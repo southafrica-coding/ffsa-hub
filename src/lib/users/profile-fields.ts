@@ -185,6 +185,51 @@ function hasNoValidProvider(profile: Record<string, unknown>): boolean {
 }
 
 // ────────────────────────────────────────────────────────────
+// INTERNATIONAL STAFF — passport & visa (conditional)
+// ────────────────────────────────────────────────────────────
+// Not in REQUIRED_PROFILE_FIELDS because they only apply when
+// `is_international` is true (and visa_type / visa_expiry_date only for a
+// long-term visa). The gate collects them progressively: ask for passport
+// + visa category first, then on the next pass — once we know it's
+// long-term — ask for the visa specifics.
+export const PASSPORT_VISA_BASE_FIELDS: FieldConfig[] = [
+  { field: "passport_country", label: "Passport Country", type: "select", options: COUNTRY_OPTIONS },
+  { field: "passport_number", label: "Passport Number", type: "text", placeholder: "e.g. A12345678" },
+  {
+    field: "visa_category",
+    label: "Visa Status",
+    type: "select",
+    options: [
+      { value: "90_day", label: "90-Day Visa" },
+      { value: "long_term", label: "Long-Term Visa" },
+    ],
+  },
+];
+
+export const VISA_LONG_TERM_FIELDS: FieldConfig[] = [
+  { field: "visa_type", label: "Visa Type", type: "text", placeholder: "e.g. Religious, Study" },
+  { field: "visa_expiry_date", label: "Visa Expiry Date", type: "date" },
+];
+
+// Passport/visa fields still missing for an international staff member.
+// Returns [] for everyone else — the conditional the flat
+// REQUIRED_PROFILE_FIELDS list can't express on its own.
+export function getMissingInternationalFields(
+  profile: Record<string, unknown>
+): FieldConfig[] {
+  if (!profile["is_international"]) return [];
+  const isEmpty = (f: FieldConfig) => {
+    const v = profile[f.field];
+    return v === null || v === undefined || v === "";
+  };
+  const missing = PASSPORT_VISA_BASE_FIELDS.filter(isEmpty);
+  if (profile["visa_category"] === "long_term") {
+    missing.push(...VISA_LONG_TERM_FIELDS.filter(isEmpty));
+  }
+  return missing;
+}
+
+// ────────────────────────────────────────────────────────────
 // THE GATE'S SINGLE SOURCE OF TRUTH
 // ────────────────────────────────────────────────────────────
 // What (if anything) blocks the user from using the Hub:
@@ -203,7 +248,10 @@ export type ProfileBlock = {
 export function getProfileBlock(
   profile: Record<string, unknown>
 ): ProfileBlock | null {
-  const missing = getMissingProfileFields(profile);
+  const missing = [
+    ...getMissingProfileFields(profile),
+    ...getMissingInternationalFields(profile),
+  ];
   if (missing.length > 0) return { reason: "incomplete", fields: missing };
 
   if (hasNoValidProvider(profile) || getInsuranceStatus(profile).state === "expired") {

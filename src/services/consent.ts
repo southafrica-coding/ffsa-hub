@@ -56,3 +56,18 @@ export async function getConsentRecordsForUser(supabase: Client, userId: string)
     .eq("user_id", userId)
     .order("accepted_at", { ascending: false });
 }
+
+// True if the user has any consent acceptance on record. Fail-open on a
+// query error so a transient DB blip never locks people out of the Hub.
+export async function hasUserConsented(
+  supabase: Client,
+  userId: string
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("consent_records")
+    .select("id")
+    .eq("user_id", userId)
+    .limit(1);
+  if (error) return true;
+  return (data?.length ?? 0) > 0;
+}

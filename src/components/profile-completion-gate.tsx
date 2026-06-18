@@ -1,7 +1,31 @@
 import { createClient } from "@/lib/supabase/server";
 import { ProfileCompletionForm } from "./profile-completion-form";
+import { ConsentAcceptanceForm } from "./consent-acceptance-form";
 import { InsuranceExpiryBanner } from "./insurance-expiry-banner";
 import { getProfileBlock, getInsuranceStatus } from "@/lib/users/profile-fields";
+import { hasUserConsented, getCurrentConsentAgreement } from "@/services/consent";
+
+// Full-screen blocking overlay: blurs and disables the page behind the panel.
+function BlockingOverlay({
+  children,
+  panel,
+}: {
+  children: React.ReactNode;
+  panel: React.ReactNode;
+}) {
+  return (
+    <div className="relative">
+      {/* Blurred background */}
+      <div className="pointer-events-none blur-sm opacity-50 select-none" aria-hidden>
+        {children}
+      </div>
+      {/* Blocking overlay */}
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+        {panel}
+      </div>
+    </div>
+  );
+}
 
 export async function ProfileCompletionGate({
   children,
@@ -38,70 +62,86 @@ export async function ProfileCompletionGate({
 
   const row = profile as Record<string, unknown>;
 
-  // What (if anything) hard-blocks the Hub: missing required fields or a
-  // lapsed/invalid health-insurance policy.
+  // 1) Missing required fields (incl. passport/visa for international
+  //    staff) or a lapsed/invalid health-insurance policy → field form.
   const block = getProfileBlock(row);
+  if (block) {
+    // For an expired/invalid policy, pre-fill the provider + policy number
+    // (a renewal usually keeps them) but leave the expiry blank so they
+    // must enter a fresh date. A legacy "none" provider is cleared so they
+    // pick a real one.
+    const provider = String(row.health_insurance_provider ?? "");
+    const defaults =
+      block.reason === "insurance_expired"
+        ? {
+            health_insurance_provider:
+              provider.toLowerCase() === "none" ? "" : provider,
+            health_insurance_policy_number: String(
+              row.health_insurance_policy_number ?? ""
+            ),
+          }
+        : undefined;
 
-  if (!block) {
-    // Not blocked — but nudge if insurance is approaching expiry.
-    const insurance = getInsuranceStatus(row);
-    if (insurance.state === "expiring") {
-      return (
-        <>
-          <InsuranceExpiryBanner
-            expiryDate={insurance.expiryDate ?? ""}
-            daysLeft={insurance.daysLeft ?? 0}
-            defaults={{
-              health_insurance_provider: String(
-                row.health_insurance_provider ?? ""
-              ),
-              health_insurance_policy_number: String(
-                row.health_insurance_policy_number ?? ""
-              ),
-              health_insurance_expiry_date: String(
-                row.health_insurance_expiry_date ?? ""
-              ).slice(0, 10),
-            }}
+    return (
+      <BlockingOverlay
+        panel={
+          <ProfileCompletionForm
+            fields={block.fields}
+            reason={block.reason}
+            defaults={defaults}
           />
-          {children}
-        </>
-      );
-    }
-    return <>{children}</>;
+        }
+      >
+        {children}
+      </BlockingOverlay>
+    );
   }
 
-  // For an expired/invalid policy, pre-fill the provider + policy number
-  // (a renewal usually keeps them) but leave the expiry blank so they must
-  // enter a fresh date. A legacy "none" provider is cleared so they pick a
-  // real one.
-  const provider = String(row.health_insurance_provider ?? "");
-  const defaults =
-    block.reason === "insurance_expired"
-      ? {
-          health_insurance_provider:
-            provider.toLowerCase() === "none" ? "" : provider,
-          health_insurance_policy_number: String(
-            row.health_insurance_policy_number ?? ""
-          ),
-        }
-      : undefined;
+  // 2) Privacy consent must be on record → blocking accept screen. Fail
+  //    open if no agreement is published so we never lock everyone out.
+  const consented = await hasUserConsented(supabase, user.id);
+  if (!consented) {
+    const { data: agreement } = await getCurrentConsentAgreement(supabase);
+    if (agreement) {
+      return (
+        <BlockingOverlay
+          panel={
+            <ConsentAcceptanceForm
+              version={agreement.version}
+              title={agreement.title}
+            />
+          }
+        >
+          {children}
+        </BlockingOverlay>
+      );
+    }
+  }
 
-  // Blocked — show the completion form over a blurred, inert page.
-  return (
-    <div className="relative">
-      {/* Blurred background */}
-      <div className="pointer-events-none blur-sm opacity-50 select-none" aria-hidden>
-        {children}
-      </div>
-
-      {/* Blocking overlay */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-        <ProfileCompletionForm
-          fields={block.fields}
-          reason={block.reason}
-          defaults={defaults}
+  // 3) Cleared — non-blocking nudge if insurance is approaching expiry.
+  const insurance = getInsuranceStatus(row);
+  if (insurance.state === "expiring") {
+    return (
+      <>
+        <InsuranceExpiryBanner
+          expiryDate={insurance.expiryDate ?? ""}
+          daysLeft={insurance.daysLeft ?? 0}
+          defaults={{
+            health_insurance_provider: String(
+              row.health_insurance_provider ?? ""
+            ),
+            health_insurance_policy_number: String(
+              row.health_insurance_policy_number ?? ""
+            ),
+            health_insurance_expiry_date: String(
+              row.health_insurance_expiry_date ?? ""
+            ).slice(0, 10),
+          }}
         />
-      </div>
-    </div>
-  );
+        {children}
+      </>
+    );
+  }
+
+  return <>{children}</>;
 }
