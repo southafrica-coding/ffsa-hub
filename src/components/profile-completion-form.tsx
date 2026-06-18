@@ -13,23 +13,72 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import type { FieldConfig } from "@/lib/users/profile-fields";
+import { type FieldConfig, isExpiryDatePast } from "@/lib/users/profile-fields";
 
 const OTHER_SENTINEL = "__other__";
 
+// Why the form is on screen — drives the heading and copy. The gate
+// passes "incomplete" / "insurance_expired" (blocking); the expiry
+// banner passes "insurance_expiring" (dismissible).
+export type ProfileFormReason =
+  | "incomplete"
+  | "insurance_expired"
+  | "insurance_expiring";
+
+const COPY: Record<ProfileFormReason, { title: string; description: string }> = {
+  incomplete: {
+    title: "Complete Your Profile",
+    description: "Please fill in the following information to continue.",
+  },
+  insurance_expired: {
+    title: "Update Your Health Insurance",
+    description:
+      "Your health insurance is no longer valid. Please enter your current policy details to keep using the Hub.",
+  },
+  insurance_expiring: {
+    title: "Update Your Health Insurance",
+    description:
+      "Your health insurance is about to expire. Update your current policy details below.",
+  },
+};
+
 export function ProfileCompletionForm({
-  missingFields,
+  fields,
+  reason = "incomplete",
+  defaults,
+  onDismiss,
 }: {
-  missingFields: FieldConfig[];
+  fields: FieldConfig[];
+  reason?: ProfileFormReason;
+  // Pre-filled values (e.g. existing provider / policy number on renewal).
+  defaults?: Record<string, string>;
+  // When provided, the form is non-blocking and shows a "Maybe later" exit.
+  onDismiss?: () => void;
 }) {
   const router = useRouter();
-  const [values, setValues] = useState<Record<string, string>>({});
+  const [values, setValues] = useState<Record<string, string>>(() => ({
+    ...(defaults ?? {}),
+  }));
   // For `select-with-other`: tracks whether the user has chosen "Other".
   // Stored separately from `values` so we know to render the follow-up
-  // text input even before they've typed anything.
-  const [otherActive, setOtherActive] = useState<Record<string, boolean>>({});
+  // text input even before they've typed anything. Seeded from defaults so
+  // a pre-filled off-list value (a custom provider) shows in the text box.
+  const [otherActive, setOtherActive] = useState<Record<string, boolean>>(
+    () => {
+      const init: Record<string, boolean> = {};
+      for (const f of fields) {
+        if (f.type === "select-with-other" && f.options && defaults?.[f.field]) {
+          const known = new Set(f.options.map((o) => o.value));
+          if (!known.has(defaults[f.field])) init[f.field] = true;
+        }
+      }
+      return init;
+    }
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const copy = COPY[reason];
 
   function setValue(field: string, value: string) {
     setValues((prev) => ({ ...prev, [field]: value }));
@@ -41,10 +90,18 @@ export function ProfileCompletionForm({
 
     // Validate all fields are filled — but for select-with-other we
     // need the follow-up text, not the sentinel.
-    for (const f of missingFields) {
+    for (const f of fields) {
       const v = values[f.field]?.trim();
       if (!v || v === OTHER_SENTINEL) {
         setError(`Please fill in: ${f.label}`);
+        return;
+      }
+      // A renewed policy must expire in the future — otherwise the gate
+      // would just re-block them on the next render.
+      if (f.field === "health_insurance_expiry_date" && isExpiryDatePast(v)) {
+        setError(
+          "Your health insurance expiry date can't be in the past. Please enter the date your current policy expires."
+        );
         return;
       }
     }
@@ -65,8 +122,9 @@ export function ProfileCompletionForm({
         return;
       }
 
-      // Refresh the page — the gate will re-check and let them through
+      // Refresh the page — the gate/banner will re-check and let them through
       router.refresh();
+      onDismiss?.();
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -77,14 +135,12 @@ export function ProfileCompletionForm({
   return (
     <Card className="w-full max-w-md mx-4 shadow-2xl max-h-[90vh] overflow-y-auto">
       <CardHeader className="text-center">
-        <CardTitle className="text-xl">Complete Your Profile</CardTitle>
-        <CardDescription>
-          Please fill in the following information to continue.
-        </CardDescription>
+        <CardTitle className="text-xl">{copy.title}</CardTitle>
+        <CardDescription>{copy.description}</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
-          {missingFields.map((f) => (
+          {fields.map((f) => (
             <FieldControl
               key={f.field}
               field={f}
@@ -102,6 +158,18 @@ export function ProfileCompletionForm({
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? "Saving..." : "Continue"}
           </Button>
+
+          {onDismiss && (
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full"
+              disabled={loading}
+              onClick={onDismiss}
+            >
+              Maybe later
+            </Button>
+          )}
         </form>
       </CardContent>
     </Card>

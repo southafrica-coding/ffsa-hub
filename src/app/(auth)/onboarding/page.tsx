@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { updateUserProfile, completeOnboarding } from "@/services/users";
+import { isExpiryDatePast } from "@/lib/users/profile-fields";
 import { validatePassword } from "@/lib/auth/password";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -222,6 +223,8 @@ export default function OnboardingPage() {
       if (blank(form.health_insurance_provider)) return "Health insurance provider is required.";
       if (blank(form.health_insurance_policy_number)) return "Health insurance policy number is required.";
       if (blank(form.health_insurance_expiry_date)) return "Health insurance expiry date is required.";
+      if (isExpiryDatePast(form.health_insurance_expiry_date))
+        return "Your health insurance has expired. Please enter the date your current policy expires.";
       return null;
     }
     return null;

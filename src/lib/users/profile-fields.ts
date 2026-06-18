@@ -96,3 +96,118 @@ export function getMissingProfileFields(
     return value === null || value === undefined || value === "";
   });
 }
+
+// ────────────────────────────────────────────────────────────
+// HEALTH INSURANCE VALIDITY
+// ────────────────────────────────────────────────────────────
+// Beyond "is the field filled in?", health insurance must stay CURRENT.
+// The gate blocks the Hub once a policy has lapsed; a banner warns in the
+// run-up. Dates are compared as calendar days in SA time so the expiry
+// day itself still counts as valid and there's no UTC-midnight drift.
+
+// The three insurance fields, pulled straight from the required list so
+// they never drift out of sync with it.
+export const HEALTH_INSURANCE_FIELDS: FieldConfig[] = REQUIRED_PROFILE_FIELDS.filter(
+  (f) => f.field.startsWith("health_insurance_")
+);
+
+// How many days before expiry we start the (non-blocking) warning.
+export const INSURANCE_WARNING_DAYS = 60;
+
+export type InsuranceState = "ok" | "expiring" | "expired" | "missing";
+
+export type InsuranceStatus = {
+  state: InsuranceState;
+  expiryDate: string | null; // YYYY-MM-DD
+  daysLeft: number | null; // whole days until expiry; negative once past
+};
+
+// Today as YYYY-MM-DD in South African time (UTC+2, no DST). en-CA
+// formats as ISO-style YYYY-MM-DD, which we can compare lexicographically.
+export function todayInSA(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Johannesburg",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+// Whole days from `fromYmd` to `toYmd` (positive when `toYmd` is later).
+// Parsed at UTC midnight so the result is a pure calendar-day delta.
+function daysBetween(fromYmd: string, toYmd: string): number {
+  const from = Date.parse(`${fromYmd}T00:00:00Z`);
+  const to = Date.parse(`${toYmd}T00:00:00Z`);
+  if (Number.isNaN(from) || Number.isNaN(to)) return 0;
+  return Math.round((to - from) / 86_400_000);
+}
+
+// True when a value is a real calendar date strictly before today (SA
+// time). Empty/garbage → false (that's "missing", handled elsewhere).
+export function isExpiryDatePast(
+  value: unknown,
+  today: string = todayInSA()
+): boolean {
+  if (typeof value !== "string" || value.trim() === "") return false;
+  const date = value.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+  return date < today;
+}
+
+export function getInsuranceStatus(
+  profile: Record<string, unknown>,
+  today: string = todayInSA()
+): InsuranceStatus {
+  const raw = profile["health_insurance_expiry_date"];
+  if (typeof raw !== "string" || raw.trim() === "") {
+    return { state: "missing", expiryDate: null, daysLeft: null };
+  }
+  const expiryDate = raw.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(expiryDate)) {
+    return { state: "missing", expiryDate: null, daysLeft: null };
+  }
+  const daysLeft = daysBetween(today, expiryDate);
+  if (expiryDate < today) return { state: "expired", expiryDate, daysLeft };
+  if (daysLeft <= INSURANCE_WARNING_DAYS) {
+    return { state: "expiring", expiryDate, daysLeft };
+  }
+  return { state: "ok", expiryDate, daysLeft };
+}
+
+// A stored provider of "none" predates the "everyone must carry valid
+// cover" rule — treat it as no valid insurance on file so the gate makes
+// the user pick a real provider.
+function hasNoValidProvider(profile: Record<string, unknown>): boolean {
+  const provider = String(profile["health_insurance_provider"] ?? "")
+    .trim()
+    .toLowerCase();
+  return provider === "none";
+}
+
+// ────────────────────────────────────────────────────────────
+// THE GATE'S SINGLE SOURCE OF TRUTH
+// ────────────────────────────────────────────────────────────
+// What (if anything) blocks the user from using the Hub:
+//   - "incomplete":        one or more required fields are empty
+//   - "insurance_expired": fields are filled but the policy has lapsed
+//                          (or a legacy "none" provider is on file)
+// Completeness wins so we collect everything in one pass; only once the
+// profile is otherwise whole do we enforce a current insurance policy.
+export type ProfileBlockReason = "incomplete" | "insurance_expired";
+
+export type ProfileBlock = {
+  reason: ProfileBlockReason;
+  fields: FieldConfig[];
+};
+
+export function getProfileBlock(
+  profile: Record<string, unknown>
+): ProfileBlock | null {
+  const missing = getMissingProfileFields(profile);
+  if (missing.length > 0) return { reason: "incomplete", fields: missing };
+
+  if (hasNoValidProvider(profile) || getInsuranceStatus(profile).state === "expired") {
+    return { reason: "insurance_expired", fields: HEALTH_INSURANCE_FIELDS };
+  }
+  return null;
+}

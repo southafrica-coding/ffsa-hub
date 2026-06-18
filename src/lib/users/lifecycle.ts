@@ -1,4 +1,10 @@
-import { getMissingProfileFields, type FieldConfig, REQUIRED_PROFILE_FIELDS } from "./profile-fields";
+import {
+  getMissingProfileFields,
+  getInsuranceStatus,
+  type FieldConfig,
+  type InsuranceStatus,
+  REQUIRED_PROFILE_FIELDS,
+} from "./profile-fields";
 
 export type UserLifecycleStage =
   | "invited"
@@ -14,6 +20,11 @@ export type LifecycleInfo = {
   missingFields: FieldConfig[];
   totalRequired: number;
   completedRequired: number;
+  // Health-insurance validity is orthogonal to onboarding stage: an
+  // otherwise-"active" user can still have a lapsed policy, which the
+  // gate treats as a hard block. Surfaced here so the admin Users table
+  // can flag it.
+  insurance: InsuranceStatus;
 };
 
 export type UserLifecycleInput = {
@@ -52,11 +63,20 @@ export function deriveUserLifecycle(user: UserLifecycleInput): LifecycleInfo {
   const missingFields = getMissingProfileFields(user as Record<string, unknown>);
   const totalRequired = REQUIRED_PROFILE_FIELDS.length;
   const completedRequired = totalRequired - missingFields.length;
+  const insurance = getInsuranceStatus(user as Record<string, unknown>);
 
   const stage: UserLifecycleStage = computeStage(user, missingFields.length);
   const { label, description } = STAGE_LABELS[stage];
 
-  return { stage, label, description, missingFields, totalRequired, completedRequired };
+  return {
+    stage,
+    label,
+    description,
+    missingFields,
+    totalRequired,
+    completedRequired,
+    insurance,
+  };
 }
 
 function computeStage(

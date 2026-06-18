@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { ProfileCompletionForm } from "./profile-completion-form";
-import { getMissingProfileFields } from "@/lib/users/profile-fields";
+import { InsuranceExpiryBanner } from "./insurance-expiry-banner";
+import { getProfileBlock, getInsuranceStatus } from "@/lib/users/profile-fields";
 
 export async function ProfileCompletionGate({
   children,
@@ -35,13 +36,57 @@ export async function ProfileCompletionGate({
   // skipped. Always gate; if onboarding ever wraps gate-bearing routes,
   // re-add the check there.
 
-  // Check which required fields are missing
-  const missingFields = getMissingProfileFields(profile as Record<string, unknown>);
+  const row = profile as Record<string, unknown>;
 
-  // All good — render the page
-  if (missingFields.length === 0) return <>{children}</>;
+  // What (if anything) hard-blocks the Hub: missing required fields or a
+  // lapsed/invalid health-insurance policy.
+  const block = getProfileBlock(row);
 
-  // Missing fields — show the completion form over the page
+  if (!block) {
+    // Not blocked — but nudge if insurance is approaching expiry.
+    const insurance = getInsuranceStatus(row);
+    if (insurance.state === "expiring") {
+      return (
+        <>
+          <InsuranceExpiryBanner
+            expiryDate={insurance.expiryDate ?? ""}
+            daysLeft={insurance.daysLeft ?? 0}
+            defaults={{
+              health_insurance_provider: String(
+                row.health_insurance_provider ?? ""
+              ),
+              health_insurance_policy_number: String(
+                row.health_insurance_policy_number ?? ""
+              ),
+              health_insurance_expiry_date: String(
+                row.health_insurance_expiry_date ?? ""
+              ).slice(0, 10),
+            }}
+          />
+          {children}
+        </>
+      );
+    }
+    return <>{children}</>;
+  }
+
+  // For an expired/invalid policy, pre-fill the provider + policy number
+  // (a renewal usually keeps them) but leave the expiry blank so they must
+  // enter a fresh date. A legacy "none" provider is cleared so they pick a
+  // real one.
+  const provider = String(row.health_insurance_provider ?? "");
+  const defaults =
+    block.reason === "insurance_expired"
+      ? {
+          health_insurance_provider:
+            provider.toLowerCase() === "none" ? "" : provider,
+          health_insurance_policy_number: String(
+            row.health_insurance_policy_number ?? ""
+          ),
+        }
+      : undefined;
+
+  // Blocked — show the completion form over a blurred, inert page.
   return (
     <div className="relative">
       {/* Blurred background */}
@@ -51,7 +96,11 @@ export async function ProfileCompletionGate({
 
       {/* Blocking overlay */}
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-        <ProfileCompletionForm missingFields={missingFields} />
+        <ProfileCompletionForm
+          fields={block.fields}
+          reason={block.reason}
+          defaults={defaults}
+        />
       </div>
     </div>
   );

@@ -280,7 +280,6 @@ export const INSURANCE_PROVIDERS: Option[] = [
   { value: "Profmed", label: "Profmed" },
   { value: "Sizwe Hosmed", label: "Sizwe Hosmed" },
   { value: "Liberty Health", label: "Liberty Health" },
-  { value: "none", label: "No health insurance" },
   { value: "other", label: "Other (specify)" },
 ];
 

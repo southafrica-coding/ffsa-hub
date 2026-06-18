@@ -56,6 +56,8 @@ type UserRow = {
   gender: string | null;
   marital_status: string | null;
   nationality: string | null;
+  health_insurance_provider: string | null;
+  health_insurance_expiry_date: string | null;
   last_sign_in_at: string | null;
   user_roles: Array<{
     id: string;
@@ -275,6 +277,32 @@ export function UsersTable({
                           {lifecycle.completedRequired} of{" "}
                           {lifecycle.totalRequired} fields
                         </span>
+                      )}
+                      {lifecycle.insurance.state === "expired" && (
+                        <Badge
+                          variant="outline"
+                          style={{
+                            borderColor: "hsl(0 84% 60% / 0.4)",
+                            color: "hsl(0 84% 72%)",
+                            background: "hsl(0 70% 16%)",
+                          }}
+                          title={`Health insurance expired ${lifecycle.insurance.expiryDate ?? ""}`}
+                        >
+                          Insurance expired
+                        </Badge>
+                      )}
+                      {lifecycle.insurance.state === "expiring" && (
+                        <Badge
+                          variant="outline"
+                          style={{
+                            borderColor: "hsl(28 95% 55% / 0.4)",
+                            color: "hsl(28 95% 65%)",
+                            background: "hsl(28 80% 16%)",
+                          }}
+                          title={`Health insurance expires ${lifecycle.insurance.expiryDate ?? ""}`}
+                        >
+                          Insurance expires in {lifecycle.insurance.daysLeft ?? 0}d
+                        </Badge>
                       )}
                     </div>
                   </TableCell>
