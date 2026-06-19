@@ -13,6 +13,7 @@ import {
   Archive,
   History,
   Building2,
+  Network,
   type LucideIcon,
 } from "lucide-react";
 
@@ -90,6 +91,14 @@ export const ADMIN_MODULES: ModuleDefinition[] = [
     icon: UsersRound,
     description: "Ministry and outreach teams",
     requiredRoles: ["super_admin", "admin", "team_leader"],
+  },
+  {
+    id: "org-chart",
+    label: "Org Chart",
+    href: "/org-chart",
+    icon: Network,
+    description: "Interactive map of FFSA's organisational structure",
+    requiredRoles: [], // visible to ALL authenticated users (internal reference)
   },
   {
     id: "finance",
