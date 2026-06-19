@@ -32,6 +32,12 @@ export type FieldConfig = {
     | "phone";
   placeholder?: string;
   options?: { value: string; label: string }[];
+  // Only meaningful outside REQUIRED_PROFILE_FIELDS (the gate treats every
+  // field it's handed as mandatory). The editable profile page reads this
+  // to decide whether an empty value blocks a section save — e.g.
+  // preferred_name, address_line_2 and the passport/visa fields are
+  // optional for non-international staff.
+  optional?: boolean;
 };
 
 export const REQUIRED_PROFILE_FIELDS: FieldConfig[] = [

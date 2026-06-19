@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { ProfileRecords } from "@/components/profile-records";
 import { AvatarUploader } from "@/components/avatar-uploader";
+import { EditableProfileSection } from "@/components/profile/editable-profile-section";
+import { PROFILE_SECTIONS } from "@/lib/users/profile-sections";
 
 export default async function ProfilePage() {
   const supabase = await createClient();
@@ -11,6 +13,7 @@ export default async function ProfilePage() {
 
   if (!user) redirect("/login");
 
+  const row = user as Record<string, unknown>;
   const roles = user.user_roles ?? [];
 
   const fullName =
@@ -20,6 +23,21 @@ export default async function ProfilePage() {
 
   const avatarName =
     user.preferred_name ?? user.first_name ?? user.email ?? "?";
+
+  // Email is auth-managed, so it rides along as a read-only row in the
+  // Contact card rather than as an editable field.
+  const readOnlyRowsById: Record<
+    string,
+    { label: string; value: string; hint?: string }[]
+  > = {
+    contact: [
+      {
+        label: "Email",
+        value: user.email ?? "—",
+        hint: "To change your email, use Account settings.",
+      },
+    ],
+  };
 
   return (
     <div className="space-y-8">
@@ -68,37 +86,25 @@ export default async function ProfilePage() {
         </div>
       </div>
 
-      <section className="grid gap-4 lg:grid-cols-3">
-        <InfoCard title="Personal">
-          <InfoRow
-            label="Date of birth"
-            value={user.date_of_birth ?? "—"}
-          />
-          <InfoRow label="Nationality" value={user.nationality ?? "—"} />
-          <InfoRow
-            label="Department"
-            value={departmentLabel(user.department) ?? "—"}
-          />
-        </InfoCard>
-
-        <InfoCard title="Contact">
-          <InfoRow label="Email" value={user.email ?? "—"} />
-          <InfoRow label="Phone" value={user.phone ?? "—"} />
-        </InfoCard>
-
-        <InfoCard title="Address">
-          {addressLines(user).length > 0 ? (
-            <div className="space-y-0.5 text-sm">
-              {addressLines(user).map((line) => (
-                <div key={line}>{line}</div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground italic">
-              No address on file.
-            </p>
-          )}
-        </InfoCard>
+      <section className="space-y-3">
+        <div>
+          <p className="page-eyebrow">MY DETAILS</p>
+          <h2 className="text-xl font-semibold">Personal information</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Everything we have on file. Use the Edit button on any section to
+            keep it up to date.
+          </p>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-2">
+          {PROFILE_SECTIONS.map((section) => (
+            <EditableProfileSection
+              key={section.id}
+              section={section}
+              values={sectionValues(row, section.fields)}
+              readOnlyRows={readOnlyRowsById[section.id]}
+            />
+          ))}
+        </div>
       </section>
 
       <section className="space-y-3">
@@ -116,63 +122,22 @@ export default async function ProfilePage() {
   );
 }
 
-function addressLines(u: {
-  address_line_1?: string | null;
-  address_line_2?: string | null;
-  city?: string | null;
-  province?: string | null;
-  postal_code?: string | null;
-  country?: string | null;
-}): string[] {
-  return [
-    u.address_line_1,
-    u.address_line_2,
-    [u.city, u.province].filter(Boolean).join(", "),
-    u.postal_code,
-    u.country,
-  ].filter((s): s is string => !!s && s.length > 0);
-}
-
-const DEPARTMENT_LABELS: Record<string, string> = {
-  prayer_and_worship: "Prayer and Worship",
-  media: "Media",
-  hulk: "Hulk",
-  backbone: "Backbone",
-  training: "Training",
-  project_54: "Project 54",
-  education: "Education",
-  woven: "Woven",
-};
-
-function departmentLabel(value: string | null | undefined): string | null {
-  if (!value) return null;
-  return DEPARTMENT_LABELS[value] ?? value;
-}
-
-function InfoCard({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="rounded-xl border p-4 space-y-3">
-      <h3 className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
-        {title}
-      </h3>
-      <div className="space-y-2">{children}</div>
-    </div>
-  );
-}
-
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
-        {label}
-      </div>
-      <div className="text-sm mt-0.5">{value}</div>
-    </div>
-  );
+// Coerce the stored row into the string map the editable section expects:
+// dates trimmed to YYYY-MM-DD, null/undefined → "".
+function sectionValues(
+  row: Record<string, unknown>,
+  fields: { field: string; type: string }[]
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const f of fields) {
+    const raw = row[f.field];
+    if (raw === null || raw === undefined) {
+      out[f.field] = "";
+    } else if (f.type === "date") {
+      out[f.field] = String(raw).slice(0, 10);
+    } else {
+      out[f.field] = String(raw);
+    }
+  }
+  return out;
 }
