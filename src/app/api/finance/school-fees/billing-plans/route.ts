@@ -7,6 +7,7 @@ import {
   type Tier,
 } from "@/services/school-billing";
 import { getXeroRegionForStudent } from "@/services/xero";
+import { canManageFinance } from "@/lib/api-auth";
 import {
   buildSchedule,
   scheduleTotal,
@@ -23,6 +24,12 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+  if (!(await canManageFinance(supabase, user.id))) {
+    return NextResponse.json(
+      { error: "You don't have permission to manage finance settings" },
+      { status: 403 }
+    );
   }
 
   const body = await request.json();

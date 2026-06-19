@@ -1,19 +1,38 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { canManageFinance } from "@/lib/api-auth";
 import {
   createProgramGroup,
   updateProgramGroup,
   deleteProgramGroup,
 } from "@/services/school-billing";
 
-export async function POST(request: Request) {
-  const supabase = await createClient();
+async function guard(supabase: Awaited<ReturnType<typeof createClient>>) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    return {
+      user: null,
+      res: NextResponse.json({ error: "Not authenticated" }, { status: 401 }),
+    };
   }
+  if (!(await canManageFinance(supabase, user.id))) {
+    return {
+      user: null,
+      res: NextResponse.json(
+        { error: "You don't have permission to manage finance settings" },
+        { status: 403 }
+      ),
+    };
+  }
+  return { user, res: null };
+}
+
+export async function POST(request: Request) {
+  const supabase = await createClient();
+  const { user, res } = await guard(supabase);
+  if (res) return res;
 
   const body = await request.json();
   const { name, code } = body;
@@ -29,7 +48,7 @@ export async function POST(request: Request) {
     code,
     year: body.year ?? null,
     description: body.description ?? null,
-    created_by: user.id,
+    created_by: user!.id,
   });
 
   if (error) {
@@ -40,12 +59,8 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  }
+  const { user, res } = await guard(supabase);
+  if (res) return res;
 
   const body = await request.json();
   const { id } = body;
@@ -69,12 +84,8 @@ export async function PUT(request: Request) {
 
 export async function DELETE(request: Request) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  }
+  const { user, res } = await guard(supabase);
+  if (res) return res;
 
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");

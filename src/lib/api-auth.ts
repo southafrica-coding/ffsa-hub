@@ -87,6 +87,25 @@ export async function canManageEvents(
   return hasAnyPermission(supabase, userId, perms);
 }
 
+// Roles or granular permissions that allow managing finance config
+// (school billing setup, the country-tier backbone list, fee structures).
+// Mirrors the finance RLS (admins / finance_admin).
+export const FINANCE_MANAGE_ROLES = ["super_admin", "admin", "finance_admin"];
+export const FINANCE_MANAGE_PERMS = ["finance.manage", "finance.write"];
+
+/**
+ * True if the user may manage finance configuration — either via a finance
+ * role (FINANCE_MANAGE_ROLES) or a granular finance permission. Mirrors the
+ * RLS on country_tiers / school billing tables (migrations 009, 095).
+ */
+export async function canManageFinance(
+  supabase: Client,
+  userId: string
+): Promise<boolean> {
+  if (await hasAnyRole(supabase, userId, FINANCE_MANAGE_ROLES)) return true;
+  return hasAnyPermission(supabase, userId, FINANCE_MANAGE_PERMS);
+}
+
 // Granular communications permissions that imply "can manage / can send".
 export const COMMS_MANAGE_PERMS = [
   "communications.send_emails",
