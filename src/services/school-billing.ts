@@ -180,3 +180,96 @@ export async function upsertChargeItem(
 export async function deleteChargeItem(supabase: Client, id: string) {
   return supabase.from("fee_charge_items").delete().eq("id", id);
 }
+
+// ────────────────────────────────────────────────────────────
+// ENROLLED STUDENTS (for a course) + their billing plans
+// ────────────────────────────────────────────────────────────
+
+export async function getEnrolledStudentsForCourse(
+  supabase: Client,
+  programId: string
+) {
+  return supabase
+    .from("enrollments")
+    .select(
+      "id, user_id, status, enrolled_at, users!enrollments_user_id_fkey(id, first_name, last_name, preferred_name, email, nationality)"
+    )
+    .eq("program_id", programId)
+    .in("status", ["active", "on_hold"])
+    .order("enrolled_at", { ascending: false });
+}
+
+export async function getBillingPlansForCourse(
+  supabase: Client,
+  programId: string
+) {
+  return supabase
+    .from("student_billing_plans")
+    .select("*, student_billing_schedule(*)")
+    .eq("program_id", programId);
+}
+
+export async function getBillingPlanByEnrollment(
+  supabase: Client,
+  enrollmentId: string
+) {
+  return supabase
+    .from("student_billing_plans")
+    .select("*, student_billing_schedule(*)")
+    .eq("enrollment_id", enrollmentId)
+    .maybeSingle();
+}
+
+export async function upsertBillingPlan(
+  supabase: Client,
+  data: {
+    enrollment_id: string;
+    user_id: string;
+    program_id: string;
+    program_group_id?: string | null;
+    tier: Tier;
+    tier_override?: boolean;
+    payment_preference: "standard" | "quarter_prepay" | "full_prepay";
+    xero_region?: "za" | "us";
+    created_by?: string | null;
+  }
+) {
+  return supabase
+    .from("student_billing_plans")
+    .upsert(data, { onConflict: "enrollment_id" })
+    .select()
+    .single();
+}
+
+// Replace all NOT-yet-generated ('scheduled') rows for a plan with a fresh set.
+// Rows already pushed to Xero (generated/sent/paid) are left untouched.
+export async function replaceScheduledRows(
+  supabase: Client,
+  planId: string,
+  rows: Array<Record<string, unknown>>
+) {
+  const del = await supabase
+    .from("student_billing_schedule")
+    .delete()
+    .eq("plan_id", planId)
+    .eq("status", "scheduled");
+  if (del.error) return del;
+
+  if (rows.length === 0) return { data: [], error: null };
+
+  return supabase
+    .from("student_billing_schedule")
+    .insert(rows.map((r) => ({ ...r, plan_id: planId })))
+    .select();
+}
+
+export async function getCountryTierMap(supabase: Client) {
+  const { data } = await supabase
+    .from("country_tiers")
+    .select("country_name, tier");
+  const map: Record<string, Tier> = {};
+  for (const row of data ?? []) {
+    map[row.country_name.toLowerCase()] = row.tier as Tier;
+  }
+  return map;
+}

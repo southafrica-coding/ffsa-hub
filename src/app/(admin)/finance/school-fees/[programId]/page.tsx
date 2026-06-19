@@ -68,12 +68,20 @@ export default async function ProgramFeesPage({
 
   return (
     <div className="space-y-6">
-      <Link
-        href="/finance/school-fees"
-        className="text-sm text-muted-foreground hover:underline"
-      >
-        &larr; Back to School Fees
-      </Link>
+      <div className="flex items-center justify-between">
+        <Link
+          href="/finance/school-fees"
+          className="text-sm text-muted-foreground hover:underline"
+        >
+          &larr; Back to School Fees
+        </Link>
+        <Link
+          href={`/finance/school-fees/${programId}/billing`}
+          className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-muted transition-colors"
+        >
+          Billing Schedules &rarr;
+        </Link>
+      </div>
 
       <ProgramFeesDetail
         program={program}
