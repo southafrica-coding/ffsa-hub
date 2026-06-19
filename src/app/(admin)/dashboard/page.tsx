@@ -5,6 +5,7 @@ import { getNotifications } from "@/services/notifications";
 import { MyAssignmentsCard } from "./my-assignments-card";
 import { StaffWorkloadCard } from "./staff-workload-card";
 import { NotificationFeed } from "./notification-feed";
+import { UpcomingEventsWidget } from "./upcoming-events-widget";
 
 function StatCard({
   label,
@@ -148,6 +149,9 @@ export default async function DashboardPage() {
 
       {/* Notification feed — the homescreen for what needs attention */}
       <NotificationFeed initial={notifications} />
+
+      {/* Upcoming events — rotating view of the FFSA Base Calendar (everyone) */}
+      <UpcomingEventsWidget />
 
       {/* Stat cards */}
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
