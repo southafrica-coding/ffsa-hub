@@ -70,7 +70,7 @@ export default async function MyHistoryPage() {
       {history.enrollments.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Schools attended</CardTitle>
+            <CardTitle>Training attended</CardTitle>
             <CardDescription>Past enrollments and staff seasons</CardDescription>
           </CardHeader>
           <CardContent>

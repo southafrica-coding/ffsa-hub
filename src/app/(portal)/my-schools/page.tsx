@@ -109,7 +109,7 @@ export default async function MySchoolsPage() {
     <div className="space-y-6">
       <div>
         <p className="page-eyebrow">TRAINING &amp; EDUCATION</p>
-        <h1 className="page-title">My Schools</h1>
+        <h1 className="page-title">My Training</h1>
       </div>
 
       {/* Open Applications Section */}

@@ -229,7 +229,7 @@ export function ContactDossier({ dossier }: { dossier: ContactDossier }) {
 
       {/* Schools — applications & enrollments */}
       {(dossier.applications.length > 0 || dossier.enrollments.length > 0) && (
-        <Section title="Schools" icon={<GraduationCap className="h-4 w-4" />}>
+        <Section title="Training" icon={<GraduationCap className="h-4 w-4" />}>
           <div className="space-y-1.5">
             {dossier.applications.map((a, i) => (
               <div key={`app-${i}`} className="flex items-center justify-between gap-2 rounded-md border bg-muted/20 px-3 py-2">

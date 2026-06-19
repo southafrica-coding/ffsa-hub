@@ -12,7 +12,7 @@ import type { Permission, UserPermission, ScopeOption, PermissionsByModule } fro
 const MODULE_LABELS: Record<string, string> = {
   contacts: "Contacts",
   events: "Events",
-  schools: "Schools",
+  schools: "Training",
   teams: "Teams",
   finance: "Finance",
   communications: "Communications",

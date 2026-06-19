@@ -46,7 +46,7 @@ export default async function EnrollmentDetailPage({
           href="/my-schools"
           className="text-sm text-muted-foreground hover:underline"
         >
-          &larr; Back to My Schools
+          &larr; Back to My Training
         </Link>
         <p className="text-destructive">Enrollment not found.</p>
       </div>
@@ -136,7 +136,7 @@ export default async function EnrollmentDetailPage({
         href="/my-schools"
         className="text-sm text-muted-foreground hover:underline"
       >
-        &larr; Back to My Schools
+        &larr; Back to My Training
       </Link>
 
       {/* Program Header */}

@@ -37,7 +37,7 @@ const MODULE_LABELS: Record<string, string> = {
   contacts: "Contacts",
   communications: "Communications",
   events: "Events",
-  schools: "Schools",
+  schools: "Training",
   teams: "Teams",
   finance: "Finance",
   mission: "Mission",

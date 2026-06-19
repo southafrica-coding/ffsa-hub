@@ -19,7 +19,7 @@ export default async function ProgramDetailPage({
     return (
       <div className="space-y-4">
         <Link href="/schools" className="text-sm text-muted-foreground hover:underline">
-          &larr; Back to Schools
+          &larr; Back to Training
         </Link>
         <p className="text-destructive">Program not found.</p>
       </div>

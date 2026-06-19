@@ -35,7 +35,7 @@ export default async function SchoolsPage({
       <div className="flex items-center justify-between">
         <div>
           <p className="page-eyebrow">TRAINING &amp; EDUCATION</p>
-          <h1 className="page-title">Schools</h1>
+          <h1 className="page-title">Training</h1>
         </div>
         <CreateProgramForm />
       </div>

@@ -180,10 +180,10 @@ export function OutreachDashboardClient({
         <div className="flex items-center gap-2 flex-wrap">
           <Select value={schoolFilter} onValueChange={setSchoolFilter}>
             <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="All Schools" />
+              <SelectValue placeholder="All Programs" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Schools</SelectItem>
+              <SelectItem value="all">All Programs</SelectItem>
               {uniquePrograms.map((p) => (
                 <SelectItem key={p.id} value={p.id}>
                   {p.name}

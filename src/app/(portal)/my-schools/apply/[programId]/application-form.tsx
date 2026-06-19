@@ -162,7 +162,7 @@ export function ApplicationForm({
             notified when a decision has been made.
           </p>
           <Button variant="outline" onClick={() => router.push("/my-schools")}>
-            Back to My Schools
+            Back to My Training
           </Button>
         </CardContent>
       </Card>

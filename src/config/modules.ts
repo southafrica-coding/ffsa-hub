@@ -78,7 +78,7 @@ export const ADMIN_MODULES: ModuleDefinition[] = [
   },
   {
     id: "schools",
-    label: "Schools",
+    label: "Training",
     href: "/schools",
     icon: GraduationCap,
     description: "DTS, DBS, SBS, and other programs",
@@ -176,7 +176,7 @@ export const PORTAL_TABS: PortalTab[] = [
   },
   {
     id: "my-schools",
-    label: "Schools",
+    label: "Training",
     href: "/my-schools",
     icon: GraduationCap,
   },
