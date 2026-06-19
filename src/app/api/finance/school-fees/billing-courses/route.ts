@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { canManageFinance } from "@/lib/api-auth";
 import {
-  createProgramGroup,
-  updateProgramGroup,
-  deleteProgramGroup,
+  createBillingCourse,
+  updateBillingCourse,
+  deleteBillingCourse,
 } from "@/services/school-billing";
 
 async function guard(supabase: Awaited<ReturnType<typeof createClient>>) {
@@ -35,19 +35,24 @@ export async function POST(request: Request) {
   if (res) return res;
 
   const body = await request.json();
-  const { name, code } = body;
-  if (!name || !code) {
+  const { program_id, code, name } = body;
+  if (!program_id || !code || !name) {
     return NextResponse.json(
-      { error: "name and code are required" },
+      { error: "program_id, code and name are required" },
       { status: 400 }
     );
   }
 
-  const { data, error } = await createProgramGroup(supabase, {
-    name,
+  const { data, error } = await createBillingCourse(supabase, {
+    program_id,
     code,
-    year: body.year ?? null,
-    description: body.description ?? null,
+    name,
+    scope: body.scope ?? "segment",
+    sequence: body.sequence ?? 0,
+    start_date: body.start_date || null,
+    end_date: body.end_date || null,
+    arrival_date: body.arrival_date || null,
+    enroll_lead_days: body.enroll_lead_days ?? 30,
     created_by: user!.id,
   });
 
@@ -59,7 +64,7 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   const supabase = await createClient();
-  const { user, res } = await guard(supabase);
+  const { res } = await guard(supabase);
   if (res) return res;
 
   const body = await request.json();
@@ -68,14 +73,24 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: "id is required" }, { status: 400 });
   }
 
-  const { data, error } = await updateProgramGroup(supabase, id, {
-    name: body.name,
-    code: body.code,
-    year: body.year,
-    description: body.description,
-    status: body.status,
-  });
+  const update: Record<string, unknown> = {};
+  for (const key of [
+    "code",
+    "name",
+    "scope",
+    "sequence",
+    "enroll_lead_days",
+    "status",
+    "notes",
+  ]) {
+    if (key in body) update[key] = body[key];
+  }
+  // Date fields: empty string → null
+  for (const key of ["start_date", "end_date", "arrival_date"]) {
+    if (key in body) update[key] = body[key] || null;
+  }
 
+  const { data, error } = await updateBillingCourse(supabase, id, update);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -84,7 +99,7 @@ export async function PUT(request: Request) {
 
 export async function DELETE(request: Request) {
   const supabase = await createClient();
-  const { user, res } = await guard(supabase);
+  const { res } = await guard(supabase);
   if (res) return res;
 
   const { searchParams } = new URL(request.url);
@@ -93,7 +108,7 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "id is required" }, { status: 400 });
   }
 
-  const { error } = await deleteProgramGroup(supabase, id);
+  const { error } = await deleteBillingCourse(supabase, id);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

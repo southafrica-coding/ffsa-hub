@@ -31,11 +31,11 @@ async function upsert(request: Request) {
   }
 
   const body = (await request.json()) as ChargeItemInput;
-  const { program_id, tier, charge_type, label } = body;
+  const { course_id, tier, charge_type, label } = body;
 
-  if (!program_id || !tier || !charge_type) {
+  if (!course_id || !tier || !charge_type) {
     return NextResponse.json(
-      { error: "program_id, tier and charge_type are required" },
+      { error: "course_id, tier and charge_type are required" },
       { status: 400 }
     );
   }
@@ -47,7 +47,7 @@ async function upsert(request: Request) {
   }
 
   const { data, error } = await upsertChargeItem(supabase, {
-    program_id,
+    course_id,
     tier,
     charge_type,
     label: label ?? charge_type,

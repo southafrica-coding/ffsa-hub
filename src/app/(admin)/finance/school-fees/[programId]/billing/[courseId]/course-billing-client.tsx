@@ -36,8 +36,6 @@ import {
 } from "@/lib/finance/billing";
 import type { Tier } from "@/services/school-billing";
 
-// ── Types ───────────────────────────────────────────────────
-
 type Student = {
   id: string; // enrollment id
   user_id: string;
@@ -88,16 +86,14 @@ const fmtDate = (d: string) =>
     year: "numeric",
   });
 
-// ── Root ────────────────────────────────────────────────────
-
 export function CourseBillingClient({
-  programId,
+  courseId,
   hasArrivalDate,
   configuredTiers,
   students,
   plans,
 }: {
-  programId: string;
+  courseId: string;
   hasArrivalDate: boolean;
   configuredTiers: string[];
   students: Student[];
@@ -109,8 +105,8 @@ export function CourseBillingClient({
   if (configuredTiers.length === 0) {
     return (
       <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800">
-        No charge items are configured for this course yet. Set them up in{" "}
-        <strong>Billing Setup</strong> first, then come back to build student
+        No charge items are configured for this course yet. Add them on the
+        course&apos;s billing page first, then come back to build student
         schedules.
       </div>
     );
@@ -119,7 +115,7 @@ export function CourseBillingClient({
   if (students.length === 0) {
     return (
       <p className="text-sm text-muted-foreground py-6 text-center">
-        No active students enrolled in this course.
+        No active students enrolled in this program.
       </p>
     );
   }
@@ -143,7 +139,7 @@ export function CourseBillingClient({
               {students.map((s) => (
                 <StudentRow
                   key={s.id}
-                  programId={programId}
+                  courseId={courseId}
                   hasArrivalDate={hasArrivalDate}
                   student={s}
                   plan={planByEnrollment[s.id] ?? null}
@@ -157,15 +153,13 @@ export function CourseBillingClient({
   );
 }
 
-// ── Per-student row ─────────────────────────────────────────
-
 function StudentRow({
-  programId,
+  courseId,
   hasArrivalDate,
   student,
   plan,
 }: {
-  programId: string;
+  courseId: string;
   hasArrivalDate: boolean;
   student: Student;
   plan: Plan | null;
@@ -175,9 +169,7 @@ function StudentRow({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const [tier, setTier] = useState<Tier | "auto">(
-    plan ? plan.tier : "auto"
-  );
+  const [tier, setTier] = useState<Tier | "auto">(plan ? plan.tier : "auto");
   const [preference, setPreference] = useState<Preference>(
     plan?.payment_preference ?? "standard"
   );
@@ -201,6 +193,7 @@ function StudentRow({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           enrollment_id: student.id,
+          course_id: courseId,
           tier: tier === "auto" ? undefined : tier,
           payment_preference: preference,
           action: "preview",
@@ -232,6 +225,7 @@ function StudentRow({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           enrollment_id: student.id,
+          course_id: courseId,
           tier: tier === "auto" ? undefined : tier,
           payment_preference: preference,
           action: "commit",
@@ -333,8 +327,7 @@ function StudentRow({
                 <p className="text-xs text-yellow-700 flex items-center gap-1">
                   <AlertTriangle className="h-3 w-3" />
                   No arrival date set for this course — quarter payments
-                  (relative-to-arrival) can&apos;t be scheduled until you set one
-                  in Billing Setup.
+                  (relative-to-arrival) can&apos;t be scheduled until you set one.
                 </p>
               )}
 
@@ -386,8 +379,6 @@ function StudentRow({
   );
 }
 
-// ── Schedule table (grouped by combined invoice) ────────────
-
 function ScheduleTable({
   rows,
   isPreview,
@@ -395,7 +386,6 @@ function ScheduleTable({
   rows: ScheduleRow[];
   isPreview: boolean;
 }) {
-  // Group rows that share a combined_group_key into one logical invoice.
   const groups = new Map<string, ScheduleRow[]>();
   rows.forEach((r, i) => {
     const key = r.combined_group_key ?? `solo-${i}`;

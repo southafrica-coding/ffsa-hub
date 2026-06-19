@@ -1,13 +1,10 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getProgramById } from "@/services/schools";
-import {
-  getEnrolledStudentsForCourse,
-  getBillingPlansForCourse,
-} from "@/services/school-billing";
-import { CourseBillingClient } from "./course-billing-client";
+import { getBillingCoursesByProgram } from "@/services/school-billing";
+import { ProgramBillingClient } from "./program-billing-client";
 
-export default async function CourseBillingPage({
+export default async function ProgramBillingPage({
   params,
 }: {
   params: Promise<{ programId: string }>;
@@ -25,55 +22,55 @@ export default async function CourseBillingPage({
         >
           &larr; Back to School Fees
         </Link>
-        <p className="text-destructive">Course not found.</p>
+        <p className="text-destructive">Program not found.</p>
       </div>
     );
   }
 
-  const [{ data: students }, { data: plans }] = await Promise.all([
-    getEnrolledStudentsForCourse(supabase, programId),
-    getBillingPlansForCourse(supabase, programId),
-  ]);
+  const { data: courses } = await getBillingCoursesByProgram(supabase, programId);
 
-  // Which tiers have charge items configured (to warn if none).
+  // All charge items across this program's courses, grouped by course_id.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: items } = await (supabase as any)
     .from("fee_charge_items")
-    .select("tier")
-    .eq("program_id", programId)
-    .eq("active", true);
-  const configuredTiers = Array.from(
-    new Set((items ?? []).map((i: { tier: string }) => i.tier))
-  );
+    .select("*, billing_courses!inner(program_id)")
+    .eq("billing_courses.program_id", programId)
+    .order("tier", { ascending: true })
+    .order("sort_order", { ascending: true });
+
+  const itemsByCourse: Record<string, unknown[]> = {};
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const item of (items ?? []) as any[]) {
+    (itemsByCourse[item.course_id] ??= []).push(item);
+  }
 
   return (
     <div className="space-y-6">
       <Link
-        href={`/finance/school-fees/${programId}`}
+        href="/finance/school-fees"
         className="text-sm text-muted-foreground hover:underline"
       >
-        &larr; Back to {program.name}
+        &larr; Back to School Fees
       </Link>
 
       <div>
         <p className="page-eyebrow">FINANCIAL MANAGEMENT</p>
-        <h1 className="page-title">
-          {program.name} — Billing Schedules
-        </h1>
+        <h1 className="page-title">{program.name} — Courses</h1>
         <p className="text-sm text-muted-foreground">
-          Build each student&apos;s payment schedule from the configured charge
-          items. Preview before saving — nothing is sent to Xero at this stage.
+          The chronological courses within this program. Each course has its own
+          timeframe and per-tier charge items, and its own student billing
+          schedules. Students enrol in the whole year or a single course.
         </p>
       </div>
 
-      <CourseBillingClient
+      <ProgramBillingClient
         programId={programId}
-        hasArrivalDate={!!program.billing_arrival_date}
-        configuredTiers={configuredTiers as string[]}
-        students={
-          (students ?? []) as Parameters<typeof CourseBillingClient>[0]["students"]
+        courses={
+          (courses ?? []) as Parameters<typeof ProgramBillingClient>[0]["courses"]
         }
-        plans={(plans ?? []) as Parameters<typeof CourseBillingClient>[0]["plans"]}
+        itemsByCourse={
+          itemsByCourse as Parameters<typeof ProgramBillingClient>[0]["itemsByCourse"]
+        }
       />
     </div>
   );

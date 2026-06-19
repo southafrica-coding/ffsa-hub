@@ -1,7 +1,7 @@
 // ────────────────────────────────────────────────────────────
 // FFSA Hub — School Billing Engine (config layer)
-// Itemized, per-course/tier charge configuration + program groups.
-// See migration 095_school_billing_engine.sql.
+// Program (umbrella) → billing_courses → fee_charge_items / plans.
+// See migrations 095 + 098.
 // ────────────────────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -31,7 +31,7 @@ export type GenerationRule =
   | "days_before_due";
 
 export interface ChargeItemInput {
-  program_id: string;
+  course_id: string;
   tier: Tier;
   charge_type: ChargeType;
   label: string;
@@ -54,124 +54,104 @@ export interface ChargeItemInput {
 }
 
 // ────────────────────────────────────────────────────────────
-// PROGRAM GROUPS  ("Programs" — the umbrella over courses)
+// PROGRAMS (umbrella — the existing `programs` table)
 // ────────────────────────────────────────────────────────────
 
-export async function getProgramGroups(supabase: Client) {
+export async function getProgramsForBilling(supabase: Client) {
   return supabase
-    .from("program_groups")
-    .select("*, programs(id, name, code, status)")
-    .order("year", { ascending: false })
+    .from("programs")
+    .select("id, name, code, status, billing_courses(id)")
     .order("name", { ascending: true });
 }
 
-export async function getProgramGroupById(supabase: Client, id: string) {
+// ────────────────────────────────────────────────────────────
+// BILLING COURSES (chronological courses under a Program)
+// ────────────────────────────────────────────────────────────
+
+export async function getBillingCoursesByProgram(
+  supabase: Client,
+  programId: string
+) {
   return supabase
-    .from("program_groups")
-    .select("*, programs(id, name, code, status, billing_arrival_date, billing_start_date)")
-    .eq("id", id)
-    .single();
+    .from("billing_courses")
+    .select("*, fee_charge_items(id)")
+    .eq("program_id", programId)
+    .order("sequence", { ascending: true })
+    .order("name", { ascending: true });
 }
 
-export async function createProgramGroup(
+export async function getBillingCourseById(supabase: Client, id: string) {
+  return supabase.from("billing_courses").select("*").eq("id", id).single();
+}
+
+export async function createBillingCourse(
   supabase: Client,
   data: {
-    name: string;
+    program_id: string;
     code: string;
-    year?: number | null;
-    description?: string | null;
+    name: string;
+    scope?: "full_program" | "segment";
+    sequence?: number;
+    start_date?: string | null;
+    end_date?: string | null;
+    arrival_date?: string | null;
+    enroll_lead_days?: number;
     created_by?: string | null;
   }
 ) {
-  return supabase.from("program_groups").insert(data).select().single();
+  return supabase.from("billing_courses").insert(data).select().single();
 }
 
-export async function updateProgramGroup(
+export async function updateBillingCourse(
   supabase: Client,
   id: string,
-  data: {
-    name?: string;
-    code?: string;
-    year?: number | null;
-    description?: string | null;
-    status?: string;
-  }
+  data: Record<string, unknown>
 ) {
   return supabase
-    .from("program_groups")
+    .from("billing_courses")
     .update(data)
     .eq("id", id)
     .select()
     .single();
 }
 
-export async function deleteProgramGroup(supabase: Client, id: string) {
-  return supabase.from("program_groups").delete().eq("id", id);
-}
-
-// ────────────────────────────────────────────────────────────
-// COURSE BILLING SETTINGS (group assignment + anchor dates)
-// "Course" === a row in the existing `programs` table.
-// ────────────────────────────────────────────────────────────
-
-export async function setCourseBilling(
-  supabase: Client,
-  programId: string,
-  data: {
-    program_group_id?: string | null;
-    billing_arrival_date?: string | null;
-    billing_start_date?: string | null;
-  }
-) {
-  return supabase
-    .from("programs")
-    .update(data)
-    .eq("id", programId)
-    .select("id, name, code, program_group_id, billing_arrival_date, billing_start_date")
-    .single();
-}
-
-// All courses with their billing config + a count of charge items.
-export async function getCoursesWithBilling(supabase: Client) {
-  return supabase
-    .from("programs")
-    .select(
-      "id, name, code, status, program_group_id, billing_arrival_date, billing_start_date, program_groups(id, name, code, year), fee_charge_items(id)"
-    )
-    .order("name", { ascending: true });
+export async function deleteBillingCourse(supabase: Client, id: string) {
+  return supabase.from("billing_courses").delete().eq("id", id);
 }
 
 // ────────────────────────────────────────────────────────────
 // FEE CHARGE ITEMS (per course + tier)
 // ────────────────────────────────────────────────────────────
 
-export async function getChargeItemsByProgram(
+export async function getChargeItemsByCourse(
   supabase: Client,
-  programId: string
+  courseId: string
 ) {
   return supabase
     .from("fee_charge_items")
     .select("*")
-    .eq("program_id", programId)
+    .eq("course_id", courseId)
     .order("tier", { ascending: true })
     .order("sort_order", { ascending: true });
 }
 
-export async function upsertChargeItem(
+export async function getChargeItemsByProgram(
   supabase: Client,
-  data: ChargeItemInput
+  programId: string
 ) {
+  // All charge items for every course under a program (for overview).
+  return supabase
+    .from("fee_charge_items")
+    .select("*, billing_courses!inner(program_id)")
+    .eq("billing_courses.program_id", programId);
+}
+
+export async function upsertChargeItem(supabase: Client, data: ChargeItemInput) {
   return supabase
     .from("fee_charge_items")
     .upsert(
-      {
-        cadence: "once",
-        quantity: 1,
-        active: true,
-        sort_order: 0,
-        ...data,
-      },
-      { onConflict: "program_id,tier,charge_type" }
+      { cadence: "once", quantity: 1, active: true, sort_order: 0, ...data },
+      { onConflict: "course_id,tier,charge_type" }
     )
     .select()
     .single();
@@ -182,10 +162,10 @@ export async function deleteChargeItem(supabase: Client, id: string) {
 }
 
 // ────────────────────────────────────────────────────────────
-// ENROLLED STUDENTS (for a course) + their billing plans
+// ENROLLED STUDENTS (program-level enrolment) + billing plans
 // ────────────────────────────────────────────────────────────
 
-export async function getEnrolledStudentsForCourse(
+export async function getEnrolledStudentsForProgram(
   supabase: Client,
   programId: string
 ) {
@@ -201,23 +181,12 @@ export async function getEnrolledStudentsForCourse(
 
 export async function getBillingPlansForCourse(
   supabase: Client,
-  programId: string
+  courseId: string
 ) {
   return supabase
     .from("student_billing_plans")
     .select("*, student_billing_schedule(*)")
-    .eq("program_id", programId);
-}
-
-export async function getBillingPlanByEnrollment(
-  supabase: Client,
-  enrollmentId: string
-) {
-  return supabase
-    .from("student_billing_plans")
-    .select("*, student_billing_schedule(*)")
-    .eq("enrollment_id", enrollmentId)
-    .maybeSingle();
+    .eq("course_id", courseId);
 }
 
 export async function upsertBillingPlan(
@@ -226,7 +195,7 @@ export async function upsertBillingPlan(
     enrollment_id: string;
     user_id: string;
     program_id: string;
-    program_group_id?: string | null;
+    course_id: string;
     tier: Tier;
     tier_override?: boolean;
     payment_preference: "standard" | "quarter_prepay" | "full_prepay";
@@ -236,7 +205,7 @@ export async function upsertBillingPlan(
 ) {
   return supabase
     .from("student_billing_plans")
-    .upsert(data, { onConflict: "enrollment_id" })
+    .upsert(data, { onConflict: "enrollment_id,course_id" })
     .select()
     .single();
 }

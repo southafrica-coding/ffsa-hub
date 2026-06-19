@@ -16,7 +16,7 @@ import {
 
 type Preference = "standard" | "quarter_prepay" | "full_prepay";
 
-// POST { enrollment_id, tier?, payment_preference, action: 'preview' | 'commit' }
+// POST { enrollment_id, course_id, tier?, payment_preference, action }
 export async function POST(request: Request) {
   const supabase = await createClient();
   const {
@@ -34,13 +34,14 @@ export async function POST(request: Request) {
 
   const body = await request.json();
   const enrollmentId: string = body.enrollment_id;
+  const courseId: string = body.course_id;
   const action: "preview" | "commit" = body.action ?? "preview";
   const preference: Preference = body.payment_preference ?? "standard";
   const tierOverride: Tier | undefined = body.tier;
 
-  if (!enrollmentId) {
+  if (!enrollmentId || !courseId) {
     return NextResponse.json(
-      { error: "enrollment_id is required" },
+      { error: "enrollment_id and course_id are required" },
       { status: 400 }
     );
   }
@@ -48,7 +49,6 @@ export async function POST(request: Request) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = supabase as any;
 
-  // 1. Load enrollment + student
   const { data: enrollment, error: enrErr } = await db
     .from("enrollments")
     .select(
@@ -58,22 +58,20 @@ export async function POST(request: Request) {
     .single();
 
   if (enrErr || !enrollment) {
-    return NextResponse.json(
-      { error: "Enrollment not found" },
-      { status: 404 }
-    );
+    return NextResponse.json({ error: "Enrollment not found" }, { status: 404 });
   }
 
-  // 2. Load course (program) + its program group
-  const { data: course } = await db
-    .from("programs")
-    .select(
-      "id, program_group_id, billing_arrival_date, program_groups(id, year)"
-    )
-    .eq("id", enrollment.program_id)
+  const { data: course, error: courseErr } = await db
+    .from("billing_courses")
+    .select("id, program_id, arrival_date, start_date")
+    .eq("id", courseId)
     .single();
 
-  // 3. Resolve tier (explicit override → country tier → 'A')
+  if (courseErr || !course) {
+    return NextResponse.json({ error: "Course not found" }, { status: 404 });
+  }
+
+  // Resolve tier (explicit override → country tier → 'A')
   let tier: Tier = tierOverride ?? "A";
   if (!tierOverride) {
     const tierMap = await getCountryTierMap(supabase);
@@ -81,31 +79,33 @@ export async function POST(request: Request) {
     tier = tierMap[nat] ?? "A";
   }
 
-  // 4. Load charge items for this course + tier
   const { data: items } = await db
     .from("fee_charge_items")
     .select("*")
-    .eq("program_id", enrollment.program_id)
+    .eq("course_id", courseId)
     .eq("tier", tier)
     .eq("active", true);
 
-  const acceptanceDate = (enrollment.enrolled_at ?? new Date().toISOString()).split(
-    "T"
-  )[0];
+  const acceptanceDate = (
+    enrollment.enrolled_at ?? new Date().toISOString()
+  ).split("T")[0];
+
+  const groupYear = course.start_date
+    ? Number(String(course.start_date).split("-")[0])
+    : null;
 
   const { rows, warnings } = buildSchedule(
     (items ?? []) as BuilderChargeItem[],
     {
       acceptanceDate,
-      arrivalDate: course?.billing_arrival_date ?? null,
-      groupYear: course?.program_groups?.year ?? null,
+      arrivalDate: course.arrival_date ?? null,
+      groupYear,
       paymentPreference: preference,
     }
   );
 
   const region = getXeroRegionForStudent(enrollment.users?.nationality ?? null);
 
-  // ── Preview only ──
   if (action === "preview") {
     return NextResponse.json({
       success: true,
@@ -122,7 +122,7 @@ export async function POST(request: Request) {
     enrollment_id: enrollmentId,
     user_id: enrollment.user_id,
     program_id: enrollment.program_id,
-    program_group_id: course?.program_group_id ?? null,
+    course_id: courseId,
     tier,
     tier_override: !!tierOverride,
     payment_preference: preference,
@@ -150,11 +150,7 @@ export async function POST(request: Request) {
     status: "scheduled",
   }));
 
-  const { error: rowsErr } = await replaceScheduledRows(
-    supabase,
-    plan.id,
-    payload
-  );
+  const { error: rowsErr } = await replaceScheduledRows(supabase, plan.id, payload);
   if (rowsErr) {
     return NextResponse.json({ error: rowsErr.message }, { status: 500 });
   }

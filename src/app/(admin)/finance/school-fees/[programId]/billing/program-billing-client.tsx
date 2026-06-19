@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,9 +31,10 @@ import {
   Trash2,
   Loader2,
   Sparkles,
-  Calendar,
   ChevronDown,
   ChevronRight,
+  CalendarDays,
+  ArrowRight,
 } from "lucide-react";
 import {
   CHARGE_TYPE_META,
@@ -49,35 +51,26 @@ import type {
   Tier,
 } from "@/services/school-billing";
 
-// ────────────────────────────────────────────────────────────
-// TYPES
-// ────────────────────────────────────────────────────────────
-
-type ProgramGroup = {
-  id: string;
-  name: string;
-  code: string;
-  year: number | null;
-  description: string | null;
-  status: string;
-  programs: { id: string; name: string; code: string; status: string }[] | null;
-};
+// ── Types ───────────────────────────────────────────────────
 
 type Course = {
   id: string;
-  name: string;
+  program_id: string;
   code: string;
+  name: string;
+  scope: "full_program" | "segment";
+  sequence: number;
+  start_date: string | null;
+  end_date: string | null;
+  arrival_date: string | null;
+  enroll_lead_days: number;
   status: string;
-  program_group_id: string | null;
-  billing_arrival_date: string | null;
-  billing_start_date: string | null;
-  program_groups: { id: string; name: string; code: string; year: number | null } | null;
   fee_charge_items: { id: string }[] | null;
 };
 
 type ChargeItem = {
   id: string;
-  program_id: string;
+  course_id: string;
   tier: Tier;
   charge_type: ChargeType;
   label: string;
@@ -98,10 +91,6 @@ type ChargeItem = {
   active: boolean;
   notes: string | null;
 };
-
-// ────────────────────────────────────────────────────────────
-// HELPERS
-// ────────────────────────────────────────────────────────────
 
 const MONTHS = [
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -125,7 +114,9 @@ function dueSummary(item: ChargeItem): string {
     case "relative_to_arrival": {
       const off = item.arrival_offset_days ?? 0;
       const when =
-        off === 0 ? "on arrival" : `${Math.abs(off)} days ${off < 0 ? "before" : "after"} arrival`;
+        off === 0
+          ? "on arrival"
+          : `${Math.abs(off)} days ${off < 0 ? "before" : "after"} arrival`;
       return `${occ} · due ${when}`;
     }
     default:
@@ -133,320 +124,83 @@ function dueSummary(item: ChargeItem): string {
   }
 }
 
-// ────────────────────────────────────────────────────────────
-// ROOT
-// ────────────────────────────────────────────────────────────
+// ── Root ────────────────────────────────────────────────────
 
-export function BillingSetupClient({
-  groups,
+export function ProgramBillingClient({
+  programId,
   courses,
-  itemsByProgram,
+  itemsByCourse,
 }: {
-  groups: ProgramGroup[];
+  programId: string;
   courses: Course[];
-  itemsByProgram: Record<string, ChargeItem[]>;
+  itemsByCourse: Record<string, ChargeItem[]>;
 }) {
-  return (
-    <div className="space-y-8">
-      <ProgramGroupsSection groups={groups} />
-      <CoursesSection
-        courses={courses}
-        groups={groups}
-        itemsByProgram={itemsByProgram}
-      />
-    </div>
-  );
-}
-
-// ────────────────────────────────────────────────────────────
-// PROGRAM GROUPS
-// ────────────────────────────────────────────────────────────
-
-function ProgramGroupsSection({ groups }: { groups: ProgramGroup[] }) {
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<ProgramGroup | null>(null);
+  const [dialogCourse, setDialogCourse] = useState<Course | null>(null);
+  const [creating, setCreating] = useState(false);
 
   return (
-    <section className="space-y-3">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">Programs</h2>
-          <p className="text-xs text-muted-foreground">
-            The umbrella each set of courses rolls up into (e.g. FFX 2027).
-          </p>
-        </div>
-        <Button
-          size="sm"
-          onClick={() => {
-            setEditing(null);
-            setOpen(true);
-          }}
-        >
-          <Plus className="h-4 w-4 mr-1" /> New Program
+        <p className="text-sm text-muted-foreground">
+          {courses.length} course{courses.length !== 1 ? "s" : ""}
+        </p>
+        <Button size="sm" onClick={() => setCreating(true)}>
+          <Plus className="h-4 w-4 mr-1" /> New Course
         </Button>
       </div>
 
-      {groups.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-4">
-          No programs yet. Create one to group your courses.
-        </p>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {groups.map((g) => (
-            <Card key={g.id}>
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">{g.name}</CardTitle>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={() => {
-                      setEditing(g);
-                      setOpen(true);
-                    }}
-                  >
-                    <Pencil className="h-3 w-3" />
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary" className="text-xs">
-                    {g.code}
-                  </Badge>
-                  {g.year && (
-                    <Badge variant="outline" className="text-xs">
-                      {g.year}
-                    </Badge>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {g.programs?.length ?? 0} course
-                  {(g.programs?.length ?? 0) !== 1 ? "s" : ""} linked
-                </p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      <ProgramGroupDialog
-        open={open}
-        onOpenChange={setOpen}
-        group={editing}
-      />
-    </section>
-  );
-}
-
-function ProgramGroupDialog({
-  open,
-  onOpenChange,
-  group,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  group: ProgramGroup | null;
-}) {
-  const router = useRouter();
-  const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({
-    name: group?.name ?? "",
-    code: group?.code ?? "",
-    year: group?.year ? String(group.year) : "",
-    description: group?.description ?? "",
-  });
-
-  // Reset form whenever the dialog target changes
-  const [lastId, setLastId] = useState<string | null>(group?.id ?? null);
-  if (open && (group?.id ?? null) !== lastId) {
-    setLastId(group?.id ?? null);
-    setForm({
-      name: group?.name ?? "",
-      code: group?.code ?? "",
-      year: group?.year ? String(group.year) : "",
-      description: group?.description ?? "",
-    });
-  }
-
-  async function save() {
-    if (!form.name || !form.code) {
-      toast.error("Name and code are required");
-      return;
-    }
-    setLoading(true);
-    try {
-      const res = await fetch("/api/finance/school-fees/program-groups", {
-        method: group ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: group?.id,
-          name: form.name,
-          code: form.code,
-          year: form.year ? Number(form.year) : null,
-          description: form.description || null,
-        }),
-      });
-      if (res.ok) {
-        toast.success(group ? "Program updated" : "Program created");
-        onOpenChange(false);
-        router.refresh();
-      } else {
-        const { error } = await res.json();
-        toast.error(error || "Failed to save");
-      }
-    } catch {
-      toast.error("Network error");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{group ? "Edit Program" : "New Program"}</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div>
-            <Label>Name</Label>
-            <Input
-              value={form.name}
-              placeholder="FFX Year Long"
-              onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label>Code</Label>
-              <Input
-                value={form.code}
-                placeholder="FFX2027"
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, code: e.target.value }))
-                }
-              />
-            </div>
-            <div>
-              <Label>Year</Label>
-              <Input
-                type="number"
-                value={form.year}
-                placeholder="2027"
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, year: e.target.value }))
-                }
-              />
-            </div>
-          </div>
-          <div>
-            <Label>Description</Label>
-            <Textarea
-              value={form.description}
-              rows={2}
-              onChange={(e) =>
-                setForm((p) => ({ ...p, description: e.target.value }))
-              }
-            />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={save} disabled={loading}>
-            {loading ? "Saving..." : "Save"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ────────────────────────────────────────────────────────────
-// COURSES + CHARGE ITEMS
-// ────────────────────────────────────────────────────────────
-
-function CoursesSection({
-  courses,
-  groups,
-  itemsByProgram,
-}: {
-  courses: Course[];
-  groups: ProgramGroup[];
-  itemsByProgram: Record<string, ChargeItem[]>;
-}) {
-  return (
-    <section className="space-y-3">
-      <div>
-        <h2 className="text-lg font-semibold">Courses & Charge Items</h2>
-        <p className="text-xs text-muted-foreground">
-          Each course (FFXYL, FFXQ, …) and its per-tier charge items. Link a
-          course to a program, set arrival/start dates, and configure charges.
-        </p>
-      </div>
-
       {courses.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-4">
-          No courses found. Create programs (courses) under Schools first.
+        <p className="text-sm text-muted-foreground py-6 text-center">
+          No courses yet. Add the courses that make up this program (e.g. FFXYL,
+          FFXQ, FFBXQ, FFWVQ).
         </p>
       ) : (
         <div className="space-y-3">
           {courses.map((course) => (
             <CourseCard
               key={course.id}
+              programId={programId}
               course={course}
-              groups={groups}
-              items={itemsByProgram[course.id] ?? []}
+              items={itemsByCourse[course.id] ?? []}
+              onEdit={() => setDialogCourse(course)}
             />
           ))}
         </div>
       )}
-    </section>
+
+      {(creating || dialogCourse) && (
+        <CourseDialog
+          programId={programId}
+          course={dialogCourse}
+          onClose={() => {
+            setCreating(false);
+            setDialogCourse(null);
+          }}
+        />
+      )}
+    </div>
   );
 }
 
+// ── Course card ─────────────────────────────────────────────
+
 function CourseCard({
+  programId,
   course,
-  groups,
   items,
+  onEdit,
 }: {
+  programId: string;
   course: Course;
-  groups: ProgramGroup[];
   items: ChargeItem[];
+  onEdit: () => void;
 }) {
   const router = useRouter();
   const [expanded, setExpanded] = useState(false);
-  const [savingMeta, setSavingMeta] = useState(false);
   const [seeding, setSeeding] = useState(false);
-  const [arrival, setArrival] = useState(course.billing_arrival_date ?? "");
-  const [start, setStart] = useState(course.billing_start_date ?? "");
 
   const hasTemplate = !!FFX_2027_TEMPLATE[course.code];
-
-  async function saveCourseBilling(patch: Record<string, unknown>) {
-    setSavingMeta(true);
-    try {
-      const res = await fetch("/api/finance/school-fees/course-billing", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ program_id: course.id, ...patch }),
-      });
-      if (res.ok) {
-        toast.success("Course billing updated");
-        router.refresh();
-      } else {
-        const { error } = await res.json();
-        toast.error(error || "Failed to update");
-      }
-    } catch {
-      toast.error("Network error");
-    } finally {
-      setSavingMeta(false);
-    }
-  }
+  const itemCount = items.length;
 
   async function loadTemplate() {
     const template = FFX_2027_TEMPLATE[course.code];
@@ -454,7 +208,7 @@ function CourseCard({
     setSeeding(true);
     try {
       const all = TIERS.flatMap((tier) =>
-        (template[tier] ?? []).map((item) => ({ ...item, program_id: course.id }))
+        (template[tier] ?? []).map((item) => ({ ...item, course_id: course.id }))
       );
       for (const item of all) {
         const res = await fetch("/api/finance/school-fees/charge-items", {
@@ -477,15 +231,17 @@ function CourseCard({
     }
   }
 
-  const itemCount = items.length;
+  const dateRange =
+    course.start_date || course.end_date
+      ? `${course.start_date ?? "?"} → ${course.end_date ?? "?"}`
+      : null;
 
   return (
     <Card>
-      <CardContent className="pt-4 space-y-4">
-        {/* Header row */}
+      <CardContent className="pt-4 space-y-3">
         <div className="flex items-start justify-between gap-3">
           <button
-            className="flex items-center gap-2 text-left"
+            className="flex items-center gap-2 text-left min-w-0"
             onClick={() => setExpanded((v) => !v)}
           >
             {expanded ? (
@@ -493,101 +249,64 @@ function CourseCard({
             ) : (
               <ChevronRight className="h-4 w-4 shrink-0" />
             )}
-            <div>
-              <p className="font-semibold">
-                {course.name}{" "}
-                <Badge variant="secondary" className="text-xs ml-1">
+            <div className="min-w-0">
+              <p className="font-semibold flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-muted-foreground font-mono">
+                  #{course.sequence}
+                </span>
+                {course.name}
+                <Badge variant="secondary" className="text-xs">
                   {course.code}
                 </Badge>
+                {course.scope === "full_program" && (
+                  <Badge variant="outline" className="text-[10px]">
+                    whole year
+                  </Badge>
+                )}
               </p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground flex items-center gap-2">
                 {itemCount} charge item{itemCount !== 1 ? "s" : ""}
-                {course.program_groups
-                  ? ` · ${course.program_groups.name}`
-                  : " · no program"}
+                {dateRange && (
+                  <span className="flex items-center gap-1">
+                    <CalendarDays className="h-3 w-3" />
+                    {dateRange}
+                  </span>
+                )}
               </p>
             </div>
           </button>
 
-          {hasTemplate && itemCount === 0 && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={loadTemplate}
-              disabled={seeding}
+          <div className="flex items-center gap-2 shrink-0">
+            {hasTemplate && itemCount === 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={loadTemplate}
+                disabled={seeding}
+              >
+                {seeding ? (
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4 mr-1" />
+                )}
+                Load FFX 2027
+              </Button>
+            )}
+            <Link
+              href={`/finance/school-fees/${programId}/billing/${course.id}`}
+              className="inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-medium hover:bg-muted"
             >
-              {seeding ? (
-                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-              ) : (
-                <Sparkles className="h-4 w-4 mr-1" />
-              )}
-              Load FFX 2027
+              Student schedules <ArrowRight className="h-3 w-3" />
+            </Link>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onEdit}>
+              <Pencil className="h-3 w-3" />
             </Button>
-          )}
+          </div>
         </div>
 
         {expanded && (
-          <div className="space-y-4 pl-6">
-            {/* Course billing meta */}
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div>
-                <Label className="text-xs">Program</Label>
-                <Select
-                  value={course.program_group_id ?? "none"}
-                  onValueChange={(v) =>
-                    saveCourseBilling({
-                      program_group_id: v === "none" ? null : v,
-                    })
-                  }
-                  disabled={savingMeta}
-                >
-                  <SelectTrigger className="h-9">
-                    <SelectValue placeholder="Unassigned" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Unassigned</SelectItem>
-                    {groups.map((g) => (
-                      <SelectItem key={g.id} value={g.id}>
-                        {g.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-xs flex items-center gap-1">
-                  <Calendar className="h-3 w-3" /> Arrival date
-                </Label>
-                <Input
-                  type="date"
-                  value={arrival}
-                  className="h-9"
-                  onChange={(e) => setArrival(e.target.value)}
-                  onBlur={() => {
-                    if (arrival !== (course.billing_arrival_date ?? ""))
-                      saveCourseBilling({ billing_arrival_date: arrival });
-                  }}
-                />
-              </div>
-              <div>
-                <Label className="text-xs flex items-center gap-1">
-                  <Calendar className="h-3 w-3" /> Start date
-                </Label>
-                <Input
-                  type="date"
-                  value={start}
-                  className="h-9"
-                  onChange={(e) => setStart(e.target.value)}
-                  onBlur={() => {
-                    if (start !== (course.billing_start_date ?? ""))
-                      saveCourseBilling({ billing_start_date: start });
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Charge items per tier */}
-            <ChargeItemsEditor programId={course.id} items={items} />
+          <div className="pl-6">
+            <ChargeItemsEditor courseId={course.id} items={items} />
           </div>
         )}
       </CardContent>
@@ -595,15 +314,217 @@ function CourseCard({
   );
 }
 
-// ────────────────────────────────────────────────────────────
-// CHARGE ITEMS EDITOR (tabs A/B/C)
-// ────────────────────────────────────────────────────────────
+// ── Course create/edit dialog ───────────────────────────────
 
-function ChargeItemsEditor({
+function CourseDialog({
   programId,
-  items,
+  course,
+  onClose,
 }: {
   programId: string;
+  course: Course | null;
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [form, setForm] = useState({
+    code: course?.code ?? "",
+    name: course?.name ?? "",
+    scope: course?.scope ?? ("segment" as "segment" | "full_program"),
+    sequence: course ? String(course.sequence) : "0",
+    start_date: course?.start_date ?? "",
+    end_date: course?.end_date ?? "",
+    arrival_date: course?.arrival_date ?? "",
+    enroll_lead_days: course ? String(course.enroll_lead_days) : "30",
+  });
+
+  const set = (patch: Partial<typeof form>) =>
+    setForm((p) => ({ ...p, ...patch }));
+
+  async function save() {
+    if (!form.code || !form.name) {
+      toast.error("Code and name are required");
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch("/api/finance/school-fees/billing-courses", {
+        method: course ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: course?.id,
+          program_id: programId,
+          code: form.code,
+          name: form.name,
+          scope: form.scope,
+          sequence: Number(form.sequence) || 0,
+          start_date: form.start_date || null,
+          end_date: form.end_date || null,
+          arrival_date: form.arrival_date || null,
+          enroll_lead_days: Number(form.enroll_lead_days) || 30,
+        }),
+      });
+      if (res.ok) {
+        toast.success(course ? "Course updated" : "Course created");
+        onClose();
+        router.refresh();
+      } else {
+        const { error } = await res.json();
+        toast.error(error || "Failed to save");
+      }
+    } catch {
+      toast.error("Network error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function remove() {
+    if (!course) return;
+    if (!confirm(`Delete course "${course.name}" and all its charge items?`))
+      return;
+    setDeleting(true);
+    try {
+      const res = await fetch(
+        `/api/finance/school-fees/billing-courses?id=${course.id}`,
+        { method: "DELETE" }
+      );
+      if (res.ok) {
+        toast.success("Course deleted");
+        onClose();
+        router.refresh();
+      } else {
+        toast.error("Failed to delete");
+      }
+    } catch {
+      toast.error("Network error");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{course ? "Edit course" : "New course"}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Code</Label>
+              <Input
+                value={form.code}
+                placeholder="FFXYL"
+                onChange={(e) => set({ code: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Sequence (order)</Label>
+              <Input
+                type="number"
+                value={form.sequence}
+                onChange={(e) => set({ sequence: e.target.value })}
+              />
+            </div>
+          </div>
+          <div>
+            <Label>Name</Label>
+            <Input
+              value={form.name}
+              placeholder="FFX Year Long"
+              onChange={(e) => set({ name: e.target.value })}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Scope</Label>
+              <Select
+                value={form.scope}
+                onValueChange={(v) =>
+                  set({ scope: v as "segment" | "full_program" })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="segment">Segment (e.g. a quarter)</SelectItem>
+                  <SelectItem value="full_program">Whole year</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Enrolment opens (days before start)</Label>
+              <Input
+                type="number"
+                value={form.enroll_lead_days}
+                onChange={(e) => set({ enroll_lead_days: e.target.value })}
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <Label>Start date</Label>
+              <Input
+                type="date"
+                value={form.start_date}
+                onChange={(e) => set({ start_date: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>End date</Label>
+              <Input
+                type="date"
+                value={form.end_date}
+                onChange={(e) => set({ end_date: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Arrival date</Label>
+              <Input
+                type="date"
+                value={form.arrival_date}
+                onChange={(e) => set({ arrival_date: e.target.value })}
+              />
+            </div>
+          </div>
+        </div>
+        <DialogFooter className="flex items-center justify-between sm:justify-between">
+          {course ? (
+            <Button
+              variant="ghost"
+              className="text-destructive"
+              onClick={remove}
+              disabled={deleting}
+            >
+              <Trash2 className="h-4 w-4 mr-1" /> Delete
+            </Button>
+          ) : (
+            <span />
+          )}
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button onClick={save} disabled={loading}>
+              {loading ? "Saving..." : "Save"}
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Charge items editor (tabs A/B/C) ────────────────────────
+
+function ChargeItemsEditor({
+  courseId,
+  items,
+}: {
+  courseId: string;
   items: ChargeItem[];
 }) {
   const [dialogState, setDialogState] = useState<{
@@ -629,17 +550,16 @@ function ChargeItemsEditor({
           const tierItems = byTier[tier];
           const total = tierItems.reduce(
             (sum, it) =>
-              sum + Number(it.amount_zar) * (it.cadence === "monthly" ? it.quantity : 1),
+              sum +
+              Number(it.amount_zar) * (it.cadence === "monthly" ? it.quantity : 1),
             0
           );
           return (
             <TabsContent key={tier} value={tier} className="mt-3 space-y-2">
               <div className="flex items-center justify-between">
                 <p className="text-xs text-muted-foreground">
-                  Program total (Tier {tier}):{" "}
-                  <span className="font-mono font-medium">
-                    {formatZAR(total)}
-                  </span>
+                  Course total (Tier {tier}):{" "}
+                  <span className="font-mono font-medium">{formatZAR(total)}</span>
                 </p>
                 <Button
                   size="sm"
@@ -672,7 +592,7 @@ function ChargeItemsEditor({
 
       {dialogState && (
         <ChargeItemDialog
-          programId={programId}
+          courseId={courseId}
           tier={dialogState.tier}
           item={dialogState.item}
           onClose={() => setDialogState(null)}
@@ -730,7 +650,9 @@ function ChargeItemRow({
         <p className="text-xs text-muted-foreground">{dueSummary(item)}</p>
       </div>
       <div className="flex items-center gap-2 shrink-0">
-        <span className="font-mono text-sm">{formatZAR(Number(item.amount_zar))}</span>
+        <span className="font-mono text-sm">
+          {formatZAR(Number(item.amount_zar))}
+        </span>
         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onEdit}>
           <Pencil className="h-3 w-3" />
         </Button>
@@ -748,9 +670,7 @@ function ChargeItemRow({
   );
 }
 
-// ────────────────────────────────────────────────────────────
-// CHARGE ITEM DIALOG (add / edit — all fields editable)
-// ────────────────────────────────────────────────────────────
+// ── Charge item dialog ──────────────────────────────────────
 
 const CHARGE_TYPES: ChargeType[] = [
   "deposit",
@@ -775,12 +695,12 @@ const GENERATION_RULES: GenerationRule[] = [
 ];
 
 function ChargeItemDialog({
-  programId,
+  courseId,
   tier,
   item,
   onClose,
 }: {
-  programId: string;
+  courseId: string;
   tier: Tier;
   item: ChargeItem | null;
   onClose: () => void;
@@ -827,7 +747,7 @@ function ChargeItemDialog({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          program_id: programId,
+          course_id: courseId,
           tier,
           charge_type: form.charge_type,
           label: form.label,
@@ -941,9 +861,7 @@ function ChargeItemDialog({
               <Label>Cadence</Label>
               <Select
                 value={form.cadence}
-                onValueChange={(v) =>
-                  set({ cadence: v as "once" | "monthly" })
-                }
+                onValueChange={(v) => set({ cadence: v as "once" | "monthly" })}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -967,7 +885,6 @@ function ChargeItemDialog({
             )}
           </div>
 
-          {/* DUE rules */}
           <div className="rounded-md border p-3 space-y-3">
             <p className="text-xs font-medium uppercase text-muted-foreground">
               When is it due?
@@ -1048,7 +965,6 @@ function ChargeItemDialog({
             )}
           </div>
 
-          {/* GENERATION rules */}
           <div className="rounded-md border p-3 space-y-3">
             <p className="text-xs font-medium uppercase text-muted-foreground">
               When is the invoice generated?
@@ -1080,9 +996,7 @@ function ChargeItemDialog({
                 <Input
                   type="date"
                   value={form.generation_fixed_date}
-                  onChange={(e) =>
-                    set({ generation_fixed_date: e.target.value })
-                  }
+                  onChange={(e) => set({ generation_fixed_date: e.target.value })}
                 />
               </div>
             )}
@@ -1094,9 +1008,7 @@ function ChargeItemDialog({
                   type="number"
                   min="0"
                   value={form.generation_lead_days}
-                  onChange={(e) =>
-                    set({ generation_lead_days: e.target.value })
-                  }
+                  onChange={(e) => set({ generation_lead_days: e.target.value })}
                 />
               </div>
             )}

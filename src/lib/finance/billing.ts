@@ -78,7 +78,7 @@ export const FFX_2027 = {
   year: 2027,
 };
 
-type TemplateItem = Omit<ChargeItemInput, "program_id">;
+type TemplateItem = Omit<ChargeItemInput, "course_id">;
 
 // Helper builders ------------------------------------------------------------
 
