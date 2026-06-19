@@ -45,10 +45,19 @@ function findAnswerByLabel(
 export async function POST(request: Request) {
   const body = await request.json();
   const { program_id, answers, references, files, consent_version } = body;
+  const homeCountry =
+    typeof body.home_country === "string" ? body.home_country.trim() : "";
 
   if (!program_id || !answers) {
     return NextResponse.json(
       { error: "Missing required fields" },
+      { status: 400 }
+    );
+  }
+
+  if (!homeCountry) {
+    return NextResponse.json(
+      { error: "Home country is required." },
       { status: 400 }
     );
   }
@@ -155,9 +164,20 @@ export async function POST(request: Request) {
   if (email) applicantInfo.email = email;
   if (firstName) applicantInfo.first_name = firstName;
   if (lastName) applicantInfo.last_name = lastName;
+  // Home country is the source of truth for the student's fee tier. We store
+  // it as nationality (the field accept-application reads onto users) and keep
+  // an explicit home_country copy. country_tiers maps this exact value to A/B/C.
+  applicantInfo.home_country = homeCountry;
+  applicantInfo.nationality = homeCountry;
   if (files && Array.isArray(files) && files.length > 0) {
     applicantInfo.files = files;
   }
+
+  // Surface home country in the answers list so reviewers see it.
+  const answersWithCountry = [
+    { question_id: "home_country", question_label: "Home Country", answer: homeCountry },
+    ...answers,
+  ];
 
   const { data: response, error: insertError } = await createPublicResponse(
     supabase,
@@ -165,7 +185,7 @@ export async function POST(request: Request) {
       program_id,
       applicant_email: email || "unknown@applicant.local",
       applicant_info: applicantInfo,
-      answers,
+      answers: answersWithCountry,
     }
   );
 

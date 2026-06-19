@@ -116,12 +116,14 @@ export function PublicApplicationForm({
   programName,
   questions,
   referenceSlots = [],
+  countries = [],
   consentAgreementVersion,
 }: {
   programId: string;
   programName: string;
   questions: DbQuestion[];
   referenceSlots?: ReferenceSlot[];
+  countries?: string[];
   consentAgreementVersion: string | null;
 }) {
   const [submitted, setSubmitted] = useState(false);
@@ -133,6 +135,8 @@ export function PublicApplicationForm({
   const [refEmails, setRefEmails] = useState<Record<string, string>>({});
   const [consentAccepted, setConsentAccepted] = useState(false);
   const [consentError, setConsentError] = useState<string | null>(null);
+  const [homeCountry, setHomeCountry] = useState("");
+  const [homeCountryError, setHomeCountryError] = useState<string | null>(null);
 
   // Reorder so follow-ups render directly under their parent (and indent
   // them via depthById) instead of falling to the bottom by sort_order.
@@ -221,6 +225,13 @@ export function PublicApplicationForm({
   async function onSubmit(data: Record<string, unknown>) {
     setServerError(null);
 
+    if (!homeCountry) {
+      setHomeCountryError("Please select your home country.");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    setHomeCountryError(null);
+
     const answers: Array<{
       question_id: string;
       question_label: string;
@@ -297,6 +308,7 @@ export function PublicApplicationForm({
           program_id: programId,
           answers,
           references,
+          home_country: homeCountry,
           files: files.length > 0 ? files : undefined,
           consent_version: consentAgreementVersion,
         }),
@@ -349,6 +361,39 @@ export function PublicApplicationForm({
       {hasAttemptedSubmit && Object.keys(errors).length > 0 && (
         <ErrorSummary errors={errors} questions={allQuestions} />
       )}
+
+      {/* Home Country — required on every application; drives fee tier */}
+      <div className="rounded-lg border bg-card p-6 space-y-2">
+        <Label htmlFor="home_country">
+          Home Country
+          <span className="text-destructive ml-0.5">*</span>
+        </Label>
+        <p className="text-xs text-muted-foreground">
+          Your country of residence. This determines your fee category.
+        </p>
+        <select
+          id="home_country"
+          value={homeCountry}
+          onChange={(e) => {
+            setHomeCountry(e.target.value);
+            if (e.target.value) setHomeCountryError(null);
+          }}
+          required
+          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+        >
+          <option value="" disabled>
+            Select your home country…
+          </option>
+          {countries.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+        {homeCountryError && (
+          <p className="text-sm text-destructive">{homeCountryError}</p>
+        )}
+      </div>
 
       {/* Application Questions */}
       {visibleQuestions.length > 0 && (

@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getProgramPublicInfo, getQuestionsByProgram, getReferenceSlotsByProgram } from "@/services/schools";
+import { getCountryTiers } from "@/services/school-fees";
 import { getCurrentConsentAgreement } from "@/services/consent";
 import { PublicApplicationForm } from "./public-application-form";
 import {
@@ -41,6 +42,10 @@ export default async function PublicApplyPage({
   const { data: questions } = await getQuestionsByProgram(supabase, programId);
   const { data: referenceSlots } = await getReferenceSlotsByProgram(supabase, programId);
   const { data: agreement } = await getCurrentConsentAgreement(supabase);
+  const { data: countryRows } = await getCountryTiers(supabase);
+  const countries = (countryRows ?? []).map(
+    (c: { country_name: string }) => c.country_name
+  );
 
   return (
     <div className="ffsa-public">
@@ -56,6 +61,7 @@ export default async function PublicApplyPage({
           programName={program.name}
           questions={questions ?? []}
           referenceSlots={referenceSlots ?? []}
+          countries={countries}
           consentAgreementVersion={agreement?.version ?? null}
         />
       </PublicFormShell>
