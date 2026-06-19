@@ -4,6 +4,7 @@ import { getPrograms } from "@/services/schools";
 import { getAllProgramsSummary } from "@/services/school-fees";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Settings2 } from "lucide-react";
 
 export default async function SchoolFeesPage() {
   const supabase = await createClient();
@@ -47,6 +48,13 @@ export default async function SchoolFeesPage() {
           <p className="page-eyebrow">FINANCIAL MANAGEMENT</p>
           <h1 className="page-title">School Fees</h1>
         </div>
+        <Link
+          href="/finance/school-fees/billing-setup"
+          className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-muted transition-colors"
+        >
+          <Settings2 className="h-4 w-4" />
+          Billing Setup
+        </Link>
       </div>
 
       {/* Programs Grid */}
