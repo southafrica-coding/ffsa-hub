@@ -73,9 +73,19 @@ export async function POST(request: Request) {
       options: { redirectTo: `${siteUrl}/auth/confirm?flow=recovery` },
     });
 
-  if (linkError || !linkData?.properties?.action_link) {
+  if (linkError || !linkData?.properties?.hashed_token) {
     return neutral;
   }
+
+  // Do NOT email Supabase's raw action_link (the /auth/v1/verify URL). That
+  // link is a one-time GET — email scanners and clients that pre-fetch links
+  // (Gmail, corporate AV) consume the recovery token before the user clicks,
+  // producing otp_expired. Instead, build a link to OUR /auth/confirm page
+  // carrying the token_hash; the OTP is only verified when the page's JS runs
+  // verifyOtp, which scanners don't trigger.
+  const resetUrl = `${siteUrl}/auth/confirm?flow=recovery&type=recovery&token_hash=${encodeURIComponent(
+    linkData.properties.hashed_token
+  )}`;
 
   const fromEmail = process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com";
   try {
@@ -85,7 +95,7 @@ export async function POST(request: Request) {
       subject: "Reset your FFSA Hub password",
       html: resetPasswordEmailHtml({
         firstName: user.first_name || undefined,
-        resetUrl: linkData.properties.action_link,
+        resetUrl,
       }),
     });
   } catch {

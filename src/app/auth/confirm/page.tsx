@@ -24,6 +24,29 @@ export default function AuthConfirmPage() {
         return;
       }
 
+      // --- OTP token_hash flow in the query string ---
+      // Our branded recovery/invite emails link straight here with
+      // ?token_hash=…&type=… so that link-scanners pre-fetching the email
+      // can't consume the one-time token (only this verifyOtp call does).
+      const queryTokenHash = searchParams.get("token_hash");
+      const queryType = searchParams.get("type");
+      if (queryTokenHash && queryType) {
+        const { error } = await supabase.auth.verifyOtp({
+          token_hash: queryTokenHash,
+          type: queryType as any,
+        });
+        if (error) {
+          router.replace("/login?error=invite_expired");
+          return;
+        }
+        router.replace(
+          isRecovery || queryType === "recovery"
+            ? "/reset-password"
+            : "/onboarding"
+        );
+        return;
+      }
+
       if (code) {
         const { error } = await supabase.auth.exchangeCodeForSession(code);
         if (error) {
