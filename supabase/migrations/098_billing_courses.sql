@@ -55,7 +55,7 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.billing_courses
 -- 2. RE-KEY fee_charge_items: program_id → course_id
 -- ────────────────────────────────────────────────────────────
 
-TRUNCATE public.fee_charge_items;
+TRUNCATE public.fee_charge_items CASCADE;  -- cascades to student_billing_schedule (FK on charge_item_id)
 
 ALTER TABLE public.fee_charge_items
   DROP CONSTRAINT IF EXISTS fee_charge_items_program_id_tier_charge_type_key;
