@@ -19,7 +19,8 @@ import {
   CalendarRange,
   Clock,
   List as ListIcon,
-  AlertTriangle,
+  ClipboardList,
+  Inbox,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import {
@@ -32,7 +33,6 @@ import {
   todayISO,
 } from "@/lib/bookings/dates";
 import { conflictingIds, type BookingWindow } from "@/lib/bookings/conflicts";
-import { statusColor, statusLabel } from "@/lib/bookings/status";
 import type {
   BookingAccess,
   BookingWithRefs,
@@ -43,10 +43,9 @@ import { BookingCalendar } from "./booking-calendar";
 import { BookingList } from "./booking-list";
 import { WeekView } from "./week-view";
 import { DayView } from "./day-view";
-import { ColorDot } from "./ui";
 
 type ViewKind = "month" | "week" | "day" | "list";
-type Filters = { venue: string; ministry: string; status: string };
+type Filters = { venue: string; ministry: string };
 
 const VIEW_OPTIONS: { key: ViewKind; label: string; icon: typeof CalendarDays }[] = [
   { key: "month", label: "Month", icon: CalendarDays },
@@ -64,6 +63,7 @@ export function BookingsView({
   date,
   year,
   month,
+  pendingCount,
   filters,
 }: {
   bookings: BookingWithRefs[];
@@ -74,21 +74,19 @@ export function BookingsView({
   date: string;
   year: number;
   month: number;
+  pendingCount: number;
   filters: Filters;
 }) {
   const router = useRouter();
   const today = todayISO();
 
-  function buildHref(
-    overrides: Partial<Filters & { view: ViewKind; date: string }>
-  ) {
+  function buildHref(overrides: Partial<Filters & { view: ViewKind; date: string }>) {
     const next = { view, date, ...filters, ...overrides };
     const sp = new URLSearchParams();
     if (next.view && next.view !== "month") sp.set("view", next.view);
     if (next.date && next.date !== today) sp.set("date", next.date);
     if (next.venue !== "all") sp.set("venue", next.venue);
     if (next.ministry !== "all") sp.set("ministry", next.ministry);
-    if (next.status !== "all") sp.set("status", next.status);
     const qs = sp.toString();
     return `/bookings${qs ? `?${qs}` : ""}`;
   }
@@ -97,7 +95,6 @@ export function BookingsView({
     router.push(buildHref(overrides));
   }
 
-  // Period navigation depends on the active view.
   let prevDate: string;
   let nextDate: string;
   let headerLabel: string;
@@ -123,18 +120,6 @@ export function BookingsView({
 
   const clashIds = conflictingIds(bookings as unknown as BookingWindow[]);
 
-  const counts = { pending: 0, approved: 0, denied: 0, cancelled: 0 };
-  for (const b of bookings) counts[b.status] = (counts[b.status] ?? 0) + 1;
-
-  const stats: { key: string; label: string; value: number; color?: string; status?: string }[] = [
-    { key: "all", label: "In view", value: bookings.length, status: "all" },
-    { key: "pending", label: "Pending", value: counts.pending, color: statusColor("pending"), status: "pending" },
-    { key: "approved", label: "Approved", value: counts.approved, color: statusColor("approved"), status: "approved" },
-    { key: "denied", label: "Denied", value: counts.denied, color: statusColor("denied"), status: "denied" },
-    { key: "clashes", label: "Clashes", value: clashIds.size, color: "hsl(0 70% 62%)" },
-  ];
-
-  // Day view shows a column per venue (respecting an active venue filter).
   const columnVenues = venues.filter(
     (v) => v.is_active && (filters.venue === "all" || v.id === filters.venue)
   );
@@ -146,8 +131,35 @@ export function BookingsView({
         <div>
           <p className="page-eyebrow">VENUE SCHEDULING</p>
           <h1 className="page-title">Space Bookings</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {bookings.length} confirmed booking{bookings.length === 1 ? "" : "s"} in view
+            {clashIds.size > 0 && (
+              <span className="text-[hsl(0_70%_64%)]">
+                {" "}· {clashIds.size} clash{clashIds.size === 1 ? "" : "es"}
+              </span>
+            )}
+          </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Link href="/bookings/my-requests">
+            <Button variant="ghost" size="sm" className="gap-1.5">
+              <Inbox className="h-4 w-4" />
+              My requests
+            </Button>
+          </Link>
+          {access.canApprove && (
+            <Link href="/bookings/requests">
+              <Button variant="outline" size="sm" className="gap-1.5">
+                <ClipboardList className="h-4 w-4" />
+                Requests
+                {pendingCount > 0 && (
+                  <span className="ml-0.5 rounded-full bg-primary px-1.5 py-px text-[10px] font-bold text-primary-foreground">
+                    {pendingCount}
+                  </span>
+                )}
+              </Button>
+            </Link>
+          )}
           {access.canManage && (
             <Link href="/bookings/venues">
               <Button variant="outline" size="sm" className="gap-1.5">
@@ -167,50 +179,21 @@ export function BookingsView({
         </div>
       </div>
 
-      {/* Summary stat strip */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-        {stats.map((s) => {
-          const active = s.status && filters.status === s.status;
-          const isClashes = s.key === "clashes";
-          const inner = (
-            <>
-              <div
-                className="text-2xl font-bold tabular-nums leading-none"
-                style={{ color: s.value === 0 && isClashes ? undefined : s.color }}
-              >
-                {s.value}
-              </div>
-              <div className="mt-1.5 flex items-center gap-1 text-[9px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-                {isClashes && s.value > 0 && (
-                  <AlertTriangle className="h-3 w-3 text-[hsl(0_70%_62%)]" />
-                )}
-                {s.label}
-              </div>
-            </>
-          );
-          const base = "rounded-xl border bg-card px-3.5 py-3 text-left transition-all";
-          if (isClashes) {
-            return (
-              <div key={s.key} className={cn(base, s.value > 0 && "border-destructive/40")}>
-                {inner}
-              </div>
-            );
-          }
-          return (
-            <Link
-              key={s.key}
-              href={buildHref({ status: s.status })}
-              className={cn(
-                base,
-                "hover:-translate-y-px hover:border-[hsl(22_8%_20%)]",
-                active && "border-primary/55 ring-1 ring-primary/30"
-              )}
-            >
-              {inner}
-            </Link>
-          );
-        })}
-      </div>
+      {/* Manager nudge */}
+      {access.canApprove && pendingCount > 0 && (
+        <Link
+          href="/bookings/requests"
+          className="flex items-center justify-between gap-3 rounded-xl border border-primary/35 bg-primary/[0.07] px-4 py-3 transition-colors hover:bg-primary/10"
+        >
+          <span className="flex items-center gap-2 text-sm font-medium text-primary">
+            <ClipboardList className="h-4 w-4" />
+            {pendingCount} request{pendingCount === 1 ? "" : "s"} awaiting your review
+          </span>
+          <span className="text-xs font-semibold uppercase tracking-wider text-primary">
+            Review →
+          </span>
+        </Link>
+      )}
 
       {/* Controls */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -289,19 +272,6 @@ export function BookingsView({
           </div>
         </div>
       </div>
-
-      {/* Legend */}
-      {view !== "list" && (
-        <div className="-mt-1 flex items-center justify-end gap-4 text-[10px] text-muted-foreground">
-          {["pending", "approved", "denied", "cancelled"].map((s) => (
-            <span key={s} className="inline-flex items-center gap-1.5">
-              <ColorDot color={statusColor(s)} className="h-2 w-2" />
-              {statusLabel(s)}
-            </span>
-          ))}
-          <span className="hidden text-[hsl(30_6%_34%)] sm:inline">· bar = venue</span>
-        </div>
-      )}
 
       {view === "list" ? (
         <BookingList

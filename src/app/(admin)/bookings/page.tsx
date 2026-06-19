@@ -6,6 +6,7 @@ import {
   getVenues,
   getMinistries,
   getBookingAccess,
+  countPendingBookings,
   type BookingWithRefs,
   type Venue,
   type Ministry,
@@ -71,12 +72,14 @@ export default async function BookingsPage({
   const venueId = params.venue && params.venue !== "all" ? params.venue : undefined;
   const ministryId =
     params.ministry && params.ministry !== "all" ? params.ministry : undefined;
-  const status = params.status && params.status !== "all" ? params.status : undefined;
 
-  const [venuesRes, ministriesRes, bookingsRes] = await Promise.all([
+  const [venuesRes, ministriesRes, bookingsRes, pendingCount] = await Promise.all([
     getVenues(supabase),
     getMinistries(supabase),
-    getBookings(supabase, { from, to, venueId, ministryId, status }),
+    // The calendar shows only the confirmed schedule; pending requests live in
+    // the manager's review queue, not here.
+    getBookings(supabase, { from, to, venueId, ministryId, status: "approved" }),
+    countPendingBookings(supabase),
   ]);
 
   const venues = (venuesRes.data ?? []) as Venue[];
@@ -93,10 +96,10 @@ export default async function BookingsPage({
       date={focus}
       year={year}
       month={month}
+      pendingCount={pendingCount}
       filters={{
         venue: params.venue ?? "all",
         ministry: params.ministry ?? "all",
-        status: params.status ?? "all",
       }}
     />
   );

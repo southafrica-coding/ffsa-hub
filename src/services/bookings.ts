@@ -227,6 +227,34 @@ export async function getVenueBookingsBetween(
     .in("status", ["pending", "approved"]);
 }
 
+/** Count of all pending requests — for the manager's "Requests" badge. */
+export async function countPendingBookings(supabase: Client): Promise<number> {
+  const { count } = await supabase
+    .from("venue_bookings")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "pending");
+  return count ?? 0;
+}
+
+/** Every pending request, soonest first — the manager review queue. */
+export async function getPendingRequests(supabase: Client) {
+  return supabase
+    .from("venue_bookings")
+    .select(`*, ${VENUE_EMBED}, ${MINISTRY_EMBED}`)
+    .eq("status", "pending")
+    .order("booking_date", { ascending: true })
+    .order("start_time", { ascending: true, nullsFirst: true });
+}
+
+/** Bookings a given user submitted — their "My requests" list (any status). */
+export async function getMyRequests(supabase: Client, userId: string) {
+  return supabase
+    .from("venue_bookings")
+    .select(`*, ${VENUE_EMBED}, ${MINISTRY_EMBED}`)
+    .eq("requested_by", userId)
+    .order("booking_date", { ascending: false });
+}
+
 export async function getSeriesById(supabase: Client, id: string) {
   return supabase.from("booking_series").select("*").eq("id", id).single();
 }
