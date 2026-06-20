@@ -6,6 +6,8 @@ import { MyAssignmentsCard } from "./my-assignments-card";
 import { StaffWorkloadCard } from "./staff-workload-card";
 import { NotificationFeed } from "./notification-feed";
 import { UpcomingEventsWidget } from "./upcoming-events-widget";
+import { MyBookingsCard } from "./my-bookings-card";
+import { PrayerWeekCard } from "./prayer-week-card";
 
 function StatCard({
   label,
@@ -150,10 +152,14 @@ export default async function DashboardPage() {
       {/* Notification feed — the homescreen for what needs attention */}
       <NotificationFeed initial={notifications} />
 
-      {/* Upcoming events — half-width; second column left open for a future side panel */}
+      {/* Upcoming events + my space bookings, side by side */}
       <div className="grid gap-4 lg:grid-cols-2">
         <UpcomingEventsWidget />
+        <MyBookingsCard />
       </div>
+
+      {/* Prayer Room — this week's schedule, full width */}
+      <PrayerWeekCard />
 
       {/* Stat cards */}
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">

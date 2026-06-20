@@ -255,6 +255,25 @@ export async function getMyRequests(supabase: Client, userId: string) {
     .order("booking_date", { ascending: false });
 }
 
+/** A user's upcoming (today-onward, not cancelled) bookings — soonest first.
+ *  Powers the dashboard "My Space Bookings" panel. */
+export async function getMyUpcomingBookings(
+  supabase: Client,
+  userId: string,
+  todayStr: string,
+  limit = 12
+) {
+  return supabase
+    .from("venue_bookings")
+    .select(`*, ${VENUE_EMBED}, ${MINISTRY_EMBED}`)
+    .eq("requested_by", userId)
+    .gte("booking_date", todayStr)
+    .neq("status", "cancelled")
+    .order("booking_date", { ascending: true })
+    .order("start_time", { ascending: true, nullsFirst: true })
+    .limit(limit);
+}
+
 export async function getSeriesById(supabase: Client, id: string) {
   return supabase.from("booking_series").select("*").eq("id", id).single();
 }
