@@ -82,9 +82,11 @@ export async function PUT(request: Request) {
     "enroll_lead_days",
     "status",
     "notes",
+    "description",
   ]) {
     if (key in body) update[key] = body[key];
   }
+  if ("lead_staff_id" in body) update.lead_staff_id = body.lead_staff_id || null;
   // Date fields: empty string → null
   for (const key of ["start_date", "end_date", "arrival_date"]) {
     if (key in body) update[key] = body[key] || null;
