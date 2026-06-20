@@ -432,6 +432,152 @@ export async function createAndSendInvoice(
 }
 
 // ────────────────────────────────────────────────────────────
+// SCHEDULED INVOICE (from billing schedule rows, using item codes)
+// ────────────────────────────────────────────────────────────
+
+export async function createScheduledInvoice(
+  supabase: Client,
+  params: {
+    region: XeroRegion;
+    studentEmail: string;
+    studentName: string;
+    dueDate: string; // YYYY-MM-DD
+    reference: string;
+    lineItems: Array<{
+      itemCode: string | null;
+      description: string;
+      amount: number;
+    }>;
+    autoSend: boolean;
+  }
+): Promise<{
+  success: boolean;
+  invoiceId?: string;
+  invoiceNumber?: string;
+  status?: string;
+  emailed?: boolean;
+  error?: string;
+}> {
+  const region = params.region;
+  const auth = await getValidAccessToken(supabase, region);
+  if (!auth) {
+    return {
+      success: false,
+      error: `Xero ${region.toUpperCase()} not connected or token expired`,
+    };
+  }
+  const { accessToken, tenantId } = auth;
+  const currencyCode = REGION_CURRENCY[region];
+
+  try {
+    // 1. Find or create the contact
+    let contactId: string;
+    const contactsRes = await xeroGet(
+      accessToken,
+      tenantId,
+      `Contacts?where=EmailAddress%3D%3D%22${encodeURIComponent(params.studentEmail)}%22`
+    );
+    if (contactsRes.Contacts && contactsRes.Contacts.length > 0) {
+      contactId = contactsRes.Contacts[0].ContactID;
+    } else {
+      const nameParts = params.studentName.split(" ");
+      const newContactRes = await xeroPost(accessToken, tenantId, "Contacts", {
+        Contacts: [
+          {
+            Name: params.studentName,
+            EmailAddress: params.studentEmail,
+            FirstName: nameParts[0],
+            LastName: nameParts.slice(1).join(" ") || undefined,
+          },
+        ],
+      });
+      contactId = newContactRes.Contacts[0].ContactID;
+    }
+
+    // 2. Revenue account code (needed to AUTHORISE; else falls back to DRAFT)
+    let accountCode: string | null = null;
+    try {
+      const accountsRes = await xeroGet(
+        accessToken,
+        tenantId,
+        'Accounts?where=Type%3D%3D%22REVENUE%22%20AND%20Status%3D%3D%22ACTIVE%22'
+      );
+      if (accountsRes.Accounts && accountsRes.Accounts.length > 0) {
+        accountCode = accountsRes.Accounts[0].Code;
+      }
+    } catch {
+      // no settings scope — invoice will be DRAFT
+    }
+
+    // 3. Line items (ItemCode pulls the loaded Xero item's account/tax)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const lineItems = params.lineItems.map((li) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const item: any = {
+        Description: li.description,
+        Quantity: 1,
+        UnitAmount: li.amount,
+      };
+      if (li.itemCode) item.ItemCode = li.itemCode;
+      if (accountCode) item.AccountCode = accountCode;
+      return item;
+    });
+
+    const canAuthorise = !!accountCode;
+    const initialStatus = params.autoSend && canAuthorise ? "AUTHORISED" : "DRAFT";
+
+    const invoiceRes = await xeroPost(accessToken, tenantId, "Invoices", {
+      Invoices: [
+        {
+          Type: "ACCREC",
+          Contact: { ContactID: contactId },
+          LineItems: lineItems,
+          Date: new Date().toISOString().split("T")[0],
+          DueDate: params.dueDate,
+          Reference: params.reference,
+          CurrencyCode: currencyCode,
+          Status: initialStatus,
+          LineAmountTypes: "NoTax",
+        },
+      ],
+    });
+
+    const invoice = invoiceRes.Invoices?.[0];
+    if (!invoice?.InvoiceID) {
+      return { success: false, error: "Invoice creation returned no data" };
+    }
+
+    let emailed = false;
+    if (params.autoSend && initialStatus === "AUTHORISED") {
+      try {
+        await xeroPost(
+          accessToken,
+          tenantId,
+          `Invoices/${invoice.InvoiceID}/Email`,
+          {}
+        );
+        emailed = true;
+      } catch (emailErr) {
+        console.error(`Xero (${region}): email failed`, emailErr);
+      }
+    }
+
+    return {
+      success: true,
+      invoiceId: invoice.InvoiceID,
+      invoiceNumber: invoice.InvoiceNumber ?? undefined,
+      status: initialStatus,
+      emailed,
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Unknown Xero error",
+    };
+  }
+}
+
+// ────────────────────────────────────────────────────────────
 // VOID AN EXISTING INVOICE
 // ────────────────────────────────────────────────────────────
 

@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { GraduationCap } from "lucide-react";
 import { CountryTiersDialog } from "./country-tiers-dialog";
+import { GenerateInvoicesButton } from "./generate-invoices-button";
 
 type ProgramRow = {
   id: string;
@@ -40,13 +41,16 @@ export default async function SchoolFeesPage() {
             Pick a program to configure its courses and student billing.
           </p>
         </div>
-        <CountryTiersDialog
-          initialTiers={
-            (countryTiers ?? []) as Parameters<
-              typeof CountryTiersDialog
-            >[0]["initialTiers"]
-          }
-        />
+        <div className="flex items-center gap-2">
+          <GenerateInvoicesButton />
+          <CountryTiersDialog
+            initialTiers={
+              (countryTiers ?? []) as Parameters<
+                typeof CountryTiersDialog
+              >[0]["initialTiers"]
+            }
+          />
+        </div>
       </div>
 
       {!programs || programs.length === 0 ? (

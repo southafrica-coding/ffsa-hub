@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { setupProgramBillingOnAcceptance } from "@/services/billing-generation";
 import { Resend } from "resend";
 import { applicationAcceptedEmailHtml } from "@/lib/email/templates/application-accepted";
 import { enrollmentConfirmationEmailHtml } from "@/lib/email/templates/enrollment-confirmation";
@@ -281,19 +282,44 @@ export async function POST(request: Request) {
   }
 
   // Create enrollment
-  const { error: enrollError } = await adminSupabase
+  const { data: enrollRow, error: enrollError } = await adminSupabase
     .from("enrollments")
     .insert({
       user_id: userId,
       program_id: appResponse.program_id,
       enrolled_by: authUser.id,
-    });
+    })
+    .select("id")
+    .single();
 
   if (enrollError && !enrollError.message.includes("duplicate")) {
     return NextResponse.json(
       { error: `Failed to create enrollment: ${enrollError.message}` },
       { status: 500 }
     );
+  }
+
+  // Resolve the enrolment id (new, or existing if it was a duplicate).
+  let enrollmentId: string | null = enrollRow?.id ?? null;
+  if (!enrollmentId) {
+    const { data: existing } = await adminSupabase
+      .from("enrollments")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("program_id", appResponse.program_id)
+      .maybeSingle();
+    enrollmentId = existing?.id ?? null;
+  }
+
+  // Auto-set up the full-program billing schedule and generate the deposit
+  // invoice. Non-throwing — never blocks acceptance if billing isn't configured.
+  if (enrollmentId) {
+    const billing = await setupProgramBillingOnAcceptance(
+      adminSupabase,
+      enrollmentId,
+      authUser.id
+    );
+    console.log("[accept-application] billing setup:", billing);
   }
 
   // Audit log
