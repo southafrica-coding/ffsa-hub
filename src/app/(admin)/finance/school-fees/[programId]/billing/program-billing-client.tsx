@@ -41,7 +41,7 @@ import {
   DUE_ANCHOR_LABELS,
   GENERATION_RULE_LABELS,
   TIERS,
-  FFX_2027_TEMPLATE,
+  FFX_2027_PROGRAM_TEMPLATE,
   formatZAR,
 } from "@/lib/finance/billing";
 import type {
@@ -135,8 +135,53 @@ export function ProgramBillingClient({
   courses: Course[];
   itemsByCourse: Record<string, ChargeItem[]>;
 }) {
+  const router = useRouter();
   const [dialogCourse, setDialogCourse] = useState<Course | null>(null);
   const [creating, setCreating] = useState(false);
+  const [seeding, setSeeding] = useState(false);
+
+  async function seedFFX() {
+    setSeeding(true);
+    try {
+      for (const ct of FFX_2027_PROGRAM_TEMPLATE.courses) {
+        const cRes = await fetch("/api/finance/school-fees/billing-courses", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            program_id: programId,
+            code: ct.code,
+            name: ct.name,
+            scope: ct.scope,
+            sequence: ct.sequence,
+            start_date: ct.start_date,
+            end_date: ct.end_date,
+          }),
+        });
+        const cJson = await cRes.json();
+        if (!cRes.ok) throw new Error(cJson.error || `Failed to create ${ct.code}`);
+        const courseId = cJson.data.id;
+        for (const tier of TIERS) {
+          for (const item of ct.charges[tier]) {
+            const iRes = await fetch("/api/finance/school-fees/charge-items", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ ...item, course_id: courseId }),
+            });
+            if (!iRes.ok) {
+              const e = await iRes.json();
+              throw new Error(e.error || "Failed to add charge");
+            }
+          }
+        }
+      }
+      toast.success("Loaded FFX 2027 — 3 phases with full-program charges");
+      router.refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to load template");
+    } finally {
+      setSeeding(false);
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -144,15 +189,32 @@ export function ProgramBillingClient({
         <p className="text-sm text-muted-foreground">
           {courses.length} course{courses.length !== 1 ? "s" : ""}
         </p>
-        <Button size="sm" onClick={() => setCreating(true)}>
-          <Plus className="h-4 w-4 mr-1" /> New Course
-        </Button>
+        <div className="flex items-center gap-2">
+          {courses.length === 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={seedFFX}
+              disabled={seeding}
+            >
+              {seeding ? (
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4 mr-1" />
+              )}
+              Load FFX 2027
+            </Button>
+          )}
+          <Button size="sm" onClick={() => setCreating(true)}>
+            <Plus className="h-4 w-4 mr-1" /> New Course
+          </Button>
+        </div>
       </div>
 
       {courses.length === 0 ? (
         <p className="text-sm text-muted-foreground py-6 text-center">
-          No courses yet. Add the courses that make up this program (e.g. FFXYL,
-          FFXQ, FFBXQ, FFWVQ).
+          No courses yet. Add the courses that make up this program (e.g. FFX,
+          FFBX, FFWV), or load the FFX 2027 template.
         </p>
       ) : (
         <div className="space-y-3">
@@ -195,41 +257,9 @@ function CourseCard({
   items: ChargeItem[];
   onEdit: () => void;
 }) {
-  const router = useRouter();
   const [expanded, setExpanded] = useState(false);
-  const [seeding, setSeeding] = useState(false);
 
-  const hasTemplate = !!FFX_2027_TEMPLATE[course.code];
   const itemCount = items.length;
-
-  async function loadTemplate() {
-    const template = FFX_2027_TEMPLATE[course.code];
-    if (!template) return;
-    setSeeding(true);
-    try {
-      const all = TIERS.flatMap((tier) =>
-        (template[tier] ?? []).map((item) => ({ ...item, course_id: course.id }))
-      );
-      for (const item of all) {
-        const res = await fetch("/api/finance/school-fees/charge-items", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(item),
-        });
-        if (!res.ok) {
-          const { error } = await res.json();
-          throw new Error(error || "Failed");
-        }
-      }
-      toast.success(`Loaded FFX 2027 template for ${course.code}`);
-      setExpanded(true);
-      router.refresh();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to load template");
-    } finally {
-      setSeeding(false);
-    }
-  }
 
   const dateRange =
     course.start_date || course.end_date
@@ -277,21 +307,6 @@ function CourseCard({
           </button>
 
           <div className="flex items-center gap-2 shrink-0">
-            {hasTemplate && itemCount === 0 && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={loadTemplate}
-                disabled={seeding}
-              >
-                {seeding ? (
-                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                ) : (
-                  <Sparkles className="h-4 w-4 mr-1" />
-                )}
-                Load FFX 2027
-              </Button>
-            )}
             <Link
               href={`/finance/school-fees/${programId}/billing/${course.id}`}
               className="inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-medium hover:bg-muted"
