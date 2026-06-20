@@ -40,7 +40,7 @@ type Course = {
 };
 
 type Plan = {
-  course_id: string;
+  course_id: string | null;
   tier: Tier;
   payment_preference: "standard" | "quarter_prepay" | "full_prepay";
   student_billing_schedule: unknown[] | null;
@@ -69,38 +69,38 @@ const fmtDate = (d: string) =>
 export function StudentProgramBilling({
   enrollmentId,
   nationality,
+  hasWholeProgram,
   courses,
   plans,
 }: {
   enrollmentId: string;
   nationality: string | null;
+  hasWholeProgram: boolean;
   courses: Course[];
   plans: Plan[];
 }) {
   const router = useRouter();
-  const fullProgram = courses
-    .filter((c) => c.scope === "full_program")
-    .sort((a, b) => a.sequence - b.sequence);
-  const segments = courses
-    .filter((c) => c.scope === "segment")
-    .sort((a, b) => a.sequence - b.sequence);
+  const segments = [...courses].sort((a, b) => a.sequence - b.sequence);
 
-  const fullProgramIds = new Set(fullProgram.map((c) => c.id));
-  const existingCourseIds = new Set(plans.map((p) => p.course_id));
-  const hasFull = fullProgram.length > 0;
-  const onFullProgramAlready = [...existingCourseIds].some((id) =>
-    fullProgramIds.has(id)
-  );
+  const hasWholeProgramPlan = plans.some((p) => p.course_id == null);
+  const existingSegmentIds = plans
+    .map((p) => p.course_id)
+    .filter((id): id is string => !!id);
 
-  // Default mode: existing whole-program plan → whole; existing segment plans
+  // Default mode: existing whole-program plan → whole; existing course plans
   // → individual; nothing yet → whole if available, else individual.
   const [mode, setMode] = useState<"whole_program" | "individual">(
-    onFullProgramAlready ? "whole_program" : existingCourseIds.size > 0 ? "individual" : hasFull ? "whole_program" : "individual"
+    hasWholeProgramPlan
+      ? "whole_program"
+      : existingSegmentIds.length > 0
+        ? "individual"
+        : hasWholeProgram
+          ? "whole_program"
+          : "individual"
   );
 
-  // Selected segment courses (individual mode). Default to existing segment plans.
   const [selectedSegments, setSelectedSegments] = useState<Set<string>>(
-    new Set([...existingCourseIds].filter((id) => !fullProgramIds.has(id)))
+    new Set(existingSegmentIds)
   );
 
   const [tier, setTier] = useState<Tier | "auto">(plans[0]?.tier ?? "auto");
@@ -116,12 +116,6 @@ export function StudentProgramBilling({
     tier: Tier;
     warnings: string[];
   } | null>(null);
-
-  function courseIdsForMode(): string[] {
-    return mode === "whole_program"
-      ? fullProgram.map((c) => c.id)
-      : [...selectedSegments];
-  }
 
   function toggleSegment(id: string) {
     setSelectedSegments((prev) => {
@@ -139,7 +133,8 @@ export function StudentProgramBilling({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         enrollment_id: enrollmentId,
-        course_ids: courseIdsForMode(),
+        whole_program: mode === "whole_program",
+        course_ids: mode === "individual" ? [...selectedSegments] : [],
         tier: tier === "auto" ? undefined : tier,
         payment_preference: preference,
         action,
@@ -198,7 +193,7 @@ export function StudentProgramBilling({
   });
 
   const canPreview =
-    mode === "whole_program" ? hasFull : selectedSegments.size > 0;
+    mode === "whole_program" ? hasWholeProgram : selectedSegments.size > 0;
 
   return (
     <div className="space-y-4">
@@ -213,7 +208,7 @@ export function StudentProgramBilling({
               <button
                 className={`px-3 py-1.5 text-sm rounded ${mode === "whole_program" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
                 onClick={() => { setMode("whole_program"); setPreview(null); }}
-                disabled={!hasFull}
+                disabled={!hasWholeProgram}
               >
                 Whole program
               </button>
@@ -224,9 +219,9 @@ export function StudentProgramBilling({
                 Individual course(s)
               </button>
             </div>
-            {!hasFull && (
+            {!hasWholeProgram && (
               <p className="text-[11px] text-yellow-700 mt-1 flex items-center gap-1">
-                <AlertTriangle className="h-3 w-3" /> No whole-program offering set up for this program yet.
+                <AlertTriangle className="h-3 w-3" /> No whole-program pricing set up yet (Finance → this program).
               </p>
             )}
           </div>
@@ -257,21 +252,13 @@ export function StudentProgramBilling({
             </div>
           </div>
 
-          {/* Whole-program: show the offering; Individual: pick courses */}
+          {/* Whole-program: uses program-level pricing; Individual: pick courses */}
           {mode === "whole_program" ? (
-            <div className="rounded-md border bg-muted/20 p-3 text-sm">
-              {fullProgram.map((c) => (
-                <div key={c.id} className="flex items-center gap-2">
-                  <Badge variant="default" className="text-[10px]">whole program</Badge>
-                  <span className="font-medium">{c.name}</span>
-                  <Badge variant="secondary" className="text-[10px]">{c.code}</Badge>
-                  {(c.fee_charge_items?.length ?? 0) === 0 && (
-                    <span className="text-[10px] text-yellow-700 flex items-center gap-1">
-                      <AlertTriangle className="h-3 w-3" /> no charges configured
-                    </span>
-                  )}
-                </div>
-              ))}
+            <div className="rounded-md border bg-muted/20 p-3 text-sm flex items-center gap-2">
+              <Badge variant="default" className="text-[10px]">whole program</Badge>
+              <span className="text-muted-foreground">
+                Billed from the program&apos;s whole-program pricing.
+              </span>
             </div>
           ) : (
             <div className="space-y-2">

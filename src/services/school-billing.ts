@@ -162,6 +162,92 @@ export async function deleteChargeItem(supabase: Client, id: string) {
 }
 
 // ────────────────────────────────────────────────────────────
+// PROGRAM-LEVEL CHARGE ITEMS (the whole-program structure)
+// ────────────────────────────────────────────────────────────
+
+export type ProgramChargeItemInput = Omit<ChargeItemInput, "course_id"> & {
+  program_id: string;
+};
+
+export async function getProgramChargeItems(
+  supabase: Client,
+  programId: string
+) {
+  return supabase
+    .from("program_charge_items")
+    .select("*")
+    .eq("program_id", programId)
+    .order("tier", { ascending: true })
+    .order("sort_order", { ascending: true });
+}
+
+export async function upsertProgramChargeItem(
+  supabase: Client,
+  data: ProgramChargeItemInput
+) {
+  return supabase
+    .from("program_charge_items")
+    .upsert(
+      { cadence: "once", quantity: 1, active: true, sort_order: 0, ...data },
+      { onConflict: "program_id,tier,charge_type" }
+    )
+    .select()
+    .single();
+}
+
+export async function deleteProgramChargeItem(supabase: Client, id: string) {
+  return supabase.from("program_charge_items").delete().eq("id", id);
+}
+
+// Whole-program billing plan = one plan per enrolment with course_id NULL.
+export async function setWholeProgramPlan(
+  supabase: Client,
+  data: {
+    enrollment_id: string;
+    user_id: string;
+    program_id: string;
+    tier: Tier;
+    tier_override?: boolean;
+    payment_preference: "standard" | "quarter_prepay" | "full_prepay";
+    xero_region?: "za" | "us";
+    created_by?: string | null;
+  }
+) {
+  await supabase
+    .from("student_billing_plans")
+    .delete()
+    .eq("enrollment_id", data.enrollment_id)
+    .is("course_id", null);
+  return supabase
+    .from("student_billing_plans")
+    .insert({ ...data, course_id: null })
+    .select()
+    .single();
+}
+
+export async function deleteWholeProgramPlan(
+  supabase: Client,
+  enrollmentId: string
+) {
+  return supabase
+    .from("student_billing_plans")
+    .delete()
+    .eq("enrollment_id", enrollmentId)
+    .is("course_id", null);
+}
+
+export async function deleteAllCoursePlans(
+  supabase: Client,
+  enrollmentId: string
+) {
+  return supabase
+    .from("student_billing_plans")
+    .delete()
+    .eq("enrollment_id", enrollmentId)
+    .not("course_id", "is", null);
+}
+
+// ────────────────────────────────────────────────────────────
 // ENROLLED STUDENTS (program-level enrolment) + billing plans
 // ────────────────────────────────────────────────────────────
 

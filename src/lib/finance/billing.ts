@@ -169,36 +169,29 @@ const quarterFinal = (tier: Tier, amount: number, code: string): TemplateItem =>
 
 export const FFX_2027_PROGRAM_TEMPLATE: {
   label: string;
+  wholeProgram: Record<Tier, TemplateItem[]>;
   courses: CourseTemplate[];
 } = {
   label: "FFX 2027",
+  // Whole-program pricing lives at the PROGRAM level (not a course).
+  wholeProgram: {
+    A: [
+      deposit("A", 15000, "FFXYL2027-DEP-A", { fixedDate: "2027-01-04" }),
+      monthly("A", 6000, "FFXYL2027-MON-A", 2, 10),
+      outreach("A"),
+    ],
+    B: [
+      deposit("B", 15000, "FFXYL2027-DEP-B", { fixedDate: "2027-01-04" }),
+      monthly("B", 3950, "FFXYL2027-MON-B", 2, 10),
+      outreach("B"),
+    ],
+    C: [
+      deposit("C", 15000, "FFXYL2027-DEP-C", { fixedDate: "2027-01-04" }),
+      monthly("C", 2000, "FFXYL2027-MON-C", 2, 10),
+      outreach("C"),
+    ],
+  },
   courses: [
-    // ── Whole-program offering (FFX Year Long) ──
-    {
-      code: "FFXYL",
-      name: "FFX Year Long (Whole Program)",
-      sequence: 0,
-      scope: "full_program",
-      start_date: "2027-01-01",
-      end_date: "2027-11-30",
-      charges: {
-        A: [
-          deposit("A", 15000, "FFXYL2027-DEP-A", { fixedDate: "2027-01-04" }),
-          monthly("A", 6000, "FFXYL2027-MON-A", 2, 10),
-          outreach("A"),
-        ],
-        B: [
-          deposit("B", 15000, "FFXYL2027-DEP-B", { fixedDate: "2027-01-04" }),
-          monthly("B", 3950, "FFXYL2027-MON-B", 2, 10),
-          outreach("B"),
-        ],
-        C: [
-          deposit("C", 15000, "FFXYL2027-DEP-C", { fixedDate: "2027-01-04" }),
-          monthly("C", 2000, "FFXYL2027-MON-C", 2, 10),
-          outreach("C"),
-        ],
-      },
-    },
     // ── Standalone Q1 (FFX) ──
     {
       code: "FFX",

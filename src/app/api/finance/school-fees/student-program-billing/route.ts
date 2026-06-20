@@ -5,6 +5,9 @@ import {
   upsertBillingPlan,
   replaceScheduledRows,
   deleteBillingPlanForEnrollmentCourse,
+  setWholeProgramPlan,
+  deleteWholeProgramPlan,
+  deleteAllCoursePlans,
   getCountryTierMap,
   type Tier,
 } from "@/services/school-billing";
@@ -18,11 +21,11 @@ import {
 
 type Preference = "standard" | "quarter_prepay" | "full_prepay";
 
-// Program-centric billing with auto-trim.
-// POST { enrollment_id, course_ids: string[] (phases the student IS doing),
+// Program-centric billing.
+// POST { enrollment_id, whole_program?: boolean, course_ids?: string[],
 //        tier?, payment_preference, action: 'preview' | 'commit' }
-// Generates the full schedule across the selected phases; on commit it also
-// removes plans for any of the program's phases NOT selected (the trim).
+//  • whole_program=true  → bills the program-level whole-program structure
+//  • otherwise           → bills the selected courses (auto-trims the rest)
 export async function POST(request: Request) {
   const supabase = await createClient();
   const {
@@ -40,16 +43,14 @@ export async function POST(request: Request) {
 
   const body = await request.json();
   const enrollmentId: string = body.enrollment_id;
+  const wholeProgram: boolean = !!body.whole_program;
   const selected: string[] = Array.isArray(body.course_ids) ? body.course_ids : [];
   const action: "preview" | "commit" = body.action ?? "preview";
   const preference: Preference = body.payment_preference ?? "standard";
   const tierOverride: Tier | undefined = body.tier;
 
   if (!enrollmentId) {
-    return NextResponse.json(
-      { error: "enrollment_id is required" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "enrollment_id is required" }, { status: 400 });
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -66,7 +67,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Enrollment not found" }, { status: 404 });
   }
 
-  // Resolve tier
   let tier: Tier = tierOverride ?? "A";
   if (!tierOverride) {
     const tierMap = await getCountryTierMap(supabase);
@@ -78,7 +78,84 @@ export async function POST(request: Request) {
     enrollment.enrolled_at ?? new Date().toISOString()
   ).split("T")[0];
 
-  // All phases (courses) in the program
+  // ── WHOLE PROGRAM ──────────────────────────────────────────
+  if (wholeProgram) {
+    const { data: items } = await db
+      .from("program_charge_items")
+      .select("*")
+      .eq("program_id", enrollment.program_id)
+      .eq("tier", tier)
+      .eq("active", true);
+
+    const { rows, warnings } = buildSchedule((items ?? []) as BuilderChargeItem[], {
+      acceptanceDate,
+      arrivalDate: null,
+      groupYear: null,
+      paymentPreference: preference,
+    });
+    const total = scheduleTotal(rows);
+
+    if (action === "preview") {
+      return NextResponse.json({
+        success: true,
+        tier,
+        region,
+        grandTotal: total,
+        perPhase: [
+          { course: { id: "whole", code: "PROGRAM", name: "Whole Program" }, total, count: rows.length },
+        ],
+        rows: rows.map((r) => ({ ...r, phase: "PROGRAM" })),
+        warnings,
+      });
+    }
+
+    const { data: plan, error: planErr } = await setWholeProgramPlan(supabase, {
+      enrollment_id: enrollmentId,
+      user_id: enrollment.user_id,
+      program_id: enrollment.program_id,
+      tier,
+      tier_override: !!tierOverride,
+      payment_preference: preference,
+      xero_region: region,
+      created_by: user.id,
+    });
+    if (planErr || !plan) {
+      return NextResponse.json(
+        { error: planErr?.message ?? "Failed to save plan" },
+        { status: 500 }
+      );
+    }
+    await replaceScheduledRows(
+      supabase,
+      plan.id,
+      rows.map((r) => ({
+        charge_item_id: r.charge_item_id ?? null,
+        charge_type: r.charge_type,
+        label: r.label,
+        sequence: r.sequence,
+        amount_zar: r.amount_zar,
+        xero_item_code: r.xero_item_code,
+        scheduled_generation_date: r.scheduled_generation_date,
+        due_date: r.due_date,
+        combined_group_key: r.combined_group_key,
+        status: "scheduled",
+      }))
+    );
+    // Trim any individual-course plans (student is now whole-program).
+    await deleteAllCoursePlans(supabase, enrollmentId);
+
+    return NextResponse.json({
+      success: true,
+      tier,
+      region,
+      grandTotal: total,
+      phasesBilled: 1,
+      phasesTrimmed: 0,
+      warnings,
+    });
+  }
+
+  // ── INDIVIDUAL COURSES ─────────────────────────────────────
   const { data: courses } = await db
     .from("billing_courses")
     .select("id, code, name, sequence, arrival_date, start_date")
@@ -88,7 +165,6 @@ export async function POST(request: Request) {
   const allCourses = courses ?? [];
   const selectedSet = new Set(selected);
 
-  // Build per included phase
   const warnings: string[] = [];
   const perPhase: Array<{
     course: { id: string; code: string; name: string };
@@ -104,11 +180,9 @@ export async function POST(request: Request) {
       .eq("course_id", course.id)
       .eq("tier", tier)
       .eq("active", true);
-
     const groupYear = course.start_date
       ? Number(String(course.start_date).split("-")[0])
       : null;
-
     const built = buildSchedule((items ?? []) as BuilderChargeItem[], {
       acceptanceDate,
       arrivalDate: course.arrival_date ?? null,
@@ -134,17 +208,12 @@ export async function POST(request: Request) {
       tier,
       region,
       grandTotal,
-      perPhase: perPhase.map((p) => ({
-        course: p.course,
-        total: p.total,
-        count: p.rows.length,
-      })),
+      perPhase: perPhase.map((p) => ({ course: p.course, total: p.total, count: p.rows.length })),
       rows: combined,
       warnings,
     });
   }
 
-  // ── Commit: upsert selected phases, trim (delete) the rest ──
   let created = 0;
   let trimmed = 0;
   for (const course of allCourses) {
@@ -168,33 +237,33 @@ export async function POST(request: Request) {
           { status: 500 }
         );
       }
-      const payload = phase.rows.map((r) => ({
-        charge_item_id: r.charge_item_id ?? null,
-        charge_type: r.charge_type,
-        label: r.label,
-        sequence: r.sequence,
-        amount_zar: r.amount_zar,
-        xero_item_code: r.xero_item_code,
-        scheduled_generation_date: r.scheduled_generation_date,
-        due_date: r.due_date,
-        combined_group_key: r.combined_group_key,
-        status: "scheduled",
-      }));
       const { error: rowsErr } = await replaceScheduledRows(
         supabase,
         plan.id,
-        payload
+        phase.rows.map((r) => ({
+          charge_item_id: r.charge_item_id ?? null,
+          charge_type: r.charge_type,
+          label: r.label,
+          sequence: r.sequence,
+          amount_zar: r.amount_zar,
+          xero_item_code: r.xero_item_code,
+          scheduled_generation_date: r.scheduled_generation_date,
+          due_date: r.due_date,
+          combined_group_key: r.combined_group_key,
+          status: "scheduled",
+        }))
       );
       if (rowsErr) {
         return NextResponse.json({ error: rowsErr.message }, { status: 500 });
       }
       created++;
     } else {
-      // Auto-trim: remove any existing plan for a phase the student isn't doing.
       await deleteBillingPlanForEnrollmentCourse(supabase, enrollmentId, course.id);
       trimmed++;
     }
   }
+  // Trim the whole-program plan (student is now on individual courses).
+  await deleteWholeProgramPlan(supabase, enrollmentId);
 
   return NextResponse.json({
     success: true,

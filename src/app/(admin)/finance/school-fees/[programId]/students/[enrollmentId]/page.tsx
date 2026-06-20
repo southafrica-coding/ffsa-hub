@@ -53,6 +53,14 @@ export default async function StudentBillingPage({
     getBillingPlansForEnrollment(supabase, enrollmentId),
   ]);
 
+  // Does this program have whole-program pricing configured?
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { count: wholeProgramCharges } = await (supabase as any)
+    .from("program_charge_items")
+    .select("id", { count: "exact", head: true })
+    .eq("program_id", programId);
+  const hasWholeProgram = (wholeProgramCharges ?? 0) > 0;
+
   return (
     <div className="space-y-6">
       <Link
@@ -74,6 +82,7 @@ export default async function StudentBillingPage({
       <StudentProgramBilling
         enrollmentId={enrollmentId}
         nationality={enrollment.users?.nationality ?? null}
+        hasWholeProgram={hasWholeProgram}
         courses={
           (courses ?? []) as Parameters<
             typeof StudentProgramBilling

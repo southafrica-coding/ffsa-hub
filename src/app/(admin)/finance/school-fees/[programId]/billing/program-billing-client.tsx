@@ -130,32 +130,52 @@ export function ProgramBillingClient({
   programId,
   courses,
   itemsByCourse,
+  programItems,
 }: {
   programId: string;
   courses: Course[];
   itemsByCourse: Record<string, ChargeItem[]>;
+  programItems: ChargeItem[];
 }) {
   const router = useRouter();
   const [seeding, setSeeding] = useState(false);
 
-  const fullProgram = courses
-    .filter((c) => c.scope === "full_program")
-    .sort((a, b) => a.sequence - b.sequence);
-  const segments = courses
-    .filter((c) => c.scope === "segment")
-    .sort((a, b) => a.sequence - b.sequence);
+  const sortedCourses = [...courses].sort((a, b) => a.sequence - b.sequence);
 
-  const templateCodes = new Set(
+  const templateCourseCodes = new Set(
     FFX_2027_PROGRAM_TEMPLATE.courses.map((c) => c.code)
   );
-  const canSeedCharges = courses.some(
-    (c) => templateCodes.has(c.code) && (itemsByCourse[c.id]?.length ?? 0) === 0
-  );
+  const canSeedCharges =
+    programItems.length === 0 ||
+    courses.some(
+      (c) =>
+        templateCourseCodes.has(c.code) &&
+        (itemsByCourse[c.id]?.length ?? 0) === 0
+    );
 
   async function seedCharges() {
     setSeeding(true);
     try {
-      let seeded = 0;
+      // Whole-program pricing (program level)
+      if (programItems.length === 0) {
+        for (const tier of TIERS) {
+          for (const item of FFX_2027_PROGRAM_TEMPLATE.wholeProgram[tier]) {
+            const res = await fetch(
+              "/api/finance/school-fees/program-charge-items",
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ ...item, program_id: programId }),
+              }
+            );
+            if (!res.ok) {
+              const e = await res.json();
+              throw new Error(e.error || "Failed to add whole-program charge");
+            }
+          }
+        }
+      }
+      // Per-course standalone pricing
       for (const ct of FFX_2027_PROGRAM_TEMPLATE.courses) {
         const course = courses.find((c) => c.code === ct.code);
         if (!course || (itemsByCourse[course.id]?.length ?? 0) > 0) continue;
@@ -172,9 +192,8 @@ export function ProgramBillingClient({
             }
           }
         }
-        seeded++;
       }
-      toast.success(`Seeded FFX 2027 charges for ${seeded} course${seeded !== 1 ? "s" : ""}`);
+      toast.success("Seeded FFX 2027 charges");
       router.refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to seed charges");
@@ -188,8 +207,8 @@ export function ProgramBillingClient({
       <div className="flex items-start justify-between gap-3">
         <p className="text-sm text-muted-foreground">
           Courses are created &amp; edited in{" "}
-          <span className="font-medium">Training</span>. Set their charges
-          here — whole-program pricing and each individual course&apos;s price.
+          <span className="font-medium">Training</span>. Set their charges here —
+          whole-program pricing and each individual course&apos;s price.
         </p>
         {canSeedCharges && (
           <Button size="sm" variant="outline" onClick={seedCharges} disabled={seeding}>
@@ -203,46 +222,38 @@ export function ProgramBillingClient({
         )}
       </div>
 
-      {courses.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-6 text-center">
-          No courses yet. Create them in{" "}
-          <span className="font-medium">Training → this program → Courses</span>,
-          then set their charges here.
-        </p>
-      ) : (
-        <div className="space-y-6">
-          {fullProgram.length > 0 && (
-            <section className="space-y-2">
-              <h2 className="text-sm font-semibold">Whole-Program Pricing</h2>
-              <div className="space-y-3">
-                {fullProgram.map((course) => (
-                  <CourseCard
-                    key={course.id}
-                    programId={programId}
-                    course={course}
-                    items={itemsByCourse[course.id] ?? []}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
-          {segments.length > 0 && (
-            <section className="space-y-2">
-              <h2 className="text-sm font-semibold">Individual Courses</h2>
-              <div className="space-y-3">
-                {segments.map((course) => (
-                  <CourseCard
-                    key={course.id}
-                    programId={programId}
-                    course={course}
-                    items={itemsByCourse[course.id] ?? []}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
+      {/* Whole-Program Pricing — always present, billed to whole-program students */}
+      <section className="space-y-2">
+        <div>
+          <h2 className="text-sm font-semibold">Whole-Program Pricing</h2>
+          <p className="text-xs text-muted-foreground">
+            The structure billed to students doing the whole program.
+          </p>
         </div>
-      )}
+        <ChargeItemsEditor target={programTarget(programId)} items={programItems} />
+      </section>
+
+      {/* Individual Courses */}
+      <section className="space-y-2">
+        <h2 className="text-sm font-semibold">Individual Courses</h2>
+        {courses.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-4">
+            No courses yet. Create them in{" "}
+            <span className="font-medium">Training → this program → Courses</span>.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {sortedCourses.map((course) => (
+              <CourseCard
+                key={course.id}
+                programId={programId}
+                course={course}
+                items={itemsByCourse[course.id] ?? []}
+              />
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }
@@ -319,7 +330,7 @@ function CourseCard({
 
         {expanded && (
           <div className="pl-6">
-            <ChargeItemsEditor courseId={course.id} items={items} />
+            <ChargeItemsEditor target={courseTarget(course.id)} items={items} />
           </div>
         )}
       </CardContent>
@@ -533,11 +544,32 @@ function CourseDialog({
 
 // ── Charge items editor (tabs A/B/C) ────────────────────────
 
+type ChargeTarget = {
+  saveEndpoint: string;
+  deleteEndpoint: string;
+  idField: "course_id" | "program_id";
+  idValue: string;
+};
+
+const courseTarget = (courseId: string): ChargeTarget => ({
+  saveEndpoint: "/api/finance/school-fees/charge-items",
+  deleteEndpoint: "/api/finance/school-fees/charge-items",
+  idField: "course_id",
+  idValue: courseId,
+});
+
+const programTarget = (programId: string): ChargeTarget => ({
+  saveEndpoint: "/api/finance/school-fees/program-charge-items",
+  deleteEndpoint: "/api/finance/school-fees/program-charge-items",
+  idField: "program_id",
+  idValue: programId,
+});
+
 function ChargeItemsEditor({
-  courseId,
+  target,
   items,
 }: {
-  courseId: string;
+  target: ChargeTarget;
   items: ChargeItem[];
 }) {
   const [dialogState, setDialogState] = useState<{
@@ -571,7 +603,7 @@ function ChargeItemsEditor({
             <TabsContent key={tier} value={tier} className="mt-3 space-y-2">
               <div className="flex items-center justify-between">
                 <p className="text-xs text-muted-foreground">
-                  Course total (Tier {tier}):{" "}
+                  Total (Tier {tier}):{" "}
                   <span className="font-mono font-medium">{formatZAR(total)}</span>
                 </p>
                 <Button
@@ -593,6 +625,7 @@ function ChargeItemsEditor({
                     <ChargeItemRow
                       key={it.id}
                       item={it}
+                      target={target}
                       onEdit={() => setDialogState({ tier, item: it })}
                     />
                   ))}
@@ -605,7 +638,7 @@ function ChargeItemsEditor({
 
       {dialogState && (
         <ChargeItemDialog
-          courseId={courseId}
+          target={target}
           tier={dialogState.tier}
           item={dialogState.item}
           onClose={() => setDialogState(null)}
@@ -617,9 +650,11 @@ function ChargeItemsEditor({
 
 function ChargeItemRow({
   item,
+  target,
   onEdit,
 }: {
   item: ChargeItem;
+  target: ChargeTarget;
   onEdit: () => void;
 }) {
   const router = useRouter();
@@ -629,10 +664,9 @@ function ChargeItemRow({
     if (!confirm(`Delete "${item.label}"?`)) return;
     setDeleting(true);
     try {
-      const res = await fetch(
-        `/api/finance/school-fees/charge-items?id=${item.id}`,
-        { method: "DELETE" }
-      );
+      const res = await fetch(`${target.deleteEndpoint}?id=${item.id}`, {
+        method: "DELETE",
+      });
       if (res.ok) {
         toast.success("Charge deleted");
         router.refresh();
@@ -708,12 +742,12 @@ const GENERATION_RULES: GenerationRule[] = [
 ];
 
 function ChargeItemDialog({
-  courseId,
+  target,
   tier,
   item,
   onClose,
 }: {
-  courseId: string;
+  target: ChargeTarget;
   tier: Tier;
   item: ChargeItem | null;
   onClose: () => void;
@@ -756,11 +790,11 @@ function ChargeItemDialog({
     }
     setLoading(true);
     try {
-      const res = await fetch("/api/finance/school-fees/charge-items", {
+      const res = await fetch(target.saveEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          course_id: courseId,
+          [target.idField]: target.idValue,
           tier,
           charge_type: form.charge_type,
           label: form.label,

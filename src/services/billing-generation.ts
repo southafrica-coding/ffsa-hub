@@ -10,7 +10,7 @@
 
 import { createScheduledInvoice, getXeroRegionForStudent } from "@/services/xero";
 import {
-  upsertBillingPlan,
+  setWholeProgramPlan,
   replaceScheduledRows,
   getCountryTierMap,
   type Tier,
@@ -184,23 +184,6 @@ export async function setupProgramBillingOnAcceptance(
       .single();
     if (!enrollment) return { ok: false, plansCreated: 0, generated: 0, note: "no enrollment" };
 
-    const { data: allCourses } = await supabase
-      .from("billing_courses")
-      .select("id, scope, arrival_date, start_date")
-      .eq("program_id", enrollment.program_id);
-    if (!allCourses || allCourses.length === 0) {
-      return { ok: true, plansCreated: 0, generated: 0, note: "program has no courses configured" };
-    }
-
-    // Default a new student to the WHOLE PROGRAM (the full_program course) if
-    // one exists; otherwise bill all courses. Single-course overrides happen
-    // later on the student billing page.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const fullProgram = (allCourses as any[]).filter(
-      (c) => c.scope === "full_program"
-    );
-    const courses = fullProgram.length > 0 ? fullProgram : allCourses;
-
     const tierMap = await getCountryTierMap(supabase);
     const nat = (enrollment.users?.nationality ?? "").toLowerCase().trim();
     const tier: Tier = tierMap[nat] ?? "A";
@@ -209,60 +192,53 @@ export async function setupProgramBillingOnAcceptance(
       enrollment.enrolled_at ?? new Date().toISOString()
     ).split("T")[0];
 
-    const planIds: string[] = [];
-    for (const course of courses) {
-      const { data: items } = await supabase
-        .from("fee_charge_items")
-        .select("*")
-        .eq("course_id", course.id)
-        .eq("tier", tier)
-        .eq("active", true);
-      if (!items || items.length === 0) continue;
-
-      const groupYear = course.start_date
-        ? Number(String(course.start_date).split("-")[0])
-        : null;
-      const { rows } = buildSchedule(items as BuilderChargeItem[], {
-        acceptanceDate,
-        arrivalDate: course.arrival_date ?? null,
-        groupYear,
-        paymentPreference: "standard",
-      });
-
-      const { data: plan } = await upsertBillingPlan(supabase, {
-        enrollment_id: enrollmentId,
-        user_id: enrollment.user_id,
-        program_id: enrollment.program_id,
-        course_id: course.id,
-        tier,
-        payment_preference: "standard",
-        xero_region: region,
-        created_by: createdBy,
-      });
-      if (!plan) continue;
-      planIds.push(plan.id);
-
-      await replaceScheduledRows(
-        supabase,
-        plan.id,
-        rows.map((r) => ({
-          charge_item_id: r.charge_item_id ?? null,
-          charge_type: r.charge_type,
-          label: r.label,
-          sequence: r.sequence,
-          amount_zar: r.amount_zar,
-          xero_item_code: r.xero_item_code,
-          scheduled_generation_date: r.scheduled_generation_date,
-          due_date: r.due_date,
-          combined_group_key: r.combined_group_key,
-          status: "scheduled",
-        }))
-      );
+    // Default a new student to the WHOLE PROGRAM pricing (program-level).
+    const { data: items } = await supabase
+      .from("program_charge_items")
+      .select("*")
+      .eq("program_id", enrollment.program_id)
+      .eq("tier", tier)
+      .eq("active", true);
+    if (!items || items.length === 0) {
+      return { ok: true, plansCreated: 0, generated: 0, note: "no whole-program pricing configured" };
     }
 
-    if (planIds.length === 0) {
-      return { ok: true, plansCreated: 0, generated: 0, note: "no charge items configured" };
+    const { rows } = buildSchedule(items as BuilderChargeItem[], {
+      acceptanceDate,
+      arrivalDate: null,
+      groupYear: null,
+      paymentPreference: "standard",
+    });
+
+    const { data: plan } = await setWholeProgramPlan(supabase, {
+      enrollment_id: enrollmentId,
+      user_id: enrollment.user_id,
+      program_id: enrollment.program_id,
+      tier,
+      payment_preference: "standard",
+      xero_region: region,
+      created_by: createdBy,
+    });
+    if (!plan) {
+      return { ok: false, plansCreated: 0, generated: 0, note: "failed to create plan" };
     }
+    await replaceScheduledRows(
+      supabase,
+      plan.id,
+      rows.map((r) => ({
+        charge_item_id: r.charge_item_id ?? null,
+        charge_type: r.charge_type,
+        label: r.label,
+        sequence: r.sequence,
+        amount_zar: r.amount_zar,
+        xero_item_code: r.xero_item_code,
+        scheduled_generation_date: r.scheduled_generation_date,
+        due_date: r.due_date,
+        combined_group_key: r.combined_group_key,
+        status: "scheduled",
+      }))
+    );
+    const planIds: string[] = [plan.id];
 
     // Generate any invoices already due to generate (the deposit).
     const gen = await generateDueInvoices(supabase, {

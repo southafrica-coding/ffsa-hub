@@ -44,6 +44,15 @@ export default async function ProgramBillingPage({
     (itemsByCourse[item.course_id] ??= []).push(item);
   }
 
+  // Whole-program (program-level) charges.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: programItems } = await (supabase as any)
+    .from("program_charge_items")
+    .select("*")
+    .eq("program_id", programId)
+    .order("tier", { ascending: true })
+    .order("sort_order", { ascending: true });
+
   return (
     <div className="space-y-6">
       <Link
@@ -79,6 +88,11 @@ export default async function ProgramBillingPage({
         }
         itemsByCourse={
           itemsByCourse as Parameters<typeof ProgramBillingClient>[0]["itemsByCourse"]
+        }
+        programItems={
+          (programItems ?? []) as Parameters<
+            typeof ProgramBillingClient
+          >[0]["programItems"]
         }
       />
     </div>

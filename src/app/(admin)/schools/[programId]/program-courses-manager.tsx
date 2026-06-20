@@ -316,28 +316,16 @@ function CourseDialog({
             <Label>Name</Label>
             <Input value={form.name} placeholder="FFX (Q1)" onChange={(e) => set({ name: e.target.value })} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label>Status</Label>
-              <Select value={form.status} onValueChange={(v) => set({ status: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {["upcoming", "active", "completed", "archived"].map((s) => (
-                    <SelectItem key={s} value={s}>{s}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Scope</Label>
-              <Select value={form.scope} onValueChange={(v) => set({ scope: v as "segment" | "full_program" })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="segment">Segment (a phase)</SelectItem>
-                  <SelectItem value="full_program">Whole year</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          <div>
+            <Label>Status</Label>
+            <Select value={form.status} onValueChange={(v) => set({ status: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {["upcoming", "active", "completed", "archived"].map((s) => (
+                  <SelectItem key={s} value={s}>{s}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="grid grid-cols-3 gap-2">
             <div>
