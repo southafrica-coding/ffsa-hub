@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Roboto, Bebas_Neue, Anton, Space_Mono } from "next/font/google";
+import { Roboto, Bebas_Neue, Anton, Space_Mono, Fraunces, Hanken_Grotesk } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
@@ -27,6 +27,20 @@ const spaceMono = Space_Mono({
   variable: "--font-space-mono",
   display: "swap",
 });
+// Editorial type system for the Org Chart module ("Rooted & Sent" look).
+const fraunces = Fraunces({
+  weight: ["400", "500", "600"],
+  style: ["normal", "italic"],
+  subsets: ["latin"],
+  variable: "--font-fraunces",
+  display: "swap",
+});
+const hanken = Hanken_Grotesk({
+  weight: ["400", "500", "600"],
+  subsets: ["latin"],
+  variable: "--font-hanken",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: {
@@ -49,7 +63,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`dark ${roboto.variable} ${bebasNeue.variable} ${anton.variable} ${spaceMono.variable}`}>
+    <html lang="en" className={`dark ${roboto.variable} ${bebasNeue.variable} ${anton.variable} ${spaceMono.variable} ${fraunces.variable} ${hanken.variable}`}>
       <body className={roboto.className}>
         {children}
         <Toaster />

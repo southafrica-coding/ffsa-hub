@@ -1,34 +1,24 @@
-import dagre from "dagre";
 import { Position, type Node as RFNode, type Edge as RFEdge } from "@xyflow/react";
-import type { OrgNode, OrgEdge, OrgNodeKind } from "@/services/org-chart";
+import type { OrgNode, OrgEdge } from "@/services/org-chart";
 
-// ── Accent palette (tuned for the Hub's dark/gold theme) ────────────────
-export const ACCENTS: Record<string, string> = {
-  gold: "#F5B820",
-  outward: "#D08A4F", // Mission — copper/terracotta
-  inward: "#5FA877", // Formation — green
-  backbone: "#6E91BC", // Support — slate blue
-  copper: "#D08A4F",
-  green: "#5FA877",
-  sand: "#C9B68C",
-  slate: "#6E91BC",
+// ── Accent palette (hex for edge strokes; cards use CSS vars + data-accent) ──
+type Theme = "paper" | "dark";
+const ACCENT_HEX: Record<Theme, Record<string, string>> = {
+  paper: { outward: "#B5703F", inward: "#5C7A56", backbone: "#5E7187", gold: "#B68A3C", sand: "#9C9377", copper: "#B5703F" },
+  dark: { outward: "#D08A4F", inward: "#74A56E", backbone: "#7C9AC0", gold: "#D7AA4E", sand: "#9A9079", copper: "#D08A4F" },
 };
-
-export function accentColor(key: string | null | undefined): string {
-  return (key && ACCENTS[key]) || "#8A8378";
+export function accentColor(key: string | null | undefined, theme: Theme = "dark"): string {
+  const k = key ?? "sand";
+  return ACCENT_HEX[theme][k] ?? ACCENT_HEX[theme].sand;
 }
 
-// ── Node footprint per kind (must match the rendered card size) ─────────
-export const NODE_SIZE: Record<OrgNodeKind, { w: number; h: number }> = {
-  root: { w: 280, h: 96 },
-  cluster: { w: 240, h: 80 },
-  team: { w: 244, h: 92 },
-  subteam: { w: 210, h: 70 },
-  person: { w: 224, h: 70 },
-  role: { w: 244, h: 84 },
-  stream: { w: 224, h: 68 },
-};
+// ── Layout geometry ──────────────────────────────────────────────────────
+const COL = { w: 300, gap: 32, pad: 14, indent: 16, headerH: 40 };
+const H = { root: 100, leadership: 112, role: 88, team: 94, subteam: 40, person: 58, stream: 62, missioHead: 80 };
+const ROW = 12;
+const NEST = 7;
 
+export type Member = { label: string; subtitle: string | null };
 export type FlowNodeData = {
   node: OrgNode;
   hasChildren: boolean;
@@ -36,134 +26,197 @@ export type FlowNodeData = {
   expanded: boolean;
   dimmed: boolean;
   matched: boolean;
-  onToggle: (id: string) => void;
+  members?: Member[]; // leadership chips
+  laneCount?: string; // lane caption "6 teams · 66"
 };
 
-type BuildArgs = {
-  nodes: OrgNode[];
-  edges: OrgEdge[];
-  expanded: Set<string>;
-  query?: string;
-};
+type BuildArgs = { nodes: OrgNode[]; edges: OrgEdge[]; expanded: Set<string>; query?: string; theme?: Theme };
+type BuildResult = { rfNodes: RFNode<FlowNodeData>[]; rfEdges: RFEdge[]; matchIds: string[] };
 
-type BuildResult = {
-  rfNodes: RFNode<FlowNodeData>[];
-  rfEdges: RFEdge[];
-  matchIds: string[];
-};
+const sortKids = (a: OrgNode, b: OrgNode) => a.sort_order - b.sort_order || a.label.localeCompare(b.label);
 
-/**
- * Turn the stored tree (parent_id) + extra connectors (org_edges) into a
- * laid-out React Flow graph, honouring which branches are expanded.
- *
- * - Hierarchy → solid edges, fed to dagre for a clean top-down tree.
- * - org_edges (cross-team / parallel) → dotted edges, NOT fed to dagre
- *   (they'd fight the tree layout), only drawn when both ends are visible.
- */
-export function buildGraph({ nodes, edges, expanded, query }: BuildArgs): BuildResult {
+export function buildGraph({ nodes, edges, expanded, query, theme = "dark" }: BuildArgs): BuildResult {
   const byId = new Map(nodes.map((n) => [n.id, n]));
-  const childrenOf = new Map<string, OrgNode[]>();
+  const byKey = new Map(nodes.map((n) => [n.key, n]));
+  const kids = new Map<string, OrgNode[]>();
   for (const n of nodes) {
     if (!n.parent_id) continue;
-    const arr = childrenOf.get(n.parent_id) ?? [];
-    arr.push(n);
-    childrenOf.set(n.parent_id, arr);
+    const a = kids.get(n.parent_id) ?? [];
+    a.push(n);
+    kids.set(n.parent_id, a);
   }
+  const childrenOf = (id: string) => (kids.get(id) ?? []).slice().sort(sortKids);
+  const isOpen = (id: string) => expanded.has(id);
 
-  const isExpanded = (id: string) => expanded.has(id);
-
-  // Visible = every ancestor is expanded.
-  const visible = new Set<string>();
-  const walk = (n: OrgNode) => {
-    visible.add(n.id);
-    if (!isExpanded(n.id)) return;
-    for (const c of childrenOf.get(n.id) ?? []) walk(c);
-  };
-  for (const n of nodes) if (!n.parent_id) walk(n);
-
-  // Search matching (over the full tree, not just visible).
+  // search
   const q = (query ?? "").trim().toLowerCase();
   const matchIds: string[] = [];
-  if (q) {
-    for (const n of nodes) {
-      if (
-        n.label.toLowerCase().includes(q) ||
-        (n.subtitle ?? "").toLowerCase().includes(q)
-      ) {
-        matchIds.push(n.id);
-      }
-    }
+  if (q) for (const n of nodes) {
+    if (n.label.toLowerCase().includes(q) || (n.subtitle ?? "").toLowerCase().includes(q)) matchIds.push(n.id);
   }
   const matchSet = new Set(matchIds);
 
-  // ── dagre layout over the visible hierarchy ───────────────────────────
-  const g = new dagre.graphlib.Graph();
-  g.setDefaultEdgeLabel(() => ({}));
-  g.setGraph({ rankdir: "TB", ranksep: 64, nodesep: 22, marginx: 24, marginy: 24 });
-
-  for (const id of visible) {
-    const n = byId.get(id)!;
-    const size = NODE_SIZE[n.kind] ?? NODE_SIZE.person;
-    g.setNode(id, { width: size.w, height: size.h });
-  }
-  for (const id of visible) {
-    const n = byId.get(id)!;
-    if (n.parent_id && visible.has(n.parent_id)) g.setEdge(n.parent_id, id);
-  }
-  dagre.layout(g);
-
   const rfNodes: RFNode<FlowNodeData>[] = [];
-  for (const id of visible) {
-    const n = byId.get(id)!;
-    const p = g.node(id);
-    const size = NODE_SIZE[n.kind] ?? NODE_SIZE.person;
-    const kids = childrenOf.get(id) ?? [];
+  const rfEdges: RFEdge[] = [];
+  const visible = new Set<string>();
+
+  const mk = (
+    n: OrgNode,
+    type: string,
+    x: number, y: number, w: number, h: number,
+    extra: Partial<FlowNodeData> = {},
+    z = 1
+  ) => {
+    visible.add(n.id);
     rfNodes.push({
-      id,
-      type: "org",
-      position: { x: p.x - size.w / 2, y: p.y - size.h / 2 },
+      id: n.id, type,
+      position: { x, y },
+      width: w, height: h,
+      draggable: false, selectable: type !== "lane",
+      zIndex: z,
+      sourcePosition: Position.Bottom, targetPosition: Position.Top,
       data: {
         node: n,
-        hasChildren: kids.length > 0,
-        childCount: kids.length,
-        expanded: isExpanded(id),
-        dimmed: q.length > 0 && !matchSet.has(id),
-        matched: matchSet.has(id),
-        onToggle: () => {},
+        hasChildren: (kids.get(n.id)?.length ?? 0) > 0,
+        childCount: kids.get(n.id)?.length ?? 0,
+        expanded: isOpen(n.id),
+        dimmed: q.length > 0 && !matchSet.has(n.id),
+        matched: matchSet.has(n.id),
+        ...extra,
       },
-      sourcePosition: Position.Bottom,
+    });
+  };
+
+  // ── geometry anchors ──
+  const lanesW = 3 * COL.w + 2 * COL.gap;
+  const centerX = lanesW / 2;
+  const laneXOf = (i: number) => i * (COL.w + COL.gap);
+
+  // root
+  const root = byKey.get("ffsa");
+  const rootW = 340;
+  const rootBottom = H.root;
+  if (root) mk(root, "root", centerX - rootW / 2, 0, rootW, H.root);
+
+  // leadership + integrator
+  const leadership = byKey.get("leadership");
+  const integrator = byKey.get("integrator");
+  const leadW = 330, integW = 224, gapLI = 18;
+  const pairStart = centerX - (leadW + gapLI + integW) / 2;
+  const leadY = rootBottom + 46;
+  if (leadership) {
+    const members: Member[] = childrenOf(leadership.id)
+      .filter((c) => c.kind === "person")
+      .map((c) => ({ label: c.label, subtitle: c.subtitle }));
+    mk(leadership, "leadership", pairStart, leadY, leadW, H.leadership, { members });
+  }
+  if (integrator) mk(integrator, "role", pairStart + leadW + gapLI, leadY + (H.leadership - H.role) / 2, integW, H.role);
+  const leadBottom = leadY + H.leadership;
+
+  // clusters as lanes
+  const clusters = nodes.filter((n) => n.kind === "cluster").sort(sortKids);
+  const lanesTop = leadBottom + 52;
+
+  const layoutChildren = (parentId: string, laneX: number, depth: number, cursor: { y: number }) => {
+    const x = laneX + COL.pad + depth * COL.indent;
+    const w = COL.w - 2 * COL.pad - depth * COL.indent;
+    for (const c of childrenOf(parentId)) {
+      if (c.kind === "subteam") {
+        mk(c, "subteam", x, cursor.y, w, H.subteam);
+        cursor.y += H.subteam + NEST;
+        if (isOpen(c.id)) layoutChildren(c.id, laneX, depth + 1, cursor);
+      } else if (c.kind === "person" || c.kind === "role") {
+        mk(c, "person", x, cursor.y, w, H.person);
+        cursor.y += H.person + NEST;
+      }
+    }
+  };
+
+  clusters.forEach((cluster, i) => {
+    const laneX = laneXOf(i);
+    const teams = childrenOf(cluster.id).filter((t) => t.kind === "team" || t.kind === "person" || t.kind === "role");
+    const contentTop = lanesTop + COL.headerH;
+    const cursor = { y: contentTop };
+    for (const t of teams) {
+      if (t.kind === "team") {
+        mk(t, "team", laneX + COL.pad, cursor.y, COL.w - 2 * COL.pad, H.team);
+        cursor.y += H.team + ROW;
+        if (isOpen(t.id)) layoutChildren(t.id, laneX, 1, cursor);
+      } else {
+        mk(t, "person", laneX + COL.pad, cursor.y, COL.w - 2 * COL.pad, H.person);
+        cursor.y += H.person + ROW;
+      }
+    }
+    const laneH = cursor.y - lanesTop + COL.pad;
+    const headcount = teams.reduce((s, t) => s + (t.headcount ?? 0), 0);
+    const teamCount = teams.filter((t) => t.kind === "team").length;
+    rfNodes.push({
+      id: `lane-${cluster.id}`, type: "lane",
+      position: { x: laneX, y: lanesTop },
+      width: COL.w, height: laneH,
+      draggable: false, selectable: false, zIndex: 0,
       targetPosition: Position.Top,
+      data: {
+        node: cluster, hasChildren: false, childCount: teamCount,
+        expanded: true, dimmed: false, matched: false,
+        laneCount: `${teamCount} teams · ${headcount}`,
+      },
+    });
+    visible.add(`lane-${cluster.id}`);
+    if (integrator) rfEdges.push({
+      id: `s-int-${cluster.id}`, source: integrator.id, target: `lane-${cluster.id}`,
+      type: "smoothstep", style: { stroke: theme === "paper" ? "#B9AC8A" : "#3C3528", strokeWidth: 1 }, zIndex: 0,
+    });
+  });
+
+  // missio alongside column
+  const missio = byKey.get("missio");
+  if (missio) {
+    const mx = 3 * (COL.w + COL.gap) + 4;
+    const mw = 250;
+    let y = lanesTop;
+    const chain = ["missio", "missio-leaders", "missio-comm", "missio-groups", "missio-disc"];
+    chain.forEach((k, idx) => {
+      const node = byKey.get(k);
+      if (!node) return;
+      const h = idx === 0 ? H.missioHead : H.stream;
+      mk(node, "stream", mx, y, mw, h);
+      if (idx > 0) {
+        const prev = byKey.get(chain[idx - 1]);
+        if (prev) rfEdges.push({
+          id: `m-${k}`, source: prev.id, target: node.id, type: "smoothstep",
+          style: { stroke: accentColor("sand", theme), strokeWidth: 1, strokeDasharray: "3 4", opacity: 0.6 },
+        });
+      }
+      y += h + ROW;
+    });
+    if (leadership) rfEdges.push({
+      id: "m-alongside", source: leadership.id, target: missio.id, type: "smoothstep",
+      animated: true, label: "alongside",
+      style: { stroke: accentColor("sand", theme), strokeWidth: 1.2, strokeDasharray: "5 4", opacity: 0.7 },
+      labelStyle: { fill: theme === "paper" ? "#6E674F" : "#9A9079", fontSize: 9, fontFamily: "var(--font-space-mono)", textTransform: "uppercase", letterSpacing: "0.12em" },
+      labelBgStyle: { fill: theme === "paper" ? "#E9E2D1" : "#13110C", fillOpacity: 0.9 },
+      labelBgPadding: [4, 2],
     });
   }
 
-  // ── edges ─────────────────────────────────────────────────────────────
-  const rfEdges: RFEdge[] = [];
-  for (const id of visible) {
-    const n = byId.get(id)!;
-    if (n.parent_id && visible.has(n.parent_id)) {
-      rfEdges.push({
-        id: `h-${n.parent_id}-${id}`,
-        source: n.parent_id,
-        target: id,
-        type: "smoothstep",
-        style: { stroke: "#3A3530", strokeWidth: 1.5 },
-      });
-    }
-  }
+  // scaffold solid connectors
+  const hair = theme === "paper" ? "#B9AC8A" : "#3C3528";
+  if (root && leadership) rfEdges.push({ id: "s-root-lead", source: root.id, target: leadership.id, type: "smoothstep", style: { stroke: hair, strokeWidth: 1.2 } });
+  if (leadership && integrator) rfEdges.push({ id: "s-lead-int", source: leadership.id, target: integrator.id, type: "smoothstep", style: { stroke: hair, strokeWidth: 1 } });
+
+  // cross-team dashed edges (only when both endpoints visible)
   for (const e of edges) {
+    if (e.kind === "parallel") continue;
     if (!visible.has(e.source_id) || !visible.has(e.target_id)) continue;
     const tgt = byId.get(e.target_id);
-    const color = accentColor(tgt?.accent ?? "copper");
+    const color = accentColor(tgt?.accent ?? "copper", theme);
     rfEdges.push({
-      id: `x-${e.id}`,
-      source: e.source_id,
-      target: e.target_id,
-      type: "smoothstep",
-      animated: e.kind === "parallel",
+      id: `x-${e.id}`, source: e.source_id, target: e.target_id, type: "smoothstep",
       label: e.label ?? undefined,
       style: { stroke: color, strokeWidth: 1.25, strokeDasharray: "5 4", opacity: 0.7 },
-      labelStyle: { fill: "#9A9389", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em" },
-      labelBgStyle: { fill: "#171310", fillOpacity: 0.85 },
+      labelStyle: { fill: theme === "paper" ? "#6E674F" : "#9A9079", fontSize: 9, fontFamily: "var(--font-space-mono)", textTransform: "uppercase", letterSpacing: "0.1em" },
+      labelBgStyle: { fill: theme === "paper" ? "#E9E2D1" : "#13110C", fillOpacity: 0.85 },
       labelBgPadding: [4, 2],
     });
   }
@@ -171,19 +224,15 @@ export function buildGraph({ nodes, edges, expanded, query }: BuildArgs): BuildR
   return { rfNodes, rfEdges, matchIds };
 }
 
-/** Initial expanded set: everything except nodes stored as collapsed-by-default. */
-export function defaultExpanded(nodes: OrgNode[]): Set<string> {
-  return new Set(nodes.filter((n) => !n.collapsed).map((n) => n.id));
+/** Initial state: scaffold open, every team collapsed for a clean lane view. */
+export function defaultExpanded(): Set<string> {
+  return new Set();
 }
 
-/** Ancestor chain (exclusive of self) for auto-expanding to a search hit. */
 export function ancestorsOf(nodes: OrgNode[], id: string): string[] {
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const chain: string[] = [];
   let cur = byId.get(id)?.parent_id ?? null;
-  while (cur) {
-    chain.push(cur);
-    cur = byId.get(cur)?.parent_id ?? null;
-  }
+  while (cur) { chain.push(cur); cur = byId.get(cur)?.parent_id ?? null; }
   return chain;
 }
