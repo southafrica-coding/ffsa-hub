@@ -274,6 +274,24 @@ export async function getMyUpcomingBookings(
     .limit(limit);
 }
 
+/** A user's recently DECIDED bookings (approved / denied) since `sinceIso`,
+ *  newest decision first. Powers the requester's decision notifications. */
+export async function getMyDecidedBookings(
+  supabase: Client,
+  userId: string,
+  sinceIso: string,
+  limit = 15
+) {
+  return supabase
+    .from("venue_bookings")
+    .select(`*, ${VENUE_EMBED}, ${MINISTRY_EMBED}`)
+    .eq("requested_by", userId)
+    .in("status", ["approved", "denied"])
+    .gte("decided_at", sinceIso)
+    .order("decided_at", { ascending: false })
+    .limit(limit);
+}
+
 export async function getSeriesById(supabase: Client, id: string) {
   return supabase.from("booking_series").select("*").eq("id", id).single();
 }
