@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { CalendarClock, ArrowUpRight, MapPin } from "lucide-react";
+import { CalendarClock, ArrowUpRight, MapPin, Repeat } from "lucide-react";
 
 type Ref = { name: string; color: string | null; building?: string | null };
 
@@ -13,11 +13,38 @@ type Booking = {
   start_time: string | null;
   end_time: string | null;
   status: "pending" | "approved" | "denied" | "cancelled";
+  series_id: string | null;
   venue: Ref | Ref[] | null;
   ministry: Ref | Ref[] | null;
 };
 
 const TZ = "Africa/Johannesburg";
+
+// A recurring booking shows up as several identical instances. Group by the
+// series id when present, otherwise by an identical-content signature (same
+// title / venue / time), so weekly repeats collapse either way.
+function groupKey(b: Booking): string {
+  if (b.series_id) return `s:${b.series_id}`;
+  const venue = one(b.venue)?.name ?? "";
+  return `c:${b.title}|${venue}|${b.start_time ?? ""}|${b.end_time ?? ""}`;
+}
+
+// Bookings already arrive soonest-first: keep the first occurrence of each group
+// and drop the repeats, flagging a group as recurring when it had 2+ instances.
+function collapseRecurring(bookings: Booking[]): Array<Booking & { recurring: boolean }> {
+  const counts = new Map<string, number>();
+  for (const b of bookings) counts.set(groupKey(b), (counts.get(groupKey(b)) ?? 0) + 1);
+
+  const seen = new Set<string>();
+  const out: Array<Booking & { recurring: boolean }> = [];
+  for (const b of bookings) {
+    const key = groupKey(b);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ ...b, recurring: (counts.get(key) ?? 1) > 1 });
+  }
+  return out;
+}
 
 const STATUS_STYLE: Record<string, { bg: string; fg: string; label: string }> = {
   approved: { bg: "hsl(142 50% 22% / 0.5)", fg: "hsl(142 52% 65%)", label: "Approved" },
@@ -101,10 +128,10 @@ export function MyBookingsCard() {
       ) : (
         <div style={{ maxHeight: 3 * 76, overflowY: "auto" }} className="ffsa-bk-list">
           <style>{".ffsa-bk-list{scrollbar-width:thin;scrollbar-color:hsl(22 8% 22%) transparent}"}</style>
-          {bookings.map((b) => {
+          {collapseRecurring(bookings).map((b) => {
             const venue = one(b.venue);
-            const ministry = one(b.ministry);
             const start = new Date(b.booking_date + "T00:00:00");
+            const weekday = start.toLocaleDateString("en-ZA", { weekday: "short", timeZone: TZ });
             const st = STATUS_STYLE[b.status] ?? STATUS_STYLE.pending;
             return (
               <Link
@@ -149,6 +176,15 @@ export function MyBookingsCard() {
                       {venue?.name ?? "—"} · {timeLabel(b)}
                     </span>
                   </p>
+                  {b.recurring && (
+                    <p
+                      className="flex items-center gap-1"
+                      style={{ fontSize: 10.5, fontWeight: 600, color: "hsl(42 95% 60%)", marginTop: 2 }}
+                    >
+                      <Repeat className="h-3 w-3 shrink-0" />
+                      Weekly · {weekday} · next {start.toLocaleDateString("en-ZA", { day: "numeric", month: "short", timeZone: TZ })}
+                    </p>
+                  )}
                 </div>
 
                 <span
