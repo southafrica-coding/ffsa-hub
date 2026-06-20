@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CalendarDays, MapPin } from "lucide-react";
 import type { CalendarEvent } from "@/app/api/calendar/upcoming/route";
 
@@ -12,6 +12,8 @@ const TZ = "Africa/Johannesburg";
 const VISIBLE = 3;
 // Approximate row height (px) used only to size the scrolling viewport.
 const ROW_H = 76;
+// Auto-scroll pace in pixels per second (a touch slower than the first cut).
+const SPEED = 14;
 
 function formatWhen(ev: CalendarEvent): string {
   const start = new Date(ev.start);
@@ -88,6 +90,10 @@ function EventRow({ ev }: { ev: CalendarEvent }) {
 
 export function UpcomingEventsWidget() {
   const [events, setEvents] = useState<CalendarEvent[] | null>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  // Paused while the cursor is over the list, so it holds still and the user
+  // can wheel/trackpad through it manually.
+  const pausedRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -104,6 +110,41 @@ export function UpcomingEventsWidget() {
     };
   }, []);
 
+  // Only auto-scroll when the list is taller than the viewport.
+  const scroll = !!events && events.length > VISIBLE;
+
+  // Drive the scroll with rAF (instead of a CSS transform) so the viewport is a
+  // real scroll container — that's what lets the user move it by hand on hover.
+  useEffect(() => {
+    if (!scroll) return;
+    const el = viewportRef.current;
+    if (!el) return;
+
+    // Respect reduced-motion: no auto-advance, but manual scrolling still works.
+    const reduce =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) return;
+
+    let raf = 0;
+    let last = performance.now();
+    const tick = (now: number) => {
+      const dt = now - last;
+      last = now;
+      if (!pausedRef.current) {
+        const half = el.scrollHeight / 2; // height of one copy (list is duplicated)
+        if (half > 0) {
+          let next = el.scrollTop + (SPEED * dt) / 1000;
+          if (next >= half) next -= half; // seamless wrap
+          el.scrollTop = next;
+        }
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [scroll, events]);
+
   // Loading skeleton — keep layout stable.
   if (events === null) {
     return (
@@ -118,14 +159,9 @@ export function UpcomingEventsWidget() {
   // Nothing to show (no events, or integration not configured) — render nothing.
   if (events.length === 0) return null;
 
-  // Only auto-scroll when the list is taller than the viewport.
-  const scroll = events.length > VISIBLE;
-  // A steady, readable pace that scales with how many events there are.
-  const duration = events.length * 3.2;
-
   return (
     <div style={shell}>
-      <style>{KEYFRAMES}</style>
+      <style>{STYLES}</style>
 
       <div
         className="flex items-center justify-between"
@@ -157,12 +193,20 @@ export function UpcomingEventsWidget() {
         </span>
       </div>
 
-      {/* Scrolling viewport — the track is duplicated so the loop is seamless. */}
+      {/* Scrolling viewport — a real scroll container; the list is duplicated so
+          the auto-scroll loops seamlessly and manual scrolling has room to move. */}
       <div
+        ref={viewportRef}
         className="ffsa-cal-viewport"
+        onMouseEnter={() => {
+          pausedRef.current = true;
+        }}
+        onMouseLeave={() => {
+          pausedRef.current = false;
+        }}
         style={{
           maxHeight: scroll ? VISIBLE * ROW_H : undefined,
-          overflow: "hidden",
+          overflowY: scroll ? "auto" : "visible",
           position: "relative",
           maskImage: scroll
             ? "linear-gradient(to bottom, transparent, #000 9%, #000 91%, transparent)"
@@ -172,10 +216,7 @@ export function UpcomingEventsWidget() {
             : undefined,
         }}
       >
-        <div
-          className="ffsa-cal-track"
-          style={scroll ? { animation: `ffsa-cal-scroll ${duration}s linear infinite` } : undefined}
-        >
+        <div>
           {events.map((ev) => (
             <EventRow key={ev.id} ev={ev} />
           ))}
@@ -193,15 +234,8 @@ const shell: React.CSSProperties = {
   overflow: "hidden",
 };
 
-// Continuous upward scroll; the track holds two copies so -50% loops seamlessly.
-// Pauses on hover, and respects users who prefer reduced motion.
-const KEYFRAMES = `
-@keyframes ffsa-cal-scroll {
-  from { transform: translateY(0); }
-  to { transform: translateY(-50%); }
-}
-.ffsa-cal-viewport:hover .ffsa-cal-track { animation-play-state: paused !important; }
-@media (prefers-reduced-motion: reduce) {
-  .ffsa-cal-track { animation: none !important; }
-}
+// Hide the scrollbar — the list still scrolls via wheel/trackpad on hover.
+const STYLES = `
+.ffsa-cal-viewport { scrollbar-width: none; -ms-overflow-style: none; }
+.ffsa-cal-viewport::-webkit-scrollbar { display: none; }
 `;

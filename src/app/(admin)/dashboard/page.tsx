@@ -150,8 +150,10 @@ export default async function DashboardPage() {
       {/* Notification feed — the homescreen for what needs attention */}
       <NotificationFeed initial={notifications} />
 
-      {/* Upcoming events — rotating view of the FFSA Base Calendar (everyone) */}
-      <UpcomingEventsWidget />
+      {/* Upcoming events — half-width; second column left open for a future side panel */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <UpcomingEventsWidget />
+      </div>
 
       {/* Stat cards */}
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
