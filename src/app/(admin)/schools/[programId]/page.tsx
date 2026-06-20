@@ -29,6 +29,21 @@ export default async function ProgramDetailPage({
   const { data: enrollments } = await getEnrollmentsByProgram(supabase, programId);
   const { data: grades } = await getGradesByProgram(supabase, programId);
 
+  // Phase-courses (billing_courses) — the unified course concept managed here.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: billingCourses } = await (supabase as any)
+    .from("billing_courses")
+    .select(
+      "id, code, name, scope, sequence, status, start_date, end_date, arrival_date, lead_staff_id, description"
+    )
+    .eq("program_id", programId)
+    .order("sequence", { ascending: true });
+  const { data: courseStaff } = await supabase
+    .from("users")
+    .select("id, first_name, last_name, preferred_name")
+    .order("first_name", { ascending: true })
+    .limit(500);
+
   const { data: questions } = await getQuestionsByProgram(supabase, programId);
   const { data: responses } = await getResponsesByProgram(supabase, programId);
   const { data: referenceSlots } = await getReferenceSlotsByProgram(supabase, programId);
@@ -59,6 +74,8 @@ export default async function ProgramDetailPage({
         grades={grades ?? []}
         allUsers={allUsers ?? []}
         staffOptions={staffOptions}
+        billingCourses={billingCourses ?? []}
+        courseStaff={courseStaff ?? []}
         questions={questions ?? []}
         responses={responses ?? []}
         referenceSlots={referenceSlots ?? []}

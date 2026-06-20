@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { QuestionTree, type TreeQuestion } from "@/components/admin/question-tree";
 import { ReferenceQuestionsBuilder } from "./reference-questions-builder";
+import { ProgramCoursesManager, type PhaseCourse } from "./program-courses-manager";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -291,6 +292,8 @@ export function ProgramDetail({
   grades,
   allUsers,
   staffOptions,
+  billingCourses,
+  courseStaff,
   questions,
   responses,
   referenceSlots,
@@ -302,6 +305,8 @@ export function ProgramDetail({
   grades: GradeRow[];
   allUsers: UserOption[];
   staffOptions: StaffUser[];
+  billingCourses: PhaseCourse[];
+  courseStaff: Parameters<typeof ProgramCoursesManager>[0]["staff"];
   questions: AppQuestion[];
   responses: AppResponse[];
   referenceSlots: ReferenceSlot[];
@@ -421,12 +426,11 @@ export function ProgramDetail({
       <Tabs defaultValue="courses">
         <TabsList>
           <TabsTrigger value="courses">
-            Courses ({program.courses.length})
+            Courses ({billingCourses.length})
           </TabsTrigger>
           <TabsTrigger value="enrollments">
             Enrollments ({enrollments.length})
           </TabsTrigger>
-          <TabsTrigger value="grades">Grades</TabsTrigger>
           <TabsTrigger value="application">
             Application
           </TabsTrigger>
@@ -436,7 +440,11 @@ export function ProgramDetail({
         </TabsList>
 
         <TabsContent value="courses" className="mt-4">
-          <CoursesTab programId={program.id} courses={program.courses} />
+          <ProgramCoursesManager
+            programId={program.id}
+            courses={billingCourses}
+            staff={courseStaff}
+          />
         </TabsContent>
 
         <TabsContent value="enrollments" className="mt-4">
