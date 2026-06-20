@@ -53,14 +53,23 @@ export default async function ProgramBillingPage({
         &larr; Back to School Fees
       </Link>
 
-      <div>
-        <p className="page-eyebrow">FINANCIAL MANAGEMENT</p>
-        <h1 className="page-title">{program.name} — Courses</h1>
-        <p className="text-sm text-muted-foreground">
-          The chronological courses within this program. Each course has its own
-          timeframe and per-tier charge items, and its own student billing
-          schedules. Students enrol in the whole year or a single course.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="page-eyebrow">FINANCIAL MANAGEMENT</p>
+          <h1 className="page-title">{program.name} — Courses</h1>
+          <p className="text-sm text-muted-foreground">
+            The phases (courses) within this program, each with its own
+            timeframe and per-tier charges. The phases together make up the
+            full program; students are billed the whole program and auto-trimmed
+            to the phases they&apos;re doing.
+          </p>
+        </div>
+        <Link
+          href={`/finance/school-fees/${programId}/students`}
+          className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-muted transition-colors shrink-0"
+        >
+          Student billing &rarr;
+        </Link>
       </div>
 
       <ProgramBillingClient

@@ -232,6 +232,30 @@ export async function replaceScheduledRows(
     .select();
 }
 
+export async function getBillingPlansForEnrollment(
+  supabase: Client,
+  enrollmentId: string
+) {
+  return supabase
+    .from("student_billing_plans")
+    .select(
+      "*, billing_courses(id, code, name, sequence), student_billing_schedule(*)"
+    )
+    .eq("enrollment_id", enrollmentId);
+}
+
+export async function deleteBillingPlanForEnrollmentCourse(
+  supabase: Client,
+  enrollmentId: string,
+  courseId: string
+) {
+  return supabase
+    .from("student_billing_plans")
+    .delete()
+    .eq("enrollment_id", enrollmentId)
+    .eq("course_id", courseId);
+}
+
 export async function getCountryTierMap(supabase: Client) {
   const { data } = await supabase
     .from("country_tiers")
