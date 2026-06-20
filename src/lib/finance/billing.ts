@@ -1,13 +1,14 @@
 // ────────────────────────────────────────────────────────────
 // FFSA Hub — School Billing shared constants & seed templates
 // ────────────────────────────────────────────────────────────
-// The FFX 2027 template is the FULL-PROGRAM schedule decomposed
-// into its 3 phases (FFX Q1 / FFBX Q2 / FFWV Q3). The phases sum
-// to the full-program tier price (A R120k / B R99.5k / C R80k).
-// A student doing the whole year gets all 3; a partial student is
-// auto-trimmed to the phases they're enrolled in. Standalone single-
-// quarter bespoke pricing is the anomaly, handled as an override.
-// Everything here is editable per course/tier in the UI.
+// Two pricing structures, both from the FFX 2027 doc:
+//   • Whole-Program (FFX Year Long): deposit + 10 monthly + outreach
+//     = A R120k / B R99.5k / C R80k. scope = 'full_program'.
+//   • Standalone quarters (FFX/FFBX/FFWV): each its own price.
+//     scope = 'segment'.
+// A whole-program student bills from the full_program course; a single-
+// course student bills from that segment course. Everything editable
+// per course/tier in the UI.
 // ────────────────────────────────────────────────────────────
 
 import type {
@@ -22,21 +23,13 @@ export const CHARGE_TYPE_META: Record<
   ChargeType,
   { label: string; blurb: string; sort: number }
 > = {
-  deposit: {
-    label: "Deposit",
-    blurb: "Charged once, on acceptance.",
-    sort: 0,
-  },
+  deposit: { label: "Deposit", blurb: "Charged once, on acceptance.", sort: 0 },
   monthly_tuition: {
     label: "Monthly Tuition",
     blurb: "Recurs monthly; invoice generated the 15th of the preceding month.",
     sort: 1,
   },
-  outreach: {
-    label: "Outreach",
-    blurb: "Charged once on a fixed date.",
-    sort: 2,
-  },
+  outreach: { label: "Outreach", blurb: "Charged once on a fixed date.", sort: 2 },
   quarter_first: {
     label: "Quarter — First Payment",
     blurb: "50% — due relative to arrival (standalone quarter).",
@@ -70,18 +63,13 @@ export const PAYMENT_PREFERENCE_LABELS: Record<string, string> = {
 };
 
 export const formatZAR = (amount: number) =>
-  new Intl.NumberFormat("en-ZA", {
-    style: "currency",
-    currency: "ZAR",
-  }).format(amount);
+  new Intl.NumberFormat("en-ZA", { style: "currency", currency: "ZAR" }).format(
+    amount
+  );
 
 // ────────────────────────────────────────────────────────────
-// FFX 2027 PROGRAM TEMPLATE  (full-program decomposition)
+// FFX 2027 TEMPLATE  (whole-program + standalone quarters)
 // ────────────────────────────────────────────────────────────
-// Monthly tuition per tier: A 6000 / B 3950 / C 2000.
-// Phases: Q1 = deposit (Jan 4) + outreach (Mar 4) + monthly Feb–Apr,
-//         Q2 = monthly May–Jul, Q3 = monthly Aug–Nov.
-// Item codes reuse the loaded FFXYL (year-long) Xero codes.
 
 type TemplateItem = Omit<ChargeItemInput, "course_id">;
 
@@ -92,23 +80,49 @@ export type CourseTemplate = {
   scope: "full_program" | "segment";
   start_date: string;
   end_date: string;
+  arrival_date?: string;
   charges: Record<Tier, TemplateItem[]>;
 };
 
-const MONTHLY_ZAR: Record<Tier, number> = { A: 6000, B: 3950, C: 2000 };
-
-const deposit = (tier: Tier): TemplateItem => ({
+const deposit = (
+  tier: Tier,
+  amount: number,
+  code: string,
+  opts: { fixedDate?: string } = {}
+): TemplateItem => ({
   tier,
   charge_type: "deposit",
   label: "Deposit",
-  amount_zar: 15000,
-  xero_item_code: `FFXYL2027-DEP-${tier}`,
+  amount_zar: amount,
+  xero_item_code: code,
   cadence: "once",
   quantity: 1,
-  due_anchor: "fixed_date",
-  fixed_due_date: "2027-01-04",
+  due_anchor: opts.fixedDate ? "fixed_date" : "acceptance",
+  fixed_due_date: opts.fixedDate ?? null,
   generation_rule: "immediate",
   sort_order: 0,
+});
+
+const monthly = (
+  tier: Tier,
+  amount: number,
+  code: string,
+  firstMonth: number,
+  count: number
+): TemplateItem => ({
+  tier,
+  charge_type: "monthly_tuition",
+  label: "Monthly Tuition",
+  amount_zar: amount,
+  xero_item_code: code,
+  cadence: "monthly",
+  quantity: count,
+  due_anchor: "month_day",
+  due_day: 4,
+  first_due_month: firstMonth,
+  first_due_year: 2027,
+  generation_rule: "preceding_month_15th",
+  sort_order: 1,
 });
 
 const outreach = (tier: Tier): TemplateItem => ({
@@ -125,29 +139,32 @@ const outreach = (tier: Tier): TemplateItem => ({
   sort_order: 2,
 });
 
-// Monthly tuition slice for a phase: `count` payments starting `firstMonth`.
-const monthly = (tier: Tier, firstMonth: number, count: number): TemplateItem => ({
+const quarterFirst = (tier: Tier, amount: number, code: string): TemplateItem => ({
   tier,
-  charge_type: "monthly_tuition",
-  label: "Monthly Tuition",
-  amount_zar: MONTHLY_ZAR[tier],
-  xero_item_code: `FFXYL2027-MON-${tier}`,
-  cadence: "monthly",
-  quantity: count,
-  due_anchor: "month_day",
-  due_day: 4,
-  first_due_month: firstMonth,
-  first_due_year: 2027,
-  generation_rule: "preceding_month_15th",
-  sort_order: 1,
+  charge_type: "quarter_first",
+  label: "First Payment (50%)",
+  amount_zar: amount,
+  xero_item_code: code,
+  cadence: "once",
+  quantity: 1,
+  due_anchor: "relative_to_arrival",
+  arrival_offset_days: -30,
+  generation_rule: "immediate",
+  sort_order: 3,
 });
 
-const tierCharges = (
-  build: (tier: Tier) => TemplateItem[]
-): Record<Tier, TemplateItem[]> => ({
-  A: build("A"),
-  B: build("B"),
-  C: build("C"),
+const quarterFinal = (tier: Tier, amount: number, code: string): TemplateItem => ({
+  tier,
+  charge_type: "quarter_final",
+  label: "Final Payment (50%)",
+  amount_zar: amount,
+  xero_item_code: code,
+  cadence: "once",
+  quantity: 1,
+  due_anchor: "relative_to_arrival",
+  arrival_offset_days: 0,
+  generation_rule: "immediate",
+  sort_order: 4,
 });
 
 export const FFX_2027_PROGRAM_TEMPLATE: {
@@ -156,36 +173,103 @@ export const FFX_2027_PROGRAM_TEMPLATE: {
 } = {
   label: "FFX 2027",
   courses: [
+    // ── Whole-program offering (FFX Year Long) ──
+    {
+      code: "FFXYL",
+      name: "FFX Year Long (Whole Program)",
+      sequence: 0,
+      scope: "full_program",
+      start_date: "2027-01-01",
+      end_date: "2027-11-30",
+      charges: {
+        A: [
+          deposit("A", 15000, "FFXYL2027-DEP-A", { fixedDate: "2027-01-04" }),
+          monthly("A", 6000, "FFXYL2027-MON-A", 2, 10),
+          outreach("A"),
+        ],
+        B: [
+          deposit("B", 15000, "FFXYL2027-DEP-B", { fixedDate: "2027-01-04" }),
+          monthly("B", 3950, "FFXYL2027-MON-B", 2, 10),
+          outreach("B"),
+        ],
+        C: [
+          deposit("C", 15000, "FFXYL2027-DEP-C", { fixedDate: "2027-01-04" }),
+          monthly("C", 2000, "FFXYL2027-MON-C", 2, 10),
+          outreach("C"),
+        ],
+      },
+    },
+    // ── Standalone Q1 (FFX) ──
     {
       code: "FFX",
-      name: "FFX (Q1)",
+      name: "FFX (Q1 standalone)",
       sequence: 1,
       scope: "segment",
       start_date: "2027-01-01",
       end_date: "2027-04-30",
-      charges: tierCharges((t) => [
-        deposit(t),
-        monthly(t, 2, 3), // Feb, Mar, Apr
-        outreach(t),
-      ]),
+      charges: {
+        A: [
+          deposit("A", 15000, "FFXQ2027-DEP-A"),
+          monthly("A", 4333.33, "FFXQ2027-MON-A", 2, 3),
+          outreach("A"),
+        ],
+        B: [
+          deposit("B", 10000, "FFXQ2027-DEP-B"),
+          monthly("B", 3950, "FFXQ2027-MON-B", 2, 3),
+          outreach("B"),
+        ],
+        C: [
+          deposit("C", 5000, "FFXQ2027-DEP-C"),
+          monthly("C", 2000, "FFXQ2027-MON-C", 2, 3),
+          outreach("C"),
+        ],
+      },
     },
+    // ── Standalone Q2 (FFBX) — 50/50 around arrival ──
     {
       code: "FFBX",
-      name: "FFBX (Q2)",
+      name: "FFBX (Q2 standalone)",
       sequence: 2,
       scope: "segment",
       start_date: "2027-05-01",
       end_date: "2027-07-31",
-      charges: tierCharges((t) => [monthly(t, 5, 3)]), // May, Jun, Jul
+      charges: {
+        A: [
+          quarterFirst("A", 12500, "FFBXQ2027-DEP-A"),
+          quarterFinal("A", 12500, "FFBXQ2027-BAL-A"),
+        ],
+        B: [
+          quarterFirst("B", 10416.67, "FFBXQ2027-DEP-B"),
+          quarterFinal("B", 10416.66, "FFBXQ2027-BAL-B"),
+        ],
+        C: [
+          quarterFirst("C", 8333.34, "FFBXQ2027-DEP-C"),
+          quarterFinal("C", 8333.33, "FFBXQ2027-BAL-C"),
+        ],
+      },
     },
+    // ── Standalone Q3 (FFWV) — 50/50 around arrival ──
     {
       code: "FFWV",
-      name: "FFWV (Q3)",
+      name: "FFWV (Q3 standalone)",
       sequence: 3,
       scope: "segment",
       start_date: "2027-08-01",
       end_date: "2027-11-30",
-      charges: tierCharges((t) => [monthly(t, 8, 4)]), // Aug, Sep, Oct, Nov
+      charges: {
+        A: [
+          quarterFirst("A", 12500, "FFWVQ2027-DEP-A"),
+          quarterFinal("A", 12500, "FFWVQ2027-BAL-A"),
+        ],
+        B: [
+          quarterFirst("B", 10416.67, "FFWVQ2027-DEP-B"),
+          quarterFinal("B", 10416.66, "FFWVQ2027-BAL-B"),
+        ],
+        C: [
+          quarterFirst("C", 8333.34, "FFWVQ2027-DEP-C"),
+          quarterFinal("C", 8333.33, "FFWVQ2027-BAL-C"),
+        ],
+      },
     },
   ],
 };

@@ -30,6 +30,7 @@ import {
   Pencil,
   Trash2,
   Loader2,
+  Sparkles,
   ChevronDown,
   ChevronRight,
   CalendarDays,
@@ -40,6 +41,7 @@ import {
   DUE_ANCHOR_LABELS,
   GENERATION_RULE_LABELS,
   TIERS,
+  FFX_2027_PROGRAM_TEMPLATE,
   formatZAR,
 } from "@/lib/finance/billing";
 import type {
@@ -133,30 +135,112 @@ export function ProgramBillingClient({
   courses: Course[];
   itemsByCourse: Record<string, ChargeItem[]>;
 }) {
+  const router = useRouter();
+  const [seeding, setSeeding] = useState(false);
+
+  const fullProgram = courses
+    .filter((c) => c.scope === "full_program")
+    .sort((a, b) => a.sequence - b.sequence);
+  const segments = courses
+    .filter((c) => c.scope === "segment")
+    .sort((a, b) => a.sequence - b.sequence);
+
+  const templateCodes = new Set(
+    FFX_2027_PROGRAM_TEMPLATE.courses.map((c) => c.code)
+  );
+  const canSeedCharges = courses.some(
+    (c) => templateCodes.has(c.code) && (itemsByCourse[c.id]?.length ?? 0) === 0
+  );
+
+  async function seedCharges() {
+    setSeeding(true);
+    try {
+      let seeded = 0;
+      for (const ct of FFX_2027_PROGRAM_TEMPLATE.courses) {
+        const course = courses.find((c) => c.code === ct.code);
+        if (!course || (itemsByCourse[course.id]?.length ?? 0) > 0) continue;
+        for (const tier of TIERS) {
+          for (const item of ct.charges[tier]) {
+            const res = await fetch("/api/finance/school-fees/charge-items", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ ...item, course_id: course.id }),
+            });
+            if (!res.ok) {
+              const e = await res.json();
+              throw new Error(e.error || "Failed to add charge");
+            }
+          }
+        }
+        seeded++;
+      }
+      toast.success(`Seeded FFX 2027 charges for ${seeded} course${seeded !== 1 ? "s" : ""}`);
+      router.refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to seed charges");
+    } finally {
+      setSeeding(false);
+    }
+  }
+
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        {courses.length} course{courses.length !== 1 ? "s" : ""} · courses are
-        created &amp; edited in <span className="font-medium">Training</span>. Set
-        each course&apos;s charges and student billing here.
-      </p>
+    <div className="space-y-6">
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
+          Courses are created &amp; edited in{" "}
+          <span className="font-medium">Training</span>. Set their charges
+          here — whole-program pricing and each individual course&apos;s price.
+        </p>
+        {canSeedCharges && (
+          <Button size="sm" variant="outline" onClick={seedCharges} disabled={seeding}>
+            {seeding ? (
+              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+            ) : (
+              <Sparkles className="h-4 w-4 mr-1" />
+            )}
+            Load FFX 2027 charges
+          </Button>
+        )}
+      </div>
 
       {courses.length === 0 ? (
         <p className="text-sm text-muted-foreground py-6 text-center">
-          No courses yet. Create the courses (phases) in{" "}
+          No courses yet. Create them in{" "}
           <span className="font-medium">Training → this program → Courses</span>,
           then set their charges here.
         </p>
       ) : (
-        <div className="space-y-3">
-          {courses.map((course) => (
-            <CourseCard
-              key={course.id}
-              programId={programId}
-              course={course}
-              items={itemsByCourse[course.id] ?? []}
-            />
-          ))}
+        <div className="space-y-6">
+          {fullProgram.length > 0 && (
+            <section className="space-y-2">
+              <h2 className="text-sm font-semibold">Whole-Program Pricing</h2>
+              <div className="space-y-3">
+                {fullProgram.map((course) => (
+                  <CourseCard
+                    key={course.id}
+                    programId={programId}
+                    course={course}
+                    items={itemsByCourse[course.id] ?? []}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+          {segments.length > 0 && (
+            <section className="space-y-2">
+              <h2 className="text-sm font-semibold">Individual Courses</h2>
+              <div className="space-y-3">
+                {segments.map((course) => (
+                  <CourseCard
+                    key={course.id}
+                    programId={programId}
+                    course={course}
+                    items={itemsByCourse[course.id] ?? []}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       )}
     </div>

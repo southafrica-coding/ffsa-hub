@@ -33,6 +33,7 @@ type Course = {
   id: string;
   code: string;
   name: string;
+  scope: "full_program" | "segment";
   sequence: number;
   arrival_date: string | null;
   fee_charge_items: { id: string }[] | null;
@@ -77,15 +78,31 @@ export function StudentProgramBilling({
   plans: Plan[];
 }) {
   const router = useRouter();
-  const sorted = [...courses].sort((a, b) => a.sequence - b.sequence);
-  const existingCourseIds = new Set(plans.map((p) => p.course_id));
+  const fullProgram = courses
+    .filter((c) => c.scope === "full_program")
+    .sort((a, b) => a.sequence - b.sequence);
+  const segments = courses
+    .filter((c) => c.scope === "segment")
+    .sort((a, b) => a.sequence - b.sequence);
 
-  // Default selection: phases already billed, else all phases (full program).
-  const [selected, setSelected] = useState<Set<string>>(
-    existingCourseIds.size > 0
-      ? new Set(existingCourseIds)
-      : new Set(sorted.map((c) => c.id))
+  const fullProgramIds = new Set(fullProgram.map((c) => c.id));
+  const existingCourseIds = new Set(plans.map((p) => p.course_id));
+  const hasFull = fullProgram.length > 0;
+  const onFullProgramAlready = [...existingCourseIds].some((id) =>
+    fullProgramIds.has(id)
   );
+
+  // Default mode: existing whole-program plan → whole; existing segment plans
+  // → individual; nothing yet → whole if available, else individual.
+  const [mode, setMode] = useState<"whole_program" | "individual">(
+    onFullProgramAlready ? "whole_program" : existingCourseIds.size > 0 ? "individual" : hasFull ? "whole_program" : "individual"
+  );
+
+  // Selected segment courses (individual mode). Default to existing segment plans.
+  const [selectedSegments, setSelectedSegments] = useState<Set<string>>(
+    new Set([...existingCourseIds].filter((id) => !fullProgramIds.has(id)))
+  );
+
   const [tier, setTier] = useState<Tier | "auto">(plans[0]?.tier ?? "auto");
   const [preference, setPreference] = useState<Preference>(
     plans[0]?.payment_preference ?? "standard"
@@ -100,8 +117,14 @@ export function StudentProgramBilling({
     warnings: string[];
   } | null>(null);
 
-  function toggle(id: string) {
-    setSelected((prev) => {
+  function courseIdsForMode(): string[] {
+    return mode === "whole_program"
+      ? fullProgram.map((c) => c.id)
+      : [...selectedSegments];
+  }
+
+  function toggleSegment(id: string) {
+    setSelectedSegments((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -110,23 +133,18 @@ export function StudentProgramBilling({
     setPreview(null);
   }
 
-  const allOn = selected.size === sorted.length;
-  const isFullProgram = allOn;
-
   async function call(action: "preview" | "commit") {
-    const body = {
-      enrollment_id: enrollmentId,
-      course_ids: [...selected],
-      tier: tier === "auto" ? undefined : tier,
-      payment_preference: preference,
-      action,
-    };
-    const res = await fetch("/api/finance/school-fees/student-program-billing", {
+    return fetch("/api/finance/school-fees/student-program-billing", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        enrollment_id: enrollmentId,
+        course_ids: courseIdsForMode(),
+        tier: tier === "auto" ? undefined : tier,
+        payment_preference: preference,
+        action,
+      }),
     });
-    return res;
   }
 
   async function runPreview() {
@@ -159,7 +177,7 @@ export function StudentProgramBilling({
       const json = await res.json();
       if (res.ok) {
         toast.success(
-          `Saved — ${json.phasesBilled} phase${json.phasesBilled !== 1 ? "s" : ""} billed${json.phasesTrimmed ? `, ${json.phasesTrimmed} trimmed` : ""}`
+          `Saved — ${json.phasesBilled} billed${json.phasesTrimmed ? `, ${json.phasesTrimmed} trimmed` : ""}`
         );
         router.refresh();
       } else {
@@ -172,7 +190,6 @@ export function StudentProgramBilling({
     }
   }
 
-  // Group preview rows into invoices (by combined_group_key, else standalone).
   const groups = new Map<string, PreviewRow[]>();
   (preview?.rows ?? []).forEach((r, i) => {
     const key = r.combined_group_key ? `${r.phase}:${r.combined_group_key}` : `solo-${i}`;
@@ -180,22 +197,47 @@ export function StudentProgramBilling({
     groups.get(key)!.push(r);
   });
 
+  const canPreview =
+    mode === "whole_program" ? hasFull : selectedSegments.size > 0;
+
   return (
     <div className="space-y-4">
-      {/* Controls */}
       <Card>
         <CardContent className="pt-4 space-y-4">
+          {/* Mode toggle */}
+          <div>
+            <p className="text-xs font-medium uppercase text-muted-foreground mb-1.5">
+              Enrollment type
+            </p>
+            <div className="inline-flex rounded-md border p-0.5">
+              <button
+                className={`px-3 py-1.5 text-sm rounded ${mode === "whole_program" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+                onClick={() => { setMode("whole_program"); setPreview(null); }}
+                disabled={!hasFull}
+              >
+                Whole program
+              </button>
+              <button
+                className={`px-3 py-1.5 text-sm rounded ${mode === "individual" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+                onClick={() => { setMode("individual"); setPreview(null); }}
+              >
+                Individual course(s)
+              </button>
+            </div>
+            {!hasFull && (
+              <p className="text-[11px] text-yellow-700 mt-1 flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3" /> No whole-program offering set up for this program yet.
+              </p>
+            )}
+          </div>
+
           <div className="flex flex-wrap items-end gap-3">
             <div>
               <p className="text-xs text-muted-foreground mb-1">Tier</p>
               <Select value={tier} onValueChange={(v) => { setTier(v as Tier | "auto"); setPreview(null); }}>
-                <SelectTrigger className="w-[150px] h-9">
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger className="w-[150px] h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="auto">
-                    Auto{nationality ? ` (${nationality})` : " (country)"}
-                  </SelectItem>
+                  <SelectItem value="auto">Auto{nationality ? ` (${nationality})` : " (country)"}</SelectItem>
                   <SelectItem value="A">Tier A</SelectItem>
                   <SelectItem value="B">Tier B</SelectItem>
                   <SelectItem value="C">Tier C</SelectItem>
@@ -205,65 +247,71 @@ export function StudentProgramBilling({
             <div>
               <p className="text-xs text-muted-foreground mb-1">Payment preference</p>
               <Select value={preference} onValueChange={(v) => { setPreference(v as Preference); setPreview(null); }}>
-                <SelectTrigger className="w-[180px] h-9">
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger className="w-[180px] h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {Object.entries(PAYMENT_PREFERENCE_LABELS).map(([k, label]) => (
-                    <SelectItem key={k} value={k}>
-                      {label}
-                    </SelectItem>
+                    <SelectItem key={k} value={k}>{label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            <Badge variant={isFullProgram ? "default" : "secondary"}>
-              {isFullProgram ? "Full program" : `${selected.size} of ${sorted.length} phases`}
-            </Badge>
           </div>
 
-          {/* Phase checklist */}
-          <div className="space-y-2">
-            <p className="text-xs font-medium uppercase text-muted-foreground">
-              Phases this student is doing
-            </p>
-            {sorted.map((c) => {
-              const on = selected.has(c.id);
-              const noCharges = (c.fee_charge_items?.length ?? 0) === 0;
-              return (
-                <label
-                  key={c.id}
-                  className="flex items-center gap-3 rounded-md border bg-card px-3 py-2 cursor-pointer"
-                >
-                  <input
-                    type="checkbox"
-                    checked={on}
-                    onChange={() => toggle(c.id)}
-                    className="h-4 w-4"
-                  />
-                  <span className="text-xs text-muted-foreground font-mono">
-                    #{c.sequence}
-                  </span>
-                  <span className="font-medium text-sm">{c.name}</span>
-                  <Badge variant="secondary" className="text-[10px]">
-                    {c.code}
-                  </Badge>
-                  {noCharges && (
+          {/* Whole-program: show the offering; Individual: pick courses */}
+          {mode === "whole_program" ? (
+            <div className="rounded-md border bg-muted/20 p-3 text-sm">
+              {fullProgram.map((c) => (
+                <div key={c.id} className="flex items-center gap-2">
+                  <Badge variant="default" className="text-[10px]">whole program</Badge>
+                  <span className="font-medium">{c.name}</span>
+                  <Badge variant="secondary" className="text-[10px]">{c.code}</Badge>
+                  {(c.fee_charge_items?.length ?? 0) === 0 && (
                     <span className="text-[10px] text-yellow-700 flex items-center gap-1">
                       <AlertTriangle className="h-3 w-3" /> no charges configured
                     </span>
                   )}
-                </label>
-              );
-            })}
-          </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-xs font-medium uppercase text-muted-foreground">
+                Courses this student is doing
+              </p>
+              {segments.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No individual courses set up.</p>
+              ) : (
+                segments.map((c) => {
+                  const noCharges = (c.fee_charge_items?.length ?? 0) === 0;
+                  return (
+                    <label key={c.id} className="flex items-center gap-3 rounded-md border bg-card px-3 py-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedSegments.has(c.id)}
+                        onChange={() => toggleSegment(c.id)}
+                        className="h-4 w-4"
+                      />
+                      <span className="text-xs text-muted-foreground font-mono">#{c.sequence}</span>
+                      <span className="font-medium text-sm">{c.name}</span>
+                      <Badge variant="secondary" className="text-[10px]">{c.code}</Badge>
+                      {noCharges && (
+                        <span className="text-[10px] text-yellow-700 flex items-center gap-1">
+                          <AlertTriangle className="h-3 w-3" /> no charges configured
+                        </span>
+                      )}
+                    </label>
+                  );
+                })
+              )}
+            </div>
+          )}
 
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={runPreview} disabled={loading || selected.size === 0}>
+            <Button variant="outline" onClick={runPreview} disabled={loading || !canPreview}>
               {loading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Eye className="h-4 w-4 mr-1" />}
               Preview schedule
             </Button>
-            <Button onClick={commit} disabled={saving}>
+            <Button onClick={commit} disabled={saving || !canPreview}>
               {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
               Save billing
             </Button>
@@ -271,7 +319,6 @@ export function StudentProgramBilling({
         </CardContent>
       </Card>
 
-      {/* Preview */}
       {preview && (
         <Card>
           <CardContent className="pt-4 space-y-3">
@@ -280,7 +327,6 @@ export function StudentProgramBilling({
                 <AlertTriangle className="h-3 w-3" /> {w}
               </p>
             ))}
-
             <div className="flex flex-wrap gap-2">
               {preview.perPhase.map((p) => (
                 <Badge key={p.course.code} variant="outline" className="text-xs">
@@ -288,17 +334,13 @@ export function StudentProgramBilling({
                 </Badge>
               ))}
             </div>
-
             {preview.rows.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-2">
-                No charges for this configuration.
-              </p>
+              <p className="text-sm text-muted-foreground py-2">No charges for this configuration.</p>
             ) : (
               <div className="rounded-md border overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Phase</TableHead>
                       <TableHead>Charge</TableHead>
                       <TableHead>Item code</TableHead>
                       <TableHead>Generate</TableHead>
@@ -310,37 +352,27 @@ export function StudentProgramBilling({
                     {[...groups.values()].flatMap((rows, gi) =>
                       rows.map((r, ri) => (
                         <TableRow key={`${gi}-${ri}`}>
-                          <TableCell className="text-xs font-mono">{r.phase}</TableCell>
                           <TableCell className="text-sm">
                             {r.label}
                             {rows.length > 1 && ri === 0 && (
-                              <Badge variant="outline" className="ml-2 text-[10px]">
-                                combined
-                              </Badge>
+                              <Badge variant="outline" className="ml-2 text-[10px]">combined</Badge>
                             )}
                             <span className="block text-[10px] text-muted-foreground">
                               {CHARGE_TYPE_META[r.charge_type as keyof typeof CHARGE_TYPE_META]?.label ?? r.charge_type}
                             </span>
                           </TableCell>
-                          <TableCell className="text-xs font-mono text-muted-foreground">
-                            {r.xero_item_code ?? "—"}
-                          </TableCell>
+                          <TableCell className="text-xs font-mono text-muted-foreground">{r.xero_item_code ?? "—"}</TableCell>
                           <TableCell className="text-sm">{fmtDate(r.scheduled_generation_date)}</TableCell>
                           <TableCell className="text-sm">{fmtDate(r.due_date)}</TableCell>
-                          <TableCell className="text-right font-mono text-sm">
-                            {formatZAR(Number(r.amount_zar))}
-                          </TableCell>
+                          <TableCell className="text-right font-mono text-sm">{formatZAR(Number(r.amount_zar))}</TableCell>
                         </TableRow>
                       ))
                     )}
                     <TableRow className="font-bold border-t-2">
-                      <TableCell colSpan={5}>
-                        Total · Tier {preview.tier}
-                        {isFullProgram ? " · full program" : ""}
+                      <TableCell colSpan={4}>
+                        Total · Tier {preview.tier} · {mode === "whole_program" ? "whole program" : "individual"}
                       </TableCell>
-                      <TableCell className="text-right font-mono">
-                        {formatZAR(preview.grandTotal)}
-                      </TableCell>
+                      <TableCell className="text-right font-mono">{formatZAR(preview.grandTotal)}</TableCell>
                     </TableRow>
                   </TableBody>
                 </Table>

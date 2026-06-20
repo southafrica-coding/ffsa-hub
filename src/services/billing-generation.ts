@@ -184,13 +184,22 @@ export async function setupProgramBillingOnAcceptance(
       .single();
     if (!enrollment) return { ok: false, plansCreated: 0, generated: 0, note: "no enrollment" };
 
-    const { data: courses } = await supabase
+    const { data: allCourses } = await supabase
       .from("billing_courses")
-      .select("id, arrival_date, start_date")
+      .select("id, scope, arrival_date, start_date")
       .eq("program_id", enrollment.program_id);
-    if (!courses || courses.length === 0) {
+    if (!allCourses || allCourses.length === 0) {
       return { ok: true, plansCreated: 0, generated: 0, note: "program has no courses configured" };
     }
+
+    // Default a new student to the WHOLE PROGRAM (the full_program course) if
+    // one exists; otherwise bill all courses. Single-course overrides happen
+    // later on the student billing page.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const fullProgram = (allCourses as any[]).filter(
+      (c) => c.scope === "full_program"
+    );
+    const courses = fullProgram.length > 0 ? fullProgram : allCourses;
 
     const tierMap = await getCountryTierMap(supabase);
     const nat = (enrollment.users?.nationality ?? "").toLowerCase().trim();
