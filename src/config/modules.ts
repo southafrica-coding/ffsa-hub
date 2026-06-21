@@ -70,10 +70,10 @@ export const ADMIN_MODULES: ModuleDefinition[] = [
   },
   {
     id: "bookings",
-    label: "Space Bookings",
+    label: "Bookings",
     href: "/bookings",
     icon: Building2,
-    description: "Venue & space booking requests and approvals",
+    description: "Space bookings and vehicle reservations",
     requiredRoles: ["super_admin", "admin"], // others via bookings.* permissions
   },
   {

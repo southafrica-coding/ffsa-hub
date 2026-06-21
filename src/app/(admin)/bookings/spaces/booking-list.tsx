@@ -39,7 +39,7 @@ export function BookingList({
             </p>
           </div>
           {canCreate && (
-            <Link href="/bookings/new">
+            <Link href="/bookings/spaces/new">
               <Button size="sm" className="mt-1 gap-1">
                 <Plus className="h-4 w-4" />
                 New booking
@@ -83,7 +83,7 @@ export function BookingList({
                 </TableCell>
                 <TableCell>
                   <Link
-                    href={`/bookings/${b.id}`}
+                    href={`/bookings/spaces/${b.id}`}
                     className="font-medium text-foreground hover:text-[hsl(42_95%_62%)] transition-colors"
                   >
                     {b.title}

@@ -100,7 +100,7 @@ export function EditBookingForm({
       return;
     }
     toast.success("Booking updated.");
-    router.push(`/bookings/${booking.id}`);
+    router.push(`/bookings/spaces/${booking.id}`);
     router.refresh();
   }
 
@@ -221,7 +221,7 @@ export function EditBookingForm({
             <Button
               type="button"
               variant="outline"
-              onClick={() => router.push(`/bookings/${booking.id}`)}
+              onClick={() => router.push(`/bookings/spaces/${booking.id}`)}
             >
               Cancel
             </Button>

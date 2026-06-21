@@ -24,7 +24,7 @@ export default async function VenuesAdminPage() {
     requireModuleAccess(supabase, user.id, "bookings"),
     getBookingAccess(supabase, user.id),
   ]);
-  if (!access.canManage) redirect("/bookings");
+  if (!access.canManage) redirect("/bookings/spaces");
 
   const [venuesRes, ministriesRes] = await Promise.all([
     getVenues(supabase),
@@ -34,7 +34,7 @@ export default async function VenuesAdminPage() {
   return (
     <div className="max-w-3xl space-y-6">
       <Link
-        href="/bookings"
+        href="/bookings/spaces"
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="h-4 w-4" />

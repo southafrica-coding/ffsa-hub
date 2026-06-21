@@ -38,7 +38,7 @@ export default async function EditBookingPage({
   const isOwner = booking.requested_by === user.id;
   const canEdit =
     access.isAdmin || access.canManage || access.canApprove || isOwner;
-  if (!canEdit) redirect(`/bookings/${id}`);
+  if (!canEdit) redirect(`/bookings/spaces/${id}`);
 
   const [venuesRes, ministriesRes] = await Promise.all([
     getVenues(supabase, { activeOnly: true }),
@@ -48,7 +48,7 @@ export default async function EditBookingPage({
   return (
     <div className="max-w-2xl space-y-6">
       <Link
-        href={`/bookings/${id}`}
+        href={`/bookings/spaces/${id}`}
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="h-4 w-4" />

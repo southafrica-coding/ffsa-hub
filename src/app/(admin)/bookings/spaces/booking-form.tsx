@@ -15,28 +15,39 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Ban, CheckCircle2, Clock } from "lucide-react";
 import { WEEKDAY_OPTIONS } from "@/lib/bookings/recurrence";
 import { humanDate } from "@/lib/bookings/dates";
 import type { Venue, Ministry } from "@/services/bookings";
 
-type Conflict = { date: string; existingId: string; existingTitle: string };
+type Conflict = {
+  date: string;
+  existingId: string;
+  existingTitle: string;
+  existingTime?: string;
+  occupiedUntil?: string;
+  who?: string | null;
+};
 
 export function BookingForm({
   venues,
   ministries,
   defaultRequesterName,
   defaultDate = "",
+  canApprove = false,
 }: {
   venues: Venue[];
   ministries: Ministry[];
   defaultRequesterName: string;
   defaultDate?: string;
+  canApprove?: boolean;
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conflicts, setConflicts] = useState<Conflict[]>([]);
+  // True when the clash is on an auto-confirm space — a hard block, not a warning.
+  const [blocked, setBlocked] = useState(false);
 
   const [form, setForm] = useState({
     venue_id: venues[0]?.id ?? "",
@@ -61,8 +72,14 @@ export function BookingForm({
     setForm((prev) => ({ ...prev, [field]: value }));
     // Any change invalidates the previous clash check.
     if (conflicts.length) setConflicts([]);
+    if (blocked) setBlocked(false);
     if (error) setError(null);
   }
+
+  const selectedVenue = venues.find((v) => v.id === form.venue_id);
+  // What happens to THIS booking on submit: managers always auto-confirm; for
+  // everyone else it depends on the space's approval setting.
+  const willAutoConfirm = canApprove || !(selectedVenue?.requires_approval ?? false);
 
   function validate(): string | null {
     if (!form.venue_id) return "Please choose a venue.";
@@ -111,7 +128,14 @@ export function BookingForm({
     const json = await res.json().catch(() => ({}));
     return { ok: res.ok, json } as {
       ok: boolean;
-      json: { error?: string; conflicts?: Conflict[]; bookingId?: string; count?: number };
+      json: {
+        error?: string;
+        conflicts?: Conflict[];
+        bookingId?: string;
+        count?: number;
+        autoConfirm?: boolean;
+        blocked?: boolean;
+      };
     };
   }
 
@@ -134,28 +158,40 @@ export function BookingForm({
       }
       if (dry.json.conflicts && dry.json.conflicts.length > 0) {
         setConflicts(dry.json.conflicts);
+        // On auto-confirm spaces a clash is a hard block (no "Book anyway").
+        setBlocked(!!dry.json.blocked);
         setLoading(false);
-        return; // surface the warning; the button becomes "Book anyway"
+        return;
       }
     }
 
     // Step 2: create.
     const res = await post(false);
     if (!res.ok) {
+      // A 409 means the server blocked a double-booking on an auto-confirm space.
+      if (res.json.blocked && res.json.conflicts) {
+        setConflicts(res.json.conflicts);
+        setBlocked(true);
+      }
       setError(res.json.error ?? "Could not submit the booking.");
       setLoading(false);
       return;
     }
 
-    if (res.json.conflicts && res.json.conflicts.length > 0) {
-      toast.warning("Booked — heads up, it clashes with an existing booking.");
-    } else if (res.json.count && res.json.count > 1) {
-      toast.success(`Recurring booking submitted (${res.json.count} dates).`);
+    const confirmed = res.json.autoConfirm;
+    if (res.json.count && res.json.count > 1) {
+      toast.success(
+        confirmed
+          ? `Recurring booking confirmed (${res.json.count} dates).`
+          : `Recurring booking submitted for approval (${res.json.count} dates).`
+      );
+    } else if (confirmed) {
+      toast.success("Booking confirmed.");
     } else {
-      toast.success("Booking request submitted.");
+      toast.success("Booking request submitted for approval.");
     }
 
-    router.push(res.json.bookingId ? `/bookings/${res.json.bookingId}` : "/bookings");
+    router.push(res.json.bookingId ? `/bookings/spaces/${res.json.bookingId}` : "/bookings/spaces");
     router.refresh();
   }
 
@@ -187,6 +223,18 @@ export function BookingForm({
                   ))}
                 </SelectContent>
               </Select>
+              {selectedVenue &&
+                (willAutoConfirm ? (
+                  <p className="flex items-center gap-1.5 text-xs text-[hsl(142_52%_55%)]">
+                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                    Instant confirmation — this space doesn&apos;t need approval.
+                  </p>
+                ) : (
+                  <p className="flex items-center gap-1.5 text-xs text-[hsl(42_95%_60%)]">
+                    <Clock className="h-3.5 w-3.5 shrink-0" />
+                    Goes to the booking manager for approval.
+                  </p>
+                ))}
             </div>
             <div className="space-y-2">
               <Label>Ministry</Label>
@@ -365,25 +413,43 @@ export function BookingForm({
             </div>
           </div>
 
-          {/* Clash warning */}
+          {/* Clash — a hard BLOCK on auto-confirm spaces, a warning otherwise */}
           {hasConflicts && (
-            <div className="rounded-lg border border-primary/35 bg-primary/10 p-3 text-sm">
-              <p className="flex items-center gap-2 font-semibold text-primary">
-                <AlertTriangle className="h-4 w-4" />
-                This {form.recurrence === "weekly" ? "series clashes" : "booking clashes"} with
-                an existing booking in this venue
+            <div
+              className={
+                blocked
+                  ? "rounded-lg border border-destructive/45 bg-destructive/10 p-3 text-sm"
+                  : "rounded-lg border border-primary/35 bg-primary/10 p-3 text-sm"
+              }
+            >
+              <p
+                className={
+                  blocked
+                    ? "flex items-center gap-2 font-semibold text-destructive"
+                    : "flex items-center gap-2 font-semibold text-primary"
+                }
+              >
+                {blocked ? <Ban className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+                {blocked
+                  ? "This space is already booked at that time"
+                  : `This ${form.recurrence === "weekly" ? "series clashes" : "booking clashes"} with an existing booking in this venue`}
               </p>
               <ul className="mt-2 space-y-0.5 text-muted-foreground">
                 {conflicts.slice(0, 8).map((c, i) => (
                   <li key={`${c.existingId}-${i}`}>
-                    {humanDate(c.date)} — overlaps{" "}
+                    {humanDate(c.date)} —{" "}
                     <span className="font-medium text-foreground">{c.existingTitle}</span>
+                    {c.who ? ` (${c.who})` : ""}
+                    {c.existingTime ? `, ${c.existingTime}` : ""}
+                    {c.occupiedUntil ? ` · holds it until ${c.occupiedUntil}` : ""}
                   </li>
                 ))}
                 {conflicts.length > 8 && <li>…and {conflicts.length - 8} more</li>}
               </ul>
               <p className="mt-2 text-xs text-muted-foreground">
-                You can still submit it — clashes are flagged, not blocked.
+                {blocked
+                  ? "Pick a time that doesn't overlap — even a small gap is fine (back-to-back is allowed)."
+                  : "You can still submit it — clashes here are flagged, not blocked."}
               </p>
             </div>
           )}
@@ -391,12 +457,16 @@ export function BookingForm({
           {error && <p className="text-sm text-destructive">{error}</p>}
 
           <div className="flex gap-3 pt-1">
-            <Button type="submit" disabled={loading}>
+            <Button type="submit" disabled={loading || blocked}>
               {loading
                 ? "Working…"
-                : hasConflicts
-                  ? "Book anyway"
-                  : "Submit request"}
+                : blocked
+                  ? "Unavailable"
+                  : hasConflicts
+                    ? "Book anyway"
+                    : willAutoConfirm
+                      ? "Confirm booking"
+                      : "Submit request"}
             </Button>
             <Button type="button" variant="outline" onClick={() => router.back()}>
               Cancel

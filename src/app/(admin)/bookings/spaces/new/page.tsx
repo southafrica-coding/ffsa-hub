@@ -30,7 +30,7 @@ export default async function NewBookingPage({
   ]);
 
   if (!(access.canRequest || access.canApprove || access.canManage)) {
-    redirect("/bookings");
+    redirect("/bookings/spaces");
   }
 
   const [venuesRes, ministriesRes, userRes] = await Promise.all([
@@ -57,6 +57,7 @@ export default async function NewBookingPage({
         ministries={ministries}
         defaultRequesterName={defaultRequesterName}
         defaultDate={defaultDate}
+        canApprove={access.canApprove}
       />
     </div>
   );

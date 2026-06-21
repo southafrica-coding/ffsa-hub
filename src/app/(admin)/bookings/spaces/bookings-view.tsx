@@ -88,7 +88,7 @@ export function BookingsView({
     if (next.venue !== "all") sp.set("venue", next.venue);
     if (next.ministry !== "all") sp.set("ministry", next.ministry);
     const qs = sp.toString();
-    return `/bookings${qs ? `?${qs}` : ""}`;
+    return `/bookings/spaces${qs ? `?${qs}` : ""}`;
   }
 
   function go(overrides: Partial<Filters & { view: ViewKind; date: string }>) {
@@ -141,14 +141,14 @@ export function BookingsView({
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <Link href="/bookings/my-requests">
+          <Link href="/bookings/spaces/my-requests">
             <Button variant="ghost" size="sm" className="gap-1.5">
               <Inbox className="h-4 w-4" />
               My requests
             </Button>
           </Link>
           {access.canApprove && (
-            <Link href="/bookings/requests">
+            <Link href="/bookings/spaces/requests">
               <Button variant="outline" size="sm" className="gap-1.5">
                 <ClipboardList className="h-4 w-4" />
                 Requests
@@ -161,7 +161,7 @@ export function BookingsView({
             </Link>
           )}
           {access.canManage && (
-            <Link href="/bookings/venues">
+            <Link href="/bookings/spaces/venues">
               <Button variant="outline" size="sm" className="gap-1.5">
                 <Settings2 className="h-4 w-4" />
                 Manage venues
@@ -169,7 +169,7 @@ export function BookingsView({
             </Link>
           )}
           {(access.canRequest || access.canApprove || access.canManage) && (
-            <Link href="/bookings/new">
+            <Link href="/bookings/spaces/new">
               <Button size="sm" className="gap-1.5">
                 <Plus className="h-4 w-4" />
                 New booking
@@ -182,7 +182,7 @@ export function BookingsView({
       {/* Manager nudge */}
       {access.canApprove && pendingCount > 0 && (
         <Link
-          href="/bookings/requests"
+          href="/bookings/spaces/requests"
           className="flex items-center justify-between gap-3 rounded-xl border border-primary/35 bg-primary/[0.07] px-4 py-3 transition-colors hover:bg-primary/10"
         >
           <span className="flex items-center gap-2 text-sm font-medium text-primary">

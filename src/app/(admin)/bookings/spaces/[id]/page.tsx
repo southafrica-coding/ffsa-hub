@@ -109,7 +109,7 @@ export default async function BookingDetailPage({
     <BookingStatusProvider initialStatus={booking.status}>
     <div className="max-w-3xl space-y-5">
       <Link
-        href="/bookings"
+        href="/bookings/spaces"
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="h-4 w-4" />
@@ -135,7 +135,7 @@ export default async function BookingDetailPage({
         <div className="flex flex-col items-end gap-2">
           <LiveStatusPill className="text-[11px] px-2.5 py-1" />
           {canEdit && (
-            <Link href={`/bookings/${booking.id}/edit`}>
+            <Link href={`/bookings/spaces/${booking.id}/edit`}>
               <Button variant="outline" size="sm" className="h-7 gap-1">
                 <Pencil className="h-3.5 w-3.5" />
                 Edit
@@ -155,7 +155,7 @@ export default async function BookingDetailPage({
             {clashes.slice(0, 6).map((c) => (
               <li key={c.id}>
                 {humanDate(c.booking_date)} —{" "}
-                <Link href={`/bookings/${c.id}`} className="font-medium text-foreground hover:underline">
+                <Link href={`/bookings/spaces/${c.id}`} className="font-medium text-foreground hover:underline">
                   {(c as { title?: string }).title ?? "another booking"}
                 </Link>
               </li>

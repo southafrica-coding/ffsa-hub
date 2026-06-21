@@ -25,7 +25,7 @@ export default async function RequestsPage() {
     getBookingAccess(supabase, user.id),
     getPendingRequests(supabase),
   ]);
-  if (!access.canApprove) redirect("/bookings");
+  if (!access.canApprove) redirect("/bookings/spaces");
 
   const pending = (pendingRes.data ?? []) as BookingWithRefs[];
 
@@ -52,7 +52,7 @@ export default async function RequestsPage() {
   return (
     <div className="space-y-5">
       <Link
-        href="/bookings"
+        href="/bookings/spaces"
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="h-4 w-4" />

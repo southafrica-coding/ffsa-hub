@@ -88,7 +88,7 @@ export function RequestsQueue({
               <TableRow key={b.id}>
                 <TableCell className="whitespace-nowrap">
                   <Link
-                    href={`/bookings?view=day&date=${b.booking_date}`}
+                    href={`/bookings/spaces?view=day&date=${b.booking_date}`}
                     className="hover:text-[hsl(42_95%_62%)]"
                     title="See the schedule for this day"
                   >
@@ -103,7 +103,7 @@ export function RequestsQueue({
                 </TableCell>
                 <TableCell>
                   <Link
-                    href={`/bookings/${b.id}`}
+                    href={`/bookings/spaces/${b.id}`}
                     className="font-medium text-foreground hover:text-[hsl(42_95%_62%)]"
                   >
                     {b.title}

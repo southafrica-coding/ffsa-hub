@@ -34,7 +34,7 @@ export function WeekView({
     key: d,
     label: weekdayShortFor(d),
     sublabel: String(isoDay(d)),
-    href: `/bookings?view=day&date=${d}`,
+    href: `/bookings/spaces?view=day&date=${d}`,
     isToday: d === today,
   }));
 

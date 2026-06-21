@@ -32,7 +32,7 @@ export default async function MyRequestsPage() {
   return (
     <div className="space-y-5">
       <Link
-        href="/bookings"
+        href="/bookings/spaces"
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="h-4 w-4" />
@@ -46,7 +46,7 @@ export default async function MyRequestsPage() {
             {mine.length} booking{mine.length === 1 ? "" : "s"} you&apos;ve submitted
           </p>
         </div>
-        <Link href="/bookings/new">
+        <Link href="/bookings/spaces/new">
           <Button size="sm" className="gap-1.5">
             <Plus className="h-4 w-4" />
             New booking
@@ -66,7 +66,7 @@ export default async function MyRequestsPage() {
                 Bookings you submit will show here with their status.
               </p>
             </div>
-            <Link href="/bookings/new">
+            <Link href="/bookings/spaces/new">
               <Button size="sm" className="mt-1 gap-1">
                 <Plus className="h-4 w-4" />
                 New booking
@@ -101,7 +101,7 @@ export default async function MyRequestsPage() {
                   </TableCell>
                   <TableCell>
                     <Link
-                      href={`/bookings/${b.id}`}
+                      href={`/bookings/spaces/${b.id}`}
                       className="font-medium text-foreground hover:text-[hsl(42_95%_62%)]"
                     >
                       {b.title}

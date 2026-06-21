@@ -19,12 +19,14 @@ import {
   type Ministry,
 } from "@/services/bookings";
 
-function ActiveToggle({
+function CheckToggle({
   checked,
   onChange,
+  label,
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
+  label: string;
 }) {
   return (
     <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -34,7 +36,7 @@ function ActiveToggle({
         onChange={(e) => onChange(e.target.checked)}
         className="rounded border-input"
       />
-      Active
+      {label}
     </label>
   );
 }
@@ -48,6 +50,7 @@ function VenueRow({ venue }: { venue: Venue }) {
     capacity: venue.capacity?.toString() ?? "",
     color: venue.color,
     is_active: venue.is_active,
+    requires_approval: venue.requires_approval,
   });
   const [saving, setSaving] = useState(false);
 
@@ -60,6 +63,7 @@ function VenueRow({ venue }: { venue: Venue }) {
       capacity: d.capacity ? parseInt(d.capacity, 10) : null,
       color: d.color,
       is_active: d.is_active,
+      requires_approval: d.requires_approval,
     });
     setSaving(false);
     if (error) return toast.error(error.message);
@@ -95,7 +99,16 @@ function VenueRow({ venue }: { venue: Venue }) {
         placeholder="Cap."
         type="number"
       />
-      <ActiveToggle checked={d.is_active} onChange={(v) => setD({ ...d, is_active: v })} />
+      <CheckToggle
+        checked={d.requires_approval}
+        onChange={(v) => setD({ ...d, requires_approval: v })}
+        label="Needs approval"
+      />
+      <CheckToggle
+        checked={d.is_active}
+        onChange={(v) => setD({ ...d, is_active: v })}
+        label="Active"
+      />
       <Button size="sm" variant="outline" onClick={save} disabled={saving} className="ml-auto">
         {saving ? "Saving…" : "Save"}
       </Button>
@@ -142,7 +155,11 @@ function MinistryRow({ ministry }: { ministry: Ministry }) {
         className="h-9 w-56"
         placeholder="Name"
       />
-      <ActiveToggle checked={d.is_active} onChange={(v) => setD({ ...d, is_active: v })} />
+      <CheckToggle
+        checked={d.is_active}
+        onChange={(v) => setD({ ...d, is_active: v })}
+        label="Active"
+      />
       <Button size="sm" variant="outline" onClick={save} disabled={saving} className="ml-auto">
         {saving ? "Saving…" : "Save"}
       </Button>

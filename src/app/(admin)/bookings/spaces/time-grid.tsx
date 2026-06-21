@@ -152,7 +152,7 @@ export function TimeGrid({
                   {allDay.map((b) => (
                     <Link
                       key={b.id}
-                      href={`/bookings/${b.id}`}
+                      href={`/bookings/spaces/${b.id}`}
                       title={`${b.title} · all day`}
                       style={statusChipStyle(b.status)}
                       className="block truncate rounded border-l-2 px-1.5 py-0.5 text-[10px] font-medium"
@@ -173,7 +173,7 @@ export function TimeGrid({
                 return (
                   <Link
                     key={p.item.id}
-                    href={`/bookings/${p.item.id}`}
+                    href={`/bookings/spaces/${p.item.id}`}
                     title={`${p.item.title} · ${timeRangeLabel(p.item.start_time, p.item.end_time)}`}
                     style={{
                       ...statusChipStyle(p.item.status),
