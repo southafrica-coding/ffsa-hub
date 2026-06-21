@@ -467,7 +467,9 @@ export async function createScheduledInvoice(
     };
   }
   const { accessToken, tenantId } = auth;
-  const currencyCode = REGION_CURRENCY[region];
+  // Hub bills in ZAR regardless of which Xero org (US vs SA) the invoice
+  // posts to. The org/item code still drives the ledger account + tax.
+  const currencyCode = "ZAR";
 
   try {
     // 1. Find or create the contact
@@ -494,22 +496,28 @@ export async function createScheduledInvoice(
       contactId = newContactRes.Contacts[0].ContactID;
     }
 
-    // 2. Revenue account code (needed to AUTHORISE; else falls back to DRAFT)
-    let accountCode: string | null = null;
-    try {
-      const accountsRes = await xeroGet(
-        accessToken,
-        tenantId,
-        'Accounts?where=Type%3D%3D%22REVENUE%22%20AND%20Status%3D%3D%22ACTIVE%22'
-      );
-      if (accountsRes.Accounts && accountsRes.Accounts.length > 0) {
-        accountCode = accountsRes.Accounts[0].Code;
+    // 2. Fallback revenue account — ONLY used for lines that have no item code.
+    // Lines WITH an item code let Xero resolve the ledger account + tax from
+    // the item (US → 1020/Tax Exempt, SA → 1030/No VAT), matching the org's
+    // accounting structure.
+    let fallbackAccount: string | null = null;
+    const needFallback = params.lineItems.some((li) => !li.itemCode);
+    if (needFallback) {
+      try {
+        const accountsRes = await xeroGet(
+          accessToken,
+          tenantId,
+          'Accounts?where=Type%3D%3D%22REVENUE%22%20AND%20Status%3D%3D%22ACTIVE%22'
+        );
+        if (accountsRes.Accounts && accountsRes.Accounts.length > 0) {
+          fallbackAccount = accountsRes.Accounts[0].Code;
+        }
+      } catch {
+        // no settings scope — code-less lines can't authorise
       }
-    } catch {
-      // no settings scope — invoice will be DRAFT
     }
 
-    // 3. Line items (ItemCode pulls the loaded Xero item's account/tax)
+    // 3. Line items — item code drives account + tax; fallback only otherwise.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const lineItems = params.lineItems.map((li) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -518,13 +526,19 @@ export async function createScheduledInvoice(
         Quantity: 1,
         UnitAmount: li.amount,
       };
-      if (li.itemCode) item.ItemCode = li.itemCode;
-      if (accountCode) item.AccountCode = accountCode;
+      if (li.itemCode) {
+        item.ItemCode = li.itemCode;
+      } else if (fallbackAccount) {
+        item.AccountCode = fallbackAccount;
+      }
       return item;
     });
 
-    const canAuthorise = !!accountCode;
-    const initialStatus = params.autoSend && canAuthorise ? "AUTHORISED" : "DRAFT";
+    // Every line resolves an account (via item code or fallback) → can authorise.
+    const allResolvable = params.lineItems.every(
+      (li) => li.itemCode || fallbackAccount
+    );
+    const initialStatus = params.autoSend && allResolvable ? "AUTHORISED" : "DRAFT";
 
     const invoiceRes = await xeroPost(accessToken, tenantId, "Invoices", {
       Invoices: [
