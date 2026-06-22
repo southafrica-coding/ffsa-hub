@@ -16,6 +16,7 @@ import {
   roleLabel,
   fullName,
   displayName,
+  formatTime,
   formatDateLabel,
   formatTimeRange,
   type Person,
@@ -161,6 +162,17 @@ export default function SetDetail({ setId, open, onClose, userId, isStaff, onCha
 
   async function saveDetails(form: FormData) {
     if (!set) return;
+    const set_date = String(form.get("set_date") || "");
+    const start_time = String(form.get("start_time") || "");
+    const end_time = String(form.get("end_time") || "");
+    if (!set_date || !start_time || !end_time) {
+      toast.error("Date, start time and end time are all required");
+      return;
+    }
+    if (end_time <= start_time) {
+      toast.error("End time must be after start time");
+      return;
+    }
     setBusy("save");
     try {
       const res = await fetch("/api/prayer-room/sets", {
@@ -173,9 +185,20 @@ export default function SetDetail({ setId, open, onClose, userId, isStaff, onCha
           scripture: form.get("scripture"),
           prayer_focus: form.get("prayer_focus"),
           setlist: form.get("setlist"),
+          set_date,
+          start_time,
+          end_time,
         }),
       });
-      if (!res.ok) throw new Error((await res.json()).error || "Failed to save");
+      if (!res.ok) {
+        const msg = (await res.json()).error || "Failed to save";
+        // 23P01: the no_double_booking exclusion constraint — surface it in plain English.
+        throw new Error(
+          /no_double_booking|exclusion/i.test(msg)
+            ? "That time clashes with someone already serving in another set. Adjust the time, or remove the clashing person first."
+            : msg
+        );
+      }
       toast.success("Set updated");
       setEditing(false);
       await refresh();
@@ -230,6 +253,20 @@ export default function SetDetail({ setId, open, onClose, userId, isStaff, onCha
             {/* Content */}
             {editing ? (
               <form action={saveDetails} className="space-y-3">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <div className="col-span-2 space-y-1">
+                    <Label className="text-xs">Date</Label>
+                    <Input type="date" name="set_date" defaultValue={set.set_date} required />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Start</Label>
+                    <Input type="time" name="start_time" defaultValue={formatTime(set.start_time)} required />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">End</Label>
+                    <Input type="time" name="end_time" defaultValue={formatTime(set.end_time)} required />
+                  </div>
+                </div>
                 <Field name="title" label="Title" defaultValue={set.title} />
                 <Field name="theme" label="Theme / focus" defaultValue={set.theme} />
                 <Field name="scripture" label="Scripture" defaultValue={set.scripture} />
