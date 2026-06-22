@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChevronLeft, ChevronRight, Plus, CalendarPlus, X, UserPlus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, X, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import SetDetail from "./set-detail";
 import MemberPicker from "./member-picker";
@@ -27,6 +27,7 @@ interface SetRow {
   title: string | null;
   theme: string | null;
   status: string;
+  relocation_note: string | null;
   owner: Person;
   slots: SetSlot[];
 }
@@ -43,7 +44,6 @@ export default function ScheduleView({ userId, isStaff, isMember }: Props) {
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const [busy, setBusy] = useState(false);
 
   const weekEnd = addDays(weekStart, 6);
   const todayStr = toISODate(new Date());
@@ -62,25 +62,6 @@ export default function ScheduleView({ userId, isStaff, isMember }: Props) {
   useEffect(() => {
     load();
   }, [load]);
-
-  async function generateWeek() {
-    setBusy(true);
-    try {
-      const res = await fetch("/api/prayer-room/week", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ weekStart: toISODate(weekStart) }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed");
-      toast.success(data.created > 0 ? `Created ${data.created} set${data.created === 1 ? "" : "s"}` : "This week is already up to date");
-      await load();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed");
-    } finally {
-      setBusy(false);
-    }
-  }
 
   const days = Array.from({ length: 7 }, (_, i) => toISODate(addDays(weekStart, i)));
   const setsByDay: Record<string, SetRow[]> = {};
@@ -106,18 +87,11 @@ export default function ScheduleView({ userId, isStaff, isMember }: Props) {
             {weekEnd.toLocaleDateString("en-ZA", { month: "short", day: "numeric" })}
           </span>
         </div>
-        <div className="flex gap-2">
-          {isStaff && (
-            <Button variant="outline" size="sm" className="gap-1" disabled={busy} onClick={generateWeek}>
-              <CalendarPlus className="h-4 w-4" /> Generate week
-            </Button>
-          )}
-          {(isMember || isStaff) && (
-            <Button size="sm" className="gap-1" onClick={() => setCreating(true)}>
-              <Plus className="h-4 w-4" /> New set
-            </Button>
-          )}
-        </div>
+        {(isMember || isStaff) && (
+          <Button size="sm" className="gap-1" onClick={() => setCreating(true)}>
+            <Plus className="h-4 w-4" /> New set
+          </Button>
+        )}
       </div>
 
       {loading ? (
@@ -186,6 +160,11 @@ function SetCard({ set, onClick }: { set: SetRow; onClick: () => void }) {
       <div className="text-xs font-semibold leading-tight">{formatTimeRange(set.start_time, set.end_time)}</div>
       <div className="truncate text-[13px] font-medium leading-tight">{set.title || set.theme || "Devo set"}</div>
       {set.owner && <div className="truncate text-[11px] text-muted-foreground">{fullName(set.owner)}</div>}
+      {set.relocation_note && (
+        <div className="mt-0.5 truncate text-[10px] font-medium text-amber-400" title={set.relocation_note}>
+          → {set.relocation_note}
+        </div>
+      )}
       <div className="mt-1 flex items-center gap-1.5">
         {total > 0 ? (
           <>

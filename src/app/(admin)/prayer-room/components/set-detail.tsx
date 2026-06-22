@@ -45,6 +45,7 @@ interface SetRow {
   prayer_focus: string | null;
   setlist: string | null;
   status: string;
+  relocation_note: string | null;
   owner_id: string | null;
   owner: Person;
   slots: Slot[];
@@ -249,6 +250,12 @@ export default function SetDetail({ setId, open, onClose, userId, isStaff, onCha
                 </Badge>
               )}
             </p>
+
+            {set.relocation_note && (
+              <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
+                <span className="font-medium">Relocated</span> → {set.relocation_note}
+              </div>
+            )}
 
             {/* Content */}
             {editing ? (

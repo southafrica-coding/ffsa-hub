@@ -359,6 +359,59 @@ export async function deleteTemplateBlock(supabase: Client, id: string) {
 }
 
 // ────────────────────────────────────────────────────────────
+// BLOCK-OUTS (Manage tab) — windows when the room is needed elsewhere
+// ────────────────────────────────────────────────────────────
+
+export async function getBlockouts(supabase: Client, options?: { from?: string }) {
+  let q = supabase
+    .from("prayer_room_blockouts")
+    .select("*")
+    .order("block_date", { ascending: true })
+    .order("start_time", { ascending: true });
+  if (options?.from) q = q.gte("block_date", options.from);
+  return q;
+}
+
+export async function createBlockout(
+  supabase: Client,
+  data: {
+    block_date: string;
+    start_time: string;
+    end_time: string;
+    reason?: string | null;
+    relocation_note?: string | null;
+    created_by: string;
+  }
+) {
+  return supabase.from("prayer_room_blockouts").insert(data).select().single();
+}
+
+export async function deleteBlockout(supabase: Client, id: string) {
+  return supabase.from("prayer_room_blockouts").delete().eq("id", id);
+}
+
+/** Scheduled sets overlapping a block-out window (read via admin for owner names). */
+export async function getSetsInWindow(
+  supabase: Client,
+  blockDate: string,
+  startTime: string,
+  endTime: string
+) {
+  return supabase
+    .from("prayer_room_sets")
+    .select(`id, title, theme, start_time, end_time, owner:owner_id(${NAME_FIELDS})`)
+    .eq("set_date", blockDate)
+    .eq("status", "scheduled")
+    .lt("start_time", endTime)
+    .gt("end_time", startTime);
+}
+
+/** Stamp the relocation note on the displaced sets (staff client). */
+export async function stampRelocation(supabase: Client, ids: string[], note: string | null) {
+  return supabase.from("prayer_room_sets").update({ relocation_note: note }).in("id", ids);
+}
+
+// ────────────────────────────────────────────────────────────
 // STATS
 // ────────────────────────────────────────────────────────────
 
