@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { requireModuleAccess } from "@/lib/require-permission";
+import { requireAnyModuleAccess } from "@/lib/require-permission";
 import { Building2, Car } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
@@ -17,10 +17,10 @@ const BOOKING_TYPES = [
   {
     title: "Rent a Vehicle",
     description:
-      "Reserve an FFSA vehicle for ministry trips and errands.",
+      "Request a base vehicle for outreach, airport runs, and ministry trips — fleet, drivers, and approvals.",
     href: "/bookings/vehicles",
     icon: Car,
-    ready: false,
+    ready: true,
   },
 ];
 
@@ -30,7 +30,7 @@ export default async function BookingsHubPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
-  await requireModuleAccess(supabase, user.id, "bookings");
+  await requireAnyModuleAccess(supabase, user.id, ["bookings", "vehicles"]);
 
   return (
     <div className="space-y-6">

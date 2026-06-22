@@ -115,6 +115,9 @@ export async function getSidebarAccess(
         // Users with schools.manage can delegate the assignable-contact
         // permission, so they need access to the Users page.
         if (perm?.key === "schools.manage") result.permittedModules.add("users");
+        // Rent a Vehicle lives under the Bookings hub — vehicle permissions
+        // must light up the single "Bookings" sidebar item.
+        if (perm?.module === "vehicles") result.permittedModules.add("bookings");
       }
 
       // Also count modules reachable through assigned roles' bundles.
@@ -122,6 +125,7 @@ export async function getSidebarAccess(
       for (const perm of await getRoleDerivedPermissionRows(supabase, userId)) {
         result.permittedModules.add(perm.module);
         if (perm.key === "schools.manage") result.permittedModules.add("users");
+        if (perm.module === "vehicles") result.permittedModules.add("bookings");
       }
     }
   } catch {
