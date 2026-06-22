@@ -2,7 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect, notFound } from "next/navigation";
-import { ArrowLeft, ClipboardCheck, Camera, FileText } from "lucide-react";
+import { ArrowLeft, ClipboardCheck, Camera, FileText, PenLine, CheckCircle2 } from "lucide-react";
 import { requireModuleAccess } from "@/lib/require-permission";
 import {
   getVehicleBookingById,
@@ -12,6 +12,7 @@ import {
   getInspectionsForBooking,
   getInspectionFiles,
   getVehiclePaymentsForBooking,
+  getAgreementsForBooking,
   purposeLabel,
   dayCount,
   inspectionKindLabel,
@@ -21,6 +22,7 @@ import {
   type VehicleInspection,
   type VehicleInspectionFile,
   type VehiclePayment,
+  type VehicleAgreement,
 } from "@/services/vehicles";
 import { Button } from "@/components/ui/button";
 import { PaymentBlock } from "../payment-block";
@@ -148,16 +150,19 @@ export default async function VehicleBookingDetail({
   if (!booking) notFound();
   const b = booking as VehicleBookingWithRefs;
 
-  const [vehiclesRes, overlapping, inspectionsRes, filesRes, paymentsRes] =
+  const [vehiclesRes, overlapping, inspectionsRes, filesRes, paymentsRes, agreementsRes] =
     await Promise.all([
       getVehicles(supabase, { activeOnly: true }),
       getOverlappingAssignments(supabase, b.checkout_date, b.return_date, b.id),
       getInspectionsForBooking(supabase, b.id),
       getInspectionFiles(supabase, b.id),
       getVehiclePaymentsForBooking(supabase, b.id),
+      getAgreementsForBooking(supabase, b.id),
     ]);
   const payments = (paymentsRes.data ?? []) as VehiclePayment[];
   const latestPayment = payments[0] ?? null;
+  const agreements = (agreementsRes.data ?? []) as VehicleAgreement[];
+  const latestAgreement = agreements[0] ?? null;
   const vehicles = (vehiclesRes.data ?? []) as Vehicle[];
   const unavailableIds = Array.from(new Set(overlapping.map((a) => a.vehicle_id)));
   const assignedIds = (b.assignments ?? [])
@@ -306,6 +311,35 @@ export default async function VehicleBookingDetail({
           <InspectionRow kind="return" insp={returnInsp} bookingId={b.id} canInspect={canInspect} />
           <FileLinks title="Damage / condition photos" icon={Camera} files={photos} />
           <FileLinks title="Driver licences" icon={FileText} files={licenses} />
+        </CardContent>
+      </Card>
+
+      {/* Policy agreement */}
+      <Card>
+        <CardContent className="space-y-3 pt-6">
+          <h2 className="flex items-center gap-2 text-sm font-semibold">
+            <PenLine className="h-4 w-4 text-muted-foreground" />
+            Policy agreement
+          </h2>
+          {latestAgreement ? (
+            <p className="flex flex-wrap items-center gap-2 text-sm">
+              <CheckCircle2 className="h-4 w-4" style={{ color: "hsl(142 52% 60%)" }} />
+              <span className="font-medium text-foreground">{latestAgreement.signer_name}</span>
+              <span className="text-muted-foreground">
+                signed {latestAgreement.signed_at.slice(0, 10)} · policy {latestAgreement.policy_version}
+              </span>
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">Not signed yet.</p>
+          )}
+          {canInspect && (
+            <Link href={`/bookings/vehicles/${b.id}/agreement`}>
+              <Button size="sm" variant="outline" className="gap-1.5">
+                <PenLine className="h-4 w-4" />
+                {latestAgreement ? "View / re-sign" : "Sign policy"}
+              </Button>
+            </Link>
+          )}
         </CardContent>
       </Card>
 

@@ -587,3 +587,31 @@ export async function markBookingPaid(supabase: Client, bookingId: string) {
     })
     .eq("id", bookingId);
 }
+
+// ── Policy agreements / e-signature (v3) ───────────────────
+
+export type VehicleAgreement = {
+  id: string;
+  vehicle_booking_id: string;
+  signer_name: string;
+  signer_email: string | null;
+  typed_signature: string;
+  policy_version: string;
+  agreed: boolean;
+  ip_address: string | null;
+  signed_by: string | null;
+  signed_at: string;
+  created_at: string;
+};
+
+export async function getAgreementsForBooking(supabase: Client, bookingId: string) {
+  return supabase
+    .from("vehicle_agreements")
+    .select("*")
+    .eq("vehicle_booking_id", bookingId)
+    .order("signed_at", { ascending: false });
+}
+
+export async function insertAgreement(supabase: Client, row: Record<string, unknown>) {
+  return supabase.from("vehicle_agreements").insert(row).select().single();
+}
