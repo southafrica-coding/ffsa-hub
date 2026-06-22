@@ -2,35 +2,37 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChevronLeft, ChevronRight, Plus, X, UserPlus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, X, UserPlus, CalendarDays, CalendarRange, Clock, List as ListIcon } from "lucide-react";
 import { toast } from "sonner";
 import SetDetail from "./set-detail";
 import MemberPicker from "./member-picker";
+import { ScheduleCalendar, type CalendarSet } from "./calendar";
 import { WEEKDAY_OPTIONS } from "@/lib/bookings/recurrence";
-import { DAYS_SHORT, ROLES, roleLabel, fullName, formatTimeRange, toISODate, weekStartDate, addDays, type Person } from "./helpers";
+import {
+  todayISO,
+  shiftDays,
+  weekDays,
+  monthGridDays,
+  monthLabel,
+  weekRangeLabel,
+  dayHeadingLabel,
+  shiftMonth,
+  monthParam,
+} from "@/lib/bookings/dates";
+import { ROLES, roleLabel, fullName, toISODate, addDays } from "./helpers";
 
-interface SetSlot {
-  id: string;
-  role: string;
-  status: string;
-}
-interface SetRow {
-  id: string;
-  set_date: string;
-  start_time: string;
-  end_time: string;
-  title: string | null;
-  theme: string | null;
-  status: string;
-  relocation_note: string | null;
-  owner: Person;
-  slots: SetSlot[];
-}
+type ViewKind = "month" | "week" | "day" | "list";
+
+const VIEW_OPTIONS: { key: ViewKind; label: string; icon: typeof CalendarDays }[] = [
+  { key: "month", label: "Month", icon: CalendarDays },
+  { key: "week", label: "Week", icon: CalendarRange },
+  { key: "day", label: "Day", icon: Clock },
+  { key: "list", label: "List", icon: ListIcon },
+];
 
 interface Props {
   userId: string;
@@ -38,87 +40,115 @@ interface Props {
   isMember: boolean;
 }
 
+function ymOf(iso: string) {
+  return { year: parseInt(iso.slice(0, 4), 10), month: parseInt(iso.slice(5, 7), 10) };
+}
+
+/** Date range to fetch for the current view + anchor. */
+function rangeFor(view: ViewKind, anchor: string): { from: string; to: string } {
+  if (view === "day") return { from: anchor, to: anchor };
+  if (view === "week") {
+    const d = weekDays(anchor);
+    return { from: d[0], to: d[6] };
+  }
+  const { year, month } = ymOf(anchor);
+  const days = monthGridDays(year, month);
+  return { from: days[0], to: days[days.length - 1] };
+}
+
 export default function ScheduleView({ userId, isStaff, isMember }: Props) {
-  const [weekStart, setWeekStart] = useState(() => weekStartDate(new Date()));
-  const [sets, setSets] = useState<SetRow[]>([]);
+  const [view, setView] = useState<ViewKind>("week");
+  const [anchor, setAnchor] = useState<string>(() => todayISO());
+  const [sets, setSets] = useState<CalendarSet[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
-  const weekEnd = addDays(weekStart, 6);
-  const todayStr = toISODate(new Date());
+  const { from, to } = rangeFor(view, anchor);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/prayer-room/sets?dateFrom=${toISODate(weekStart)}&dateTo=${toISODate(weekEnd)}`);
+      const res = await fetch(`/api/prayer-room/sets?dateFrom=${from}&dateTo=${to}`);
       setSets(res.ok ? await res.json() : []);
     } finally {
       setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weekStart]);
+  }, [from, to]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  const days = Array.from({ length: 7 }, (_, i) => toISODate(addDays(weekStart, i)));
-  const setsByDay: Record<string, SetRow[]> = {};
-  days.forEach((d) => (setsByDay[d] = []));
-  sets.forEach((s) => setsByDay[s.set_date]?.push(s));
+  function step(dir: -1 | 1) {
+    if (view === "day") setAnchor(shiftDays(anchor, dir));
+    else if (view === "week") setAnchor(shiftDays(anchor, dir * 7));
+    else {
+      const { year, month } = ymOf(anchor);
+      const m = shiftMonth(year, month, dir);
+      setAnchor(`${monthParam(m.year, m.month)}-01`);
+    }
+  }
+
+  const { year, month } = ymOf(anchor);
+  const headerLabel =
+    view === "week" ? weekRangeLabel(anchor) : view === "day" ? dayHeadingLabel(anchor) : monthLabel(year, month);
 
   return (
     <div>
-      {/* Week nav + actions */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setWeekStart(addDays(weekStart, -7))}>
+        <div className="flex items-center gap-1">
+          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => step(-1)} aria-label="Previous">
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setWeekStart(weekStartDate(new Date()))}>
-            Today
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setWeekStart(addDays(weekStart, 7))}>
+          <div className="min-w-[10rem] px-1 text-center text-sm font-semibold tracking-wide">{headerLabel}</div>
+          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => step(1)} aria-label="Next">
             <ChevronRight className="h-4 w-4" />
           </Button>
-          <span className="ml-1 text-sm font-medium">
-            {weekStart.toLocaleDateString("en-ZA", { month: "short", day: "numeric" })} –{" "}
-            {weekEnd.toLocaleDateString("en-ZA", { month: "short", day: "numeric" })}
-          </span>
-        </div>
-        {(isMember || isStaff) && (
-          <Button size="sm" className="gap-1" onClick={() => setCreating(true)}>
-            <Plus className="h-4 w-4" /> New set
+          <Button variant="ghost" size="sm" className="ml-1" onClick={() => setAnchor(todayISO())}>
+            Today
           </Button>
-        )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div className="flex items-center rounded-lg border bg-card p-0.5">
+            {VIEW_OPTIONS.map((opt) => {
+              const Icon = opt.icon;
+              return (
+                <Button
+                  key={opt.key}
+                  variant={view === opt.key ? "secondary" : "ghost"}
+                  size="sm"
+                  className="h-7 gap-1 px-2"
+                  onClick={() => setView(opt.key)}
+                >
+                  <Icon className="h-4 w-4" />
+                  <span className="hidden md:inline">{opt.label}</span>
+                </Button>
+              );
+            })}
+          </div>
+          {(isMember || isStaff) && (
+            <Button size="sm" className="gap-1" onClick={() => setCreating(true)}>
+              <Plus className="h-4 w-4" /> New set
+            </Button>
+          )}
+        </div>
       </div>
 
       {loading ? (
         <p className="py-20 text-center text-muted-foreground">Loading schedule…</p>
       ) : (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-7 md:gap-2">
-          {days.map((d, i) => {
-            const isToday = d === todayStr;
-            return (
-              <div key={d} className="min-w-0">
-                <div className={`mb-2 rounded-md px-2 py-1 text-center ${isToday ? "bg-primary/10" : ""}`}>
-                  <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{DAYS_SHORT[i]}</div>
-                  <div className={`text-sm font-semibold ${isToday ? "text-primary" : ""}`}>
-                    {new Date(d + "T00:00:00").getDate()}
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  {setsByDay[d].length === 0 ? (
-                    <p className="px-1 text-center text-[11px] text-muted-foreground/60">—</p>
-                  ) : (
-                    setsByDay[d].map((s) => <SetCard key={s.id} set={s} onClick={() => setSelectedId(s.id)} />)
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <ScheduleCalendar
+          view={view}
+          anchor={anchor}
+          sets={sets}
+          onSelect={setSelectedId}
+          onPickDay={(iso) => {
+            setAnchor(iso);
+            setView("day");
+          }}
+        />
       )}
 
       <SetDetail
@@ -133,7 +163,7 @@ export default function ScheduleView({ userId, isStaff, isMember }: Props) {
       <CreateSetDialog
         open={creating}
         onClose={() => setCreating(false)}
-        defaultDate={toISODate(weekStart)}
+        defaultDate={view === "day" ? anchor : todayISO()}
         onCreated={async (id) => {
           setCreating(false);
           await load();
@@ -141,47 +171,6 @@ export default function ScheduleView({ userId, isStaff, isMember }: Props) {
         }}
       />
     </div>
-  );
-}
-
-function SetCard({ set, onClick }: { set: SetRow; onClick: () => void }) {
-  const total = set.slots.length;
-  const filled = set.slots.filter((s) => s.status === "filled").length;
-  const open = set.slots.filter((s) => s.status === "open").length;
-  const cancelled = set.status === "cancelled";
-
-  return (
-    <button
-      onClick={onClick}
-      className={`w-full rounded-md border border-border bg-card px-2.5 py-2 text-left transition-colors hover:border-primary/50 hover:bg-accent ${
-        cancelled ? "opacity-50" : ""
-      }`}
-    >
-      <div className="text-xs font-semibold leading-tight">{formatTimeRange(set.start_time, set.end_time)}</div>
-      <div className="truncate text-[13px] font-medium leading-tight">{set.title || set.theme || "Devo set"}</div>
-      {set.owner && <div className="truncate text-[11px] text-muted-foreground">{fullName(set.owner)}</div>}
-      {set.relocation_note && (
-        <div className="mt-0.5 truncate text-[10px] font-medium text-amber-400" title={set.relocation_note}>
-          → {set.relocation_note}
-        </div>
-      )}
-      <div className="mt-1 flex items-center gap-1.5">
-        {total > 0 ? (
-          <>
-            <span className="text-[10px] text-muted-foreground">
-              {filled}/{total}
-            </span>
-            {open > 0 && (
-              <Badge variant="outline" className="h-4 border-amber-500/40 px-1 text-[9px] text-amber-400">
-                {open} open
-              </Badge>
-            )}
-          </>
-        ) : (
-          <span className="text-[10px] text-muted-foreground/60">no roster</span>
-        )}
-      </div>
-    </button>
   );
 }
 
@@ -323,10 +312,14 @@ function CreateSetDialog({
               <div className="space-y-1">
                 <Label className="text-xs">Day of week</Label>
                 <Select value={String(weekday)} onValueChange={(v) => setWeekday(Number(v))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     {WEEKDAY_OPTIONS.map((d) => (
-                      <SelectItem key={d.value} value={String(d.value)}>{d.label}</SelectItem>
+                      <SelectItem key={d.value} value={String(d.value)}>
+                        {d.label}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -410,11 +403,18 @@ function CreateSetDialog({
                 {team.map((t, i) => (
                   <div key={`${t.user_id}-${i}`} className="flex items-center gap-2">
                     <span className="min-w-0 flex-1 truncate text-sm">{t.name}</span>
-                    <Select value={t.role} onValueChange={(v) => setTeam((prev) => prev.map((x, j) => (j === i ? { ...x, role: v } : x)))}>
-                      <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
+                    <Select
+                      value={t.role}
+                      onValueChange={(v) => setTeam((prev) => prev.map((x, j) => (j === i ? { ...x, role: v } : x)))}
+                    >
+                      <SelectTrigger className="h-8 w-40">
+                        <SelectValue />
+                      </SelectTrigger>
                       <SelectContent>
                         {ROLES.map((r) => (
-                          <SelectItem key={r} value={r}>{roleLabel(r)}</SelectItem>
+                          <SelectItem key={r} value={r}>
+                            {roleLabel(r)}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
