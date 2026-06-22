@@ -1,19 +1,26 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect, notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ClipboardCheck, Camera, FileText } from "lucide-react";
 import { requireModuleAccess } from "@/lib/require-permission";
 import {
   getVehicleBookingById,
   getVehicles,
   getVehicleAccess,
   getOverlappingAssignments,
+  getInspectionsForBooking,
+  getInspectionFiles,
   purposeLabel,
   dayCount,
+  inspectionKindLabel,
   type Vehicle,
   type VehicleBookingWithRefs,
   type VehicleDriver,
+  type VehicleInspection,
+  type VehicleInspectionFile,
 } from "@/services/vehicles";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatusPill, AssignedVehicles } from "../ui";
 import { statusColor } from "@/lib/vehicles/status";
@@ -38,6 +45,85 @@ const TEST_LABEL: Record<string, string> = {
   failed: "Test failed",
 };
 
+function InspectionRow({
+  kind,
+  insp,
+  bookingId,
+  canInspect,
+}: {
+  kind: "collection" | "return";
+  insp: VehicleInspection | null;
+  bookingId: string;
+  canInspect: boolean;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-3 last:border-b-0 last:pb-0">
+      <div>
+        <p className="text-sm font-medium text-foreground">{inspectionKindLabel(kind)}</p>
+        {insp ? (
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {insp.mileage != null ? `${insp.mileage.toLocaleString()} km · ` : ""}
+            recorded {insp.performed_at.slice(0, 10)}
+            {kind === "collection" && insp.damage_panels.length > 0
+              ? ` · ${insp.damage_panels.length} panel(s) flagged`
+              : ""}
+          </p>
+        ) : (
+          <p className="mt-0.5 text-xs text-muted-foreground">Not recorded yet.</p>
+        )}
+      </div>
+      {canInspect && (
+        <Link
+          href={`/bookings/vehicles/${bookingId}/${kind === "collection" ? "collect" : "return"}`}
+        >
+          <Button size="sm" variant="outline" className="gap-1.5">
+            <ClipboardCheck className="h-4 w-4" />
+            {insp ? "Update" : "Record"}
+          </Button>
+        </Link>
+      )}
+    </div>
+  );
+}
+
+function FileLinks({
+  title,
+  icon: Icon,
+  files,
+}: {
+  title: string;
+  icon: typeof Camera;
+  files: { id: string; file_name: string | null; signed_url: string | null }[];
+}) {
+  if (files.length === 0) return null;
+  return (
+    <div>
+      <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-[hsl(30_6%_46%)]">
+        {title}
+      </p>
+      <ul className="space-y-1">
+        {files.map((f) => (
+          <li key={f.id} className="flex items-center gap-2 text-sm">
+            <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+            {f.signed_url ? (
+              <a
+                href={f.signed_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-foreground hover:text-[hsl(42_95%_62%)]"
+              >
+                {f.file_name ?? "file"}
+              </a>
+            ) : (
+              <span>{f.file_name ?? "file"}</span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export default async function VehicleBookingDetail({
   params,
 }: {
@@ -59,9 +145,11 @@ export default async function VehicleBookingDetail({
   if (!booking) notFound();
   const b = booking as VehicleBookingWithRefs;
 
-  const [vehiclesRes, overlapping] = await Promise.all([
+  const [vehiclesRes, overlapping, inspectionsRes, filesRes] = await Promise.all([
     getVehicles(supabase, { activeOnly: true }),
     getOverlappingAssignments(supabase, b.checkout_date, b.return_date, b.id),
+    getInspectionsForBooking(supabase, b.id),
+    getInspectionFiles(supabase, b.id),
   ]);
   const vehicles = (vehiclesRes.data ?? []) as Vehicle[];
   const unavailableIds = Array.from(new Set(overlapping.map((a) => a.vehicle_id)));
@@ -70,8 +158,25 @@ export default async function VehicleBookingDetail({
     .filter(Boolean) as string[];
   const drivers = (b.drivers ?? []) as VehicleDriver[];
 
+  const inspections = (inspectionsRes.data ?? []) as VehicleInspection[];
+  const collection = inspections.find((i) => i.kind === "collection") ?? null;
+  const returnInsp = inspections.find((i) => i.kind === "return") ?? null;
+
+  const admin = createAdminClient();
+  const files = await Promise.all(
+    ((filesRes.data ?? []) as VehicleInspectionFile[]).map(async (f) => {
+      const { data: signed } = await admin.storage
+        .from("vehicle-inspections")
+        .createSignedUrl(f.file_path, 3600);
+      return { ...f, signed_url: signed?.signedUrl ?? null };
+    })
+  );
+  const photos = files.filter((f) => f.kind === "damage_photo");
+  const licenses = files.filter((f) => f.kind === "license");
+
   const isManager = access.isAdmin || access.canApprove || access.canManage;
   const isOwner = b.requested_by === user.id;
+  const canInspect = isManager || isOwner;
   const days = dayCount(b.checkout_date, b.return_date);
 
   return (
@@ -170,6 +275,20 @@ export default async function VehicleBookingDetail({
           </CardContent>
         </Card>
       )}
+
+      {/* Inspections */}
+      <Card>
+        <CardContent className="space-y-4 pt-6">
+          <h2 className="flex items-center gap-2 text-sm font-semibold">
+            <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
+            Inspections
+          </h2>
+          <InspectionRow kind="collection" insp={collection} bookingId={b.id} canInspect={canInspect} />
+          <InspectionRow kind="return" insp={returnInsp} bookingId={b.id} canInspect={canInspect} />
+          <FileLinks title="Damage / condition photos" icon={Camera} files={photos} />
+          <FileLinks title="Driver licences" icon={FileText} files={licenses} />
+        </CardContent>
+      </Card>
 
       {/* Management */}
       <VehicleBookingActions

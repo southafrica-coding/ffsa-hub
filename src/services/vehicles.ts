@@ -158,6 +158,15 @@ export async function getVehicleBookingById(supabase: Client, id: string) {
     .single();
 }
 
+/** Lean owner/status lookup for authorization in API routes. */
+export async function getVehicleBookingOwner(supabase: Client, id: string) {
+  return supabase
+    .from("vehicle_bookings")
+    .select("requested_by, status")
+    .eq("id", id)
+    .single();
+}
+
 export async function countPendingVehicleBookings(
   supabase: Client
 ): Promise<number> {
@@ -341,4 +350,101 @@ export function dayCount(checkout: string, ret: string): number {
   const b = new Date(ret + "T00:00:00Z").getTime();
   if (Number.isNaN(a) || Number.isNaN(b) || b < a) return 1;
   return Math.round((b - a) / 86_400_000) + 1;
+}
+
+// ── Inspections (v2) ───────────────────────────────────────
+
+export type InspectionKind = "collection" | "return";
+export type InspectionFileKind = "damage_photo" | "license";
+
+export type VehicleInspection = {
+  id: string;
+  vehicle_booking_id: string;
+  vehicle_id: string | null;
+  kind: InspectionKind;
+  driver_names: string | null;
+  mileage: number | null;
+  fuel_full: boolean | null;
+  washed: boolean | null;
+  damage_reported: boolean | null;
+  damage_panels: string[];
+  inventory: Record<string, boolean>;
+  condition_notes: string | null;
+  declaration_agreed: boolean;
+  performed_by: string | null;
+  performed_at: string;
+  created_at: string;
+};
+
+export type VehicleInspectionFile = {
+  id: string;
+  vehicle_booking_id: string;
+  inspection_id: string | null;
+  kind: InspectionFileKind;
+  file_path: string;
+  file_name: string | null;
+  uploaded_by: string | null;
+  created_at: string;
+};
+
+/** Walk-around panels from the "Sign Out" form — the vehicle damage map. */
+export const DAMAGE_PANELS: { key: string; label: string }[] = [
+  { key: "front_bumper", label: "Front bumper" },
+  { key: "front", label: "Front (windscreen & wipers)" },
+  { key: "bonnet", label: "Bonnet & function" },
+  { key: "right_front_fender", label: "Right front fender" },
+  { key: "right_front_door", label: "Right front door & window" },
+  { key: "right_rear_door", label: "Right rear door & window" },
+  { key: "right_rear_fender", label: "Right rear fender" },
+  { key: "rear_bumper", label: "Rear bumper" },
+  { key: "boot", label: "Boot lid & function" },
+  { key: "rear", label: "Rear (windscreen)" },
+  { key: "left_rear_fender", label: "Left rear fender" },
+  { key: "left_rear_door", label: "Left rear door & window" },
+  { key: "left_front_door", label: "Left front door & window" },
+  { key: "left_front_fender", label: "Left front fender" },
+  { key: "roof", label: "Roof" },
+  { key: "tyres", label: "Tyres (tread & sidewalls, all 4)" },
+  { key: "rims", label: "Wheel rims (all 4)" },
+];
+
+/** In-vehicle inventory check from the "Sign Out" form. */
+export const INVENTORY_ITEMS: { key: string; label: string }[] = [
+  { key: "car_jack", label: "Car jack" },
+  { key: "wheel_spanner", label: "Wheel spanner" },
+  { key: "emergency_triangle", label: "Emergency triangle" },
+  { key: "vests", label: "Emergency vests (×2)" },
+  { key: "spare_tyre", label: "Spare tyre (condition checked)" },
+];
+
+export async function getInspectionsForBooking(supabase: Client, bookingId: string) {
+  return supabase
+    .from("vehicle_inspections")
+    .select("*")
+    .eq("vehicle_booking_id", bookingId)
+    .order("performed_at", { ascending: true });
+}
+
+export async function insertInspection(supabase: Client, row: Record<string, unknown>) {
+  return supabase.from("vehicle_inspections").insert(row).select().single();
+}
+
+export async function getInspectionFiles(supabase: Client, bookingId: string) {
+  return supabase
+    .from("vehicle_inspection_files")
+    .select("*")
+    .eq("vehicle_booking_id", bookingId)
+    .order("created_at", { ascending: true });
+}
+
+export async function insertInspectionFile(supabase: Client, row: Record<string, unknown>) {
+  return supabase.from("vehicle_inspection_files").insert(row).select().single();
+}
+
+export async function deleteInspectionFile(supabase: Client, id: string) {
+  return supabase.from("vehicle_inspection_files").delete().eq("id", id);
+}
+
+export function inspectionKindLabel(kind: string): string {
+  return kind === "collection" ? "Collection (Sign Out)" : "Return (Sign In)";
 }
