@@ -1,5 +1,5 @@
 -- ============================================================================
--- 105 — Prayer Room: allow one person to hold MULTIPLE roles in the same set
+-- 108 — Prayer Room: allow one person to hold MULTIPLE roles in the same set
 -- ============================================================================
 -- Before this migration a person could not be rostered into two slots of the
 -- SAME set (e.g. Vocals AND Instrument) because the `no_double_booking`

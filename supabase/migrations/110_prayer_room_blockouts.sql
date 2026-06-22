@@ -1,5 +1,5 @@
 -- ============================================================================
--- 107 — Prayer Room: block-out dates (replaces the templates concept)
+-- 110 — Prayer Room: block-out dates (replaces the templates concept)
 -- ============================================================================
 -- A block-out marks a window when the prayer room is needed for another event,
 -- so the devo sets that fall in it move elsewhere. Creating a block-out stamps
@@ -7,7 +7,7 @@
 -- heads-up to the dedicated prayer-room Slack channel (handled in the route).
 --
 -- The old prayer_room_template_blocks table + ensure_prayer_room_week() are
--- left in place but no longer surfaced in the UI — weekly recurrence (106) is
+-- left in place but no longer surfaced in the UI — weekly recurrence (109) is
 -- now how repeating sets are created.
 -- ----------------------------------------------------------------------------
 

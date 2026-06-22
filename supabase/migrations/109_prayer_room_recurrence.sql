@@ -1,5 +1,5 @@
 -- ============================================================================
--- 106 — Prayer Room: weekly recurring devo sets
+-- 109 — Prayer Room: weekly recurring devo sets
 -- ============================================================================
 -- Mirrors the Space Bookings booking_series pattern: a series row holds the
 -- weekly recurrence rule; each occurrence is a normal prayer_room_sets row
