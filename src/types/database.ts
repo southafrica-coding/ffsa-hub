@@ -1666,6 +1666,84 @@ export type Database = {
           },
         ]
       }
+      event_report_subscriptions: {
+        Row: {
+          cadence: string
+          created_at: string
+          dest_email: string | null
+          dest_whatsapp: string | null
+          email_enabled: boolean
+          enabled: boolean
+          event_id: string
+          id: string
+          last_error: string | null
+          last_sent_at: string | null
+          last_status: string | null
+          last_window_end: string | null
+          last_window_start: string | null
+          send_hour_utc: number
+          updated_at: string
+          user_id: string
+          weekly_weekday: number
+          whatsapp_enabled: boolean
+        }
+        Insert: {
+          cadence?: string
+          created_at?: string
+          dest_email?: string | null
+          dest_whatsapp?: string | null
+          email_enabled?: boolean
+          enabled?: boolean
+          event_id: string
+          id?: string
+          last_error?: string | null
+          last_sent_at?: string | null
+          last_status?: string | null
+          last_window_end?: string | null
+          last_window_start?: string | null
+          send_hour_utc?: number
+          updated_at?: string
+          user_id: string
+          weekly_weekday?: number
+          whatsapp_enabled?: boolean
+        }
+        Update: {
+          cadence?: string
+          created_at?: string
+          dest_email?: string | null
+          dest_whatsapp?: string | null
+          email_enabled?: boolean
+          enabled?: boolean
+          event_id?: string
+          id?: string
+          last_error?: string | null
+          last_sent_at?: string | null
+          last_status?: string | null
+          last_window_end?: string | null
+          last_window_start?: string | null
+          send_hour_utc?: number
+          updated_at?: string
+          user_id?: string
+          weekly_weekday?: number
+          whatsapp_enabled?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_report_subscriptions_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_report_subscriptions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_roles: {
         Row: {
           contact_id: string | null

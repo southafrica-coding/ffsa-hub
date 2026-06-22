@@ -30,6 +30,7 @@ import { EventDetailsForm } from "./event-details-form";
 import { TicketsTab } from "./tickets-tab";
 import { OrdersTab } from "./orders-tab";
 import { CheckInTab } from "./check-in-tab";
+import { ReportsTab } from "./reports-tab";
 import {
   listTicketTypesByEvent,
   listPromoCodesByEvent,
@@ -46,6 +47,7 @@ const TABS = [
   { key: "orders", label: "Orders" },
   { key: "check-in", label: "Check-in" },
   { key: "forms", label: "Forms" },
+  { key: "reports", label: "Reports" },
 ] as const;
 
 export default async function EventDetailPage({
@@ -216,6 +218,8 @@ export default async function EventDetailPage({
       )}
 
       {tab === "forms" && <FormsTab eventId={id} forms={forms ?? []} />}
+
+      {tab === "reports" && <ReportsTab eventId={id} />}
     </div>
   );
 }

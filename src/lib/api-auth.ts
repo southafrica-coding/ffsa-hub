@@ -87,6 +87,24 @@ export async function canManageEvents(
   return hasAnyPermission(supabase, userId, perms);
 }
 
+/**
+ * True if the user may view/manage an event's ticketing reports — i.e. they
+ * hold any events-management capability (create/edit, registrations, or
+ * attendance). Used to gate the per-event "Reports" tab subscription routes.
+ * The subscription rows themselves are self-scoped by RLS (migration 111);
+ * this is the "may subscribe to this event at all" gate.
+ */
+export async function canAccessEventReports(
+  supabase: Client,
+  userId: string
+): Promise<boolean> {
+  return canManageEvents(supabase, userId, [
+    "events.create",
+    "events.manage_registrations",
+    "events.manage_attendance",
+  ]);
+}
+
 // Roles or granular permissions that allow managing finance config
 // (school billing setup, the country-tier backbone list, fee structures).
 // Mirrors the finance RLS (admins / finance_admin).
