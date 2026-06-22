@@ -29,10 +29,23 @@ export interface CalendarSet {
   slots: { status: string }[];
 }
 
+export interface CalendarBlockout {
+  id: string;
+  block_date: string;
+  start_time: string;
+  end_time: string;
+  reason: string | null;
+  relocation_note: string | null;
+}
+
 type ViewKind = "month" | "week" | "day" | "list";
 
 const HOUR_H = 46; // px per hour
 const MIN_BLOCK = 16;
+
+// Hatched translucent red so blocked time reads clearly but the sets beneath stay visible.
+const BLOCKOUT_FILL =
+  "repeating-linear-gradient(45deg, hsl(0 72% 52% / 0.18), hsl(0 72% 52% / 0.18) 6px, hsl(0 72% 52% / 0.06) 6px, hsl(0 72% 52% / 0.06) 12px)";
 
 function toMin(t: string): number {
   const m = (t || "").match(/^(\d{1,2}):(\d{2})/);
@@ -42,8 +55,16 @@ function winOf(s: CalendarSet): { start: number; end: number } {
   const start = toMin(s.start_time);
   return { start, end: Math.max(toMin(s.end_time), start + 15) };
 }
+function boWin(b: CalendarBlockout): { start: number; end: number } {
+  const start = toMin(b.start_time);
+  return { start, end: Math.max(toMin(b.end_time), start + 15) };
+}
 const hhmm = (t: string) => (t || "").slice(0, 5);
 const setTitle = (s: CalendarSet) => s.title || s.theme || "Devo set";
+const blockoutTip = (b: CalendarBlockout) =>
+  `Blocked ${hhmm(b.start_time)}–${hhmm(b.end_time)}${b.reason ? ` — ${b.reason}` : ""}${
+    b.relocation_note ? ` · sets → ${b.relocation_note}` : ""
+  }`;
 
 function chipStyle(status: string): CSSProperties {
   if (status === "cancelled") return { background: "hsl(22 8% 24% / 0.5)", color: "hsl(30 6% 58%)" };
@@ -70,34 +91,50 @@ function groupByDay(sets: CalendarSet[]): Map<string, CalendarSet[]> {
   }
   return m;
 }
+function groupBlockoutsByDay(blockouts: CalendarBlockout[]): Map<string, CalendarBlockout[]> {
+  const m = new Map<string, CalendarBlockout[]>();
+  for (const b of blockouts) {
+    const arr = m.get(b.block_date);
+    if (arr) arr.push(b);
+    else m.set(b.block_date, [b]);
+  }
+  return m;
+}
 
 export function ScheduleCalendar({
   view,
   anchor,
   sets,
+  blockouts,
   onSelect,
   onPickDay,
 }: {
   view: ViewKind;
   anchor: string;
   sets: CalendarSet[];
+  blockouts: CalendarBlockout[];
   onSelect: (id: string) => void;
   onPickDay: (iso: string) => void;
 }) {
-  if (view === "list") return <ListView sets={sets} onSelect={onSelect} />;
-  if (view === "month") return <MonthView anchor={anchor} sets={sets} onSelect={onSelect} onPickDay={onPickDay} />;
+  if (view === "list") return <ListView sets={sets} blockouts={blockouts} onSelect={onSelect} />;
+  if (view === "month")
+    return <MonthView anchor={anchor} sets={sets} blockouts={blockouts} onSelect={onSelect} onPickDay={onPickDay} />;
   const days = view === "day" ? [anchor] : weekDays(anchor);
-  return <GridView days={days} sets={sets} onSelect={onSelect} onPickDay={view === "week" ? onPickDay : undefined} />;
+  return (
+    <GridView days={days} sets={sets} blockouts={blockouts} onSelect={onSelect} onPickDay={view === "week" ? onPickDay : undefined} />
+  );
 }
 
 function MonthView({
   anchor,
   sets,
+  blockouts,
   onSelect,
   onPickDay,
 }: {
   anchor: string;
   sets: CalendarSet[];
+  blockouts: CalendarBlockout[];
   onSelect: (id: string) => void;
   onPickDay: (iso: string) => void;
 }) {
@@ -106,6 +143,7 @@ function MonthView({
   const days = monthGridDays(year, month);
   const today = todayISO();
   const byDay = groupByDay(sets);
+  const blByDay = groupBlockoutsByDay(blockouts);
 
   return (
     <div className="overflow-hidden rounded-xl border bg-card shadow-[0_2px_16px_rgba(0,0,0,0.35)]">
@@ -121,6 +159,7 @@ function MonthView({
           const inMonth = isoMonth(d) === month;
           const isToday = d === today;
           const daySets = (byDay.get(d) ?? []).sort((a, b) => a.start_time.localeCompare(b.start_time));
+          const dayBlocks = (blByDay.get(d) ?? []).sort((a, b) => a.start_time.localeCompare(b.start_time));
           return (
             <div
               key={d}
@@ -139,6 +178,16 @@ function MonthView({
                 {isoDay(d)}
               </button>
               <div className="space-y-0.5">
+                {dayBlocks.map((b) => (
+                  <div
+                    key={b.id}
+                    title={blockoutTip(b)}
+                    className="truncate rounded px-1 py-0.5 text-left text-[10px] font-semibold"
+                    style={{ background: "hsl(0 72% 52% / 0.18)", color: "hsl(0 85% 80%)", borderLeft: "2px solid hsl(0 80% 60%)" }}
+                  >
+                    🚧 {hhmm(b.start_time)} Blocked
+                  </div>
+                ))}
                 {daySets.slice(0, 3).map((s) => (
                   <button
                     key={s.id}
@@ -167,16 +216,20 @@ function MonthView({
 function GridView({
   days,
   sets,
+  blockouts,
   onSelect,
   onPickDay,
 }: {
   days: string[];
   sets: CalendarSet[];
+  blockouts: CalendarBlockout[];
   onSelect: (id: string) => void;
   onPickDay?: (iso: string) => void;
 }) {
   const byDay = groupByDay(sets);
-  const { startHour, endHour } = computeHourRange(sets.map(winOf));
+  const blByDay = groupBlockoutsByDay(blockouts);
+  // Hour bounds must fit both sets and block-out windows.
+  const { startHour, endHour } = computeHourRange([...sets.map(winOf), ...blockouts.map(boWin)]);
   const hours: number[] = [];
   for (let h = startHour; h <= endHour; h++) hours.push(h);
   const gridHeight = (endHour - startHour) * HOUR_H;
@@ -237,6 +290,7 @@ function GridView({
           const isToday = d === today;
           const items = byDay.get(d) ?? [];
           const packed = packLanes(items.map((s) => ({ item: s, ...winOf(s) })));
+          const dayBlocks = blByDay.get(d) ?? [];
           return (
             <div
               key={d}
@@ -255,6 +309,7 @@ function GridView({
                 </div>
               )}
 
+              {/* Devo sets */}
               {packed.map((p) => {
                 const top = ((p.start - minOf) / 60) * HOUR_H;
                 const height = Math.max(MIN_BLOCK, ((p.end - p.start) / 60) * HOUR_H - 2);
@@ -288,6 +343,27 @@ function GridView({
                   </button>
                 );
               })}
+
+              {/* Block-out overlay — sits ON TOP of any sets in the window but lets
+                  clicks pass through to the sets beneath (pointer-events: none). */}
+              {dayBlocks.map((b) => {
+                const bs = toMin(b.start_time);
+                const be = Math.max(toMin(b.end_time), bs + 15);
+                const top = ((bs - minOf) / 60) * HOUR_H;
+                const height = Math.max(MIN_BLOCK, ((be - bs) / 60) * HOUR_H);
+                return (
+                  <div
+                    key={b.id}
+                    title={blockoutTip(b)}
+                    className="pointer-events-none absolute inset-x-0 z-20 overflow-hidden border-y border-dashed border-[hsl(0_78%_62%/0.8)]"
+                    style={{ top, height, background: BLOCKOUT_FILL }}
+                  >
+                    <div className="truncate px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[hsl(0_85%_82%)]">
+                      🚧 Blocked{b.relocation_note ? ` → ${b.relocation_note}` : ""}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           );
         })}
@@ -296,51 +372,76 @@ function GridView({
   );
 }
 
-function ListView({ sets, onSelect }: { sets: CalendarSet[]; onSelect: (id: string) => void }) {
-  const sorted = [...sets].sort(
-    (a, b) => a.set_date.localeCompare(b.set_date) || a.start_time.localeCompare(b.start_time)
-  );
-  if (sorted.length === 0) {
-    return <p className="rounded-xl border bg-card py-16 text-center text-muted-foreground">No devo sets in this range.</p>;
+function ListView({
+  sets,
+  blockouts,
+  onSelect,
+}: {
+  sets: CalendarSet[];
+  blockouts: CalendarBlockout[];
+  onSelect: (id: string) => void;
+}) {
+  const setsByDay = groupByDay(sets);
+  const blByDay = groupBlockoutsByDay(blockouts);
+  const dates = Array.from(new Set([...sets.map((s) => s.set_date), ...blockouts.map((b) => b.block_date)])).sort();
+
+  if (dates.length === 0) {
+    return <p className="rounded-xl border bg-card py-16 text-center text-muted-foreground">Nothing scheduled in this range.</p>;
   }
-  const groups: { date: string; items: CalendarSet[] }[] = [];
-  for (const s of sorted) {
-    const g = groups[groups.length - 1];
-    if (g && g.date === s.set_date) g.items.push(s);
-    else groups.push({ date: s.set_date, items: [s] });
-  }
+
   return (
     <div className="space-y-4">
-      {groups.map((g) => (
-        <div key={g.date}>
-          <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{humanDate(g.date)}</div>
-          <div className="space-y-1.5">
-            {g.items.map((s) => {
-              const fill = fillLabel(s);
-              return (
-                <button
-                  key={s.id}
-                  onClick={() => onSelect(s.id)}
-                  className="flex w-full items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2 text-left transition-colors hover:border-primary/50 hover:bg-accent"
+      {dates.map((date) => {
+        const daySets = (setsByDay.get(date) ?? []).sort((a, b) => a.start_time.localeCompare(b.start_time));
+        const dayBlocks = (blByDay.get(date) ?? []).sort((a, b) => a.start_time.localeCompare(b.start_time));
+        return (
+          <div key={date}>
+            <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{humanDate(date)}</div>
+            <div className="space-y-1.5">
+              {dayBlocks.map((b) => (
+                <div
+                  key={b.id}
+                  className="flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm"
+                  style={{ borderColor: "hsl(0 72% 52% / 0.4)", background: "hsl(0 72% 52% / 0.08)" }}
                 >
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-medium">
-                      {setTitle(s)}
-                      {s.status !== "scheduled" && <span className="ml-2 text-xs capitalize text-muted-foreground">{s.status}</span>}
+                  <span className="font-semibold text-[hsl(0_85%_80%)]">
+                    🚧 Blocked {hhmm(b.start_time)}–{hhmm(b.end_time)}
+                  </span>
+                  {(b.reason || b.relocation_note) && (
+                    <span className="truncate text-xs text-muted-foreground">
+                      {b.reason || ""}
+                      {b.relocation_note ? ` · sets → ${b.relocation_note}` : ""}
+                    </span>
+                  )}
+                </div>
+              ))}
+              {daySets.map((s) => {
+                const fill = fillLabel(s);
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => onSelect(s.id)}
+                    className="flex w-full items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2 text-left transition-colors hover:border-primary/50 hover:bg-accent"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium">
+                        {setTitle(s)}
+                        {s.status !== "scheduled" && <span className="ml-2 text-xs capitalize text-muted-foreground">{s.status}</span>}
+                      </div>
+                      <div className="truncate text-xs text-muted-foreground">
+                        {hhmm(s.start_time)}–{hhmm(s.end_time)}
+                        {s.owner ? ` · ${fullName(s.owner)}` : ""}
+                        {s.relocation_note ? ` · → ${s.relocation_note}` : ""}
+                      </div>
                     </div>
-                    <div className="truncate text-xs text-muted-foreground">
-                      {hhmm(s.start_time)}–{hhmm(s.end_time)}
-                      {s.owner ? ` · ${fullName(s.owner)}` : ""}
-                      {s.relocation_note ? ` · → ${s.relocation_note}` : ""}
-                    </div>
-                  </div>
-                  {fill && <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{fill}</span>}
-                </button>
-              );
-            })}
+                    {fill && <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{fill}</span>}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

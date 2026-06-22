@@ -300,11 +300,22 @@ function BlockoutManager() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed");
-      toast.success(
+      const moved =
         data.affected > 0
-          ? `Blocked out — ${data.affected} set${data.affected === 1 ? "" : "s"} relocated, team notified on Slack`
-          : "Blocked out — no sets in that window, team notified on Slack"
-      );
+          ? `Blocked out — ${data.affected} set${data.affected === 1 ? "" : "s"} relocated`
+          : "Blocked out — no sets in that window";
+      const slack = data.slack as { ok?: boolean; skipped?: string; error?: string } | undefined;
+      if (slack?.ok) {
+        toast.success(`${moved}. Team notified on Slack.`);
+      } else if (slack?.skipped) {
+        toast.warning(`${moved}. Slack not posted — SLACK_PRAYER_ROOM_CHANNEL_ID isn't set on this deployment yet.`);
+      } else if (slack?.error === "not_in_channel") {
+        toast.warning(`${moved}. Slack post failed — invite the bot to the channel (type /invite @FFSA Hub Activity there).`);
+      } else if (slack?.error) {
+        toast.warning(`${moved}. Slack post failed: ${slack.error}.`);
+      } else {
+        toast.success(moved);
+      }
       await load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed");

@@ -29,6 +29,9 @@ export type AffectedSet = {
   owner: string | null;
 };
 
+/** Outcome of the post, so the route can tell the user why it did / didn't land. */
+export type SlackResult = { ok: boolean; skipped?: string; error?: string };
+
 export async function notifyPrayerRoomBlockout(args: {
   blockDate: string;
   startTime: string;
@@ -36,13 +39,13 @@ export async function notifyPrayerRoomBlockout(args: {
   reason: string | null;
   relocationNote: string | null;
   affected: AffectedSet[];
-}): Promise<void> {
+}): Promise<SlackResult> {
   const channel = process.env.SLACK_PRAYER_ROOM_CHANNEL_ID;
   if (!process.env.SLACK_BOT_TOKEN || !channel) {
     console.warn(
       "[slack/prayer-room] SLACK_BOT_TOKEN or SLACK_PRAYER_ROOM_CHANNEL_ID missing — skipping block-out post"
     );
-    return;
+    return { ok: false, skipped: "not_configured" };
   }
 
   const when = `${dateLabel(args.blockDate)}, ${hhmm(args.startTime)}–${hhmm(args.endTime)}`;
@@ -83,8 +86,13 @@ export async function notifyPrayerRoomBlockout(args: {
 
   try {
     const res = await slack.postMessage({ channel, text: title, blocks });
-    if (!res.ok) console.error("[slack/prayer-room] postMessage failed", res.error);
+    if (!res.ok) {
+      console.error("[slack/prayer-room] postMessage failed", res.error);
+      return { ok: false, error: res.error ?? "unknown" };
+    }
+    return { ok: true };
   } catch (err) {
     console.error("[slack/prayer-room] post threw", err);
+    return { ok: false, error: err instanceof Error ? err.message : "threw" };
   }
 }

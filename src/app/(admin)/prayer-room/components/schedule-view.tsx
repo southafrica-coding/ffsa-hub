@@ -10,7 +10,7 @@ import { ChevronLeft, ChevronRight, Plus, X, UserPlus, CalendarDays, CalendarRan
 import { toast } from "sonner";
 import SetDetail from "./set-detail";
 import MemberPicker from "./member-picker";
-import { ScheduleCalendar, type CalendarSet } from "./calendar";
+import { ScheduleCalendar, type CalendarSet, type CalendarBlockout } from "./calendar";
 import { WEEKDAY_OPTIONS } from "@/lib/bookings/recurrence";
 import {
   todayISO,
@@ -60,6 +60,7 @@ export default function ScheduleView({ userId, isStaff, isMember }: Props) {
   const [view, setView] = useState<ViewKind>("week");
   const [anchor, setAnchor] = useState<string>(() => todayISO());
   const [sets, setSets] = useState<CalendarSet[]>([]);
+  const [blockouts, setBlockouts] = useState<CalendarBlockout[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -69,8 +70,12 @@ export default function ScheduleView({ userId, isStaff, isMember }: Props) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/prayer-room/sets?dateFrom=${from}&dateTo=${to}`);
-      setSets(res.ok ? await res.json() : []);
+      const [setsRes, blockoutsRes] = await Promise.all([
+        fetch(`/api/prayer-room/sets?dateFrom=${from}&dateTo=${to}`),
+        fetch(`/api/prayer-room/blockouts?from=${from}&to=${to}`),
+      ]);
+      setSets(setsRes.ok ? await setsRes.json() : []);
+      setBlockouts(blockoutsRes.ok ? await blockoutsRes.json() : []);
     } finally {
       setLoading(false);
     }
@@ -143,6 +148,7 @@ export default function ScheduleView({ userId, isStaff, isMember }: Props) {
           view={view}
           anchor={anchor}
           sets={sets}
+          blockouts={blockouts}
           onSelect={setSelectedId}
           onPickDay={(iso) => {
             setAnchor(iso);

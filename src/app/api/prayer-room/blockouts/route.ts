@@ -26,8 +26,12 @@ export async function GET(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-  const all = new URL(request.url).searchParams.get("all") === "true";
-  const { data, error } = await getBlockouts(supabase, all ? undefined : { from: todayISO() });
+  const sp = new URL(request.url).searchParams;
+  const from = sp.get("from") || undefined;
+  const to = sp.get("to") || undefined;
+  // ?all=true → everything; ?from=&to= → a calendar range; default → today onward.
+  const opts = sp.get("all") === "true" ? undefined : from || to ? { from, to } : { from: todayISO() };
+  const { data, error } = await getBlockouts(supabase, opts);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data);
 }
@@ -81,8 +85,9 @@ export async function POST(request: Request) {
     await stampRelocation(supabase, affected.map((s) => s.id), relocation_note);
   }
 
-  // Announce on the dedicated prayer-room Slack channel (best-effort).
-  await notifyPrayerRoomBlockout({
+  // Announce on the dedicated prayer-room Slack channel; relay the outcome so
+  // the UI can say why it did / didn't post (not configured, bot not in channel…).
+  const slack = await notifyPrayerRoomBlockout({
     blockDate: block_date,
     startTime: start_time,
     endTime: end_time,
@@ -96,7 +101,7 @@ export async function POST(request: Request) {
     })),
   });
 
-  return NextResponse.json({ ok: true, blockout, affected: affected.length });
+  return NextResponse.json({ ok: true, blockout, affected: affected.length, slack });
 }
 
 // DELETE — remove a block-out entry (RLS: staff only). Leaves any relocation

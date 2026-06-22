@@ -362,13 +362,14 @@ export async function deleteTemplateBlock(supabase: Client, id: string) {
 // BLOCK-OUTS (Manage tab) — windows when the room is needed elsewhere
 // ────────────────────────────────────────────────────────────
 
-export async function getBlockouts(supabase: Client, options?: { from?: string }) {
+export async function getBlockouts(supabase: Client, options?: { from?: string; to?: string }) {
   let q = supabase
     .from("prayer_room_blockouts")
     .select("*")
     .order("block_date", { ascending: true })
     .order("start_time", { ascending: true });
   if (options?.from) q = q.gte("block_date", options.from);
+  if (options?.to) q = q.lte("block_date", options.to);
   return q;
 }
 
