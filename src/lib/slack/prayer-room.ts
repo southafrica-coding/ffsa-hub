@@ -30,7 +30,28 @@ export type AffectedSet = {
 };
 
 /** Outcome of the post, so the route can tell the user why it did / didn't land. */
-export type SlackResult = { ok: boolean; skipped?: string; error?: string };
+export type SlackResult = {
+  ok: boolean;
+  skipped?: string;
+  error?: string;
+  /** Populated on failure to diagnose config issues straight from the UI. */
+  debug?: { channelLen: number; team: string | null };
+};
+
+// On failure we surface two things the user otherwise can't see: the length of
+// the channel value the server actually received (catches a stray space/newline
+// in the env var — a correct id is 11 chars) and which Slack workspace the bot
+// token belongs to (catches a token from the wrong workspace).
+async function debugInfo(channel: string): Promise<{ channelLen: number; team: string | null }> {
+  let team: string | null = null;
+  try {
+    const a = await slack.authTest();
+    team = a.ok ? a.team ?? null : `auth_error:${a.error ?? "unknown"}`;
+  } catch {
+    team = "auth_unreachable";
+  }
+  return { channelLen: channel.length, team };
+}
 
 export async function notifyPrayerRoomBlockout(args: {
   blockDate: string;
@@ -88,11 +109,11 @@ export async function notifyPrayerRoomBlockout(args: {
     const res = await slack.postMessage({ channel, text: title, blocks });
     if (!res.ok) {
       console.error("[slack/prayer-room] postMessage failed", res.error);
-      return { ok: false, error: res.error ?? "unknown" };
+      return { ok: false, error: res.error ?? "unknown", debug: await debugInfo(channel) };
     }
     return { ok: true };
   } catch (err) {
     console.error("[slack/prayer-room] post threw", err);
-    return { ok: false, error: err instanceof Error ? err.message : "threw" };
+    return { ok: false, error: err instanceof Error ? err.message : "threw", debug: await debugInfo(channel) };
   }
 }

@@ -304,15 +304,18 @@ function BlockoutManager() {
         data.affected > 0
           ? `Blocked out — ${data.affected} set${data.affected === 1 ? "" : "s"} relocated`
           : "Blocked out — no sets in that window";
-      const slack = data.slack as { ok?: boolean; skipped?: string; error?: string } | undefined;
+      const slack = data.slack as
+        | { ok?: boolean; skipped?: string; error?: string; debug?: { channelLen: number; team: string | null } }
+        | undefined;
+      const diag = slack?.debug ? ` [channel value: ${slack.debug.channelLen} chars; bot workspace: ${slack.debug.team ?? "unknown"}]` : "";
       if (slack?.ok) {
         toast.success(`${moved}. Team notified on Slack.`);
       } else if (slack?.skipped) {
         toast.warning(`${moved}. Slack not posted — SLACK_PRAYER_ROOM_CHANNEL_ID isn't set on this deployment yet.`);
       } else if (slack?.error === "not_in_channel") {
-        toast.warning(`${moved}. Slack post failed — invite the bot to the channel (type /invite @FFSA Hub Activity there).`);
+        toast.warning(`${moved}. Slack post failed — invite the bot to the channel (type /invite @FFSA Hub Activity there).${diag}`);
       } else if (slack?.error) {
-        toast.warning(`${moved}. Slack post failed: ${slack.error}.`);
+        toast.warning(`${moved}. Slack post failed: ${slack.error}.${diag}`);
       } else {
         toast.success(moved);
       }
