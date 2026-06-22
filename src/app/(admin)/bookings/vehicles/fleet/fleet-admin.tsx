@@ -25,6 +25,7 @@ function VehicleRow({ vehicle }: { vehicle: Vehicle }) {
     registration_plate: vehicle.registration_plate ?? "",
     status: vehicle.status,
     color: vehicle.color,
+    xero_item_code: vehicle.xero_item_code ?? "",
   });
   const [saving, setSaving] = useState(false);
 
@@ -39,6 +40,7 @@ function VehicleRow({ vehicle }: { vehicle: Vehicle }) {
       registration_plate: d.registration_plate.trim() || null,
       status: d.status,
       color: d.color,
+      xero_item_code: d.xero_item_code.trim() || null,
     });
     setSaving(false);
     if (error) return toast.error(error.message);
@@ -93,6 +95,13 @@ function VehicleRow({ vehicle }: { vehicle: Vehicle }) {
         className="h-9 w-32"
         placeholder="Plate"
       />
+      <Input
+        value={d.xero_item_code}
+        onChange={(e) => setD({ ...d, xero_item_code: e.target.value })}
+        className="h-9 w-32"
+        placeholder="Xero code"
+        title="Xero item code — routes rental income to the right ledger account"
+      />
       <select
         value={d.status}
         onChange={(e) => setD({ ...d, status: e.target.value as Vehicle["status"] })}
@@ -120,6 +129,7 @@ export function FleetAdmin({ vehicles }: { vehicles: Vehicle[] }) {
     seats: "",
     registration_plate: "",
     color: "#0ea5e9",
+    xero_item_code: "",
   });
   const [adding, setAdding] = useState(false);
 
@@ -134,12 +144,13 @@ export function FleetAdmin({ vehicles }: { vehicles: Vehicle[] }) {
       seats: n.seats ? parseInt(n.seats, 10) : null,
       registration_plate: n.registration_plate.trim() || null,
       color: n.color,
+      xero_item_code: n.xero_item_code.trim() || null,
       sort_order: (vehicles.length ? vehicles[vehicles.length - 1].sort_order : 0) + 10,
     });
     setAdding(false);
     if (error) return toast.error(error.message);
     toast.success("Vehicle added.");
-    setN({ name: "", vehicle_type: "van", fuel_type: "", seats: "", registration_plate: "", color: "#0ea5e9" });
+    setN({ name: "", vehicle_type: "van", fuel_type: "", seats: "", registration_plate: "", color: "#0ea5e9", xero_item_code: "" });
     router.refresh();
   }
 
@@ -200,6 +211,13 @@ export function FleetAdmin({ vehicles }: { vehicles: Vehicle[] }) {
             onChange={(e) => setN({ ...n, registration_plate: e.target.value })}
             className="h-9 w-32"
             placeholder="Plate"
+          />
+          <Input
+            value={n.xero_item_code}
+            onChange={(e) => setN({ ...n, xero_item_code: e.target.value })}
+            className="h-9 w-32"
+            placeholder="Xero code"
+            title="Xero item code — routes rental income to the right ledger account"
           />
           <Button size="sm" onClick={add} disabled={adding} className="gap-1">
             <Plus className="h-4 w-4" />

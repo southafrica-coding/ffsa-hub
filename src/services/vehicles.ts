@@ -31,6 +31,7 @@ export type Vehicle = {
   status: "active" | "maintenance" | "retired";
   color: string;
   notes: string | null;
+  xero_item_code: string | null;
   sort_order: number;
   created_by: string | null;
   created_at: string;
@@ -447,4 +448,142 @@ export async function deleteInspectionFile(supabase: Client, id: string) {
 
 export function inspectionKindLabel(kind: string): string {
   return kind === "collection" ? "Collection (Sign Out)" : "Return (Sign In)";
+}
+
+// ── Payments (v3) ──────────────────────────────────────────
+
+export type VehiclePaymentStatus =
+  | "pending"
+  | "paid"
+  | "cancelled"
+  | "failed"
+  | "refunded";
+
+export type VehiclePayment = {
+  id: string;
+  vehicle_booking_id: string;
+  amount_cents: number;
+  currency: string;
+  status: VehiclePaymentStatus;
+  payment_provider: string;
+  provider_reference: string | null;
+  provider_payment_id: string | null;
+  description: string | null;
+  xero_item_code: string | null;
+  xero_invoice_id: string | null;
+  xero_invoice_number: string | null;
+  created_by: string | null;
+  paid_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export async function getVehiclePaymentsForBooking(
+  supabase: Client,
+  bookingId: string
+) {
+  return supabase
+    .from("vehicle_payments")
+    .select("*")
+    .eq("vehicle_booking_id", bookingId)
+    .order("created_at", { ascending: false });
+}
+
+export async function getVehiclePaymentById(supabase: Client, id: string) {
+  return supabase.from("vehicle_payments").select("*").eq("id", id).single();
+}
+
+export async function insertVehiclePayment(
+  supabase: Client,
+  row: Record<string, unknown>
+) {
+  return supabase.from("vehicle_payments").insert(row).select().single();
+}
+
+export async function updateVehiclePayment(
+  supabase: Client,
+  id: string,
+  data: Record<string, unknown>
+) {
+  return supabase
+    .from("vehicle_payments")
+    .update({ ...data, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select()
+    .single();
+}
+
+/** Rands (e.g. "1 250.00") from a ZAR-cents amount, for display. */
+export function randsLabel(amountCents: number, currency = "ZAR"): string {
+  return `${currency} ${(amountCents / 100).toFixed(2)}`;
+}
+
+/** Booking fields needed by the checkout + webhook routes (untyped table). */
+export async function getVehicleBookingPaymentInfo(supabase: Client, id: string) {
+  return supabase
+    .from("vehicle_bookings")
+    .select(
+      "id, booking_name, requester_name, requester_email, total_amount, payment_received, requested_by, status"
+    )
+    .eq("id", id)
+    .maybeSingle();
+}
+
+/** The Xero item code of the first vehicle assigned to a booking. */
+export async function getFirstAssignedVehicleXeroCode(
+  supabase: Client,
+  bookingId: string
+): Promise<string | null> {
+  const { data } = await supabase
+    .from("vehicle_booking_assignments")
+    .select("vehicle:vehicles(xero_item_code)")
+    .eq("vehicle_booking_id", bookingId)
+    .limit(1);
+  const row = data?.[0]?.vehicle;
+  const v = Array.isArray(row) ? row[0] : row;
+  return v?.xero_item_code ?? null;
+}
+
+/** Idempotent pending → paid transition; returns the row only on first flip. */
+export async function markVehiclePaymentPaidIfPending(
+  supabase: Client,
+  id: string,
+  providerPaymentId: string | null
+) {
+  return supabase
+    .from("vehicle_payments")
+    .update({
+      status: "paid",
+      paid_at: new Date().toISOString(),
+      provider_payment_id: providerPaymentId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .eq("status", "pending")
+    .select("id")
+    .maybeSingle();
+}
+
+export async function markVehiclePaymentStatusIfPending(
+  supabase: Client,
+  id: string,
+  status: string
+) {
+  return supabase
+    .from("vehicle_payments")
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("status", "pending");
+}
+
+/** Flip a booking's payment gate (called from the webhook after a paid charge). */
+export async function markBookingPaid(supabase: Client, bookingId: string) {
+  return supabase
+    .from("vehicle_bookings")
+    .update({
+      payment_received: true,
+      payment_received_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", bookingId);
 }

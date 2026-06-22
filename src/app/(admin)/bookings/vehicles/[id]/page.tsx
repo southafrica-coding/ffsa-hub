@@ -11,6 +11,7 @@ import {
   getOverlappingAssignments,
   getInspectionsForBooking,
   getInspectionFiles,
+  getVehiclePaymentsForBooking,
   purposeLabel,
   dayCount,
   inspectionKindLabel,
@@ -19,8 +20,10 @@ import {
   type VehicleDriver,
   type VehicleInspection,
   type VehicleInspectionFile,
+  type VehiclePayment,
 } from "@/services/vehicles";
 import { Button } from "@/components/ui/button";
+import { PaymentBlock } from "../payment-block";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatusPill, AssignedVehicles } from "../ui";
 import { statusColor } from "@/lib/vehicles/status";
@@ -145,12 +148,16 @@ export default async function VehicleBookingDetail({
   if (!booking) notFound();
   const b = booking as VehicleBookingWithRefs;
 
-  const [vehiclesRes, overlapping, inspectionsRes, filesRes] = await Promise.all([
-    getVehicles(supabase, { activeOnly: true }),
-    getOverlappingAssignments(supabase, b.checkout_date, b.return_date, b.id),
-    getInspectionsForBooking(supabase, b.id),
-    getInspectionFiles(supabase, b.id),
-  ]);
+  const [vehiclesRes, overlapping, inspectionsRes, filesRes, paymentsRes] =
+    await Promise.all([
+      getVehicles(supabase, { activeOnly: true }),
+      getOverlappingAssignments(supabase, b.checkout_date, b.return_date, b.id),
+      getInspectionsForBooking(supabase, b.id),
+      getInspectionFiles(supabase, b.id),
+      getVehiclePaymentsForBooking(supabase, b.id),
+    ]);
+  const payments = (paymentsRes.data ?? []) as VehiclePayment[];
+  const latestPayment = payments[0] ?? null;
   const vehicles = (vehiclesRes.data ?? []) as Vehicle[];
   const unavailableIds = Array.from(new Set(overlapping.map((a) => a.vehicle_id)));
   const assignedIds = (b.assignments ?? [])
@@ -274,6 +281,18 @@ export default async function VehicleBookingDetail({
             </Field>
           </CardContent>
         </Card>
+      )}
+
+      {/* Card payment + Xero */}
+      {b.payment_required && (
+        <PaymentBlock
+          bookingId={b.id}
+          paymentReceived={b.payment_received}
+          total={b.total_amount}
+          latestStatus={latestPayment?.status ?? null}
+          xeroInvoiceNumber={latestPayment?.xero_invoice_number ?? null}
+          canPay={isManager || isOwner}
+        />
       )}
 
       {/* Inspections */}
