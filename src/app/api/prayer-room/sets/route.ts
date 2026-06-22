@@ -8,12 +8,75 @@ import {
   getMyInvites,
   getSetById,
   createSet,
+  createSeries,
+  deleteSeries,
   updateSet,
   completeSet,
   cancelSet,
   deleteSet,
-  addSlots,
 } from "@/services/prayer-room";
+import { weeklyOccurrenceDates } from "@/lib/bookings/recurrence";
+import { sendPrayerRoomInvite } from "@/lib/email/send-prayer-room";
+
+type TeamPick = { user_id: string; role: string };
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyClient = any;
+
+/**
+ * Seed each set with the up-front team. "invite" creates invited slots the
+ * person must accept; "open" creates the same roles as empty slots to be
+ * filled later (used for a weekly series that doesn't keep the team each week).
+ */
+async function applyTeam(
+  supabase: AnyClient,
+  sets: Array<{ id: string }>,
+  team: TeamPick[],
+  mode: "invite" | "open",
+  invitedBy: string
+) {
+  if (team.length === 0) return;
+  const now = new Date().toISOString();
+  for (const set of sets) {
+    const rows = team.map((t, i) =>
+      mode === "invite"
+        ? {
+            set_id: set.id,
+            role: t.role,
+            position: i,
+            status: "invited",
+            invitee_id: t.user_id,
+            invited_by: invitedBy,
+            invited_at: now,
+          }
+        : { set_id: set.id, role: t.role, position: i }
+    );
+    await supabase.from("prayer_room_set_slots").insert(rows);
+  }
+}
+
+/** One invite email per team member, referencing the first (or only) occurrence. */
+async function emailTeam(
+  admin: AnyClient,
+  team: TeamPick[],
+  ownerId: string,
+  when: { setTitle: string; setDate: string; startTime: string; endTime: string }
+) {
+  if (team.length === 0) return;
+  const ids = Array.from(new Set([...team.map((t) => t.user_id), ownerId]));
+  const { data: people } = await admin
+    .from("users")
+    .select("id, first_name, last_name, preferred_name, email")
+    .in("id", ids);
+  const list = people ?? [];
+  const owner = list.find((p: { id: string }) => p.id === ownerId) ?? {};
+  for (const t of team) {
+    const invitee = list.find((p: { id: string }) => p.id === t.user_id);
+    if (invitee) {
+      await sendPrayerRoomInvite({ invitee, owner, role: t.role, ...when });
+    }
+  }
+}
 
 // GET — schedule + "my" views. Reads via the admin client so other people's
 // display names resolve (RLS on users is own-row-or-admin); no contact fields.
@@ -47,7 +110,8 @@ export async function GET(request: Request) {
   return NextResponse.json(result.data);
 }
 
-// POST — create a devo set (RLS: owner must be self + an active member, or staff).
+// POST — create a one-off or weekly-recurring devo set, optionally seeding the
+// team up front. (RLS: owner must be self + an active member, or staff.)
 export async function POST(request: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -60,22 +124,110 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { set_date, start_time, end_time } = body as Record<string, string>;
-  if (!set_date || !start_time || !end_time) {
-    return NextResponse.json({ error: "set_date, start_time and end_time are required" }, { status: 400 });
+  const recurrence = body.recurrence === "weekly" ? "weekly" : "none";
+  const start_time = body.start_time as string;
+  const end_time = body.end_time as string;
+  const title = (body.title as string) || null;
+  const theme = (body.theme as string) || null;
+  const ownerId = (body.owner_id as string) || user.id;
+  const team: TeamPick[] = Array.isArray(body.team)
+    ? (body.team as TeamPick[]).filter((t) => t && t.user_id && t.role)
+    : [];
+
+  if (!start_time || !end_time) {
+    return NextResponse.json({ error: "start_time and end_time are required" }, { status: 400 });
   }
   if (end_time <= start_time) {
     return NextResponse.json({ error: "end_time must be after start_time" }, { status: 400 });
   }
 
+  const admin = createAdminClient();
+
+  // ── Weekly recurrence ───────────────────────────────────────────────────
+  if (recurrence === "weekly") {
+    const weekday = Number(body.weekday);
+    const series_start = body.series_start as string;
+    const series_end = body.series_end as string;
+    if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) {
+      return NextResponse.json({ error: "A day of the week is required" }, { status: 400 });
+    }
+    if (!series_start || !series_end) {
+      return NextResponse.json({ error: "Series start and end dates are required" }, { status: 400 });
+    }
+    if (series_end < series_start) {
+      return NextResponse.json({ error: "Series end must be on or after the start" }, { status: 400 });
+    }
+    const dates = weeklyOccurrenceDates(series_start, series_end, weekday);
+    if (dates.length === 0) {
+      return NextResponse.json({ error: "No dates in that range fall on the chosen day" }, { status: 400 });
+    }
+
+    const keepTeam = body.keep_team !== false; // default true
+    const { data: series, error: serr } = await createSeries(supabase, {
+      owner_id: ownerId,
+      created_by: user.id,
+      weekday,
+      start_time,
+      end_time,
+      title,
+      theme,
+      series_start,
+      series_end,
+      keep_team: keepTeam,
+    });
+    if (serr || !series) {
+      return NextResponse.json({ error: serr?.message ?? "Failed to create series" }, { status: 403 });
+    }
+
+    const created: Array<{ id: string; set_date: string }> = [];
+    for (const d of dates) {
+      const { data: set, error } = await createSet(supabase, {
+        owner_id: ownerId,
+        created_by: user.id,
+        set_date: d,
+        start_time,
+        end_time,
+        title,
+        theme,
+        series_id: series.id,
+      });
+      if (error || !set) {
+        // Best-effort rollback so we don't leave a half-built series behind.
+        for (const c of created) await deleteSet(supabase, c.id);
+        await deleteSeries(supabase, series.id);
+        return NextResponse.json({ error: error?.message ?? "Failed to create occurrences" }, { status: 403 });
+      }
+      created.push(set);
+    }
+
+    // keep_team → invite the team into every week; otherwise repeat the roles as open slots.
+    await applyTeam(supabase, created, team, keepTeam ? "invite" : "open", user.id);
+    if (keepTeam) {
+      await emailTeam(admin, team, ownerId, {
+        setTitle: title ?? "Devo set",
+        setDate: created[0].set_date,
+        startTime: start_time,
+        endTime: end_time,
+      });
+    }
+
+    return NextResponse.json({ id: created[0].id, count: created.length, seriesId: series.id });
+  }
+
+  // ── One-off ─────────────────────────────────────────────────────────────
+  const set_date = body.set_date as string;
+  if (!set_date) {
+    return NextResponse.json({ error: "set_date is required" }, { status: 400 });
+  }
+
   const { data: set, error } = await createSet(supabase, {
-    owner_id: (body.owner_id as string) || user.id,
+    owner_id: ownerId,
     created_by: user.id,
     set_date,
     start_time,
     end_time,
-    title: (body.title as string) ?? null,
-    theme: (body.theme as string) ?? null,
+    title,
+    theme,
     scripture: (body.scripture as string) ?? null,
     prayer_focus: (body.prayer_focus as string) ?? null,
     setlist: (body.setlist as string) ?? null,
@@ -84,19 +236,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error?.message ?? "Failed to create set" }, { status: 403 });
   }
 
-  // optional initial roster slots: [{ role, required_label_id? }]
-  const slots = Array.isArray(body.slots) ? (body.slots as Array<{ role: string; required_label_id?: string }>) : [];
-  if (slots.length > 0) {
-    const rows = slots.map((s, i) => ({
-      set_id: set.id,
-      role: s.role,
-      required_label_id: s.required_label_id ?? null,
-      position: i,
-    }));
-    await addSlots(supabase, rows);
-  }
+  await applyTeam(supabase, [set], team, "invite", user.id);
+  await emailTeam(admin, team, ownerId, {
+    setTitle: title ?? "Devo set",
+    setDate: set_date,
+    startTime: start_time,
+    endTime: end_time,
+  });
 
-  return NextResponse.json(set);
+  return NextResponse.json({ id: set.id, count: 1 });
 }
 
 // PUT — update / complete / cancel a set (RLS: owner or staff).

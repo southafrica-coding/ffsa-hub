@@ -71,6 +71,7 @@ export async function createSet(
     scripture?: string | null;
     prayer_focus?: string | null;
     setlist?: string | null;
+    series_id?: string | null;
   }
 ) {
   return supabase
@@ -78,6 +79,30 @@ export async function createSet(
     .insert({ ...data, week_start: weekStartOf(data.set_date) })
     .select()
     .single();
+}
+
+/** Create a weekly recurrence series (the occurrences are normal sets tagged with series_id). */
+export async function createSeries(
+  supabase: Client,
+  data: {
+    owner_id: string;
+    created_by: string;
+    weekday: number;
+    start_time: string;
+    end_time: string;
+    title?: string | null;
+    theme?: string | null;
+    series_start: string;
+    series_end: string;
+    keep_team: boolean;
+  }
+) {
+  return supabase.from("prayer_room_set_series").insert(data).select().single();
+}
+
+/** Best-effort cleanup if occurrence creation fails partway. */
+export async function deleteSeries(supabase: Client, id: string) {
+  return supabase.from("prayer_room_set_series").delete().eq("id", id);
 }
 
 export async function updateSet(supabase: Client, id: string, data: Record<string, unknown>) {
