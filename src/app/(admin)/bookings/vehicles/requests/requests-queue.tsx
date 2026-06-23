@@ -40,19 +40,12 @@ function RequestCard({ booking }: { booking: VehicleBookingWithRefs }) {
     <div className="rounded-xl border bg-card p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <Link
-              href={`/bookings/vehicles/${booking.id}`}
-              className="font-medium text-foreground hover:text-[hsl(42_95%_62%)]"
-            >
-              {booking.booking_name}
-            </Link>
-            {booking.source === "public" && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-[hsl(150_45%_40%/0.5)] bg-[hsl(150_45%_30%/0.25)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-[hsl(150_55%_70%)]">
-                External · public link
-              </span>
-            )}
-          </div>
+          <Link
+            href={`/bookings/vehicles/${booking.id}`}
+            className="font-medium text-foreground hover:text-[hsl(42_95%_62%)]"
+          >
+            {booking.booking_name}
+          </Link>
           <p className="mt-1 text-sm text-muted-foreground">
             {dateRangeLabel(booking.checkout_date, booking.return_date)} ·{" "}
             {purposeLabel(booking.purpose)}
@@ -65,13 +58,6 @@ function RequestCard({ booking }: { booking: VehicleBookingWithRefs }) {
             <p className="mt-1.5 text-xs text-muted-foreground">
               {booking.requester_name ? `Requested by ${booking.requester_name}` : ""}
               {booking.point_person ? ` · Point person: ${booking.point_person}` : ""}
-            </p>
-          )}
-          {booking.source === "public" && (booking.requester_email || booking.requester_phone) && (
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {booking.requester_email ?? ""}
-              {booking.requester_email && booking.requester_phone ? " · " : ""}
-              {booking.requester_phone ?? ""}
             </p>
           )}
         </div>

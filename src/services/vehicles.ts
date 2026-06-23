@@ -59,8 +59,6 @@ export type VehicleBooking = {
   payment_received: boolean;
   payment_received_at: string | null;
   notes: string | null;
-  source: "internal" | "public";
-  submitted_ip: string | null;
   requested_by: string | null;
   decided_by: string | null;
   decided_at: string | null;

@@ -22,7 +22,6 @@ export async function middleware(request: NextRequest) {
     "/e", // public ticket storefront (/e/[slug] + /e/[slug]/thanks)
     "/f", // public form runtime (/f/[slug]) — CRM lead-capture forms
     "/join", // public signup link (/join/[code]) — anyone with the active code can self-onboard
-    "/request-vehicle", // public vehicle-request link (/request-vehicle/[slug]) — the slug is the auth
     "/preferences", // public email preference / unsubscribe page
     "/api/upload/sign", // public applicants upload photos from /apply
     "/api/public", // public application submission + signup

@@ -204,14 +204,7 @@ export default async function VehicleBookingDetail({
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <p className="page-eyebrow">RESERVATIONS</p>
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="page-title">{b.booking_name}</h1>
-            {b.source === "public" && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-[hsl(150_45%_40%/0.5)] bg-[hsl(150_45%_30%/0.25)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-[hsl(150_55%_70%)]">
-                External · public link
-              </span>
-            )}
-          </div>
+          <h1 className="page-title">{b.booking_name}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {dateRangeLabel(b.checkout_date, b.return_date)} · {days} day
             {days === 1 ? "" : "s"} · {purposeLabel(b.purpose)}
