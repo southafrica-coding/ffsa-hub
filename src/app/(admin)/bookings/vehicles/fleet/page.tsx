@@ -5,6 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import { requireModuleAccess } from "@/lib/require-permission";
 import { getVehicles, getVehicleAccess, type Vehicle } from "@/services/vehicles";
 import { FleetAdmin } from "./fleet-admin";
+import { RequestLinkCard } from "./request-link-card";
 
 export default async function FleetPage() {
   const supabase = await createClient();
@@ -40,6 +41,7 @@ export default async function FleetPage() {
         </p>
       </div>
       <FleetAdmin vehicles={vehicles} />
+      <RequestLinkCard />
     </div>
   );
 }

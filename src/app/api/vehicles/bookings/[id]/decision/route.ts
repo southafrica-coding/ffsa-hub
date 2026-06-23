@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthedUser } from "@/lib/api-auth";
 import { getVehicleAccess, updateVehicleBooking } from "@/services/vehicles";
+import { sendVehicleRequestDecision } from "@/lib/email/send-vehicle-request";
 
 type DecisionBody = { decision?: string; note?: string };
 
@@ -37,7 +38,7 @@ export async function POST(
   }
 
   const note = (body.note ?? "").trim();
-  const { error } = await updateVehicleBooking(supabase, id, {
+  const { data: updated, error } = await updateVehicleBooking(supabase, id, {
     status: body.decision,
     decision_note: note.length ? note : null,
     decided_by: user.id,
@@ -45,5 +46,20 @@ export async function POST(
   });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Email the requester on approve/deny (covers public requesters who have no
+  // in-app feed). Best-effort — a mail failure never fails the decision.
+  if (updated?.requester_email && (body.decision === "approved" || body.decision === "denied")) {
+    await sendVehicleRequestDecision({
+      email: updated.requester_email,
+      requesterName: updated.requester_name,
+      bookingName: updated.booking_name,
+      checkoutDate: updated.checkout_date,
+      returnDate: updated.return_date,
+      approved: body.decision === "approved",
+      note: note.length ? note : null,
+    });
+  }
+
   return NextResponse.json({ ok: true });
 }
