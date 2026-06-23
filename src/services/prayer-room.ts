@@ -213,6 +213,11 @@ export async function addSlots(
   return supabase.from("prayer_room_set_slots").insert(rows);
 }
 
+/** Insert roster slot rows verbatim (open or invited) — used when duplicating a roster. */
+export async function insertSlotRows(supabase: Client, rows: Record<string, unknown>[]) {
+  return supabase.from("prayer_room_set_slots").insert(rows);
+}
+
 export async function removeSlot(supabase: Client, slotId: string) {
   return supabase.from("prayer_room_set_slots").delete().eq("id", slotId);
 }

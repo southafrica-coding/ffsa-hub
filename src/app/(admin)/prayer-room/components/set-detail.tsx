@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, X, Check } from "lucide-react";
+import { Plus, X, Check, Repeat } from "lucide-react";
 import { toast } from "sonner";
 import MemberPicker from "./member-picker";
 import {
@@ -46,6 +46,7 @@ interface SetRow {
   setlist: string | null;
   status: string;
   relocation_note: string | null;
+  series_id: string | null;
   owner_id: string | null;
   owner: Person;
   slots: Slot[];
@@ -67,6 +68,7 @@ export default function SetDetail({ setId, open, onClose, userId, isStaff, onCha
   const [busy, setBusy] = useState<string | null>(null);
   const [inviteSlot, setInviteSlot] = useState<Slot | null>(null);
   const [addRole, setAddRole] = useState<string>("vocals");
+  const [repeating, setRepeating] = useState(false);
 
   const load = useCallback(async () => {
     if (!setId) return;
@@ -249,6 +251,11 @@ export default function SetDetail({ setId, open, onClose, userId, isStaff, onCha
                   {set.status}
                 </Badge>
               )}
+              {set.series_id && (
+                <Badge variant="outline" className="ml-2 gap-1">
+                  <Repeat className="h-3 w-3" /> Weekly
+                </Badge>
+              )}
             </p>
 
             {set.relocation_note && (
@@ -388,6 +395,11 @@ export default function SetDetail({ setId, open, onClose, userId, isStaff, onCha
                     Edit details
                   </Button>
                 )}
+                {!editing && set.status === "scheduled" && !set.series_id && (
+                  <Button size="sm" variant="outline" className="gap-1" onClick={() => setRepeating(true)}>
+                    <Repeat className="h-3.5 w-3.5" /> Repeat weekly
+                  </Button>
+                )}
                 {set.status === "scheduled" && (
                   <>
                     <Button size="sm" variant="outline" disabled={busy === "complete"} onClick={() => setStatus("complete")}>
@@ -411,6 +423,112 @@ export default function SetDetail({ setId, open, onClose, userId, isStaff, onCha
           busyId={busy}
           onPick={(uid) => invite(uid)}
         />
+
+        {set && (
+          <RepeatWeeklyDialog
+            open={repeating}
+            onClose={() => setRepeating(false)}
+            setId={set.id}
+            setDate={set.set_date}
+            onDone={refresh}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function RepeatWeeklyDialog({
+  open,
+  onClose,
+  setId,
+  setDate,
+  onDone,
+}: {
+  open: boolean;
+  onClose: () => void;
+  setId: string;
+  setDate: string;
+  onDone: () => void | Promise<void>;
+}) {
+  const [seriesEnd, setSeriesEnd] = useState("");
+  const [keepTeam, setKeepTeam] = useState(true);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const base = new Date(setDate + "T00:00:00");
+    base.setDate(base.getDate() + 77);
+    setSeriesEnd(base.toISOString().slice(0, 10));
+    setKeepTeam(true);
+  }, [open, setDate]);
+
+  async function submit() {
+    if (!seriesEnd || seriesEnd < setDate) {
+      toast.error("Pick an end date on or after this set's date");
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/prayer-room/sets/${setId}/repeat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ series_end: seriesEnd, keep_team: keepTeam }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      toast.success(
+        data.created > 0
+          ? `Now repeating weekly — ${data.created} more set${data.created === 1 ? "" : "s"} created`
+          : "Now repeating weekly"
+      );
+      await onDone();
+      onClose();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Repeat weekly</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          This set repeats every week on the same day and time until the date you choose. The set you’re looking at
+          stays as the first week.
+        </p>
+        <div className="space-y-1">
+          <Label className="text-xs">Runs until</Label>
+          <Input type="date" value={seriesEnd} onChange={(e) => setSeriesEnd(e.target.value)} />
+        </div>
+        <div className="space-y-1.5 rounded-md border bg-muted/20 p-3">
+          <div className="flex w-fit items-center rounded-md border bg-card p-0.5">
+            {([true, false] as const).map((v) => (
+              <Button
+                key={String(v)}
+                type="button"
+                variant={keepTeam === v ? "secondary" : "ghost"}
+                size="sm"
+                className="h-7 px-3"
+                onClick={() => setKeepTeam(v)}
+              >
+                {v ? "Keep this team" : "Open slots each week"}
+              </Button>
+            ))}
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            {keepTeam
+              ? "Each new week invites the same people in the same roles."
+              : "Each new week repeats the same roles as open slots."}
+          </p>
+        </div>
+        <Button type="button" disabled={busy} className="w-full" onClick={submit}>
+          {busy ? "Creating…" : "Create weekly series"}
+        </Button>
       </DialogContent>
     </Dialog>
   );
