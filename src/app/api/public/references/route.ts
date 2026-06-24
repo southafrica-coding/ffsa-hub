@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getReferenceRequestByToken, submitReference } from "@/services/schools";
+import {
+  editReferenceContact,
+  REFERENCE_EDIT_SELECT,
+} from "@/lib/references/edit-reference-contact";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -122,4 +126,57 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ success: true, reference: data });
+}
+
+// PATCH — applicant self-serve: swap out a pending reference's contact
+// (name/email) from their application-status page. Authorized by the
+// application's status_token, NOT a login — the same trust model as the
+// status page itself. A changed email regenerates the invite token and
+// re-sends the invite to the corrected address.
+export async function PATCH(request: Request) {
+  const body = await request.json().catch(() => null);
+  const status_token = body?.status_token;
+  const reference_request_id = body?.reference_request_id;
+
+  if (!status_token || !reference_request_id) {
+    return NextResponse.json(
+      { error: "status_token and reference_request_id are required" },
+      { status: 400 }
+    );
+  }
+
+  const supabase = createAdminClient();
+  const { data: ref } = await supabase
+    .from("reference_requests")
+    .select(REFERENCE_EDIT_SELECT)
+    .eq("id", reference_request_id)
+    .single();
+
+  if (!ref) {
+    return NextResponse.json(
+      { error: "Reference request not found" },
+      { status: 404 }
+    );
+  }
+
+  // Authorize: the reference must belong to the application this status_token
+  // unlocks. Guards against editing another applicant's references.
+  if ((ref.application_responses as any)?.status_token !== status_token) {
+    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  }
+
+  const result = await editReferenceContact(supabase, ref, {
+    referee_name: body?.referee_name,
+    referee_email: body?.referee_email,
+  });
+
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error }, { status: result.status });
+  }
+
+  return NextResponse.json({
+    success: true,
+    emailed: result.emailed,
+    email_changed: result.emailChanged,
+  });
 }

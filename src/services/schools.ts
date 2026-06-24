@@ -589,6 +589,32 @@ export async function createReferenceRequest(supabase: Client, data: {
   return supabase.from("reference_requests").insert(data).select().single();
 }
 
+// Update a reference request's contact details (and, when the email is being
+// corrected, its token / send timestamps). Used by the admin review panel and
+// the applicant status page to swap out a wrong referee email or name while the
+// reference is still pending. The status guard makes the pending-only rule
+// hold at the data layer, not just in the UI. See
+// lib/references/edit-reference-contact.ts.
+export async function updateReferenceRequest(
+  supabase: Client,
+  id: string,
+  data: {
+    referee_name?: string;
+    referee_email?: string;
+    token?: string;
+    email_sent_at?: string | null;
+    reminder_sent_at?: string | null;
+  }
+) {
+  return supabase
+    .from("reference_requests")
+    .update(data)
+    .eq("id", id)
+    .eq("status", "pending")
+    .select()
+    .single();
+}
+
 export async function getReferenceRequestSummaries(supabase: Client, applicationIds: string[]) {
   if (applicationIds.length === 0) return { data: [], error: null };
   return supabase

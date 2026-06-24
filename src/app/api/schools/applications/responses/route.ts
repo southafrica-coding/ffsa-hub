@@ -8,7 +8,7 @@ import {
   createReferenceRequest,
 } from "@/services/schools";
 import { Resend } from "resend";
-import { referenceRequestEmailHtml } from "@/lib/email/templates/reference-request";
+import { sendReferenceInvite } from "@/lib/email/send-reference-invite";
 import { referenceReminderEmailHtml } from "@/lib/email/templates/reference-reminder";
 import { applicationRejectedEmailHtml } from "@/lib/email/templates/application-rejected";
 import { applicationWaitlistedEmailHtml } from "@/lib/email/templates/application-waitlisted";
@@ -55,8 +55,6 @@ export async function POST(request: Request) {
   // Create reference requests and send emails
   if (references && Array.isArray(references) && references.length > 0) {
     const adminSupabase = createAdminClient();
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://ffsahub.com";
-    const fromEmail = process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com";
 
     const { data: slots } = await getReferenceSlotsByProgram(supabase, program_id);
     const slotMap = new Map<string, any>((slots ?? []).map((s: any) => [s.id, s]));
@@ -89,19 +87,14 @@ export async function POST(request: Request) {
 
       if (refRequest) {
         const slot = slotMap.get(ref.slot_id);
-        const referenceUrl = `${siteUrl}/reference/${refRequest.token}`;
 
-        await resend.emails.send({
-          from: `Fire & Fragrance SA <${fromEmail}>`,
-          to: ref.referee_email,
-          subject: `Reference Request — ${program?.name ?? "School Program"}`,
-          html: referenceRequestEmailHtml({
-            refereeName: ref.referee_name,
-            applicantName,
-            programName: program?.name ?? "School Program",
-            slotLabel: slot?.label ?? "Reference",
-            referenceUrl,
-          }),
+        await sendReferenceInvite({
+          toEmail: ref.referee_email,
+          refereeName: ref.referee_name,
+          applicantName,
+          programName: program?.name ?? "School Program",
+          slotLabel: slot?.label ?? "Reference",
+          token: refRequest.token,
         });
 
         await (adminSupabase as any)

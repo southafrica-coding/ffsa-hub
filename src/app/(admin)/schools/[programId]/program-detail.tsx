@@ -1401,6 +1401,61 @@ function ApplicantsTab({
   // Reference reminder state
   const [sendingReminder, setSendingReminder] = useState<string | null>(null);
 
+  // Reference contact edit state (swap a pending referee's name/email)
+  const [editingRefId, setEditingRefId] = useState<string | null>(null);
+  const [editRefName, setEditRefName] = useState("");
+  const [editRefEmail, setEditRefEmail] = useState("");
+  const [savingRef, setSavingRef] = useState(false);
+
+  function startEditReference(ref: ReferenceRequest) {
+    setEditingRefId(ref.id);
+    setEditRefName(ref.referee_name ?? "");
+    setEditRefEmail(ref.referee_email ?? "");
+  }
+
+  function cancelEditReference() {
+    setEditingRefId(null);
+    setEditRefName("");
+    setEditRefEmail("");
+  }
+
+  async function handleSaveReferenceEdit(refId: string) {
+    if (!editRefName.trim() || !editRefEmail.trim()) {
+      alert("Reference name and email are both required.");
+      return;
+    }
+    setSavingRef(true);
+    try {
+      const res = await fetch("/api/schools/applications/references", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reference_request_id: refId,
+          referee_name: editRefName.trim(),
+          referee_email: editRefEmail.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        if (data.email_changed) {
+          alert(
+            data.emailed
+              ? "Reference updated — a fresh invite was sent to the new email and the old link no longer works."
+              : "Reference updated, but the invite email could not be sent. Use 'Remind' to retry."
+          );
+        }
+        cancelEditReference();
+        fetchReferences(reviewingResponse!.id);
+      } else {
+        alert(data.error || "Failed to update reference");
+      }
+    } catch {
+      alert("Failed to update reference");
+    } finally {
+      setSavingRef(false);
+    }
+  }
+
   // Resend invite state
   const [resendingInviteId, setResendingInviteId] = useState<string | null>(null);
 
@@ -2082,6 +2137,18 @@ function ApplicantsTab({
                               </p>
                             </div>
                             <div className="flex items-center gap-2">
+                              {ref.status !== "submitted" && editingRefId !== ref.id && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-xs gap-1"
+                                  onClick={() => startEditReference(ref)}
+                                  title="Change reference name or email"
+                                >
+                                  <Edit2 className="h-3 w-3" />
+                                  Edit
+                                </Button>
+                              )}
                               {ref.status !== "submitted" && (
                                 <Button
                                   variant="ghost"
@@ -2104,6 +2171,61 @@ function ApplicantsTab({
                               </Badge>
                             </div>
                           </div>
+
+                          {/* Inline edit: swap a pending referee's name/email */}
+                          {editingRefId === ref.id && (
+                            <div className="rounded-md border bg-background p-3 space-y-3">
+                              <div className="space-y-1">
+                                <Label htmlFor={`ref-name-${ref.id}`} className="text-xs">
+                                  Reference name
+                                </Label>
+                                <Input
+                                  id={`ref-name-${ref.id}`}
+                                  value={editRefName}
+                                  onChange={(e) => setEditRefName(e.target.value)}
+                                  placeholder="Full name"
+                                  className="h-8 text-sm"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label htmlFor={`ref-email-${ref.id}`} className="text-xs">
+                                  Reference email
+                                </Label>
+                                <Input
+                                  id={`ref-email-${ref.id}`}
+                                  type="email"
+                                  value={editRefEmail}
+                                  onChange={(e) => setEditRefEmail(e.target.value)}
+                                  placeholder="name@example.com"
+                                  className="h-8 text-sm"
+                                />
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                Changing the email sends a fresh invite to the new
+                                address and disables the old link.
+                              </p>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  size="sm"
+                                  className="text-xs gap-1"
+                                  disabled={savingRef}
+                                  onClick={() => handleSaveReferenceEdit(ref.id)}
+                                >
+                                  {savingRef && <Loader2 className="h-3 w-3 animate-spin" />}
+                                  Save
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-xs"
+                                  disabled={savingRef}
+                                  onClick={cancelEditReference}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            </div>
+                          )}
                           {ref.status === "submitted" && (
                             Array.isArray(ref.form_data?.answers) && ref.form_data.answers.length > 0 ? (
                               <div className="space-y-3 pt-2 border-t text-sm">

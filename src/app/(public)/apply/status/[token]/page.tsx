@@ -4,6 +4,7 @@ import {
   PublicFormShell,
   PUBLIC_SHELL_TOKENS,
 } from "@/components/public-form-shell";
+import { ReferenceEditor, type EditableReference } from "./reference-editor";
 
 const T = PUBLIC_SHELL_TOKENS;
 
@@ -79,13 +80,24 @@ export default async function ApplicationStatusPage({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: refs } = await (supabase as any)
     .from("reference_requests")
-    .select("id, status, referee_name")
+    .select("id, status, referee_name, referee_email, reference_slots(label)")
     .eq("application_id", response.id);
 
   const totalRefs = refs?.length ?? 0;
   const submittedRefs =
     refs?.filter((r: { status: string }) => r.status === "submitted").length ??
     0;
+
+  const editableRefs: EditableReference[] = (refs ?? []).map(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (r: any) => ({
+      id: r.id,
+      status: r.status,
+      referee_name: r.referee_name ?? "",
+      referee_email: r.referee_email ?? "",
+      slot_label: r.reference_slots?.label ?? "Reference",
+    })
+  );
 
   const currentStep = STATUS_ORDER[response.status] ?? 0;
   const programName =
@@ -240,6 +252,10 @@ export default async function ApplicationStatusPage({
           </div>
         )}
       </div>
+
+      {totalRefs > 0 && (
+        <ReferenceEditor statusToken={token} references={editableRefs} />
+      )}
 
       {msg && (
         <div

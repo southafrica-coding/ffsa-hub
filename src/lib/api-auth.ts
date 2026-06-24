@@ -133,3 +133,25 @@ export async function canManageComms(
   if (await hasAnyRole(supabase, userId, COMMS_MANAGE_ROLES)) return true;
   return hasAnyPermission(supabase, userId, perms);
 }
+
+// Roles or granular permissions that allow managing school/training
+// applications — viewing applications, managing references, deciding outcomes.
+// Mirrors the schools RLS (admins) plus the granular `schools.manage` grant
+// used by the point-of-contact assignment scopes.
+export const SCHOOLS_MANAGE_ROLES = ["super_admin", "admin", "schools_admin"];
+export const SCHOOLS_MANAGE_PERMS = ["schools.manage"];
+
+/**
+ * True if the user may manage school applications (incl. editing reference
+ * contacts) — either via a schools-capable role or the granular
+ * `schools.manage` permission. Use to gate admin-client reference routes so
+ * they don't rely on "is the caller merely logged in".
+ */
+export async function canManageSchools(
+  supabase: Client,
+  userId: string,
+  perms: string[] = SCHOOLS_MANAGE_PERMS
+): Promise<boolean> {
+  if (await hasAnyRole(supabase, userId, SCHOOLS_MANAGE_ROLES)) return true;
+  return hasAnyPermission(supabase, userId, perms);
+}
