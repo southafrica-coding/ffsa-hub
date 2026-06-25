@@ -25,7 +25,7 @@ export async function PUT(request: Request) {
     "emergency_contact_relationship",
     "health_insurance_provider", "health_insurance_policy_number",
     "health_insurance_expiry_date",
-    "passport_country", "passport_number",
+    "passport_country", "passport_number", "passport_expiry_date",
     "visa_category", "visa_type", "visa_expiry_date",
   ];
 

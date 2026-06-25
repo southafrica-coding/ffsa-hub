@@ -50,6 +50,7 @@ interface FormData {
   is_international: boolean;
   passport_country: string;
   passport_number: string;
+  passport_expiry_date: string;
   visa_category: string;
   visa_type: string;
   visa_expiry_date: string;
@@ -67,7 +68,7 @@ const EMPTY_FORM: FormData = {
   nationality: "", phone: "",
   address_line_1: "", address_line_2: "", city: "",
   province: "", country: "", postal_code: "",
-  is_international: false, passport_country: "", passport_number: "",
+  is_international: false, passport_country: "South Africa", passport_number: "", passport_expiry_date: "",
   visa_category: "", visa_type: "", visa_expiry_date: "",
   emergency_contact_name: "", emergency_contact_phone: "",
   emergency_contact_relationship: "", health_insurance_provider: "",
@@ -130,7 +131,8 @@ export default function OnboardingPage() {
         city: appUser.city ?? "", province: appUser.province ?? "",
         country: appUser.country ?? "", postal_code: appUser.postal_code ?? "",
         is_international: appUser.is_international ?? false,
-        passport_country: appUser.passport_country ?? "", passport_number: appUser.passport_number ?? "",
+        passport_country: appUser.passport_country ?? "South Africa", passport_number: appUser.passport_number ?? "",
+        passport_expiry_date: appUser.passport_expiry_date ?? "",
         visa_category: appUser.visa_category ?? "", visa_type: appUser.visa_type ?? "",
         visa_expiry_date: appUser.visa_expiry_date ?? "",
         emergency_contact_name: appUser.emergency_contact_name ?? "",
@@ -204,11 +206,12 @@ export default function OnboardingPage() {
       return null;
     }
     if (s === 4) {
-      // Local South Africans can skip this step entirely. Only international
-      // staff need to fill in passport + visa details.
-      if (!form.is_international) return null;
+      // Passport is required for everyone, South African or not.
       if (blank(form.passport_country)) return "Passport country is required.";
       if (blank(form.passport_number)) return "Passport number is required.";
+      if (blank(form.passport_expiry_date)) return "Passport expiry date is required.";
+      // Visa details are only collected for international staff.
+      if (!form.is_international) return null;
       if (blank(form.visa_category)) return "Please select a visa status.";
       if (form.visa_category === "long_term") {
         if (blank(form.visa_type)) return "Visa type is required.";
@@ -264,8 +267,9 @@ export default function OnboardingPage() {
         city: nullify(form.city), province: nullify(form.province),
         country: nullify(form.country), postal_code: nullify(form.postal_code),
         is_international: form.is_international,
-        passport_country: form.is_international ? nullify(form.passport_country) : null,
-        passport_number: form.is_international ? nullify(form.passport_number) : null,
+        passport_country: nullify(form.passport_country),
+        passport_number: nullify(form.passport_number),
+        passport_expiry_date: nullify(form.passport_expiry_date),
         visa_category: form.is_international ? nullify(form.visa_category) : null,
         visa_type: form.is_international && form.visa_category === "long_term" ? nullify(form.visa_type) : null,
         visa_expiry_date: form.is_international && form.visa_category === "long_term" ? nullify(form.visa_expiry_date) : null,
@@ -425,7 +429,7 @@ export default function OnboardingPage() {
                 <h2 style={{ fontFamily: "var(--font-bebas,'Arial Black',sans-serif)", fontSize: "2rem", letterSpacing: "0.04em", color: "#F0EBE3", lineHeight: 1 }}>
                   Passport &amp; Visa
                 </h2>
-                <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>Only for international staff. Local South Africans can skip.</p>
+                <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>Your passport details are required for everyone. The visa section is only for international staff.</p>
               </>}
               {step === 5 && <>
                 <p className="page-eyebrow" style={{ marginBottom: "6px" }}>Step 5 of {TOTAL_STEPS}</p>
@@ -585,6 +589,29 @@ export default function OnboardingPage() {
               {/* ── Step 4: Passport & Visa ── */}
               {step === 4 && (
                 <>
+                  {/* Passport — required for everyone, South African or not */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="passport_country">Passport Country *</Label>
+                      <select id="passport_country" value={form.passport_country} onChange={(e) => set("passport_country", e.target.value)}
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" required>
+                        <option value="">Select…</option>
+                        {COUNTRY_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="passport_number">Passport Number *</Label>
+                      <Input id="passport_number" placeholder="e.g. A12345678" value={form.passport_number} onChange={(e) => set("passport_number", e.target.value)} required />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="passport_expiry_date">Passport Expiry Date *</Label>
+                    <DateInput id="passport_expiry_date" value={form.passport_expiry_date} onChange={(v) => set("passport_expiry_date", v)} />
+                  </div>
+
+                  {/* International toggle — reveals the visa section below */}
                   <label
                     className="flex items-center gap-3 cursor-pointer rounded-xl p-4"
                     style={{ border: "1px solid var(--surface-4)", background: "var(--surface-1)" }}
@@ -592,35 +619,18 @@ export default function OnboardingPage() {
                     <input type="checkbox" checked={form.is_international}
                       onChange={(e) => setForm((prev) => ({
                         ...prev, is_international: e.target.checked,
-                        ...(!e.target.checked && { passport_country: "", passport_number: "", visa_category: "", visa_type: "", visa_expiry_date: "" }),
+                        ...(!e.target.checked && { visa_category: "", visa_type: "", visa_expiry_date: "" }),
                       }))}
                       className="h-4 w-4"
                     />
                     <div>
                       <p style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>I am an international staff member or visitor</p>
-                      <p style={{ fontSize: "11px", color: "var(--text-tertiary)" }}>Check this if you are not a South African citizen</p>
+                      <p style={{ fontSize: "11px", color: "var(--text-tertiary)" }}>Check this if you are not a South African citizen — you&rsquo;ll be asked for your visa details</p>
                     </div>
                   </label>
 
                   {form.is_international && (
                     <div className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="passport_country">Passport Country *</Label>
-                          <select id="passport_country" value={form.passport_country} onChange={(e) => set("passport_country", e.target.value)}
-                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" required>
-                            <option value="">Select…</option>
-                            {COUNTRY_OPTIONS.map((o) => (
-                              <option key={o.value} value={o.value}>{o.label}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="passport_number">Passport Number *</Label>
-                          <Input id="passport_number" placeholder="e.g. A12345678" value={form.passport_number} onChange={(e) => set("passport_number", e.target.value)} required />
-                        </div>
-                      </div>
-
                       <div className="space-y-2">
                         <Label>Visa Status *</Label>
                         <div className="grid grid-cols-2 gap-3">

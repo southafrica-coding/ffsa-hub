@@ -4674,6 +4674,7 @@ export type Database = {
           marital_status: string | null
           nationality: string | null
           passport_country: string | null
+          passport_expiry_date: string | null
           passport_number: string | null
           phone: string | null
           postal_code: string | null
@@ -4715,6 +4716,7 @@ export type Database = {
           marital_status?: string | null
           nationality?: string | null
           passport_country?: string | null
+          passport_expiry_date?: string | null
           passport_number?: string | null
           phone?: string | null
           postal_code?: string | null
@@ -4756,6 +4758,7 @@ export type Database = {
           marital_status?: string | null
           nationality?: string | null
           passport_country?: string | null
+          passport_expiry_date?: string | null
           passport_number?: string | null
           phone?: string | null
           postal_code?: string | null

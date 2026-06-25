@@ -5,14 +5,15 @@
 // cards. Field configs are reused verbatim from profile-fields.ts so the
 // page, the onboarding flow and the blocking gate can never disagree on
 // how a field is collected. We add only the two fields the gate doesn't
-// enforce (preferred_name, address_line_2) plus the passport/visa fields
-// (shown to everyone, optional unless the user is flagged international
-// elsewhere). Every field listed here is on the /api/profile/update
-// safelist.
+// enforce (preferred_name, address_line_2). Passport is required for
+// everyone; the visa fields stay optional unless the user is flagged
+// international elsewhere. Every field listed here is on the
+// /api/profile/update safelist.
 
 import {
   REQUIRED_PROFILE_FIELDS,
-  PASSPORT_VISA_BASE_FIELDS,
+  PASSPORT_FIELDS,
+  VISA_BASE_FIELDS,
   VISA_LONG_TERM_FIELDS,
   type FieldConfig,
 } from "./profile-fields";
@@ -22,7 +23,8 @@ import {
 const POOL: Record<string, FieldConfig> = {};
 for (const f of [
   ...REQUIRED_PROFILE_FIELDS,
-  ...PASSPORT_VISA_BASE_FIELDS,
+  ...PASSPORT_FIELDS,
+  ...VISA_BASE_FIELDS,
   ...VISA_LONG_TERM_FIELDS,
 ]) {
   POOL[f.field] = f;
@@ -117,13 +119,24 @@ export const PROFILE_SECTIONS: ProfileSectionDef[] = [
     ],
   },
   {
-    id: "international",
-    title: "Passport & Visa",
+    id: "passport",
+    title: "Passport",
     description:
-      "For international staff. Leave blank if you're a South African citizen.",
+      "Required for everyone. Defaults to South Africa — change the country if you travel on another passport.",
+    // Kept required: passport is now mandatory for all staff, so the gate
+    // re-blocks the Hub until these are filled.
     fields: [
-      optional(pick("passport_country")),
-      optional(pick("passport_number")),
+      pick("passport_country"),
+      pick("passport_number"),
+      pick("passport_expiry_date"),
+    ],
+  },
+  {
+    id: "visa",
+    title: "Visa",
+    description:
+      "For international staff only. Leave blank if you're a South African citizen.",
+    fields: [
       optional(pick("visa_category")),
       ...VISA_LONG_TERM_FIELDS.map(optional),
     ],

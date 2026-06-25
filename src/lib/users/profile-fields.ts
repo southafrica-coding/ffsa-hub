@@ -192,16 +192,28 @@ function hasNoValidProvider(profile: Record<string, unknown>): boolean {
 }
 
 // ────────────────────────────────────────────────────────────
-// INTERNATIONAL STAFF — passport & visa (conditional)
+// PASSPORT — required for EVERYONE
 // ────────────────────────────────────────────────────────────
-// Not in REQUIRED_PROFILE_FIELDS because they only apply when
-// `is_international` is true (and visa_type / visa_expiry_date only for a
-// long-term visa). The gate collects them progressively: ask for passport
-// + visa category first, then on the next pass — once we know it's
-// long-term — ask for the visa specifics.
-export const PASSPORT_VISA_BASE_FIELDS: FieldConfig[] = [
+// Passport details are collected from all staff, South African or not.
+// Kept out of REQUIRED_PROFILE_FIELDS only so the passport section can be
+// grouped on its own surfaces; the gate enforces it via getMissingPassportFields
+// below. passport_country defaults to South Africa in the forms but stays a
+// real selectable field so dual-nationals can record the passport they
+// actually travel on.
+export const PASSPORT_FIELDS: FieldConfig[] = [
   { field: "passport_country", label: "Passport Country", type: "select", options: COUNTRY_OPTIONS },
   { field: "passport_number", label: "Passport Number", type: "text", placeholder: "e.g. A12345678" },
+  { field: "passport_expiry_date", label: "Passport Expiry Date", type: "date" },
+];
+
+// ────────────────────────────────────────────────────────────
+// VISA — international (non-South-African) staff only
+// ────────────────────────────────────────────────────────────
+// Only applies when `is_international` is true (and visa_type /
+// visa_expiry_date only for a long-term visa). The gate collects them
+// progressively: ask for the visa category first, then on the next pass —
+// once we know it's long-term — ask for the visa specifics.
+export const VISA_BASE_FIELDS: FieldConfig[] = [
   {
     field: "visa_category",
     label: "Visa Status",
@@ -218,18 +230,27 @@ export const VISA_LONG_TERM_FIELDS: FieldConfig[] = [
   { field: "visa_expiry_date", label: "Visa Expiry Date", type: "date" },
 ];
 
-// Passport/visa fields still missing for an international staff member.
-// Returns [] for everyone else — the conditional the flat
-// REQUIRED_PROFILE_FIELDS list can't express on its own.
-export function getMissingInternationalFields(
+const isFieldEmpty = (profile: Record<string, unknown>) => (f: FieldConfig) => {
+  const v = profile[f.field];
+  return v === null || v === undefined || v === "";
+};
+
+// Passport fields still missing — checked for every user.
+export function getMissingPassportFields(
+  profile: Record<string, unknown>
+): FieldConfig[] {
+  return PASSPORT_FIELDS.filter(isFieldEmpty(profile));
+}
+
+// Visa fields still missing for an international staff member. Returns []
+// for South Africans — the conditional the flat REQUIRED_PROFILE_FIELDS
+// list can't express on its own.
+export function getMissingVisaFields(
   profile: Record<string, unknown>
 ): FieldConfig[] {
   if (!profile["is_international"]) return [];
-  const isEmpty = (f: FieldConfig) => {
-    const v = profile[f.field];
-    return v === null || v === undefined || v === "";
-  };
-  const missing = PASSPORT_VISA_BASE_FIELDS.filter(isEmpty);
+  const isEmpty = isFieldEmpty(profile);
+  const missing = VISA_BASE_FIELDS.filter(isEmpty);
   if (profile["visa_category"] === "long_term") {
     missing.push(...VISA_LONG_TERM_FIELDS.filter(isEmpty));
   }
@@ -257,7 +278,8 @@ export function getProfileBlock(
 ): ProfileBlock | null {
   const missing = [
     ...getMissingProfileFields(profile),
-    ...getMissingInternationalFields(profile),
+    ...getMissingPassportFields(profile),
+    ...getMissingVisaFields(profile),
   ];
   if (missing.length > 0) return { reason: "incomplete", fields: missing };
 

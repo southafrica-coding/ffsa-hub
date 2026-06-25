@@ -71,16 +71,25 @@ export async function ProfileCompletionGate({
     // must enter a fresh date. A legacy "none" provider is cleared so they
     // pick a real one.
     const provider = String(row.health_insurance_provider ?? "");
-    const defaults =
-      block.reason === "insurance_expired"
-        ? {
-            health_insurance_provider:
-              provider.toLowerCase() === "none" ? "" : provider,
-            health_insurance_policy_number: String(
-              row.health_insurance_policy_number ?? ""
-            ),
-          }
-        : undefined;
+    let defaults: Record<string, string> | undefined;
+    if (block.reason === "insurance_expired") {
+      defaults = {
+        health_insurance_provider:
+          provider.toLowerCase() === "none" ? "" : provider,
+        health_insurance_policy_number: String(
+          row.health_insurance_policy_number ?? ""
+        ),
+      };
+    } else if (
+      // Passport is now required for everyone. A South African being asked
+      // for it for the first time shouldn't have to hunt for their country —
+      // default it to South Africa (international staff pick their own).
+      block.fields.some((f) => f.field === "passport_country") &&
+      !row.is_international &&
+      !row.passport_country
+    ) {
+      defaults = { passport_country: "South Africa" };
+    }
 
     return (
       <BlockingOverlay
