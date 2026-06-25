@@ -1,5 +1,5 @@
 -- ============================================================
--- FFSA Hub — Migration 114: Baseline self-service access
+-- FFSA Hub — Migration 115: Baseline self-service access
 -- ============================================================
 -- Establishes the access "floor" every account carries the moment it
 -- is created. The self_service role (already auto-assigned at signup /
