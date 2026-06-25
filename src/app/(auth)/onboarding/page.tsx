@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { updateUserProfile, completeOnboarding } from "@/services/users";
-import { isExpiryDatePast } from "@/lib/users/profile-fields";
 import { validatePassword } from "@/lib/auth/password";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,7 +57,6 @@ interface FormData {
   emergency_contact_relationship: string;
   health_insurance_provider: string;
   health_insurance_policy_number: string;
-  health_insurance_expiry_date: string;
 }
 
 const EMPTY_FORM: FormData = {
@@ -71,7 +69,7 @@ const EMPTY_FORM: FormData = {
   visa_category: "", visa_type: "", visa_expiry_date: "",
   emergency_contact_name: "", emergency_contact_phone: "",
   emergency_contact_relationship: "", health_insurance_provider: "",
-  health_insurance_policy_number: "", health_insurance_expiry_date: "",
+  health_insurance_policy_number: "",
 };
 
 export default function OnboardingPage() {
@@ -138,7 +136,6 @@ export default function OnboardingPage() {
         emergency_contact_relationship: appUser.emergency_contact_relationship ?? "",
         health_insurance_provider: appUser.health_insurance_provider ?? "",
         health_insurance_policy_number: appUser.health_insurance_policy_number ?? "",
-        health_insurance_expiry_date: appUser.health_insurance_expiry_date ?? "",
       });
 
       // Fetch the current consent agreement version so we know what the user
@@ -222,9 +219,6 @@ export default function OnboardingPage() {
       if (blank(form.emergency_contact_relationship)) return "Emergency contact relationship is required.";
       if (blank(form.health_insurance_provider)) return "Health insurance provider is required.";
       if (blank(form.health_insurance_policy_number)) return "Health insurance policy number is required.";
-      if (blank(form.health_insurance_expiry_date)) return "Health insurance expiry date is required.";
-      if (isExpiryDatePast(form.health_insurance_expiry_date))
-        return "Your health insurance has expired. Please enter the date your current policy expires.";
       return null;
     }
     return null;
@@ -274,7 +268,9 @@ export default function OnboardingPage() {
         emergency_contact_relationship: nullify(form.emergency_contact_relationship),
         health_insurance_provider: nullify(form.health_insurance_provider),
         health_insurance_policy_number: nullify(form.health_insurance_policy_number),
-        health_insurance_expiry_date: nullify(form.health_insurance_expiry_date),
+        // Entering valid cover during onboarding counts as the first
+        // confirmation; re-confirmation falls due 6 months later.
+        health_insurance_confirmed_at: new Date().toISOString(),
       });
       if (profileError) throw new Error(profileError.message);
       await completeOnboarding(supabase, userId);
@@ -742,10 +738,6 @@ export default function OnboardingPage() {
                           <Label htmlFor="health_insurance_policy_number">Policy Number *</Label>
                           <Input id="health_insurance_policy_number" placeholder="e.g. 123456789" value={form.health_insurance_policy_number} onChange={(e) => set("health_insurance_policy_number", e.target.value)} required />
                         </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="health_insurance_expiry_date">Expiry Date *</Label>
-                        <DateInput id="health_insurance_expiry_date" value={form.health_insurance_expiry_date} onChange={(v) => set("health_insurance_expiry_date", v)} />
                       </div>
                     </div>
                   </div>

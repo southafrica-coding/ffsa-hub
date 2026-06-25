@@ -107,13 +107,12 @@ export const PROFILE_SECTIONS: ProfileSectionDef[] = [
     id: "insurance",
     title: "Health Insurance",
     description:
-      "Must stay current — an expired policy will block the Hub until renewed.",
-    // Kept required: the update API rejects an empty/“none” provider or a
-    // past expiry, mirroring the gate.
+      "We ask you to confirm this is current every 6 months — saving here counts as confirming it.",
+    // Kept required: the update API rejects an empty/“none” provider
+    // (mirroring the gate) and re-stamps the confirmation on save.
     fields: [
       pick("health_insurance_provider"),
       pick("health_insurance_policy_number"),
-      pick("health_insurance_expiry_date"),
     ],
   },
   {

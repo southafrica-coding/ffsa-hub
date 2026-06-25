@@ -57,7 +57,7 @@ type UserRow = {
   marital_status: string | null;
   nationality: string | null;
   health_insurance_provider: string | null;
-  health_insurance_expiry_date: string | null;
+  health_insurance_confirmed_at: string | null;
   last_sign_in_at: string | null;
   user_roles: Array<{
     id: string;
@@ -278,7 +278,7 @@ export function UsersTable({
                           {lifecycle.totalRequired} fields
                         </span>
                       )}
-                      {lifecycle.insurance.state === "expired" && (
+                      {lifecycle.insurance.state === "due" && (
                         <Badge
                           variant="outline"
                           style={{
@@ -286,22 +286,9 @@ export function UsersTable({
                             color: "hsl(0 84% 72%)",
                             background: "hsl(0 70% 16%)",
                           }}
-                          title={`Health insurance expired ${lifecycle.insurance.expiryDate ?? ""}`}
+                          title={`Health insurance re-confirmation overdue (last confirmed ${lifecycle.insurance.confirmedDate ?? "never"})`}
                         >
-                          Insurance expired
-                        </Badge>
-                      )}
-                      {lifecycle.insurance.state === "expiring" && (
-                        <Badge
-                          variant="outline"
-                          style={{
-                            borderColor: "hsl(28 95% 55% / 0.4)",
-                            color: "hsl(28 95% 65%)",
-                            background: "hsl(28 80% 16%)",
-                          }}
-                          title={`Health insurance expires ${lifecycle.insurance.expiryDate ?? ""}`}
-                        >
-                          Insurance expires in {lifecycle.insurance.daysLeft ?? 0}d
+                          Insurance check overdue
                         </Badge>
                       )}
                     </div>

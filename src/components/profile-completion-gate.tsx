@@ -1,9 +1,16 @@
 import { createClient } from "@/lib/supabase/server";
 import { ProfileCompletionForm } from "./profile-completion-form";
 import { ConsentAcceptanceForm } from "./consent-acceptance-form";
-import { InsuranceExpiryBanner } from "./insurance-expiry-banner";
-import { getProfileBlock, getInsuranceStatus } from "@/lib/users/profile-fields";
+import { InsuranceReconfirmPanel } from "./insurance-reconfirm-panel";
+import { getProfileBlock } from "@/lib/users/profile-fields";
+import { INSURANCE_PROVIDERS } from "@/lib/profile/options";
 import { hasUserConsented, getCurrentConsentAgreement } from "@/services/consent";
+
+// Map a stored provider value to its human label (a custom "Other" value is
+// stored verbatim, so fall back to the raw string).
+function insuranceProviderLabel(value: string): string {
+  return INSURANCE_PROVIDERS.find((o) => o.value === value)?.label ?? value;
+}
 
 // Full-screen blocking overlay: blurs and disables the page behind the panel.
 function BlockingOverlay({
@@ -62,23 +69,41 @@ export async function ProfileCompletionGate({
 
   const row = profile as Record<string, unknown>;
 
-  // 1) Missing required fields (incl. passport/visa for international
-  //    staff) or a lapsed/invalid health-insurance policy → field form.
+  // 1) Missing required fields (incl. passport/visa for international staff),
+  //    no valid provider on file, or a lapsed 6-monthly cover confirmation.
   const block = getProfileBlock(row);
   if (block) {
-    // For an expired/invalid policy, pre-fill the provider + policy number
-    // (a renewal usually keeps them) but leave the expiry blank so they
-    // must enter a fresh date. A legacy "none" provider is cleared so they
-    // pick a real one.
-    const provider = String(row.health_insurance_provider ?? "");
+    const providerRaw = String(row.health_insurance_provider ?? "");
+    const policyNumber = String(row.health_insurance_policy_number ?? "");
+
+    // Cover is on file but the periodic confirmation has lapsed → one-click
+    // re-confirm panel (Yes keeps it; No opens the form to edit the details).
+    if (block.reason === "insurance_confirm") {
+      return (
+        <BlockingOverlay
+          panel={
+            <InsuranceReconfirmPanel
+              providerLabel={insuranceProviderLabel(providerRaw)}
+              policyNumber={policyNumber}
+              defaults={{
+                health_insurance_provider: providerRaw,
+                health_insurance_policy_number: policyNumber,
+              }}
+            />
+          }
+        >
+          {children}
+        </BlockingOverlay>
+      );
+    }
+
+    // A legacy "none" provider must be swapped for a real one — pre-fill the
+    // policy number (usually kept) and blank the provider so they re-pick.
     const defaults =
-      block.reason === "insurance_expired"
+      providerRaw.toLowerCase() === "none"
         ? {
-            health_insurance_provider:
-              provider.toLowerCase() === "none" ? "" : provider,
-            health_insurance_policy_number: String(
-              row.health_insurance_policy_number ?? ""
-            ),
+            health_insurance_provider: "",
+            health_insurance_policy_number: policyNumber,
           }
         : undefined;
 
@@ -118,30 +143,7 @@ export async function ProfileCompletionGate({
     }
   }
 
-  // 3) Cleared — non-blocking nudge if insurance is approaching expiry.
-  const insurance = getInsuranceStatus(row);
-  if (insurance.state === "expiring") {
-    return (
-      <>
-        <InsuranceExpiryBanner
-          expiryDate={insurance.expiryDate ?? ""}
-          daysLeft={insurance.daysLeft ?? 0}
-          defaults={{
-            health_insurance_provider: String(
-              row.health_insurance_provider ?? ""
-            ),
-            health_insurance_policy_number: String(
-              row.health_insurance_policy_number ?? ""
-            ),
-            health_insurance_expiry_date: String(
-              row.health_insurance_expiry_date ?? ""
-            ).slice(0, 10),
-          }}
-        />
-        {children}
-      </>
-    );
-  }
-
+  // Cleared — re-confirmation is enforced as a hard block above (a single
+  // click clears it), so there's no separate pre-due banner.
   return <>{children}</>;
 }

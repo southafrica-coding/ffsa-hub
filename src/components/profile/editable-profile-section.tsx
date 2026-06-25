@@ -8,7 +8,6 @@ import {
   OTHER_SENTINEL,
   seedOtherActive,
 } from "@/components/profile/field-control";
-import { isExpiryDatePast } from "@/lib/users/profile-fields";
 import { type ProfileSectionDef } from "@/lib/users/profile-sections";
 
 // One profile card: a read-only view of its fields with an "Edit" button
@@ -57,12 +56,6 @@ export function EditableProfileSection({
       const v = draft[f.field]?.trim() ?? "";
       if (!f.optional && (!v || v === OTHER_SENTINEL)) {
         setError(`Please fill in: ${f.label}`);
-        return;
-      }
-      if (f.field === "health_insurance_expiry_date" && v && isExpiryDatePast(v)) {
-        setError(
-          "Your health insurance expiry date can't be in the past. Please enter the date your current policy expires."
-        );
         return;
       }
     }

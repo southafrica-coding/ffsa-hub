@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { isExpiryDatePast } from "@/lib/users/profile-fields";
 
 export async function PUT(request: Request) {
   const supabase = await createClient();
@@ -24,7 +23,6 @@ export async function PUT(request: Request) {
     "emergency_contact_name", "emergency_contact_phone",
     "emergency_contact_relationship",
     "health_insurance_provider", "health_insurance_policy_number",
-    "health_insurance_expiry_date",
     "passport_country", "passport_number",
     "visa_category", "visa_type", "visa_expiry_date",
   ];
@@ -40,8 +38,10 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
   }
 
-  // Health insurance must be valid and current — mirror the gate so the
-  // block can't be dodged by POSTing a lapsed date or a "none" provider.
+  // Health insurance must name a valid provider — mirror the gate so the
+  // block can't be dodged by POSTing a "none" provider. Saving a valid
+  // provider also counts as confirming the cover is current, so re-stamp the
+  // 6-monthly confirmation clock.
   if ("health_insurance_provider" in updateData) {
     const provider = String(updateData.health_insurance_provider ?? "").trim();
     if (provider === "" || provider.toLowerCase() === "none") {
@@ -50,18 +50,7 @@ export async function PUT(request: Request) {
         { status: 400 }
       );
     }
-  }
-  if (
-    "health_insurance_expiry_date" in updateData &&
-    isExpiryDatePast(updateData.health_insurance_expiry_date)
-  ) {
-    return NextResponse.json(
-      {
-        error:
-          "Your health insurance expiry date can't be in the past. Please enter the date your current policy expires.",
-      },
-      { status: 400 }
-    );
+    updateData.health_insurance_confirmed_at = new Date().toISOString();
   }
 
   const { error } = await supabase

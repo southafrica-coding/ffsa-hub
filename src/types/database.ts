@@ -4661,6 +4661,7 @@ export type Database = {
           emergency_contact_relationship: string | null
           first_name: string | null
           gender: string | null
+          health_insurance_confirmed_at: string | null
           health_insurance_expiry_date: string | null
           health_insurance_policy_number: string | null
           health_insurance_provider: string | null
@@ -4702,6 +4703,7 @@ export type Database = {
           emergency_contact_relationship?: string | null
           first_name?: string | null
           gender?: string | null
+          health_insurance_confirmed_at?: string | null
           health_insurance_expiry_date?: string | null
           health_insurance_policy_number?: string | null
           health_insurance_provider?: string | null
@@ -4743,6 +4745,7 @@ export type Database = {
           emergency_contact_relationship?: string | null
           first_name?: string | null
           gender?: string | null
+          health_insurance_confirmed_at?: string | null
           health_insurance_expiry_date?: string | null
           health_insurance_policy_number?: string | null
           health_insurance_provider?: string | null

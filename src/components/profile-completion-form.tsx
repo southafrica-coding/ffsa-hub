@@ -10,35 +10,27 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import { type FieldConfig, isExpiryDatePast } from "@/lib/users/profile-fields";
+import { type FieldConfig } from "@/lib/users/profile-fields";
 import {
   FieldControl,
   OTHER_SENTINEL,
   seedOtherActive,
 } from "@/components/profile/field-control";
 
-// Why the form is on screen — drives the heading and copy. The gate
-// passes "incomplete" / "insurance_expired" (blocking); the expiry
-// banner passes "insurance_expiring" (dismissible).
-export type ProfileFormReason =
-  | "incomplete"
-  | "insurance_expired"
-  | "insurance_expiring";
+// Why the form is on screen — drives the heading and copy. The gate passes
+// "incomplete" (blocking) or "insurance_confirm" (the re-confirm panel's
+// "No, update it" path, also blocking).
+export type ProfileFormReason = "incomplete" | "insurance_confirm";
 
 const COPY: Record<ProfileFormReason, { title: string; description: string }> = {
   incomplete: {
     title: "Complete Your Profile",
     description: "Please fill in the following information to continue.",
   },
-  insurance_expired: {
+  insurance_confirm: {
     title: "Update Your Health Insurance",
     description:
-      "Your health insurance is no longer valid. Please enter your current policy details to keep using the Hub.",
-  },
-  insurance_expiring: {
-    title: "Update Your Health Insurance",
-    description:
-      "Your health insurance is about to expire. Update your current policy details below.",
+      "Please enter your current health insurance details to keep using the Hub.",
   },
 };
 
@@ -85,14 +77,6 @@ export function ProfileCompletionForm({
       const v = values[f.field]?.trim();
       if (!v || v === OTHER_SENTINEL) {
         setError(`Please fill in: ${f.label}`);
-        return;
-      }
-      // A renewed policy must expire in the future — otherwise the gate
-      // would just re-block them on the next render.
-      if (f.field === "health_insurance_expiry_date" && isExpiryDatePast(v)) {
-        setError(
-          "Your health insurance expiry date can't be in the past. Please enter the date your current policy expires."
-        );
         return;
       }
     }
