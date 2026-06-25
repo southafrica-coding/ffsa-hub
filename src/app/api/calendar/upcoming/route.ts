@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getUpcomingFamilyMilestones } from "@/services/family";
 
-// GET /api/calendar/upcoming — next N events from the public FFSA Base Calendar
-// (read-only, via a Google Calendar API key restricted to the Calendar API).
-// Powers the rotating "Upcoming Events" widget on the dashboard.
+// GET /api/calendar/upcoming — upcoming events for the dashboard ticker:
+// the public FFSA Base Calendar (read-only, via a Google Calendar API key)
+// MERGED with the signed-in user's own family milestones (anniversary +
+// children's birthdays, next ~60 days). Both share the CalendarEvent shape
+// so the widget renders them identically.
 
 const CALENDAR_ID = process.env.GOOGLE_CALENDAR_ID;
 const API_KEY = process.env.GOOGLE_CALENDAR_API_KEY;
@@ -27,13 +32,8 @@ type GoogleEvent = {
   end?: { dateTime?: string; date?: string };
 };
 
-export async function GET() {
-  // If the integration isn't configured, return an empty (but successful)
-  // payload so the widget can simply render nothing instead of erroring.
-  if (!CALENDAR_ID || !API_KEY) {
-    return NextResponse.json({ events: [], configured: false });
-  }
-
+async function fetchGoogleEvents(): Promise<CalendarEvent[]> {
+  if (!CALENDAR_ID || !API_KEY) return [];
   const params = new URLSearchParams({
     key: API_KEY,
     timeMin: new Date().toISOString(),
@@ -48,30 +48,68 @@ export async function GET() {
   try {
     // Cache for 10 minutes so a busy dashboard doesn't hammer the Calendar API.
     const res = await fetch(url, { next: { revalidate: 600 } });
-    if (!res.ok) {
-      return NextResponse.json({ events: [], configured: true }, { status: 200 });
-    }
+    if (!res.ok) return [];
     const data = (await res.json()) as { items?: GoogleEvent[] };
-
-    const events: CalendarEvent[] = (data.items ?? [])
+    return (data.items ?? [])
       .map((e): CalendarEvent | null => {
         const startRaw = e.start?.dateTime ?? e.start?.date;
         if (!startRaw) return null;
-        const allDay = !e.start?.dateTime;
         return {
           id: e.id,
           title: e.summary?.trim() || "Untitled event",
           start: startRaw,
           end: e.end?.dateTime ?? e.end?.date ?? null,
-          allDay,
+          allDay: !e.start?.dateTime,
           location: e.location?.trim() || null,
           htmlLink: e.htmlLink ?? null,
         };
       })
       .filter((e): e is CalendarEvent => e !== null);
-
-    return NextResponse.json({ events, configured: true, timeZone: TIME_ZONE });
   } catch {
-    return NextResponse.json({ events: [], configured: true }, { status: 200 });
+    return [];
   }
+}
+
+async function fetchFamilyEvents(userId: string): Promise<CalendarEvent[]> {
+  try {
+    const milestones = await getUpcomingFamilyMilestones(
+      createAdminClient(),
+      userId,
+      60
+    );
+    return milestones.map((m) => ({
+      id: `family-${m.kind}-${m.refId}-${m.dateISO}`,
+      title: m.kind === "anniversary" ? `💍 ${m.title}` : `🎂 ${m.title}`,
+      start: m.dateISO, // all-day, YYYY-MM-DD
+      end: null,
+      allDay: true,
+      location: null,
+      htmlLink: null,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export async function GET() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const [google, family] = await Promise.all([
+    fetchGoogleEvents(),
+    user ? fetchFamilyEvents(user.id) : Promise.resolve([]),
+  ]);
+
+  // Merge and order by start; cap so the ticker stays tight.
+  const events = [...google, ...family]
+    .sort((a, b) => a.start.localeCompare(b.start))
+    .slice(0, 12);
+
+  return NextResponse.json({
+    events,
+    configured: !!CALENDAR_ID && !!API_KEY,
+    timeZone: TIME_ZONE,
+  });
 }

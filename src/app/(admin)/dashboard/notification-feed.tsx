@@ -9,6 +9,7 @@ import {
   UserPlus,
   Archive,
   Car,
+  Heart,
   Check,
   type LucideIcon,
 } from "lucide-react";
@@ -20,6 +21,7 @@ const ICONS: Record<string, LucideIcon> = {
   user: UserPlus,
   records: Archive,
   vehicle: Car,
+  family: Heart,
 };
 
 const ACCENTS: Record<string, string> = {
@@ -27,6 +29,7 @@ const ACCENTS: Record<string, string> = {
   user: "hsl(200 70% 62%)",
   records: "hsl(265 60% 68%)",
   vehicle: "hsl(150 55% 58%)",
+  family: "hsl(340 70% 64%)",
 };
 
 export function NotificationFeed({ initial }: { initial: AppNotification[] }) {

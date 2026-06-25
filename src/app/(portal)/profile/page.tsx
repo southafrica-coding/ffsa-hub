@@ -1,17 +1,24 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/services/users";
 import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { ProfileRecords } from "@/components/profile-records";
 import { AvatarUploader } from "@/components/avatar-uploader";
 import { EditableProfileSection } from "@/components/profile/editable-profile-section";
+import { FamilySection } from "@/components/profile/family-section";
 import { PROFILE_SECTIONS } from "@/lib/users/profile-sections";
+import { getMyFamily } from "@/services/family";
 
 export default async function ProfilePage() {
   const supabase = await createClient();
   const { data: user } = await getCurrentUser(supabase);
 
   if (!user) redirect("/login");
+
+  // Family is relational (a shared couple + kids), not flat user columns, so
+  // it loads through the admin client scoped to this user — never anyone else.
+  const family = await getMyFamily(createAdminClient(), user.id);
 
   const row = user as Record<string, unknown>;
   const roles = user.user_roles ?? [];
@@ -105,6 +112,20 @@ export default async function ProfilePage() {
             />
           ))}
         </div>
+      </section>
+
+      <section className="space-y-3">
+        <div>
+          <p className="page-eyebrow">MY HOUSEHOLD</p>
+          <h2 className="text-xl font-semibold">Spouse &amp; children</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Link your spouse, record your anniversary and add your children.
+            Anniversaries and birthdays show up on the dashboard so the team can
+            celebrate with you. Only you, your spouse and permitted staff can see
+            this.
+          </p>
+        </div>
+        <FamilySection initial={family} />
       </section>
 
       <section className="space-y-3">
