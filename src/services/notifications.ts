@@ -15,13 +15,15 @@
 import { getBookingAccess, getPendingRequests, getMyDecidedBookings } from "./bookings";
 import { getVehicleAccess } from "./vehicles";
 import { dateRangeLabel } from "@/lib/bookings/dates";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getMyFamily, getUpcomingFamilyMilestones } from "./family";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
 
 export type AppNotification = {
   key: string; // stable identity, e.g. "booking:<uuid>"
-  kind: "booking" | "user" | "records" | "vehicle";
+  kind: "booking" | "user" | "records" | "vehicle" | "family";
   title: string;
   body: string;
   href: string;
@@ -219,7 +221,91 @@ async function recordsMatchNotifs(supabase: Client, userId: string): Promise<App
   ];
 }
 
-const PROVIDERS = [bookingNotifs, bookingDecisionNotifs, staffApprovalNotifs, vehicleRequestNotifs, recordsMatchNotifs];
+// ── Family providers ───────────────────────────────────────
+// Family data is relational and cross-user (a partner's name lives on
+// another user's record), so these read via the admin client scoped to the
+// current user rather than the RLS client passed in.
+
+function ordinal(n: number): string {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`;
+}
+
+function inDaysLabel(n: number): string {
+  if (n <= 0) return "today";
+  if (n === 1) return "tomorrow";
+  return `in ${n}d`;
+}
+
+function shortDate(iso: string): string {
+  const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  });
+}
+
+// "<name> listed you as their spouse — confirm" for partner B. Reuses the
+// family service (admin-scoped, partner names already resolved) so this
+// never touches the typed RLS client for cross-user reads.
+async function spouseLinkRequestNotifs(
+  _supabase: Client,
+  userId: string
+): Promise<AppNotification[]> {
+  const { incomingRequests } = await getMyFamily(createAdminClient(), userId);
+  return incomingRequests.slice(0, CAP).map((r) => {
+    const { label, ts } = timeAgo(r.created_at);
+    return {
+      key: `family-link:${r.id}`,
+      kind: "family" as const,
+      title: "Spouse link request",
+      body: `${r.fromName} listed you as their spouse — confirm on your profile`,
+      href: "/profile",
+      when: label,
+      ts,
+      read: false,
+    };
+  });
+}
+
+// Upcoming anniversaries & children's birthdays (next 30 days).
+async function familyMilestoneNotifs(
+  _supabase: Client,
+  userId: string
+): Promise<AppNotification[]> {
+  const milestones = await getUpcomingFamilyMilestones(
+    createAdminClient(),
+    userId,
+    30
+  );
+  return milestones.slice(0, CAP).map((m) => ({
+    // keyed by occurrence so it re-surfaces each year and after being read
+    key: `family-milestone:${m.kind}:${m.refId}:${m.dateISO}`,
+    kind: "family" as const,
+    title: m.kind === "anniversary" ? "Anniversary coming up" : "Birthday coming up",
+    body:
+      m.kind === "anniversary"
+        ? `${m.title} · ${m.years >= 1 ? `${ordinal(m.years)} anniversary` : "anniversary"} · ${shortDate(m.dateISO)} (${inDaysLabel(m.inDays)})`
+        : `${m.title} · turns ${m.years} · ${shortDate(m.dateISO)} (${inDaysLabel(m.inDays)})`,
+    href: "/profile",
+    when: inDaysLabel(m.inDays),
+    // nearer events sort higher (larger ts), but below live real-time items
+    ts: Date.now() - m.inDays * 86_400_000,
+    read: false,
+  }));
+}
+
+const PROVIDERS = [
+  bookingNotifs,
+  bookingDecisionNotifs,
+  staffApprovalNotifs,
+  vehicleRequestNotifs,
+  recordsMatchNotifs,
+  spouseLinkRequestNotifs,
+  familyMilestoneNotifs,
+];
 
 // ── Public API ─────────────────────────────────────────────
 
