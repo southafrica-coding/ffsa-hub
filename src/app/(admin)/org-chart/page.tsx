@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { requireModuleAccess } from "@/lib/require-permission";
 import { getOrgChart } from "@/services/org-chart";
 import { OrgChartFlow } from "./org-chart-flow";
 
@@ -13,7 +14,9 @@ export default async function OrgChartPage() {
   const user = session?.user;
   if (!user) redirect("/login");
 
-  // Open to any authenticated user — internal reference material.
+  // Gated until the module is dialed in — admins or holders of org.view.
+  await requireModuleAccess(supabase, user.id, "org-chart");
+
   const data = await getOrgChart(supabase);
 
   return (

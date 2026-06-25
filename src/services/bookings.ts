@@ -3,6 +3,8 @@
 // so this service uses the project's standard `Client = any` pattern and
 // hand-written row types.
 
+import { getRoleDerivedPermissionRows } from "@/services/permissions";
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
 
@@ -417,6 +419,13 @@ export async function getBookingAccess(
       ? row.permissions[0]
       : row.permissions;
     if (perm?.key) keys.add(perm.key);
+  }
+
+  // Also honor permissions granted via an assigned role's bundle — e.g. the
+  // self_service floor grants bookings.view to every user. Mirrors RLS's
+  // role-aware has_permission so UI gating matches actual access.
+  for (const perm of await getRoleDerivedPermissionRows(supabase, userId)) {
+    if (perm.module === "bookings") keys.add(perm.key);
   }
 
   return {

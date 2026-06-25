@@ -98,7 +98,7 @@ export const ADMIN_MODULES: ModuleDefinition[] = [
     href: "/org-chart",
     icon: Network,
     description: "Interactive map of FFSA's organisational structure",
-    requiredRoles: [], // visible to ALL authenticated users (internal reference)
+    requiredRoles: ["super_admin", "admin"], // others via the org.view permission — gated until the module is dialed in
   },
   {
     id: "finance",
