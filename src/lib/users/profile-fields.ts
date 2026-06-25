@@ -64,10 +64,11 @@ export const REQUIRED_PROFILE_FIELDS: FieldConfig[] = [
     label: "Department",
     type: "select",
     options: [
+      { value: "leadership_team", label: "Leadership Team" },
       { value: "prayer_and_worship", label: "Prayer and Worship" },
       { value: "media", label: "Media" },
       { value: "hulk", label: "Hulk" },
-      { value: "backbone", label: "Backbone" },
+      { value: "operations", label: "Operations" },
       { value: "training", label: "Training" },
       { value: "project_54", label: "Project 54" },
       { value: "education", label: "Education" },

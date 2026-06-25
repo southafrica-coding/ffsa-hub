@@ -67,10 +67,11 @@ type UserRow = {
 };
 
 const DEPARTMENT_LABELS: Record<string, string> = {
+  leadership_team: "Leadership Team",
   prayer_and_worship: "Prayer and Worship",
   media: "Media",
   hulk: "Hulk",
-  backbone: "Backbone",
+  operations: "Operations",
   training: "Training",
   project_54: "Project 54",
   education: "Education",
