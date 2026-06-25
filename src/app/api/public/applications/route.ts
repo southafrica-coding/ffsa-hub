@@ -47,10 +47,19 @@ export async function POST(request: Request) {
   const { program_id, answers, references, files, consent_version } = body;
   const homeCountry =
     typeof body.home_country === "string" ? body.home_country.trim() : "";
+  const nationality =
+    typeof body.nationality === "string" ? body.nationality.trim() : "";
 
   if (!program_id || !answers) {
     return NextResponse.json(
       { error: "Missing required fields" },
+      { status: 400 }
+    );
+  }
+
+  if (!nationality) {
+    return NextResponse.json(
+      { error: "Nationality is required." },
       { status: 400 }
     );
   }
@@ -164,17 +173,19 @@ export async function POST(request: Request) {
   if (email) applicantInfo.email = email;
   if (firstName) applicantInfo.first_name = firstName;
   if (lastName) applicantInfo.last_name = lastName;
-  // Home country is the source of truth for the student's fee tier. We store
-  // it as nationality (the field accept-application reads onto users) and keep
-  // an explicit home_country copy. country_tiers maps this exact value to A/B/C.
+  // Nationality is now collected explicitly (no longer copied from home
+  // country) and is the field accept-application reads onto users.nationality,
+  // which drives the fee tier via country_tiers (keyed on country names).
+  // Home country is kept separately as the applicant's country of residence.
+  applicantInfo.nationality = nationality;
   applicantInfo.home_country = homeCountry;
-  applicantInfo.nationality = homeCountry;
   if (files && Array.isArray(files) && files.length > 0) {
     applicantInfo.files = files;
   }
 
-  // Surface home country in the answers list so reviewers see it.
+  // Surface nationality + home country in the answers list so reviewers see them.
   const answersWithCountry = [
+    { question_id: "nationality", question_label: "Nationality", answer: nationality },
     { question_id: "home_country", question_label: "Home Country", answer: homeCountry },
     ...answers,
   ];

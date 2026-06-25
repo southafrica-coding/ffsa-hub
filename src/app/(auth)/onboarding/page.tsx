@@ -13,7 +13,6 @@ import { Label } from "@/components/ui/label";
 import { PhoneInput } from "@/components/ui/phone-input";
 import {
   COUNTRY_OPTIONS,
-  NATIONALITY_OPTIONS,
   SA_PROVINCES,
   GENDER_OPTIONS,
   RELATIONSHIP_OPTIONS,
@@ -523,7 +522,7 @@ export default function OnboardingPage() {
                       <select id="nationality" value={form.nationality} onChange={(e) => set("nationality", e.target.value)}
                         className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" required>
                         <option value="">Select…</option>
-                        {NATIONALITY_OPTIONS.map((o) => (
+                        {COUNTRY_OPTIONS.map((o) => (
                           <option key={o.value} value={o.value}>{o.label}</option>
                         ))}
                       </select>

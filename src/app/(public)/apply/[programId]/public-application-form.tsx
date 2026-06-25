@@ -137,6 +137,8 @@ export function PublicApplicationForm({
   const [consentError, setConsentError] = useState<string | null>(null);
   const [homeCountry, setHomeCountry] = useState("");
   const [homeCountryError, setHomeCountryError] = useState<string | null>(null);
+  const [nationality, setNationality] = useState("");
+  const [nationalityError, setNationalityError] = useState<string | null>(null);
 
   // Reorder so follow-ups render directly under their parent (and indent
   // them via depthById) instead of falling to the bottom by sort_order.
@@ -225,6 +227,13 @@ export function PublicApplicationForm({
   async function onSubmit(data: Record<string, unknown>) {
     setServerError(null);
 
+    if (!nationality) {
+      setNationalityError("Please select your nationality.");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    setNationalityError(null);
+
     if (!homeCountry) {
       setHomeCountryError("Please select your home country.");
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -308,6 +317,7 @@ export function PublicApplicationForm({
           program_id: programId,
           answers,
           references,
+          nationality,
           home_country: homeCountry,
           files: files.length > 0 ? files : undefined,
           consent_version: consentAgreementVersion,
@@ -362,14 +372,49 @@ export function PublicApplicationForm({
         <ErrorSummary errors={errors} questions={allQuestions} />
       )}
 
-      {/* Home Country — required on every application; drives fee tier */}
+      {/* Nationality — required on every application; drives the fee tier
+          (matched against country_tiers on the user's nationality). */}
+      <div className="rounded-lg border bg-card p-6 space-y-2">
+        <Label htmlFor="nationality">
+          Nationality
+          <span className="text-destructive ml-0.5">*</span>
+        </Label>
+        <p className="text-xs text-muted-foreground">
+          Your country of citizenship. This determines your fee category.
+        </p>
+        <select
+          id="nationality"
+          value={nationality}
+          onChange={(e) => {
+            setNationality(e.target.value);
+            if (e.target.value) setNationalityError(null);
+          }}
+          required
+          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+        >
+          <option value="" disabled>
+            Select your nationality…
+          </option>
+          {countries.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+        {nationalityError && (
+          <p className="text-sm text-destructive">{nationalityError}</p>
+        )}
+      </div>
+
+      {/* Home Country — country of residence (kept for our records; fee
+          tier is driven by nationality above, not this field). */}
       <div className="rounded-lg border bg-card p-6 space-y-2">
         <Label htmlFor="home_country">
           Home Country
           <span className="text-destructive ml-0.5">*</span>
         </Label>
         <p className="text-xs text-muted-foreground">
-          Your country of residence. This determines your fee category.
+          Your country of residence (where you currently live).
         </p>
         <select
           id="home_country"

@@ -9,7 +9,6 @@
 
 import {
   COUNTRY_OPTIONS,
-  NATIONALITY_OPTIONS,
   SA_PROVINCES,
   GENDER_OPTIONS,
   RELATIONSHIP_OPTIONS,
@@ -57,7 +56,12 @@ export const REQUIRED_PROFILE_FIELDS: FieldConfig[] = [
     ],
   },
   { field: "date_of_birth", label: "Date of Birth", type: "date" },
-  { field: "nationality", label: "Nationality", type: "select", options: NATIONALITY_OPTIONS },
+  // Nationality uses country NAMES (not adjectives) on purpose: the school
+  // fee tier is keyed off users.nationality matched against country_tiers
+  // (which lists country names), in both the admin billing code and the
+  // auto_create_student_fee enrollment trigger. Listing country names keeps
+  // that mapping intact.
+  { field: "nationality", label: "Nationality", type: "select", options: COUNTRY_OPTIONS },
   { field: "phone", label: "Phone Number", type: "phone" },
   {
     field: "department",
