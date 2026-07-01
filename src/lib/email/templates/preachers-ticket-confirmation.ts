@@ -18,6 +18,7 @@
 import {
   PREACHERS_COLORS,
   PREACHERS_FONTS,
+  PREACHERS_FONT_LINK,
   PREACHERS_SLOGAN,
   PREACHERS_VISION,
 } from "../preachers-shell";
@@ -101,6 +102,7 @@ export function preachersTicketEmailHtml(opts: {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>You're in — ${escapeHtml(opts.eventTitle)}</title>
+  ${PREACHERS_FONT_LINK}
 </head>
 <body style="margin:0;padding:0;background:${INK};font-family:${BODY};color:${OFFWHITE};">
   <!-- Preheader (hidden) — sets Gmail/iOS inbox preview text -->

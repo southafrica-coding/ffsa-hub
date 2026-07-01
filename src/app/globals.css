@@ -2,6 +2,32 @@
 @tailwind components;
 @tailwind utilities;
 
+/* PREACHERS SA brand face — Big Shoulders Display (self-hosted, latin
+   subset). Registered globally so every PREACHERS surface (ticketing
+   storefront + registration form shell) renders the real face. Rugged
+   industrial condensed heavy caps; falls back to Anton→Impact. */
+@font-face {
+  font-family: 'Big Shoulders Display';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/brand/fonts/BigShouldersDisplay-700.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Big Shoulders Display';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url('/brand/fonts/BigShouldersDisplay-800.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Big Shoulders Display';
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src: url('/brand/fonts/BigShouldersDisplay-900.woff2') format('woff2');
+}
+
 /* ═══════════════════════════════════════════════════════
    FFSA HUB — Design System
    Cinematic dark · FF Nashville brand · Roboto + Bebas

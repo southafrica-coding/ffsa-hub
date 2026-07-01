@@ -169,7 +169,7 @@ export function PublicFormShell({
     : isCamps
       ? "'Aileron','Helvetica Neue',Arial,sans-serif"
       : isPreachers
-        ? "'Anton','Impact','Haettenschweiler','Arial Narrow Bold',sans-serif"
+        ? "'Big Shoulders Display','Anton','Impact','Haettenschweiler','Arial Narrow Bold',sans-serif"
         : "var(--font-bebas, 'Arial Black', sans-serif)";
 
   return (
@@ -399,7 +399,7 @@ function BrandLockup({ brand }: { brand: PublicShellBrand }) {
           style={{
             margin: 0,
             fontFamily:
-              "'Anton','Impact','Haettenschweiler','Arial Narrow Bold',sans-serif",
+              "'Big Shoulders Display','Anton','Impact','Haettenschweiler','Arial Narrow Bold',sans-serif",
             fontSize: 32,
             fontWeight: 900,
             color: tk.yellow,
@@ -519,7 +519,7 @@ function Footer({
               : isCamps
                 ? "'Aileron','Helvetica Neue',Arial,sans-serif"
                 : isPreachers
-                  ? "'Anton','Impact','Haettenschweiler','Arial Narrow Bold',sans-serif"
+                  ? "'Big Shoulders Display','Anton','Impact','Haettenschweiler','Arial Narrow Bold',sans-serif"
                   : undefined,
             fontStyle: isCamps ? "italic" : undefined,
             fontSize: isTheSend || isCamps || isPreachers ? 11 : 10,

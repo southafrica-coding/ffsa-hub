@@ -61,10 +61,19 @@ const C = PREACHERS_COLORS;
 
 export const PREACHERS_FONTS = {
   // DISPLAY is used together with `font-weight:900` + uppercase at each
-  // call site. The condensed heavy caps are the brand signature.
-  DISPLAY: "'Anton','Impact','Haettenschweiler','Arial Narrow Bold',sans-serif",
+  // call site. Big Shoulders Display is the brand face (self-hosted on the
+  // web); in email it's pulled via a <link> in the chrome <head> so
+  // webfont-capable clients (Apple Mail) render it, and everything else
+  // falls back to Anton→Impact.
+  DISPLAY:
+    "'Big Shoulders Display','Anton','Impact','Haettenschweiler','Arial Narrow Bold',sans-serif",
   BODY: "Helvetica,Arial,sans-serif",
 } as const;
+
+// Google Fonts <link> for the display face — email progressive enhancement.
+// Gmail strips it (falls back to Impact); Apple Mail honours it.
+export const PREACHERS_FONT_LINK =
+  '<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&display=swap" rel="stylesheet" />';
 
 const F = PREACHERS_FONTS;
 
@@ -222,6 +231,7 @@ export function preachersChrome(opts: PreachersChromeOptions): string {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>${preachersEsc(title)}</title>
+  ${PREACHERS_FONT_LINK}
 </head>
 <body style="margin:0;padding:0;background:${C.INK};font-family:${F.BODY};color:${C.OFFWHITE};">
   ${preview}

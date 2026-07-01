@@ -948,10 +948,28 @@ function formatTime(timeStr: string): string {
 // ──────────────────────────────────────────────────────────────
 
 const scopedCss = `
+/* Big Shoulders Display — the PREACHERS brand face (self-hosted, latin
+   subset). Rugged industrial condensed heavy caps. Falls back to
+   Anton→Impact so the layout holds before/without the woff2. */
+@font-face{
+  font-family:'Big Shoulders Display';
+  font-style:normal;font-weight:700;font-display:swap;
+  src:url('/brand/fonts/BigShouldersDisplay-700.woff2') format('woff2');
+}
+@font-face{
+  font-family:'Big Shoulders Display';
+  font-style:normal;font-weight:800;font-display:swap;
+  src:url('/brand/fonts/BigShouldersDisplay-800.woff2') format('woff2');
+}
+@font-face{
+  font-family:'Big Shoulders Display';
+  font-style:normal;font-weight:900;font-display:swap;
+  src:url('/brand/fonts/BigShouldersDisplay-900.woff2') format('woff2');
+}
 .pr{
   --navy:#1B2A33; --ink:#0F1920; --bone:#EDE6D3;
   --offwhite:#F7F5EF; --line:#3A4A54;
-  --display:'Anton','Impact','Haettenschweiler','Arial Narrow Bold',sans-serif;
+  --display:'Big Shoulders Display','Anton','Impact','Haettenschweiler','Arial Narrow Bold',sans-serif;
   --body:'Helvetica Neue',Helvetica,Arial,sans-serif;
   font-family:var(--body);
   background:var(--navy);
