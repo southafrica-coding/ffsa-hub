@@ -372,8 +372,10 @@ export async function getBlockouts(supabase: Client, options?: { from?: string; 
     .from("prayer_room_blockouts")
     .select("*")
     .order("block_date", { ascending: true })
-    .order("start_time", { ascending: true });
-  if (options?.from) q = q.gte("block_date", options.from);
+    .order("start_time", { ascending: true, nullsFirst: true });
+  // A block-out spans block_date → end_date, so a range query wants everything
+  // that OVERLAPS [from, to]: it ends on/after `from` and starts on/before `to`.
+  if (options?.from) q = q.gte("end_date", options.from);
   if (options?.to) q = q.lte("block_date", options.to);
   return q;
 }
@@ -382,8 +384,9 @@ export async function createBlockout(
   supabase: Client,
   data: {
     block_date: string;
-    start_time: string;
-    end_time: string;
+    end_date: string;
+    start_time: string | null;
+    end_time: string | null;
     reason?: string | null;
     relocation_note?: string | null;
     created_by: string;
@@ -396,20 +399,29 @@ export async function deleteBlockout(supabase: Client, id: string) {
   return supabase.from("prayer_room_blockouts").delete().eq("id", id);
 }
 
-/** Scheduled sets overlapping a block-out window (read via admin for owner names). */
+/**
+ * Scheduled sets a block-out displaces (read via admin for owner names).
+ * Covers the whole span block_date → end_date; a timed block-out (times given)
+ * only catches sets that overlap that window, an all-day one (times null) catches
+ * every scheduled set on the covered date(s).
+ */
 export async function getSetsInWindow(
   supabase: Client,
   blockDate: string,
-  startTime: string,
-  endTime: string
+  endDate: string,
+  startTime: string | null,
+  endTime: string | null
 ) {
-  return supabase
+  let q = supabase
     .from("prayer_room_sets")
-    .select(`id, title, theme, start_time, end_time, owner:owner_id(${NAME_FIELDS})`)
-    .eq("set_date", blockDate)
-    .eq("status", "scheduled")
-    .lt("start_time", endTime)
-    .gt("end_time", startTime);
+    .select(`id, title, theme, set_date, start_time, end_time, owner:owner_id(${NAME_FIELDS})`)
+    .gte("set_date", blockDate)
+    .lte("set_date", endDate)
+    .eq("status", "scheduled");
+  if (startTime && endTime) {
+    q = q.lt("start_time", endTime).gt("end_time", startTime);
+  }
+  return q;
 }
 
 /** Stamp the relocation note on the displaced sets (staff client). */

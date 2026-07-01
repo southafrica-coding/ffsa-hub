@@ -12,12 +12,11 @@ import { Trash2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import {
   fullName,
-  formatTimeRange,
-  formatDateLabel,
   APPLICATION_STATUS_LABELS,
   MEMBER_STATUS_LABELS,
   type Person,
 } from "./helpers";
+import { weekDays, weekRangeLabel, dateRangeLabel, timeRangeLabel } from "@/lib/bookings/dates";
 
 export default function AdminPanel() {
   return (
@@ -253,16 +252,37 @@ function DecideControls({
 interface Blockout {
   id: string;
   block_date: string;
-  start_time: string;
-  end_time: string;
+  end_date: string;
+  start_time: string | null;
+  end_time: string | null;
   reason: string | null;
   relocation_note: string | null;
 }
+
+type BlockoutScope = "window" | "day" | "week" | "range";
+
+const SCOPE_LABELS: Record<BlockoutScope, string> = {
+  window: "Time window (one day)",
+  day: "Whole day",
+  week: "Whole week",
+  range: "Date range",
+};
+
+const isAllDay = (b: Blockout) => !b.start_time || !b.end_time;
 
 function BlockoutManager() {
   const [blockouts, setBlockouts] = useState<Blockout[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+
+  // Form state (controlled — fields shown depend on the chosen scope).
+  const [scope, setScope] = useState<BlockoutScope>("window");
+  const [date, setDate] = useState(""); // window/day: the date; week: any day in the week
+  const [endDate, setEndDate] = useState(""); // range only
+  const [startTime, setStartTime] = useState("06:00");
+  const [endTime, setEndTime] = useState("08:00");
+  const [reason, setReason] = useState("");
+  const [reloc, setReloc] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -278,11 +298,34 @@ function BlockoutManager() {
     load();
   }, [load]);
 
-  async function addBlockout(form: FormData) {
-    const start_time = String(form.get("start_time") || "");
-    const end_time = String(form.get("end_time") || "");
-    if (end_time <= start_time) {
-      toast.error("End time must be after start time");
+  /** Turn the form's scope + fields into the API payload, or an error string. */
+  function buildPayload(): { body: Record<string, unknown> } | { error: string } {
+    if (!date) return { error: "Pick a date" };
+    const reasonV = reason.trim() || null;
+    const relocV = reloc.trim() || null;
+    const common = { reason: reasonV, relocation_note: relocV };
+
+    if (scope === "window") {
+      if (endTime <= startTime) return { error: "End time must be after start time" };
+      return { body: { ...common, block_date: date, end_date: date, start_time: startTime, end_time: endTime } };
+    }
+    if (scope === "day") {
+      return { body: { ...common, block_date: date, end_date: date, all_day: true } };
+    }
+    if (scope === "week") {
+      const wk = weekDays(date); // Sun→Sat of the week containing `date`
+      return { body: { ...common, block_date: wk[0], end_date: wk[6], all_day: true } };
+    }
+    // range
+    if (!endDate) return { error: "Pick an end date" };
+    if (endDate < date) return { error: "End date must be on or after the start date" };
+    return { body: { ...common, block_date: date, end_date: endDate, all_day: true } };
+  }
+
+  async function addBlockout() {
+    const built = buildPayload();
+    if ("error" in built) {
+      toast.error(built.error);
       return;
     }
     setBusy(true);
@@ -290,20 +333,14 @@ function BlockoutManager() {
       const res = await fetch("/api/prayer-room/blockouts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          block_date: form.get("block_date"),
-          start_time,
-          end_time,
-          reason: form.get("reason") || null,
-          relocation_note: form.get("relocation_note") || null,
-        }),
+        body: JSON.stringify(built.body),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed");
       const moved =
         data.affected > 0
           ? `Blocked out — ${data.affected} set${data.affected === 1 ? "" : "s"} relocated`
-          : "Blocked out — no sets in that window";
+          : "Blocked out — no sets in that period";
       const slack = data.slack as
         | { ok?: boolean; skipped?: string; error?: string; debug?: { channelLen: number; team: string | null } }
         | undefined;
@@ -319,6 +356,9 @@ function BlockoutManager() {
       } else {
         toast.success(moved);
       }
+      // Reset the transient fields, keep the scope for repeat entries.
+      setReason("");
+      setReloc("");
       await load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed");
@@ -344,32 +384,72 @@ function BlockoutManager() {
       <section>
         <h3 className="mb-1 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Block out a time</h3>
         <p className="mb-3 text-xs text-muted-foreground">
-          When the prayer room is needed for another event, block the window here. Any devo sets in it are tagged as
-          relocated and the worship team is notified on Slack.
+          When the prayer room is needed for another event, block it out here — a single time window, a whole day, a
+          whole week, or a date range. Any devo sets in it are tagged as relocated and the worship team is notified on
+          Slack.
         </p>
-        <form action={addBlockout} className="space-y-3 rounded-lg border border-dashed border-border p-4">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            addBlockout();
+          }}
+          className="space-y-3 rounded-lg border border-dashed border-border p-4"
+        >
           <div className="flex flex-wrap items-end gap-3">
             <div className="space-y-1">
-              <Label className="text-xs">Date</Label>
-              <Input type="date" name="block_date" required className="w-44" />
+              <Label className="text-xs">Block out</Label>
+              <Select value={scope} onValueChange={(v) => setScope(v as BlockoutScope)}>
+                <SelectTrigger className="w-52">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(SCOPE_LABELS) as BlockoutScope[]).map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {SCOPE_LABELS[s]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+
             <div className="space-y-1">
-              <Label className="text-xs">From</Label>
-              <Input type="time" name="start_time" defaultValue="06:00" required className="w-28" />
+              <Label className="text-xs">{scope === "week" ? "Any day in the week" : scope === "range" ? "From date" : "Date"}</Label>
+              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} required className="w-44" />
             </div>
-            <div className="space-y-1">
-              <Label className="text-xs">To</Label>
-              <Input type="time" name="end_time" defaultValue="08:00" required className="w-28" />
-            </div>
+
+            {scope === "range" && (
+              <div className="space-y-1">
+                <Label className="text-xs">To date</Label>
+                <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required className="w-44" />
+              </div>
+            )}
+
+            {scope === "window" && (
+              <>
+                <div className="space-y-1">
+                  <Label className="text-xs">From</Label>
+                  <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} required className="w-28" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">To</Label>
+                  <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} required className="w-28" />
+                </div>
+              </>
+            )}
           </div>
+
+          {scope === "week" && date && (
+            <p className="text-xs text-muted-foreground">Blocks the whole week — {weekRangeLabel(date)} (Sun–Sat).</p>
+          )}
+
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1">
               <Label className="text-xs">Reason (optional)</Label>
-              <Input name="reason" placeholder="e.g. Youth conference setup" />
+              <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Youth conference setup" />
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Devo sets move to</Label>
-              <Input name="relocation_note" placeholder="e.g. The chapel" />
+              <Input value={reloc} onChange={(e) => setReloc(e.target.value)} placeholder="e.g. The chapel" />
             </div>
           </div>
           <Button type="submit" size="sm" className="gap-1" disabled={busy}>
@@ -388,7 +468,7 @@ function BlockoutManager() {
               <div key={b.id} className="flex items-start justify-between rounded-lg border border-border bg-card px-3 py-2">
                 <div className="min-w-0">
                   <div className="text-sm font-medium">
-                    {formatDateLabel(b.block_date)} · {formatTimeRange(b.start_time, b.end_time)}
+                    {dateRangeLabel(b.block_date, b.end_date)} · {isAllDay(b) ? "All day" : timeRangeLabel(b.start_time, b.end_time)}
                   </div>
                   {b.reason && <div className="text-xs text-muted-foreground">{b.reason}</div>}
                   {b.relocation_note && <div className="text-xs text-amber-400">Moved to: {b.relocation_note}</div>}

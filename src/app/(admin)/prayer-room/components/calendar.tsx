@@ -32,8 +32,9 @@ export interface CalendarSet {
 export interface CalendarBlockout {
   id: string;
   block_date: string;
-  start_time: string;
-  end_time: string;
+  end_date: string;
+  start_time: string | null;
+  end_time: string | null;
   reason: string | null;
   relocation_note: string | null;
 }
@@ -47,7 +48,7 @@ const MIN_BLOCK = 16;
 const BLOCKOUT_FILL =
   "repeating-linear-gradient(45deg, hsl(0 72% 52% / 0.18), hsl(0 72% 52% / 0.18) 6px, hsl(0 72% 52% / 0.06) 6px, hsl(0 72% 52% / 0.06) 12px)";
 
-function toMin(t: string): number {
+function toMin(t: string | null): number {
   const m = (t || "").match(/^(\d{1,2}):(\d{2})/);
   return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : 0;
 }
@@ -55,16 +56,33 @@ function winOf(s: CalendarSet): { start: number; end: number } {
   const start = toMin(s.start_time);
   return { start, end: Math.max(toMin(s.end_time), start + 15) };
 }
+// All-day block-out = no time window (whole day / week / range).
+const isAllDayBlockout = (b: CalendarBlockout) => !b.start_time || !b.end_time;
 function boWin(b: CalendarBlockout): { start: number; end: number } {
-  const start = toMin(b.start_time);
-  return { start, end: Math.max(toMin(b.end_time), start + 15) };
+  const start = toMin(b.start_time || "");
+  return { start, end: Math.max(toMin(b.end_time || ""), start + 15) };
 }
-const hhmm = (t: string) => (t || "").slice(0, 5);
+const hhmm = (t: string | null) => (t || "").slice(0, 5);
 const setTitle = (s: CalendarSet) => s.title || s.theme || "Devo set";
-const blockoutTip = (b: CalendarBlockout) =>
-  `Blocked ${hhmm(b.start_time)}–${hhmm(b.end_time)}${b.reason ? ` — ${b.reason}` : ""}${
-    b.relocation_note ? ` · sets → ${b.relocation_note}` : ""
-  }`;
+const blockoutTip = (b: CalendarBlockout) => {
+  const when = isAllDayBlockout(b) ? "all day" : `${hhmm(b.start_time)}–${hhmm(b.end_time)}`;
+  return `Blocked ${when}${b.reason ? ` — ${b.reason}` : ""}${b.relocation_note ? ` · sets → ${b.relocation_note}` : ""}`;
+};
+
+/** Every ISO date a block-out covers (block_date → end_date, capped for safety). */
+function blockoutDays(b: CalendarBlockout): string[] {
+  const end = b.end_date && b.end_date > b.block_date ? b.end_date : b.block_date;
+  const out: string[] = [];
+  const cur = new Date(`${b.block_date}T00:00:00Z`);
+  const last = new Date(`${end}T00:00:00Z`);
+  let guard = 0;
+  while (cur <= last && guard < 366) {
+    out.push(cur.toISOString().slice(0, 10));
+    cur.setUTCDate(cur.getUTCDate() + 1);
+    guard++;
+  }
+  return out;
+}
 
 function chipStyle(status: string): CSSProperties {
   if (status === "cancelled") return { background: "hsl(22 8% 24% / 0.5)", color: "hsl(30 6% 58%)" };
@@ -91,15 +109,22 @@ function groupByDay(sets: CalendarSet[]): Map<string, CalendarSet[]> {
   }
   return m;
 }
+// A multi-day block-out lands on every day it covers, so it shows on each of
+// those days in the calendar.
 function groupBlockoutsByDay(blockouts: CalendarBlockout[]): Map<string, CalendarBlockout[]> {
   const m = new Map<string, CalendarBlockout[]>();
   for (const b of blockouts) {
-    const arr = m.get(b.block_date);
-    if (arr) arr.push(b);
-    else m.set(b.block_date, [b]);
+    for (const day of blockoutDays(b)) {
+      const arr = m.get(day);
+      if (arr) arr.push(b);
+      else m.set(day, [b]);
+    }
   }
   return m;
 }
+// All-day block-outs sort first (null time), then timed ones by start.
+const byBlockoutStart = (a: CalendarBlockout, b: CalendarBlockout) =>
+  (a.start_time || "").localeCompare(b.start_time || "");
 
 export function ScheduleCalendar({
   view,
@@ -159,7 +184,7 @@ function MonthView({
           const inMonth = isoMonth(d) === month;
           const isToday = d === today;
           const daySets = (byDay.get(d) ?? []).sort((a, b) => a.start_time.localeCompare(b.start_time));
-          const dayBlocks = (blByDay.get(d) ?? []).sort((a, b) => a.start_time.localeCompare(b.start_time));
+          const dayBlocks = (blByDay.get(d) ?? []).sort(byBlockoutStart);
           return (
             <div
               key={d}
@@ -185,7 +210,7 @@ function MonthView({
                     className="truncate rounded px-1 py-0.5 text-left text-[10px] font-semibold"
                     style={{ background: "hsl(0 72% 52% / 0.18)", color: "hsl(0 85% 80%)", borderLeft: "2px solid hsl(0 80% 60%)" }}
                   >
-                    🚧 {hhmm(b.start_time)} Blocked
+                    🚧 {isAllDayBlockout(b) ? "Blocked all day" : `${hhmm(b.start_time)} Blocked`}
                   </div>
                 ))}
                 {daySets.slice(0, 3).map((s) => (
@@ -228,8 +253,12 @@ function GridView({
 }) {
   const byDay = groupByDay(sets);
   const blByDay = groupBlockoutsByDay(blockouts);
-  // Hour bounds must fit both sets and block-out windows.
-  const { startHour, endHour } = computeHourRange([...sets.map(winOf), ...blockouts.map(boWin)]);
+  // Hour bounds must fit sets and TIMED block-out windows (all-day ones span the
+  // whole column and shouldn't stretch the grid to 00:00).
+  const { startHour, endHour } = computeHourRange([
+    ...sets.map(winOf),
+    ...blockouts.filter((b) => !isAllDayBlockout(b)).map(boWin),
+  ]);
   const hours: number[] = [];
   for (let h = startHour; h <= endHour; h++) hours.push(h);
   const gridHeight = (endHour - startHour) * HOUR_H;
@@ -344,11 +373,14 @@ function GridView({
                 );
               })}
 
-              {/* Block-out overlay — sits ON TOP of any sets in the window but lets
-                  clicks pass through to the sets beneath (pointer-events: none). */}
+              {/* Block-out overlay — sits ON TOP of any sets it covers but lets
+                  clicks pass through to the sets beneath (pointer-events: none).
+                  All-day block-outs span the full column; timed ones cover their
+                  window. */}
               {dayBlocks.map((b) => {
-                const bs = toMin(b.start_time);
-                const be = Math.max(toMin(b.end_time), bs + 15);
+                const allDay = isAllDayBlockout(b);
+                const bs = allDay ? minOf : toMin(b.start_time);
+                const be = allDay ? endHour * 60 : Math.max(toMin(b.end_time), bs + 15);
                 const top = ((bs - minOf) / 60) * HOUR_H;
                 const height = Math.max(MIN_BLOCK, ((be - bs) / 60) * HOUR_H);
                 return (
@@ -359,7 +391,8 @@ function GridView({
                     style={{ top, height, background: BLOCKOUT_FILL }}
                   >
                     <div className="truncate px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[hsl(0_85%_82%)]">
-                      🚧 Blocked{b.relocation_note ? ` → ${b.relocation_note}` : ""}
+                      🚧 {allDay ? "Blocked all day" : "Blocked"}
+                      {b.relocation_note ? ` → ${b.relocation_note}` : ""}
                     </div>
                   </div>
                 );
@@ -383,7 +416,7 @@ function ListView({
 }) {
   const setsByDay = groupByDay(sets);
   const blByDay = groupBlockoutsByDay(blockouts);
-  const dates = Array.from(new Set([...sets.map((s) => s.set_date), ...blockouts.map((b) => b.block_date)])).sort();
+  const dates = Array.from(new Set([...sets.map((s) => s.set_date), ...blByDay.keys()])).sort();
 
   if (dates.length === 0) {
     return <p className="rounded-xl border bg-card py-16 text-center text-muted-foreground">Nothing scheduled in this range.</p>;
@@ -393,7 +426,7 @@ function ListView({
     <div className="space-y-4">
       {dates.map((date) => {
         const daySets = (setsByDay.get(date) ?? []).sort((a, b) => a.start_time.localeCompare(b.start_time));
-        const dayBlocks = (blByDay.get(date) ?? []).sort((a, b) => a.start_time.localeCompare(b.start_time));
+        const dayBlocks = (blByDay.get(date) ?? []).sort(byBlockoutStart);
         return (
           <div key={date}>
             <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{humanDate(date)}</div>
@@ -405,7 +438,7 @@ function ListView({
                   style={{ borderColor: "hsl(0 72% 52% / 0.4)", background: "hsl(0 72% 52% / 0.08)" }}
                 >
                   <span className="font-semibold text-[hsl(0_85%_80%)]">
-                    🚧 Blocked {hhmm(b.start_time)}–{hhmm(b.end_time)}
+                    🚧 Blocked {isAllDayBlockout(b) ? "all day" : `${hhmm(b.start_time)}–${hhmm(b.end_time)}`}
                   </span>
                   {(b.reason || b.relocation_note) && (
                     <span className="truncate text-xs text-muted-foreground">

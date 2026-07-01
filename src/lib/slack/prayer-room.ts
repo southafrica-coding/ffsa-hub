@@ -24,6 +24,8 @@ const hhmm = (t: string) => (t ?? "").slice(0, 5);
 
 export type AffectedSet = {
   title: string;
+  /** Which day the set falls on — shown when a block-out spans multiple days. */
+  date: string;
   startTime: string;
   endTime: string;
   owner: string | null;
@@ -55,8 +57,9 @@ async function debugInfo(channel: string): Promise<{ channelLen: number; team: s
 
 export async function notifyPrayerRoomBlockout(args: {
   blockDate: string;
-  startTime: string;
-  endTime: string;
+  endDate: string;
+  startTime: string | null;
+  endTime: string | null;
   reason: string | null;
   relocationNote: string | null;
   affected: AffectedSet[];
@@ -69,7 +72,12 @@ export async function notifyPrayerRoomBlockout(args: {
     return { ok: false, skipped: "not_configured" };
   }
 
-  const when = `${dateLabel(args.blockDate)}, ${hhmm(args.startTime)}–${hhmm(args.endTime)}`;
+  // Span first: one day → "Sat 4 Jul", a range → "Sat 4 Jul → Fri 10 Jul".
+  const multiDay = args.endDate && args.endDate !== args.blockDate;
+  const dateSpan = multiDay ? `${dateLabel(args.blockDate)} → ${dateLabel(args.endDate)}` : dateLabel(args.blockDate);
+  // Then the window: null times mean the room is out all day.
+  const allDay = !args.startTime || !args.endTime;
+  const when = allDay ? `${dateSpan} — all day` : `${dateSpan}, ${hhmm(args.startTime!)}–${hhmm(args.endTime!)}`;
   const title = `🚧 Prayer room blocked out — ${when}`;
 
   const lines: string[] = [`*${title}*`];
@@ -84,10 +92,10 @@ export async function notifyPrayerRoomBlockout(args: {
 
   if (args.affected.length > 0) {
     const setLines = args.affected
-      .map(
-        (s) =>
-          `• ${hhmm(s.startTime)}–${hhmm(s.endTime)} — ${s.title}${s.owner ? ` (led by ${s.owner})` : ""}`
-      )
+      .map((s) => {
+        const day = multiDay ? `${dateLabel(s.date)} · ` : "";
+        return `• ${day}${hhmm(s.startTime)}–${hhmm(s.endTime)} — ${s.title}${s.owner ? ` (led by ${s.owner})` : ""}`;
+      })
       .join("\n");
     blocks.push({
       type: "section",

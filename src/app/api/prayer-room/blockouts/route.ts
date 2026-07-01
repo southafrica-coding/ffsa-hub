@@ -45,20 +45,33 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => ({}));
   const block_date = body.block_date as string;
-  const start_time = body.start_time as string;
-  const end_time = body.end_time as string;
+  // Multi-day block-outs span block_date → end_date; a single day omits end_date.
+  const end_date = (body.end_date as string) || block_date;
+  // All-day block-outs (whole day / week / range) send no times → NULL window.
+  const all_day = body.all_day === true;
+  const start_time = all_day ? null : (body.start_time as string) || null;
+  const end_time = all_day ? null : (body.end_time as string) || null;
   const reason = (body.reason as string)?.trim() || null;
   const relocation_note = (body.relocation_note as string)?.trim() || null;
 
-  if (!block_date || !start_time || !end_time) {
-    return NextResponse.json({ error: "Date, start time and end time are required" }, { status: 400 });
+  if (!block_date) {
+    return NextResponse.json({ error: "A date is required" }, { status: 400 });
   }
-  if (end_time <= start_time) {
-    return NextResponse.json({ error: "End time must be after start time" }, { status: 400 });
+  if (end_date < block_date) {
+    return NextResponse.json({ error: "End date must be on or after the start date" }, { status: 400 });
+  }
+  if (!all_day) {
+    if (!start_time || !end_time) {
+      return NextResponse.json({ error: "Start time and end time are required for a timed block-out" }, { status: 400 });
+    }
+    if (end_time <= start_time) {
+      return NextResponse.json({ error: "End time must be after start time" }, { status: 400 });
+    }
   }
 
   const { data: blockout, error } = await createBlockout(supabase, {
     block_date,
+    end_date,
     start_time,
     end_time,
     reason,
@@ -69,13 +82,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error?.message ?? "Failed to create block-out" }, { status: 403 });
   }
 
-  // Find + relocate the scheduled sets caught in the window.
+  // Find + relocate the scheduled sets caught across the whole span.
   const admin = createAdminClient();
-  const { data: sets } = await getSetsInWindow(admin, block_date, start_time, end_time);
+  const { data: sets } = await getSetsInWindow(admin, block_date, end_date, start_time, end_time);
   const affected = (sets ?? []) as Array<{
     id: string;
     title: string | null;
     theme: string | null;
+    set_date: string;
     start_time: string;
     end_time: string;
     owner: OwnerName;
@@ -89,12 +103,14 @@ export async function POST(request: Request) {
   // the UI can say why it did / didn't post (not configured, bot not in channel…).
   const slack = await notifyPrayerRoomBlockout({
     blockDate: block_date,
+    endDate: end_date,
     startTime: start_time,
     endTime: end_time,
     reason,
     relocationNote: relocation_note,
     affected: affected.map((s) => ({
       title: s.title || s.theme || "Devo set",
+      date: s.set_date,
       startTime: s.start_time,
       endTime: s.end_time,
       owner: ownerName(s.owner),
