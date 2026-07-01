@@ -66,10 +66,30 @@ export async function getContacts(
   }
 
   if (options?.search) {
-    const term = `%${options.search}%`;
-    query = query.or(
-      `first_name.ilike.${term},last_name.ilike.${term},email.ilike.${term},phone.ilike.${term},preferred_name.ilike.${term}`
-    );
+    // Match each whitespace-separated token against any name/contact column.
+    // Tokens are AND-ed (each token must match some column) while columns are
+    // OR-ed, so "John Smith" finds a contact whose first_name is "John" and
+    // last_name is "Smith" — not just single-token surname searches.
+    const columns = [
+      "first_name",
+      "last_name",
+      "preferred_name",
+      "email",
+      "phone",
+    ];
+    const tokens = options.search
+      .trim()
+      .split(/\s+/)
+      // Strip PostgREST reserved characters so tokens can't break the or() filter.
+      .map((token) => token.replace(/[,()]/g, ""))
+      .filter(Boolean);
+
+    for (const token of tokens) {
+      const term = `%${token}%`;
+      query = query.or(
+        columns.map((column) => `${column}.ilike.${term}`).join(",")
+      );
+    }
   }
 
   if (options?.labelId) {
