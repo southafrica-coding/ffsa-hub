@@ -398,17 +398,23 @@ export function PreachersStorefront({
 
       {/* ── HERO ───────────────────────────────────────────── */}
       <section className="pr-hero">
-        <div className="pr-hero-frame">
-          <p className="pr-eyebrow">
-            <span className="pr-tag">PREACHERS&nbsp;SA</span>
-            <span>
-              {dateRange}&nbsp;·&nbsp;{(event.location ?? "SOUTH AFRICA").toUpperCase()}
-            </span>
-          </p>
-
-          <h1 className="pr-hero-title">{event.title}</h1>
-
-          <p className="pr-slogan">GO. PREACH.</p>
+        <div className="pr-hero-inner">
+          {/* Hand-crafted PREACHERS key art is the hero. Two crops of the
+              official poster (both navy-baked, so they blend into the page):
+              the 3:1 banner on wide screens, the square on narrow ones. */}
+          <h1 className="pr-visually-hidden">{event.title}</h1>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            className="pr-hero-art pr-hero-art-wide"
+            src="/brand/preachers-hero-banner.webp"
+            alt={event.title}
+          />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            className="pr-hero-art pr-hero-art-narrow"
+            src="/brand/preachers-hero-square.webp"
+            alt={event.title}
+          />
 
           {event.description && (
             <p className="pr-hero-desc">{event.description}</p>
@@ -1078,44 +1084,37 @@ const scopedCss = `
   background:
     radial-gradient(120% 90% at 50% -10%, rgba(58,74,84,.4), transparent 60%),
     var(--navy);
-  padding:44px 18px 52px;
+  padding:24px 18px 48px;
 }
-.pr-hero-frame{
-  max-width:820px;margin:0 auto;
-  background:var(--ink);
-  border:2px solid var(--line);
-  padding:38px 28px 34px;
-  position:relative;
-  box-shadow:0 0 0 6px rgba(15,25,32,.5);
+.pr-hero-inner{
+  max-width:1000px;margin:0 auto;
+  display:flex;flex-direction:column;align-items:center;text-align:center;
 }
-.pr-eyebrow{
-  display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;
-  font-size:11px;font-weight:700;letter-spacing:.22em;margin:0 0 22px;color:var(--offwhite);opacity:.82;
+.pr-visually-hidden{
+  position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+  overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;
 }
-.pr-tag{
-  background:var(--bone);color:var(--ink);padding:4px 10px;font-weight:900;
-  letter-spacing:.14em;font-family:var(--display);text-transform:uppercase;opacity:1;
+/* Hand-crafted PREACHERS key art — the hero. Navy-baked composites that
+   blend into the page. Banner (3:1) on wide screens, square on narrow. */
+.pr-hero-art{
+  display:block;width:100%;height:auto;object-fit:contain;
+  border:1px solid var(--line);box-shadow:0 16px 50px rgba(0,0,0,.45);
 }
-.pr-hero-title{
-  font-family:var(--display);font-weight:900;
-  margin:0;line-height:.88;text-transform:uppercase;color:var(--bone);
-  font-size:clamp(48px,13vw,118px);letter-spacing:.01em;word-break:break-word;
-  text-shadow:0 2px 0 rgba(0,0,0,.25);
-}
-.pr-slogan{
-  font-family:var(--display);font-weight:900;color:var(--ink);
-  background:var(--bone);display:inline-flex;align-items:center;gap:.4em;
-  font-size:clamp(18px,5vw,28px);letter-spacing:.1em;
-  padding:8px 16px;margin:22px 0 0;text-transform:uppercase;
+.pr-hero-art-wide{max-width:1000px;}
+.pr-hero-art-narrow{max-width:440px;display:none;}
+@media(max-width:759px){
+  .pr-hero-art-wide{display:none;}
+  .pr-hero-art-narrow{display:block;}
 }
 .pr-hero-desc{
-  margin:22px 0 0;font-size:14px;line-height:1.7;color:var(--offwhite);
+  margin:26px auto 0;font-size:14px;line-height:1.7;color:var(--offwhite);
   max-width:560px;opacity:.82;
 }
 .pr-coords{
   margin-top:28px;display:grid;gap:2px;background:var(--line);
-  border:2px solid var(--line);
+  border:2px solid var(--line);width:100%;max-width:620px;text-align:left;
 }
+@media(min-width:620px){.pr-coords{grid-template-columns:repeat(3,1fr);}}
 .pr-coord{
   background:var(--navy);padding:12px 14px;display:flex;flex-direction:column;gap:3px;
 }
