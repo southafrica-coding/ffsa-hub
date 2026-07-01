@@ -16,6 +16,7 @@ import {
   formatAnswerValue,
   type CheckoutAnswerSnapshot,
 } from "@/lib/ticketing/checkout-questions";
+import { OrdersExportPanel } from "./orders-export-panel";
 
 type Order = {
   id: string;
@@ -139,8 +140,9 @@ export function OrdersTab({
       </div>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <CardTitle className="text-base">Orders</CardTitle>
+          {orders.length > 0 && <OrdersExportPanel eventId={eventId} />}
         </CardHeader>
         <CardContent>
           {orders.length === 0 ? (
