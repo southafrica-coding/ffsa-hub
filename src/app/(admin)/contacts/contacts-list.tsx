@@ -63,6 +63,7 @@ interface ContactsListProps {
     }>;
   }>;
   personTypes: PersonType[];
+  lists: Array<{ id: string; name: string }>;
   totalCount: number;
   currentPage: number;
   pageSize: number;
@@ -73,6 +74,7 @@ interface ContactsListProps {
 
 export function ContactsList({
   contacts,
+  lists,
   totalCount,
   currentPage,
   pageSize,
@@ -83,6 +85,28 @@ export function ContactsList({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [search, setSearch] = useState(searchQuery ?? "");
+
+  // Multi-select for bulk "Add to list". Keyed by contact id, scoped to the
+  // current page (selection clears when the visible rows change).
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const pageIds = contacts.map((c) => c.id);
+  const allSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id));
+
+  function toggleOne(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    setSelected((prev) => {
+      if (pageIds.every((id) => prev.has(id))) return new Set();
+      return new Set(pageIds);
+    });
+  }
 
   // Live debounced search — typing immediately filters after 300ms of idle.
   // Skip the very first run so hydration doesn't bounce the URL just because
@@ -182,10 +206,31 @@ export function ContactsList({
         </Link>
       </div>
 
+      {selected.size > 0 && (
+        <BulkAddToList
+          lists={lists}
+          selectedIds={Array.from(selected)}
+          onClear={() => setSelected(new Set())}
+          onDone={() => {
+            setSelected(new Set());
+            router.refresh();
+          }}
+        />
+      )}
+
       <div className="rounded-lg border bg-card overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-10">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleAll}
+                  aria-label="Select all on this page"
+                  className="align-middle"
+                />
+              </TableHead>
               <TableHead className="whitespace-nowrap">Name</TableHead>
               <TableHead className="whitespace-nowrap">Email</TableHead>
               <TableHead className="whitespace-nowrap">Phone</TableHead>
@@ -202,13 +247,25 @@ export function ContactsList({
           <TableBody>
             {contacts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={12} className="text-center text-muted-foreground py-8">
                   No contacts found
                 </TableCell>
               </TableRow>
             ) : (
               contacts.map((contact) => (
-                <TableRow key={contact.id}>
+                <TableRow
+                  key={contact.id}
+                  data-state={selected.has(contact.id) ? "selected" : undefined}
+                >
+                  <TableCell className="w-10">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(contact.id)}
+                      onChange={() => toggleOne(contact.id)}
+                      aria-label={`Select ${displayName(contact)}`}
+                      className="align-middle"
+                    />
+                  </TableCell>
                   <TableCell className="whitespace-nowrap">
                     <Link
                       href={`/contacts/${contact.id}`}
@@ -322,6 +379,122 @@ export function ContactsList({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function BulkAddToList({
+  lists,
+  selectedIds,
+  onClear,
+  onDone,
+}: {
+  lists: Array<{ id: string; name: string }>;
+  selectedIds: string[];
+  onClear: () => void;
+  onDone: () => void;
+}) {
+  const [pickId, setPickId] = useState("");
+  const [newName, setNewName] = useState("");
+  const [creatingNew, setCreatingNew] = useState(lists.length === 0);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function addToList() {
+    setErr(null);
+    let listId = pickId;
+
+    if (creatingNew) {
+      const name = newName.trim();
+      if (!name) {
+        setErr("Name the new list.");
+        return;
+      }
+      setBusy(true);
+      const res = await fetch("/api/contacts/lists", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) {
+        setBusy(false);
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setErr(data.error ?? "Failed to create list");
+        return;
+      }
+      const data = (await res.json()) as { list: { id: string } };
+      listId = data.list.id;
+    } else if (!listId) {
+      setErr("Pick a list.");
+      return;
+    }
+
+    setBusy(true);
+    const res = await fetch(`/api/contacts/lists/${listId}/members`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contactIds: selectedIds }),
+    });
+    setBusy(false);
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      setErr(data.error ?? "Failed to add to list");
+      return;
+    }
+    onDone();
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-secondary/40 px-4 py-3">
+      <span className="text-sm font-medium">
+        {selectedIds.length} selected
+      </span>
+
+      {creatingNew ? (
+        <Input
+          placeholder="New list name"
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          disabled={busy}
+          className="h-9 w-56"
+          autoFocus
+        />
+      ) : (
+        <Select value={pickId} onValueChange={setPickId}>
+          <SelectTrigger className="h-9 w-56">
+            <SelectValue placeholder="Add to list…" />
+          </SelectTrigger>
+          <SelectContent>
+            {lists.map((l) => (
+              <SelectItem key={l.id} value={l.id}>
+                {l.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+
+      {lists.length > 0 && (
+        <button
+          type="button"
+          onClick={() => {
+            setCreatingNew((v) => !v);
+            setErr(null);
+          }}
+          className="text-xs text-blue-600 hover:underline"
+        >
+          {creatingNew ? "Pick existing" : "Create new"}
+        </button>
+      )}
+
+      <Button size="sm" onClick={addToList} disabled={busy}>
+        Add
+      </Button>
+      <Button size="sm" variant="ghost" onClick={onClear} disabled={busy}>
+        Clear
+      </Button>
+
+      {err && <span className="text-xs text-red-600">{err}</span>}
     </div>
   );
 }

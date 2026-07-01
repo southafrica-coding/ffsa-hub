@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { requireModuleAccess } from "@/lib/require-permission";
 import { getContacts, type ContactSort } from "@/services/contacts";
+import { getContactLists } from "@/services/contact-lists";
 import { getCachedPersonTypes } from "@/lib/cached-reads";
 
 const VALID_SORTS: ContactSort[] = [
@@ -42,20 +43,25 @@ export default async function ContactsPage({
 
   // Run the three independent queries concurrently instead of sequentially.
   // Cuts ~200ms off the contacts page render (was waterfall).
-  const [contactsResult, personTypesResult, canAccessFollowup] = await Promise.all([
-    getContacts(supabase, {
-      status,
-      search,
-      sort,
-      limit: pageSize,
-      offset: (page - 1) * pageSize,
-    }),
-    getCachedPersonTypes(),
-    userCanAccessFollowupQueue(supabase, user.id),
-  ]);
+  const [contactsResult, personTypesResult, listsResult, canAccessFollowup] =
+    await Promise.all([
+      getContacts(supabase, {
+        status,
+        search,
+        sort,
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
+      }),
+      getCachedPersonTypes(),
+      getContactLists(supabase),
+      userCanAccessFollowupQueue(supabase, user.id),
+    ]);
 
   const { data: contacts, count } = contactsResult;
   const { data: personTypes } = personTypesResult;
+  const lists = (listsResult.data ?? []).map(
+    (l: { id: string; name: string }) => ({ id: l.id, name: l.name })
+  );
 
   // Follow-up pending count for the tab badge (null = user has no access)
   let pendingCount: number | null = null;
@@ -95,6 +101,7 @@ export default async function ContactsPage({
       <ContactsList
         contacts={contacts ?? []}
         personTypes={personTypes ?? []}
+        lists={lists}
         totalCount={count ?? 0}
         currentPage={page}
         pageSize={pageSize}

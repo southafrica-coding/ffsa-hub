@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getContactById } from "@/services/contacts";
 import { getContactLabels } from "@/services/labels";
+import { getContactLists, getListsForContact } from "@/services/contact-lists";
 import { getCachedActiveLabels } from "@/lib/cached-reads";
 import { getContactActivity } from "@/services/activity-events";
 import {
@@ -19,6 +20,7 @@ import {
 } from "@/components/ui/card";
 import Link from "next/link";
 import { LabelsCard } from "./labels-card";
+import { ListsCard } from "./lists-card";
 import { IdentifiersCard } from "./identifiers-card";
 import { MergeButton } from "./merge-button";
 import { Timeline } from "./timeline";
@@ -47,6 +49,8 @@ export default async function ContactDetailPage({
   const [
     contactLabelsRes,
     allLabelsRes,
+    contactListsRes,
+    allListsRes,
     activityRes,
     emailsRes,
     phonesRes,
@@ -54,6 +58,8 @@ export default async function ContactDetailPage({
   ] = await Promise.all([
     getContactLabels(supabase, id),
     getCachedActiveLabels(),
+    getListsForContact(supabase, id),
+    getContactLists(supabase),
     getContactActivity(supabase, id, { limit: 100 }),
     listContactEmails(admin, id),
     listContactPhones(admin, id),
@@ -62,6 +68,10 @@ export default async function ContactDetailPage({
 
   const contactLabels = contactLabelsRes.data ?? [];
   const allLabels = allLabelsRes.data ?? [];
+  const contactLists = contactListsRes.data ?? [];
+  const allLists = (allListsRes.data ?? []).map(
+    (l: { id: string; name: string }) => ({ id: l.id, name: l.name })
+  );
   const events = activityRes.data ?? [];
   const emails = emailsRes.data ?? [];
   const phones = phonesRes.data ?? [];
@@ -195,6 +205,12 @@ export default async function ContactDetailPage({
             contactId={id}
             contactLabels={contactLabels}
             allLabels={allLabels}
+          />
+
+          <ListsCard
+            contactId={id}
+            contactLists={contactLists}
+            allLists={allLists}
           />
 
           {personTypes.length > 0 && (

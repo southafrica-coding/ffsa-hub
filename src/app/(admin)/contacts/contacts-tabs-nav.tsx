@@ -19,6 +19,7 @@ export function ContactsTabsNav({
 
   const tabs: Tab[] = [
     { key: "list", label: "All Contacts", href: "/contacts" },
+    { key: "lists", label: "Lists", href: "/contacts/lists" },
     {
       key: "event-followup",
       label: "Event Follow-up",
