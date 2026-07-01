@@ -146,6 +146,13 @@ export default async function EventsPage({
                       >
                         FFSA CAMPS
                       </Badge>
+                    ) : event.brand === "preachers" ? (
+                      <Badge
+                        variant="outline"
+                        className="border-slate-400/40 text-slate-600 dark:text-slate-300 uppercase tracking-wider text-[10px]"
+                      >
+                        PREACHERS
+                      </Badge>
                     ) : (
                       <span className="text-xs text-muted-foreground">F&amp;F</span>
                     )}

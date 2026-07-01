@@ -12,6 +12,7 @@ export const dynamic = "force-dynamic";
 function normalizeBrand(raw: unknown): PublicShellBrand {
   if (raw === "the_send") return "the_send";
   if (raw === "ffsa_camps") return "ffsa_camps";
+  if (raw === "preachers") return "preachers";
   return "ff";
 }
 

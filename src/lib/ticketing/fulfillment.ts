@@ -20,9 +20,10 @@ import { sendViaMailtrap } from "@/lib/email/mailtrap";
 import { ticketConfirmationEmailHtml } from "@/lib/email/templates/ticket-confirmation";
 import { theSendTicketEmailHtml } from "@/lib/email/templates/the-send-ticket-confirmation";
 import { campsTicketEmailHtml } from "@/lib/email/templates/ffsa-camps-ticket-confirmation";
+import { preachersTicketEmailHtml } from "@/lib/email/templates/preachers-ticket-confirmation";
 import { resolveOrderToCrm } from "./crm-resolution";
 
-type EventBrand = "ff" | "the_send" | "ffsa_camps";
+type EventBrand = "ff" | "the_send" | "ffsa_camps" | "preachers";
 
 // Bespoke email keyed by the event's brand flag (migration 077 + the
 // ffsa_camps follow-up). An explicit brand always wins. Falls back to a
@@ -37,12 +38,14 @@ function resolveEventBrand(event: {
 }): EventBrand {
   if (event.brand === "the_send") return "the_send";
   if (event.brand === "ffsa_camps") return "ffsa_camps";
+  if (event.brand === "preachers") return "preachers";
   if (event.brand) return "ff"; // explicit (incl. 'ff' / unknown) → no heuristic
   const slug = (event.public_slug ?? "").toLowerCase();
   const title = (event.title ?? "").toLowerCase();
   if (slug.includes("the-send") || title.includes("the send")) return "the_send";
   if (slug.includes("ffsa-camps") || slug.includes("camps") || title.includes("camps"))
     return "ffsa_camps";
+  if (slug.includes("preachers") || title.includes("preachers")) return "preachers";
   return "ff";
 }
 
@@ -170,7 +173,9 @@ export async function fulfillOrder(
       ? "the-send"
       : brand === "ffsa_camps"
         ? "ffsa-camps"
-        : "events";
+        : brand === "preachers"
+          ? "preachers"
+          : "events";
   const { data: identity } = await supabase
     .from("sending_identities")
     .select("from_email, from_name, reply_to")
@@ -207,13 +212,17 @@ export async function fulfillOrder(
         ? `You're in — ${order.events.title} →`
         : brand === "ffsa_camps"
           ? `you're in 🤞 — ${order.events.title}`
-          : `Your tickets for ${order.events.title}`,
+          : brand === "preachers"
+            ? `You're in — ${order.events.title} ⚡`
+            : `Your tickets for ${order.events.title}`,
     html:
       brand === "the_send"
         ? theSendTicketEmailHtml(emailArgs)
         : brand === "ffsa_camps"
           ? campsTicketEmailHtml(emailArgs)
-          : ticketConfirmationEmailHtml(emailArgs),
+          : brand === "preachers"
+            ? preachersTicketEmailHtml(emailArgs)
+            : ticketConfirmationEmailHtml(emailArgs),
     category: "ticket_confirmation",
   });
   if (sendResult.error) {

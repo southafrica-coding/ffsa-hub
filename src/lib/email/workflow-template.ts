@@ -43,6 +43,19 @@ import {
   campsEsc,
   campsChrome,
 } from "./ffsa-camps-shell";
+import {
+  PREACHERS_COLORS,
+  PREACHERS_FONTS,
+  preachersEyebrow,
+  preachersHeading,
+  preachersButton,
+  preachersQuote,
+  preachersDivider,
+  preachersSpacer,
+  preachersImage,
+  preachersEsc,
+  preachersChrome,
+} from "./preachers-shell";
 
 const BLACK = "#141414"; // masthead / footer
 const INK = "#1A1A1A"; // headings + body text
@@ -159,7 +172,7 @@ function renderBlock(b: CampaignBlock): string {
   }
 }
 
-export type WorkflowEmailBrand = "ff" | "the_send" | "ffsa_camps";
+export type WorkflowEmailBrand = "ff" | "the_send" | "ffsa_camps" | "preachers";
 
 export type WorkflowEmailOpts = {
   baseUrl: string; // e.g. https://www.ffsahub.com — for the logo assets
@@ -182,6 +195,9 @@ export function renderWorkflowEmail(
 ): string {
   if (opts.brand === "ffsa_camps") {
     return renderCampsWorkflowEmail(body, opts);
+  }
+  if (opts.brand === "preachers") {
+    return renderPreachersWorkflowEmail(body, opts);
   }
   if (opts.brand === "the_send") {
     return renderTheSendWorkflowEmail(body, opts);
@@ -448,6 +464,113 @@ ${campsButton(opts.scheduler.url, opts.scheduler.label, "filled")}
     `<p style="font-family:${CF.BODY};font-size:15px;color:${CC.INK};">&nbsp;</p>`;
 
   return campsChrome({
+    previewText: opts.previewText,
+    bodyHtml: bodyHtml + prefsFooter,
+    siteUrl: opts.baseUrl,
+  });
+}
+
+// ============================================================
+// PREACHERS SA variant — same block editor, swapped chrome + per-block
+// styling. Lives next to the F&F + SEND + Camps renderers so all four
+// stay in lockstep as block types are added. DARK gunmetal navy paper,
+// aged bone type, condensed heavy caps, strictly monochrome.
+// ============================================================
+
+const PC = PREACHERS_COLORS;
+const PF = PREACHERS_FONTS;
+const PREACHERS_DISPLAY = `font-family:${PF.DISPLAY};font-weight:900;`;
+
+// PREACHERS-styled rich text — same allowed tags as F&F/SEND/Camps so the
+// block editor produces the same shape; only the inline styles differ
+// (off-white text on navy, bone underline on links, body font Helvetica).
+function preachersRichText(html: string): string {
+  return sanitizeHtml(html, {
+    allowedTags: ["p", "br", "strong", "b", "em", "i", "a", "span", "ul", "ol", "li"],
+    allowedAttributes: { a: ["href", "target", "rel"] },
+    transformTags: {
+      a: (_t, attribs) => ({
+        tagName: "a",
+        attribs: {
+          ...attribs,
+          style: `color:${PC.BONE};text-decoration:underline;text-decoration-color:${PC.BONE};`,
+          target: "_blank",
+          rel: "noopener noreferrer",
+        },
+      }),
+      p: () => ({
+        tagName: "p",
+        attribs: {
+          style: `margin:0 0 4px;font-family:${PF.BODY};font-size:15px;line-height:1.65;color:${PC.OFFWHITE};`,
+        },
+      }),
+    },
+  });
+}
+
+function renderPreachersBlock(b: CampaignBlock): string {
+  switch (b.type) {
+    case "eyebrow":
+      return preachersEyebrow(b.text);
+
+    case "heading":
+      return `${b.eyebrow ? preachersEyebrow(b.eyebrow) : ""}${preachersHeading(b.text)}`;
+
+    case "text":
+      return `<div style="margin:0 0 6px;font-family:${PF.BODY};font-size:15px;line-height:1.65;color:${PC.OFFWHITE};">${preachersRichText(b.text)}</div>`;
+
+    case "button":
+      return preachersButton(b.url, b.text, b.style ?? "filled");
+
+    case "image":
+      return preachersImage(b.url, b.alt, b.caption);
+
+    case "quote":
+      return preachersQuote(b.text, b.attribution);
+
+    case "divider":
+      return preachersDivider(b.style ?? "rule");
+
+    case "spacer":
+      return preachersSpacer(b.size ?? "md");
+
+    case "image-text":
+      return `${preachersImage(b.url, b.alt)}${
+        b.heading
+          ? `<h2 style="margin:0 0 6px;${PREACHERS_DISPLAY}font-size:22px;line-height:1.02;text-transform:uppercase;color:${PC.BONE};">${preachersEsc(b.heading)}</h2>`
+          : ""
+      }<div style="margin:0 0 6px;font-family:${PF.BODY};font-size:15px;line-height:1.65;color:${PC.OFFWHITE};">${preachersRichText(b.text)}</div>`;
+
+    default:
+      return "";
+  }
+}
+
+export function renderPreachersWorkflowEmail(
+  body: CampaignBody | null | undefined,
+  opts: WorkflowEmailOpts
+): string {
+  const blocks = (body?.blocks ?? []).map(renderPreachersBlock).join("");
+
+  // Scheduler — framed ink card with a bone stamp button so it reads as
+  // an action inside the PREACHERS aesthetic.
+  const schedulerBlock = opts.scheduler
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:24px 0 6px;"><tr><td style="background:${PC.INK};border:2px solid ${PC.LINE};padding:22px;text-align:center;">
+<p style="margin:0 0 14px;font-family:${PF.BODY};font-size:11px;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;color:${PC.BONE};opacity:0.8;">Find a time to talk</p>
+${preachersButton(opts.scheduler.url, opts.scheduler.label, "filled")}
+</td></tr></table>`
+    : "";
+
+  // Preferences link footer — appended INSIDE the chrome body so it sits
+  // on the navy paper above the ink footer. The chrome itself doesn't
+  // know about prefsUrl.
+  const prefsFooter = `<p style="margin:28px 0 0;padding-top:18px;border-top:2px dashed ${PC.LINE};font-family:${PF.BODY};font-size:10px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:${PC.OFFWHITE};opacity:0.7;text-align:center;"><a href="${preachersEsc(opts.prefsUrl)}" style="color:${PC.OFFWHITE};text-decoration:underline;">Manage email preferences</a></p>`;
+
+  const bodyHtml =
+    (blocks + schedulerBlock) ||
+    `<p style="font-family:${PF.BODY};font-size:15px;color:${PC.OFFWHITE};">&nbsp;</p>`;
+
+  return preachersChrome({
     previewText: opts.previewText,
     bodyHtml: bodyHtml + prefsFooter,
     siteUrl: opts.baseUrl,
