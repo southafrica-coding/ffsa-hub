@@ -395,28 +395,17 @@ function BrandLockup({ brand }: { brand: PublicShellBrand }) {
     const tk = PREACHERS_SHELL_TOKENS;
     return (
       <div className="flex flex-col items-center mb-6">
+        <Image
+          src="/brand/preachers-wordmark-bone.png"
+          alt="PREACHERS South Africa"
+          width={230}
+          height={87}
+          priority
+          style={{ objectFit: "contain", maxWidth: "62%", height: "auto", width: "auto" }}
+        />
         <p
           style={{
-            margin: 0,
-            fontFamily:
-              "'Big Shoulders Display','Anton','Impact','Haettenschweiler','Arial Narrow Bold',sans-serif",
-            fontSize: 32,
-            fontWeight: 900,
-            color: tk.yellow,
-            letterSpacing: "0.03em",
-            textTransform: "uppercase",
-            lineHeight: 1,
-            display: "inline-flex",
-            alignItems: "center",
-          }}
-        >
-          <span style={{ margin: "0 0.28em" }}>&#9889;</span>
-          PREACHERS
-          <span style={{ margin: "0 0.28em" }}>&#9889;</span>
-        </p>
-        <p
-          style={{
-            margin: "10px 0 0",
+            margin: "12px 0 0",
             fontFamily: "'Helvetica Neue',Helvetica,Arial,sans-serif",
             fontSize: 10,
             fontWeight: 700,

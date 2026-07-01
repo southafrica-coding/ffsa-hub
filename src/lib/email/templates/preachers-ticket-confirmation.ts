@@ -126,8 +126,8 @@ export function preachersTicketEmailHtml(opts: {
           <td style="background:${INK};padding:16px 22px;border-bottom:1px solid ${LINE};">
             <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
               <tr>
-                <td valign="middle" style="${D}font-size:24px;color:${BONE};letter-spacing:0.03em;text-transform:uppercase;line-height:1;">
-                  ${BOLT}&nbsp;PREACHERS&nbsp;${BOLT}
+                <td valign="middle">
+                  <img src="${base}/brand/preachers-wordmark-bone.png" alt="PREACHERS South Africa" width="79" height="30" style="display:inline-block;height:30px;width:79px;border:0;" />
                 </td>
                 <td valign="middle" align="right" style="font-family:${BODY};font-size:10px;font-weight:700;color:${BONE};letter-spacing:0.18em;text-transform:uppercase;opacity:0.7;">
                   SOUTH&nbsp;AFRICA
@@ -214,8 +214,8 @@ export function preachersTicketEmailHtml(opts: {
         <!-- Ink footer -->
         <tr>
           <td style="background:${INK};color:${BONE};padding:26px 28px;text-align:center;border-top:1px solid ${LINE};">
-            <p style="margin:0;${D}font-size:26px;color:${BONE};letter-spacing:0.03em;text-transform:uppercase;line-height:1;">
-              ${BOLT}&nbsp;PREACHERS&nbsp;${BOLT}
+            <p style="margin:0;">
+              <img src="${base}/brand/preachers-wordmark-bone.png" alt="PREACHERS South Africa" width="106" height="40" style="display:inline-block;height:40px;width:106px;border:0;" />
             </p>
             <p style="margin:14px 0 0;font-family:${BODY};font-size:12px;font-style:italic;line-height:1.6;color:${BONE};opacity:0.9;max-width:420px;margin-left:auto;margin-right:auto;">
               ${escapeHtml(PREACHERS_VISION)}

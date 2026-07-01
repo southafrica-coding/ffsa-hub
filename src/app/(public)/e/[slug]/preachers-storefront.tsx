@@ -382,16 +382,14 @@ export function PreachersStorefront({
       {/* ── MASTHEAD ───────────────────────────────────────── */}
       <header className="pr-masthead">
         <div className="pr-logo">
-          {event.logo_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={event.logo_url} alt="PREACHERS" className="pr-logo-img" />
-          ) : (
-            <span className="pr-logo-word">
-              <Bolt className="pr-logo-bolt" />
-              PREACHERS
-              <Bolt className="pr-logo-bolt" />
-            </span>
-          )}
+          {/* Official PREACHERS SA wordmark. An event-level logo_url override
+              still wins if an admin sets one. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={event.logo_url || "/brand/preachers-wordmark-bone.png"}
+            alt="PREACHERS South Africa"
+            className="pr-logo-img"
+          />
         </div>
         <div className="pr-masthead-meta">
           <span>SOUTH&nbsp;AFRICA</span>
@@ -699,11 +697,12 @@ export function PreachersStorefront({
 
       {/* ── FOOTER ─────────────────────────────────────────── */}
       <footer className="pr-footer">
-        <span className="pr-footer-word">
-          <Bolt className="pr-footer-bolt" />
-          PREACHERS
-          <Bolt className="pr-footer-bolt" />
-        </span>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/brand/preachers-wordmark-bone.png"
+          alt="PREACHERS South Africa"
+          className="pr-footer-img"
+        />
         <p className="pr-footer-vision">
           Go into all the world and preach the gospel. — Mark 16:15
         </p>
@@ -991,11 +990,8 @@ const scopedCss = `
 /* Display helper — condensed heavy caps is the PREACHERS signature. */
 .pr-disp{font-family:var(--display);font-weight:900;text-transform:uppercase;}
 
-/* Lightning bolts. */
-.pr-logo-bolt,.pr-footer-bolt{
-  width:.62em;height:.62em;display:inline-block;vertical-align:-.02em;
-  margin:0 .28em;flex:0 0 auto;
-}
+/* Lightning bolt — decorative separator in the "GO. PREACH." ticker.
+   (The masthead/footer lockups use the real PREACHERS wordmark image.) */
 .pr-ticker-bolt{width:11px;height:11px;display:inline-block;opacity:.75;margin:0 .55em;}
 
 /* Reset the app's aggressive global input styling inside our scope.
@@ -1070,13 +1066,7 @@ const scopedCss = `
   display:flex;align-items:center;justify-content:space-between;
   padding:15px 18px;border-bottom:1px solid var(--line);
 }
-.pr-logo-word{
-  font-family:var(--display);font-weight:900;
-  font-size:26px;letter-spacing:.04em;white-space:nowrap;
-  color:var(--bone);line-height:1;text-transform:uppercase;
-  display:inline-flex;align-items:center;
-}
-.pr-logo-img{height:32px;width:auto;object-fit:contain;}
+.pr-logo-img{height:30px;width:auto;object-fit:contain;display:block;}
 .pr-masthead-meta{
   display:none;gap:8px;align-items:center;font-size:11px;font-weight:700;
   letter-spacing:.2em;color:var(--bone);opacity:.7;
@@ -1331,11 +1321,7 @@ const scopedCss = `
   background:var(--ink);color:var(--bone);text-align:center;padding:46px 20px 120px;
   border-top:1px solid var(--line);
 }
-.pr-footer-word{
-  font-family:var(--display);font-weight:900;
-  font-size:32px;letter-spacing:.04em;color:var(--bone);text-transform:uppercase;
-  display:inline-flex;align-items:center;justify-content:center;
-}
+.pr-footer-img{height:46px;width:auto;max-width:80%;object-fit:contain;display:inline-block;}
 .pr-footer-vision{font-size:12px;font-style:italic;line-height:1.6;margin:16px auto 0;opacity:.85;max-width:440px;}
 .pr-footer-meta{font-size:10px;font-weight:700;letter-spacing:.16em;margin:14px 0 0;opacity:.6;}
 

@@ -208,15 +208,17 @@ export interface PreachersChromeOptions {
   siteUrl?: string | null;
 }
 
-// PREACHERS typographic lockup — condensed heavy wordmark flanked by the
-// twin lightning bolts (no logo image, same approach as THE SEND / Camps
-// text lockups). `size` scales the masthead vs footer instances.
-function preachersLockup(size: number, color: string): string {
-  return `<span style="${DISPLAY_STYLE}font-size:${size}px;color:${color};letter-spacing:0.03em;text-transform:uppercase;line-height:1;">${BOLT}&nbsp;PREACHERS&nbsp;${BOLT}</span>`;
+// PREACHERS logo lockup — the official bone wordmark (grunge caps + twin
+// lightning bolts), served as an absolute-URL image so inbox clients load
+// it. `height` scales the masthead vs footer instances. Wordmark aspect is
+// ~2.64:1, so width is derived from height.
+function preachersLockup(base: string, height: number): string {
+  const width = Math.round(height * 2.64);
+  return `<img src="${base}/brand/preachers-wordmark-bone.png" alt="PREACHERS South Africa" width="${width}" height="${height}" style="display:inline-block;height:${height}px;width:${width}px;border:0;" />`;
 }
 
 export function preachersChrome(opts: PreachersChromeOptions): string {
-  siteBase(opts.siteUrl); // reserved for future absolute-asset URLs
+  const base = siteBase(opts.siteUrl);
   const title = opts.title ?? "PREACHERS SA";
   const preview = opts.previewText
     ? `<div style="display:none;max-height:0;overflow:hidden;font-size:1px;line-height:1px;color:${C.NAVY};">${preachersEsc(opts.previewText)}</div>`
@@ -251,7 +253,7 @@ export function preachersChrome(opts: PreachersChromeOptions): string {
           <td style="background:${C.INK};padding:16px 22px;border-bottom:1px solid ${C.LINE};">
             <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
               <tr>
-                <td valign="middle">${preachersLockup(24, C.BONE)}</td>
+                <td valign="middle">${preachersLockup(base, 30)}</td>
                 <td valign="middle" align="right" style="font-family:${F.BODY};font-size:10px;font-weight:700;color:${C.BONE};letter-spacing:0.18em;text-transform:uppercase;opacity:0.7;">
                   SOUTH&nbsp;AFRICA
                 </td>
@@ -270,7 +272,7 @@ export function preachersChrome(opts: PreachersChromeOptions): string {
         <!-- Ink footer -->
         <tr>
           <td style="background:${C.INK};color:${C.BONE};padding:26px 28px;text-align:center;border-top:1px solid ${C.LINE};">
-            <p style="margin:0;">${preachersLockup(26, C.BONE)}</p>
+            <p style="margin:0;">${preachersLockup(base, 40)}</p>
             <p style="margin:14px 0 0;font-family:${F.BODY};font-size:12px;font-style:italic;line-height:1.6;color:${C.BONE};opacity:0.9;max-width:420px;margin-left:auto;margin-right:auto;">
               ${preachersEsc(PREACHERS_VISION)}
             </p>
