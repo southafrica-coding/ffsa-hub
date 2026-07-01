@@ -21,6 +21,8 @@ import crypto from "node:crypto";
 import { isAllowed } from "@/lib/slack/assistant/access";
 import { runAssistant } from "@/lib/slack/assistant/run";
 import * as slack from "@/lib/slack/client";
+import { getActiveSession } from "@/lib/hub-feedback/store";
+import { handleTurn } from "@/lib/hub-feedback/conversation";
 
 export const maxDuration = 60; // covers the after() agent work
 export const dynamic = "force-dynamic";
@@ -75,6 +77,13 @@ export async function POST(request: Request) {
       text?: string;
       ts?: string;
       thread_ts?: string;
+      files?: Array<{
+        id: string;
+        name?: string;
+        mimetype?: string;
+        permalink?: string;
+        url_private?: string;
+      }>;
     };
   };
   try {
@@ -99,14 +108,48 @@ export async function POST(request: Request) {
 
   const event = body.event;
 
-  // (5) Ignore bot messages, our own posts, and edits/joins/etc.
-  if (event.bot_id || event.subtype) {
+  // Ignore anything the bot itself posted.
+  if (event.bot_id) {
     return NextResponse.json({ ok: true });
   }
 
   const isMention = event.type === "app_mention";
   const isDM = event.type === "message" && event.channel_type === "im";
   if ((!isMention && !isDM) || !event.channel || !event.user) {
+    return NextResponse.json({ ok: true });
+  }
+
+  // Feedback intake: a DM from a user with an ACTIVE intake session is
+  // handled by the feedback bot, not the Q&A assistant. Accept plain
+  // messages and file shares (screenshots); ignore edits/other subtypes.
+  if (isDM && (!event.subtype || event.subtype === "file_share")) {
+    const session = await getActiveSession(event.user);
+    if (session) {
+      const newMedia = (event.files ?? []).map((f) => ({
+        slack_file_id: f.id,
+        name: f.name,
+        mimetype: f.mimetype,
+        permalink: f.permalink,
+        url_private: f.url_private,
+      }));
+      const userText =
+        cleanText(event.text ?? "") || (newMedia.length ? "(shared a screenshot)" : "");
+      if (userText || newMedia.length) {
+        const evId = body.event_id ?? null;
+        after(async () => {
+          try {
+            await handleTurn({ session, text: userText, newMedia, eventId: evId });
+          } catch (err) {
+            console.error("[slack/events] intake turn failed", err);
+          }
+        });
+      }
+      return NextResponse.json({ ok: true });
+    }
+  }
+
+  // (5) For the Q&A path, ignore edits/joins/file-shares and other subtypes.
+  if (event.subtype) {
     return NextResponse.json({ ok: true });
   }
 

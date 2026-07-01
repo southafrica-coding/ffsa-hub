@@ -128,3 +128,42 @@ export function authTest() {
     bot_id?: string;
   }>("auth.test", {});
 }
+
+// ────────────────────────────────────────────────────────────
+// users.info
+// ------------------------------------------------------------
+// Fetch a user's display name / email by Slack user id (U…). Used
+// by the feedback bot to label reports with a human name.
+// ────────────────────────────────────────────────────────────
+
+export function usersInfo(userId: string) {
+  return callSlack<{
+    user?: {
+      id: string;
+      real_name?: string;
+      profile?: { real_name?: string; display_name?: string; email?: string };
+    };
+  }>("users.info", { user: userId });
+}
+
+// ────────────────────────────────────────────────────────────
+// chat.update
+// ------------------------------------------------------------
+// Edit an already-posted message in place (channel id + ts). Used
+// to reflect status changes on #hub-triage briefs when an admin
+// taps a button.
+// ────────────────────────────────────────────────────────────
+
+export function updateMessage(args: {
+  channel: string;
+  ts: string;
+  text: string;
+  blocks?: unknown[];
+}) {
+  return callSlack<{ ts?: string }>("chat.update", {
+    channel: args.channel,
+    ts: args.ts,
+    text: args.text,
+    blocks: args.blocks,
+  });
+}
