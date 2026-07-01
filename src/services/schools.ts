@@ -432,6 +432,7 @@ export async function deleteQuestion(supabase: Client, id: string) {
 // APPLICATION RESPONSES
 // ────────────────────────────────────────────────────────────
 
+// Active applications for a program (excludes archived/removed rows).
 export async function getResponsesByProgram(supabase: Client, programId: string) {
   return supabase
     .from("application_responses")
@@ -439,8 +440,40 @@ export async function getResponsesByProgram(supabase: Client, programId: string)
       "*, users!application_responses_user_id_fkey(id, first_name, last_name, preferred_name, email), assigned_staff:users!application_responses_assigned_staff_id_fkey(id, first_name, last_name, preferred_name, email)"
     )
     .eq("program_id", programId)
+    .is("removed_at", null)
     .order("submitted_at", { ascending: false });
   // Note: nullable user_id FK join returns null for public applicants — PostgREST handles this automatically
+}
+
+// Archived/removed applications for a program (the "Removed" bin).
+export async function getRemovedResponsesByProgram(supabase: Client, programId: string) {
+  return supabase
+    .from("application_responses")
+    .select(
+      "*, users!application_responses_user_id_fkey(id, first_name, last_name, preferred_name, email), assigned_staff:users!application_responses_assigned_staff_id_fkey(id, first_name, last_name, preferred_name, email)"
+    )
+    .eq("program_id", programId)
+    .not("removed_at", "is", null)
+    .order("removed_at", { ascending: false });
+}
+
+// Set/clear the archive flag on an application.
+export async function setResponseRemoved(
+  supabase: Client,
+  id: string,
+  removed: boolean,
+  removedBy: string
+) {
+  return supabase
+    .from("application_responses")
+    .update(
+      removed
+        ? { removed_at: new Date().toISOString(), removed_by: removedBy }
+        : { removed_at: null, removed_by: null }
+    )
+    .eq("id", id)
+    .select()
+    .single();
 }
 
 export async function getResponseByUserAndProgram(

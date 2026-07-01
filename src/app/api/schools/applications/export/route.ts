@@ -63,6 +63,7 @@ export async function GET(request: Request) {
     .from("application_responses")
     .select("*")
     .eq("program_id", programId)
+    .is("removed_at", null)
     .order("submitted_at", { ascending: true });
 
   const allResponses = responses ?? [];

@@ -25,7 +25,8 @@ export async function GET(request: Request) {
   const { data: responses } = await supabase
     .from("application_responses")
     .select("id, status, submitted_at, reviewed_at")
-    .eq("program_id", programId);
+    .eq("program_id", programId)
+    .is("removed_at", null);
 
   // Fetch reference requests for these applications
   const applicationIds = (responses ?? []).map((r: { id: string }) => r.id);

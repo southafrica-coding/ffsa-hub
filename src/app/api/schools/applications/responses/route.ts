@@ -6,7 +6,9 @@ import {
   updateResponseStatus,
   getReferenceSlotsByProgram,
   createReferenceRequest,
+  setResponseRemoved,
 } from "@/services/schools";
+import { userCanManageApplications } from "@/lib/auth/check-schools-access";
 import { Resend } from "resend";
 import { sendReferenceInvite } from "@/lib/email/send-reference-invite";
 import { referenceReminderEmailHtml } from "@/lib/email/templates/reference-reminder";
@@ -285,7 +287,40 @@ export async function PATCH(request: Request) {
   }
 
   const body = await request.json();
-  const { action, reference_request_id } = body;
+  const { action, reference_request_id, id } = body;
+
+  // ── Archive / restore an application (reversible "remove") ──
+  if (action === "archive" || action === "restore") {
+    if (!id) {
+      return NextResponse.json({ error: "id is required" }, { status: 400 });
+    }
+    if (!(await userCanManageApplications(supabase, user.id))) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // Gate is the permission check above; write with the admin client so the
+    // broader set of application managers isn't blocked by the narrower
+    // row-update RLS policy.
+    const adminSupabase = createAdminClient();
+    const { data, error } = await setResponseRemoved(
+      adminSupabase,
+      id,
+      action === "archive",
+      user.id
+    );
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    await adminSupabase.from("audit_logs").insert({
+      user_id: user.id,
+      action: action === "archive" ? "archive_application" : "restore_application",
+      resource_type: "application_responses",
+      resource_id: id,
+    });
+
+    return NextResponse.json({ success: true, response: data });
+  }
 
   if (action === "send_reference_reminder" && reference_request_id) {
     const adminSupabase = createAdminClient();
@@ -335,4 +370,74 @@ export async function PATCH(request: Request) {
   }
 
   return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+}
+
+// ── DELETE: permanently remove an application ──
+// Guarded: accepted applications own an enrollment / billing / user account,
+// so they can never be hard-deleted here — they must be archived instead.
+export async function DELETE(request: Request) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  if (!(await userCanManageApplications(supabase, user.id))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const body = await request.json().catch(() => ({}));
+  const { id } = body;
+  if (!id) {
+    return NextResponse.json({ error: "id is required" }, { status: 400 });
+  }
+
+  const adminSupabase = createAdminClient();
+
+  const { data: existing, error: fetchError } = await adminSupabase
+    .from("application_responses")
+    .select("id, status, program_id, applicant_email, user_id")
+    .eq("id", id)
+    .single();
+
+  if (fetchError || !existing) {
+    return NextResponse.json({ error: "Application not found" }, { status: 404 });
+  }
+
+  if (existing.status === "accepted") {
+    return NextResponse.json(
+      {
+        error:
+          "This application has been accepted and has an enrolment, billing, and possibly a user account attached. Archive it instead of deleting.",
+      },
+      { status: 409 }
+    );
+  }
+
+  // reference_requests cascade via ON DELETE CASCADE.
+  const { error: deleteError } = await adminSupabase
+    .from("application_responses")
+    .delete()
+    .eq("id", id);
+
+  if (deleteError) {
+    return NextResponse.json({ error: deleteError.message }, { status: 500 });
+  }
+
+  await adminSupabase.from("audit_logs").insert({
+    user_id: user.id,
+    action: "delete_application",
+    resource_type: "application_responses",
+    resource_id: id,
+    changes: {
+      status: existing.status,
+      program_id: existing.program_id,
+      applicant_email: existing.applicant_email,
+    },
+  });
+
+  return NextResponse.json({ success: true });
 }

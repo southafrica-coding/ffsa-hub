@@ -169,6 +169,8 @@ type AppResponse = {
   reviewed_at: string | null;
   admin_notes: string | null;
   submitted_at: string;
+  removed_at: string | null;
+  removed_by: string | null;
   assigned_staff_id: string | null;
   assigned_staff: StaffUser | null;
   users: {
@@ -296,6 +298,7 @@ export function ProgramDetail({
   courseStaff,
   questions,
   responses,
+  removedResponses,
   referenceSlots,
   referenceQuestions,
   refRequestSummaries,
@@ -309,6 +312,7 @@ export function ProgramDetail({
   courseStaff: Parameters<typeof ProgramCoursesManager>[0]["staff"];
   questions: AppQuestion[];
   responses: AppResponse[];
+  removedResponses: AppResponse[];
   referenceSlots: ReferenceSlot[];
   referenceQuestions: TreeQuestion[];
   refRequestSummaries: RefRequestSummary[];
@@ -484,6 +488,7 @@ export function ProgramDetail({
             programId={program.id}
             programCode={program.code}
             responses={responses}
+            removedResponses={removedResponses}
             referenceSlots={referenceSlots}
             refRequestSummaries={refRequestSummaries}
             questions={questions}
@@ -1368,6 +1373,7 @@ function ApplicantsTab({
   programId,
   programCode,
   responses,
+  removedResponses,
   referenceSlots,
   refRequestSummaries,
   questions,
@@ -1376,6 +1382,7 @@ function ApplicantsTab({
   programId: string;
   programCode: string;
   responses: AppResponse[];
+  removedResponses: AppResponse[];
   referenceSlots: ReferenceSlot[];
   refRequestSummaries: RefRequestSummary[];
   questions: AppQuestion[];
@@ -1484,6 +1491,79 @@ function ApplicantsTab({
     }
   }
 
+  // Remove / restore / delete state
+  const [removingId, setRemovingId] = useState<string | null>(null);
+
+  async function handleArchive(resp: AppResponse) {
+    if (!confirm(`Remove ${respName(resp)}'s application from the list? You can restore it later from the Removed tab.`)) return;
+    setRemovingId(resp.id);
+    try {
+      const res = await fetch("/api/schools/applications/responses", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "archive", id: resp.id }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || "Failed to remove application");
+        return;
+      }
+      router.refresh();
+    } catch {
+      alert("Failed to remove application");
+    } finally {
+      setRemovingId(null);
+    }
+  }
+
+  async function handleRestore(resp: AppResponse) {
+    setRemovingId(resp.id);
+    try {
+      const res = await fetch("/api/schools/applications/responses", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "restore", id: resp.id }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || "Failed to restore application");
+        return;
+      }
+      router.refresh();
+    } catch {
+      alert("Failed to restore application");
+    } finally {
+      setRemovingId(null);
+    }
+  }
+
+  async function handleDeletePermanently(resp: AppResponse) {
+    if (
+      !confirm(
+        `Permanently delete ${respName(resp)}'s application? This cannot be undone — the application and its references will be erased.`
+      )
+    )
+      return;
+    setRemovingId(resp.id);
+    try {
+      const res = await fetch("/api/schools/applications/responses", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: resp.id }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || "Failed to delete application");
+        return;
+      }
+      router.refresh();
+    } catch {
+      alert("Failed to delete application");
+    } finally {
+      setRemovingId(null);
+    }
+  }
+
   // Review state
   const [reviewStatus, setReviewStatus] = useState("");
   const [reviewNotes, setReviewNotes] = useState("");
@@ -1542,9 +1622,13 @@ function ApplicantsTab({
 
   const unassignedCount = responses.filter((r) => !r.assigned_staff_id).length;
 
+  // "Removed" is a virtual filter that swaps the data source to the archive bin.
+  const isRemovedView = statusFilter === "removed";
+  const sourceResponses = isRemovedView ? removedResponses : responses;
+
   // Filter responses by status, search, and unassigned-only toggle.
-  const filteredResponses = responses.filter((resp) => {
-    if (statusFilter !== "all" && resp.status !== statusFilter) return false;
+  const filteredResponses = sourceResponses.filter((resp) => {
+    if (!isRemovedView && statusFilter !== "all" && resp.status !== statusFilter) return false;
     if (unassignedOnly && resp.assigned_staff_id) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -1774,6 +1858,25 @@ function ApplicantsTab({
               {unassignedCount}
             </span>
           </button>
+          {removedResponses.length > 0 && (
+            <button
+              onClick={() => setStatusFilter(isRemovedView ? "all" : "removed")}
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                isRemovedView
+                  ? "bg-destructive text-destructive-foreground"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+              }`}
+              title="Applications removed from the pipeline"
+            >
+              <Archive className="h-3 w-3" />
+              Removed
+              <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                isRemovedView ? "bg-destructive-foreground/20 text-destructive-foreground" : "bg-background/50"
+              }`}>
+                {removedResponses.length}
+              </span>
+            </button>
+          )}
         </div>
 
         {/* Search bar */}
@@ -1870,8 +1973,20 @@ function ApplicantsTab({
         </div>
       )}
 
+      {/* Removed-view explainer */}
+      {isRemovedView && (
+        <div className="rounded-lg border bg-muted/40 p-3 text-sm text-muted-foreground flex items-start gap-2">
+          <Archive className="h-4 w-4 mt-0.5 shrink-0" />
+          <span>
+            These applications have been removed from the pipeline. <strong>Restore</strong> returns one to its
+            previous status. <strong>Delete permanently</strong> erases it for good and is only available for
+            applications that were never accepted.
+          </span>
+        </div>
+      )}
+
       {/* Bulk Actions Bar */}
-      {selectedIds.size > 0 && (
+      {!isRemovedView && selectedIds.size > 0 && (
         <div className="rounded-lg border bg-primary/5 border-primary/30 p-3 flex items-center gap-3">
           <span className="text-sm font-medium">
             {selectedIds.size} selected
@@ -1904,7 +2019,11 @@ function ApplicantsTab({
 
       {filteredResponses.length === 0 ? (
         <p className="text-sm text-muted-foreground text-center py-6">
-          {responses.length === 0 ? "No applications submitted yet." : "No applicants match your filters."}
+          {isRemovedView
+            ? "No removed applications."
+            : responses.length === 0
+              ? "No applications submitted yet."
+              : "No applicants match your filters."}
         </p>
       ) : (
         <div className="rounded-lg border bg-card">
@@ -1912,12 +2031,14 @@ function ApplicantsTab({
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[40px]">
-                  <input
-                    type="checkbox"
-                    className="rounded"
-                    checked={selectedIds.size === filteredResponses.length && filteredResponses.length > 0}
-                    onChange={toggleSelectAll}
-                  />
+                  {!isRemovedView && (
+                    <input
+                      type="checkbox"
+                      className="rounded"
+                      checked={selectedIds.size === filteredResponses.length && filteredResponses.length > 0}
+                      onChange={toggleSelectAll}
+                    />
+                  )}
                 </TableHead>
                 <TableHead>Student</TableHead>
                 <TableHead>Email</TableHead>
@@ -1932,12 +2053,14 @@ function ApplicantsTab({
               {filteredResponses.map((resp) => (
                 <TableRow key={resp.id} className={selectedIds.has(resp.id) ? "bg-primary/5" : ""}>
                   <TableCell>
-                    <input
-                      type="checkbox"
-                      className="rounded"
-                      checked={selectedIds.has(resp.id)}
-                      onChange={() => toggleSelect(resp.id)}
-                    />
+                    {!isRemovedView && (
+                      <input
+                        type="checkbox"
+                        className="rounded"
+                        checked={selectedIds.has(resp.id)}
+                        onChange={() => toggleSelect(resp.id)}
+                      />
+                    )}
                   </TableCell>
                   <TableCell className="font-medium">
                     {respName(resp)}
@@ -1996,46 +2119,98 @@ function ApplicantsTab({
                     />
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setReviewingResponse(resp);
-                          setReviewStatus(resp.status);
-                          setReviewNotes(resp.admin_notes ?? "");
-                          fetchReferences(resp.id);
-                        }}
-                      >
-                        Review
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground"
-                        title="Print application"
-                        onClick={() => window.open(`/api/schools/applications/pdf?response_id=${resp.id}`, "_blank")}
-                      >
-                        <FileText className="h-3.5 w-3.5" />
-                      </Button>
-                      {resp.status === "accepted" && (
+                    {isRemovedView ? (
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={removingId === resp.id}
+                          onClick={() => handleRestore(resp)}
+                        >
+                          {removingId === resp.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            "Restore"
+                          )}
+                        </Button>
+                        {resp.status === "accepted" ? (
+                          <span
+                            className="text-[11px] text-muted-foreground"
+                            title="Accepted applications have an enrolment/billing attached — restore it instead of deleting."
+                          >
+                            Can’t delete
+                          </span>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            title="Delete permanently"
+                            aria-label="Delete permanently"
+                            disabled={removingId === resp.id}
+                            onClick={() => handleDeletePermanently(resp)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setReviewingResponse(resp);
+                            setReviewStatus(resp.status);
+                            setReviewNotes(resp.admin_notes ?? "");
+                            fetchReferences(resp.id);
+                          }}
+                        >
+                          Review
+                        </Button>
                         <Button
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-muted-foreground"
-                          title="Resend invite email"
-                          aria-label="Resend invite email"
-                          disabled={resendingInviteId === resp.id}
-                          onClick={() => handleResendInvite(resp.id)}
+                          title="Print application"
+                          onClick={() => window.open(`/api/schools/applications/pdf?response_id=${resp.id}`, "_blank")}
                         >
-                          {resendingInviteId === resp.id ? (
+                          <FileText className="h-3.5 w-3.5" />
+                        </Button>
+                        {resp.status === "accepted" && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground"
+                            title="Resend invite email"
+                            aria-label="Resend invite email"
+                            disabled={resendingInviteId === resp.id}
+                            onClick={() => handleResendInvite(resp.id)}
+                          >
+                            {resendingInviteId === resp.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Send className="h-3.5 w-3.5" />
+                            )}
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground"
+                          title="Remove application"
+                          aria-label="Remove application"
+                          disabled={removingId === resp.id}
+                          onClick={() => handleArchive(resp)}
+                        >
+                          {removingId === resp.id ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
                           ) : (
-                            <Send className="h-3.5 w-3.5" />
+                            <Archive className="h-3.5 w-3.5" />
                           )}
                         </Button>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

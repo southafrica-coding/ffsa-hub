@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getProgramById, getEnrollmentsByProgram, getGradesByProgram, getQuestionsByProgram, getResponsesByProgram, getReferenceSlotsByProgram, getReferenceRequestSummaries, getReferenceQuestionsByProgram } from "@/services/schools";
+import { getProgramById, getEnrollmentsByProgram, getGradesByProgram, getQuestionsByProgram, getResponsesByProgram, getRemovedResponsesByProgram, getReferenceSlotsByProgram, getReferenceRequestSummaries, getReferenceQuestionsByProgram } from "@/services/schools";
 import { fetchAssignableContacts } from "@/lib/auth/assignable-contacts";
 import { ProgramDetail } from "./program-detail";
 
@@ -46,6 +46,7 @@ export default async function ProgramDetailPage({
 
   const { data: questions } = await getQuestionsByProgram(supabase, programId);
   const { data: responses } = await getResponsesByProgram(supabase, programId);
+  const { data: removedResponses } = await getRemovedResponsesByProgram(supabase, programId);
   const { data: referenceSlots } = await getReferenceSlotsByProgram(supabase, programId);
   const { data: referenceQuestions } = await getReferenceQuestionsByProgram(supabase, programId);
 
@@ -78,6 +79,7 @@ export default async function ProgramDetailPage({
         courseStaff={courseStaff ?? []}
         questions={questions ?? []}
         responses={responses ?? []}
+        removedResponses={removedResponses ?? []}
         referenceSlots={referenceSlots ?? []}
         referenceQuestions={referenceQuestions ?? []}
         refRequestSummaries={refRequests ?? []}
