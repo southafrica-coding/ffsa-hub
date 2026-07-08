@@ -23,11 +23,12 @@ export async function GET() {
   const adminSupabase = createAdminClient();
   // Cast around auto-generated DB types that don't yet know the new
   // assigned_staff_id column (added in migration 052).
+  type InStep = { in: (col: string, vals: unknown[]) => Promise<{ data: unknown }> };
   const sb = adminSupabase as unknown as {
     from: (t: string) => {
       select: (cols: string) => {
-        not: (col: string, op: string, val: unknown) => {
-          in: (col: string, vals: unknown[]) => Promise<{ data: unknown }>;
+        not: (col: string, op: string, val: unknown) => InStep & {
+          is: (col: string, val: unknown) => InStep;
         };
       };
     };
@@ -41,6 +42,7 @@ export async function GET() {
     sb.from("enrollments")
       .select("assigned_staff_id, status")
       .not("assigned_staff_id", "is", null)
+      .is("removed_at", null)
       .in("status", ["active", "waiting_for_arrival", "arrived", "on_hold"]),
   ]);
 

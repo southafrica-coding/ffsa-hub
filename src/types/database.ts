@@ -1137,6 +1137,8 @@ export type Database = {
           id: string
           notes: string | null
           program_id: string
+          removed_at: string | null
+          removed_by: string | null
           staff_assigned_at: string | null
           staff_assigned_by: string | null
           staff_viewed_at: string | null
@@ -1153,6 +1155,8 @@ export type Database = {
           id?: string
           notes?: string | null
           program_id: string
+          removed_at?: string | null
+          removed_by?: string | null
           staff_assigned_at?: string | null
           staff_assigned_by?: string | null
           staff_viewed_at?: string | null
@@ -1169,6 +1173,8 @@ export type Database = {
           id?: string
           notes?: string | null
           program_id?: string
+          removed_at?: string | null
+          removed_by?: string | null
           staff_assigned_at?: string | null
           staff_assigned_by?: string | null
           staff_viewed_at?: string | null

@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createEnrollment, updateEnrollmentStatus } from "@/services/schools";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { userCanManageApplications } from "@/lib/auth/check-schools-access";
+import {
+  createEnrollment,
+  updateEnrollmentStatus,
+  setEnrollmentRemoved,
+  deleteEnrollment,
+} from "@/services/schools";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -63,4 +70,110 @@ export async function PUT(request: Request) {
   }
 
   return NextResponse.json({ success: true, enrollment: data });
+}
+
+// Reversibly remove a student from the roster, or restore a removed one.
+// Body: { id, removed: boolean }
+export async function PATCH(request: Request) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  if (!(await userCanManageApplications(supabase, user.id))) {
+    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  }
+
+  const body = await request.json();
+  const { id, removed } = body as { id?: string; removed?: boolean };
+
+  if (!id || typeof removed !== "boolean") {
+    return NextResponse.json(
+      { error: "id and removed (boolean) are required" },
+      { status: 400 }
+    );
+  }
+
+  const admin = createAdminClient();
+  const { data, error } = await setEnrollmentRemoved(
+    admin,
+    id,
+    removed ? user.id : null
+  );
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  await admin.from("audit_logs").insert({
+    user_id: user.id,
+    action: removed ? "remove_enrollment" : "restore_enrollment",
+    resource_type: "enrollments",
+    resource_id: id,
+  });
+
+  return NextResponse.json({ success: true, enrollment: data });
+}
+
+// Permanently delete an enrollment. Only allowed once it has been removed,
+// so the remove step always acts as a buffer. Cascades grades/fees; the
+// student's Hub account is untouched.
+export async function DELETE(request: Request) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  if (!(await userCanManageApplications(supabase, user.id))) {
+    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  }
+
+  const body = await request.json().catch(() => ({}));
+  const { id } = body as { id?: string };
+
+  if (!id) {
+    return NextResponse.json({ error: "id is required" }, { status: 400 });
+  }
+
+  const admin = createAdminClient();
+
+  const { data: existing, error: fetchError } = await admin
+    .from("enrollments")
+    .select("id, removed_at")
+    .eq("id", id)
+    .single();
+
+  if (fetchError || !existing) {
+    return NextResponse.json({ error: "Enrollment not found" }, { status: 404 });
+  }
+
+  if (!existing.removed_at) {
+    return NextResponse.json(
+      { error: "Remove the student from the school before deleting permanently." },
+      { status: 409 }
+    );
+  }
+
+  const { error } = await deleteEnrollment(admin, id);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  await admin.from("audit_logs").insert({
+    user_id: user.id,
+    action: "delete_enrollment",
+    resource_type: "enrollments",
+    resource_id: id,
+  });
+
+  return NextResponse.json({ success: true });
 }

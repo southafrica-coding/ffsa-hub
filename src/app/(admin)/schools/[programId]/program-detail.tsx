@@ -34,7 +34,13 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Trash2, Download, ChevronUp, ChevronDown, Edit2, ClipboardList, Copy, Check, Link as LinkIcon, Archive, BookTemplate, Upload, Loader2, FileText, Send, BarChart3, Calendar, RefreshCw, CheckSquare, Search, Users } from "lucide-react";
+import { Plus, Trash2, Download, ChevronUp, ChevronDown, Edit2, ClipboardList, Copy, Check, Link as LinkIcon, Archive, BookTemplate, Upload, Loader2, FileText, Send, BarChart3, Calendar, RefreshCw, CheckSquare, Search, Users, MoreHorizontal, UserMinus, RotateCcw } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import { ProgramActions } from "../program-actions";
 
 // ────────────────────────────────────────────────────────────
@@ -62,6 +68,8 @@ type Enrollment = {
   user_id: string;
   status: string;
   enrolled_at: string;
+  removed_at: string | null;
+  removed_by: string | null;
   assigned_staff_id: string | null;
   assigned_staff: StaffUser | null;
   users: {
@@ -464,7 +472,7 @@ export function ProgramDetail({
           <GradesTab
             programId={program.id}
             courses={program.courses}
-            enrollments={enrollments}
+            enrollments={enrollments.filter((e) => !e.removed_at)}
             grades={grades}
           />
         </TabsContent>
@@ -860,8 +868,12 @@ function EnrollmentsTab({
   const [error, setError] = useState<string | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
   const [unassignedOnly, setUnassignedOnly] = useState(false);
+  const [showRemoved, setShowRemoved] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
-  // Filter out already-enrolled users
+  // Filter out already-enrolled users (a removed enrollment still occupies
+  // the unique (user, program) slot, so removed students stay excluded here
+  // until they're restored or permanently deleted).
   const enrolledIds = new Set(enrollments.map((e) => e.user_id));
   const availableUsers = allUsers.filter((u) => !enrolledIds.has(u.id));
 
@@ -879,10 +891,88 @@ function EnrollmentsTab({
     router.refresh();
   }
 
-  const visibleEnrollments = unassignedOnly
-    ? enrollments.filter((e) => !e.assigned_staff_id)
-    : enrollments;
-  const unassignedCount = enrollments.filter((e) => !e.assigned_staff_id).length;
+  const activeEnrollments = enrollments.filter((e) => !e.removed_at);
+  const removedEnrollments = enrollments.filter((e) => e.removed_at);
+  const removedCount = removedEnrollments.length;
+
+  const visibleEnrollments = showRemoved
+    ? removedEnrollments
+    : unassignedOnly
+      ? activeEnrollments.filter((e) => !e.assigned_staff_id)
+      : activeEnrollments;
+  const unassignedCount = activeEnrollments.filter((e) => !e.assigned_staff_id).length;
+
+  async function handleRemove(enrollmentId: string) {
+    setBusyId(enrollmentId);
+    try {
+      const res = await fetch("/api/schools/enrollments", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: enrollmentId, removed: true }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || "Failed to remove student");
+        return;
+      }
+      router.refresh();
+    } catch {
+      alert("Failed to remove student");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleRestore(enrollmentId: string) {
+    setBusyId(enrollmentId);
+    try {
+      const res = await fetch("/api/schools/enrollments", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: enrollmentId, removed: false }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || "Failed to restore student");
+        return;
+      }
+      router.refresh();
+    } catch {
+      alert("Failed to restore student");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleDelete(enrollment: Enrollment) {
+    if (
+      !confirm(
+        `Permanently delete ${userName(enrollment.users)} from this school?\n\n` +
+          "This removes their enrollment, grades and fees for this program and cannot be undone. " +
+          "Their Hub account is not affected."
+      )
+    ) {
+      return;
+    }
+    setBusyId(enrollment.id);
+    try {
+      const res = await fetch("/api/schools/enrollments", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: enrollment.id }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || "Failed to delete student");
+        return;
+      }
+      router.refresh();
+    } catch {
+      alert("Failed to delete student");
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   function userName(u: { first_name: string | null; last_name: string | null; preferred_name: string | null; email: string | null }) {
     if (u.first_name) {
@@ -967,20 +1057,44 @@ function EnrollmentsTab({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
-        <button
-          type="button"
-          onClick={() => setUnassignedOnly((v) => !v)}
-          className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
-            unassignedOnly
-              ? "border-primary bg-primary/15 text-primary"
-              : "border-border text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          Unassigned
-          <span className="rounded-full bg-background/60 px-1.5 py-0.5 text-[10px] font-bold">
-            {unassignedCount}
-          </span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setUnassignedOnly((v) => !v);
+              setShowRemoved(false);
+            }}
+            className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+              unassignedOnly && !showRemoved
+                ? "border-primary bg-primary/15 text-primary"
+                : "border-border text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Unassigned
+            <span className="rounded-full bg-background/60 px-1.5 py-0.5 text-[10px] font-bold">
+              {unassignedCount}
+            </span>
+          </button>
+          {removedCount > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setShowRemoved((v) => !v);
+                setUnassignedOnly(false);
+              }}
+              className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                showRemoved
+                  ? "border-destructive bg-destructive/15 text-destructive"
+                  : "border-border text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Removed
+              <span className="rounded-full bg-background/60 px-1.5 py-0.5 text-[10px] font-bold">
+                {removedCount}
+              </span>
+            </button>
+          )}
+        </div>
         <Dialog open={enrollOpen} onOpenChange={setEnrollOpen}>
           <DialogTrigger asChild>
             <Button size="sm">
@@ -1044,23 +1158,29 @@ function EnrollmentsTab({
               <TableHead>Enrolled</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Assigned Staff</TableHead>
+              <TableHead className="w-[1%]"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {visibleEnrollments.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={5}
+                  colSpan={6}
                   className="text-center text-muted-foreground py-8"
                 >
-                  {enrollments.length === 0
-                    ? "No students enrolled yet."
-                    : "No enrollments match the current filter."}
+                  {showRemoved
+                    ? "No removed students."
+                    : enrollments.length === 0
+                      ? "No students enrolled yet."
+                      : "No enrollments match the current filter."}
                 </TableCell>
               </TableRow>
             ) : (
               visibleEnrollments.map((enrollment) => (
-                <TableRow key={enrollment.id}>
+                <TableRow
+                  key={enrollment.id}
+                  className={enrollment.removed_at ? "opacity-60" : undefined}
+                >
                   <TableCell className="font-medium">
                     {userName(enrollment.users)}
                   </TableCell>
@@ -1100,6 +1220,48 @@ function EnrollmentsTab({
                         handleAssignStaff(enrollment.id, staffId)
                       }
                     />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          disabled={busyId === enrollment.id}
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                          <span className="sr-only">Student actions</span>
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {enrollment.removed_at ? (
+                          <>
+                            <DropdownMenuItem
+                              onClick={() => handleRestore(enrollment.id)}
+                            >
+                              <RotateCcw className="mr-2 h-4 w-4" />
+                              Restore to school
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
+                              onClick={() => handleDelete(enrollment)}
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete permanently
+                            </DropdownMenuItem>
+                          </>
+                        ) : (
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => handleRemove(enrollment.id)}
+                          >
+                            <UserMinus className="mr-2 h-4 w-4" />
+                            Remove from school
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               ))

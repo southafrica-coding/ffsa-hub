@@ -141,6 +141,7 @@ export async function getEnrollmentsByUser(supabase: Client, userId: string) {
       "*, programs(*), assigned_staff:users!enrollments_assigned_staff_id_fkey(id, first_name, last_name, preferred_name, email)"
     )
     .eq("user_id", userId)
+    .is("removed_at", null)
     .order("enrolled_at", { ascending: false });
 }
 
@@ -172,6 +173,31 @@ export async function updateEnrollmentStatus(
     data.completed_at = completedAt ?? new Date().toISOString();
   }
   return supabase.from("enrollments").update(data).eq("id", id).select().single();
+}
+
+/**
+ * Reversibly remove (or restore) an enrollment. A removed enrollment keeps
+ * its status/grades/fees and simply drops off the active roster — pass
+ * `removedBy: null` to restore it.
+ */
+export async function setEnrollmentRemoved(
+  supabase: Client,
+  id: string,
+  removedBy: string | null
+) {
+  const data = removedBy
+    ? { removed_at: new Date().toISOString(), removed_by: removedBy }
+    : { removed_at: null, removed_by: null };
+  return supabase.from("enrollments").update(data).eq("id", id).select().single();
+}
+
+/**
+ * Permanently delete an enrollment. Grades, student_fees and
+ * student_billing_plans cascade (see their ON DELETE CASCADE FKs); the
+ * student's user account is untouched.
+ */
+export async function deleteEnrollment(supabase: Client, id: string) {
+  return supabase.from("enrollments").delete().eq("id", id);
 }
 
 // ────────────────────────────────────────────────────────────
