@@ -114,6 +114,30 @@ function Bolt({ className }: { className?: string }) {
   );
 }
 
+// Bespoke PREACHERS masthead mark — my own take on the logo: a lightning-
+// bolt badge locked up with the condensed wordmark. Deliberately distinct
+// from the grunge photo-wordmark (kept in the footer): a clean, crisp
+// lockup that holds up at small size in the top-left corner.
+function PreachersMark() {
+  return (
+    <span className="pr-mark" aria-label="PREACHERS">
+      <svg
+        className="pr-mark-badge"
+        viewBox="0 0 32 32"
+        aria-hidden
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <rect className="pr-mark-tile" x="0.75" y="0.75" width="30.5" height="30.5" rx="6" />
+        <path
+          className="pr-mark-bolt"
+          d="M18.7 5 L9 18.4 h5.4 l-2.1 8.6 L23 12.9 h-5.4 z"
+        />
+      </svg>
+      <span className="pr-mark-word">PREACHERS</span>
+    </span>
+  );
+}
+
 export function PreachersStorefront({
   event,
   ticketTypes,
@@ -382,14 +406,7 @@ export function PreachersStorefront({
       {/* ── MASTHEAD ───────────────────────────────────────── */}
       <header className="pr-masthead">
         <div className="pr-logo">
-          {/* Official PREACHERS SA wordmark. An event-level logo_url override
-              still wins if an admin sets one. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={event.logo_url || "/brand/preachers-wordmark-bone.png"}
-            alt="PREACHERS South Africa"
-            className="pr-logo-img"
-          />
+          <PreachersMark />
         </div>
         <div className="pr-masthead-meta">
           <span>SOUTH&nbsp;AFRICA</span>
@@ -1072,7 +1089,15 @@ const scopedCss = `
   display:flex;align-items:center;justify-content:space-between;
   padding:15px 18px;border-bottom:1px solid var(--line);
 }
-.pr-logo-img{height:30px;width:auto;object-fit:contain;display:block;}
+/* Bespoke masthead mark — bolt badge + condensed wordmark. */
+.pr-mark{display:inline-flex;align-items:center;gap:9px;}
+.pr-mark-badge{width:30px;height:30px;display:block;flex:0 0 auto;filter:drop-shadow(0 1px 0 rgba(0,0,0,.35));}
+.pr-mark-tile{fill:var(--bone);}
+.pr-mark-bolt{fill:var(--ink);}
+.pr-mark-word{
+  font-family:var(--display);font-weight:900;font-size:23px;
+  letter-spacing:.05em;color:var(--bone);text-transform:uppercase;line-height:1;
+}
 .pr-masthead-meta{
   display:none;gap:8px;align-items:center;font-size:11px;font-weight:700;
   letter-spacing:.2em;color:var(--bone);opacity:.7;
