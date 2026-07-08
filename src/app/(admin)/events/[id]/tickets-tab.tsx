@@ -18,6 +18,7 @@ export function TicketsTab({
   eventId,
   ticketingEnabled,
   publicSlug,
+  xeroItemCode,
   ticketTypes,
   promoCodes,
   feeProfiles,
@@ -26,6 +27,7 @@ export function TicketsTab({
   eventId: string;
   ticketingEnabled: boolean;
   publicSlug: string | null;
+  xeroItemCode: string | null;
   ticketTypes: TicketTypeRow[];
   promoCodes: PromoCodeRow[];
   feeProfiles: FeeProfile[];
@@ -37,6 +39,7 @@ export function TicketsTab({
         eventId={eventId}
         ticketingEnabled={ticketingEnabled}
         publicSlug={publicSlug}
+        xeroItemCode={xeroItemCode}
       />
       <TicketTypesManager
         eventId={eventId}

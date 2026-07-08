@@ -9,14 +9,17 @@ export function TicketingSettings({
   eventId,
   ticketingEnabled,
   publicSlug,
+  xeroItemCode,
 }: {
   eventId: string;
   ticketingEnabled: boolean;
   publicSlug: string | null;
+  xeroItemCode: string | null;
 }) {
   const router = useRouter();
   const [enabled, setEnabled] = useState(ticketingEnabled);
   const [slug, setSlug] = useState(publicSlug ?? "");
+  const [xeroCode, setXeroCode] = useState(xeroItemCode ?? "");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [savedHint, setSavedHint] = useState<string | null>(null);
@@ -30,7 +33,9 @@ export function TicketingSettings({
   }, []);
 
   const dirty =
-    enabled !== ticketingEnabled || (slug.trim() || null) !== publicSlug;
+    enabled !== ticketingEnabled ||
+    (slug.trim() || null) !== publicSlug ||
+    (xeroCode.trim() || null) !== xeroItemCode;
 
   const trimmedSlug = slug.trim();
   const fullUrl = trimmedSlug ? `${origin}/e/${trimmedSlug}` : "";
@@ -66,6 +71,7 @@ export function TicketingSettings({
       body: JSON.stringify({
         ticketing_enabled: enabled,
         public_slug: slug.trim() || null,
+        xero_item_code: xeroCode.trim() || null,
       }),
     });
     setBusy(false);
@@ -167,6 +173,29 @@ export function TicketingSettings({
             )}
           </div>
         )}
+
+        {/* Xero accounting — optional. When set, each paid ticket order
+            (Stripe or PayFast) posts a PAID sales invoice into Xero
+            using this item code to route income to the right ledger
+            account. Leave blank to keep this event out of Xero. */}
+        <div className="rounded-md border border-border p-3 space-y-1.5">
+          <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            Xero item code
+          </label>
+          <input
+            type="text"
+            value={xeroCode}
+            onChange={(e) => setXeroCode(e.target.value)}
+            placeholder="e.g. EventTickets"
+            className="w-full border rounded px-2 py-1.5 text-sm font-mono"
+            disabled={busy}
+          />
+          <p className="text-xs text-muted-foreground">
+            Optional. When set, each paid ticket order posts a <strong>PAID</strong>{" "}
+            sales invoice to Xero against this item code (ZAR org). Leave
+            blank to keep this event out of Xero.
+          </p>
+        </div>
 
         {err && <p className="text-xs text-red-600">{err}</p>}
         {savedHint && <p className="text-xs text-green-600">{savedHint}</p>}

@@ -30,6 +30,8 @@ type Order = {
   created_at: string;
   contact_resolution: string;
   custom_answers?: unknown;
+  xero_invoice_number?: string | null;
+  xero_invoice_id?: string | null;
 };
 
 function answersForOrder(o: Order): CheckoutAnswerSnapshot[] {
@@ -218,6 +220,11 @@ export function OrdersTab({
                         {o.paid_at
                           ? new Date(o.paid_at).toLocaleString()
                           : "—"}
+                        {o.xero_invoice_number && (
+                          <div className="text-[11px] text-muted-foreground/80">
+                            Xero: {o.xero_invoice_number}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         {o.status === "paid" && (

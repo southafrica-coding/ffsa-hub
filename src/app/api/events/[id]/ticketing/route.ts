@@ -23,7 +23,11 @@ export async function PATCH(
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
-  let body: { ticketing_enabled?: boolean; public_slug?: string | null };
+  let body: {
+    ticketing_enabled?: boolean;
+    public_slug?: string | null;
+    xero_item_code?: string | null;
+  };
   try {
     body = await request.json();
   } catch {
@@ -33,6 +37,13 @@ export async function PATCH(
   const patch: Record<string, unknown> = {};
   if (typeof body.ticketing_enabled === "boolean") {
     patch.ticketing_enabled = body.ticketing_enabled;
+  }
+  // Per-event Xero item code — its presence opts the event into posting
+  // a PAID sales invoice to Xero on each paid ticket order. Empty ⇒ null
+  // (off). Trimmed; Xero item codes are case-sensitive so we don't fold case.
+  if (body.xero_item_code !== undefined) {
+    const code = body.xero_item_code?.trim();
+    patch.xero_item_code = code ? code : null;
   }
   if (body.public_slug !== undefined) {
     if (body.public_slug === null || body.public_slug.trim() === "") {
