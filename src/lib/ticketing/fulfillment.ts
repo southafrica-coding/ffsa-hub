@@ -22,6 +22,7 @@ import { theSendTicketEmailHtml } from "@/lib/email/templates/the-send-ticket-co
 import { campsTicketEmailHtml } from "@/lib/email/templates/ffsa-camps-ticket-confirmation";
 import { preachersTicketEmailHtml } from "@/lib/email/templates/preachers-ticket-confirmation";
 import { resolveOrderToCrm } from "./crm-resolution";
+import { createPaidTicketInvoice } from "@/services/xero";
 
 type EventBrand = "ff" | "the_send" | "ffsa_camps" | "preachers";
 
@@ -141,6 +142,23 @@ export async function fulfillOrder(
       };
     }
     tickets = inserted;
+  }
+
+  // 2b. Post a PAID sales invoice into Xero — only for events that carry
+  //     a Xero item code (the per-event opt-in), and only once per order
+  //     (guarded by orders.xero_invoice_id). Runs here, before the email
+  //     step's Mailtrap-absent early return, so accounting isn't coupled
+  //     to email config. Non-blocking: tickets are already issued.
+  try {
+    const xero = await createPaidTicketInvoice(supabase, orderId);
+    if (!xero.success) {
+      console.error(
+        "[fulfillment] Xero invoice failed (non-blocking):",
+        xero.error
+      );
+    }
+  } catch (e) {
+    console.error("[fulfillment] Xero invoice threw (non-blocking):", e);
   }
 
   // 3. Build the ticket list for the email. QR codes are loaded

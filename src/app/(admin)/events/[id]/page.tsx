@@ -198,6 +198,7 @@ export default async function EventDetailPage({
           eventId={id}
           ticketingEnabled={event.ticketing_enabled ?? false}
           publicSlug={event.public_slug ?? null}
+          xeroItemCode={event.xero_item_code ?? null}
           ticketTypes={ticketTypes ?? []}
           promoCodes={promoCodes ?? []}
           feeProfiles={feeProfiles}

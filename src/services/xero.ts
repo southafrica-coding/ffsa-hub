@@ -592,6 +592,279 @@ export async function createScheduledInvoice(
 }
 
 // ────────────────────────────────────────────────────────────
+// PAID TICKET INVOICE (event ticket sales — Stripe / PayFast)
+// ────────────────────────────────────────────────────────────
+//
+// A ticket is paid at point of sale, so the correct accounting is an
+// AUTHORISED sales invoice with a payment already applied against the
+// receiving bank/clearing account → the invoice reads PAID. This is
+// deliberately NOT emailed to the buyer (they already get the ticket
+// confirmation email); it's an internal accounting record.
+//
+// The per-event `xero_item_code` drives the ledger account + tax, the
+// same way vehicles/school billing resolve their account from an item
+// code. Ticketing bills in ZAR → the "za" Xero org.
+
+type OrderLineForXero = {
+  ticket_type_id: string;
+  qty: number;
+  per_ticket_cents: number;
+};
+
+// Find an existing Xero contact by email, or create one from name+email.
+async function findOrCreateContact(
+  accessToken: string,
+  tenantId: string,
+  name: string,
+  email: string
+): Promise<string> {
+  const contactsRes = await xeroGet(
+    accessToken,
+    tenantId,
+    `Contacts?where=EmailAddress%3D%3D%22${encodeURIComponent(email)}%22`
+  );
+  if (contactsRes.Contacts && contactsRes.Contacts.length > 0) {
+    return contactsRes.Contacts[0].ContactID;
+  }
+  const nameParts = name.split(" ");
+  const created = await xeroPost(accessToken, tenantId, "Contacts", {
+    Contacts: [
+      {
+        Name: name,
+        EmailAddress: email,
+        FirstName: nameParts[0],
+        LastName: nameParts.slice(1).join(" ") || undefined,
+      },
+    ],
+  });
+  return created.Contacts[0].ContactID;
+}
+
+// Apply a full payment against an AUTHORISED invoice so it reads PAID.
+// `bankAccountCode` is the Xero account code money is received into
+// (e.g. a Stripe clearing account). Requires the accounting.transactions
+// scope, which the invoice-create path already relies on.
+async function applyInvoicePayment(
+  accessToken: string,
+  tenantId: string,
+  params: {
+    invoiceId: string;
+    bankAccountCode: string;
+    amount: number;
+    date: string; // YYYY-MM-DD
+    reference?: string;
+  }
+): Promise<{ paymentId?: string }> {
+  const res = await xeroPost(accessToken, tenantId, "Payments", {
+    Payments: [
+      {
+        Invoice: { InvoiceID: params.invoiceId },
+        Account: { Code: params.bankAccountCode },
+        Date: params.date,
+        Amount: params.amount,
+        Reference: params.reference,
+      },
+    ],
+  });
+  return { paymentId: res.Payments?.[0]?.PaymentID };
+}
+
+export async function createPaidTicketInvoice(
+  supabase: Client,
+  orderId: string
+): Promise<{
+  success: boolean;
+  skipped?: boolean;
+  reason?: string;
+  invoiceId?: string;
+  invoiceNumber?: string;
+  paid?: boolean;
+  error?: string;
+}> {
+  // 1. Load the order + its event (need the per-event item code).
+  const { data: order, error: orderErr } = await (supabase as Client)
+    .from("orders")
+    .select(
+      "id, status, buyer_first_name, buyer_last_name, buyer_email, lines, currency, subtotal_cents, discount_cents, donation_cents, total_cents, provider_payment_id, paid_at, xero_invoice_id, events(id, title, xero_item_code)"
+    )
+    .eq("id", orderId)
+    .maybeSingle();
+
+  if (orderErr || !order) {
+    return { success: false, error: `Order ${orderId} not found` };
+  }
+  if (order.status !== "paid") {
+    return { success: true, skipped: true, reason: `order not paid (${order.status})` };
+  }
+  // Idempotency: never post a second invoice for the same order.
+  if (order.xero_invoice_id) {
+    return {
+      success: true,
+      skipped: true,
+      reason: "already invoiced",
+      invoiceId: order.xero_invoice_id,
+    };
+  }
+  const event = order.events;
+  const itemCode: string | null = event?.xero_item_code ?? null;
+  // The per-event item code is the opt-in. No code ⇒ this event doesn't
+  // invoice into Xero.
+  if (!itemCode || !itemCode.trim()) {
+    return { success: true, skipped: true, reason: "event has no xero_item_code" };
+  }
+
+  const region: XeroRegion = "za";
+  const auth = await getValidAccessToken(supabase, region);
+  if (!auth) {
+    return {
+      success: false,
+      error: `Xero ${region.toUpperCase()} not connected or token expired`,
+    };
+  }
+  const { accessToken, tenantId } = auth;
+  const currencyCode = order.currency || "ZAR";
+
+  try {
+    // 2. Contact.
+    const buyerName =
+      `${order.buyer_first_name ?? ""} ${order.buyer_last_name ?? ""}`.trim() ||
+      order.buyer_email;
+    const contactId = await findOrCreateContact(
+      accessToken,
+      tenantId,
+      buyerName,
+      order.buyer_email
+    );
+
+    // 3. Resolve ticket-type names for line descriptions.
+    const lines = (order.lines as OrderLineForXero[]) ?? [];
+    const typeIds = [...new Set(lines.map((l) => l.ticket_type_id))];
+    const nameByType = new Map<string, string>();
+    if (typeIds.length > 0) {
+      const { data: types } = await (supabase as Client)
+        .from("ticket_types")
+        .select("id, name")
+        .in("id", typeIds);
+      for (const t of types ?? []) nameByType.set(t.id, t.name);
+    }
+
+    // 4. Build line items. Every line carries the event's item code so
+    //    Xero derives the ledger account + tax and the invoice can be
+    //    AUTHORISED. Discount / donation are folded in so the invoice
+    //    total equals total_cents (== the amount we collected == the
+    //    payment we apply). Keep them on the same item code to stay
+    //    resolvable; a dedicated donations account is a later refinement.
+    const eventTitle = event?.title ?? "Event";
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const lineItems: any[] = lines.map((l) => ({
+      Description: `${eventTitle} — ${nameByType.get(l.ticket_type_id) ?? "Ticket"}`,
+      Quantity: l.qty,
+      UnitAmount: l.per_ticket_cents / 100,
+      ItemCode: itemCode,
+    }));
+    if (order.discount_cents > 0) {
+      lineItems.push({
+        Description: "Discount",
+        Quantity: 1,
+        UnitAmount: -(order.discount_cents / 100),
+        ItemCode: itemCode,
+      });
+    }
+    if (order.donation_cents > 0) {
+      lineItems.push({
+        Description: "Donation",
+        Quantity: 1,
+        UnitAmount: order.donation_cents / 100,
+        ItemCode: itemCode,
+      });
+    }
+    if (lineItems.length === 0) {
+      return { success: true, skipped: true, reason: "order has no lines" };
+    }
+
+    // 5. Create the invoice — AUTHORISED (item code resolves the
+    //    account), never emailed.
+    const paidDate = (order.paid_at
+      ? new Date(order.paid_at)
+      : new Date()
+    )
+      .toISOString()
+      .split("T")[0];
+
+    const invoiceRes = await xeroPost(accessToken, tenantId, "Invoices", {
+      Invoices: [
+        {
+          Type: "ACCREC",
+          Contact: { ContactID: contactId },
+          LineItems: lineItems,
+          Date: paidDate,
+          DueDate: paidDate,
+          Reference: `FFSA-TIX-${order.id.slice(0, 8)}`,
+          CurrencyCode: currencyCode,
+          Status: "AUTHORISED",
+          LineAmountTypes: "NoTax",
+        },
+      ],
+    });
+    const invoice = invoiceRes.Invoices?.[0];
+    if (!invoice?.InvoiceID) {
+      return { success: false, error: "Invoice creation returned no data" };
+    }
+
+    // 6. Apply a payment so the invoice reads PAID (money already
+    //    collected by the gateway). Needs a receiving bank/clearing
+    //    account code; without it the invoice stays AUTHORISED/outstanding
+    //    for manual reconciliation.
+    let paid = false;
+    const bankCode = process.env.XERO_ZA_BANK_ACCOUNT_CODE;
+    if (bankCode && bankCode.trim()) {
+      try {
+        await applyInvoicePayment(accessToken, tenantId, {
+          invoiceId: invoice.InvoiceID,
+          bankAccountCode: bankCode.trim(),
+          amount: order.total_cents / 100,
+          date: paidDate,
+          reference: order.provider_payment_id ?? undefined,
+        });
+        paid = true;
+      } catch (payErr) {
+        console.error(
+          `Xero (za): invoice ${invoice.InvoiceNumber} created but payment failed — left outstanding:`,
+          payErr
+        );
+      }
+    } else {
+      console.warn(
+        "Xero (za): XERO_ZA_BANK_ACCOUNT_CODE not set — ticket invoice left outstanding (not marked PAID)"
+      );
+    }
+
+    // 7. Write the invoice reference back to the order.
+    await (supabase as Client)
+      .from("orders")
+      .update({
+        xero_invoice_id: invoice.InvoiceID,
+        xero_invoice_number: invoice.InvoiceNumber,
+        xero_synced_at: new Date().toISOString(),
+      })
+      .eq("id", order.id);
+
+    return {
+      success: true,
+      invoiceId: invoice.InvoiceID,
+      invoiceNumber: invoice.InvoiceNumber ?? undefined,
+      paid,
+    };
+  } catch (err) {
+    console.error(`Xero (za): ticket invoice failed for order ${orderId}:`, err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Unknown Xero error",
+    };
+  }
+}
+
+// ────────────────────────────────────────────────────────────
 // VOID AN EXISTING INVOICE
 // ────────────────────────────────────────────────────────────
 
