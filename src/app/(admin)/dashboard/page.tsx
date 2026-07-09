@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Users, Calendar, UserCheck, ClipboardCheck, ArrowUpRight } from "lucide-react";
 import { getNotifications } from "@/services/notifications";
 import { MyAssignmentsCard } from "./my-assignments-card";
+import { ApplicationCountsCard } from "./application-counts-card";
 import { StaffWorkloadCard } from "./staff-workload-card";
 import { NotificationFeed } from "./notification-feed";
 import { UpcomingEventsWidget } from "./upcoming-events-widget";
@@ -168,6 +169,9 @@ export default async function DashboardPage() {
         <StatCard label="Active Users" value={usersResult.count ?? 0} icon={UserCheck} />
         <StatCard label="Recent Reg." value={recentRegistrations.data?.length ?? 0} icon={ClipboardCheck} />
       </div>
+
+      {/* School application counts (only renders for staff with course/program permission) */}
+      <ApplicationCountsCard />
 
       {/* Schools assignments (only renders for staff with assigned students) */}
       <MyAssignmentsCard />
