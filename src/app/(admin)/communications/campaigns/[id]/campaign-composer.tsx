@@ -945,6 +945,7 @@ function BlockEditor({
             onChange={(html) => onChange({ text: html })}
             disabled={disabled}
             placeholder="Write your message — bold, italics, and links supported."
+            mergeFields={[{ label: "First name", token: "[First Name]" }]}
             onPolish={async (html) => {
               const res = await fetch(
                 `/api/campaigns/${campaignId}/ai/polish`,

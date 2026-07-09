@@ -8,6 +8,7 @@ import {
   type CampaignBody,
 } from "@/lib/campaigns/blocks";
 import { sendViaMailtrap } from "@/lib/email/mailtrap";
+import { substituteFirstName, escapeHtml } from "@/lib/email/placeholders";
 import { getAuthedUser, canManageComms, COMMS_SEND_PERMS } from "@/lib/api-auth";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://www.ffsahub.com";
@@ -77,12 +78,31 @@ export async function POST(
   const brand = await getEffectiveBrand(supabase, campaign.sending_identity_id);
   const testNotice = `Preview send to ${to}. Recipients won't see this notice. The rest of the email is exactly what would be sent.`;
 
-  const html = renderCampaignHtml(source, {
-    previewText: campaign.preview_text ?? undefined,
-    brand,
-    testNotice,
-  });
-  const text = renderCampaignText(source, { brand, testNotice });
+  // Resolve [First Name] / {{first_name}} tokens the same way a real send
+  // does, so the preview is honest. Use the test recipient's own contact
+  // first name when we have one on file, else fall back to "there".
+  const { data: testContact } = await supabase
+    .from("contacts")
+    .select("first_name")
+    .ilike("email", to)
+    .limit(1)
+    .maybeSingle();
+  const firstName =
+    (testContact?.first_name as string | null)?.trim() || "there";
+
+  const html = substituteFirstName(
+    renderCampaignHtml(source, {
+      previewText: campaign.preview_text ?? undefined,
+      brand,
+      testNotice,
+    }),
+    escapeHtml(firstName)
+  );
+  const text = substituteFirstName(
+    renderCampaignText(source, { brand, testNotice }),
+    firstName
+  );
+  const subject = substituteFirstName(campaign.subject, firstName);
 
   const identity = campaign.sending_identities as {
     from_email: string;
@@ -107,7 +127,7 @@ export async function POST(
     fromName: identity.from_name,
     replyTo: identity.reply_to,
     to,
-    subject: campaign.subject,
+    subject,
     html,
     text,
     category: `campaign-test:${id}`,

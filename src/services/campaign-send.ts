@@ -4,6 +4,7 @@ import {
   type CampaignBody,
 } from "@/lib/campaigns/blocks";
 import { sendViaMailtrap } from "@/lib/email/mailtrap";
+import { substituteFirstName, escapeHtml } from "@/lib/email/placeholders";
 import { signPrefsToken } from "@/lib/tokens/unsubscribe";
 import { getEffectiveBrand } from "@/services/brand";
 
@@ -112,7 +113,7 @@ export async function sendCampaignBatch(
   const [{ data: audience }, { data: doneRows }] = await Promise.all([
     supabase
       .from("v_campaign_audience")
-      .select("contact_id, email")
+      .select("contact_id, email, first_name")
       .eq("campaign_id", campaignId),
     supabase
       .from("campaign_recipients")
@@ -143,21 +144,37 @@ export async function sendCampaignBatch(
   let sent = 0;
   let failed = 0;
 
-  for (const recipient of batch as { contact_id: string; email: string }[]) {
+  for (const recipient of batch as {
+    contact_id: string;
+    email: string;
+    first_name: string | null;
+  }[]) {
     const prefsUrl = prefsUrlFor(recipient.contact_id, campaignId);
-    const html = renderCampaignHtml(body, {
-      previewText: campaign.preview_text ?? undefined,
-      brand,
-      footerHtml: footerHtml(prefsUrl),
-    });
-    const text = renderCampaignText(body, { brand });
+    // Personalise [First Name] / {{first_name}} tokens the user dropped into
+    // any block or the subject. Fall back to "there" when a contact has no
+    // first name. The name is HTML-escaped before it lands in HTML so an odd
+    // name can't break the markup (mirrors the workflow email path).
+    const firstName = recipient.first_name?.trim() || "there";
+    const html = substituteFirstName(
+      renderCampaignHtml(body, {
+        previewText: campaign.preview_text ?? undefined,
+        brand,
+        footerHtml: footerHtml(prefsUrl),
+      }),
+      escapeHtml(firstName)
+    );
+    const text = substituteFirstName(
+      renderCampaignText(body, { brand }),
+      firstName
+    );
+    const subject = substituteFirstName(campaign.subject, firstName);
 
     const result = await sendViaMailtrap({
       fromEmail,
       fromName,
       replyTo,
       to: recipient.email,
-      subject: campaign.subject,
+      subject,
       html,
       text: `${text}\n\n———\nManage email preferences: ${prefsUrl}`,
       category: `campaign:${campaignId}`,
