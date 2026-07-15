@@ -67,6 +67,15 @@ export async function deactivateLabel(supabase: Client, id: string) {
   return supabase.from("labels").update({ is_active: false }).eq("id", id).select().single();
 }
 
+// Hard delete. Cascades to contact_labels + unsubscribes (see migrations
+// 042/046/052) and nulls events.base_label_id / event_outcomes.label_id.
+// Blocked by ON DELETE RESTRICT if any form (044) or campaign_labels (051)
+// still references the label — callers should pre-flight those and/or map
+// the Postgres 23503 error to a friendly message.
+export async function deleteLabel(supabase: Client, id: string) {
+  return supabase.from("labels").delete().eq("id", id);
+}
+
 // ────────────────────────────────────────────────────────────
 // Contact ↔ Label assignments
 // ────────────────────────────────────────────────────────────

@@ -38,6 +38,12 @@ export default async function CommunicationsPage() {
             Automations →
           </a>
           <a
+            href="/communications/labels"
+            className="text-sm px-3 py-1.5 rounded-full border hover:bg-muted transition-colors"
+          >
+            Labels →
+          </a>
+          <a
             href="/communications/identities"
             className="text-sm px-3 py-1.5 rounded-full border hover:bg-muted transition-colors"
           >
