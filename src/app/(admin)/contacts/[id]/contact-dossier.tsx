@@ -240,7 +240,7 @@ export function ContactDossier({ dossier }: { dossier: ContactDossier }) {
                 <div className="flex items-center gap-2 shrink-0">
                   <StatusPill
                     label={a.status}
-                    tone={a.status === "accepted" ? "good" : a.status === "rejected" ? "bad" : a.status === "waitlisted" ? "neutral" : "accent"}
+                    tone={a.status === "accepted" ? "good" : a.status === "rejected" ? "bad" : a.status === "waitlisted" || a.status === "cancelled" ? "neutral" : "accent"}
                   />
                   <span className="text-xs text-muted-foreground">{fmtDate(a.submittedAt)}</span>
                 </div>

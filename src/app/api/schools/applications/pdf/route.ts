@@ -141,6 +141,7 @@ export async function GET(request: Request) {
     accepted: "background:#d1fae5;color:#065f46;",
     rejected: "background:#fee2e2;color:#991b1b;",
     waitlisted: "background:#fef3c7;color:#92400e;",
+    cancelled: "background:#e5e7eb;color:#374151;",
   };
 
   // Generate signed URLs for any photo/file answers

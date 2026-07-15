@@ -283,6 +283,7 @@ const APPLICATION_STATUSES = [
   "accepted",
   "rejected",
   "waitlisted",
+  "cancelled",
 ] as const;
 
 async function applicationStats(input: {

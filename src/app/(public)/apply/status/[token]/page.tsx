@@ -23,6 +23,7 @@ const STATUS_ORDER: Record<string, number> = {
   accepted: 3,
   rejected: 3,
   waitlisted: 3,
+  cancelled: 3,
 };
 
 function StatusBadge({ status }: { status: string }) {
@@ -35,6 +36,7 @@ function StatusBadge({ status }: { status: string }) {
     accepted: { bg: "hsl(142 40% 14%)", fg: "hsl(142 60% 65%)", border: "hsl(142 40% 30%)" },
     rejected: { bg: "hsl(0 50% 14%)", fg: "hsl(0 75% 70%)", border: "hsl(0 50% 30%)" },
     waitlisted: { bg: "hsl(28 60% 14%)", fg: "hsl(28 95% 70%)", border: "hsl(28 60% 30%)" },
+    cancelled: { bg: "hsl(215 15% 16%)", fg: "hsl(215 15% 70%)", border: "hsl(215 15% 32%)" },
   };
   const p = palettes[status] ?? palettes.submitted;
   return (
@@ -106,7 +108,7 @@ export default async function ApplicationStatusPage({
     (response.applicant_info as Record<string, string> | null)?.first_name ??
     "Applicant";
 
-  const statusMessages: Record<string, { tone: "green" | "red" | "orange" | "purple"; title: string; body: string }> = {
+  const statusMessages: Record<string, { tone: "green" | "red" | "orange" | "purple" | "grey"; title: string; body: string }> = {
     accepted: {
       tone: "green",
       title: "Congratulations! Your application has been accepted.",
@@ -127,6 +129,11 @@ export default async function ApplicationStatusPage({
       title: "Your interview has been scheduled!",
       body: "Check your email for details about your upcoming interview.",
     },
+    cancelled: {
+      tone: "grey",
+      title: "This application has been cancelled.",
+      body: "If you believe this is a mistake, please contact us.",
+    },
   };
   const msg = statusMessages[response.status];
   const toneColor: Record<string, string> = {
@@ -134,6 +141,7 @@ export default async function ApplicationStatusPage({
     red: "hsl(0 75% 70%)",
     orange: "hsl(28 95% 65%)",
     purple: "hsl(280 80% 75%)",
+    grey: "hsl(215 15% 70%)",
   };
 
   return (

@@ -62,6 +62,7 @@ export default async function ApplyPage({
       accepted: "default",
       rejected: "destructive",
       waitlisted: "secondary",
+      cancelled: "secondary",
     };
 
     return (

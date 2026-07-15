@@ -1529,6 +1529,7 @@ const ALL_STATUSES = [
   { key: "accepted", label: "Accepted" },
   { key: "waitlisted", label: "Waitlisted" },
   { key: "rejected", label: "Rejected" },
+  { key: "cancelled", label: "Cancelled" },
 ] as const;
 
 function ApplicantsTab({
@@ -1774,6 +1775,7 @@ function ApplicantsTab({
     accepted: "default",
     rejected: "destructive",
     waitlisted: "secondary",
+    cancelled: "secondary",
   };
 
   // Compute status counts for pipeline chips
@@ -2164,6 +2166,7 @@ function ApplicantsTab({
               <SelectItem value="accepted">Accepted</SelectItem>
               <SelectItem value="rejected">Rejected</SelectItem>
               <SelectItem value="waitlisted">Waitlisted</SelectItem>
+              <SelectItem value="cancelled">Cancelled</SelectItem>
             </SelectContent>
           </Select>
           <Button
@@ -2744,6 +2747,7 @@ function ApplicantsTab({
                     <SelectItem value="accepted">Accepted</SelectItem>
                     <SelectItem value="rejected">Rejected</SelectItem>
                     <SelectItem value="waitlisted">Waitlisted</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
                   </SelectContent>
                 </Select>
                 <Button

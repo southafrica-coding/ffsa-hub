@@ -103,6 +103,7 @@ export default async function MySchoolsPage() {
     accepted: "default",
     rejected: "destructive",
     waitlisted: "secondary",
+    cancelled: "secondary",
   };
 
   return (
