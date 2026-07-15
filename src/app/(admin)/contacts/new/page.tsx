@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { AlertTriangle } from "lucide-react";
+import { getLabelColors } from "@/lib/label-color";
 
 interface DuplicateMatch {
   id: string;
@@ -23,6 +24,14 @@ interface DuplicateMatch {
   email: string | null;
   phone: string | null;
   status: string;
+}
+
+interface PickerLabel {
+  id: string;
+  slug: string;
+  name: string;
+  category: string | null;
+  color: string | null;
 }
 
 export default function NewContactPage() {
@@ -40,6 +49,31 @@ export default function NewContactPage() {
     email: "",
     phone: "",
   });
+
+  const [allLabels, setAllLabels] = useState<PickerLabel[]>([]);
+  const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const { data } = await supabase
+        .from("labels")
+        .select("id, slug, name, category, color")
+        .eq("is_active", true)
+        .order("name");
+      if (active) setAllLabels((data ?? []) as PickerLabel[]);
+    })();
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function toggleLabel(id: string) {
+    setSelectedLabelIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  }
 
   function updateField(field: string, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -124,6 +158,25 @@ export default function NewContactPage() {
           is_primary: true,
           source: "manual",
         });
+      }
+
+      // Attach any labels the user picked. Reuses the same endpoint the
+      // contact detail page uses, so activity logging and label_added
+      // workflows fire consistently. Best-effort: a label hiccup never
+      // discards the already-created contact.
+      for (const labelId of selectedLabelIds) {
+        await fetch(`/api/contacts/${newId}/labels`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ labelId }),
+        });
+      }
+
+      if (selectedLabelIds.length > 0) {
+        // Land on the new contact so the applied labels are visible.
+        router.push(`/contacts/${newId}`);
+        router.refresh();
+        return;
       }
     }
 
@@ -270,12 +323,13 @@ export default function NewContactPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">Email *</Label>
                 <Input
                   id="email"
                   type="email"
                   value={form.email}
                   onChange={(e) => updateField("email", e.target.value)}
+                  required
                 />
               </div>
               <div className="space-y-2">
@@ -287,6 +341,40 @@ export default function NewContactPage() {
                 />
               </div>
             </div>
+
+            {allLabels.length > 0 && (
+              <div className="space-y-2">
+                <Label>Labels</Label>
+                <p className="text-xs text-muted-foreground">
+                  Optional. Tap to tag this contact — adding a label may enrol
+                  them in that label&apos;s email workflows.
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {allLabels.map((l) => {
+                    const selected = selectedLabelIds.includes(l.id);
+                    const colors = getLabelColors(l);
+                    return (
+                      <button
+                        key={l.id}
+                        type="button"
+                        onClick={() => toggleLabel(l.id)}
+                        aria-pressed={selected}
+                        className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium transition-opacity"
+                        style={{
+                          backgroundColor: colors.bg,
+                          color: colors.text,
+                          borderColor: selected ? colors.text : colors.border,
+                          opacity: selected ? 1 : 0.5,
+                        }}
+                      >
+                        {selected && <span aria-hidden>✓</span>}
+                        {l.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {error && <p className="text-sm text-destructive">{error}</p>}
 
