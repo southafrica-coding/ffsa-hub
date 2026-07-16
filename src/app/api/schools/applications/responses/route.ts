@@ -42,6 +42,10 @@ export async function POST(request: Request) {
     program_id,
     user_id: user.id,
     answers,
+    // Always stamp the applicant's email onto the row itself, so downstream
+    // flows (acceptance, resend-invite, export) never depend on the linked
+    // users join being readable. Signed-in applicants otherwise left this null.
+    applicant_email: user.email ?? null,
   });
 
   if (error) {

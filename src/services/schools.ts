@@ -529,6 +529,7 @@ export async function createResponse(supabase: Client, data: {
   program_id: string;
   user_id: string;
   answers: Array<{ question_id: string; question_label: string; answer: string }>;
+  applicant_email?: string | null;
 }) {
   return supabase.from("application_responses").insert(data).select().single();
 }
