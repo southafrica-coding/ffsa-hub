@@ -33,8 +33,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
   deriveUserLifecycle,
   formatRelativeTime,
+  groupMissingFields,
+  type LifecycleInfo,
   type UserLifecycleStage,
 } from "@/lib/users/lifecycle";
 import { UserAvatar } from "@/components/ui/user-avatar";
@@ -308,10 +315,7 @@ export function UsersTable({
                         {lifecycle.label}
                       </Badge>
                       {lifecycle.stage === "profile_incomplete" && (
-                        <span className="text-[11px] text-muted-foreground">
-                          {lifecycle.completedRequired} of{" "}
-                          {lifecycle.totalRequired} fields
-                        </span>
+                        <MissingFieldsPopover lifecycle={lifecycle} />
                       )}
                       {lifecycle.insurance.state === "expired" && (
                         <Badge
@@ -435,6 +439,58 @@ export function UsersTable({
         </TableBody>
       </Table>
     </div>
+  );
+}
+
+// The "X of Y fields" summary under the "Profile Incomplete" badge, upgraded
+// to a click-to-open list of exactly which required fields are still missing —
+// so a super admin can see what's blocking the user without opening their form.
+function MissingFieldsPopover({ lifecycle }: { lifecycle: LifecycleInfo }) {
+  const groups = groupMissingFields(lifecycle.missingFields);
+  const count = lifecycle.missingFields.length;
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          // Stop the row's onClick from navigating to /users/[id].
+          onClick={(e) => e.stopPropagation()}
+          className="text-[11px] text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground"
+        >
+          {lifecycle.completedRequired} of {lifecycle.totalRequired} fields
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="w-64"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <p className="text-xs font-semibold mb-2">
+          Missing {count} field{count === 1 ? "" : "s"}
+        </p>
+        {groups.length === 0 ? (
+          <p className="text-xs text-muted-foreground">Nothing outstanding.</p>
+        ) : (
+          <div className="space-y-2">
+            {groups.map((group) => (
+              <div key={group.section}>
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  {group.section}
+                </p>
+                <ul className="mt-0.5 space-y-0.5">
+                  {group.fields.map((field) => (
+                    <li key={field.field} className="text-xs">
+                      {field.label}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
   );
 }
 

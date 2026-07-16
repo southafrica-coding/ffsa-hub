@@ -6,6 +6,10 @@ import { getUserSecurityEvents } from "@/lib/users/security-events";
 import { getSchoolsManageScopes } from "@/lib/auth/schools-manage-scopes";
 import { ProfileRecords } from "@/components/profile-records";
 import { SecurityActivityCard } from "@/components/security-activity-card";
+import {
+  deriveUserLifecycle,
+  groupMissingFields,
+} from "@/lib/users/lifecycle";
 import { UserHeader } from "./user-header";
 import { UserTabs } from "./user-tabs";
 
@@ -57,6 +61,13 @@ export default async function UserProfilePage({
     ]);
   if (error || !targetUser) notFound();
 
+  // Feed the real Supabase-Auth last-sign-in so the derived stage matches the
+  // Users table (the users.last_sign_in_at column is unmaintained).
+  const lifecycle = deriveUserLifecycle({
+    ...targetUser,
+    last_sign_in_at: authLastSignInAt ?? targetUser.last_sign_in_at,
+  });
+
   return (
     <div className="space-y-6">
       <UserHeader
@@ -69,6 +80,8 @@ export default async function UserProfilePage({
         active="profile"
         showPermissions={canManagePermissions}
       />
+
+      <ProfileCompletenessCard lifecycle={lifecycle} />
 
       <section className="grid gap-4 lg:grid-cols-3">
         <InfoCard title="Personal">
@@ -157,6 +170,76 @@ function addressLines(u: {
     u.postal_code,
     u.country,
   ].filter((s): s is string => !!s && s.length > 0);
+}
+
+function ProfileCompletenessCard({
+  lifecycle,
+}: {
+  lifecycle: ReturnType<typeof deriveUserLifecycle>;
+}) {
+  const groups = groupMissingFields(lifecycle.missingFields);
+  const missingCount = lifecycle.missingFields.length;
+  const isComplete = missingCount === 0;
+  const insurance = lifecycle.insurance;
+
+  return (
+    <section className="rounded-xl border p-4 space-y-3">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <p className="page-eyebrow">PROFILE COMPLETENESS</p>
+          <h2 className="text-xl font-semibold">
+            {isComplete ? "Profile complete" : "Profile incomplete"}
+          </h2>
+        </div>
+        <span className="text-sm text-muted-foreground">
+          {lifecycle.completedRequired} of {lifecycle.totalRequired} required
+          fields on file
+        </span>
+      </div>
+
+      {isComplete ? (
+        <p className="text-sm text-emerald-500">
+          All required fields are on file.
+        </p>
+      ) : (
+        <div>
+          <p className="text-sm text-orange-400 mb-2">
+            Missing {missingCount} required field{missingCount === 1 ? "" : "s"}:
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {groups.map((group) => (
+              <div key={group.section}>
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                  {group.section}
+                </p>
+                <ul className="mt-1 space-y-0.5">
+                  {group.fields.map((field) => (
+                    <li key={field.field} className="text-sm">
+                      {field.label}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {insurance.state === "expired" && (
+        <p className="text-sm text-red-400">
+          Health insurance policy expired
+          {insurance.expiryDate ? ` on ${insurance.expiryDate}` : ""}.
+        </p>
+      )}
+      {insurance.state === "expiring" && (
+        <p className="text-sm text-orange-400">
+          Health insurance expires in {insurance.daysLeft ?? 0} day
+          {insurance.daysLeft === 1 ? "" : "s"}
+          {insurance.expiryDate ? ` (${insurance.expiryDate})` : ""}.
+        </p>
+      )}
+    </section>
+  );
 }
 
 function InfoCard({

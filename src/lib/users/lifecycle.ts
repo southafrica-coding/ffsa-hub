@@ -1,9 +1,14 @@
 import {
   getMissingProfileFields,
+  getMissingPassportFields,
+  getMissingVisaFields,
   getInsuranceStatus,
   type FieldConfig,
   type InsuranceStatus,
   REQUIRED_PROFILE_FIELDS,
+  PASSPORT_FIELDS,
+  VISA_BASE_FIELDS,
+  VISA_LONG_TERM_FIELDS,
 } from "./profile-fields";
 
 export type UserLifecycleStage =
@@ -60,10 +65,20 @@ const STAGE_LABELS: Record<UserLifecycleStage, { label: string; description: str
 };
 
 export function deriveUserLifecycle(user: UserLifecycleInput): LifecycleInfo {
-  const missingFields = getMissingProfileFields(user as Record<string, unknown>);
-  const totalRequired = REQUIRED_PROFILE_FIELDS.length;
+  const row = user as Record<string, unknown>;
+
+  // Everything the profile-completion gate would block on: the core required
+  // fields plus passport (required for everyone) and visa (international staff
+  // only). Kept in sync with getProfileBlock so the badge/lists match what
+  // actually stops the user entering the Hub.
+  const missingFields = [
+    ...getMissingProfileFields(row),
+    ...getMissingPassportFields(row),
+    ...getMissingVisaFields(row),
+  ];
+  const totalRequired = countApplicableFields(row);
   const completedRequired = totalRequired - missingFields.length;
-  const insurance = getInsuranceStatus(user as Record<string, unknown>);
+  const insurance = getInsuranceStatus(row);
 
   const stage: UserLifecycleStage = computeStage(user, missingFields.length);
   const { label, description } = STAGE_LABELS[stage];
@@ -77,6 +92,58 @@ export function deriveUserLifecycle(user: UserLifecycleInput): LifecycleInfo {
     completedRequired,
     insurance,
   };
+}
+
+// How many fields are actually required for THIS user — the denominator in
+// the "X of Y fields" summary. Passport applies to everyone; visa only to
+// international staff (and the long-term specifics only for a long-term visa).
+// Mirrors the conditional getMissingVisaFields encodes so the two never drift.
+function countApplicableFields(row: Record<string, unknown>): number {
+  let total = REQUIRED_PROFILE_FIELDS.length + PASSPORT_FIELDS.length;
+  if (row.is_international) {
+    total += VISA_BASE_FIELDS.length;
+    if (row.visa_category === "long_term") {
+      total += VISA_LONG_TERM_FIELDS.length;
+    }
+  }
+  return total;
+}
+
+// Group missing fields into readable sections for the admin surfaces, keyed off
+// the column-name prefix. Order is intentional (matches the onboarding form).
+// Returns only non-empty groups.
+export type MissingFieldGroup = { section: string; fields: FieldConfig[] };
+
+export function groupMissingFields(fields: FieldConfig[]): MissingFieldGroup[] {
+  const sectionFor = (field: string): string => {
+    if (field.startsWith("address_") || field === "city" || field === "province" || field === "postal_code" || field === "country") {
+      return "Address";
+    }
+    if (field.startsWith("emergency_contact_")) return "Emergency contact";
+    if (field.startsWith("health_insurance_")) return "Health insurance";
+    if (field.startsWith("passport_")) return "Passport";
+    if (field.startsWith("visa_")) return "Visa";
+    return "Personal";
+  };
+
+  const order = [
+    "Personal",
+    "Address",
+    "Emergency contact",
+    "Health insurance",
+    "Passport",
+    "Visa",
+  ];
+  const bySection = new Map<string, FieldConfig[]>();
+  for (const f of fields) {
+    const section = sectionFor(f.field);
+    const bucket = bySection.get(section) ?? [];
+    bucket.push(f);
+    bySection.set(section, bucket);
+  }
+  return order
+    .filter((section) => bySection.has(section))
+    .map((section) => ({ section, fields: bySection.get(section)! }));
 }
 
 function computeStage(
