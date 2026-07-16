@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ChevronRight,
@@ -11,9 +11,11 @@ import {
   PowerOff,
   Trash2,
   ShieldCheck,
+  Search,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -137,6 +139,27 @@ export function UsersTable({
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+
+  const filteredUsers = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return users;
+    return users.filter((user) => {
+      const departmentLabel = user.department
+        ? DEPARTMENT_LABELS[user.department] ?? user.department
+        : "";
+      return [
+        displayName(user),
+        user.email ?? "",
+        user.job_title ?? "",
+        user.department ?? "",
+        departmentLabel,
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(q);
+    });
+  }, [users, search]);
 
   async function callApi(
     path: string,
@@ -207,6 +230,17 @@ export function UsersTable({
 
   return (
     <div className="rounded-lg border bg-card">
+      <div className="p-3 border-b">
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search by name, email, job title, or department..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+      </div>
       <Table>
         <TableHeader>
           <TableRow>
@@ -220,7 +254,7 @@ export function UsersTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {users.length === 0 ? (
+          {filteredUsers.length === 0 ? (
             <TableRow>
               <TableCell
                 colSpan={7}
@@ -230,7 +264,7 @@ export function UsersTable({
               </TableCell>
             </TableRow>
           ) : (
-            users.map((user) => {
+            filteredUsers.map((user) => {
               const lifecycle = deriveUserLifecycle(user);
               const stageStyle = STAGE_STYLES[lifecycle.stage];
               const isSelf = user.id === currentUserId;
