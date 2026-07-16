@@ -89,7 +89,23 @@ export async function POST(request: Request) {
     city?: string;
   } | null;
 
-  const applicantEmail = appResponse.applicant_email ?? applicantInfo?.email;
+  // Fall back to the linked user's email when the response row itself stores no
+  // applicant_email / applicant_info.email (e.g. staff-created or imported
+  // applications, where the address lives on the linked users row). Mirrors
+  // getApplicantDetails() and the resend-invite route, which already do this.
+  let linkedUserEmail: string | null = null;
+  if (appResponse.user_id) {
+    const { data: linkedUser } = await adminSupabase
+      .from("users")
+      .select("email")
+      .eq("id", appResponse.user_id)
+      .maybeSingle();
+    linkedUserEmail =
+      (linkedUser as { email?: string | null } | null)?.email ?? null;
+  }
+
+  const applicantEmail =
+    appResponse.applicant_email ?? applicantInfo?.email ?? linkedUserEmail;
 
   if (!applicantEmail) {
     return NextResponse.json(
