@@ -47,16 +47,14 @@ export async function getMinistryRoster(supabase: Client, ministryId: string) {
 }
 
 /**
- * Users to offer in the "add staff / add leader" pickers — real staff,
- * whether they've signed in yet (`active`) or are still `invited`. Invited
- * users are legitimate staff, so they must be pickable (e.g. to add or make
- * them a ministry leader before they accept). Only deactivated statuses (if
- * ever added) are excluded.
+ * Candidate users for the "add staff / add leader" pickers. Returns the full
+ * user row (all profile columns) so the caller can keep only those whose
+ * profile is fully set up (deriveUserLifecycle → no missing required fields).
+ * `users.status` is not used for this — it's unreliable (see auth-signins.ts).
  */
 export async function listPickableUsers(supabase: Client) {
   return supabase
     .from("users")
-    .select("id, first_name, last_name, display_name, preferred_name, email")
-    .in("status", ["active", "invited"])
+    .select("*")
     .order("first_name", { ascending: true });
 }
