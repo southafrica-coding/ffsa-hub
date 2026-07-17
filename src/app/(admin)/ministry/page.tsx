@@ -44,7 +44,7 @@ export default async function MinistryPage() {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {visible.map((m) => {
-            const count = m.ministry_memberships?.[0]?.count ?? 0;
+            const count = m.staff_ministry_members?.[0]?.count ?? 0;
             return (
               <Link
                 key={m.id}
