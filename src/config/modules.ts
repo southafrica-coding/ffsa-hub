@@ -10,6 +10,7 @@ import {
   UserCog,
   Shield,
   Heart,
+  HeartHandshake,
   Archive,
   History,
   Building2,
@@ -123,6 +124,14 @@ export const ADMIN_MODULES: ModuleDefinition[] = [
     icon: Globe,
     description: "Outreach trips and impact stats",
     requiredRoles: ["super_admin", "admin", "mission_leader"],
+  },
+  {
+    id: "ministry",
+    label: "Ministry",
+    href: "/ministry",
+    icon: HeartHandshake,
+    description: "Ministries and their staff teams",
+    requiredRoles: ["super_admin", "admin", "ministry_leader"],
   },
   {
     id: "records-library",
