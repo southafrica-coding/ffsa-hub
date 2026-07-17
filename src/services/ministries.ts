@@ -46,11 +46,17 @@ export async function getMinistryRoster(supabase: Client, ministryId: string) {
     .order("created_at", { ascending: true });
 }
 
-/** Active users to offer in the "add staff / add leader" pickers. */
+/**
+ * Users to offer in the "add staff / add leader" pickers — real staff,
+ * whether they've signed in yet (`active`) or are still `invited`. Invited
+ * users are legitimate staff, so they must be pickable (e.g. to add or make
+ * them a ministry leader before they accept). Only deactivated statuses (if
+ * ever added) are excluded.
+ */
 export async function listPickableUsers(supabase: Client) {
   return supabase
     .from("users")
     .select("id, first_name, last_name, display_name, preferred_name, email")
-    .eq("status", "active")
+    .in("status", ["active", "invited"])
     .order("first_name", { ascending: true });
 }
