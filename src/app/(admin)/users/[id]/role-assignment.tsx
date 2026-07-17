@@ -12,35 +12,60 @@ export type AssignedRole = {
   scope_id: string | null;
   display_name: string;
 };
-export type AssignableRole = { id: string; display_name: string };
+export type AssignableRole = {
+  id: string;
+  display_name: string;
+  // When set (e.g. "program"), adding the role prompts for a scope first.
+  scope_type?: string | null;
+};
 
 export function RoleAssignment({
   userId,
   assigned,
   assignable,
   scopeLabels,
+  programOptions = [],
   canManage,
 }: {
   userId: string;
   assigned: AssignedRole[];
   assignable: AssignableRole[];
   scopeLabels: Record<string, string>;
+  programOptions?: { id: string; label: string }[];
   canManage: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  // The scope-capable role awaiting a program pick (2nd menu level), or null.
+  const [scopingRole, setScopingRole] = useState<AssignableRole | null>(null);
 
   const assignedIds = new Set(assigned.map((a) => a.role_id));
-  const options = assignable.filter((r) => !assignedIds.has(r.id));
+  // Scope-capable roles stay available even once assigned, so a leader can be
+  // added to more than one program; global roles drop off after assignment.
+  const options = assignable.filter((r) => r.scope_type || !assignedIds.has(r.id));
 
-  async function addRole(roleId: string) {
-    setBusy(true);
+  function closeMenu() {
     setOpen(false);
+    setScopingRole(null);
+  }
+
+  async function addRole(
+    roleId: string,
+    scopeType: string | null = null,
+    scopeId: string | null = null
+  ) {
+    setBusy(true);
+    closeMenu();
     const res = await fetch("/api/admin/grant-role", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: userId, role_id: roleId }),
+      body: JSON.stringify({
+        user_id: userId,
+        role_id: roleId,
+        scope_type: scopeType,
+        scope_id: scopeId,
+      }),
     });
     setBusy(false);
     if (!res.ok) {
@@ -141,7 +166,7 @@ export function RoleAssignment({
         {canManage && (
           <div style={{ position: "relative", display: "inline-block" }}>
             <button
-              onClick={() => setOpen((o) => !o)}
+              onClick={() => (open ? closeMenu() : setOpen(true))}
               disabled={busy || options.length === 0}
               style={{
                 display: "inline-flex",
@@ -175,25 +200,81 @@ export function RoleAssignment({
                   boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
                 }}
               >
-                {options.map((r) => (
-                  <button
-                    key={r.id}
-                    onClick={() => addRole(r.id)}
-                    style={{
-                      display: "block",
-                      width: "100%",
-                      textAlign: "left",
-                      padding: "7px 10px",
-                      fontSize: "13px",
-                      color: "#F0EBE3",
-                      background: "transparent",
-                      borderRadius: "6px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    {r.display_name}
-                  </button>
-                ))}
+                {scopingRole ? (
+                  // 2nd level: pick which program this scoped role applies to.
+                  <>
+                    <button
+                      onClick={() => setScopingRole(null)}
+                      style={{
+                        display: "block",
+                        width: "100%",
+                        textAlign: "left",
+                        padding: "7px 10px",
+                        fontSize: "12px",
+                        color: "hsl(30 8% 55%)",
+                        background: "transparent",
+                        borderRadius: "6px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      ← {scopingRole.display_name} · pick a program
+                    </button>
+                    {programOptions.length === 0 && (
+                      <span
+                        style={{
+                          display: "block",
+                          padding: "7px 10px",
+                          fontSize: "12px",
+                          color: "hsl(30 8% 45%)",
+                        }}
+                      >
+                        No programs available.
+                      </span>
+                    )}
+                    {programOptions.map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => addRole(scopingRole.id, "program", p.id)}
+                        style={{
+                          display: "block",
+                          width: "100%",
+                          textAlign: "left",
+                          padding: "7px 10px",
+                          fontSize: "13px",
+                          color: "#F0EBE3",
+                          background: "transparent",
+                          borderRadius: "6px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </>
+                ) : (
+                  options.map((r) => (
+                    <button
+                      key={r.id}
+                      onClick={() => (r.scope_type === "program" ? setScopingRole(r) : addRole(r.id))}
+                      style={{
+                        display: "block",
+                        width: "100%",
+                        textAlign: "left",
+                        padding: "7px 10px",
+                        fontSize: "13px",
+                        color: "#F0EBE3",
+                        background: "transparent",
+                        borderRadius: "6px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {r.display_name}
+                      {r.scope_type === "program" && (
+                        <span style={{ color: "hsl(30 8% 45%)", fontSize: "11px" }}> · by program</span>
+                      )}
+                    </button>
+                  ))
+                )}
               </div>
             )}
           </div>

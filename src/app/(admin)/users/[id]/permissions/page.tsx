@@ -74,12 +74,15 @@ export default async function UserPermissionsPage({
       .limit(1),
     supabase
       .from("user_roles")
-      .select("id, role_id, scope_type, scope_id, roles!inner(display_name, is_system)")
+      .select("id, role_id, scope_type, scope_id, roles!inner(name, display_name, is_system)")
       .eq("user_id", id),
+    // Non-system roles are the normal "job titles". program_leader is a
+    // system role but is assignable here (scoped to a program) — allow it
+    // through explicitly.
     supabase
       .from("roles")
-      .select("id, display_name")
-      .eq("is_system", false)
+      .select("id, name, display_name")
+      .or("is_system.eq.false,name.eq.program_leader")
       .order("display_name", { ascending: true }),
   ]);
 
@@ -100,10 +103,12 @@ export default async function UserPermissionsPage({
         scope_type: (r.scope_type as string | null) ?? null,
         scope_id: (r.scope_id as string | null) ?? null,
         display_name: (role?.display_name as string) ?? "Role",
+        name: (role?.name as string) ?? "",
         is_system: !!role?.is_system,
       };
     })
-    .filter((r) => !r.is_system)
+    // Show non-system job titles, plus the scoped program_leader chip.
+    .filter((r) => !r.is_system || r.name === "program_leader")
     .map((r) => ({
       id: r.id,
       role_id: r.role_id,
@@ -112,13 +117,20 @@ export default async function UserPermissionsPage({
       display_name: r.display_name,
     }));
 
+  // Roles carrying a program scope prompt for a program when added.
   const assignable = (assignableRolesRes.data ?? []).map((r) => ({
     id: r.id as string,
     display_name: r.display_name as string,
+    scope_type: (r.name as string) === "program_leader" ? "program" : null,
   }));
 
   const scopeLabels: Record<string, string> = {};
   for (const s of scopeOptions) scopeLabels[s.id] = s.label;
+
+  // Program-only options for the scoped-role picker (e.g. Program Leader).
+  const programOptions = scopeOptions
+    .filter((s) => s.scope_type === "program")
+    .map((s) => ({ id: s.id, label: s.label }));
 
   return (
     <div className="space-y-6">
@@ -134,6 +146,7 @@ export default async function UserPermissionsPage({
         assigned={assigned}
         assignable={assignable}
         scopeLabels={scopeLabels}
+        programOptions={programOptions}
         canManage={isSuperAdmin || canManageRoles}
       />
 
