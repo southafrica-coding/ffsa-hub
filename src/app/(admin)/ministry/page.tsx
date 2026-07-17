@@ -30,7 +30,7 @@ export default async function MinistryPage() {
       <div className="flex items-center justify-between gap-4">
         <div>
           <p className="page-eyebrow">PEOPLE</p>
-          <h1 className="page-title">Ministry</h1>
+          <h1 className="page-title">Ministries</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {visible.length} ministr{visible.length === 1 ? "y" : "ies"}
             {!isAdmin && " you lead"}

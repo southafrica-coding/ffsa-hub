@@ -127,7 +127,7 @@ export const ADMIN_MODULES: ModuleDefinition[] = [
   },
   {
     id: "ministry",
-    label: "Ministry",
+    label: "Ministries",
     href: "/ministry",
     icon: HeartHandshake,
     description: "Ministries and their staff teams",
