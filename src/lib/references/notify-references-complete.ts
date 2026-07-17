@@ -15,6 +15,45 @@ function resolveApplicantName(app: any): string {
   return fromUser || fromInfo || "the applicant";
 }
 
+type Recipient = {
+  email: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  preferred_name?: string | null;
+};
+
+// Active users who hold the `program_leader` role for this program — i.e.
+// assigned to it (scope_type='program', scope_id=<program>) OR globally
+// (scope_type NULL, applies everywhere), mirroring has_schools_access. Deduped
+// by email. Used as the fallback recipient when an application is unassigned.
+async function getProgramLeaders(
+  adminSupabase: Client,
+  programId: string
+): Promise<Recipient[]> {
+  const { data } = await adminSupabase
+    .from("user_roles")
+    .select(
+      "scope_type, scope_id, roles!inner(name), " +
+        "user:users!user_id(first_name, last_name, preferred_name, email, status)"
+    )
+    .eq("roles.name", "program_leader");
+
+  const seen = new Set<string>();
+  const out: Recipient[] = [];
+  for (const row of ((data ?? []) as any[])) {
+    const applies =
+      row.scope_type == null ||
+      (row.scope_type === "program" && row.scope_id === programId);
+    if (!applies) continue;
+    const u = row.user;
+    if (!u?.email || u.status !== "active") continue;
+    if (seen.has(u.email)) continue;
+    seen.add(u.email);
+    out.push(u);
+  }
+  return out;
+}
+
 /**
  * After a reference is submitted, notify the application's assigned staff member
  * IF every required reference is now in.
@@ -23,7 +62,8 @@ function resolveApplicantName(app: any): string {
  *   have `status = 'submitted'`. Optional-slot references don't gate it.
  * - Fires at most once naturally: only the final required submission flips the
  *   set to complete, and a submitted reference can't be re-opened.
- * - Unassigned applications (`assigned_staff_id` null) send NO email — by design.
+ * - Assigned → emails the assignee. Unassigned → emails the program's
+ *   leader(s) a "needs assigning" variant (nothing sent if there are none).
  *
  * Runs against the admin (service-role) client — the referee is unauthenticated.
  * Fully self-contained try/catch: a notification problem never fails the caller.
@@ -56,15 +96,32 @@ export async function maybeNotifyReferencesComplete(
       .eq("id", applicationId)
       .single();
 
-    const assignedStaff = (app as any)?.assigned_staff;
-    if (!assignedStaff) return; // Unassigned — no notification (deferred feature).
+    const applicantName = resolveApplicantName(app);
+    const programName = (app as any)?.programs?.name ?? "School Program";
+    const programId = (app as any)?.program_id;
 
-    await sendReferencesCompleteEmail({
-      staff: assignedStaff,
-      applicantName: resolveApplicantName(app),
-      programName: (app as any)?.programs?.name ?? "School Program",
-      programId: (app as any)?.program_id,
-    });
+    const assignedStaff = (app as any)?.assigned_staff;
+    if (assignedStaff) {
+      await sendReferencesCompleteEmail({
+        staff: assignedStaff,
+        applicantName,
+        programName,
+        programId,
+      });
+      return;
+    }
+
+    // Unassigned → notify the program's leader(s) so they can assign it.
+    const leaders = await getProgramLeaders(adminSupabase, programId);
+    for (const leader of leaders) {
+      await sendReferencesCompleteEmail({
+        staff: leader,
+        applicantName,
+        programName,
+        programId,
+        unassigned: true,
+      });
+    }
   } catch {
     // Never let a notification failure surface to the referee's submission.
     console.error("maybeNotifyReferencesComplete failed", { applicationId });

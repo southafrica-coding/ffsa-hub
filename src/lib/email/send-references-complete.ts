@@ -3,8 +3,9 @@ import { referencesCompleteEmailHtml } from "./templates/references-complete";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-// Emails the staff member an application is assigned to, telling them every
-// required reference has been submitted. Fire-and-forget: a send failure is
+// Emails one recipient that every required reference for an application has
+// been submitted — either the assigned staff member, or (when unassigned) a
+// program leader who should assign it. Fire-and-forget: a send failure is
 // logged but never thrown, so the referee's submission is unaffected.
 export async function sendReferencesCompleteEmail(opts: {
   staff: {
@@ -16,6 +17,8 @@ export async function sendReferencesCompleteEmail(opts: {
   applicantName: string;
   programName: string;
   programId: string;
+  // true → "needs assigning" copy sent to a program leader (no assignee yet).
+  unassigned?: boolean;
 }) {
   if (!opts.staff.email) return;
 
@@ -24,21 +27,28 @@ export async function sendReferencesCompleteEmail(opts: {
   const fromHeader = `Fire & Fragrance SA <${fromEmail}>`;
 
   const staffFirstName = opts.staff.preferred_name || opts.staff.first_name || "there";
+  const subject = opts.unassigned
+    ? `References complete — needs assigning — ${opts.applicantName} · ${opts.programName}`
+    : `References complete — ${opts.applicantName} · ${opts.programName}`;
 
   try {
     await resend.emails.send({
       from: fromHeader,
       to: opts.staff.email,
-      subject: `References complete — ${opts.applicantName} · ${opts.programName}`,
+      subject,
       html: referencesCompleteEmailHtml({
         staffFirstName,
         applicantName: opts.applicantName,
         programName: opts.programName,
         programId: opts.programId,
         siteUrl,
+        unassigned: opts.unassigned,
       }),
     });
   } catch {
-    console.error("Failed to send references-complete email to assigned staff");
+    console.error("Failed to send references-complete email", {
+      to: opts.staff.email,
+      unassigned: !!opts.unassigned,
+    });
   }
 }
