@@ -143,25 +143,25 @@ export function MinistryDetail({
   const [busy, setBusy] = useState(false);
 
   const leaders = roster.filter((r) => r.member_role === "leader");
-  const members = roster.filter((r) => r.member_role === "member");
   const inMinistry = new Set(roster.map((r) => r.user?.id));
   const leaderIds = new Set(leaders.map((l) => l.user?.id));
   const base = `/api/ministries/${ministry.id}`;
 
   const hasCategories = subcategories.length > 0;
-  // Group staff by sub-category: one bucket per category (in sort order), plus
-  // a trailing "Uncategorized" bucket. Categories with no members still show,
-  // so admins can see the empty group they just created.
-  const groups: { key: string; label: string; members: Membership[] }[] = [
+  // Group the whole team (leaders + staff) by sub-category: one bucket per
+  // category (in sort order), plus a trailing "Uncategorized" bucket. `roster`
+  // is already ordered leaders-first, so leaders sit at the top of each group.
+  // Categories with no one still show, so admins see the empty group they made.
+  const groups: { key: string; label: string; rows: Membership[] }[] = [
     ...subcategories.map((c) => ({
       key: c.id,
       label: c.name,
-      members: members.filter((m) => m.subcategory_id === c.id),
+      rows: roster.filter((r) => r.subcategory_id === c.id),
     })),
     {
       key: UNCATEGORIZED,
       label: hasCategories ? "Uncategorized" : "",
-      members: members.filter((m) => !m.subcategory_id),
+      rows: roster.filter((r) => !r.subcategory_id),
     },
   ];
 
@@ -187,6 +187,134 @@ export function MinistryDetail({
     router.refresh();
   }
 
+  // One row for anyone on the team. Leaders and staff share the category
+  // picker; the action buttons differ by role (Point Leader + remove-leader
+  // for leaders; approve + remove for staff).
+  function renderRow(r: Membership) {
+    const isLeader = r.member_role === "leader";
+    return (
+      <PersonRow
+        key={r.id}
+        user={r.user}
+        badge={
+          <>
+            {r.is_point_leader && (
+              <Badge className="gap-1">
+                <Star className="h-3 w-3" /> Point Leader
+              </Badge>
+            )}
+            {isLeader && !r.is_point_leader && (
+              <Badge variant="secondary">Leader</Badge>
+            )}
+            {r.status === "pending" && <Badge variant="outline">Pending</Badge>}
+          </>
+        }
+      >
+        {hasCategories && (
+          <Select
+            value={r.subcategory_id ?? UNCATEGORIZED}
+            onValueChange={(v) =>
+              call(
+                `${base}/members`,
+                "PATCH",
+                {
+                  membership_id: r.id,
+                  subcategory_id: v === UNCATEGORIZED ? null : v,
+                },
+                "Moved"
+              )
+            }
+            disabled={busy}
+          >
+            <SelectTrigger className="h-8 w-40" aria-label="Category">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={UNCATEGORIZED}>Uncategorized</SelectItem>
+              {subcategories.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
+        {isLeader ? (
+          <>
+            {r.is_point_leader ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={busy}
+                onClick={() =>
+                  call(`${base}/point-leader`, "PATCH", { user_id: null }, "Point Leader cleared")
+                }
+              >
+                Clear
+              </Button>
+            ) : (
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={busy}
+                onClick={() =>
+                  call(
+                    `${base}/point-leader`,
+                    "PATCH",
+                    { user_id: r.user.id },
+                    "Point Leader updated"
+                  )
+                }
+              >
+                <Star className="mr-1 h-3.5 w-3.5" /> Make Point Leader
+              </Button>
+            )}
+            {isAdmin && (
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled={busy}
+                aria-label="Remove leader"
+                onClick={() =>
+                  call(`${base}/leaders`, "DELETE", { user_id: r.user.id }, "Leader removed")
+                }
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
+          </>
+        ) : (
+          <>
+            {r.status === "pending" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={busy}
+                onClick={() =>
+                  call(`${base}/members`, "PATCH", { membership_id: r.id }, "Approved")
+                }
+              >
+                <Check className="mr-1 h-3.5 w-3.5" /> Approve
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              disabled={busy}
+              aria-label="Remove from ministry"
+              onClick={() =>
+                call(`${base}/members`, "DELETE", { membership_id: r.id }, "Removed")
+              }
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </>
+        )}
+      </PersonRow>
+    );
+  }
+
   return (
     <div className="space-y-8">
       <div>
@@ -204,85 +332,7 @@ export function MinistryDetail({
         )}
       </div>
 
-      {/* Leaders */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Leaders
-          </h2>
-          {isAdmin && (
-            <PersonPicker
-              label="Add leader"
-              options={pickable.filter((u) => !leaderIds.has(u.id))}
-              onPick={(uid) => call(`${base}/leaders`, "POST", { user_id: uid }, "Leader added")}
-              disabled={busy}
-            />
-          )}
-        </div>
-        {leaders.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No leaders yet.</p>
-        ) : (
-          <div className="space-y-2">
-            {leaders.map((l) => (
-              <PersonRow
-                key={l.id}
-                user={l.user}
-                badge={
-                  l.is_point_leader ? (
-                    <Badge className="gap-1">
-                      <Star className="h-3 w-3" /> Point Leader
-                    </Badge>
-                  ) : null
-                }
-              >
-                {l.is_point_leader ? (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={busy}
-                    onClick={() =>
-                      call(`${base}/point-leader`, "PATCH", { user_id: null }, "Point Leader cleared")
-                    }
-                  >
-                    Clear
-                  </Button>
-                ) : (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={busy}
-                    onClick={() =>
-                      call(
-                        `${base}/point-leader`,
-                        "PATCH",
-                        { user_id: l.user.id },
-                        "Point Leader updated"
-                      )
-                    }
-                  >
-                    <Star className="mr-1 h-3.5 w-3.5" /> Make Point Leader
-                  </Button>
-                )}
-                {isAdmin && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    disabled={busy}
-                    aria-label="Remove leader"
-                    onClick={() =>
-                      call(`${base}/leaders`, "DELETE", { user_id: l.user.id }, "Leader removed")
-                    }
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
-              </PersonRow>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* Categories — admin-managed list that sub-divides the staff team. */}
+      {/* Categories — admin-managed list that sub-divides the team. */}
       {isAdmin && (
         <CategoryManager
           subcategories={subcategories}
@@ -292,110 +342,47 @@ export function MinistryDetail({
         />
       )}
 
-      {/* Staff team, grouped by sub-category. */}
+      {/* Team (leaders + staff), grouped by sub-category. */}
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Staff team
+            Team
           </h2>
-          <PersonPicker
-            label="Add staff"
-            options={pickable.filter((u) => !inMinistry.has(u.id))}
-            onPick={(uid) => call(`${base}/members`, "POST", { user_id: uid }, "Staff added")}
-            disabled={busy}
-          />
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <PersonPicker
+                label="Add leader"
+                options={pickable.filter((u) => !leaderIds.has(u.id))}
+                onPick={(uid) => call(`${base}/leaders`, "POST", { user_id: uid }, "Leader added")}
+                disabled={busy}
+              />
+            )}
+            <PersonPicker
+              label="Add staff"
+              options={pickable.filter((u) => !inMinistry.has(u.id))}
+              onPick={(uid) => call(`${base}/members`, "POST", { user_id: uid }, "Staff added")}
+              disabled={busy}
+            />
+          </div>
         </div>
-        {members.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No staff yet.</p>
+        {roster.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No one on the team yet.</p>
         ) : (
           <div className="space-y-5">
             {groups.map((g) =>
               // Hide the trailing "Uncategorized" group only when it's empty.
-              g.members.length === 0 && g.key === UNCATEGORIZED ? null : (
+              g.rows.length === 0 && g.key === UNCATEGORIZED ? null : (
                 <div key={g.key} className="space-y-2">
                   {g.label && (
                     <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                       {g.label}{" "}
-                      <span className="text-muted-foreground/60">({g.members.length})</span>
+                      <span className="text-muted-foreground/60">({g.rows.length})</span>
                     </h3>
                   )}
-                  {g.members.length === 0 ? (
+                  {g.rows.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No one here yet.</p>
                   ) : (
-                    g.members.map((m) => (
-                      <PersonRow
-                        key={m.id}
-                        user={m.user}
-                        badge={
-                          m.status === "pending" ? (
-                            <Badge variant="outline">Pending</Badge>
-                          ) : null
-                        }
-                      >
-                        {hasCategories && (
-                          <Select
-                            value={m.subcategory_id ?? UNCATEGORIZED}
-                            onValueChange={(v) =>
-                              call(
-                                `${base}/members`,
-                                "PATCH",
-                                {
-                                  membership_id: m.id,
-                                  subcategory_id: v === UNCATEGORIZED ? null : v,
-                                },
-                                "Moved"
-                              )
-                            }
-                            disabled={busy}
-                          >
-                            <SelectTrigger className="h-8 w-40" aria-label="Category">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value={UNCATEGORIZED}>Uncategorized</SelectItem>
-                              {subcategories.map((c) => (
-                                <SelectItem key={c.id} value={c.id}>
-                                  {c.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        )}
-                        {m.status === "pending" && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            disabled={busy}
-                            onClick={() =>
-                              call(
-                                `${base}/members`,
-                                "PATCH",
-                                { membership_id: m.id },
-                                "Approved"
-                              )
-                            }
-                          >
-                            <Check className="mr-1 h-3.5 w-3.5" /> Approve
-                          </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          disabled={busy}
-                          aria-label="Remove from ministry"
-                          onClick={() =>
-                            call(
-                              `${base}/members`,
-                              "DELETE",
-                              { membership_id: m.id },
-                              "Removed"
-                            )
-                          }
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </PersonRow>
-                    ))
+                    g.rows.map((r) => renderRow(r))
                   )}
                 </div>
               )
