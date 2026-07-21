@@ -5,10 +5,21 @@ type EventUpdate = TablesUpdate<"events">;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
 
+// Lifecycle groupings. "Closed out" events are done with — they're gone
+// from the public site and hidden from the default Events list, but never
+// deleted.
+export const OPEN_EVENT_STATUSES = ["draft", "published"] as const;
+export const CLOSED_EVENT_STATUSES = ["completed", "cancelled"] as const;
+
+export function isClosedEventStatus(status: string) {
+  return (CLOSED_EVENT_STATUSES as readonly string[]).includes(status);
+}
+
 export async function getEvents(
   supabase: Client,
   options?: {
     status?: string;
+    statuses?: readonly string[];
     search?: string;
     upcoming?: boolean;
     limit?: number;
@@ -22,6 +33,8 @@ export async function getEvents(
 
   if (options?.status) {
     query = query.eq("status", options.status);
+  } else if (options?.statuses?.length) {
+    query = query.in("status", options.statuses);
   }
 
   if (options?.search) {

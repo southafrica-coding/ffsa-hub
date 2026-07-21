@@ -1,7 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { requireModuleAccess } from "@/lib/require-permission";
-import { getEvents } from "@/services/events";
+import {
+  getEvents,
+  isClosedEventStatus,
+  OPEN_EVENT_STATUSES,
+} from "@/services/events";
 import type { Tables } from "@/types/database";
 type Event = Tables<"events">;
 import Link from "next/link";
@@ -29,10 +33,20 @@ export default async function EventsPage({
   const user = session?.user;
   if (!user) redirect("/login");
 
+  // "active" is the landing view: events still in play. Closed-out ones
+  // (completed/cancelled) stay one click away rather than cluttering it.
+  const view = params.status ?? "active";
+  const filter =
+    view === "active"
+      ? { statuses: OPEN_EVENT_STATUSES }
+      : view === "all"
+        ? {}
+        : { status: view };
+
   // Permission check + data fetch don't depend on each other — run together.
   const [, eventsResult] = await Promise.all([
     requireModuleAccess(supabase, user.id, "events"),
-    getEvents(supabase, { status: params.status }),
+    getEvents(supabase, filter),
   ]);
   const { data: events, count } = eventsResult;
 
@@ -49,7 +63,10 @@ export default async function EventsPage({
         <div>
           <p className="page-eyebrow">EVENTS &amp; GATHERINGS</p>
           <h1 className="page-title">Events</h1>
-          <p className="text-sm text-muted-foreground mt-1">{count ?? 0} events</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            {count ?? 0} {view === "active" ? "active " : ""}
+            {count === 1 ? "event" : "events"}
+          </p>
         </div>
         <Link href="/events/new">
           <Button size="sm" className="gap-1">
@@ -60,25 +77,25 @@ export default async function EventsPage({
       </div>
 
       <div className="flex gap-1 flex-wrap">
-        {[undefined, "draft", "published", "completed", "cancelled"].map(
-          (status) => {
-            const isActive = (params.status ?? undefined) === status;
-            return (
-              <Link
-                key={status ?? "all"}
-                href={`/events${status ? `?status=${status}` : ""}`}
-              >
-                <Button
-                  variant={isActive ? "default" : "ghost"}
-                  size="sm"
-                  className="capitalize"
-                >
-                  {status ?? "All"}
-                </Button>
-              </Link>
-            );
-          }
-        )}
+        {(
+          [
+            ["active", "Active"],
+            ["draft", "Draft"],
+            ["published", "Published"],
+            ["completed", "Completed"],
+            ["cancelled", "Cancelled"],
+            ["all", "All"],
+          ] as const
+        ).map(([key, label]) => (
+          <Link
+            key={key}
+            href={`/events${key === "active" ? "" : `?status=${key}`}`}
+          >
+            <Button variant={view === key ? "default" : "ghost"} size="sm">
+              {label}
+            </Button>
+          </Link>
+        ))}
       </div>
 
       <div className="rounded-lg border bg-card">
@@ -100,12 +117,17 @@ export default async function EventsPage({
                   colSpan={6}
                   className="text-center text-muted-foreground py-8"
                 >
-                  No events found
+                  {view === "active"
+                    ? "No active events. Closed-out events are under Completed and Cancelled."
+                    : "No events found"}
                 </TableCell>
               </TableRow>
             ) : (
               (events as Event[]).map((event) => (
-                <TableRow key={event.id}>
+                <TableRow
+                  key={event.id}
+                  className={isClosedEventStatus(event.status) ? "opacity-60" : undefined}
+                >
                   <TableCell>
                     <Link
                       href={`/events/${event.id}`}
