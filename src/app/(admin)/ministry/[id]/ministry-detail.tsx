@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Star, UserPlus, X, Check, Plus, Trash2 } from "lucide-react";
+import { Star, UserPlus, X, Check, Plus, Trash2, ChevronUp, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -187,11 +187,37 @@ export function MinistryDetail({
     router.refresh();
   }
 
+  // Persist a new category order by writing each category's sort_order to its
+  // position. Writes run in parallel, then one refresh.
+  async function reorderCategories(orderedIds: string[]) {
+    setBusy(true);
+    const results = await Promise.all(
+      orderedIds.map((sid, i) =>
+        fetch(`${base}/subcategories/${sid}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sort_order: i }),
+        })
+      )
+    );
+    setBusy(false);
+    if (results.some((r) => !r.ok)) {
+      toast.error("Couldn't reorder categories");
+      return;
+    }
+    router.refresh();
+  }
+
   // One row for anyone on the team. Leaders and staff share the category
-  // picker; the action buttons differ by role (Point Leader + remove-leader
-  // for leaders; approve + remove for staff).
-  function renderRow(r: Membership) {
+  // picker; the action buttons differ by role. `groupKey` is the sub-category
+  // this row is being rendered under (or UNCATEGORIZED) — used to scope the
+  // per-category point-leader control.
+  function renderRow(r: Membership, groupKey: string) {
     const isLeader = r.member_role === "leader";
+    const inCategory = groupKey !== UNCATEGORIZED;
+    // r.subcategory_id === groupKey here, so this flag is the point leader of
+    // THIS category. Only meaningful inside a real category group.
+    const isCategoryLead = inCategory && r.is_category_point_leader;
     return (
       <PersonRow
         key={r.id}
@@ -200,10 +226,15 @@ export function MinistryDetail({
           <>
             {r.is_point_leader && (
               <Badge className="gap-1">
-                <Star className="h-3 w-3" /> Point Leader
+                <Star className="h-3 w-3" /> Ministry Point Leader
               </Badge>
             )}
-            {isLeader && !r.is_point_leader && (
+            {isCategoryLead && (
+              <Badge variant="secondary" className="gap-1">
+                <Star className="h-3 w-3" /> Category Point Leader
+              </Badge>
+            )}
+            {isLeader && !r.is_point_leader && !isCategoryLead && (
               <Badge variant="secondary">Leader</Badge>
             )}
             {r.status === "pending" && <Badge variant="outline">Pending</Badge>}
@@ -242,16 +273,52 @@ export function MinistryDetail({
 
         {isLeader ? (
           <>
+            {/* Point leader OF THIS CATEGORY (only inside a real category). */}
+            {inCategory &&
+              (isCategoryLead ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() =>
+                    call(
+                      `${base}/subcategories/${groupKey}/point-leader`,
+                      "PATCH",
+                      { user_id: null },
+                      "Category point leader cleared"
+                    )
+                  }
+                >
+                  Clear category lead
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() =>
+                    call(
+                      `${base}/subcategories/${groupKey}/point-leader`,
+                      "PATCH",
+                      { user_id: r.user.id },
+                      "Category point leader set"
+                    )
+                  }
+                >
+                  <Star className="mr-1 h-3.5 w-3.5" /> Category lead
+                </Button>
+              ))}
+            {/* Overall MINISTRY point leader (one per ministry). */}
             {r.is_point_leader ? (
               <Button
                 variant="ghost"
                 size="sm"
                 disabled={busy}
                 onClick={() =>
-                  call(`${base}/point-leader`, "PATCH", { user_id: null }, "Point Leader cleared")
+                  call(`${base}/point-leader`, "PATCH", { user_id: null }, "Ministry point leader cleared")
                 }
               >
-                Clear
+                Clear ministry lead
               </Button>
             ) : (
               <Button
@@ -263,11 +330,11 @@ export function MinistryDetail({
                     `${base}/point-leader`,
                     "PATCH",
                     { user_id: r.user.id },
-                    "Point Leader updated"
+                    "Ministry point leader updated"
                   )
                 }
               >
-                <Star className="mr-1 h-3.5 w-3.5" /> Make Point Leader
+                <Star className="mr-1 h-3.5 w-3.5" /> Ministry lead
               </Button>
             )}
             {isAdmin && (
@@ -339,6 +406,7 @@ export function MinistryDetail({
           base={base}
           busy={busy}
           call={call}
+          onReorder={reorderCategories}
         />
       )}
 
@@ -382,7 +450,7 @@ export function MinistryDetail({
                   {g.rows.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No one here yet.</p>
                   ) : (
-                    g.rows.map((r) => renderRow(r))
+                    g.rows.map((r) => renderRow(r, g.key))
                   )}
                 </div>
               )
@@ -399,6 +467,7 @@ function CategoryManager({
   base,
   busy,
   call,
+  onReorder,
 }: {
   subcategories: Subcategory[];
   base: string;
@@ -409,11 +478,22 @@ function CategoryManager({
     body: Record<string, unknown>,
     okMsg?: string
   ) => Promise<void>;
+  onReorder: (orderedIds: string[]) => void;
 }) {
   const [newName, setNewName] = useState("");
   // Local draft names keyed by category id, so each row's input is editable.
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const nameFor = (c: Subcategory) => drafts[c.id] ?? c.name;
+
+  // Move a category up/down and persist the new order (used to put a chosen
+  // category, e.g. "Training Team", first).
+  function move(index: number, dir: -1 | 1) {
+    const j = index + dir;
+    if (j < 0 || j >= subcategories.length) return;
+    const ids = subcategories.map((c) => c.id);
+    [ids[index], ids[j]] = [ids[j], ids[index]];
+    onReorder(ids);
+  }
 
   return (
     <section className="space-y-3 rounded-lg border border-border bg-muted/30 p-4">
@@ -427,10 +507,30 @@ function CategoryManager({
         </p>
       ) : (
         <div className="space-y-2">
-          {subcategories.map((c) => {
+          {subcategories.map((c, index) => {
             const draft = nameFor(c).trim();
             return (
               <div key={c.id} className="flex items-center gap-2">
+                <div className="flex flex-col">
+                  <button
+                    type="button"
+                    className="text-muted-foreground hover:text-foreground disabled:opacity-30"
+                    disabled={busy || index === 0}
+                    aria-label={`Move ${c.name} up`}
+                    onClick={() => move(index, -1)}
+                  >
+                    <ChevronUp className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    className="text-muted-foreground hover:text-foreground disabled:opacity-30"
+                    disabled={busy || index === subcategories.length - 1}
+                    aria-label={`Move ${c.name} down`}
+                    onClick={() => move(index, 1)}
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                  </button>
+                </div>
                 <Input
                   value={nameFor(c)}
                   onChange={(e) =>

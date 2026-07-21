@@ -37,7 +37,7 @@ export async function PATCH(
     .eq("id", subId)
     .eq("staff_ministry_id", id)
     .select("id, staff_ministry_id, name, sort_order")
-    .single();
+    .maybeSingle();
   if (error) {
     const msg =
       error.code === "23505"
@@ -45,6 +45,8 @@ export async function PATCH(
         : error.message;
     return NextResponse.json({ error: msg }, { status: 400 });
   }
+  if (!data)
+    return NextResponse.json({ error: "Category not found" }, { status: 404 });
 
   return NextResponse.json({ success: true, subcategory: data });
 }

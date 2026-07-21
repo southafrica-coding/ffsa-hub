@@ -38,7 +38,7 @@ export async function getMinistryRoster(supabase: Client, ministryId: string) {
   return supabase
     .from("staff_ministry_members")
     .select(
-      `id, member_role, is_point_leader, status, subcategory_id, created_at,
+      `id, member_role, is_point_leader, is_category_point_leader, status, subcategory_id, created_at,
        user:users!user_id(${MEMBER_USER_FIELDS})`
     )
     .eq("staff_ministry_id", ministryId)
@@ -75,23 +75,6 @@ export async function createSubcategory(
     })
     .select("id, staff_ministry_id, name, sort_order")
     .single();
-}
-
-export async function updateSubcategory(
-  supabase: Client,
-  subId: string,
-  patch: { name?: string; sort_order?: number }
-) {
-  return supabase
-    .from("staff_ministry_subcategories")
-    .update({ ...patch, updated_at: new Date().toISOString() })
-    .eq("id", subId)
-    .select("id, staff_ministry_id, name, sort_order")
-    .single();
-}
-
-export async function deleteSubcategory(supabase: Client, subId: string) {
-  return supabase.from("staff_ministry_subcategories").delete().eq("id", subId);
 }
 
 /**
