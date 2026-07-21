@@ -42,7 +42,11 @@ export async function POST(
   return NextResponse.json({ success: true });
 }
 
-// Approve a pending membership. Admins or a Ministry Leader of this ministry.
+// Update a membership. Admins or a Ministry Leader of this ministry.
+// Two modes, keyed off the body:
+//   - { membership_id, subcategory_id }  → move the person into a sub-category
+//     (subcategory_id may be null to move them back to Uncategorized).
+//   - { membership_id }                  → approve a pending membership.
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -63,12 +67,39 @@ export async function PATCH(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin: any = createAdminClient();
+
+  // Sub-category assignment vs. approval.
+  const assigning = "subcategory_id" in body;
+  const subcategoryId = assigning ? ((body.subcategory_id as string | null) ?? null) : null;
+
+  // Guard: a non-null sub-category must belong to THIS ministry (the FK only
+  // checks existence, so this stops one ministry tagging with another's id).
+  if (assigning && subcategoryId) {
+    const { data: sub } = await admin
+      .from("staff_ministry_subcategories")
+      .select("id")
+      .eq("id", subcategoryId)
+      .eq("staff_ministry_id", id)
+      .maybeSingle();
+    if (!sub)
+      return NextResponse.json({ error: "That category no longer exists" }, { status: 400 });
+  }
+
+  const update = assigning
+    ? { subcategory_id: subcategoryId }
+    : { status: "active", approved_by: user.id };
+
   const { error } = await admin
     .from("staff_ministry_members")
-    .update({ status: "active", approved_by: user.id })
+    .update(update)
     .eq("id", membershipId)
     .eq("staff_ministry_id", id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    // FK violation → the sub-category doesn't belong to this ministry (or was deleted).
+    const msg =
+      error.code === "23503" ? "That category no longer exists" : error.message;
+    return NextResponse.json({ error: msg }, { status: 400 });
+  }
 
   return NextResponse.json({ success: true });
 }

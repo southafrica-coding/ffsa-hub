@@ -3,11 +3,19 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Star, UserPlus, X, Check } from "lucide-react";
+import { Star, UserPlus, X, Check, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Command,
   CommandInput,
@@ -23,6 +31,10 @@ type PickUser = any;
 type Membership = any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Ministry = any;
+type Subcategory = { id: string; name: string; sort_order: number };
+
+// Select needs a non-empty string value; this stands in for "no sub-category".
+const UNCATEGORIZED = "__none__";
 
 function nameOf(u: PickUser): string {
   return (
@@ -118,11 +130,13 @@ export function MinistryDetail({
   ministry,
   roster,
   pickable,
+  subcategories,
   isAdmin,
 }: {
   ministry: Ministry;
   roster: Membership[];
   pickable: PickUser[];
+  subcategories: Subcategory[];
   isAdmin: boolean;
 }) {
   const router = useRouter();
@@ -133,6 +147,23 @@ export function MinistryDetail({
   const inMinistry = new Set(roster.map((r) => r.user?.id));
   const leaderIds = new Set(leaders.map((l) => l.user?.id));
   const base = `/api/ministries/${ministry.id}`;
+
+  const hasCategories = subcategories.length > 0;
+  // Group staff by sub-category: one bucket per category (in sort order), plus
+  // a trailing "Uncategorized" bucket. Categories with no members still show,
+  // so admins can see the empty group they just created.
+  const groups: { key: string; label: string; members: Membership[] }[] = [
+    ...subcategories.map((c) => ({
+      key: c.id,
+      label: c.name,
+      members: members.filter((m) => m.subcategory_id === c.id),
+    })),
+    {
+      key: UNCATEGORIZED,
+      label: hasCategories ? "Uncategorized" : "",
+      members: members.filter((m) => !m.subcategory_id),
+    },
+  ];
 
   async function call(
     url: string,
@@ -251,8 +282,18 @@ export function MinistryDetail({
         )}
       </section>
 
-      {/* Staff team */}
-      <section className="space-y-3">
+      {/* Categories — admin-managed list that sub-divides the staff team. */}
+      {isAdmin && (
+        <CategoryManager
+          subcategories={subcategories}
+          base={base}
+          busy={busy}
+          call={call}
+        />
+      )}
+
+      {/* Staff team, grouped by sub-category. */}
+      <section className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Staff team
@@ -267,43 +308,209 @@ export function MinistryDetail({
         {members.length === 0 ? (
           <p className="text-sm text-muted-foreground">No staff yet.</p>
         ) : (
-          <div className="space-y-2">
-            {members.map((m) => (
-              <PersonRow
-                key={m.id}
-                user={m.user}
-                badge={
-                  m.status === "pending" ? <Badge variant="outline">Pending</Badge> : null
-                }
-              >
-                {m.status === "pending" && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={busy}
-                    onClick={() =>
-                      call(`${base}/members`, "PATCH", { membership_id: m.id }, "Approved")
-                    }
-                  >
-                    <Check className="mr-1 h-3.5 w-3.5" /> Approve
-                  </Button>
-                )}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  disabled={busy}
-                  aria-label="Remove from ministry"
-                  onClick={() =>
-                    call(`${base}/members`, "DELETE", { membership_id: m.id }, "Removed")
-                  }
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </PersonRow>
-            ))}
+          <div className="space-y-5">
+            {groups.map((g) =>
+              // Hide the trailing "Uncategorized" group only when it's empty.
+              g.members.length === 0 && g.key === UNCATEGORIZED ? null : (
+                <div key={g.key} className="space-y-2">
+                  {g.label && (
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      {g.label}{" "}
+                      <span className="text-muted-foreground/60">({g.members.length})</span>
+                    </h3>
+                  )}
+                  {g.members.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No one here yet.</p>
+                  ) : (
+                    g.members.map((m) => (
+                      <PersonRow
+                        key={m.id}
+                        user={m.user}
+                        badge={
+                          m.status === "pending" ? (
+                            <Badge variant="outline">Pending</Badge>
+                          ) : null
+                        }
+                      >
+                        {hasCategories && (
+                          <Select
+                            value={m.subcategory_id ?? UNCATEGORIZED}
+                            onValueChange={(v) =>
+                              call(
+                                `${base}/members`,
+                                "PATCH",
+                                {
+                                  membership_id: m.id,
+                                  subcategory_id: v === UNCATEGORIZED ? null : v,
+                                },
+                                "Moved"
+                              )
+                            }
+                            disabled={busy}
+                          >
+                            <SelectTrigger className="h-8 w-40" aria-label="Category">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={UNCATEGORIZED}>Uncategorized</SelectItem>
+                              {subcategories.map((c) => (
+                                <SelectItem key={c.id} value={c.id}>
+                                  {c.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                        {m.status === "pending" && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={busy}
+                            onClick={() =>
+                              call(
+                                `${base}/members`,
+                                "PATCH",
+                                { membership_id: m.id },
+                                "Approved"
+                              )
+                            }
+                          >
+                            <Check className="mr-1 h-3.5 w-3.5" /> Approve
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          disabled={busy}
+                          aria-label="Remove from ministry"
+                          onClick={() =>
+                            call(
+                              `${base}/members`,
+                              "DELETE",
+                              { membership_id: m.id },
+                              "Removed"
+                            )
+                          }
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </PersonRow>
+                    ))
+                  )}
+                </div>
+              )
+            )}
           </div>
         )}
       </section>
     </div>
+  );
+}
+
+function CategoryManager({
+  subcategories,
+  base,
+  busy,
+  call,
+}: {
+  subcategories: Subcategory[];
+  base: string;
+  busy: boolean;
+  call: (
+    url: string,
+    method: string,
+    body: Record<string, unknown>,
+    okMsg?: string
+  ) => Promise<void>;
+}) {
+  const [newName, setNewName] = useState("");
+  // Local draft names keyed by category id, so each row's input is editable.
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const nameFor = (c: Subcategory) => drafts[c.id] ?? c.name;
+
+  return (
+    <section className="space-y-3 rounded-lg border border-border bg-muted/30 p-4">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+        Categories
+      </h2>
+
+      {subcategories.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          No categories yet. Add one to group the staff team.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {subcategories.map((c) => {
+            const draft = nameFor(c).trim();
+            return (
+              <div key={c.id} className="flex items-center gap-2">
+                <Input
+                  value={nameFor(c)}
+                  onChange={(e) =>
+                    setDrafts((d) => ({ ...d, [c.id]: e.target.value }))
+                  }
+                  className="h-8 max-w-xs"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busy || draft === "" || draft === c.name}
+                  onClick={() =>
+                    call(
+                      `${base}/subcategories/${c.id}`,
+                      "PATCH",
+                      { name: draft },
+                      "Category renamed"
+                    )
+                  }
+                >
+                  Save
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  disabled={busy}
+                  aria-label={`Delete ${c.name}`}
+                  onClick={() =>
+                    call(
+                      `${base}/subcategories/${c.id}`,
+                      "DELETE",
+                      {},
+                      "Category deleted"
+                    )
+                  }
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="flex items-center gap-2 pt-1">
+        <Input
+          placeholder="New category name"
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          className="h-8 max-w-xs"
+        />
+        <Button
+          size="sm"
+          disabled={busy || newName.trim() === ""}
+          onClick={async () => {
+            await call(
+              `${base}/subcategories`,
+              "POST",
+              { name: newName.trim() },
+              "Category added"
+            );
+            setNewName("");
+          }}
+        >
+          <Plus className="mr-1 h-4 w-4" /> Add
+        </Button>
+      </div>
+    </section>
   );
 }

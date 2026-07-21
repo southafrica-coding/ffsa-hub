@@ -3,7 +3,12 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getMinistry, getMinistryRoster, listPickableUsers } from "@/services/ministries";
+import {
+  getMinistry,
+  getMinistryRoster,
+  listPickableUsers,
+  listSubcategories,
+} from "@/services/ministries";
 import { deriveUserLifecycle } from "@/lib/users/lifecycle";
 import { callerIsAdmin, callerLeadsMinistry } from "@/lib/auth/check-ministry-access";
 import { MinistryDetail } from "./ministry-detail";
@@ -24,12 +29,17 @@ export default async function MinistryDetailPage({
   if (!isAdmin && !(await callerLeadsMinistry(supabase, user.id, id))) redirect("/dashboard");
 
   const admin = createAdminClient();
-  const [{ data: ministry }, { data: roster }, { data: pickable }] =
-    await Promise.all([
-      getMinistry(admin, id),
-      getMinistryRoster(admin, id),
-      listPickableUsers(admin),
-    ]);
+  const [
+    { data: ministry },
+    { data: roster },
+    { data: pickable },
+    { data: subcategories },
+  ] = await Promise.all([
+    getMinistry(admin, id),
+    getMinistryRoster(admin, id),
+    listPickableUsers(admin),
+    listSubcategories(admin, id),
+  ]);
   if (!ministry) notFound();
 
   // Only people whose profile is FULLY SET UP (the profile-completion gate
@@ -59,6 +69,7 @@ export default async function MinistryDetailPage({
         ministry={ministry}
         roster={roster ?? []}
         pickable={eligiblePickable}
+        subcategories={subcategories ?? []}
         isAdmin={isAdmin}
       />
     </div>

@@ -38,12 +38,60 @@ export async function getMinistryRoster(supabase: Client, ministryId: string) {
   return supabase
     .from("staff_ministry_members")
     .select(
-      `id, member_role, is_point_leader, status, created_at,
+      `id, member_role, is_point_leader, status, subcategory_id, created_at,
        user:users!user_id(${MEMBER_USER_FIELDS})`
     )
     .eq("staff_ministry_id", ministryId)
     .order("member_role", { ascending: true }) // 'leader' < 'member' alphabetically
     .order("created_at", { ascending: true });
+}
+
+// ────────────────────────────────────────────────────────────
+// Sub-categories — named sub-groups within a single ministry.
+// The list is admin-managed (RLS: is_admin()); members are assigned to a
+// sub-category via the staff_ministry_members.subcategory_id column.
+// ────────────────────────────────────────────────────────────
+
+/** A ministry's sub-categories, ordered for display. */
+export async function listSubcategories(supabase: Client, ministryId: string) {
+  return supabase
+    .from("staff_ministry_subcategories")
+    .select("id, staff_ministry_id, name, sort_order")
+    .eq("staff_ministry_id", ministryId)
+    .order("sort_order", { ascending: true })
+    .order("name", { ascending: true });
+}
+
+export async function createSubcategory(
+  supabase: Client,
+  input: { staff_ministry_id: string; name: string; sort_order?: number }
+) {
+  return supabase
+    .from("staff_ministry_subcategories")
+    .insert({
+      staff_ministry_id: input.staff_ministry_id,
+      name: input.name,
+      sort_order: input.sort_order ?? 0,
+    })
+    .select("id, staff_ministry_id, name, sort_order")
+    .single();
+}
+
+export async function updateSubcategory(
+  supabase: Client,
+  subId: string,
+  patch: { name?: string; sort_order?: number }
+) {
+  return supabase
+    .from("staff_ministry_subcategories")
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq("id", subId)
+    .select("id, staff_ministry_id, name, sort_order")
+    .single();
+}
+
+export async function deleteSubcategory(supabase: Client, subId: string) {
+  return supabase.from("staff_ministry_subcategories").delete().eq("id", subId);
 }
 
 /**
