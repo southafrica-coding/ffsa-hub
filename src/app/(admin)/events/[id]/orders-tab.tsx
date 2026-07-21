@@ -2,6 +2,7 @@
 
 import { Fragment, useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -17,6 +18,7 @@ import {
   type CheckoutAnswerSnapshot,
 } from "@/lib/ticketing/checkout-questions";
 import { OrdersExportPanel } from "./orders-export-panel";
+import { RefundDialog } from "./refund-dialog";
 
 type Order = {
   id: string;
@@ -30,7 +32,27 @@ type Order = {
   created_at: string;
   contact_resolution: string;
   custom_answers?: unknown;
+  payment_provider: string | null;
+  provider_payment_id: string | null;
 };
+
+export type OrderRefund = {
+  id: string;
+  order_id: string;
+  amount_cents: number;
+  reason: string | null;
+  method: string;
+  provider: string | null;
+  status: string;
+  error_message: string | null;
+  created_at: string;
+  users?: { first_name: string | null; last_name: string | null } | null;
+};
+
+// Orders that took money at some point — the denominator for revenue.
+// A refunded order still belongs in gross revenue; netting it out twice
+// (excluded from revenue AND subtracted as a refund) understated Net.
+const EVER_PAID = ["paid", "partially_refunded", "refunded"];
 
 function answersForOrder(o: Order): CheckoutAnswerSnapshot[] {
   return Array.isArray(o.custom_answers)
@@ -57,46 +79,62 @@ const STATUS_VARIANTS: Record<
 export function OrdersTab({
   eventId,
   orders,
+  refunds = [],
 }: {
   eventId: string;
   orders: Order[];
+  refunds?: OrderRefund[];
 }) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [recentlySentId, setRecentlySentId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [refundOrder, setRefundOrder] = useState<Order | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  const paid = orders.filter((o) => o.status === "paid");
-  const refunded = orders.filter(
-    (o) => o.status === "refunded" || o.status === "partially_refunded"
+  const everPaid = orders.filter((o) => EVER_PAID.includes(o.status));
+  const stillPaid = orders.filter(
+    (o) => o.status === "paid" || o.status === "partially_refunded"
   );
-  const totalRevenueCents = paid.reduce((s, o) => s + o.total_cents, 0);
-  const totalRefundedCents = refunded.reduce((s, o) => s + o.refund_cents, 0);
+  const totalRevenueCents = everPaid.reduce((s, o) => s + o.total_cents, 0);
+  const totalRefundedCents = everPaid.reduce((s, o) => s + o.refund_cents, 0);
   const netCents = totalRevenueCents - totalRefundedCents;
 
-  async function refund(order: Order) {
-    if (
-      !confirm(
-        `Refund order #${order.id.slice(0, 8)} for ${rands(order.total_cents)} to ${order.buyer_email}?\n\n` +
-          `This marks the order refunded, voids its tickets, and releases the inventory. ` +
-          `You must process the actual money refund in PayFast separately.`
-      )
-    )
-      return;
+  const refundsByOrder = new Map<string, OrderRefund[]>();
+  for (const r of refunds) {
+    const list = refundsByOrder.get(r.order_id) ?? [];
+    list.push(r);
+    refundsByOrder.set(r.order_id, list);
+  }
+
+  function settledRefundCents(orderId: string): number {
+    return (refundsByOrder.get(orderId) ?? [])
+      .filter((r) => r.status === "succeeded")
+      .reduce((s, r) => s + r.amount_cents, 0);
+  }
+
+  // PayFast settles refunds asynchronously and never calls back, so a
+  // pending row only advances when someone asks the provider.
+  async function syncRefunds(order: Order) {
     setBusyId(order.id);
     setErr(null);
     const res = await fetch(
       `/api/events/${eventId}/orders/${order.id}/refund`,
-      { method: "POST" }
+      { method: "PATCH" }
     );
     setBusyId(null);
     if (!res.ok) {
       const data = (await res.json().catch(() => ({}))) as { error?: string };
-      setErr(data.error ?? "Refund failed");
+      setErr(data.error ?? "Could not check the refund status");
       return;
     }
+    const data = (await res.json().catch(() => ({}))) as { updated?: number };
+    toast.success(
+      data.updated
+        ? `${data.updated} refund${data.updated === 1 ? "" : "s"} updated.`
+        : "Still pending at the provider."
+    );
     router.refresh();
   }
 
@@ -126,7 +164,7 @@ export function OrdersTab({
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard label="Paid orders" value={paid.length.toString()} />
+        <StatCard label="Paid orders" value={stillPaid.length.toString()} />
         <StatCard label="Revenue" value={rands(totalRevenueCents)} />
         <StatCard
           label="Net (after refunds)"
@@ -166,12 +204,18 @@ export function OrdersTab({
                 <TableBody>
                   {orders.map((o) => {
                     const answers = answersForOrder(o);
+                    const orderRefunds = refundsByOrder.get(o.id) ?? [];
+                    const hasPending = orderRefunds.some(
+                      (r) => r.status === "pending"
+                    );
+                    const expandable =
+                      answers.length > 0 || orderRefunds.length > 0;
                     const expanded = expandedId === o.id;
                     return (
                     <Fragment key={o.id}>
                     <TableRow>
                       <TableCell className="font-mono text-xs">
-                        {answers.length > 0 ? (
+                        {expandable ? (
                           <button
                             type="button"
                             onClick={() =>
@@ -179,7 +223,16 @@ export function OrdersTab({
                             }
                             className="inline-flex items-center gap-1 hover:text-foreground"
                             aria-expanded={expanded}
-                            title={`${answers.length} checkout answer${answers.length === 1 ? "" : "s"}`}
+                            title={[
+                              answers.length > 0
+                                ? `${answers.length} checkout answer${answers.length === 1 ? "" : "s"}`
+                                : null,
+                              orderRefunds.length > 0
+                                ? `${orderRefunds.length} refund${orderRefunds.length === 1 ? "" : "s"}`
+                                : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
                           >
                             <span className="text-muted-foreground">
                               {expanded ? "▾" : "▸"}
@@ -220,8 +273,8 @@ export function OrdersTab({
                           : "—"}
                       </TableCell>
                       <TableCell className="text-right">
-                        {o.status === "paid" && (
-                          <div className="flex flex-col items-end gap-1">
+                        <div className="flex flex-col items-end gap-1">
+                          {o.status === "paid" && (
                             <button
                               type="button"
                               onClick={() => resendEmail(o)}
@@ -236,39 +289,113 @@ export function OrdersTab({
                                   ? "Sent"
                                   : "Resend email"}
                             </button>
+                          )}
+                          {/* Partially refunded orders still hold money,
+                              so they stay refundable up to the balance. */}
+                          {(o.status === "paid" ||
+                            o.status === "partially_refunded") && (
                             <button
                               type="button"
-                              onClick={() => refund(o)}
+                              onClick={() => setRefundOrder(o)}
                               disabled={
                                 busyId === o.id || resendingId === o.id
                               }
                               className="text-xs text-red-600 hover:underline disabled:text-gray-300 disabled:no-underline normal-case tracking-normal"
                             >
-                              {busyId === o.id ? "Refunding…" : "Refund"}
+                              Refund
                             </button>
-                          </div>
-                        )}
+                          )}
+                          {hasPending && (
+                            <button
+                              type="button"
+                              onClick={() => syncRefunds(o)}
+                              disabled={busyId === o.id}
+                              className="text-xs text-amber-600 hover:underline disabled:opacity-50 disabled:no-underline normal-case tracking-normal"
+                            >
+                              {busyId === o.id
+                                ? "Checking…"
+                                : "Check refund status"}
+                            </button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
-                    {expanded && answers.length > 0 && (
+                    {expanded && expandable && (
                       <TableRow>
                         <TableCell colSpan={6} className="bg-muted/30">
-                          <div className="py-1 space-y-2">
-                            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                              Checkout answers
-                            </p>
-                            <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
-                              {answers.map((a, i) => (
-                                <div key={a.id ?? i} className="flex flex-col">
-                                  <dt className="text-xs text-muted-foreground">
-                                    {a.label}
-                                  </dt>
-                                  <dd className="text-sm whitespace-pre-wrap">
-                                    {formatAnswerValue(a.value) || "—"}
-                                  </dd>
-                                </div>
-                              ))}
-                            </dl>
+                          <div className="py-1 space-y-4">
+                            {answers.length > 0 && (
+                              <div className="space-y-2">
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                                  Checkout answers
+                                </p>
+                                <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
+                                  {answers.map((a, i) => (
+                                    <div key={a.id ?? i} className="flex flex-col">
+                                      <dt className="text-xs text-muted-foreground">
+                                        {a.label}
+                                      </dt>
+                                      <dd className="text-sm whitespace-pre-wrap">
+                                        {formatAnswerValue(a.value) || "—"}
+                                      </dd>
+                                    </div>
+                                  ))}
+                                </dl>
+                              </div>
+                            )}
+                            {orderRefunds.length > 0 && (
+                              <div className="space-y-2">
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                                  Refunds
+                                </p>
+                                <ul className="space-y-1.5">
+                                  {orderRefunds.map((r) => (
+                                    <li
+                                      key={r.id}
+                                      className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs"
+                                    >
+                                      <span className="font-medium text-sm">
+                                        {rands(r.amount_cents)}
+                                      </span>
+                                      <Badge
+                                        variant={
+                                          r.status === "succeeded"
+                                            ? "secondary"
+                                            : r.status === "failed"
+                                              ? "destructive"
+                                              : "outline"
+                                        }
+                                        className="capitalize"
+                                      >
+                                        {r.status}
+                                      </Badge>
+                                      <span className="text-muted-foreground">
+                                        {r.method === "manual"
+                                          ? "recorded manually"
+                                          : `via ${r.provider ?? "provider"}`}
+                                        {" · "}
+                                        {new Date(
+                                          r.created_at
+                                        ).toLocaleString()}
+                                        {r.users?.first_name
+                                          ? ` · ${r.users.first_name} ${r.users.last_name ?? ""}`.trimEnd()
+                                          : ""}
+                                      </span>
+                                      {r.reason && (
+                                        <span className="basis-full text-muted-foreground italic">
+                                          “{r.reason}”
+                                        </span>
+                                      )}
+                                      {r.error_message && (
+                                        <span className="basis-full text-red-600">
+                                          {r.error_message}
+                                        </span>
+                                      )}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -282,6 +409,18 @@ export function OrdersTab({
           )}
         </CardContent>
       </Card>
+
+      {refundOrder && (
+        <RefundDialog
+          eventId={eventId}
+          order={refundOrder}
+          alreadyRefundedCents={settledRefundCents(refundOrder.id)}
+          open={true}
+          onOpenChange={(open) => {
+            if (!open) setRefundOrder(null);
+          }}
+        />
+      )}
     </div>
   );
 }

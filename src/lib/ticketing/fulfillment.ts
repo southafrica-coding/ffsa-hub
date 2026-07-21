@@ -23,7 +23,7 @@ import { campsTicketEmailHtml } from "@/lib/email/templates/ffsa-camps-ticket-co
 import { preachersTicketEmailHtml } from "@/lib/email/templates/preachers-ticket-confirmation";
 import { resolveOrderToCrm } from "./crm-resolution";
 
-type EventBrand = "ff" | "the_send" | "ffsa_camps" | "preachers";
+export type EventBrand = "ff" | "the_send" | "ffsa_camps" | "preachers";
 
 // Bespoke email keyed by the event's brand flag (migration 077 + the
 // ffsa_camps follow-up). An explicit brand always wins. Falls back to a
@@ -31,7 +31,7 @@ type EventBrand = "ff" | "the_send" | "ffsa_camps" | "preachers";
 // they still route to a bespoke template when the slug/title is
 // unambiguous. Once every event row has its brand set deliberately, the
 // heuristic can be dropped.
-function resolveEventBrand(event: {
+export function resolveEventBrand(event: {
   brand?: string | null;
   public_slug?: string | null;
   title?: string | null;
@@ -47,6 +47,22 @@ function resolveEventBrand(event: {
     return "ffsa_camps";
   if (slug.includes("preachers") || title.includes("preachers")) return "preachers";
   return "ff";
+}
+
+// sending_identities.slug for a brand (migration 080 + the ffsa-camps
+// and preachers identities). Shared with the refund email so both send
+// from the same inbox for a given event.
+export function identitySlugForBrand(brand: EventBrand): string {
+  switch (brand) {
+    case "the_send":
+      return "the-send";
+    case "ffsa_camps":
+      return "ffsa-camps";
+    case "preachers":
+      return "preachers";
+    default:
+      return "events";
+  }
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -168,14 +184,7 @@ export async function fulfillOrder(
   // (migration 080 + the ffsa-camps identity). Admins can edit the inbox
   // display name from /communications/identities without a code change.
   // Env-var fallback preserves pre-migration behaviour if the row is missing.
-  const identitySlug =
-    brand === "the_send"
-      ? "the-send"
-      : brand === "ffsa_camps"
-        ? "ffsa-camps"
-        : brand === "preachers"
-          ? "preachers"
-          : "events";
+  const identitySlug = identitySlugForBrand(brand);
   const { data: identity } = await supabase
     .from("sending_identities")
     .select("from_email, from_name, reply_to")

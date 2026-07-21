@@ -29,6 +29,7 @@ import { EventStatusControl } from "./event-status-control";
 import { EventDetailsForm } from "./event-details-form";
 import { TicketsTab } from "./tickets-tab";
 import { OrdersTab } from "./orders-tab";
+import { listRefundsForOrders } from "@/services/order-refunds";
 import { CheckInTab } from "./check-in-tab";
 import {
   listTicketTypesByEvent,
@@ -105,6 +106,14 @@ export default async function EventDetailPage({
       .eq("is_active", true)
       .order("display_name"),
   ]);
+
+  // Refund history for the Orders tab (migration 128). Needs the order
+  // ids, so it can't join the Promise.all above. Returns empty if the
+  // migration has not been applied yet.
+  const { data: orderRefunds } = await listRefundsForOrders(
+    supabase,
+    (orders ?? []).map((o: { id: string }) => o.id)
+  );
 
   // Workflows for this event's outcomes (for the Outcomes tab). Returns
   // empty if migration 070 has not been applied yet.
@@ -208,7 +217,11 @@ export default async function EventDetailPage({
       )}
 
       {tab === "orders" && (
-        <OrdersTab eventId={id} orders={orders ?? []} />
+        <OrdersTab
+          eventId={id}
+          orders={orders ?? []}
+          refunds={orderRefunds ?? []}
+        />
       )}
 
       {tab === "check-in" && (

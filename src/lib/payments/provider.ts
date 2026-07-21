@@ -63,11 +63,75 @@ export type WebhookResult = {
   amountCents: number | null;
 };
 
+/** What the refund API hands a provider to move money back. */
+export type RefundRequest = {
+  /** Provider-side payment id — orders.provider_payment_id. */
+  providerPaymentId: string;
+  /** Amount to return, in ZAR cents. May be less than the order total. */
+  amountCents: number;
+  /** ISO 4217 currency code; must match the original payment. */
+  currency: string;
+  /** Free-text staff reason. Providers with a fixed reason enum map it. */
+  reason: string | null;
+  /**
+   * Ask the PROVIDER to email the buyer. The Hub sends its own
+   * branded refund email, so this is normally false — set it only
+   * if we ever want the provider's notice instead of ours.
+   */
+  notifyBuyer: boolean;
+  /** Our orders.id, attached as provider-side metadata for reconciliation. */
+  orderId: string;
+  /**
+   * Build and return the exact request WITHOUT sending it. PayFast
+   * refunds cannot be exercised in sandbox, so this is the only way
+   * to inspect a signed payload before it touches real money.
+   */
+  dryRun?: boolean;
+};
+
+/** Normalised, provider-independent refund state. */
+export type RefundStatus = "succeeded" | "pending" | "failed";
+
+/** Normalised outcome of a refund attempt. */
+export type RefundOutcome = {
+  status: RefundStatus;
+  /** Provider-side refund id → order_refunds.provider_refund_id. */
+  providerRefundId: string | null;
+  /** Amount the provider reports refunding (cents), when it returns one. */
+  amountCents: number | null;
+  /** Populated when status is "failed" — safe to show to staff. */
+  error: string | null;
+  /** Only present when the request was a dryRun: what would have been sent. */
+  dryRunPreview?: {
+    method: string;
+    url: string;
+    headers?: Record<string, string>;
+    body?: unknown;
+  };
+};
+
 export interface PaymentProvider {
   readonly name: ProviderName;
 
   /** Create a hosted-checkout session; returns where to send the buyer. */
   createCheckout(req: CheckoutRequest): Promise<CheckoutResult>;
+
+  /**
+   * Refund a settled payment, in full or in part.
+   *
+   * Does NOT throw for a provider-side refusal (payment too old, wrong
+   * payment method, insufficient merchant balance) — those come back as
+   * `{ status: "failed", error }` so the caller can leave the order paid
+   * and show staff why. Throws only for programmer/config errors.
+   */
+  refundPayment(req: RefundRequest): Promise<RefundOutcome>;
+
+  /**
+   * Re-read a refund the provider has already accepted. Only implemented
+   * where refunds settle asynchronously (PayFast); Stripe card refunds
+   * resolve on the create call.
+   */
+  fetchRefund?(providerRefundId: string): Promise<RefundOutcome>;
 
   /**
    * Verify an incoming webhook / ITN and return a normalised result.

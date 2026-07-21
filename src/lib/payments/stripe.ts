@@ -16,6 +16,8 @@ import type {
   CheckoutResult,
   PaymentProvider,
   PaymentStatus,
+  RefundOutcome,
+  RefundRequest,
   WebhookRequest,
   WebhookResult,
 } from "./provider";
@@ -80,6 +82,28 @@ function mapStatus(event: Stripe.Event): PaymentStatus {
   }
 }
 
+// Stripe refund.status → our normalised RefundStatus. "requires_action"
+// only appears for a handful of non-card methods; treat it as pending so
+// staff see "awaiting confirmation" rather than a false success.
+function mapRefundStatus(raw: string | null): "succeeded" | "pending" | "failed" {
+  switch (raw) {
+    case "succeeded":
+      return "succeeded";
+    case "pending":
+    case "requires_action":
+      return "pending";
+    default:
+      return "failed";
+  }
+}
+
+function errText(err: unknown): string {
+  if (err instanceof Stripe.errors.StripeError) {
+    return err.message;
+  }
+  return err instanceof Error ? err.message : "Unknown Stripe error.";
+}
+
 function extractOrderId(session: Stripe.Checkout.Session | null): string | null {
   if (!session) return null;
   if (typeof session.client_reference_id === "string" && session.client_reference_id) {
@@ -132,6 +156,89 @@ export const stripeProvider: PaymentProvider = {
       throw new Error("Stripe returned no checkout URL.");
     }
     return { redirectUrl: session.url, reference: session.id };
+  },
+
+  async refundPayment(req: RefundRequest): Promise<RefundOutcome> {
+    const { client } = getClient();
+
+    // verifyWebhook stores the PaymentIntent id, but falls back to the
+    // Checkout Session id when Stripe hasn't attached the intent yet.
+    // Refunds only accept an intent (or charge), so recover it here.
+    let paymentIntentId = req.providerPaymentId;
+    if (paymentIntentId.startsWith("cs_")) {
+      try {
+        const session = await client.checkout.sessions.retrieve(paymentIntentId);
+        const intent =
+          typeof session.payment_intent === "string"
+            ? session.payment_intent
+            : (session.payment_intent?.id ?? null);
+        if (!intent) {
+          return {
+            status: "failed",
+            providerRefundId: null,
+            amountCents: null,
+            error:
+              "Stripe session has no payment intent — the payment may never have completed.",
+          };
+        }
+        paymentIntentId = intent;
+      } catch (err) {
+        return {
+          status: "failed",
+          providerRefundId: null,
+          amountCents: null,
+          error: `Could not resolve the Stripe payment for this order: ${errText(err)}`,
+        };
+      }
+    }
+
+    const params: Stripe.RefundCreateParams = {
+      payment_intent: paymentIntentId,
+      amount: req.amountCents,
+      // Stripe's reason is a fixed enum — staff free-text goes to
+      // metadata so it survives on the Stripe side for reconciliation.
+      reason: "requested_by_customer",
+      metadata: {
+        order_id: req.orderId,
+        ...(req.reason ? { hub_reason: req.reason.slice(0, 500) } : {}),
+      },
+    };
+
+    if (req.dryRun) {
+      return {
+        status: "pending",
+        providerRefundId: null,
+        amountCents: req.amountCents,
+        error: null,
+        dryRunPreview: {
+          method: "POST",
+          url: "https://api.stripe.com/v1/refunds",
+          body: params,
+        },
+      };
+    }
+
+    try {
+      const refund = await client.refunds.create(params);
+      return {
+        status: mapRefundStatus(refund.status),
+        providerRefundId: refund.id,
+        amountCents: refund.amount ?? null,
+        error:
+          refund.status === "failed"
+            ? (refund.failure_reason ?? "Stripe reported the refund failed.")
+            : null,
+      };
+    } catch (err) {
+      // Card already refunded, charge too old, insufficient balance —
+      // all arrive here. Staff-readable, and the order stays paid.
+      return {
+        status: "failed",
+        providerRefundId: null,
+        amountCents: null,
+        error: errText(err),
+      };
+    }
   },
 
   async verifyWebhook(req: WebhookRequest): Promise<WebhookResult> {
