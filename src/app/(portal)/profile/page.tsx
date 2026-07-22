@@ -1,10 +1,14 @@
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser } from "@/services/users";
+import { getCurrentUser, getInsurancePolicies } from "@/services/users";
 import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { ProfileRecords } from "@/components/profile-records";
 import { AvatarUploader } from "@/components/avatar-uploader";
 import { EditableProfileSection } from "@/components/profile/editable-profile-section";
+import {
+  InsuranceHistory,
+  type InsurancePolicyRow,
+} from "@/components/profile/insurance-history";
 import { PROFILE_SECTIONS } from "@/lib/users/profile-sections";
 
 export default async function ProfilePage() {
@@ -12,6 +16,8 @@ export default async function ProfilePage() {
   const { data: user } = await getCurrentUser(supabase);
 
   if (!user) redirect("/login");
+
+  const { data: insurancePolicies } = await getInsurancePolicies(supabase, user.id);
 
   const row = user as Record<string, unknown>;
   const roles = user.user_roles ?? [];
@@ -102,6 +108,13 @@ export default async function ProfilePage() {
               section={section}
               values={sectionValues(row, section.fields)}
               readOnlyRows={readOnlyRowsById[section.id]}
+              footer={
+                section.id === "insurance" ? (
+                  <InsuranceHistory
+                    policies={(insurancePolicies ?? []) as InsurancePolicyRow[]}
+                  />
+                ) : undefined
+              }
             />
           ))}
         </div>

@@ -125,6 +125,13 @@ export const HEALTH_INSURANCE_FIELDS: FieldConfig[] = REQUIRED_PROFILE_FIELDS.fi
 // How many days before expiry we start the (non-blocking) warning.
 export const INSURANCE_WARNING_DAYS = 60;
 
+// Leader-escalation windows (dashboard notifications, see
+// services/notifications.ts). At 4 weeks the person's leader is nudged; at
+// 1 week the development team (super_admin/admin) is notified too, as a
+// final catch-all for everyone regardless of role.
+export const INSURANCE_LEADER_ALERT_DAYS = 28; // 4 weeks → the person's leader
+export const INSURANCE_DEV_TEAM_ALERT_DAYS = 7; // 1 week  → development team
+
 export type InsuranceState = "ok" | "expiring" | "expired" | "missing";
 
 export type InsuranceStatus = {

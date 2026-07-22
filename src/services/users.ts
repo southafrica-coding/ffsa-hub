@@ -124,6 +124,20 @@ export async function approveUser(
   return supabase.from("users").update(update).eq("id", userId).select().single();
 }
 
+/**
+ * A user's health-insurance policy history (current + past), most recently
+ * recorded first. Each renewal is snapshotted into user_insurance_policies by
+ * a DB trigger (migration 130); RLS lets a user read their own rows and admins
+ * read anyone's.
+ */
+export async function getInsurancePolicies(supabase: Client, userId: string) {
+  return supabase
+    .from("user_insurance_policies")
+    .select("id, provider, policy_number, expiry_date, recorded_at")
+    .eq("user_id", userId)
+    .order("recorded_at", { ascending: false });
+}
+
 /** Count users currently awaiting approval. */
 export async function getPendingApprovalCount(supabase: Client) {
   const { count } = await supabase

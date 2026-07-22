@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import {
   Bell,
   CalendarClock,
@@ -10,6 +11,7 @@ import {
   Archive,
   Car,
   Check,
+  ShieldAlert,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
@@ -20,6 +22,7 @@ const ICONS: Record<string, LucideIcon> = {
   user: UserPlus,
   records: Archive,
   vehicle: Car,
+  insurance: ShieldAlert,
 };
 
 const ACCENTS: Record<string, string> = {
@@ -27,12 +30,51 @@ const ACCENTS: Record<string, string> = {
   user: "hsl(200 70% 62%)",
   records: "hsl(265 60% 68%)",
   vehicle: "hsl(150 55% 58%)",
+  insurance: "hsl(4 75% 62%)",
 };
+
+// Leaders get insurance-expiry notices "on behalf of" their people. The feed
+// is recomputed on each load, so to make sure a leader NOTICES a new one we
+// pop a toast for any unread insurance key we haven't shown before (tracked in
+// localStorage so a reload doesn't re-toast the same items).
+const SEEN_INSURANCE_KEY = "ffsa:seen-insurance-notifs";
 
 export function NotificationFeed({ initial }: { initial: AppNotification[] }) {
   const router = useRouter();
   const [items, setItems] = useState(initial);
   const unread = items.filter((n) => !n.read);
+
+  // Pop a toast for newly-arrived, unread insurance notifications.
+  useEffect(() => {
+    const fresh = initial.filter((n) => n.kind === "insurance" && !n.read);
+    if (fresh.length === 0) return;
+    let seen: string[] = [];
+    try {
+      seen = JSON.parse(localStorage.getItem(SEEN_INSURANCE_KEY) ?? "[]");
+    } catch {
+      seen = [];
+    }
+    const seenSet = new Set(seen);
+    const newOnes = fresh.filter((n) => !seenSet.has(n.key));
+    if (newOnes.length > 0) {
+      toast.warning(
+        newOnes.length === 1
+          ? "A team member's health insurance needs attention"
+          : `${newOnes.length} team members' health insurance needs attention`,
+        { description: "Check your notifications to follow up on the renewal." }
+      );
+    }
+    // Persist the union so reloads don't re-toast; keep only current keys so
+    // the store doesn't grow unbounded as policies renew.
+    try {
+      localStorage.setItem(
+        SEEN_INSURANCE_KEY,
+        JSON.stringify(fresh.map((n) => n.key))
+      );
+    } catch {
+      /* ignore quota / disabled storage */
+    }
+  }, [initial]);
 
   function post(keys: string[]) {
     if (!keys.length) return;

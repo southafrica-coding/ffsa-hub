@@ -21,10 +21,14 @@ export function EditableProfileSection({
   // Extra rows shown above the fields in both view and edit modes, but never
   // editable (e.g. the auth-managed email address).
   readOnlyRows,
+  // Extra content shown below the fields in view mode only (e.g. the
+  // health-insurance policy history under the Insurance card).
+  footer,
 }: {
   section: ProfileSectionDef;
   values: Record<string, string>;
   readOnlyRows?: { label: string; value: string; hint?: string }[];
+  footer?: React.ReactNode;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -166,6 +170,7 @@ export function EditableProfileSection({
               value={displayValue(f, values[f.field])}
             />
           ))}
+          {footer && <div className="pt-1">{footer}</div>}
         </div>
       )}
     </div>

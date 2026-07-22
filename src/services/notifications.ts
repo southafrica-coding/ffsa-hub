@@ -15,13 +15,20 @@
 import { getBookingAccess, getPendingRequests, getMyDecidedBookings } from "./bookings";
 import { getVehicleAccess } from "./vehicles";
 import { dateRangeLabel } from "@/lib/bookings/dates";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { callerIsAdmin, getLedMinistryIds } from "@/lib/auth/check-ministry-access";
+import {
+  getInsuranceStatus,
+  INSURANCE_LEADER_ALERT_DAYS,
+  INSURANCE_DEV_TEAM_ALERT_DAYS,
+} from "@/lib/users/profile-fields";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
 
 export type AppNotification = {
   key: string; // stable identity, e.g. "booking:<uuid>"
-  kind: "booking" | "user" | "records" | "vehicle";
+  kind: "booking" | "user" | "records" | "vehicle" | "insurance";
   title: string;
   body: string;
   href: string;
@@ -219,7 +226,142 @@ async function recordsMatchNotifs(supabase: Client, userId: string): Promise<App
   ];
 }
 
-const PROVIDERS = [bookingNotifs, bookingDecisionNotifs, staffApprovalNotifs, vehicleRequestNotifs, recordsMatchNotifs];
+// Health-insurance expiry, escalated up the ministry hierarchy. A leader is
+// nudged on their dashboard when one of THEIR people is within 4 weeks of a
+// lapse and hasn't renewed; the development team (super_admin/admin) is the
+// 1-week catch-all for everyone, and the direct recipient for point leaders
+// and anyone in the Leadership Team ministry. See INSURANCE_*_ALERT_DAYS.
+//
+// Unlike the other providers, this one reads OTHER users' insurance + roster
+// data, which a Ministry Leader has no RLS access to (users read only their
+// own row — the users-table embedded-join gotcha). So it uses the service-role
+// client for the cross-user scan and then exposes to the viewer ONLY the rows
+// they're entitled to (their ministry's people / dev-team scope) — the
+// standard "service-role for cross-user reporting, filter server-side" pattern.
+type EscalationTier = "leader" | "point_leader" | "dev_team";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function personName(u: any): string {
+  return (
+    u?.display_name ||
+    [u?.first_name, u?.last_name].filter(Boolean).join(" ") ||
+    u?.email ||
+    "A team member"
+  );
+}
+
+function expiryPhrase(daysLeft: number, date: string): string {
+  if (daysLeft < 0) {
+    const ago = Math.abs(daysLeft);
+    return `insurance expired ${ago === 1 ? "yesterday" : `${ago} days ago`} (${date})`;
+  }
+  if (daysLeft === 0) return `insurance expires today (${date})`;
+  if (daysLeft === 1) return `insurance expires tomorrow (${date})`;
+  return `insurance expires in ${daysLeft} days (${date})`;
+}
+
+async function insuranceExpiryNotifs(supabase: Client, userId: string): Promise<AppNotification[]> {
+  // Fast path: only leaders and the dev team ever receive these.
+  const isDevTeam = await callerIsAdmin(supabase, userId);
+  const ledMinistryIds = new Set(await getLedMinistryIds(supabase, userId));
+  if (!isDevTeam && ledMinistryIds.size === 0) return [];
+
+  // Cross-user scan (service-role): every active membership with the member's
+  // insurance + the ministry's slug, so we can resolve both the affected
+  // people and each ministry's leader/point-leader structure in one pass.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin: any = createAdminClient();
+  const { data: rows } = await admin
+    .from("staff_ministry_members")
+    .select(
+      `user_id, member_role, is_point_leader, staff_ministry_id,
+       ministry:staff_ministries!staff_ministry_id(id, name, slug),
+       user:users!user_id(id, first_name, last_name, display_name, email, health_insurance_expiry_date)`
+    )
+    .eq("status", "active");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const all = (rows ?? []) as any[];
+  if (all.length === 0) return [];
+
+  // Per-ministry point leader, so we can route ministry-leader alerts to them.
+  const pointLeaderByMinistry = new Map<string, string>();
+  for (const r of all) {
+    if (r.is_point_leader) pointLeaderByMinistry.set(r.staff_ministry_id, r.user_id);
+  }
+
+  // One notification per affected person; keep the most urgent (and prefer the
+  // dev-team tier on ties) if they surface via more than one ministry.
+  const byPerson = new Map<string, AppNotification & { _days: number; _tier: EscalationTier }>();
+  const tierRank: Record<EscalationTier, number> = { dev_team: 3, point_leader: 2, leader: 1 };
+
+  for (const r of all) {
+    const personId: string = r.user_id;
+    if (personId === userId) continue; // never notify someone about themselves
+
+    const status = getInsuranceStatus({
+      health_insurance_expiry_date: r.user?.health_insurance_expiry_date,
+    });
+    const daysLeft = status.daysLeft;
+    if (status.expiryDate === null || daysLeft === null) continue; // missing → own block handles it
+    if (daysLeft > INSURANCE_LEADER_ALERT_DAYS) continue; // outside the 4-week window
+
+    const ministryId: string = r.staff_ministry_id;
+    const isLeadershipTeam = r.ministry?.slug === "leadership_team";
+    const pIsPointLeader = r.is_point_leader === true;
+    const pIsLeader = r.member_role === "leader";
+    const hasPointLeader = pointLeaderByMinistry.has(ministryId);
+
+    // Route to the right tier. Leadership Team + point leaders go straight to
+    // the dev team; a ministry leader routes to their point leader (falling
+    // back to the dev team if the ministry has none); a plain member routes to
+    // their ministry's leaders. The 1-week mark adds the dev team for everyone.
+    const ltOrPoint = isLeadershipTeam || pIsPointLeader;
+    const devTeamApplies =
+      ltOrPoint || (pIsLeader && !hasPointLeader) || daysLeft <= INSURANCE_DEV_TEAM_ALERT_DAYS;
+    const pointApplies = !ltOrPoint && pIsLeader && hasPointLeader;
+    const leaderApplies = !ltOrPoint && !pIsLeader;
+
+    let tier: EscalationTier | null = null;
+    if (devTeamApplies && isDevTeam) tier = "dev_team";
+    else if (pointApplies && pointLeaderByMinistry.get(ministryId) === userId) tier = "point_leader";
+    else if (leaderApplies && ledMinistryIds.has(ministryId)) tier = "leader";
+    if (!tier) continue;
+
+    const name = personName(r.user);
+    const ministryName = r.ministry?.name ?? "their ministry";
+    const expired = daysLeft < 0;
+    const notif: AppNotification & { _days: number; _tier: EscalationTier } = {
+      key: `insurance-expiry:${personId}:${status.expiryDate}`,
+      kind: "insurance",
+      title: expired ? "Team member's insurance expired" : "Team member's insurance expiring",
+      body: `${name} · ${ministryName} — ${expiryPhrase(daysLeft, status.expiryDate)}`,
+      href: tier === "dev_team" ? `/users/${personId}` : `/ministry/${ministryId}`,
+      when: "",
+      // Sort nearer-expiry (and already-expired) first within the feed.
+      ts: Date.now() - daysLeft * 86_400_000,
+      read: false,
+      _days: daysLeft,
+      _tier: tier,
+    };
+
+    const existing = byPerson.get(personId);
+    if (
+      !existing ||
+      notif._days < existing._days ||
+      (notif._days === existing._days && tierRank[tier] > tierRank[existing._tier])
+    ) {
+      byPerson.set(personId, notif);
+    }
+  }
+
+  return Array.from(byPerson.values())
+    .sort((a, b) => a._days - b._days)
+    .slice(0, CAP)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    .map(({ _days, _tier, ...n }) => n);
+}
+
+const PROVIDERS = [bookingNotifs, bookingDecisionNotifs, staffApprovalNotifs, vehicleRequestNotifs, recordsMatchNotifs, insuranceExpiryNotifs];
 
 // ── Public API ─────────────────────────────────────────────
 

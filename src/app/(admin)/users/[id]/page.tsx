@@ -1,6 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound, redirect } from "next/navigation";
-import { getUserById } from "@/services/users";
+import { getUserById, getInsurancePolicies } from "@/services/users";
+import {
+  InsuranceHistory,
+  type InsurancePolicyRow,
+} from "@/components/profile/insurance-history";
 import { getAuthSignIn } from "@/lib/users/auth-signins";
 import { getUserSecurityEvents } from "@/lib/users/security-events";
 import { getSchoolsManageScopes } from "@/lib/auth/schools-manage-scopes";
@@ -53,12 +57,17 @@ export default async function UserProfilePage({
 
   if (!canManagePermissions) redirect("/dashboard");
 
-  const [{ data: targetUser, error }, authLastSignInAt, securityEvents] =
-    await Promise.all([
-      getUserById(supabase, id),
-      getAuthSignIn(id),
-      getUserSecurityEvents(id),
-    ]);
+  const [
+    { data: targetUser, error },
+    authLastSignInAt,
+    securityEvents,
+    { data: insurancePolicies },
+  ] = await Promise.all([
+    getUserById(supabase, id),
+    getAuthSignIn(id),
+    getUserSecurityEvents(id),
+    getInsurancePolicies(supabase, id),
+  ]);
   if (error || !targetUser) notFound();
 
   // Feed the real Supabase-Auth last-sign-in so the derived stage matches the
@@ -123,6 +132,18 @@ export default async function UserProfilePage({
           )}
         </InfoCard>
       </section>
+
+      {isAdmin && (
+        <section className="rounded-xl border p-4 space-y-3">
+          <div>
+            <p className="page-eyebrow">HEALTH INSURANCE</p>
+            <h2 className="text-xl font-semibold">Policy history</h2>
+          </div>
+          <InsuranceHistory
+            policies={(insurancePolicies ?? []) as InsurancePolicyRow[]}
+          />
+        </section>
+      )}
 
       <section>
         <SecurityActivityCard
