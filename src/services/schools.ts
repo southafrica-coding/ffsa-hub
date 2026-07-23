@@ -134,6 +134,26 @@ export async function getEnrollmentsByProgram(supabase: Client, programId: strin
     .order("enrolled_at", { ascending: false });
 }
 
+// Full-PII roster for a program, used by the CSV export. Selects the extra
+// student columns (phone, DOB, emergency contact, …) that getEnrollmentsByProgram
+// deliberately omits. Call this with the service-role admin client — under RLS
+// the embedded users join returns null for anyone but an admin (the same
+// limitation hydrateUserIdentities works around on the roster page).
+export async function getEnrollmentsWithPiiByProgram(
+  supabase: Client,
+  programId: string
+) {
+  return supabase
+    .from("enrollments")
+    .select(
+      "id, user_id, status, enrolled_at, removed_at, notes, assigned_staff_id, " +
+        "users!enrollments_user_id_fkey(id, first_name, last_name, preferred_name, email, phone, date_of_birth, gender, nationality, emergency_contact_name, emergency_contact_phone, emergency_contact_relationship), " +
+        "assigned_staff:users!enrollments_assigned_staff_id_fkey(id, first_name, last_name, preferred_name)"
+    )
+    .eq("program_id", programId)
+    .order("enrolled_at", { ascending: false });
+}
+
 export async function getEnrollmentsByUser(supabase: Client, userId: string) {
   return supabase
     .from("enrollments")

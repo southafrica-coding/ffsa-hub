@@ -6,6 +6,8 @@ import Link from "next/link";
 import { QuestionTree, type TreeQuestion } from "@/components/admin/question-tree";
 import { ReferenceQuestionsBuilder } from "./reference-questions-builder";
 import { ProgramCoursesManager, type PhaseCourse } from "./program-courses-manager";
+import { StudentsExportPanel } from "./students-export-panel";
+import { ENROLLMENT_STATUS_LABELS } from "@/lib/schools/student-export-columns";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1049,13 +1051,7 @@ function EnrollmentsTab({
     on_hold: "secondary",
   };
 
-  const statusLabels: Record<string, string> = {
-    waiting_for_arrival: "Waiting for Arrival",
-    arrived: "Arrived",
-    dismissed: "Dismissed",
-    decided_to_leave: "Decided to Leave",
-    graduated: "Graduated",
-  };
+  const statusLabels = ENROLLMENT_STATUS_LABELS;
 
   return (
     <div className="space-y-4">
@@ -1098,7 +1094,9 @@ function EnrollmentsTab({
             </button>
           )}
         </div>
-        <Dialog open={enrollOpen} onOpenChange={setEnrollOpen}>
+        <div className="flex items-center gap-2">
+          <StudentsExportPanel programId={programId} enrollments={enrollments} />
+          <Dialog open={enrollOpen} onOpenChange={setEnrollOpen}>
           <DialogTrigger asChild>
             <Button size="sm">
               <Plus className="mr-2 h-4 w-4" />
@@ -1150,6 +1148,7 @@ function EnrollmentsTab({
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       <div className="rounded-lg border bg-card">
