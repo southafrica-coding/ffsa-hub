@@ -143,6 +143,38 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
     gate: hasSchoolsCountAccess,
   },
   {
+    key: "students-by-tier",
+    title: "Fee tier by school",
+    description:
+      "How many students fall into each fee tier (A full price, B reduced, C heavily reduced) per school.",
+    category: "Schools",
+    defaultEnabled: false,
+    defaultOrder: 72,
+    fullWidth: true,
+    gate: hasSchoolsCountAccess,
+  },
+  {
+    key: "students-by-nationality",
+    title: "Where students come from",
+    description:
+      "Share of students by country, ranked, across all schools or one you pick.",
+    category: "Schools",
+    defaultEnabled: false,
+    defaultOrder: 74,
+    fullWidth: true,
+    gate: hasSchoolsCountAccess,
+  },
+  {
+    key: "students-by-gender",
+    title: "Gender split by school",
+    description: "The male / female balance of each school's students.",
+    category: "Schools",
+    defaultEnabled: false,
+    defaultOrder: 76,
+    fullWidth: true,
+    gate: hasSchoolsCountAccess,
+  },
+  {
     key: "my-assignments",
     title: "My assigned students",
     description:

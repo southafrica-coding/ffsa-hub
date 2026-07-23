@@ -1,5 +1,5 @@
 -- ============================================================
--- FFSA Hub — Migration 134: Per-user dashboard layouts
+-- FFSA Hub — Migration 135: Per-user dashboard layouts
 -- ============================================================
 -- The dashboard is built from a WIDGET REGISTRY in application code
 -- (src/lib/dashboard/widget-registry.ts). This table stores only each

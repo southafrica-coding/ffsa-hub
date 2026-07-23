@@ -14,6 +14,9 @@ import { MyBookingsCard } from "./my-bookings-card";
 import { PrayerWeekCard } from "./prayer-week-card";
 import { SchoolsCountsCard } from "./schools-counts-card";
 import { SchoolsPipelineCard } from "./schools-pipeline-card";
+import { StudentsByTierCard } from "./students-by-tier-card";
+import { StudentsByNationalityCard } from "./students-by-nationality-card";
+import { StudentsByGenderCard } from "./students-by-gender-card";
 import { StatCards } from "./stat-cards";
 import { EventsTableCard } from "./events-table-card";
 import {
@@ -102,6 +105,9 @@ export default async function DashboardPage() {
     ),
     "schools-counts": <SchoolsCountsCard />,
     "schools-pipeline": <SchoolsPipelineCard />,
+    "students-by-tier": <StudentsByTierCard />,
+    "students-by-nationality": <StudentsByNationalityCard />,
+    "students-by-gender": <StudentsByGenderCard />,
     "my-assignments": <MyAssignmentsCard />,
     "staff-workload": <StaffWorkloadCard />,
     "events-table": <EventsTableCard events={upcomingEvents?.data ?? []} />,
