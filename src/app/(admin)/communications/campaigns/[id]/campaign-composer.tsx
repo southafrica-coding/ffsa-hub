@@ -45,6 +45,7 @@ import {
 } from "@/lib/campaigns/templates";
 import type { EffectiveBrand } from "@/services/brand";
 import { RichText } from "@/components/communications/rich-text";
+import { ImageCropDialog } from "@/components/communications/image-crop-dialog";
 
 type Label = { id: string; slug: string; name: string };
 type Identity = { id: string; display_name: string; from_email: string };
@@ -1786,13 +1787,47 @@ function ImageBlockFields({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [preparing, setPreparing] = useState(false);
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  async function upload(file: File) {
+  function fileToDataUrl(file: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result as string);
+      r.onerror = reject;
+      r.readAsDataURL(file);
+    });
+  }
+
+  // On pick: convert HEIC → JPEG if needed, then open the crop dialog.
+  async function pickFile(file: File) {
+    setErr(null);
+    setPreparing(true);
+    try {
+      let blob: Blob = file;
+      if (/hei[cf]/i.test(file.type) || /\.hei[cf]$/i.test(file.name)) {
+        const heic2any = (await import("heic2any")).default;
+        const out = await heic2any({
+          blob: file,
+          toType: "image/jpeg",
+          quality: 0.92,
+        });
+        blob = Array.isArray(out) ? out[0] : out;
+      }
+      setCropSrc(await fileToDataUrl(blob));
+    } catch {
+      setErr("Could not read that image.");
+    } finally {
+      setPreparing(false);
+    }
+  }
+
+  async function upload(file: Blob, filename: string) {
     setUploading(true);
     setErr(null);
     const fd = new FormData();
-    fd.append("file", file);
+    fd.append("file", file, filename);
     const res = await fetch(`/api/campaigns/${campaignId}/image`, {
       method: "POST",
       body: fd,
@@ -1827,11 +1862,11 @@ function ImageBlockFields({
               <Button
                 variant="ghost"
                 size="sm"
-                disabled={disabled || uploading}
+                disabled={disabled || uploading || preparing}
                 onClick={() => inputRef.current?.click()}
                 className="h-6 px-2 text-[11px]"
               >
-                Replace
+                {preparing ? "Reading…" : uploading ? "Uploading…" : "Replace"}
               </Button>
               <Button
                 variant="ghost"
@@ -1849,24 +1884,34 @@ function ImageBlockFields({
         <Button
           variant="outline"
           size="sm"
-          disabled={disabled || uploading}
+          disabled={disabled || uploading || preparing}
           onClick={() => inputRef.current?.click()}
           className="w-full gap-1.5"
         >
-          {uploading ? "Uploading…" : "Upload image"}
+          {preparing ? "Reading…" : uploading ? "Uploading…" : "Upload & crop image"}
         </Button>
       )}
       <input
         ref={inputRef}
         type="file"
-        accept="image/png,image/jpeg,image/webp,image/gif"
+        accept="image/png,image/jpeg,image/webp,image/gif,image/heic,image/heif,.heic,.heif"
         className="hidden"
         onChange={(e) => {
           const f = e.target.files?.[0];
-          if (f) upload(f);
+          if (f) pickFile(f);
           e.target.value = "";
         }}
       />
+      {cropSrc && (
+        <ImageCropDialog
+          imageSrc={cropSrc}
+          onCancel={() => setCropSrc(null)}
+          onCropped={(blob) => {
+            setCropSrc(null);
+            upload(blob, "cropped.jpg");
+          }}
+        />
+      )}
       <details className="text-xs">
         <summary className="text-muted-foreground cursor-pointer hover:text-foreground">
           or paste a URL
