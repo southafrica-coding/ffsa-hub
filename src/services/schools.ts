@@ -679,7 +679,7 @@ export async function getReferenceRequestSummaries(supabase: Client, application
   if (applicationIds.length === 0) return { data: [], error: null };
   return supabase
     .from("reference_requests")
-    .select("id, application_id, status")
+    .select("id, application_id, status, submitted_at, reminder_sent_at")
     .in("application_id", applicationIds);
 }
 

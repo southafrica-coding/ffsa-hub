@@ -295,6 +295,8 @@ type RefRequestSummary = {
   id: string;
   application_id: string;
   status: string;
+  submitted_at: string | null;
+  reminder_sent_at: string | null;
 };
 
 export function ProgramDetail({
@@ -2350,10 +2352,35 @@ function ApplicantsTab({
                         const totalRefs = refs.length;
                         const submittedRefs = refs.filter((r) => r.status === "submitted").length;
                         if (totalRefs === 0) return <span className="text-xs text-muted-foreground">—</span>;
+                        const allIn = submittedRefs === totalRefs;
+
+                        // Latest referee submission (→ completion date) / latest referee
+                        // reminder (→ last-reminded date) across this app's references.
+                        const maxDate = (vals: (string | null)[]) => {
+                          const ts = vals
+                            .filter(Boolean)
+                            .map((v) => new Date(v as string).getTime());
+                          return ts.length ? new Date(Math.max(...ts)) : null;
+                        };
+                        const completedAt = allIn ? maxDate(refs.map((r) => r.submitted_at)) : null;
+                        const remindedAt = !allIn ? maxDate(refs.map((r) => r.reminder_sent_at)) : null;
+
                         return (
-                          <span className={`text-xs font-medium ${submittedRefs === totalRefs ? "text-green-500" : "text-yellow-500"}`}>
-                            {submittedRefs === totalRefs ? "✓" : "⚠"} {submittedRefs}/{totalRefs}
-                          </span>
+                          <div className="flex flex-col gap-0.5">
+                            <span className={`text-xs font-medium ${allIn ? "text-green-500" : "text-yellow-500"}`}>
+                              {allIn ? "✓" : "⚠"} {submittedRefs}/{totalRefs}
+                            </span>
+                            {completedAt && (
+                              <span className="text-[11px] text-muted-foreground">
+                                Completed {completedAt.toLocaleDateString()}
+                              </span>
+                            )}
+                            {remindedAt && (
+                              <span className="text-[11px] text-muted-foreground">
+                                Reminded {remindedAt.toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
                         );
                       })()}
                     </TableCell>
