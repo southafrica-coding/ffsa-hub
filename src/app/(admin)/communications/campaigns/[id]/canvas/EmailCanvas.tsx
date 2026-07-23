@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import {
-  resolveTheme,
-  type CampaignBody,
-} from "@/lib/campaigns/blocks";
+import { resolveTheme, type CampaignBody } from "@/lib/campaigns/blocks";
 import type { EffectiveBrand } from "@/services/brand";
 import { CanvasBlock } from "./CanvasBlock";
 import { DropZone } from "./DropZone";
@@ -21,6 +14,7 @@ export function EmailCanvas({
   brand,
   device,
   selectedId,
+  dragActive,
   onSelect,
   onRemove,
   onDuplicate,
@@ -29,13 +23,13 @@ export function EmailCanvas({
   brand: EffectiveBrand;
   device: "desktop" | "mobile";
   selectedId: string | null;
+  dragActive: boolean;
   onSelect: (id: string) => void;
   onRemove: (id: string) => void;
   onDuplicate: (id: string) => void;
 }) {
   const theme = resolveTheme(brand, body.design);
   const width = device === "mobile" ? 375 : theme.contentWidth;
-  const rootIds = body.blocks.map((b) => b.id);
 
   return (
     <div
@@ -76,29 +70,32 @@ export function EmailCanvas({
             padding: device === "mobile" ? "20px 24px 40px" : "20px 56px 40px",
           }}
         >
-          <SortableContext items={rootIds} strategy={verticalListSortingStrategy}>
-            {body.blocks.length === 0 ? (
-              <DropZone container="root" index={0} full />
-            ) : (
-              <>
-                <DropZone container="root" index={0} />
-                {body.blocks.map((b, i) => (
-                  <div key={b.id}>
-                    <CanvasBlock
-                      block={b}
-                      theme={theme}
-                      container="root"
-                      selectedId={selectedId}
-                      onSelect={onSelect}
-                      onRemove={onRemove}
-                      onDuplicate={onDuplicate}
-                    />
-                    <DropZone container="root" index={i + 1} />
-                  </div>
-                ))}
-              </>
-            )}
-          </SortableContext>
+          {body.blocks.length === 0 ? (
+            <DropZone container="root" index={0} dragActive={dragActive} full />
+          ) : (
+            <>
+              <DropZone container="root" index={0} dragActive={dragActive} />
+              {body.blocks.map((b, i) => (
+                <div key={b.id}>
+                  <CanvasBlock
+                    block={b}
+                    theme={theme}
+                    container="root"
+                    selectedId={selectedId}
+                    dragActive={dragActive}
+                    onSelect={onSelect}
+                    onRemove={onRemove}
+                    onDuplicate={onDuplicate}
+                  />
+                  <DropZone
+                    container="root"
+                    index={i + 1}
+                    dragActive={dragActive}
+                  />
+                </div>
+              ))}
+            </>
+          )}
         </div>
       </div>
     </div>

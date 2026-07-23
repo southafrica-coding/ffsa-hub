@@ -2,16 +2,19 @@
 
 import { useDroppable } from "@dnd-kit/core";
 
-// Thin insertion target between blocks (and inside empty columns). id encodes
-// the destination: `drop:<container>:<index>` where container is "root" or a
-// column id. Highlights when something is dragged over it.
+// Insertion target between blocks (and inside empty columns). id encodes the
+// destination: `drop:<container>:<index>` (container is "root" or a column id).
+// Faint while a drag is active, strong when hovered — the only drop targets in
+// the canvas, so placement is predictable.
 export function DropZone({
   container,
   index,
+  dragActive,
   full,
 }: {
   container: string;
   index: number;
+  dragActive: boolean;
   /** Full-height variant for empty columns ("Drop content here"). */
   full?: boolean;
 }) {
@@ -26,7 +29,7 @@ export function DropZone({
         ref={setNodeRef}
         className={`flex min-h-[72px] items-center justify-center rounded border border-dashed text-xs transition-colors ${
           isOver
-            ? "border-sky-400 bg-sky-400/10 text-sky-500"
+            ? "border-sky-500 bg-sky-400/15 text-sky-600"
             : "border-muted-foreground/30 text-muted-foreground"
         }`}
       >
@@ -38,12 +41,14 @@ export function DropZone({
   return (
     <div
       ref={setNodeRef}
+      aria-hidden
       className={`transition-all ${
         isOver
-          ? "my-1 h-5 rounded border border-dashed border-sky-400 bg-sky-400/20"
-          : "h-2"
+          ? "my-1 h-7 rounded border-2 border-dashed border-sky-500 bg-sky-400/20"
+          : dragActive
+            ? "my-0.5 h-4 rounded border border-dashed border-sky-300/60"
+            : "h-2"
       }`}
-      aria-hidden
     />
   );
 }

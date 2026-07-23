@@ -958,6 +958,7 @@ export function CampaignComposer({
                 brand={brand}
                 device={device}
                 selectedId={selectedBlockId}
+                dragActive={activeDrag !== null}
                 onSelect={(id) => setSelectedBlockId(id)}
                 onRemove={removeBlock}
                 onDuplicate={duplicateBlock}
