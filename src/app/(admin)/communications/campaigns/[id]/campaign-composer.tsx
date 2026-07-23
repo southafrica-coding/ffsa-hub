@@ -94,6 +94,19 @@ const STATUS_CLASS: Record<string, string> = {
   cancelled: "status-grey",
 };
 
+// Echo a scheduled time explicitly in South Africa Standard Time, regardless
+// of the admin's browser timezone, so a mis-set laptop clock is caught.
+function formatSast(when: Date): string {
+  return `${when.toLocaleString("en-ZA", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Africa/Johannesburg",
+  })} SAST`;
+}
+
 export function CampaignComposer({
   campaign,
   initialBody,
@@ -315,7 +328,7 @@ export function CampaignComposer({
 
     // Persist so the test renders the latest content.
     if (!(await persist()))
-      return setErr("Could not save the campaign before sending the test.");
+      return setErr("Could not save the email before sending the test.");
 
     setTestState("sending");
     const res = await fetch(`/api/campaigns/${campaign.id}/test-send`, {
@@ -415,7 +428,7 @@ export function CampaignComposer({
 
     setErr(null);
     setMsg(null);
-    if (!(await persist())) return setErr("Could not save the campaign.");
+    if (!(await persist())) return setErr("Could not save the email.");
 
     setSendState("sending");
     let totalSent = 0;
@@ -456,7 +469,7 @@ export function CampaignComposer({
     setBusy(true);
     if (!(await persist())) {
       setBusy(false);
-      return setErr("Could not save the campaign.");
+      return setErr("Could not save the email.");
     }
     const res = await fetch(`/api/campaigns/${campaign.id}`, {
       method: "PATCH",
@@ -471,8 +484,29 @@ export function CampaignComposer({
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       return setErr(data.error ?? "Could not schedule");
     }
-    setMsg(`Scheduled for ${when.toLocaleString()}`);
+    setMsg(`Scheduled to send ${formatSast(when)}.`);
     router.refresh();
+  }
+
+  // Clone a sent email into a fresh editable draft (same design, audience,
+  // and sender). The user can then tweak it and/or add more audience labels
+  // before sending again.
+  async function duplicateAndResend() {
+    setErr(null);
+    setMsg(null);
+    setBusy(true);
+    const res = await fetch(`/api/campaigns/${campaign.id}/duplicate`, {
+      method: "POST",
+    });
+    setBusy(false);
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      return setErr(data.error ?? "Could not duplicate this email.");
+    }
+    const { campaign: copy } = (await res.json()) as {
+      campaign: { id: string };
+    };
+    router.push(`/communications/campaigns/${copy.id}`);
   }
 
   return (
@@ -541,9 +575,20 @@ export function CampaignComposer({
       {err && <p className="text-sm text-red-400">{err}</p>}
       {msg && <p className="text-sm text-emerald-400">{msg}</p>}
       {sent && (
-        <p className="text-sm text-amber-400">
-          This campaign has been sent and can no longer be edited.
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2">
+          <p className="text-sm text-amber-500">
+            This email has been sent and can no longer be edited.
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={duplicateAndResend}
+            disabled={busy}
+            title="Make an editable copy you can resend — optionally to more people"
+          >
+            {busy ? "Duplicating…" : "Duplicate & resend"}
+          </Button>
+        </div>
       )}
 
       {suggestion && (
@@ -782,32 +827,39 @@ export function CampaignComposer({
             )}
             {sendState === "done" && (
               <p className="text-sm text-emerald-400">
-                ✓ Campaign sent — {sendProgress.sent} delivered to the provider
+                ✓ Email sent — {sendProgress.sent} delivered to the provider
                 {sendProgress.failed > 0 ? `, ${sendProgress.failed} failed` : ""}.
               </p>
             )}
             {sendState === "idle" && (
-              <div className="flex flex-wrap items-end gap-4">
-                <Button onClick={sendNow} disabled={busy}>
-                  Send now to {audienceCount}
-                </Button>
-                <span className="text-sm text-muted-foreground">or</span>
-                <div className="flex items-end gap-2">
-                  <label className="block">
-                    <span className="block text-muted-foreground mb-1 text-xs">
-                      Schedule for
-                    </span>
-                    <Input
-                      type="datetime-local"
-                      value={scheduleAt}
-                      onChange={(e) => setScheduleAt(e.target.value)}
-                      className="w-auto"
-                    />
-                  </label>
-                  <Button variant="outline" onClick={schedule} disabled={busy}>
-                    Schedule
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-end gap-4">
+                  <Button onClick={sendNow} disabled={busy}>
+                    Send now to {audienceCount}
                   </Button>
+                  <span className="text-sm text-muted-foreground">or</span>
+                  <div className="flex items-end gap-2">
+                    <label className="block">
+                      <span className="block text-muted-foreground mb-1 text-xs">
+                        Schedule for (your local time, SAST)
+                      </span>
+                      <Input
+                        type="datetime-local"
+                        value={scheduleAt}
+                        onChange={(e) => setScheduleAt(e.target.value)}
+                        className="w-auto"
+                      />
+                    </label>
+                    <Button variant="outline" onClick={schedule} disabled={busy}>
+                      Schedule
+                    </Button>
+                  </div>
                 </div>
+                {scheduleAt && !Number.isNaN(new Date(scheduleAt).getTime()) && (
+                  <p className="text-xs text-muted-foreground">
+                    Sends {formatSast(new Date(scheduleAt))}.
+                  </p>
+                )}
               </div>
             )}
             <p className="text-xs text-muted-foreground">

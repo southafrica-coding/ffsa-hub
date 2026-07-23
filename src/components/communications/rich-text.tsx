@@ -66,7 +66,7 @@ export function RichText({
     editorProps: {
       attributes: {
         class:
-          "min-h-[80px] focus:outline-none px-3 py-2 text-sm leading-relaxed [&_p]:my-1 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0",
+          "min-h-[80px] focus:outline-none px-3 py-2 text-sm leading-relaxed [&_p]:my-3 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0",
         "data-placeholder": placeholder ?? "Write…",
       },
     },
@@ -107,6 +107,10 @@ export function RichText({
         mergeFields={mergeFields}
       />
       <EditorContent editor={editor} />
+      <p className="border-t bg-muted/20 px-3 py-1 text-[11px] text-muted-foreground">
+        <kbd className="font-sans font-medium">Enter</kbd> = new paragraph ·{" "}
+        <kbd className="font-sans font-medium">Shift+Enter</kbd> = line break
+      </p>
     </div>
   );
 }

@@ -123,14 +123,19 @@ export async function getCampaignAudienceCount(
   return count ?? 0;
 }
 
-/** Per-recipient delivery rows for a sent campaign — drives analytics. */
+/**
+ * Per-recipient delivery rows for a sent campaign — drives the per-contact
+ * status table. Embeds the contact's name/email for display.
+ */
 export async function getCampaignRecipients(supabase: Client, campaignId: string) {
   return supabase
     .from("campaign_recipients")
     .select(
-      "id, contact_id, sent_at, delivered_at, opened_at, first_clicked_at, bounced_at, complained_at, unsubscribed_at"
+      "id, contact_id, sent_at, delivered_at, opened_at, first_clicked_at, bounced_at, complained_at, unsubscribed_at, contacts(first_name, last_name, email)"
     )
-    .eq("campaign_id", campaignId);
+    .eq("campaign_id", campaignId)
+    .order("bounced_at", { ascending: false, nullsFirst: false })
+    .order("sent_at", { ascending: true });
 }
 
 export type CampaignStats = {

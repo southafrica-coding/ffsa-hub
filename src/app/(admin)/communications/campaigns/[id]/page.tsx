@@ -5,6 +5,7 @@ import {
   getCampaignAudienceCount,
   getCampaignStats,
   getCampaignLabelIds,
+  getCampaignRecipients,
   listSendingIdentities,
 } from "@/services/campaigns";
 import { getCachedActiveLabels } from "@/lib/cached-reads";
@@ -12,6 +13,10 @@ import { emptyCampaignBody, type CampaignBody } from "@/lib/campaigns/blocks";
 import { getEffectiveBrand } from "@/services/brand";
 import { CampaignComposer } from "./campaign-composer";
 import { CampaignAnalytics } from "./campaign-analytics";
+import {
+  CampaignRecipientsTable,
+  type RecipientRow,
+} from "./recipients-table";
 
 export default async function CampaignComposerPage({
   params,
@@ -46,11 +51,18 @@ export default async function CampaignComposerPage({
 
   const showStats =
     campaign.status === "sent" || campaign.status === "sending";
-  const stats = showStats ? await getCampaignStats(supabase, id) : null;
+  const [stats, recipientsRes] = showStats
+    ? await Promise.all([
+        getCampaignStats(supabase, id),
+        getCampaignRecipients(supabase, id),
+      ])
+    : [null, null];
+  const recipients = (recipientsRes?.data ?? []) as RecipientRow[];
 
   return (
     <div className="space-y-4">
       {stats && <CampaignAnalytics stats={stats} />}
+      {showStats && <CampaignRecipientsTable recipients={recipients} />}
       <CampaignComposer
         campaign={{
           id: campaign.id,

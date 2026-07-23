@@ -39,7 +39,7 @@ export function CampaignAnalytics({ stats }: { stats: CampaignStats }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Campaign performance</CardTitle>
+        <CardTitle className="text-base">Email performance</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">

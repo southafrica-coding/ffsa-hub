@@ -6,6 +6,18 @@ import { createAdminClient } from "@/lib/supabase/admin";
 // We reconcile against campaign_recipients.provider_message_id and
 // update the matching timestamp column + the contact timeline.
 export async function POST(request: Request) {
+  // Optional shared-secret gate. When MAILTRAP_WEBHOOK_SECRET is set, Mailtrap
+  // must call this endpoint with ?token=<secret>; otherwise anyone could POST
+  // fake delivery events. Left open when unset to avoid breaking an existing
+  // registration before the secret is configured.
+  const secret = process.env.MAILTRAP_WEBHOOK_SECRET;
+  if (secret) {
+    const token = new URL(request.url).searchParams.get("token");
+    if (token !== secret) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+  }
+
   const admin = createAdminClient();
 
   let body: { events?: MailtrapEvent[] } | MailtrapEvent[];

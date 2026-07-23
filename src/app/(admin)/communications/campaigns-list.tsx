@@ -80,7 +80,7 @@ export function CampaignsList({
   }
 
   async function create() {
-    if (!name.trim()) return setErr("Campaign name is required.");
+    if (!name.trim()) return setErr("Email name is required.");
     if (labelIds.length === 0) return setErr("Pick at least one audience label.");
     if (!identityId) return setErr("Pick a sending identity.");
     setBusy(true);
@@ -98,7 +98,7 @@ export function CampaignsList({
     setBusy(false);
     if (!res.ok) {
       const data = (await res.json().catch(() => ({}))) as { error?: string };
-      setErr(data.error ?? "Failed to create campaign");
+      setErr(data.error ?? "Failed to create email");
       return;
     }
     const { campaign } = (await res.json()) as { campaign: { id: string } };
@@ -108,11 +108,11 @@ export function CampaignsList({
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
-        <CardTitle className="text-base">Campaigns</CardTitle>
+        <CardTitle className="text-base">Emails</CardTitle>
         {!creating && (
           <Button size="sm" className="gap-1" onClick={() => setCreating(true)}>
             <Plus className="h-4 w-4" />
-            New campaign
+            New email
           </Button>
         )}
       </CardHeader>
@@ -144,7 +144,7 @@ export function CampaignsList({
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Campaign name (internal)"
+              placeholder="Email name (internal)"
               disabled={busy}
             />
             <div className="grid gap-3 sm:grid-cols-2">
@@ -234,13 +234,13 @@ export function CampaignsList({
         )}
 
         {campaigns.length === 0 ? (
-          <p className="text-sm text-muted-foreground italic">No campaigns yet.</p>
+          <p className="text-sm text-muted-foreground italic">No emails yet.</p>
         ) : (
           <div className="rounded-lg border bg-card overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Campaign</TableHead>
+                  <TableHead>Email</TableHead>
                   <TableHead>Audience</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>When</TableHead>

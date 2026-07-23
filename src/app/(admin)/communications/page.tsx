@@ -27,7 +27,7 @@ export default async function CommunicationsPage() {
           <p className="page-eyebrow">ANNOUNCEMENTS &amp; OUTREACH</p>
           <h1 className="page-title">Communications</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Email campaigns to your contact labels.
+            Send emails to your contact labels.
           </p>
         </div>
         <div className="flex gap-1.5">
