@@ -173,6 +173,7 @@ export type Database = {
           created_at: string
           id: string
           program_id: string
+          references_requested_at: string | null
           reviewed_at: string | null
           reviewed_by: string | null
           staff_assigned_at: string | null
@@ -193,6 +194,7 @@ export type Database = {
           created_at?: string
           id?: string
           program_id: string
+          references_requested_at?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           staff_assigned_at?: string | null
@@ -213,6 +215,7 @@ export type Database = {
           created_at?: string
           id?: string
           program_id?: string
+          references_requested_at?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           staff_assigned_at?: string | null

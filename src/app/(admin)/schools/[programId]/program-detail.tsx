@@ -179,6 +179,7 @@ type AppResponse = {
   submitted_at: string;
   removed_at: string | null;
   removed_by: string | null;
+  references_requested_at: string | null;
   assigned_staff_id: string | null;
   assigned_staff: StaffUser | null;
   users: {
@@ -1570,6 +1571,8 @@ function ApplicantsTab({
 
   // Reference reminder state
   const [sendingReminder, setSendingReminder] = useState<string | null>(null);
+  const [requestingReferences, setRequestingReferences] = useState(false);
+  const [bulkRequesting, setBulkRequesting] = useState(false);
 
   // Reference contact edit state (swap a pending referee's name/email)
   const [editingRefId, setEditingRefId] = useState<string | null>(null);
@@ -1896,6 +1899,69 @@ function ApplicantsTab({
     }
   }
 
+  // Email the applicant a link to their status page so they can add the required
+  // references they didn't provide at submit time.
+  async function handleRequestReferences() {
+    if (!reviewingResponse) return;
+    setRequestingReferences(true);
+    try {
+      const res = await fetch("/api/schools/applications/request-references", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ application_id: reviewingResponse.id }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert("Email sent to the applicant.");
+        // Reflect the "Requested {date}" indicator immediately.
+        setReviewingResponse((prev) =>
+          prev ? { ...prev, references_requested_at: new Date().toISOString() } : prev
+        );
+        router.refresh();
+      } else {
+        alert(data.error || "Failed to send email");
+      }
+    } catch {
+      alert("Failed to send email");
+    } finally {
+      setRequestingReferences(false);
+    }
+  }
+
+  // Email every applicant for this program who is missing a required reference.
+  async function handleBulkRequestReferences() {
+    if (
+      !confirm(
+        "Email all applicants for this program who are missing required references?"
+      )
+    ) {
+      return;
+    }
+    setBulkRequesting(true);
+    try {
+      const res = await fetch("/api/schools/applications/request-references", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ program_id: programId, all: true }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(
+          data.emailed === 0
+            ? "No applicants are missing required references."
+            : `Emailed ${data.emailed} applicant${data.emailed === 1 ? "" : "s"}.`
+        );
+        router.refresh();
+      } else {
+        alert(data.error || "Failed to send emails");
+      }
+    } catch {
+      alert("Failed to send emails");
+    } finally {
+      setBulkRequesting(false);
+    }
+  }
+
   async function handleReviewSave() {
     if (!reviewingResponse || !reviewStatus) return;
     setReviewLoading(true);
@@ -1978,6 +2044,22 @@ function ApplicantsTab({
                 <Download className="mr-1 h-3 w-3" />
                 Export CSV
               </Button>
+              {referenceSlots.some((slot) => slot.is_required) && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={bulkRequesting}
+                  onClick={handleBulkRequestReferences}
+                  title="Email every applicant missing a required reference"
+                >
+                  {bulkRequesting ? (
+                    <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                  ) : (
+                    <Send className="mr-1 h-3 w-3" />
+                  )}
+                  Request missing references
+                </Button>
+              )}
             </div>
           )}
         </div>
@@ -2482,6 +2564,30 @@ function ApplicantsTab({
                             .join(", ")}
                           .
                         </p>
+                        <div className="mt-2 flex items-center gap-3">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 gap-1.5 border-amber-500/50 text-amber-700 hover:bg-amber-500/10 dark:text-amber-400"
+                            disabled={requestingReferences}
+                            onClick={handleRequestReferences}
+                          >
+                            {requestingReferences ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Send className="h-3.5 w-3.5" />
+                            )}
+                            Email applicant to add references
+                          </Button>
+                          {reviewingResponse?.references_requested_at && (
+                            <span className="text-xs text-muted-foreground">
+                              Requested{" "}
+                              {new Date(
+                                reviewingResponse.references_requested_at
+                              ).toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     )}
                   {refsLoading ? (

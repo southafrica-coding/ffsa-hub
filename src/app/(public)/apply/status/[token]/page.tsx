@@ -70,7 +70,7 @@ export default async function ApplicationStatusPage({
   const { data: response } = await supabase
     .from("application_responses")
     .select(
-      "id, status, submitted_at, applicant_info, applicant_email, programs(name)"
+      "id, program_id, status, submitted_at, applicant_info, applicant_email, programs(name)"
     )
     .eq("status_token", token)
     .single();
@@ -82,13 +82,33 @@ export default async function ApplicationStatusPage({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: refs } = await (supabase as any)
     .from("reference_requests")
-    .select("id, status, referee_name, referee_email, reference_slots(label)")
+    .select("id, slot_id, status, referee_name, referee_email, reference_slots(label)")
     .eq("application_id", response.id);
+
+  // The program's reference slots — used to surface any REQUIRED reference the
+  // applicant never supplied (older applications submitted before references
+  // were enforced), so they can add it here.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: slots } = await (supabase as any)
+    .from("reference_slots")
+    .select("id, label, is_required, sort_order")
+    .eq("program_id", response.program_id)
+    .order("sort_order", { ascending: true });
 
   const totalRefs = refs?.length ?? 0;
   const submittedRefs =
     refs?.filter((r: { status: string }) => r.status === "submitted").length ??
     0;
+
+  const filledSlotIds = new Set(
+    (refs ?? []).map((r: { slot_id: string }) => r.slot_id)
+  );
+  const missingRequiredSlots: { id: string; label: string }[] = (slots ?? [])
+    .filter(
+      (s: { id: string; is_required: boolean }) =>
+        s.is_required && !filledSlotIds.has(s.id)
+    )
+    .map((s: { id: string; label: string }) => ({ id: s.id, label: s.label }));
 
   const editableRefs: EditableReference[] = (refs ?? []).map(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -261,8 +281,12 @@ export default async function ApplicationStatusPage({
         )}
       </div>
 
-      {totalRefs > 0 && (
-        <ReferenceEditor statusToken={token} references={editableRefs} />
+      {(totalRefs > 0 || missingRequiredSlots.length > 0) && (
+        <ReferenceEditor
+          statusToken={token}
+          references={editableRefs}
+          missingSlots={missingRequiredSlots}
+        />
       )}
 
       {msg && (

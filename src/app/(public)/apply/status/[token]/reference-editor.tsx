@@ -24,20 +24,93 @@ export type EditableReference = {
   slot_label: string;
 };
 
+export type MissingSlot = {
+  id: string;
+  label: string;
+};
+
 export function ReferenceEditor({
   statusToken,
   references,
+  missingSlots = [],
 }: {
   statusToken: string;
   references: EditableReference[];
+  missingSlots?: MissingSlot[];
 }) {
   const [rows, setRows] = useState<EditableReference[]>(references);
+  const [pendingSlots, setPendingSlots] = useState<MissingSlot[]>(missingSlots);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  // "Add your references" section — one draft (name/email) per missing slot.
+  const [addName, setAddName] = useState<Record<string, string>>({});
+  const [addEmail, setAddEmail] = useState<Record<string, string>>({});
+  const [addingSlotId, setAddingSlotId] = useState<string | null>(null);
+  const [addError, setAddError] = useState<Record<string, string | null>>({});
+
+  async function addReference(slot: MissingSlot) {
+    const trimmedName = (addName[slot.id] ?? "").trim();
+    const trimmedEmail = (addEmail[slot.id] ?? "").trim();
+    if (!trimmedName) {
+      setAddError((prev) => ({ ...prev, [slot.id]: "Please enter the reference's name." }));
+      return;
+    }
+    if (!EMAIL_RE.test(trimmedEmail)) {
+      setAddError((prev) => ({ ...prev, [slot.id]: "Please enter a valid email address." }));
+      return;
+    }
+    setAddingSlotId(slot.id);
+    setAddError((prev) => ({ ...prev, [slot.id]: null }));
+    try {
+      const res = await fetch("/api/public/references/add", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status_token: statusToken,
+          slot_id: slot.id,
+          referee_name: trimmedName,
+          referee_email: trimmedEmail,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAddError((prev) => ({
+          ...prev,
+          [slot.id]: data.error || "Couldn't add your reference. Please try again.",
+        }));
+        return;
+      }
+      // Move the slot from "missing" into the normal pending list.
+      setRows((prev) => [
+        ...prev,
+        {
+          id: data.reference.id,
+          status: data.reference.status ?? "pending",
+          referee_name: trimmedName,
+          referee_email: trimmedEmail,
+          slot_label: slot.label,
+        },
+      ]);
+      setPendingSlots((prev) => prev.filter((s) => s.id !== slot.id));
+      setNotice(
+        data.emailed
+          ? "Saved — we've emailed your reference a request to complete."
+          : "Saved. We couldn't email your reference just now; you can update the details to retry."
+      );
+    } catch {
+      setAddError((prev) => ({
+        ...prev,
+        [slot.id]: "Couldn't add your reference. Please try again.",
+      }));
+    } finally {
+      setAddingSlotId(null);
+    }
+  }
 
   function startEdit(ref: EditableReference) {
     setEditingId(ref.id);
@@ -105,7 +178,7 @@ export function ReferenceEditor({
     }
   }
 
-  if (rows.length === 0) return null;
+  if (rows.length === 0 && pendingSlots.length === 0) return null;
 
   const labelStyle: React.CSSProperties = {
     fontSize: 11,
@@ -128,7 +201,9 @@ export function ReferenceEditor({
 
   return (
     <div style={{ marginTop: 8, marginBottom: 16 }}>
-      <p style={{ ...labelStyle, marginBottom: 8 }}>Your references</p>
+      {rows.length > 0 && (
+        <p style={{ ...labelStyle, marginBottom: 8 }}>Your references</p>
+      )}
 
       {notice && (
         <div
@@ -296,6 +371,88 @@ export function ReferenceEditor({
           );
         })}
       </div>
+
+      {pendingSlots.length > 0 && (
+        <div style={{ marginTop: rows.length > 0 ? 16 : 0 }}>
+          <p style={{ ...labelStyle, marginBottom: 6 }}>Add your references</p>
+          <p style={{ fontSize: 12, color: C.dim, marginBottom: 10 }}>
+            Your application still needs the reference{pendingSlots.length > 1 ? "s" : ""} below.
+            Enter each reference&apos;s name and email — we&apos;ll send them a short form to complete.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {pendingSlots.map((slot) => {
+              const isAdding = addingSlotId === slot.id;
+              return (
+                <div
+                  key={slot.id}
+                  style={{
+                    padding: 12,
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 10,
+                  }}
+                >
+                  <p style={{ fontSize: 13, fontWeight: 600, color: C.text }}>
+                    {slot.label}
+                  </p>
+                  <div style={{ marginTop: 10 }}>
+                    <label style={labelStyle}>
+                      Name
+                      <input
+                        value={addName[slot.id] ?? ""}
+                        onChange={(e) =>
+                          setAddName((prev) => ({ ...prev, [slot.id]: e.target.value }))
+                        }
+                        placeholder="Reference's full name"
+                        style={inputStyle}
+                      />
+                    </label>
+                    <div style={{ height: 10 }} />
+                    <label style={labelStyle}>
+                      Email
+                      <input
+                        type="email"
+                        value={addEmail[slot.id] ?? ""}
+                        onChange={(e) =>
+                          setAddEmail((prev) => ({ ...prev, [slot.id]: e.target.value }))
+                        }
+                        placeholder="name@example.com"
+                        style={inputStyle}
+                      />
+                    </label>
+
+                    {addError[slot.id] && (
+                      <p style={{ fontSize: 12, color: "hsl(0 75% 70%)", marginTop: 6 }}>
+                        {addError[slot.id]}
+                      </p>
+                    )}
+
+                    <div style={{ marginTop: 10 }}>
+                      <button
+                        type="button"
+                        disabled={isAdding}
+                        onClick={() => addReference(slot)}
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 700,
+                          color: "#0D0B09",
+                          background: C.yellow,
+                          border: "none",
+                          borderRadius: 8,
+                          padding: "7px 16px",
+                          cursor: isAdding ? "default" : "pointer",
+                          opacity: isAdding ? 0.6 : 1,
+                        }}
+                      >
+                        {isAdding ? "Adding…" : "Add reference"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
