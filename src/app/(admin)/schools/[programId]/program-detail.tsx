@@ -34,7 +34,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Trash2, Download, ChevronUp, ChevronDown, Edit2, ClipboardList, Copy, Check, Link as LinkIcon, Archive, BookTemplate, Upload, Loader2, FileText, Send, BarChart3, Calendar, RefreshCw, CheckSquare, Search, Users, MoreHorizontal, UserMinus, RotateCcw } from "lucide-react";
+import { Plus, Trash2, Download, ChevronUp, ChevronDown, Edit2, ClipboardList, Copy, Check, Link as LinkIcon, Archive, BookTemplate, Upload, Loader2, FileText, Send, BarChart3, Calendar, RefreshCw, CheckSquare, Search, Users, MoreHorizontal, UserMinus, RotateCcw, AlertTriangle } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -2459,10 +2459,35 @@ function ApplicantsTab({
               {referenceSlots.length > 0 && (
                 <div className="space-y-3">
                   <h4 className="text-sm font-medium">References</h4>
+                  {!refsLoading &&
+                    referenceSlots.some(
+                      (slot) =>
+                        slot.is_required &&
+                        !reviewReferences.some((ref) => ref.slot_id === slot.id)
+                    ) && (
+                      <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-3">
+                        <p className="flex items-center gap-1.5 text-sm font-medium text-amber-700 dark:text-amber-400">
+                          <AlertTriangle className="h-4 w-4" />
+                          Missing required references
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          This application was submitted without:{" "}
+                          {referenceSlots
+                            .filter(
+                              (slot) =>
+                                slot.is_required &&
+                                !reviewReferences.some((ref) => ref.slot_id === slot.id)
+                            )
+                            .map((slot) => slot.label)
+                            .join(", ")}
+                          .
+                        </p>
+                      </div>
+                    )}
                   {refsLoading ? (
                     <p className="text-sm text-muted-foreground">Loading references...</p>
                   ) : reviewReferences.length === 0 ? (
-                    <p className="text-sm text-muted-foreground italic">No references requested for this application.</p>
+                    <p className="text-sm text-muted-foreground italic">No references were provided with this application.</p>
                   ) : (
                     <div className="space-y-3">
                       {reviewReferences.map((ref) => (

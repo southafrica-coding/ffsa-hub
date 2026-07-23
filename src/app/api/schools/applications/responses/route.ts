@@ -38,6 +38,32 @@ export async function POST(request: Request) {
     );
   }
 
+  // Enforce required references server-side (the client form validates too).
+  const { data: requiredSlotsCheck } = await getReferenceSlotsByProgram(
+    supabase,
+    program_id
+  );
+  const submittedRefs: Array<{
+    slot_id?: string;
+    referee_name?: string;
+    referee_email?: string;
+  }> = Array.isArray(references) ? references : [];
+  for (const slot of requiredSlotsCheck ?? []) {
+    if (!slot.is_required) continue;
+    const provided = submittedRefs.find(
+      (ref) =>
+        ref.slot_id === slot.id &&
+        ref.referee_name?.trim() &&
+        ref.referee_email?.trim()
+    );
+    if (!provided) {
+      return NextResponse.json(
+        { error: `Please provide referee details for the required reference: "${slot.label}"` },
+        { status: 400 }
+      );
+    }
+  }
+
   const { data, error } = await createResponse(supabase, {
     program_id,
     user_id: user.id,

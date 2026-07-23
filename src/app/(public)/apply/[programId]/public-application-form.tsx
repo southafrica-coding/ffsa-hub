@@ -302,6 +302,20 @@ export function PublicApplicationForm({
       }
     }
 
+    // Required references must have both a name and an email. The server
+    // enforces this too, but validate here so applicants get an inline error
+    // instead of a rejected submission.
+    for (const slot of referenceSlots) {
+      if (
+        slot.is_required &&
+        (!refNames[slot.id]?.trim() || !refEmails[slot.id]?.trim())
+      ) {
+        setServerError(`Please provide referee details for: "${slot.label}"`);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
+    }
+
     const references = referenceSlots
       .filter(
         (slot) =>

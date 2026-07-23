@@ -113,6 +113,31 @@ export async function POST(request: Request) {
     }
   }
 
+  // Validate required references. The client forms enforce this too, but the
+  // public form's guard was easy to bypass (empty/partial references were
+  // silently dropped and still accepted), so this is the authoritative check.
+  const { data: referenceSlots } = await getReferenceSlotsByProgram(supabase, program_id);
+  const submittedReferences: Array<{
+    slot_id?: string;
+    referee_name?: string;
+    referee_email?: string;
+  }> = Array.isArray(references) ? references : [];
+  for (const slot of referenceSlots ?? []) {
+    if (!slot.is_required) continue;
+    const provided = submittedReferences.find(
+      (ref) =>
+        ref.slot_id === slot.id &&
+        ref.referee_name?.trim() &&
+        ref.referee_email?.trim()
+    );
+    if (!provided) {
+      return NextResponse.json(
+        { error: `Please provide referee details for the required reference: "${slot.label}"` },
+        { status: 400 }
+      );
+    }
+  }
+
   // Try to extract email from answers (look for email-type question first, then label match)
   const email = findAnswerByType(answers, questions ?? [], "email")
     ?? findAnswerByLabel(answers, ["email"]);
@@ -258,8 +283,7 @@ export async function POST(request: Request) {
   const referenceLinks: Array<{ label: string; url: string }> = [];
 
   if (references && Array.isArray(references) && references.length > 0) {
-    const { data: slots } = await getReferenceSlotsByProgram(supabase, program_id);
-    const slotMap = new Map<string, any>((slots ?? []).map((s: any) => [s.id, s]));
+    const slotMap = new Map<string, any>((referenceSlots ?? []).map((s: any) => [s.id, s]));
     const applicantName = [firstName, lastName].filter(Boolean).join(" ") || "An applicant";
 
     for (const ref of references) {
