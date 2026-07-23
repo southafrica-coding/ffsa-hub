@@ -118,16 +118,146 @@ export type CampaignBlock =
       type: "social";
       links?: SocialLink[];
       blockStyle?: BlockStyle;
+    }
+  // Multi-column SECTION — a container of columns, each holding any leaf
+  // blocks. Depth is capped at 2 (a section may not contain a section).
+  | {
+      id: string;
+      type: "section";
+      layout: SectionLayout;
+      columns: SectionColumn[];
+      blockStyle?: BlockStyle;
     };
 
 export type ColumnCell = { heading?: string; text: string };
+
+// ────────────────────────────────────────────────────────────
+// Sections (nested column layouts) + per-email design overrides
+// ────────────────────────────────────────────────────────────
+
+export type SectionLayout =
+  | "1"
+  | "1-1"
+  | "1-1-1"
+  | "1-1-1-1"
+  | "1-2"
+  | "2-1";
+
+/** Column weight array for a layout — "1-2" → [1,2]. Shared by renderer + canvas. */
+export function sectionColumnWeights(layout: SectionLayout): number[] {
+  switch (layout) {
+    case "1":
+      return [1];
+    case "1-1":
+      return [1, 1];
+    case "1-1-1":
+      return [1, 1, 1];
+    case "1-1-1-1":
+      return [1, 1, 1, 1];
+    case "1-2":
+      return [1, 2];
+    case "2-1":
+      return [2, 1];
+    default:
+      return [1];
+  }
+}
+
+export type SectionColumn = {
+  id: string;
+  blocks: CampaignBlock[];
+  blockStyle?: BlockStyle;
+};
+
+/** Leaf block types that may be dropped inside a section column. Excludes
+ *  "section" (no nesting) and legacy "columns". */
+export const COLUMN_ALLOWED_TYPES: ReadonlySet<CampaignBlockType> = new Set([
+  "heading",
+  "text",
+  "button",
+  "image",
+  "divider",
+  "eyebrow",
+  "quote",
+  "spacer",
+  "image-text",
+  "cta",
+  "social",
+]);
+
+/** Per-email global design overrides, layered over the Brand Kit. */
+export type EmailDesign = {
+  pageBgColor?: string;
+  contentBgColor?: string;
+  contentWidthPx?: number;
+  borderWidth?: number;
+  borderColor?: string;
+  borderRadiusPx?: number;
+  text?: {
+    fontFamily?: BlockFontFamily;
+    sizePx?: number;
+    color?: string;
+    lineHeight?: number;
+  };
+  heading?: { fontFamily?: BlockFontFamily; color?: string };
+  linkColor?: string;
+  buttonColor?: string;
+};
 
 export type CampaignBlockType = CampaignBlock["type"];
 
 export type CampaignBody = {
   version: 1;
   blocks: CampaignBlock[];
+  design?: EmailDesign;
 };
+
+// ────────────────────────────────────────────────────────────
+// Theme — resolved render values (Brand Kit + per-email design).
+// A superset of EffectiveBrand so all existing brand reads keep working;
+// the extra tokens are the values the renderers used to hard-code.
+// Precedence at render time: block.blockStyle > design > brand > literal.
+// ────────────────────────────────────────────────────────────
+
+export type Theme = EffectiveBrand & {
+  pageBg: string;
+  contentBg: string;
+  contentWidth: number;
+  cardBorderWidth: number;
+  cardBorderColor: string;
+  cardBorderRadius: number;
+  linkColor: string;
+  buttonFill: string;
+  textFontFamily: BlockFontFamily;
+  textSizePx: number;
+  textColor: string;
+  textLineHeight: number;
+  headingFontFamily: BlockFontFamily;
+  headingColor: string;
+};
+
+export function resolveTheme(
+  brand: EffectiveBrand,
+  design?: EmailDesign
+): Theme {
+  return {
+    ...brand,
+    pageBg: design?.pageBgColor || brand.bg_color || "#F7F5F0",
+    contentBg: design?.contentBgColor || "#ffffff",
+    contentWidth: design?.contentWidthPx || 660,
+    cardBorderWidth: design?.borderWidth ?? 0,
+    cardBorderColor: design?.borderColor || "#e5e5e5",
+    cardBorderRadius: design?.borderRadiusPx ?? 6,
+    linkColor: design?.linkColor || brand.accent_color,
+    buttonFill: design?.buttonColor || brand.accent_color,
+    textFontFamily: design?.text?.fontFamily || "body",
+    textSizePx: design?.text?.sizePx ?? 17,
+    textColor: design?.text?.color || brand.text_color,
+    textLineHeight: design?.text?.lineHeight ?? 1.5,
+    headingFontFamily: design?.heading?.fontFamily || "display",
+    headingColor: design?.heading?.color || brand.primary_color,
+  };
+}
 
 let counter = 0;
 export function newBlockId(): string {
@@ -360,15 +490,13 @@ function buttonHtml(
   text: string,
   url: string,
   style: ButtonStyle,
-  brand: EffectiveBrand,
+  brand: Theme,
   colors?: { bgColor?: string; textColor?: string }
 ): string {
   const label = escapeHtml(text);
   const href = safeUrl(url);
-  // Custom color falls back to the brand accent (fill) / primary (outline).
-  const accent = colors?.bgColor || brand.accent_color;
   if (style === "link") {
-    const linkColor = colors?.textColor || accent;
+    const linkColor = colors?.textColor || colors?.bgColor || brand.linkColor;
     return `<a href="${href}" style="font-family:${bodyStack(brand)};font-size:14px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:${linkColor};text-decoration:none;border-bottom:1.5px solid ${linkColor};padding-bottom:2px;">${label} &nbsp;→</a>`;
   }
   if (style === "outline") {
@@ -377,7 +505,7 @@ function buttonHtml(
     return `<a href="${href}" style="display:inline-block;background:transparent;color:${label_color};text-decoration:none;font-family:${bodyStack(brand)};font-size:13px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;padding:13px 28px;border:1.5px solid ${line};border-radius:2px;">${label}</a>`;
   }
   // filled (default)
-  const fill = colors?.bgColor || brand.accent_color;
+  const fill = colors?.bgColor || brand.buttonFill;
   const fg = colors?.textColor || "#ffffff";
   return `<a href="${href}" style="display:inline-block;background:${fill};color:${fg};text-decoration:none;font-family:${bodyStack(brand)};font-size:13px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;padding:14px 30px;border-radius:2px;">${label}</a>`;
 }
@@ -419,14 +547,17 @@ function dropCapWrap(html: string, brand: EffectiveBrand): string {
 
 function imageHtml(
   block: Extract<CampaignBlock, { type: "image" }>,
-  brand: EffectiveBrand
+  brand: Theme,
+  ctx: RenderCtx = {}
 ): string {
   const img = `<img src="${safeUrl(block.url)}" alt="${escapeHtml(block.alt || "")}" style="display:block;width:100%;max-width:100%;height:auto;border:0;border-radius:2px;"/>`;
   const caption = block.caption
     ? `<div style="font-family:${displayStack(brand)};font-style:italic;font-size:13px;line-height:1.5;color:${brand.text_color};opacity:0.7;margin-top:10px;">${escapeHtml(block.caption)}</div>`
     : "";
   const td = `${padCss(block.blockStyle?.padding, "16px 0")}${tdExtraCss(block.blockStyle)}`;
-  if (block.fullBleed) {
+  // Full-bleed breaks the 56px card padding — only valid at top level, never
+  // inside a section column.
+  if (block.fullBleed && !ctx.nested) {
     // Visually break out of the standard 56px card padding.
     return `<tr><td style="${td}"><div style="margin:0 -56px;">${img}</div>${caption ? `<div style="padding:0 56px;">${caption}</div>` : ""}</td></tr>`;
   }
@@ -553,33 +684,39 @@ function socialHtml(
   return `<tr><td style="${td}">${pills}</td></tr>`;
 }
 
-function renderBlock(block: CampaignBlock, brand: EffectiveBrand): string {
+type RenderCtx = { nested?: boolean };
+
+export function renderBlock(
+  block: CampaignBlock,
+  brand: Theme,
+  ctx: RenderCtx = {}
+): string {
   switch (block.type) {
     case "heading": {
       const eyebrow = block.eyebrow ? eyebrowHtml(block.eyebrow, brand) : "";
       const td = `${padCss(block.blockStyle?.padding, "24px 0 12px")}${tdExtraCss(block.blockStyle)}`;
       const headFont = fontCss(block.blockStyle?.font, brand, {
-        family: displayStack(brand),
+        family: familyStack(brand.headingFontFamily, brand),
         sizePx: 34,
         weight: 800,
-        color: brand.primary_color,
+        color: brand.headingColor,
         lineHeight: 1.1,
       });
       return `<tr><td style="${td}">${eyebrow}<div style="${headFont}letter-spacing:-0.025em;">${escapeHtml(block.text)}</div></td></tr>`;
     }
     case "text": {
       const pFont = fontCss(block.blockStyle?.font, brand, {
-        family: bodyStack(brand),
-        sizePx: 17,
+        family: familyStack(brand.textFontFamily, brand),
+        sizePx: brand.textSizePx,
         weight: 400,
-        color: brand.text_color,
-        lineHeight: 1.5,
+        color: brand.textColor,
+        lineHeight: brand.textLineHeight,
       });
       const safe = sanitizeRichText(block.text)
         .replace(/<p(\s|>)/g, `<p style="margin:0 0 16px;${pFont}"$1`)
         .replace(
           /<a(\s|>)/g,
-          `<a style="color:${brand.accent_color};text-decoration:underline;text-underline-offset:2px;"$1`
+          `<a style="color:${brand.linkColor};text-decoration:underline;text-underline-offset:2px;"$1`
         );
       const final = block.dropCap ? dropCapWrap(safe, brand) : safe;
       const td = `${padCss(block.blockStyle?.padding, "2px 0")}${tdExtraCss(block.blockStyle)}${pFont}`;
@@ -590,7 +727,7 @@ function renderBlock(block: CampaignBlock, brand: EffectiveBrand): string {
       return `<tr><td style="${td}">${buttonHtml(block.text, block.url, block.style ?? "filled", brand, { bgColor: block.bgColor, textColor: block.textColor })}</td></tr>`;
     }
     case "image":
-      return imageHtml(block, brand);
+      return imageHtml(block, brand, ctx);
     case "divider":
       return dividerHtml(block.style ?? "rule", brand);
     case "eyebrow": {
@@ -609,9 +746,52 @@ function renderBlock(block: CampaignBlock, brand: EffectiveBrand): string {
       return columnsHtml(block, brand);
     case "social":
       return socialHtml(block, brand);
+    case "section":
+      return ctx.nested ? "" : sectionHtml(block, brand);
     default:
       return "";
   }
+}
+
+// Multi-column section — table of columns, each a nested table of its own
+// blocks. Reuses every leaf renderer. Stacks on mobile via .ff-stack/.ff-gap
+// (head @media), and holds columns side-by-side in Outlook via MSO ghost tds.
+function sectionHtml(
+  block: Extract<CampaignBlock, { type: "section" }>,
+  brand: Theme
+): string {
+  const cols = block.columns ?? [];
+  if (cols.length === 0) return "";
+  const weights = sectionColumnWeights(block.layout);
+  const total = weights.reduce((a, b) => a + b, 0) || 1;
+  const gapPct = cols.length >= 4 ? 3 : cols.length === 3 ? 4 : 6;
+  const usablePct = 100 - gapPct * (cols.length - 1);
+  const innerContentPx = brand.contentWidth - 112; // 56px card padding each side
+
+  const cells = cols.map((col, i) => {
+    const pct = Math.max(1, Math.round((weights[i] / total) * usablePct));
+    const msoPx = Math.round(((weights[i] / total) * innerContentPx));
+    const inner =
+      (col.blocks ?? [])
+        .map((child) => renderBlock(child, brand, { nested: true }))
+        .join("") || `<tr><td style="height:1px;line-height:0;">&nbsp;</td></tr>`;
+    const gap =
+      i < cols.length - 1
+        ? `<td class="ff-gap" width="${gapPct}%" style="width:${gapPct}%;">&nbsp;</td>`
+        : "";
+    return `<!--[if mso]><td valign="top" width="${msoPx}"><![endif]-->
+<td class="ff-stack" valign="top" width="${pct}%" style="width:${pct}%;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0">${inner}</table>
+</td>
+<!--[if mso]></td><![endif]-->${gap}`;
+  });
+
+  const td = `${padCss(block.blockStyle?.padding, "12px 0")}${tdExtraCss(block.blockStyle)}`;
+  return `<tr><td style="${td}">
+<!--[if mso]><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><![endif]-->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>${cells.join("")}</tr></table>
+<!--[if mso]></tr></table><![endif]-->
+</td></tr>`;
 }
 
 // ────────────────────────────────────────────────────────────
@@ -637,12 +817,14 @@ export function renderCampaignHtml(
   body: CampaignBody,
   opts: RenderOpts = {}
 ): string {
-  const brand: EffectiveBrand =
+  const baseBrand: EffectiveBrand =
     opts.brand &&
     "primary_color" in opts.brand &&
     typeof opts.brand.primary_color === "string"
       ? (opts.brand as EffectiveBrand)
       : mergeBrand((opts.brand as BrandKitRow) ?? null);
+  // Per-email design overrides layered over the Brand Kit.
+  const brand: Theme = resolveTheme(baseBrand, body.design);
 
   const fontHref = googleFontHref(brand);
   const testNoticeRow = opts.testNotice
@@ -660,7 +842,10 @@ export function renderCampaignHtml(
 
   // Warm off-white background — avoids the sterile blue-grey of #F8FAFC
   // and gives the email a "paper" feel that pairs well with editorial type.
-  const pageBg = brand.bg_color || "#F7F5F0";
+  const pageBg = brand.pageBg;
+  const cardBorder = brand.cardBorderWidth
+    ? `border:${brand.cardBorderWidth}px solid ${brand.cardBorderColor};`
+    : "";
 
   return `<!DOCTYPE html>
 <html xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office"><head>
@@ -685,8 +870,8 @@ ${fontHref ? `<link rel="preconnect" href="https://fonts.googleapis.com"><link r
 ${preview}
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${pageBg}" style="background:${pageBg};padding:40px 0;">
 <tr><td align="center">
-<!--[if mso]><table role="presentation" width="660" align="center" cellpadding="0" cellspacing="0"><tr><td><![endif]-->
-<table role="presentation" width="660" cellpadding="0" cellspacing="0" class="ff-container" bgcolor="#ffffff" style="max-width:660px;width:100%;background:#ffffff;border-radius:6px;">
+<!--[if mso]><table role="presentation" width="${brand.contentWidth}" align="center" cellpadding="0" cellspacing="0"><tr><td><![endif]-->
+<table role="presentation" width="${brand.contentWidth}" cellpadding="0" cellspacing="0" class="ff-container" bgcolor="${brand.contentBg}" style="max-width:${brand.contentWidth}px;width:100%;background:${brand.contentBg};border-radius:${brand.cardBorderRadius}px;${cardBorder}">
 ${headerHtml(brand)}
 <tr><td class="ff-pad" style="padding:20px 56px 40px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rows}</table>
@@ -807,6 +992,17 @@ export function renderCampaignText(
               .join("  |  "),
             ""
           );
+        }
+        break;
+      }
+      case "section": {
+        // Flatten columns in reading order; reuse the HTML renderer + strip tags.
+        const theme = resolveTheme(brand);
+        for (const col of block.columns ?? []) {
+          for (const child of col.blocks ?? []) {
+            const t = htmlToPlainText(renderBlock(child, theme, { nested: true }));
+            if (t) lines.push(t, "");
+          }
         }
         break;
       }

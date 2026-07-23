@@ -281,6 +281,17 @@ export function CampaignComposer({
       case "social":
         // No links => renderer falls back to the brand kit's social links.
         return { id: newBlockId(), type };
+      case "section":
+        // Minimal default; the palette (next PR) offers layout presets.
+        return {
+          id: newBlockId(),
+          type,
+          layout: "1-1",
+          columns: [
+            { id: newBlockId(), blocks: [] },
+            { id: newBlockId(), blocks: [] },
+          ],
+        };
     }
   }
   function addBlock(type: CampaignBlockType) {

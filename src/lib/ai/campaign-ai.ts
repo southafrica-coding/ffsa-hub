@@ -153,6 +153,8 @@ function blockSummary(block: CampaignBlock): string {
       return `[columns] ${block.cells.length} cells`;
     case "social":
       return `[social] ${block.links?.length ?? "brand"} links`;
+    case "section":
+      return `[section ${block.layout}] ${block.columns.length} columns`;
     default:
       return "[block]";
   }
