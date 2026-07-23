@@ -144,6 +144,8 @@ export function CampaignComposer({
   const [testEmail, setTestEmail] = useState(currentUserEmail ?? "");
   const [testState, setTestState] = useState<"idle" | "sending" | "done">("idle");
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
+  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
+  const [canvasTab, setCanvasTab] = useState<"build" | "preview">("build");
 
   const sent = campaign.status === "sent" || campaign.status === "sending";
 
@@ -177,6 +179,9 @@ export function CampaignComposer({
     () => renderCampaignHtml(body, { previewText, brand }),
     [body, previewText, brand]
   );
+
+  const selectedIdx = body.blocks.findIndex((b) => b.id === selectedBlockId);
+  const selectedBlock = selectedIdx >= 0 ? body.blocks[selectedIdx] : null;
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -249,7 +254,10 @@ export function CampaignComposer({
     }
   }
   function addBlock(type: CampaignBlockType) {
-    setBody((b) => ({ ...b, blocks: [...b.blocks, newBlock(type)] }));
+    const blk = newBlock(type);
+    setBody((b) => ({ ...b, blocks: [...b.blocks, blk] }));
+    setSelectedBlockId(blk.id);
+    setCanvasTab("build");
   }
   function updateBlock(id: string, patch: Partial<CampaignBlock>) {
     setBody((b) => ({
@@ -261,6 +269,7 @@ export function CampaignComposer({
   }
   function removeBlock(id: string) {
     setBody((b) => ({ ...b, blocks: b.blocks.filter((bl) => bl.id !== id) }));
+    setSelectedBlockId((cur) => (cur === id ? null : cur));
   }
   function moveBlock(idx: number, dir: -1 | 1) {
     setBody((b) => {
@@ -606,200 +615,246 @@ export function CampaignComposer({
         />
       )}
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        {/* Editor */}
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Setup</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Field label="Subject line">
-                <Input
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                  disabled={sent}
-                  placeholder="What recipients see in their inbox"
-                />
-              </Field>
-              <Field label="Preview text">
-                <Input
-                  value={previewText}
-                  onChange={(e) => setPreviewText(e.target.value)}
-                  disabled={sent}
-                  placeholder="The grey text shown after the subject"
-                />
-              </Field>
+      {/* Setup — full width */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Setup</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-2">
+          <Field label="Subject line">
+            <Input
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              disabled={sent}
+              placeholder="What recipients see in their inbox"
+            />
+          </Field>
+          <Field label="Preview text">
+            <Input
+              value={previewText}
+              onChange={(e) => setPreviewText(e.target.value)}
+              disabled={sent}
+              placeholder="The grey text shown after the subject"
+            />
+          </Field>
 
-              <Field label="Audience labels (anyone with ANY of these receives the send)">
-                <div className="space-y-2">
-                  {selectedLabels.length === 0 ? (
-                    <p className="text-xs text-muted-foreground italic">
-                      No labels selected — pick one or more below.
-                    </p>
-                  ) : (
-                    <div className="flex flex-wrap gap-1.5">
-                      {selectedLabels.map((l) => (
-                        <span
-                          key={l.id}
-                          className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border bg-muted"
-                        >
-                          {l.name}
-                          {!sent && (
-                            <button
-                              type="button"
-                              onClick={() => removeLabel(l.id)}
-                              className="hover:text-red-400"
-                              aria-label={`Remove ${l.name}`}
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          )}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  {!sent && availableLabels.length > 0 && (
-                    <select
-                      value=""
-                      onChange={(e) => {
-                        addLabel(e.target.value);
-                        e.target.value = "";
-                      }}
-                      className="w-full border rounded px-2 py-1.5 text-sm"
+          <Field label="Audience labels (anyone with ANY of these receives the send)">
+            <div className="space-y-2">
+              {selectedLabels.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">
+                  No labels selected — pick one or more below.
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {selectedLabels.map((l) => (
+                    <span
+                      key={l.id}
+                      className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border bg-muted"
                     >
-                      <option value="">+ Add a label…</option>
-                      {availableLabels.map((l) => (
-                        <option key={l.id} value={l.id}>
-                          {l.name}
-                        </option>
-                      ))}
-                    </select>
-                  )}
+                      {l.name}
+                      {!sent && (
+                        <button
+                          type="button"
+                          onClick={() => removeLabel(l.id)}
+                          className="hover:text-red-400"
+                          aria-label={`Remove ${l.name}`}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      )}
+                    </span>
+                  ))}
                 </div>
-              </Field>
+              )}
 
-              <Field label="Send from">
+              {!sent && availableLabels.length > 0 && (
                 <select
-                  value={identityId}
-                  onChange={(e) => setIdentityId(e.target.value)}
-                  disabled={sent}
+                  value=""
+                  onChange={(e) => {
+                    addLabel(e.target.value);
+                    e.target.value = "";
+                  }}
                   className="w-full border rounded px-2 py-1.5 text-sm"
                 >
-                  <option value="">— pick —</option>
-                  {identities.map((i) => (
-                    <option key={i.id} value={i.id}>
-                      {i.display_name}
+                  <option value="">+ Add a label…</option>
+                  {availableLabels.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.name}
                     </option>
                   ))}
                 </select>
-              </Field>
+              )}
+            </div>
+          </Field>
 
-              <p className="text-xs text-muted-foreground">
-                Current audience:{" "}
-                <span className="font-medium">{audienceCount}</span> contact
-                {audienceCount === 1 ? "" : "s"} (subscribed, not unsubscribed or
-                bounced).
-                {labelSetChanged && (
-                  <span className="text-amber-400 ml-1">
-                    Save to recompute after changing labels.
-                  </span>
-                )}
+          <Field label="Send from">
+            <select
+              value={identityId}
+              onChange={(e) => setIdentityId(e.target.value)}
+              disabled={sent}
+              className="w-full border rounded px-2 py-1.5 text-sm"
+            >
+              <option value="">— pick —</option>
+              {identities.map((i) => (
+                <option key={i.id} value={i.id}>
+                  {i.display_name}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <p className="text-xs text-muted-foreground md:col-span-2">
+            Current audience:{" "}
+            <span className="font-medium">{audienceCount}</span> contact
+            {audienceCount === 1 ? "" : "s"} (subscribed, not unsubscribed or
+            bounced).
+            {labelSetChanged && (
+              <span className="text-amber-400 ml-1">
+                Save to recompute after changing labels.
+              </span>
+            )}
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Three-pane builder: palette · canvas · inspector */}
+      <div className="grid gap-4 lg:grid-cols-[168px_minmax(0,1fr)_340px]">
+        {/* Palette */}
+        <Card className="self-start">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">Add block</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {sent ? (
+              <p className="text-xs text-muted-foreground italic">
+                Sent emails can’t be edited.
               </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Content blocks</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {body.blocks.length === 0 && (
-                <p className="text-xs text-muted-foreground italic">
-                  No blocks — add one below.
-                </p>
-              )}
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleDragEnd}
-              >
-                <SortableContext
-                  items={body.blocks.map((b) => b.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  {body.blocks.map((block, idx) => (
-                    <SortableBlockEditor
-                      key={block.id}
-                      block={block}
-                      disabled={sent}
-                      campaignId={campaign.id}
-                      onChange={(patch) => updateBlock(block.id, patch)}
-                      onRemove={() => removeBlock(block.id)}
-                      onUp={() => moveBlock(idx, -1)}
-                      onDown={() => moveBlock(idx, 1)}
-                      canUp={idx > 0}
-                      canDown={idx < body.blocks.length - 1}
-                    />
-                  ))}
-                </SortableContext>
-              </DndContext>
-              {!sent && (
-                <div className="pt-2 space-y-2 border-t mt-3">
-                  {ADD_GROUPS.map((g) => (
-                    <div key={g.group} className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold w-14">
-                        {g.group}
-                      </span>
-                      {g.items.map((t) => (
-                        <Button
-                          key={t.type}
-                          variant="outline"
-                          size="sm"
-                          onClick={() => addBlock(t.type)}
-                          className="gap-1 h-7 text-xs"
-                        >
-                          <Plus className="h-3 w-3" />
-                          {t.label}
-                        </Button>
-                      ))}
-                    </div>
-                  ))}
+            ) : (
+              ADD_GROUPS.map((g) => (
+                <div key={g.group} className="space-y-1">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                    {g.group}
+                  </p>
+                  <div className="flex flex-col gap-1">
+                    {g.items.map((t) => (
+                      <Button
+                        key={t.type}
+                        variant="outline"
+                        size="sm"
+                        onClick={() => addBlock(t.type)}
+                        className="justify-start gap-1 h-7 text-xs"
+                      >
+                        <Plus className="h-3 w-3" />
+                        {t.label}
+                      </Button>
+                    ))}
+                  </div>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
 
-        {/* Live preview */}
-        <Card className="lg:sticky lg:top-4 self-start">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-base">Preview</CardTitle>
+        {/* Canvas — Build / Preview */}
+        <Card className="self-start">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <SegmentedPicker
-              value={device}
+              value={canvasTab}
               options={[
-                { value: "desktop", label: "🖥 Desktop" },
-                { value: "mobile", label: "📱 Mobile" },
+                { value: "build", label: "Build" },
+                { value: "preview", label: "Preview" },
               ]}
-              onChange={(v) => setDevice(v as "desktop" | "mobile")}
+              onChange={(v) => setCanvasTab(v as "build" | "preview")}
             />
+            {canvasTab === "preview" && (
+              <SegmentedPicker
+                value={device}
+                options={[
+                  { value: "desktop", label: "🖥 Desktop" },
+                  { value: "mobile", label: "📱 Mobile" },
+                ]}
+                onChange={(v) => setDevice(v as "desktop" | "mobile")}
+              />
+            )}
           </CardHeader>
           <CardContent>
-            <div
-              className={
-                device === "mobile"
-                  ? "mx-auto w-[375px] max-w-full rounded border"
-                  : "w-full rounded border"
-              }
-            >
-              <iframe
-                title="Email preview"
-                srcDoc={previewHtml}
-                className="w-full rounded"
-                style={{ height: 520, background: "#fff" }}
+            {canvasTab === "build" ? (
+              <div className="space-y-2">
+                {body.blocks.length === 0 && (
+                  <p className="text-xs text-muted-foreground italic">
+                    No blocks yet — add one from the left.
+                  </p>
+                )}
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext
+                    items={body.blocks.map((b) => b.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    {body.blocks.map((block, idx) => (
+                      <SortableBlockCard
+                        key={block.id}
+                        block={block}
+                        selected={block.id === selectedBlockId}
+                        disabled={sent}
+                        onSelect={() => setSelectedBlockId(block.id)}
+                        onRemove={() => removeBlock(block.id)}
+                        onUp={() => moveBlock(idx, -1)}
+                        onDown={() => moveBlock(idx, 1)}
+                        canUp={idx > 0}
+                        canDown={idx < body.blocks.length - 1}
+                      />
+                    ))}
+                  </SortableContext>
+                </DndContext>
+              </div>
+            ) : (
+              <div
+                className={
+                  device === "mobile"
+                    ? "mx-auto w-[375px] max-w-full rounded border"
+                    : "w-full rounded border"
+                }
+              >
+                <iframe
+                  title="Email preview"
+                  srcDoc={previewHtml}
+                  className="w-full rounded"
+                  style={{ height: 560, background: "#fff" }}
+                />
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Inspector */}
+        <Card className="self-start lg:sticky lg:top-4">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">
+              {selectedBlock ? `Edit ${selectedBlock.type}` : "Inspector"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {selectedBlock ? (
+              <BlockEditor
+                block={selectedBlock}
+                disabled={sent}
+                campaignId={campaign.id}
+                onChange={(patch) => updateBlock(selectedBlock.id, patch)}
+                onRemove={() => removeBlock(selectedBlock.id)}
+                onUp={() => moveBlock(selectedIdx, -1)}
+                onDown={() => moveBlock(selectedIdx, 1)}
+                canUp={selectedIdx > 0}
+                canDown={selectedIdx < body.blocks.length - 1}
               />
-            </div>
+            ) : (
+              <p className="text-xs text-muted-foreground italic">
+                Select a block in the canvas to edit its content and style.
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -922,28 +977,113 @@ type BlockEditorProps = {
   canDown: boolean;
 };
 
-function SortableBlockEditor(props: BlockEditorProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: props.block.id, disabled: props.disabled });
+// Plain-text snippet of a block, for the canvas card label.
+function blockText(html: string): string {
+  return html
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+function blockSnippet(block: CampaignBlock): string {
+  switch (block.type) {
+    case "heading":
+      return block.text;
+    case "text":
+      return blockText(block.text);
+    case "button":
+      return block.text;
+    case "image":
+      return block.alt || block.caption || "";
+    case "divider":
+      return `Divider · ${block.style ?? "rule"}`;
+    case "eyebrow":
+      return block.text;
+    case "quote":
+      return block.text;
+    case "spacer":
+      return `Spacer · ${block.size ?? "md"}`;
+    case "image-text":
+      return block.heading || blockText(block.text);
+    case "cta":
+      return block.heading;
+    default:
+      return "";
+  }
+}
 
+// Compact, selectable card shown in the canvas. Editing happens in the
+// inspector; this is just select + reorder + quick actions.
+function SortableBlockCard({
+  block,
+  selected,
+  disabled,
+  onSelect,
+  onRemove,
+  onUp,
+  onDown,
+  canUp,
+  canDown,
+}: {
+  block: CampaignBlock;
+  selected: boolean;
+  disabled: boolean;
+  onSelect: () => void;
+  onRemove: () => void;
+  onUp: () => void;
+  onDown: () => void;
+  canUp: boolean;
+  canDown: boolean;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: block.id, disabled });
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.6 : 1,
   };
+  const snippet = blockSnippet(block);
 
   return (
     <div ref={setNodeRef} style={style}>
-      <BlockEditor
-        {...props}
-        dragHandleProps={{ attributes, listeners }}
-      />
+      <div
+        onClick={onSelect}
+        className={`group flex items-center gap-2 rounded-lg border p-2 cursor-pointer transition-colors ${
+          selected
+            ? "border-foreground bg-foreground/5"
+            : "bg-muted/40 hover:bg-muted"
+        }`}
+      >
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          disabled={disabled}
+          onClick={(e) => e.stopPropagation()}
+          className="text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing disabled:opacity-30"
+          aria-label="Drag to reorder"
+        >
+          <GripVertical className="h-3.5 w-3.5" />
+        </button>
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">
+            {block.type}
+          </p>
+          <p className="truncate text-xs">
+            {snippet || <span className="italic text-muted-foreground">Empty</span>}
+          </p>
+        </div>
+        {!disabled && (
+          <div
+            className="flex gap-0.5 opacity-0 group-hover:opacity-100"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Mini onClick={onUp} disabled={!canUp} label="↑" />
+            <Mini onClick={onDown} disabled={!canDown} label="↓" />
+            <Mini onClick={onRemove} label="✕" danger />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
