@@ -3,13 +3,20 @@
 // Staff set the target net (what FFSA keeps); buyers pay a
 // grossed-up display price that already covers the processor
 // fee, so there is never a separate fee line at checkout.
-// All amounts are ZAR cents (integers).
+// All amounts are integer minor units ("cents") of the event's
+// currency — see events.currency and EVENT_CURRENCIES. Only
+// two-decimal currencies are offered, so the math below is
+// currency-agnostic; what differs per currency is the fee profile
+// it is handed (a fixed R3.00 is not a fixed $3.00).
 //
 // Gross-up applies to fixed-price tiers only — pay-what-you-want
 // amounts and the donation add-on are charged exactly as
 // entered. See FFSA_Hub_Events_Ticketing_Spec.md §4.
 
-/** A payment processor's fee structure. percentBps is basis points (290 = 2.90%). */
+/**
+ * A payment processor's fee structure for ONE currency. percentBps is
+ * basis points (290 = 2.90%); fixedCents is in that currency's minor units.
+ */
 export type FeeProfile = {
   provider: string;
   percentBps: number;

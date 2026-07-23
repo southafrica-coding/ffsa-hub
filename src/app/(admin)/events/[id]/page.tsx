@@ -97,7 +97,7 @@ export default async function EventDetailPage({
       .order("created_at"),
     listTicketTypesByEvent(supabase, id),
     listPromoCodesByEvent(supabase, id),
-    getActiveFeeProfiles(supabase),
+    getActiveFeeProfiles(supabase, event.currency),
     listOrdersByEvent(supabase, id),
     listAttendanceTicketsByEvent(supabase, id),
     supabase
@@ -201,6 +201,12 @@ export default async function EventDetailPage({
           ticketTypes={ticketTypes ?? []}
           promoCodes={promoCodes ?? []}
           feeProfiles={feeProfiles}
+          currency={event.currency}
+          // Once real money has moved, the currency is frozen — an
+          // order recorded in the old one would misreport.
+          currencyLocked={(orders ?? []).some(
+            (o: { status: string }) => o.status !== "pending"
+          )}
           checkoutQuestions={
             (event.checkout_questions as FormField[] | null) ?? []
           }
@@ -212,6 +218,7 @@ export default async function EventDetailPage({
           eventId={id}
           orders={orders ?? []}
           refunds={orderRefunds ?? []}
+          currency={event.currency}
         />
       )}
 

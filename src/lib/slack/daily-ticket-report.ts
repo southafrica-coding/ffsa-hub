@@ -13,6 +13,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { BASE_CURRENCY, formatMoney } from "@/lib/currencies";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AdminClient = any;
@@ -20,6 +21,7 @@ type AdminClient = any;
 type OrderRow = {
   id: string;
   total_cents: number;
+  currency: string | null;
   event_id: string;
   events: { title: string | null } | null;
   tickets: Array<{ id: string }> | null;
@@ -30,6 +32,8 @@ type EventAggregate = {
   title: string;
   tickets: number;
   revenueCents: number;
+  /** An event sells in exactly one currency, so this labels the row. */
+  currency: string;
 };
 
 export type DailyTicketReport = {
@@ -37,7 +41,14 @@ export type DailyTicketReport = {
   windowEnd: string;   // ISO
   tickets: number;
   ordersCount: number;
+  /**
+   * Revenue in the base currency (ZAR) only. Events can now sell in
+   * other currencies, and adding dissimilar amounts together would be
+   * meaningless — see revenueByCurrency for the full picture.
+   */
   revenueCents: number;
+  /** Revenue keyed by ISO 4217 code, e.g. { ZAR: 125000, USD: 4500 }. */
+  revenueByCurrency: Record<string, number>;
   topEvents: EventAggregate[];
   comparison: {
     previousTickets: number;
@@ -62,7 +73,7 @@ export async function buildDailyTicketReport(
   // Yesterday's paid orders, joined to event title + tickets
   const { data: ordersRaw, error: ordersErr } = await admin
     .from("orders")
-    .select("id, total_cents, event_id, events(title), tickets(id)")
+    .select("id, total_cents, currency, event_id, events(title), tickets(id)")
     .eq("status", "paid")
     .gte("paid_at", yesterdayStart.toISOString())
     .lt("paid_at", todayStart.toISOString());
@@ -76,7 +87,12 @@ export async function buildDailyTicketReport(
     (sum, o) => sum + (o.tickets?.length ?? 0),
     0
   );
-  const revenueCents = orders.reduce((sum, o) => sum + (o.total_cents ?? 0), 0);
+  const revenueByCurrency: Record<string, number> = {};
+  for (const o of orders) {
+    const code = o.currency ?? BASE_CURRENCY;
+    revenueByCurrency[code] = (revenueByCurrency[code] ?? 0) + (o.total_cents ?? 0);
+  }
+  const revenueCents = revenueByCurrency[BASE_CURRENCY] ?? 0;
 
   // Group by event for the top-N section
   const byEvent = new Map<string, EventAggregate>();
@@ -86,6 +102,7 @@ export async function buildDailyTicketReport(
       title: o.events?.title ?? "(untitled event)",
       tickets: 0,
       revenueCents: 0,
+      currency: o.currency ?? BASE_CURRENCY,
     };
     existing.tickets += o.tickets?.length ?? 0;
     existing.revenueCents += o.total_cents ?? 0;
@@ -112,6 +129,7 @@ export async function buildDailyTicketReport(
     tickets,
     ordersCount: orders.length,
     revenueCents,
+    revenueByCurrency,
     topEvents,
     comparison: { previousTickets, deltaPct },
   };
@@ -133,7 +151,7 @@ export function renderDailyTicketReportMessage(
   const summaryLines: string[] = [
     `*${headline}*`,
     "",
-    `*Revenue:* ${formatZar(report.revenueCents)}`,
+    `*Revenue:* ${formatRevenue(report.revenueByCurrency)}`,
     `*Orders:* ${report.ordersCount}`,
     formatDeltaLine(report.tickets, report.comparison),
   ].filter(Boolean) as string[];
@@ -148,7 +166,7 @@ export function renderDailyTicketReportMessage(
   if (report.topEvents.length > 0) {
     const topLines = report.topEvents.map(
       (e, i) =>
-        `${i + 1}. *${escapeMrkdwn(e.title)}* — ${e.tickets} ticket${e.tickets === 1 ? "" : "s"} (${formatZar(e.revenueCents)})`
+        `${i + 1}. *${escapeMrkdwn(e.title)}* — ${e.tickets} ticket${e.tickets === 1 ? "" : "s"} (${formatMoney(e.revenueCents, e.currency)})`
     );
     blocks.push(
       { type: "divider" },
@@ -218,11 +236,16 @@ function friendlyDate(d: Date): string {
   });
 }
 
-function formatZar(cents: number): string {
-  return `R${(cents / 100).toLocaleString("en-ZA", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
+// Events can sell in different currencies, so the day's revenue is a
+// set of per-currency totals rather than one number. Joined with " + "
+// so a mixed day reads "R12 500,00 + $450.00".
+function formatRevenue(byCurrency: Record<string, number>): string {
+  const entries = Object.entries(byCurrency).filter(([, cents]) => cents !== 0);
+  if (entries.length === 0) return formatMoney(0, BASE_CURRENCY);
+  return entries
+    .sort(([a], [b]) => (a === BASE_CURRENCY ? -1 : b === BASE_CURRENCY ? 1 : a.localeCompare(b)))
+    .map(([code, cents]) => formatMoney(cents, code))
+    .join(" + ");
 }
 
 function formatDeltaLine(

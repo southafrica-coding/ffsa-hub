@@ -57,10 +57,18 @@ export async function POST(
     );
   }
 
+  // Gross-up rates are per currency, so price against the event's own.
+  const { data: parentEvent } = await supabase
+    .from("events")
+    .select("currency")
+    .eq("id", eventId)
+    .single();
+
   const priced = await computeDisplayPriceCents(
     supabase,
     pricingMode,
-    body.target_net_cents
+    body.target_net_cents,
+    parentEvent?.currency
   );
   if (priced.error) {
     return NextResponse.json({ error: priced.error }, { status: 400 });

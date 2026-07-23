@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { formatMoney } from "@/lib/currencies";
 import {
   Dialog,
   DialogContent,
@@ -23,11 +24,9 @@ type RefundableOrder = {
   total_cents: number;
   payment_provider: string | null;
   provider_payment_id: string | null;
+  // The currency this order was sold in (orders.currency).
+  currency: string | null;
 };
-
-function rands(cents: number): string {
-  return `R${(cents / 100).toFixed(2)}`;
-}
 
 const PROVIDER_LABEL: Record<string, string> = {
   payfast: "PayFast",
@@ -48,6 +47,7 @@ export function RefundDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const router = useRouter();
+  const money = (cents: number) => formatMoney(cents, order.currency);
   const outstanding = order.total_cents - alreadyRefundedCents;
 
   // An order with no provider payment id can only ever be recorded,
@@ -111,10 +111,10 @@ export function RefundDialog({
       const settled = data.status === "succeeded";
       toast.success(
         manual
-          ? `Recorded ${rands(amountCents)} refunded outside the Hub.`
+          ? `Recorded ${money(amountCents)} refunded outside the Hub.`
           : settled
-            ? `${rands(amountCents)} refunded via ${providerName}.`
-            : `${rands(amountCents)} submitted to ${providerName} — awaiting confirmation.`,
+            ? `${money(amountCents)} refunded via ${providerName}.`
+            : `${money(amountCents)} submitted to ${providerName} — awaiting confirmation.`,
         {
           description: data.emailSent
             ? `${order.buyer_email} has been emailed.`
@@ -147,17 +147,17 @@ export function RefundDialog({
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Order total</span>
-              <span>{rands(order.total_cents)}</span>
+              <span>{money(order.total_cents)}</span>
             </div>
             {alreadyRefundedCents > 0 && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Already refunded</span>
-                <span>− {rands(alreadyRefundedCents)}</span>
+                <span>− {money(alreadyRefundedCents)}</span>
               </div>
             )}
             <div className="flex justify-between font-medium">
               <span className="text-muted-foreground">Refundable</span>
-              <span>{rands(outstanding)}</span>
+              <span>{money(outstanding)}</span>
             </div>
           </div>
 
@@ -172,7 +172,7 @@ export function RefundDialog({
             />
             {!amountValid ? (
               <p className="text-xs text-red-600">
-                Enter an amount between R0.01 and {rands(outstanding)}.
+                Enter an amount between {money(1)} and {money(outstanding)}.
               </p>
             ) : isPartial ? (
               <p className="text-xs text-muted-foreground">
@@ -262,8 +262,8 @@ export function RefundDialog({
               {busy
                 ? "Working…"
                 : manual
-                  ? `Record ${rands(amountValid ? amountCents : 0)}`
-                  : `Refund ${rands(amountValid ? amountCents : 0)}`}
+                  ? `Record ${money(amountValid ? amountCents : 0)}`
+                  : `Refund ${money(amountValid ? amountCents : 0)}`}
             </Button>
           </div>
         </div>

@@ -21,6 +21,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getLabels, getLabelContacts } from "@/services/labels";
 import { getEvents } from "@/services/events";
 import { getPrograms } from "@/services/schools";
+import { BASE_CURRENCY } from "@/lib/currencies";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AdminClient = any;
@@ -210,7 +211,7 @@ async function ticketSales(input: { event?: string; period?: Period }) {
   const window = resolvePeriod(input.period);
   let query = admin
     .from("orders")
-    .select("id, total_cents, tickets(id)", { count: "exact" })
+    .select("id, total_cents, currency, tickets(id)", { count: "exact" })
     .eq("status", "paid");
   if (eventId) query = query.eq("event_id", eventId);
   if (window.start) query = query.gte("paid_at", window.start.toISOString());
@@ -221,17 +222,30 @@ async function ticketSales(input: { event?: string; period?: Period }) {
 
   const rows = (data ?? []) as Array<{
     total_cents: number | null;
+    currency: string | null;
     tickets: Array<{ id: string }> | null;
   }>;
   const tickets = rows.reduce((s, o) => s + (o.tickets?.length ?? 0), 0);
-  const revenueCents = rows.reduce((s, o) => s + (o.total_cents ?? 0), 0);
+
+  // Events can sell in different currencies, so report a per-currency
+  // breakdown instead of summing dissimilar amounts into one number.
+  const byCurrency: Record<string, number> = {};
+  for (const o of rows) {
+    const code = o.currency ?? BASE_CURRENCY;
+    byCurrency[code] = (byCurrency[code] ?? 0) + (o.total_cents ?? 0);
+  }
+  const revenue: Record<string, number> = {};
+  for (const [code, cents] of Object.entries(byCurrency)) {
+    revenue[code] = Math.round(cents) / 100;
+  }
 
   return {
     event: eventName,
     period: window.label,
     tickets_sold: tickets,
     paid_orders: count ?? rows.length,
-    revenue_rand: Math.round(revenueCents) / 100,
+    revenue_rand: (byCurrency[BASE_CURRENCY] ?? 0) / 100,
+    revenue_by_currency: revenue,
   };
 }
 

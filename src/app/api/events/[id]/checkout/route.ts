@@ -6,6 +6,11 @@ import type { PaymentProvider } from "@/lib/payments/provider";
 import type { Json } from "@/types/database";
 import type { FormField } from "@/lib/forms/schema";
 import {
+  eventCurrency,
+  formatMoney,
+  providersForCurrency,
+} from "@/lib/currencies";
+import {
   validateCheckoutAnswers,
   snapshotAnswers,
 } from "@/lib/ticketing/checkout-questions";
@@ -112,21 +117,12 @@ export async function POST(
     );
   }
 
-  // ── Provider ────────────────────────────────────────────────
-  const providerName = body.payment_provider ?? "payfast";
-  const providerImpl: PaymentProvider =
-    providerName === "stripe" ? stripeProvider : payfastProvider;
-  if (providerName !== "payfast" && providerName !== "stripe") {
-    return NextResponse.json(
-      { error: "Unknown payment provider." },
-      { status: 400 }
-    );
-  }
-
   // ── Event ────────────────────────────────────────────────────
   const { data: event, error: eventErr } = await supabase
     .from("events")
-    .select("id, title, status, ticketing_enabled, public_slug, checkout_questions")
+    .select(
+      "id, title, status, ticketing_enabled, public_slug, checkout_questions, currency"
+    )
     .eq("id", eventId)
     .maybeSingle();
   if (eventErr || !event) {
@@ -142,6 +138,28 @@ export async function POST(
       { status: 409 }
     );
   }
+
+  // ── Provider ────────────────────────────────────────────────
+  // Which providers can take this event's currency: PayFast is
+  // ZAR-only, so a USD event is Stripe-only. The storefront hides the
+  // ineligible button; this is the authoritative check.
+  const currency = eventCurrency(event.currency).code;
+  const eligibleProviders = providersForCurrency(currency);
+  const providerName = body.payment_provider ?? eligibleProviders[0];
+  if (providerName !== "payfast" && providerName !== "stripe") {
+    return NextResponse.json(
+      { error: "Unknown payment provider." },
+      { status: 400 }
+    );
+  }
+  if (!eligibleProviders.includes(providerName)) {
+    return NextResponse.json(
+      { error: `${providerName} can't take payments in ${currency}.` },
+      { status: 409 }
+    );
+  }
+  const providerImpl: PaymentProvider =
+    providerName === "stripe" ? stripeProvider : payfastProvider;
 
   // ── Custom checkout questions (optional, per event) ──────────
   // Validated before any inventory is reserved, so a bad/missing answer
@@ -240,7 +258,7 @@ export async function POST(
       if (entered < tt.display_price_cents) {
         return NextResponse.json(
           {
-            error: `${tt.name}: amount must be at least R${(tt.display_price_cents / 100).toFixed(2)}.`,
+            error: `${tt.name}: amount must be at least ${formatMoney(tt.display_price_cents, currency)}.`,
           },
           { status: 400 }
         );
@@ -406,7 +424,7 @@ export async function POST(
       status: "pending",
       contact_resolution: "pending",
       payment_provider: providerName,
-      currency: "ZAR",
+      currency,
       subtotal_cents: subtotalCents,
       discount_cents: discountCents,
       donation_cents: donationCents,
@@ -470,7 +488,7 @@ export async function POST(
     checkout = await providerImpl.createCheckout({
       orderId: order.id,
       amountCents: totalCents,
-      currency: "ZAR",
+      currency,
       description: describeOrder(event.title, totalQty),
       buyer: { firstName, lastName, email: emailRaw },
       returnUrl: `${base}/e/${event.public_slug}/thanks?order=${order.id}`,

@@ -19,6 +19,7 @@ import {
 } from "@/lib/ticketing/checkout-questions";
 import { OrdersExportPanel } from "./orders-export-panel";
 import { RefundDialog } from "./refund-dialog";
+import { formatMoney } from "@/lib/currencies";
 
 type Order = {
   id: string;
@@ -34,6 +35,9 @@ type Order = {
   custom_answers?: unknown;
   payment_provider: string | null;
   provider_payment_id: string | null;
+  // Snapshotted from events.currency at checkout, so an order always
+  // renders in the currency it was actually sold in.
+  currency: string | null;
 };
 
 export type OrderRefund = {
@@ -60,10 +64,6 @@ function answersForOrder(o: Order): CheckoutAnswerSnapshot[] {
     : [];
 }
 
-function rands(cents: number): string {
-  return `R${(cents / 100).toFixed(2)}`;
-}
-
 const STATUS_VARIANTS: Record<
   string,
   "default" | "secondary" | "destructive" | "outline"
@@ -80,12 +80,18 @@ export function OrdersTab({
   eventId,
   orders,
   refunds = [],
+  currency,
 }: {
   eventId: string;
   orders: Order[];
   refunds?: OrderRefund[];
+  // The event's selling currency — used for the aggregate stat cards.
+  // Individual rows prefer the order's own snapshot.
+  currency: string;
 }) {
   const router = useRouter();
+  const money = (cents: number, c?: string | null) =>
+    formatMoney(cents, c ?? currency);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [recentlySentId, setRecentlySentId] = useState<string | null>(null);
@@ -165,13 +171,13 @@ export function OrdersTab({
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard label="Paid orders" value={stillPaid.length.toString()} />
-        <StatCard label="Revenue" value={rands(totalRevenueCents)} />
+        <StatCard label="Revenue" value={money(totalRevenueCents)} />
         <StatCard
           label="Net (after refunds)"
-          value={rands(netCents)}
+          value={money(netCents)}
           sub={
             totalRefundedCents > 0
-              ? `${rands(totalRefundedCents)} refunded`
+              ? `${money(totalRefundedCents)} refunded`
               : null
           }
         />
@@ -252,10 +258,10 @@ export function OrdersTab({
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="text-sm">{rands(o.total_cents)}</div>
+                        <div className="text-sm">{money(o.total_cents, o.currency)}</div>
                         {o.refund_cents > 0 && (
                           <div className="text-xs text-muted-foreground">
-                            − {rands(o.refund_cents)} refunded
+                            − {money(o.refund_cents, o.currency)} refunded
                           </div>
                         )}
                       </TableCell>
@@ -355,7 +361,7 @@ export function OrdersTab({
                                       className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs"
                                     >
                                       <span className="font-medium text-sm">
-                                        {rands(r.amount_cents)}
+                                        {money(r.amount_cents, o.currency)}
                                       </span>
                                       <Badge
                                         variant={

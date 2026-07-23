@@ -1753,6 +1753,7 @@ export type Database = {
           brand: string
           checkout_questions: Json
           created_at: string
+          currency: string
           created_by: string
           description: string | null
           end_date: string | null
@@ -1776,6 +1777,7 @@ export type Database = {
           brand?: string
           checkout_questions?: Json
           created_at?: string
+          currency?: string
           created_by: string
           description?: string | null
           end_date?: string | null
@@ -1800,6 +1802,7 @@ export type Database = {
           checkout_questions?: Json
           created_at?: string
           created_by?: string
+          currency?: string
           description?: string | null
           end_date?: string | null
           end_time?: string | null
@@ -3293,6 +3296,7 @@ export type Database = {
       }
       payment_fee_profiles: {
         Row: {
+          currency: string
           fixed_cents: number
           id: string
           is_active: boolean
@@ -3302,6 +3306,7 @@ export type Database = {
           updated_by: string | null
         }
         Insert: {
+          currency?: string
           fixed_cents?: number
           id?: string
           is_active?: boolean
@@ -3311,6 +3316,7 @@ export type Database = {
           updated_by?: string | null
         }
         Update: {
+          currency?: string
           fixed_cents?: number
           id?: string
           is_active?: boolean

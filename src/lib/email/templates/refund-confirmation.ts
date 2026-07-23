@@ -1,3 +1,4 @@
+import { formatMoney } from "@/lib/currencies";
 // FFSA Hub — Refund confirmation email (transactional).
 //
 // Sent when staff refund an order, in full or in part. Deliberately
@@ -30,8 +31,10 @@ export function refundConfirmationEmailHtml(opts: {
   /** False when only part of the order was refunded. */
   isFullRefund: boolean;
   siteUrl: string;
+  /** ISO 4217 code from orders.currency. */
+  currency: string;
 }): string {
-  const rands = (cents: number) => `R${(cents / 100).toFixed(2)}`;
+  const money = (cents: number) => formatMoney(cents, opts.currency);
   const base = opts.siteUrl.replace(/\/$/, "");
 
   // A partial refund leaves the buyer holding valid tickets — saying
@@ -94,11 +97,11 @@ export function refundConfirmationEmailHtml(opts: {
               <tr>
                 <td style="padding:24px 18px;border:1px solid ${BORDER};border-radius:12px;background:${INSET};text-align:center;">
                   <p style="margin:0 0 8px 0;font-family:Helvetica,Arial,sans-serif;font-size:10px;color:${YELLOW};letter-spacing:0.22em;text-transform:uppercase;font-weight:700;">Amount Refunded</p>
-                  <p style="margin:0;font-family:'Arial Black','Helvetica Neue',Arial,sans-serif;font-size:34px;font-weight:900;color:${TEXT};letter-spacing:0.02em;">${rands(opts.refundedCents)}</p>
+                  <p style="margin:0;font-family:'Arial Black','Helvetica Neue',Arial,sans-serif;font-size:34px;font-weight:900;color:${TEXT};letter-spacing:0.02em;">${money(opts.refundedCents)}</p>
                   ${
                     opts.isFullRefund
                       ? ""
-                      : `<p style="margin:10px 0 0 0;font-family:Helvetica,Arial,sans-serif;font-size:12px;color:${TEXT_DIM};">${rands(opts.totalRefundedCents)} of ${rands(opts.orderTotalCents)} refunded in total</p>`
+                      : `<p style="margin:10px 0 0 0;font-family:Helvetica,Arial,sans-serif;font-size:12px;color:${TEXT_DIM};">${money(opts.totalRefundedCents)} of ${money(opts.orderTotalCents)} refunded in total</p>`
                   }
                 </td>
               </tr>
@@ -118,7 +121,7 @@ export function refundConfirmationEmailHtml(opts: {
         <!-- Footer -->
         <tr>
           <td style="padding:12px 32px 30px 32px;border-top:1px solid ${BORDER};">
-            <p style="margin:16px 0 4px 0;font-family:Helvetica,Arial,sans-serif;font-size:12px;color:${TEXT_DIM};letter-spacing:0.04em;">Order #${escapeHtml(opts.orderId.slice(0, 8))} · Order total ${rands(opts.orderTotalCents)}</p>
+            <p style="margin:16px 0 4px 0;font-family:Helvetica,Arial,sans-serif;font-size:12px;color:${TEXT_DIM};letter-spacing:0.04em;">Order #${escapeHtml(opts.orderId.slice(0, 8))} · Order total ${money(opts.orderTotalCents)}</p>
             <p style="margin:8px 0 0 0;font-family:Helvetica,Arial,sans-serif;font-size:12px;color:${TEXT_DIMMER};">Something not right? Reply to this email.</p>
           </td>
         </tr>

@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import type { FormField } from "@/lib/forms/schema";
 import { validateCheckoutAnswers } from "@/lib/ticketing/checkout-questions";
+import { formatMoney, providersForCurrency } from "@/lib/currencies";
 import {
   CheckoutQuestionFields,
   type CheckoutFieldClasses,
@@ -51,6 +52,7 @@ type PublicEvent = {
   start_time: string | null;
   end_time: string | null;
   logo_url: string | null;
+  currency: string;
 };
 
 type LineItem = {
@@ -67,10 +69,6 @@ type AppliedPromo = {
   amount_off_cents: number | null;
   applies_to_ticket_type_id: string | null;
 };
-
-function rands(cents: number): string {
-  return `R${(cents / 100).toFixed(2)}`;
-}
 
 // In its sales window — controls public visibility. Sold-out tiers within
 // the window stay visible (social proof). Tiers scheduled for later or
@@ -101,6 +99,11 @@ export function Storefront({
   ticketTypes: TicketType[];
   checkoutQuestions: FormField[];
 }) {
+  // Every price on this page is in the event's own currency, and
+  // PayFast can only take ZAR — so a non-ZAR event is card-only.
+  const currency = event.currency;
+  const money = (cents: number) => formatMoney(cents, currency);
+  const canUsePayfast = providersForCurrency(currency).includes("payfast");
   const now = useMemo(() => new Date(), []);
   const visibleTickets = useMemo(
     () => ticketTypes.filter((t) => isWindowOpen(t, now)),
@@ -400,8 +403,8 @@ export function Storefront({
                           style={{ color: "var(--yellow)" }}
                         >
                           {isPwyw
-                            ? `Minimum ${rands(t.display_price_cents)}`
-                            : rands(t.display_price_cents)}
+                            ? `Minimum ${money(t.display_price_cents)}`
+                            : money(t.display_price_cents)}
                           {rem != null && rem > 0 && rem <= 10 && (
                             <span className="text-[10px] font-bold uppercase tracking-[0.14em] ml-2 opacity-80">
                               only {rem} left
@@ -439,7 +442,7 @@ export function Storefront({
                     </div>
                     {isPwyw && qty > 0 && (
                       <div className="mt-3">
-                        <label>Amount (ZAR)</label>
+                        <label>{`Amount (${currency})`}</label>
                         <input
                           type="number"
                           step="0.01"
@@ -472,7 +475,7 @@ export function Storefront({
                     </p>
                     <p className="text-[11px] text-green-500/80">
                       {promoDiscountCents > 0
-                        ? `−${rands(promoDiscountCents)} off your order`
+                        ? `−${money(promoDiscountCents)} off your order`
                         : appliedPromo.applies_to_ticket_type_id
                           ? "Add the matching tier to your cart to use this code."
                           : "No discount on the current cart."}
@@ -521,7 +524,7 @@ export function Storefront({
               )}
             </div>
             <div>
-              <label>Add a gift (ZAR, optional)</label>
+              <label>{`Add a gift (${currency}, optional)`}</label>
               <input
                 type="number"
                 step="0.01"
@@ -544,20 +547,20 @@ export function Storefront({
               <div className="space-y-1 text-sm text-muted-foreground">
                 <div className="flex items-center justify-between">
                   <span>Subtotal</span>
-                  <span className="font-mono">{rands(subtotalCents)}</span>
+                  <span className="font-mono">{money(subtotalCents)}</span>
                 </div>
                 {promoDiscountCents > 0 && (
                   <div className="flex items-center justify-between text-green-500">
                     <span>Discount ({appliedPromo?.code})</span>
                     <span className="font-mono">
-                      −{rands(promoDiscountCents)}
+                      −{money(promoDiscountCents)}
                     </span>
                   </div>
                 )}
                 {donationCents > 0 && (
                   <div className="flex items-center justify-between">
                     <span>Gift</span>
-                    <span className="font-mono">+{rands(donationCents)}</span>
+                    <span className="font-mono">+{money(donationCents)}</span>
                   </div>
                 )}
               </div>
@@ -570,7 +573,7 @@ export function Storefront({
                 className="text-2xl font-display tracking-wide"
                 style={{ color: "var(--yellow)" }}
               >
-                {rands(totalCents)}
+                {money(totalCents)}
               </span>
             </div>
           </CardContent>
@@ -657,41 +660,51 @@ export function Storefront({
         <Card>
           <CardContent className="p-6 space-y-3">
             <p className="text-xs text-muted-foreground normal-case tracking-normal">
-              You'll be redirected to PayFast to complete payment securely.
+              You'll be redirected to {canUsePayfast ? "PayFast" : "Stripe"} to
+              complete payment securely.
             </p>
             {err && (
               <p className="text-sm rounded-md px-3 py-2 status-red normal-case tracking-normal">
                 {err}
               </p>
             )}
-            <Button
-              type="button"
-              onClick={() => submit("payfast")}
-              disabled={submitting !== null || !buyerValid}
-              size="lg"
-              className="w-full h-12"
-            >
-              {submitting === "payfast"
-                ? "Starting payment…"
-                : `Pay ${rands(totalCents)} →`}
-            </Button>
-            <div className="pt-1">
+            {canUsePayfast && (
+              <Button
+                type="button"
+                onClick={() => submit("payfast")}
+                disabled={submitting !== null || !buyerValid}
+                size="lg"
+                className="w-full h-12"
+              >
+                {submitting === "payfast"
+                  ? "Starting payment…"
+                  : `Pay ${money(totalCents)} →`}
+              </Button>
+            )}
+            {/* Stripe is the secondary option on a ZAR event and the
+                only one on any other currency, so it takes over the
+                primary styling when PayFast can't be offered. */}
+            <div className={canUsePayfast ? "pt-1" : undefined}>
               <Button
                 type="button"
                 onClick={() => submit("stripe")}
                 disabled={submitting !== null || !buyerValid}
-                variant="outline"
+                variant={canUsePayfast ? "outline" : "default"}
                 size="lg"
-                className="w-full h-11"
+                className={canUsePayfast ? "w-full h-11" : "w-full h-12"}
               >
                 {submitting === "stripe"
                   ? "Starting payment…"
-                  : "Pay with international card (Stripe) →"}
+                  : canUsePayfast
+                    ? "Pay with international card (Stripe) →"
+                    : `Pay ${money(totalCents)} →`}
               </Button>
-              <p className="text-[11px] text-muted-foreground normal-case tracking-normal mt-2 text-center">
-                Use this if your card was declined on PayFast, or for
-                international cards / Apple Pay.
-              </p>
+              {canUsePayfast && (
+                <p className="text-[11px] text-muted-foreground normal-case tracking-normal mt-2 text-center">
+                  Use this if your card was declined on PayFast, or for
+                  international cards / Apple Pay.
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>

@@ -24,6 +24,7 @@ import type {
 } from "@/lib/payments/provider";
 import { logActivity } from "@/services/activity-events";
 import { sendRefundEmail } from "@/lib/ticketing/refund-email";
+import { formatMoney } from "@/lib/currencies";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
@@ -132,7 +133,7 @@ export async function refundOrder(
   if (amountCents > outstanding) {
     return {
       ok: false,
-      error: `Refund of R${(amountCents / 100).toFixed(2)} exceeds the R${(outstanding / 100).toFixed(2)} still outstanding on this order.`,
+      error: `Refund of ${formatMoney(amountCents, order.currency)} exceeds the ${formatMoney(outstanding, order.currency)} still outstanding on this order.`,
       httpStatus: 400,
     };
   }
@@ -308,6 +309,7 @@ export async function refundOrder(
       totalRefundedCents: newRefundedTotal,
       orderTotalCents: order.total_cents,
       isFullRefund,
+      currency: order.currency ?? "ZAR",
     });
     emailSent = result.sent;
   } catch (e) {

@@ -4,19 +4,25 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Check, Copy, ExternalLink } from "lucide-react";
+import { EVENT_CURRENCIES, providersForCurrency } from "@/lib/currencies";
 
 export function TicketingSettings({
   eventId,
   ticketingEnabled,
   publicSlug,
+  currency: savedCurrency,
+  currencyLocked,
 }: {
   eventId: string;
   ticketingEnabled: boolean;
   publicSlug: string | null;
+  currency: string;
+  currencyLocked: boolean;
 }) {
   const router = useRouter();
   const [enabled, setEnabled] = useState(ticketingEnabled);
   const [slug, setSlug] = useState(publicSlug ?? "");
+  const [currency, setCurrency] = useState(savedCurrency);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [savedHint, setSavedHint] = useState<string | null>(null);
@@ -30,7 +36,9 @@ export function TicketingSettings({
   }, []);
 
   const dirty =
-    enabled !== ticketingEnabled || (slug.trim() || null) !== publicSlug;
+    enabled !== ticketingEnabled ||
+    (slug.trim() || null) !== publicSlug ||
+    currency !== savedCurrency;
 
   const trimmedSlug = slug.trim();
   const fullUrl = trimmedSlug ? `${origin}/e/${trimmedSlug}` : "";
@@ -66,6 +74,7 @@ export function TicketingSettings({
       body: JSON.stringify({
         ticketing_enabled: enabled,
         public_slug: slug.trim() || null,
+        currency,
       }),
     });
     setBusy(false);
@@ -115,6 +124,38 @@ export function TicketingSettings({
           <p className="text-xs text-muted-foreground mt-1">
             Lowercase letters, digits and dashes. Must be unique across events.
           </p>
+        </div>
+
+        <div>
+          <label className="block text-xs text-muted-foreground mb-1">
+            Selling currency
+          </label>
+          <select
+            value={currency}
+            onChange={(e) => setCurrency(e.target.value)}
+            disabled={busy || currencyLocked}
+            className="border rounded px-2 py-1.5 text-sm disabled:bg-muted disabled:text-muted-foreground"
+          >
+            {EVENT_CURRENCIES.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.code} — {c.name}
+              </option>
+            ))}
+          </select>
+          {currencyLocked ? (
+            <p className="text-xs text-muted-foreground mt-1">
+              Locked: this event already has orders. Create a new event to sell
+              in a different currency.
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground mt-1">
+              Ticket prices, promo amounts and orders all use this currency.
+              {!providersForCurrency(currency).includes("payfast") &&
+                " PayFast can't take this currency, so buyers will pay by card via Stripe only."}
+              {currency !== savedCurrency &&
+                " Saving re-calculates the display price of every fixed-price tier."}
+            </p>
+          )}
         </div>
 
         {/* Shareable storefront link — appears as soon as a slug is typed. */}

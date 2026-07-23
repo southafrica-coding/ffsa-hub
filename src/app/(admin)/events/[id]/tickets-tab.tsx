@@ -22,6 +22,8 @@ export function TicketsTab({
   promoCodes,
   feeProfiles,
   checkoutQuestions,
+  currency,
+  currencyLocked,
 }: {
   eventId: string;
   ticketingEnabled: boolean;
@@ -30,6 +32,8 @@ export function TicketsTab({
   promoCodes: PromoCodeRow[];
   feeProfiles: FeeProfile[];
   checkoutQuestions: FormField[];
+  currency: string;
+  currencyLocked: boolean;
 }) {
   return (
     <div className="space-y-6">
@@ -37,16 +41,20 @@ export function TicketsTab({
         eventId={eventId}
         ticketingEnabled={ticketingEnabled}
         publicSlug={publicSlug}
+        currency={currency}
+        currencyLocked={currencyLocked}
       />
       <TicketTypesManager
         eventId={eventId}
         ticketTypes={ticketTypes}
         feeProfiles={feeProfiles}
+        currency={currency}
       />
       <PromoCodesManager
         eventId={eventId}
         promoCodes={promoCodes}
         ticketTypes={ticketTypes.map((t) => ({ id: t.id, name: t.name }))}
+        currency={currency}
       />
       <CheckoutQuestionsManager
         eventId={eventId}

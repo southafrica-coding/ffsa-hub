@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { FormField } from "@/lib/forms/schema";
 import { validateCheckoutAnswers } from "@/lib/ticketing/checkout-questions";
+import { formatMoney, providersForCurrency } from "@/lib/currencies";
 import {
   CheckoutQuestionFields,
   type CheckoutFieldClasses,
@@ -56,6 +57,7 @@ type PublicEvent = {
   start_time: string | null;
   end_time: string | null;
   logo_url: string | null;
+  currency: string;
 };
 
 type LineItem = {
@@ -71,13 +73,6 @@ type AppliedPromo = {
   amount_off_cents: number | null;
   applies_to_ticket_type_id: string | null;
 };
-
-function rands(cents: number): string {
-  return `R${(cents / 100).toLocaleString("en-ZA", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-}
 
 // A tier's sales window is open when now sits inside [start, end). A tier with
 // no window (both null) is always open — that's the "regular" always-on ticket.
@@ -109,6 +104,11 @@ export function CampsStorefront({
   ticketTypes: TicketType[];
   checkoutQuestions: FormField[];
 }) {
+  // Every price on this page is in the event's own currency, and
+  // PayFast can only take ZAR — so a non-ZAR event is card-only.
+  const currency = event.currency;
+  const money = (cents: number) => formatMoney(cents, currency);
+  const canUsePayfast = providersForCurrency(currency).includes("payfast");
   const now = useMemo(() => new Date(), []);
   // Only show tiers whose sales window is currently open. Tiers scheduled for
   // later (or already closed) stay hidden until/while they're in their window.
@@ -454,6 +454,7 @@ export function CampsStorefront({
                 onPwyw={(v) => setPwywAmount(t, v)}
                 venue={event.location}
                 dateRange={dateRange}
+                currency={currency}
               />
             ))}
           </div>
@@ -475,7 +476,7 @@ export function CampsStorefront({
                   </span>
                   <span className="cmp-promo-applied-amount">
                     {promoDiscountCents > 0
-                      ? `−${rands(promoDiscountCents)} off`
+                      ? `−${money(promoDiscountCents)} off`
                       : appliedPromo.applies_to_ticket_type_id
                         ? "Add the matching tier to use this code."
                         : "No discount on the current cart."}
@@ -523,7 +524,7 @@ export function CampsStorefront({
           </div>
           <div className="cmp-field">
             <label className="cmp-label" htmlFor="cmp-gift">
-              [ ADD A GIFT — ZAR ]
+              {`[ ADD A GIFT — ${currency} ]`}
             </label>
             <div className="cmp-money-wrap">
               <span className="cmp-money-prefix">R</span>
@@ -630,58 +631,68 @@ export function CampsStorefront({
             <div className="cmp-pay-breakdown">
               <div className="cmp-pay-row">
                 <span>SUBTOTAL</span>
-                <span className="cmp-pay-row-v">{rands(subtotalCents)}</span>
+                <span className="cmp-pay-row-v">{money(subtotalCents)}</span>
               </div>
               {promoDiscountCents > 0 && (
                 <div className="cmp-pay-row cmp-pay-row-discount">
                   <span>DISCOUNT ({appliedPromo?.code})</span>
-                  <span className="cmp-pay-row-v">−{rands(promoDiscountCents)}</span>
+                  <span className="cmp-pay-row-v">−{money(promoDiscountCents)}</span>
                 </div>
               )}
               {donationCents > 0 && (
                 <div className="cmp-pay-row">
                   <span>GIFT</span>
-                  <span className="cmp-pay-row-v">+{rands(donationCents)}</span>
+                  <span className="cmp-pay-row-v">+{money(donationCents)}</span>
                 </div>
               )}
             </div>
           )}
           <div className="cmp-pay-total">
             <span className="cmp-pay-total-k">TOTAL DUE</span>
-            <span className="cmp-pay-total-v">{rands(totalCents)}</span>
+            <span className="cmp-pay-total-v">{money(totalCents)}</span>
           </div>
           <p className="cmp-pay-note">
-            {STAR} secure checkout via PayFast. {lineCount} pass
+            {STAR} secure checkout via {canUsePayfast ? "PayFast" : "Stripe"}.{" "}
+            {lineCount} pass
             {lineCount === 1 ? "" : "es"} held for you &#128153;
           </p>
           {err && <p className="cmp-error">{STAR} {err}</p>}
-          <button
-            type="button"
-            onClick={() => submit("payfast")}
-            disabled={submitting !== null || !buyerValid}
-            className="cmp-paybtn"
-          >
-            {submitting === "payfast" ? "LOCKING IT IN…" : `PAY ${rands(totalCents)}`}
-            {submitting !== "payfast" && <span className="cmp-cta-arrow">&rarr;</span>}
-          </button>
-          <div className="cmp-paybtn-alt-wrap">
+          {canUsePayfast && (
+            <button
+              type="button"
+              onClick={() => submit("payfast")}
+              disabled={submitting !== null || !buyerValid}
+              className="cmp-paybtn"
+            >
+              {submitting === "payfast" ? "LOCKING IT IN…" : `PAY ${money(totalCents)}`}
+              {submitting !== "payfast" && <span className="cmp-cta-arrow">&rarr;</span>}
+            </button>
+          )}
+          {/* Stripe is the alternative on a ZAR event and the only
+              option on any other currency, so it takes the primary
+              button styling when PayFast can't be offered. */}
+          <div className={canUsePayfast ? "cmp-paybtn-alt-wrap" : undefined}>
             <button
               type="button"
               onClick={() => submit("stripe")}
               disabled={submitting !== null || !buyerValid}
-              className="cmp-paybtn-alt"
+              className={canUsePayfast ? "cmp-paybtn-alt" : "cmp-paybtn"}
             >
               {submitting === "stripe"
                 ? "LOCKING IT IN…"
-                : "PAY WITH INTERNATIONAL CARD"}
+                : canUsePayfast
+                  ? "PAY WITH INTERNATIONAL CARD"
+                  : `PAY ${money(totalCents)}`}
               {submitting !== "stripe" && (
                 <span className="cmp-cta-arrow">&rarr;</span>
               )}
             </button>
-            <p className="cmp-paybtn-alt-note">
-              {STAR} card declined on PayFast? amex / apple&nbsp;pay / google&nbsp;pay?
-              use Stripe.
-            </p>
+            {canUsePayfast && (
+              <p className="cmp-paybtn-alt-note">
+                {STAR} card declined on PayFast? amex / apple&nbsp;pay / google&nbsp;pay?
+                use Stripe.
+              </p>
+            )}
           </div>
         </section>
       )}
@@ -706,11 +717,13 @@ export function CampsStorefront({
             <span className="cmp-sticky-k">
               {lineCount} PASS{lineCount === 1 ? "" : "ES"}
             </span>
-            <span className="cmp-sticky-v">{rands(totalCents)}</span>
+            <span className="cmp-sticky-v">{money(totalCents)}</span>
           </div>
           <button
             type="button"
-            onClick={() => submit("payfast")}
+            onClick={() =>
+              submit(canUsePayfast ? "payfast" : "stripe")
+            }
             disabled={submitting !== null}
             className="cmp-sticky-btn"
           >
@@ -746,6 +759,7 @@ function TicketPass({
   onPwyw,
   venue,
   dateRange,
+  currency,
 }: {
   t: TicketType;
   idx: number;
@@ -756,7 +770,9 @@ function TicketPass({
   onPwyw: (v: string) => void;
   venue: string | null;
   dateRange: string;
+  currency: string;
 }) {
+  const money = (cents: number) => formatMoney(cents, currency);
   const onSale = isOnSale(t, now);
   const rem = remaining(t);
   const isPwyw = t.pricing_mode === "pwyw";
@@ -804,7 +820,7 @@ function TicketPass({
         <div className="cmp-pass-foot">
           <div className="cmp-pass-price">
             {isPwyw && <span className="cmp-pass-price-pre">FROM</span>}
-            <span className="cmp-pass-price-v">{rands(t.display_price_cents)}</span>
+            <span className="cmp-pass-price-v">{money(t.display_price_cents)}</span>
           </div>
 
           {onSale && !isPwyw && (
@@ -834,7 +850,7 @@ function TicketPass({
         {isPwyw && qty > 0 && (
           <div className="cmp-pwyw">
             <label className="cmp-label" htmlFor={`pwyw-${t.id}`}>
-              [ YOUR AMOUNT — ZAR ]
+              {`[ YOUR AMOUNT — ${currency} ]`}
             </label>
             <div className="cmp-money-wrap">
               <span className="cmp-money-prefix">R</span>

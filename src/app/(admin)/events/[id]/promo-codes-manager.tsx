@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { currencySymbol, formatMoney } from "@/lib/currencies";
 
 type TicketTypeLite = { id: string; name: string };
 type PromoCode = {
@@ -19,13 +20,10 @@ type PromoCode = {
   is_active: boolean;
 };
 
-function rands(cents: number): string {
-  return `R${(cents / 100).toFixed(2)}`;
-}
-
-function describeValue(p: PromoCode): string {
+function describeValue(p: PromoCode, currency: string): string {
   if (p.kind === "percent") return `${p.percent_off}% off`;
-  if (p.kind === "fixed_amount") return `${rands(p.amount_off_cents ?? 0)} off`;
+  if (p.kind === "fixed_amount")
+    return `${formatMoney(p.amount_off_cents ?? 0, currency)} off`;
   if (p.kind === "comp") return "Free (100% off)";
   return "—";
 }
@@ -40,10 +38,13 @@ export function PromoCodesManager({
   eventId,
   promoCodes,
   ticketTypes,
+  currency,
 }: {
   eventId: string;
   promoCodes: PromoCode[];
   ticketTypes: TicketTypeLite[];
+  // Fixed-amount discounts are in the event's selling currency.
+  currency: string;
 }) {
   const router = useRouter();
   const [adding, setAdding] = useState(false);
@@ -54,7 +55,7 @@ export function PromoCodesManager({
   const [code, setCode] = useState("");
   const [kind, setKind] = useState<"percent" | "fixed_amount" | "comp">("percent");
   const [percentOff, setPercentOff] = useState("");
-  const [amountOff, setAmountOff] = useState(""); // ZAR rands
+  const [amountOff, setAmountOff] = useState(""); // major units of `currency`
   const [appliesTo, setAppliesTo] = useState("");
   const [maxRedemptions, setMaxRedemptions] = useState("");
   const [validFrom, setValidFrom] = useState("");
@@ -194,7 +195,7 @@ export function PromoCodesManager({
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {describeValue(p)}
+                    {describeValue(p, currency)}
                     {p.applies_to_ticket_type_id
                       ? ` · ${tierLookup.get(p.applies_to_ticket_type_id) ?? "specific tier"}`
                       : " · any tier"}
@@ -289,7 +290,7 @@ export function PromoCodesManager({
             {kind === "fixed_amount" && (
               <div>
                 <label className="block text-xs text-muted-foreground mb-1">
-                  Amount off (ZAR)
+                  {`Amount off (${currency} ${currencySymbol(currency)})`}
                 </label>
                 <input
                   type="number"

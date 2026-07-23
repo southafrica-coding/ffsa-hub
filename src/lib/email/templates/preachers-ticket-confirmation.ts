@@ -1,3 +1,4 @@
+import { formatMoney } from "@/lib/currencies";
 // FFSA Hub — Ticket confirmation email for PREACHERS SA.
 //
 // Same shape as the generic ticket-confirmation template (inline-CSS,
@@ -41,13 +42,11 @@ export function preachersTicketEmailHtml(opts: {
   orderId: string;
   totalCents: number;
   siteUrl: string;
+  /** ISO 4217 code from orders.currency. */
+  currency: string;
 }): string {
   const base = opts.siteUrl.replace(/\/$/, "");
-  const rands = (cents: number) =>
-    `R${(cents / 100).toLocaleString("en-ZA", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`;
+  const money = (cents: number) => formatMoney(cents, opts.currency);
   const count = opts.tickets.length;
   const passWord = count === 1 ? "pass is" : "passes are";
   const qrWord = count === 1 ? "code" : "codes";
@@ -201,7 +200,7 @@ export function preachersTicketEmailHtml(opts: {
                   Total Paid
                 </td>
                 <td align="right" style="padding:14px 0;${D}font-size:28px;color:${OFFWHITE};letter-spacing:0.02em;">
-                  ${rands(opts.totalCents)}
+                  ${money(opts.totalCents)}
                 </td>
               </tr>
             </table>

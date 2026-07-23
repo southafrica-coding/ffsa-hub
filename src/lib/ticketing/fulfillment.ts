@@ -103,7 +103,7 @@ export async function fulfillOrder(
   const { data: order, error: orderErr } = await supabase
     .from("orders")
     .select(
-      "id, status, total_cents, buyer_first_name, buyer_last_name, buyer_email, lines, event_id, events(id, title, start_date, end_date, location, public_slug, brand)"
+      "id, status, total_cents, currency, buyer_first_name, buyer_last_name, buyer_email, lines, event_id, events(id, title, start_date, end_date, location, public_slug, brand)"
     )
     .eq("id", orderId)
     .maybeSingle();
@@ -209,6 +209,7 @@ export async function fulfillOrder(
     tickets: ticketsForEmail,
     orderId: orderId,
     totalCents: order.total_cents,
+    currency: order.currency ?? "ZAR",
     siteUrl,
   };
   const sendResult = await sendViaMailtrap({

@@ -4,6 +4,8 @@
 // modules under src/lib/payments/. Follows src/services/school-fees.ts
 // style. See FFSA_Hub_Events_Ticketing_Spec.md.
 
+import { DEFAULT_EVENT_CURRENCY } from "@/lib/currencies";
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
 
@@ -11,11 +13,17 @@ type Client = any;
 // FEE PROFILES
 // ────────────────────────────────────────────────────────────
 
-export async function getActiveFeeProfiles(supabase: Client) {
+// Rates are per (provider, currency) since migration 134 — pass the
+// event's currency so a ZAR fixed fee never prices a USD ticket.
+export async function getActiveFeeProfiles(
+  supabase: Client,
+  currency: string = DEFAULT_EVENT_CURRENCY
+) {
   return supabase
     .from("payment_fee_profiles")
     .select("provider, percent_bps, fixed_cents")
-    .eq("is_active", true);
+    .eq("is_active", true)
+    .eq("currency", currency);
 }
 
 // ────────────────────────────────────────────────────────────

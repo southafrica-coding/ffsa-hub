@@ -76,6 +76,9 @@ export default async function PublicEventPage({
     start_time: event.start_time,
     end_time: event.end_time,
     logo_url: event.logo_url ?? null,
+    // Drives price formatting and which pay buttons render — PayFast
+    // is ZAR-only, so a non-ZAR event is Stripe-only.
+    currency: event.currency ?? "ZAR",
   };
 
   const brand = resolveEventBrand(event);

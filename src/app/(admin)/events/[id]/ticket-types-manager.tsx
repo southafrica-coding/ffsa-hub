@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { grossUpToCover, type FeeProfile } from "@/lib/payments/pricing";
+import { currencySymbol, formatMoney } from "@/lib/currencies";
 
 type TicketType = {
   id: string;
@@ -20,10 +21,6 @@ type TicketType = {
   is_active: boolean;
   sort_order: number;
 };
-
-function rands(cents: number): string {
-  return `R${(cents / 100).toFixed(2)}`;
-}
 
 function previewDisplayCents(
   pricingMode: "fixed" | "pwyw",
@@ -46,12 +43,17 @@ export function TicketTypesManager({
   eventId,
   ticketTypes,
   feeProfiles,
+  currency,
 }: {
   eventId: string;
   ticketTypes: TicketType[];
   feeProfiles: FeeProfile[];
+  currency: string;
 }) {
   const router = useRouter();
+  // Prices are in the event's currency; feeProfiles are already the
+  // rates for that currency (fetched per-currency in page.tsx).
+  const money = (cents: number) => formatMoney(cents, currency);
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -60,7 +62,7 @@ export function TicketTypesManager({
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [pricingMode, setPricingMode] = useState<"fixed" | "pwyw">("fixed");
-  const [targetRands, setTargetRands] = useState("");
+  const [targetAmount, setTargetAmount] = useState("");
   const [capacity, setCapacity] = useState("");
   const [maxPerOrder, setMaxPerOrder] = useState("");
   const [salesStart, setSalesStart] = useState("");
@@ -70,7 +72,7 @@ export function TicketTypesManager({
     setName("");
     setDescription("");
     setPricingMode("fixed");
-    setTargetRands("");
+    setTargetAmount("");
     setCapacity("");
     setMaxPerOrder("");
     setSalesStart("");
@@ -80,7 +82,7 @@ export function TicketTypesManager({
 
   const targetNetCents = Math.max(
     0,
-    Math.round((Number.parseFloat(targetRands) || 0) * 100)
+    Math.round((Number.parseFloat(targetAmount) || 0) * 100)
   );
   const previewCents = previewDisplayCents(pricingMode, targetNetCents, feeProfiles);
 
@@ -196,8 +198,8 @@ export function TicketTypesManager({
                     </p>
                   )}
                   <p className="text-xs text-muted-foreground mt-1">
-                    Net {rands(t.target_net_cents)} → buyer pays{" "}
-                    {rands(t.display_price_cents)}
+                    Net {money(t.target_net_cents)} → buyer pays{" "}
+                    {money(t.display_price_cents)}
                     {" · "}
                     {t.capacity == null
                       ? `${t.quantity_sold} sold`
@@ -284,14 +286,14 @@ export function TicketTypesManager({
             </div>
             <div>
               <label className="block text-xs text-muted-foreground mb-1">
-                {pricingMode === "fixed" ? "Target net (ZAR)" : "Minimum (ZAR)"}
+                {`${pricingMode === "fixed" ? "Target net" : "Minimum"} (${currency} ${currencySymbol(currency)})`}
               </label>
               <input
                 type="number"
                 step="0.01"
                 min="0"
-                value={targetRands}
-                onChange={(e) => setTargetRands(e.target.value)}
+                value={targetAmount}
+                onChange={(e) => setTargetAmount(e.target.value)}
                 placeholder="e.g. 250.00"
                 className="w-full border rounded px-2 py-1.5 text-sm"
                 disabled={busy}
@@ -299,8 +301,8 @@ export function TicketTypesManager({
               {targetNetCents > 0 && (
                 <p className="text-xs text-muted-foreground mt-1">
                   {pricingMode === "fixed"
-                    ? `Buyer will see ${rands(previewCents)} (grossed up to cover the processor fee).`
-                    : `Buyer can enter ${rands(previewCents)} or more; FFSA absorbs the fee from what they enter.`}
+                    ? `Buyer will see ${money(previewCents)} (grossed up to cover the processor fee).`
+                    : `Buyer can enter ${money(previewCents)} or more; FFSA absorbs the fee from what they enter.`}
                 </p>
               )}
             </div>

@@ -1,3 +1,4 @@
+import { formatMoney } from "@/lib/currencies";
 // FFSA Hub — Ticket confirmation email (transactional).
 //
 // Inline-CSS HTML, table-based layout for broad email-client
@@ -27,8 +28,10 @@ export function ticketConfirmationEmailHtml(opts: {
   orderId: string;
   totalCents: number;
   siteUrl: string;
+  /** ISO 4217 code from orders.currency. */
+  currency: string;
 }): string {
-  const rands = (cents: number) => `R${(cents / 100).toFixed(2)}`;
+  const money = (cents: number) => formatMoney(cents, opts.currency);
   const base = opts.siteUrl.replace(/\/$/, "");
   const ticketsCount = opts.tickets.length;
   const ticketWord = ticketsCount > 1 ? "tickets are" : "ticket is";
@@ -115,7 +118,7 @@ export function ticketConfirmationEmailHtml(opts: {
         <!-- Footer -->
         <tr>
           <td style="padding:12px 32px 30px 32px;border-top:1px solid ${BORDER};">
-            <p style="margin:16px 0 4px 0;font-family:Helvetica,Arial,sans-serif;font-size:12px;color:${TEXT_DIM};letter-spacing:0.04em;">Order #${escapeHtml(opts.orderId.slice(0, 8))} · Total ${rands(opts.totalCents)}</p>
+            <p style="margin:16px 0 4px 0;font-family:Helvetica,Arial,sans-serif;font-size:12px;color:${TEXT_DIM};letter-spacing:0.04em;">Order #${escapeHtml(opts.orderId.slice(0, 8))} · Total ${money(opts.totalCents)}</p>
             <p style="margin:8px 0 0 0;font-family:Helvetica,Arial,sans-serif;font-size:12px;color:${TEXT_DIMMER};">Questions? Reply to this email.</p>
           </td>
         </tr>

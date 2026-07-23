@@ -2,13 +2,16 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { updateEvent } from "@/services/events";
 import { getAuthedUser, canManageEvents } from "@/lib/api-auth";
+import { EVENT_CURRENCIES, isEventCurrency } from "@/lib/currencies";
+import { computeDisplayPriceCents } from "@/lib/payments/ticket-pricing";
 
 // Slugs that show up at /e/<slug> on the public storefront.
 // Lowercase a-z, 0-9, dashes; can't start or end with a dash.
 const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
 
 // PATCH /api/events/[id]/ticketing
-// Body: { ticketing_enabled?: boolean; public_slug?: string | null }
+// Body: { ticketing_enabled?: boolean; public_slug?: string | null;
+//         currency?: "ZAR" | "USD" }
 export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string }> }
@@ -23,7 +26,11 @@ export async function PATCH(
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
-  let body: { ticketing_enabled?: boolean; public_slug?: string | null };
+  let body: {
+    ticketing_enabled?: boolean;
+    public_slug?: string | null;
+    currency?: string;
+  };
   try {
     body = await request.json();
   } catch {
@@ -49,6 +56,47 @@ export async function PATCH(
         );
       }
       patch.public_slug = normalized;
+    }
+  }
+
+  // Selling currency. Changing it re-prices every fixed tier (the
+  // gross-up must use that currency's fee profile), so it's only
+  // allowed while the event has taken no real money.
+  let currencyChangedTo: string | null = null;
+  if (body.currency !== undefined) {
+    if (!isEventCurrency(body.currency)) {
+      return NextResponse.json(
+        {
+          error: `Currency must be one of ${EVENT_CURRENCIES.map((c) => c.code).join(", ")}.`,
+        },
+        { status: 400 }
+      );
+    }
+    const { data: current } = await supabase
+      .from("events")
+      .select("currency")
+      .eq("id", eventId)
+      .single();
+
+    if (current && current.currency !== body.currency) {
+      // A paid or refunded order recorded in the old currency would be
+      // silently misreported against the new one.
+      const { count } = await supabase
+        .from("orders")
+        .select("id", { count: "exact", head: true })
+        .eq("event_id", eventId)
+        .neq("status", "pending");
+      if ((count ?? 0) > 0) {
+        return NextResponse.json(
+          {
+            error:
+              "This event already has orders, so its currency can't be changed. Create a new event to sell in a different currency.",
+          },
+          { status: 409 }
+        );
+      }
+      patch.currency = body.currency;
+      currencyChangedTo = body.currency;
     }
   }
 
@@ -90,5 +138,45 @@ export async function PATCH(
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  // Re-gross-up existing tiers against the new currency's fee profile.
+  // Staff keep the same target net (what FFSA wants to keep); only the
+  // displayed, fee-inclusive price moves.
+  if (currencyChangedTo) {
+    const { data: tiers } = await supabase
+      .from("ticket_types")
+      .select("id, pricing_mode, target_net_cents")
+      .eq("event_id", eventId)
+      .eq("pricing_mode", "fixed");
+
+    for (const tier of (tiers ?? []) as Array<{
+      id: string;
+      pricing_mode: "fixed" | "pwyw";
+      target_net_cents: number;
+    }>) {
+      const { displayPriceCents, error: priceErr } =
+        await computeDisplayPriceCents(
+          supabase,
+          tier.pricing_mode,
+          tier.target_net_cents,
+          currencyChangedTo
+        );
+      if (priceErr || displayPriceCents === undefined) {
+        // The currency is saved but a tier couldn't be re-priced —
+        // surface it rather than leaving a stale price on the storefront.
+        return NextResponse.json(
+          {
+            error: `Currency saved, but ticket prices couldn't be recalculated: ${priceErr ?? "unknown error"}. Re-save each ticket type.`,
+          },
+          { status: 500 }
+        );
+      }
+      await supabase
+        .from("ticket_types")
+        .update({ display_price_cents: displayPriceCents })
+        .eq("id", tier.id);
+    }
+  }
+
   return NextResponse.json({ event: data });
 }

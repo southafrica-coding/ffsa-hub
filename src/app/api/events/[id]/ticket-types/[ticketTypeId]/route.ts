@@ -15,7 +15,7 @@ export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string; ticketTypeId: string }> }
 ) {
-  const { ticketTypeId } = await context.params;
+  const { id: eventId, ticketTypeId } = await context.params;
   const supabase = await createClient();
   const user = await getAuthedUser(supabase);
   if (!user) {
@@ -80,10 +80,18 @@ export async function PATCH(
       );
     }
 
+    // Gross-up rates are per currency, so price against the event's own.
+    const { data: parentEvent } = await supabase
+      .from("events")
+      .select("currency")
+      .eq("id", eventId)
+      .single();
+
     const priced = await computeDisplayPriceCents(
       supabase,
       pricingMode,
-      targetNetCents
+      targetNetCents,
+      parentEvent?.currency
     );
     if (priced.error) {
       return NextResponse.json({ error: priced.error }, { status: 400 });

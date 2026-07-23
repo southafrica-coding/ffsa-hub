@@ -9,6 +9,7 @@
 // See FFSA_Hub_Events_Ticketing_Spec.md §4.
 
 import { grossUpToCover, type FeeProfile } from "./pricing";
+import { DEFAULT_EVENT_CURRENCY } from "@/lib/currencies";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
@@ -16,7 +17,11 @@ type Client = any;
 export async function computeDisplayPriceCents(
   supabase: Client,
   pricingMode: "fixed" | "pwyw",
-  targetNetCents: number
+  targetNetCents: number,
+  // The parent event's currency. Fee rates differ per currency — a
+  // fixed R3.00 component is not a fixed $3.00 one — so the gross-up
+  // must only see profiles priced in the currency being sold in.
+  currency: string = DEFAULT_EVENT_CURRENCY
 ): Promise<{ displayPriceCents?: number; error?: string }> {
   if (!Number.isInteger(targetNetCents) || targetNetCents < 0) {
     return { error: "target_net_cents must be a non-negative integer" };
@@ -27,13 +32,16 @@ export async function computeDisplayPriceCents(
   const { data, error } = await supabase
     .from("payment_fee_profiles")
     .select("provider, percent_bps, fixed_cents")
-    .eq("is_active", true);
+    .eq("is_active", true)
+    .eq("currency", currency);
 
   if (error) {
     return { error: `Failed to read fee profiles: ${error.message}` };
   }
   if (!data || data.length === 0) {
-    return { error: "No active payment fee profiles configured." };
+    return {
+      error: `No active payment fee profiles configured for ${currency}.`,
+    };
   }
 
   // DB rows are snake_case; FeeProfile / grossUpToCover use camelCase.

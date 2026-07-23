@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { FormField } from "@/lib/forms/schema";
 import { validateCheckoutAnswers } from "@/lib/ticketing/checkout-questions";
+import { formatMoney, providersForCurrency } from "@/lib/currencies";
 import {
   CheckoutQuestionFields,
   type CheckoutFieldClasses,
@@ -55,6 +56,7 @@ type PublicEvent = {
   start_time: string | null;
   end_time: string | null;
   logo_url: string | null;
+  currency: string;
 };
 
 type LineItem = {
@@ -70,13 +72,6 @@ type AppliedPromo = {
   amount_off_cents: number | null;
   applies_to_ticket_type_id: string | null;
 };
-
-function rands(cents: number): string {
-  return `R${(cents / 100).toLocaleString("en-ZA", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-}
 
 // A tier's sales window is open when now sits inside [start, end). A tier with
 // no window (both null) is always open — that's the "regular" always-on ticket.
@@ -108,6 +103,11 @@ export function TheSendStorefront({
   ticketTypes: TicketType[];
   checkoutQuestions: FormField[];
 }) {
+  // Every price on this page is in the event's own currency, and
+  // PayFast can only take ZAR — so a non-ZAR event is card-only.
+  const currency = event.currency;
+  const money = (cents: number) => formatMoney(cents, currency);
+  const canUsePayfast = providersForCurrency(currency).includes("payfast");
   const now = useMemo(() => new Date(), []);
   // Only show tiers whose sales window is currently open. Tiers scheduled for
   // later (or already closed) stay hidden until/while they're in their window.
@@ -459,6 +459,7 @@ export function TheSendStorefront({
                 onPwyw={(v) => setPwywAmount(t, v)}
                 venue={event.location}
                 dateRange={dateRange}
+                currency={currency}
               />
             ))}
           </div>
@@ -480,7 +481,7 @@ export function TheSendStorefront({
                   </span>
                   <span className="tss-promo-applied-amount">
                     {promoDiscountCents > 0
-                      ? `−${rands(promoDiscountCents)} off`
+                      ? `−${money(promoDiscountCents)} off`
                       : appliedPromo.applies_to_ticket_type_id
                         ? "Add the matching tier to use this code."
                         : "No discount on the current cart."}
@@ -528,7 +529,7 @@ export function TheSendStorefront({
           </div>
           <div className="tss-field">
             <label className="tss-label" htmlFor="tss-gift">
-              [ ADD A GIFT — ZAR ]
+              {`[ ADD A GIFT — ${currency} ]`}
             </label>
             <div className="tss-money-wrap">
               <span className="tss-money-prefix">R</span>
@@ -638,64 +639,74 @@ export function TheSendStorefront({
             <div className="tss-pay-breakdown">
               <div className="tss-pay-row">
                 <span>SUBTOTAL</span>
-                <span className="tss-pay-row-v">{rands(subtotalCents)}</span>
+                <span className="tss-pay-row-v">{money(subtotalCents)}</span>
               </div>
               {promoDiscountCents > 0 && (
                 <div className="tss-pay-row tss-pay-row-discount">
                   <span>DISCOUNT ({appliedPromo?.code})</span>
                   <span className="tss-pay-row-v">
-                    −{rands(promoDiscountCents)}
+                    −{money(promoDiscountCents)}
                   </span>
                 </div>
               )}
               {donationCents > 0 && (
                 <div className="tss-pay-row">
                   <span>GIFT</span>
-                  <span className="tss-pay-row-v">+{rands(donationCents)}</span>
+                  <span className="tss-pay-row-v">+{money(donationCents)}</span>
                 </div>
               )}
             </div>
           )}
           <div className="tss-pay-total">
             <span className="tss-pay-total-k">TOTAL DUE</span>
-            <span className="tss-pay-total-v">{rands(totalCents)}</span>
+            <span className="tss-pay-total-v">{money(totalCents)}</span>
           </div>
           <p className="tss-pay-note">
-            {ARROW} SECURE CHECKOUT VIA PAYFAST. {lineCount} PASS
+            {ARROW} SECURE CHECKOUT VIA {canUsePayfast ? "PAYFAST" : "STRIPE"}.{" "}
+            {lineCount} PASS
             {lineCount === 1 ? "" : "ES"} HELD FOR YOU.
           </p>
           {err && <p className="tss-error">{ARROW} {err}</p>}
-          <button
-            type="button"
-            onClick={() => submit("payfast")}
-            disabled={submitting !== null || !buyerValid}
-            className="tss-paybtn"
-          >
-            {submitting === "payfast"
-              ? "DEPLOYING…"
-              : `PAY ${rands(totalCents)}`}
-            {submitting !== "payfast" && (
-              <span className="tss-cta-arrow">{ARROW}</span>
-            )}
-          </button>
-          <div className="tss-paybtn-alt-wrap">
+          {canUsePayfast && (
+            <button
+              type="button"
+              onClick={() => submit("payfast")}
+              disabled={submitting !== null || !buyerValid}
+              className="tss-paybtn"
+            >
+              {submitting === "payfast"
+                ? "DEPLOYING…"
+                : `PAY ${money(totalCents)}`}
+              {submitting !== "payfast" && (
+                <span className="tss-cta-arrow">{ARROW}</span>
+              )}
+            </button>
+          )}
+          {/* Stripe is the alternative on a ZAR event and the only
+              option on any other currency, so it takes the primary
+              button styling when PayFast can't be offered. */}
+          <div className={canUsePayfast ? "tss-paybtn-alt-wrap" : undefined}>
             <button
               type="button"
               onClick={() => submit("stripe")}
               disabled={submitting !== null || !buyerValid}
-              className="tss-paybtn-alt"
+              className={canUsePayfast ? "tss-paybtn-alt" : "tss-paybtn"}
             >
               {submitting === "stripe"
                 ? "DEPLOYING…"
-                : "PAY WITH INTERNATIONAL CARD"}
+                : canUsePayfast
+                  ? "PAY WITH INTERNATIONAL CARD"
+                  : `PAY ${money(totalCents)}`}
               {submitting !== "stripe" && (
                 <span className="tss-cta-arrow">{ARROW}</span>
               )}
             </button>
-            <p className="tss-paybtn-alt-note">
-              {ARROW} CARD DECLINED ON PAYFAST? AMEX / APPLE&nbsp;PAY / GOOGLE&nbsp;PAY?
-              USE STRIPE.
-            </p>
+            {canUsePayfast && (
+              <p className="tss-paybtn-alt-note">
+                {ARROW} CARD DECLINED ON PAYFAST? AMEX / APPLE&nbsp;PAY / GOOGLE&nbsp;PAY?
+                USE STRIPE.
+              </p>
+            )}
           </div>
         </section>
       )}
@@ -719,11 +730,13 @@ export function TheSendStorefront({
             <span className="tss-sticky-k">
               {lineCount} PASS{lineCount === 1 ? "" : "ES"}
             </span>
-            <span className="tss-sticky-v">{rands(totalCents)}</span>
+            <span className="tss-sticky-v">{money(totalCents)}</span>
           </div>
           <button
             type="button"
-            onClick={() => submit("payfast")}
+            onClick={() =>
+              submit(canUsePayfast ? "payfast" : "stripe")
+            }
             disabled={submitting !== null}
             className="tss-sticky-btn"
           >
@@ -778,6 +791,7 @@ function TicketPass({
   onPwyw,
   venue,
   dateRange,
+  currency,
 }: {
   t: TicketType;
   idx: number;
@@ -788,7 +802,9 @@ function TicketPass({
   onPwyw: (v: string) => void;
   venue: string | null;
   dateRange: string;
+  currency: string;
 }) {
+  const money = (cents: number) => formatMoney(cents, currency);
   const onSale = isOnSale(t, now);
   const rem = remaining(t);
   const isPwyw = t.pricing_mode === "pwyw";
@@ -836,7 +852,7 @@ function TicketPass({
         <div className="tss-pass-foot">
           <div className="tss-pass-price">
             {isPwyw && <span className="tss-pass-price-pre">FROM</span>}
-            <span className="tss-pass-price-v">{rands(t.display_price_cents)}</span>
+            <span className="tss-pass-price-v">{money(t.display_price_cents)}</span>
           </div>
 
           {onSale && !isPwyw && (
@@ -866,7 +882,7 @@ function TicketPass({
         {isPwyw && qty > 0 && (
           <div className="tss-pwyw">
             <label className="tss-label" htmlFor={`pwyw-${t.id}`}>
-              [ YOUR AMOUNT — ZAR ]
+              {`[ YOUR AMOUNT — ${currency} ]`}
             </label>
             <div className="tss-money-wrap">
               <span className="tss-money-prefix">R</span>
