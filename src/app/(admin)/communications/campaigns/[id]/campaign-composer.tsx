@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, X, GripVertical, Sparkles } from "lucide-react";
 import {
@@ -48,6 +48,12 @@ import { RichText } from "@/components/communications/rich-text";
 
 type Label = { id: string; slug: string; name: string };
 type Identity = { id: string; display_name: string; from_email: string };
+type CustomTemplate = {
+  id: string;
+  name: string;
+  tagline: string | null;
+  body_source: CampaignBody;
+};
 
 type CampaignMeta = {
   id: string;
@@ -155,6 +161,8 @@ export function CampaignComposer({
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [canvasTab, setCanvasTab] = useState<"build" | "preview">("build");
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [customTemplates, setCustomTemplates] = useState<CustomTemplate[]>([]);
 
   const sent = campaign.status === "sent" || campaign.status === "sending";
 
@@ -446,7 +454,63 @@ export function CampaignComposer({
       return;
     }
     setBody(tpl.build(newBlockId));
+    setTemplatesOpen(false);
     setMsg(`Applied template: ${tpl.name}. Save to keep the changes.`);
+  }
+
+  // Load saved custom templates for the gallery.
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/email-templates")
+      .then((r) => (r.ok ? r.json() : { templates: [] }))
+      .then((d: { templates?: CustomTemplate[] }) => {
+        if (alive) setCustomTemplates(d.templates ?? []);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  function applyCustomTemplate(t: CustomTemplate) {
+    if (
+      body.blocks.length > 0 &&
+      !confirm(`Apply "${t.name}"? This replaces all current blocks.`)
+    ) {
+      return;
+    }
+    // Fresh block ids so they're unique within this email.
+    const blocks = (t.body_source.blocks ?? []).map((b) => ({
+      ...b,
+      id: newBlockId(),
+    }));
+    setBody({ version: 1, blocks });
+    setTemplatesOpen(false);
+    setMsg(`Applied template: ${t.name}. Save to keep the changes.`);
+  }
+
+  async function saveAsTemplate() {
+    const name = prompt("Name this template:");
+    if (!name || !name.trim()) return;
+    setErr(null);
+    const res = await fetch("/api/email-templates", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name.trim(), body_source: body }),
+    });
+    if (!res.ok) {
+      const d = (await res.json().catch(() => ({}))) as { error?: string };
+      return setErr(d.error ?? "Could not save template");
+    }
+    const { template } = (await res.json()) as { template: CustomTemplate };
+    setCustomTemplates((cur) => [template, ...cur]);
+    setMsg(`Saved “${name.trim()}” to your templates.`);
+  }
+
+  async function deleteCustomTemplate(id: string) {
+    if (!confirm("Delete this template?")) return;
+    const res = await fetch(`/api/email-templates/${id}`, { method: "DELETE" });
+    if (res.ok) setCustomTemplates((cur) => cur.filter((t) => t.id !== id));
   }
 
   async function sendNow() {
@@ -571,22 +635,26 @@ export function CampaignComposer({
             </Button>
           )}
           {!sent && (
-            <select
-              value=""
-              onChange={(e) => {
-                applyTemplate(e.target.value);
-                e.target.value = "";
-              }}
-              className="text-xs border rounded px-2 py-1 bg-background"
-              title="Apply an editorial template"
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setTemplatesOpen(true)}
+              className="h-7 text-xs"
+              title="Start from a template, or save this design as one"
             >
-              <option value="">Apply template…</option>
-              {CAMPAIGN_TEMPLATES.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
+              Templates
+            </Button>
+          )}
+          {!sent && body.blocks.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={saveAsTemplate}
+              className="h-7 text-xs"
+              title="Save the current design as a reusable template"
+            >
+              Save as template
+            </Button>
           )}
           <span
             className={`text-xs px-2 py-0.5 rounded-full capitalize ${
@@ -633,6 +701,17 @@ export function CampaignComposer({
           warnings={suggestionWarnings}
           onAccept={acceptSuggestion}
           onReject={rejectSuggestion}
+        />
+      )}
+
+      {templatesOpen && (
+        <TemplateGalleryDialog
+          starters={CAMPAIGN_TEMPLATES}
+          custom={customTemplates}
+          onApplyStarter={(id) => applyTemplate(id)}
+          onApplyCustom={applyCustomTemplate}
+          onDeleteCustom={deleteCustomTemplate}
+          onClose={() => setTemplatesOpen(false)}
         />
       )}
 
@@ -997,6 +1076,102 @@ type BlockEditorProps = {
   canUp: boolean;
   canDown: boolean;
 };
+
+function TemplateGalleryDialog({
+  starters,
+  custom,
+  onApplyStarter,
+  onApplyCustom,
+  onDeleteCustom,
+  onClose,
+}: {
+  starters: { id: string; name: string; tagline: string }[];
+  custom: CustomTemplate[];
+  onApplyStarter: (id: string) => void;
+  onApplyCustom: (t: CustomTemplate) => void;
+  onDeleteCustom: (id: string) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4">
+      <div className="my-8 w-full max-w-3xl rounded-lg border bg-card shadow-lg">
+        <div className="flex items-center justify-between border-b px-4 py-3">
+          <p className="text-sm font-semibold">Start from a template</p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="space-y-4 p-4">
+          <section>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
+              Starter templates
+            </p>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+              {starters.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => onApplyStarter(t.id)}
+                  className="text-left rounded-lg border p-2.5 hover:bg-muted/50 transition-colors"
+                >
+                  <div className="font-semibold text-xs">{t.name}</div>
+                  <div className="text-[10px] text-muted-foreground leading-snug mt-0.5 line-clamp-2">
+                    {t.tagline}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </section>
+          <section>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
+              Your templates
+            </p>
+            {custom.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic">
+                None yet — design an email and click “Save as template”.
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                {custom.map((t) => (
+                  <div
+                    key={t.id}
+                    className="group relative rounded-lg border p-2.5 hover:bg-muted/50 transition-colors"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => onApplyCustom(t)}
+                      className="text-left w-full"
+                    >
+                      <div className="font-semibold text-xs pr-5">{t.name}</div>
+                      {t.tagline && (
+                        <div className="text-[10px] text-muted-foreground leading-snug mt-0.5 line-clamp-2">
+                          {t.tagline}
+                        </div>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDeleteCustom(t.id)}
+                      className="absolute top-1.5 right-1.5 text-muted-foreground hover:text-red-400 opacity-0 group-hover:opacity-100"
+                      aria-label="Delete template"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // Plain-text snippet of a block, for the canvas card label.
 function blockText(html: string): string {
