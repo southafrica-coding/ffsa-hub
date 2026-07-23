@@ -25,16 +25,52 @@ export type DividerStyle = "rule" | "dots" | "space";
 export type SpacerSize = "sm" | "md" | "lg" | "xl";
 export type ImageTextLayout = "image-left" | "image-right";
 
+// ────────────────────────────────────────────────────────────
+// Per-block style overrides (all optional — absence = editorial
+// defaults, so existing stored bodies render unchanged).
+// ────────────────────────────────────────────────────────────
+
+export type BlockAlign = "left" | "center" | "right";
+export type BlockFontFamily = "display" | "body";
+export type BlockFontWeight = 400 | 500 | 600 | 700 | 800;
+
+export type BlockPadding = {
+  top?: number;
+  right?: number;
+  bottom?: number;
+  left?: number;
+};
+
+export type BlockFont = {
+  family?: BlockFontFamily;
+  sizePx?: number;
+  weight?: BlockFontWeight;
+  color?: string;
+  lineHeight?: number; // unitless
+};
+
+export type BlockStyle = {
+  bgColor?: string;
+  padding?: BlockPadding;
+  align?: BlockAlign;
+  font?: BlockFont;
+};
+
 export type CampaignBlock =
   // Core 5 (with optional polish fields)
-  | { id: string; type: "heading"; text: string; eyebrow?: string }
-  | { id: string; type: "text"; text: string; dropCap?: boolean }
+  | { id: string; type: "heading"; text: string; eyebrow?: string; blockStyle?: BlockStyle }
+  | { id: string; type: "text"; text: string; dropCap?: boolean; blockStyle?: BlockStyle }
   | {
       id: string;
       type: "button";
       text: string;
       url: string;
       style?: ButtonStyle;
+      /** Custom fill/border color; falls back to the brand accent. */
+      bgColor?: string;
+      /** Custom label color; falls back to white (filled) / brand (outline). */
+      textColor?: string;
+      blockStyle?: BlockStyle;
     }
   | {
       id: string;
@@ -43,12 +79,13 @@ export type CampaignBlock =
       alt: string;
       caption?: string;
       fullBleed?: boolean;
+      blockStyle?: BlockStyle;
     }
-  | { id: string; type: "divider"; style?: DividerStyle }
+  | { id: string; type: "divider"; style?: DividerStyle; blockStyle?: BlockStyle }
   // New editorial primitives
-  | { id: string; type: "eyebrow"; text: string }
-  | { id: string; type: "quote"; text: string; attribution?: string }
-  | { id: string; type: "spacer"; size?: SpacerSize }
+  | { id: string; type: "eyebrow"; text: string; blockStyle?: BlockStyle }
+  | { id: string; type: "quote"; text: string; attribution?: string; blockStyle?: BlockStyle }
+  | { id: string; type: "spacer"; size?: SpacerSize; blockStyle?: BlockStyle }
   | {
       id: string;
       type: "image-text";
@@ -57,6 +94,7 @@ export type CampaignBlock =
       heading?: string;
       text: string;
       layout?: ImageTextLayout;
+      blockStyle?: BlockStyle;
     }
   | {
       id: string;
@@ -65,6 +103,7 @@ export type CampaignBlock =
       text: string;
       buttonText: string;
       buttonUrl: string;
+      blockStyle?: BlockStyle;
     };
 
 export type CampaignBlockType = CampaignBlock["type"];
@@ -186,6 +225,60 @@ function softenHex(hex: string, amount = 0.06): string {
 }
 
 // ────────────────────────────────────────────────────────────
+// Per-block style → inline CSS helpers
+// ────────────────────────────────────────────────────────────
+
+function familyStack(
+  family: BlockFontFamily | undefined,
+  brand: EffectiveBrand
+): string {
+  return family === "display" ? displayStack(brand) : bodyStack(brand);
+}
+
+/**
+ * Padding for a block's wrapping <td>. When the user sets any explicit
+ * padding it replaces the editorial default entirely (missing sides = 0);
+ * otherwise the default string is kept so untouched blocks look identical.
+ */
+function padCss(p: BlockPadding | undefined, fallback: string): string {
+  if (!p) return `padding:${fallback};`;
+  const t = p.top ?? 0;
+  const r = p.right ?? 0;
+  const b = p.bottom ?? 0;
+  const l = p.left ?? 0;
+  return `padding:${t}px ${r}px ${b}px ${l}px;`;
+}
+
+/** Background + alignment overrides for a block's wrapping <td>. */
+function tdExtraCss(style: BlockStyle | undefined): string {
+  if (!style) return "";
+  let css = "";
+  if (style.bgColor) css += `background:${style.bgColor};`;
+  if (style.align) css += `text-align:${style.align};`;
+  return css;
+}
+
+/** Font CSS for a text/heading element, block overrides merged over defaults. */
+function fontCss(
+  font: BlockFont | undefined,
+  brand: EffectiveBrand,
+  defaults: {
+    family: string;
+    sizePx: number;
+    weight: number;
+    color: string;
+    lineHeight: number;
+  }
+): string {
+  const family = font?.family ? familyStack(font.family, brand) : defaults.family;
+  const size = font?.sizePx ?? defaults.sizePx;
+  const weight = font?.weight ?? defaults.weight;
+  const color = font?.color ?? defaults.color;
+  const lh = font?.lineHeight ?? defaults.lineHeight;
+  return `font-family:${family};font-size:${size}px;line-height:${lh};font-weight:${weight};color:${color};`;
+}
+
+// ────────────────────────────────────────────────────────────
 // Header + brand footer
 // ────────────────────────────────────────────────────────────
 
@@ -251,18 +344,26 @@ function buttonHtml(
   text: string,
   url: string,
   style: ButtonStyle,
-  brand: EffectiveBrand
+  brand: EffectiveBrand,
+  colors?: { bgColor?: string; textColor?: string }
 ): string {
   const label = escapeHtml(text);
   const href = safeUrl(url);
+  // Custom color falls back to the brand accent (fill) / primary (outline).
+  const accent = colors?.bgColor || brand.accent_color;
   if (style === "link") {
-    return `<a href="${href}" style="font-family:${bodyStack(brand)};font-size:14px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:${brand.accent_color};text-decoration:none;border-bottom:1.5px solid ${brand.accent_color};padding-bottom:2px;">${label} &nbsp;→</a>`;
+    const linkColor = colors?.textColor || accent;
+    return `<a href="${href}" style="font-family:${bodyStack(brand)};font-size:14px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:${linkColor};text-decoration:none;border-bottom:1.5px solid ${linkColor};padding-bottom:2px;">${label} &nbsp;→</a>`;
   }
   if (style === "outline") {
-    return `<a href="${href}" style="display:inline-block;background:transparent;color:${brand.primary_color};text-decoration:none;font-family:${bodyStack(brand)};font-size:13px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;padding:13px 28px;border:1.5px solid ${brand.primary_color};border-radius:2px;">${label}</a>`;
+    const line = colors?.bgColor || brand.primary_color;
+    const label_color = colors?.textColor || line;
+    return `<a href="${href}" style="display:inline-block;background:transparent;color:${label_color};text-decoration:none;font-family:${bodyStack(brand)};font-size:13px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;padding:13px 28px;border:1.5px solid ${line};border-radius:2px;">${label}</a>`;
   }
   // filled (default)
-  return `<a href="${href}" style="display:inline-block;background:${brand.accent_color};color:#ffffff;text-decoration:none;font-family:${bodyStack(brand)};font-size:13px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;padding:14px 30px;border-radius:2px;">${label}</a>`;
+  const fill = colors?.bgColor || brand.accent_color;
+  const fg = colors?.textColor || "#ffffff";
+  return `<a href="${href}" style="display:inline-block;background:${fill};color:${fg};text-decoration:none;font-family:${bodyStack(brand)};font-size:13px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;padding:14px 30px;border-radius:2px;">${label}</a>`;
 }
 
 function dividerHtml(style: DividerStyle, brand: EffectiveBrand): string {
@@ -308,11 +409,12 @@ function imageHtml(
   const caption = block.caption
     ? `<div style="font-family:${displayStack(brand)};font-style:italic;font-size:13px;line-height:1.5;color:${brand.text_color};opacity:0.7;margin-top:10px;">${escapeHtml(block.caption)}</div>`
     : "";
+  const td = `${padCss(block.blockStyle?.padding, "16px 0")}${tdExtraCss(block.blockStyle)}`;
   if (block.fullBleed) {
     // Visually break out of the standard 56px card padding.
-    return `<tr><td style="padding:16px 0;"><div style="margin:0 -56px;">${img}</div>${caption ? `<div style="padding:0 56px;">${caption}</div>` : ""}</td></tr>`;
+    return `<tr><td style="${td}"><div style="margin:0 -56px;">${img}</div>${caption ? `<div style="padding:0 56px;">${caption}</div>` : ""}</td></tr>`;
   }
-  return `<tr><td style="padding:16px 0;">${img}${caption}</td></tr>`;
+  return `<tr><td style="${td}">${img}${caption}</td></tr>`;
 }
 
 function quoteHtml(
@@ -322,7 +424,8 @@ function quoteHtml(
   const attribution = block.attribution
     ? `<div style="font-family:${bodyStack(brand)};font-size:11px;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:${brand.text_color};opacity:0.55;margin-top:18px;">— ${escapeHtml(block.attribution)}</div>`
     : "";
-  return `<tr><td style="padding:24px 0;">
+  const td = `${padCss(block.blockStyle?.padding, "24px 0")}${tdExtraCss(block.blockStyle)}`;
+  return `<tr><td style="${td}">
 <div style="border-left:3px solid ${brand.accent_color};padding:6px 0 6px 28px;">
 <div style="font-family:${displayStack(brand)};font-style:italic;font-size:24px;line-height:1.4;font-weight:500;color:${brand.text_color};">${escapeHtml(block.text)}</div>
 ${attribution}
@@ -360,7 +463,8 @@ function imageTextHtml(
   // Note: mobile clients without media-query support will see side-by-side
   // at a narrow width. The 46% widths keep it usable. A future pass can add
   // an inlined @media query that stacks below 480px in clients that honor it.
-  return `<tr><td style="padding:24px 0;">
+  const td = `${padCss(block.blockStyle?.padding, "24px 0")}${tdExtraCss(block.blockStyle)}`;
+  return `<tr><td style="${td}">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>${cells}</tr></table>
 </td></tr>`;
 }
@@ -369,7 +473,8 @@ function ctaHtml(
   block: Extract<CampaignBlock, { type: "cta" }>,
   brand: EffectiveBrand
 ): string {
-  return `<tr><td style="padding:32px 0;">
+  const td = `${padCss(block.blockStyle?.padding, "32px 0")}${tdExtraCss(block.blockStyle)}`;
+  return `<tr><td style="${td}">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${brand.primary_color};border-radius:4px;">
 <tr><td style="padding:44px 40px;text-align:center;">
 <div style="font-family:${displayStack(brand)};font-size:26px;line-height:1.25;font-weight:700;letter-spacing:-0.015em;color:#ffffff;margin-bottom:12px;">${escapeHtml(block.heading)}</div>
@@ -384,29 +489,46 @@ function renderBlock(block: CampaignBlock, brand: EffectiveBrand): string {
   switch (block.type) {
     case "heading": {
       const eyebrow = block.eyebrow ? eyebrowHtml(block.eyebrow, brand) : "";
-      return `<tr><td style="padding:24px 0 12px;">${eyebrow}<div style="font-family:${displayStack(brand)};font-size:34px;line-height:1.1;font-weight:800;letter-spacing:-0.025em;color:${brand.primary_color};">${escapeHtml(block.text)}</div></td></tr>`;
+      const td = `${padCss(block.blockStyle?.padding, "24px 0 12px")}${tdExtraCss(block.blockStyle)}`;
+      const headFont = fontCss(block.blockStyle?.font, brand, {
+        family: displayStack(brand),
+        sizePx: 34,
+        weight: 800,
+        color: brand.primary_color,
+        lineHeight: 1.1,
+      });
+      return `<tr><td style="${td}">${eyebrow}<div style="${headFont}letter-spacing:-0.025em;">${escapeHtml(block.text)}</div></td></tr>`;
     }
     case "text": {
+      const pFont = fontCss(block.blockStyle?.font, brand, {
+        family: bodyStack(brand),
+        sizePx: 17,
+        weight: 400,
+        color: brand.text_color,
+        lineHeight: 1.5,
+      });
       const safe = sanitizeRichText(block.text)
-        .replace(
-          /<p(\s|>)/g,
-          `<p style="margin:0 0 16px;font-family:${bodyStack(brand)};font-size:17px;line-height:1.5;color:${brand.text_color};"$1`
-        )
+        .replace(/<p(\s|>)/g, `<p style="margin:0 0 16px;${pFont}"$1`)
         .replace(
           /<a(\s|>)/g,
           `<a style="color:${brand.accent_color};text-decoration:underline;text-underline-offset:2px;"$1`
         );
       const final = block.dropCap ? dropCapWrap(safe, brand) : safe;
-      return `<tr><td style="padding:2px 0;font-family:${bodyStack(brand)};font-size:17px;line-height:1.5;color:${brand.text_color};">${final}</td></tr>`;
+      const td = `${padCss(block.blockStyle?.padding, "2px 0")}${tdExtraCss(block.blockStyle)}${pFont}`;
+      return `<tr><td style="${td}">${final}</td></tr>`;
     }
-    case "button":
-      return `<tr><td style="padding:20px 0;">${buttonHtml(block.text, block.url, block.style ?? "filled", brand)}</td></tr>`;
+    case "button": {
+      const td = `${padCss(block.blockStyle?.padding, "20px 0")}${tdExtraCss(block.blockStyle)}`;
+      return `<tr><td style="${td}">${buttonHtml(block.text, block.url, block.style ?? "filled", brand, { bgColor: block.bgColor, textColor: block.textColor })}</td></tr>`;
+    }
     case "image":
       return imageHtml(block, brand);
     case "divider":
       return dividerHtml(block.style ?? "rule", brand);
-    case "eyebrow":
-      return `<tr><td style="padding:18px 0 0;">${eyebrowHtml(block.text, brand)}</td></tr>`;
+    case "eyebrow": {
+      const td = `${padCss(block.blockStyle?.padding, "18px 0 0")}${tdExtraCss(block.blockStyle)}`;
+      return `<tr><td style="${td}">${eyebrowHtml(block.text, brand)}</td></tr>`;
+    }
     case "quote":
       return quoteHtml(block, brand);
     case "spacer":

@@ -30,6 +30,10 @@ import {
   type ButtonStyle,
   type DividerStyle,
   type SpacerSize,
+  type BlockStyle,
+  type BlockAlign,
+  type BlockFontFamily,
+  type BlockFontWeight,
   newBlockId,
   renderCampaignHtml,
 } from "@/lib/campaigns/blocks";
@@ -139,6 +143,7 @@ export function CampaignComposer({
   const [sendProgress, setSendProgress] = useState({ sent: 0, failed: 0 });
   const [testEmail, setTestEmail] = useState(currentUserEmail ?? "");
   const [testState, setTestState] = useState<"idle" | "sending" | "done">("idle");
+  const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
 
   const sent = campaign.status === "sent" || campaign.status === "sending";
 
@@ -769,16 +774,32 @@ export function CampaignComposer({
 
         {/* Live preview */}
         <Card className="lg:sticky lg:top-4 self-start">
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <CardTitle className="text-base">Preview</CardTitle>
+            <SegmentedPicker
+              value={device}
+              options={[
+                { value: "desktop", label: "🖥 Desktop" },
+                { value: "mobile", label: "📱 Mobile" },
+              ]}
+              onChange={(v) => setDevice(v as "desktop" | "mobile")}
+            />
           </CardHeader>
           <CardContent>
-            <iframe
-              title="Email preview"
-              srcDoc={previewHtml}
-              className="w-full rounded border"
-              style={{ height: 520, background: "#fff" }}
-            />
+            <div
+              className={
+                device === "mobile"
+                  ? "mx-auto w-[375px] max-w-full rounded border"
+                  : "w-full rounded border"
+              }
+            >
+              <iframe
+                title="Email preview"
+                srcDoc={previewHtml}
+                className="w-full rounded"
+                style={{ height: 520, background: "#fff" }}
+              />
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -1056,6 +1077,20 @@ function BlockEditor({
             ]}
             onChange={(v) => onChange({ style: v as ButtonStyle })}
           />
+          <div className="grid grid-cols-2 gap-1.5">
+            <ColorField
+              label="Button color"
+              value={block.bgColor ?? ""}
+              disabled={disabled}
+              onChange={(v) => onChange({ bgColor: v || undefined })}
+            />
+            <ColorField
+              label="Text color"
+              value={block.textColor ?? ""}
+              disabled={disabled}
+              onChange={(v) => onChange({ textColor: v || undefined })}
+            />
+          </div>
         </>
       )}
       {block.type === "image" && (
@@ -1164,7 +1199,209 @@ function BlockEditor({
           </div>
         </>
       )}
+
+      <BlockStylePanel block={block} disabled={disabled} onChange={onChange} />
     </div>
+  );
+}
+
+// Blocks that support alignment + background + padding overrides.
+const STYLEABLE_BLOCKS: ReadonlySet<CampaignBlockType> = new Set([
+  "heading",
+  "text",
+  "button",
+  "image",
+  "eyebrow",
+  "quote",
+  "image-text",
+  "cta",
+]);
+// Blocks whose main text supports font overrides.
+const FONT_BLOCKS: ReadonlySet<CampaignBlockType> = new Set(["heading", "text"]);
+
+function BlockStylePanel({
+  block,
+  disabled,
+  onChange,
+}: {
+  block: CampaignBlock;
+  disabled: boolean;
+  onChange: (patch: Partial<CampaignBlock>) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  if (!STYLEABLE_BLOCKS.has(block.type)) return null;
+
+  const style = block.blockStyle ?? {};
+  const setStyle = (patch: Partial<BlockStyle>) =>
+    onChange({ blockStyle: { ...style, ...patch } } as Partial<CampaignBlock>);
+  const setFont = (patch: Partial<NonNullable<BlockStyle["font"]>>) =>
+    setStyle({ font: { ...style.font, ...patch } });
+  const setPad = (patch: Partial<NonNullable<BlockStyle["padding"]>>) =>
+    setStyle({ padding: { ...style.padding, ...patch } });
+
+  const showFont = FONT_BLOCKS.has(block.type);
+
+  return (
+    <div className="rounded border bg-background/60">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold"
+      >
+        Style
+        <span>{open ? "▾" : "▸"}</span>
+      </button>
+      {open && (
+        <div className="space-y-2 px-2 pb-2">
+          <div className="grid grid-cols-2 gap-1.5">
+            <ColorField
+              label="Background"
+              value={style.bgColor ?? ""}
+              disabled={disabled}
+              onChange={(v) => setStyle({ bgColor: v || undefined })}
+            />
+            <SegmentedPicker
+              label="Align"
+              value={style.align ?? "left"}
+              disabled={disabled}
+              options={[
+                { value: "left", label: "L" },
+                { value: "center", label: "C" },
+                { value: "right", label: "R" },
+              ]}
+              onChange={(v) =>
+                setStyle({ align: v === "left" ? undefined : (v as BlockAlign) })
+              }
+            />
+          </div>
+
+          <div className="grid grid-cols-4 gap-1.5">
+            <NumField label="Pad top" value={style.padding?.top} disabled={disabled} onChange={(n) => setPad({ top: n })} />
+            <NumField label="Right" value={style.padding?.right} disabled={disabled} onChange={(n) => setPad({ right: n })} />
+            <NumField label="Bottom" value={style.padding?.bottom} disabled={disabled} onChange={(n) => setPad({ bottom: n })} />
+            <NumField label="Left" value={style.padding?.left} disabled={disabled} onChange={(n) => setPad({ left: n })} />
+          </div>
+
+          {showFont && (
+            <div className="space-y-1.5 border-t pt-2">
+              <div className="grid grid-cols-2 gap-1.5">
+                <SegmentedPicker
+                  label="Font"
+                  value={style.font?.family ?? "body"}
+                  disabled={disabled}
+                  options={[
+                    { value: "body", label: "Body" },
+                    { value: "display", label: "Display" },
+                  ]}
+                  onChange={(v) => setFont({ family: v as BlockFontFamily })}
+                />
+                <ColorField
+                  label="Text color"
+                  value={style.font?.color ?? ""}
+                  disabled={disabled}
+                  onChange={(v) => setFont({ color: v || undefined })}
+                />
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                <NumField label="Size px" value={style.font?.sizePx} disabled={disabled} onChange={(n) => setFont({ sizePx: n })} />
+                <NumField label="Line ht" value={style.font?.lineHeight} step="0.1" disabled={disabled} onChange={(n) => setFont({ lineHeight: n })} />
+                <label className="block">
+                  <span className="block text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-0.5">Weight</span>
+                  <select
+                    value={style.font?.weight ?? ""}
+                    onChange={(e) =>
+                      setFont({
+                        weight: e.target.value
+                          ? (Number(e.target.value) as BlockFontWeight)
+                          : undefined,
+                      })
+                    }
+                    disabled={disabled}
+                    className="w-full rounded border bg-background px-1 py-1 text-xs"
+                  >
+                    <option value="">Default</option>
+                    <option value="400">Regular</option>
+                    <option value="500">Medium</option>
+                    <option value="600">Semibold</option>
+                    <option value="700">Bold</option>
+                    <option value="800">Black</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ColorField({
+  label,
+  value,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  disabled?: boolean;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="block text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-0.5">
+        {label}
+      </span>
+      <div className="flex items-center gap-1">
+        <input
+          type="color"
+          value={/^#[0-9a-f]{6}$/i.test(value) ? value : "#000000"}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+          className="h-7 w-8 rounded border bg-background p-0.5 disabled:opacity-30"
+          aria-label={`${label} picker`}
+        />
+        <Input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+          placeholder="brand"
+          className="h-7 text-xs flex-1"
+        />
+      </div>
+    </label>
+  );
+}
+
+function NumField({
+  label,
+  value,
+  disabled,
+  step,
+  onChange,
+}: {
+  label: string;
+  value: number | undefined;
+  disabled?: boolean;
+  step?: string;
+  onChange: (n: number | undefined) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="block text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-0.5">
+        {label}
+      </span>
+      <input
+        type="number"
+        value={value ?? ""}
+        step={step}
+        onChange={(e) =>
+          onChange(e.target.value === "" ? undefined : Number(e.target.value))
+        }
+        disabled={disabled}
+        className="w-full rounded border bg-background px-1.5 py-1 text-xs disabled:opacity-30"
+      />
+    </label>
   );
 }
 
