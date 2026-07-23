@@ -149,6 +149,12 @@ function blockSummary(block: CampaignBlock): string {
       return `[image-text${block.layout ? `, layout=${block.layout}` : ""}] heading="${block.heading ?? ""}", text="${block.text}"`;
     case "cta":
       return `[cta] heading="${block.heading}", text="${block.text}", button="${block.buttonText}" → ${block.buttonUrl}`;
+    case "columns":
+      return `[columns] ${block.cells.length} cells`;
+    case "social":
+      return `[social] ${block.links?.length ?? "brand"} links`;
+    default:
+      return "[block]";
   }
 }
 

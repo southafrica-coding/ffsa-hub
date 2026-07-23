@@ -34,9 +34,11 @@ import {
   type BlockAlign,
   type BlockFontFamily,
   type BlockFontWeight,
+  type ColumnCell,
   newBlockId,
   renderCampaignHtml,
 } from "@/lib/campaigns/blocks";
+import type { SocialLink } from "@/services/brand";
 import {
   CAMPAIGN_TEMPLATES,
   getCampaignTemplate,
@@ -74,6 +76,12 @@ const ADD_GROUPS: {
     ],
   },
   {
+    group: "Layout+",
+    items: [
+      { type: "columns", label: "Columns" },
+    ],
+  },
+  {
     group: "Media",
     items: [
       { type: "image", label: "Image" },
@@ -85,6 +93,7 @@ const ADD_GROUPS: {
     items: [
       { type: "button", label: "Button" },
       { type: "cta", label: "CTA card" },
+      { type: "social", label: "Social links" },
     ],
   },
 ];
@@ -251,6 +260,18 @@ export function CampaignComposer({
           buttonText: "Get involved",
           buttonUrl: "https://",
         };
+      case "columns":
+        return {
+          id: newBlockId(),
+          type,
+          cells: [
+            { heading: "", text: "First column — a short paragraph." },
+            { heading: "", text: "Second column — another short paragraph." },
+          ],
+        };
+      case "social":
+        // No links => renderer falls back to the brand kit's social links.
+        return { id: newBlockId(), type };
     }
   }
   function addBlock(type: CampaignBlockType) {
@@ -1007,6 +1028,12 @@ function blockSnippet(block: CampaignBlock): string {
       return block.heading || blockText(block.text);
     case "cta":
       return block.heading;
+    case "columns":
+      return `${block.cells.length} columns`;
+    case "social":
+      return block.links && block.links.length
+        ? `${block.links.length} social links`
+        : "Social links (from brand)";
     default:
       return "";
   }
@@ -1339,8 +1366,149 @@ function BlockEditor({
           </div>
         </>
       )}
+      {block.type === "columns" && (
+        <ColumnsFields block={block} disabled={disabled} onChange={onChange} />
+      )}
+      {block.type === "social" && (
+        <SocialFields block={block} disabled={disabled} onChange={onChange} />
+      )}
 
       <BlockStylePanel block={block} disabled={disabled} onChange={onChange} />
+    </div>
+  );
+}
+
+const SOCIAL_PLATFORMS: SocialLink["platform"][] = [
+  "instagram",
+  "facebook",
+  "youtube",
+  "x",
+  "tiktok",
+  "web",
+];
+
+function ColumnsFields({
+  block,
+  disabled,
+  onChange,
+}: {
+  block: Extract<CampaignBlock, { type: "columns" }>;
+  disabled: boolean;
+  onChange: (patch: Partial<CampaignBlock>) => void;
+}) {
+  const cells = block.cells;
+  const setCell = (i: number, patch: Partial<ColumnCell>) => {
+    const next = cells.map((c, idx) => (idx === i ? { ...c, ...patch } : c));
+    onChange({ cells: next } as Partial<CampaignBlock>);
+  };
+  const setCount = (n: 2 | 3) => {
+    let next = cells.slice(0, n);
+    while (next.length < n) next = [...next, { heading: "", text: "" }];
+    onChange({ cells: next } as Partial<CampaignBlock>);
+  };
+
+  return (
+    <div className="space-y-2">
+      <SegmentedPicker
+        label="Columns"
+        value={String(Math.min(cells.length, 3)) as "2" | "3"}
+        disabled={disabled}
+        options={[
+          { value: "2", label: "2" },
+          { value: "3", label: "3" },
+        ]}
+        onChange={(v) => setCount(Number(v) as 2 | 3)}
+      />
+      {cells.slice(0, 3).map((c, i) => (
+        <div key={i} className="rounded border p-2 space-y-1.5">
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+            Column {i + 1}
+          </p>
+          <Input
+            value={c.heading ?? ""}
+            onChange={(e) => setCell(i, { heading: e.target.value || undefined })}
+            disabled={disabled}
+            placeholder="Heading (optional)"
+            className="text-xs"
+          />
+          <textarea
+            value={c.text}
+            onChange={(e) => setCell(i, { text: e.target.value })}
+            disabled={disabled}
+            placeholder="Column text — supports basic paragraphs."
+            rows={3}
+            className="w-full rounded border bg-background px-2 py-1.5 text-sm resize-none"
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SocialFields({
+  block,
+  disabled,
+  onChange,
+}: {
+  block: Extract<CampaignBlock, { type: "social" }>;
+  disabled: boolean;
+  onChange: (patch: Partial<CampaignBlock>) => void;
+}) {
+  const links = block.links ?? [];
+  const usingBrand = links.length === 0;
+
+  const setLinks = (next: SocialLink[]) =>
+    onChange({ links: next.length ? next : undefined } as Partial<CampaignBlock>);
+  const addLink = () =>
+    setLinks([...links, { platform: "instagram", url: "https://" }]);
+  const setLink = (i: number, patch: Partial<SocialLink>) =>
+    setLinks(links.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
+  const removeLink = (i: number) => setLinks(links.filter((_, idx) => idx !== i));
+
+  return (
+    <div className="space-y-2">
+      {usingBrand && (
+        <p className="text-xs text-muted-foreground italic">
+          Using your brand kit’s social links. Add links below to override.
+        </p>
+      )}
+      {links.map((l, i) => (
+        <div key={i} className="flex items-center gap-1.5">
+          <select
+            value={l.platform}
+            onChange={(e) =>
+              setLink(i, { platform: e.target.value as SocialLink["platform"] })
+            }
+            disabled={disabled}
+            className="rounded border bg-background px-1.5 py-1 text-xs"
+          >
+            {SOCIAL_PLATFORMS.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+          <Input
+            value={l.url}
+            onChange={(e) => setLink(i, { url: e.target.value })}
+            disabled={disabled}
+            placeholder="https://…"
+            className="h-8 text-xs flex-1"
+          />
+          <Mini onClick={() => removeLink(i)} label="✕" danger />
+        </div>
+      ))}
+      {!disabled && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={addLink}
+          className="h-7 gap-1 text-xs"
+        >
+          <Plus className="h-3 w-3" />
+          Add link
+        </Button>
+      )}
     </div>
   );
 }
@@ -1355,6 +1523,8 @@ const STYLEABLE_BLOCKS: ReadonlySet<CampaignBlockType> = new Set([
   "quote",
   "image-text",
   "cta",
+  "columns",
+  "social",
 ]);
 // Blocks whose main text supports font overrides.
 const FONT_BLOCKS: ReadonlySet<CampaignBlockType> = new Set(["heading", "text"]);
@@ -2009,5 +2179,13 @@ function blockOneLine(b: CampaignBlock): string {
       return `${b.heading ? b.heading + " · " : ""}${(b.text || "").replace(/<[^>]+>/g, "").slice(0, 80)}`;
     case "cta":
       return `${b.heading} → ${b.buttonText}`;
+    case "columns":
+      return `${b.cells.length}-column layout`;
+    case "social":
+      return b.links && b.links.length
+        ? `${b.links.length} social links`
+        : "Social links (from brand)";
+    default:
+      return "";
   }
 }

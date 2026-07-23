@@ -104,7 +104,23 @@ export type CampaignBlock =
       buttonText: string;
       buttonUrl: string;
       blockStyle?: BlockStyle;
+    }
+  // Multi-column text (2 or 3 side-by-side cells; stacks on mobile).
+  | {
+      id: string;
+      type: "columns";
+      cells: ColumnCell[];
+      blockStyle?: BlockStyle;
+    }
+  // Social links row (falls back to the brand kit's social_links).
+  | {
+      id: string;
+      type: "social";
+      links?: SocialLink[];
+      blockStyle?: BlockStyle;
     };
+
+export type ColumnCell = { heading?: string; text: string };
 
 export type CampaignBlockType = CampaignBlock["type"];
 
@@ -451,18 +467,17 @@ function imageTextHtml(
       `<a style="color:${brand.accent_color};text-decoration:underline;"$1`
     )}</div>`;
 
-  const imageCell = `<td valign="middle" style="width:46%;padding:0;" width="46%">${img}</td>`;
-  const textCell = `<td valign="middle" style="width:46%;padding:0;" width="46%">${heading}${text}</td>`;
-  const gap = `<td style="width:8%;" width="8%">&nbsp;</td>`;
+  const imageCell = `<td valign="middle" class="ff-stack" style="width:46%;padding:0;" width="46%">${img}</td>`;
+  const textCell = `<td valign="middle" class="ff-stack" style="width:46%;padding:0;" width="46%">${heading}${text}</td>`;
+  const gap = `<td class="ff-gap" style="width:8%;" width="8%">&nbsp;</td>`;
 
   const cells =
     block.layout === "image-right"
       ? `${textCell}${gap}${imageCell}`
       : `${imageCell}${gap}${textCell}`;
 
-  // Note: mobile clients without media-query support will see side-by-side
-  // at a narrow width. The 46% widths keep it usable. A future pass can add
-  // an inlined @media query that stacks below 480px in clients that honor it.
+  // Cells carry .ff-stack / .ff-gap so the head media query stacks them to
+  // full width on phones (clients that honor <style>); desktop stays 46/46.
   const td = `${padCss(block.blockStyle?.padding, "24px 0")}${tdExtraCss(block.blockStyle)}`;
   return `<tr><td style="${td}">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>${cells}</tr></table>
@@ -483,6 +498,59 @@ function ctaHtml(
 </td></tr>
 </table>
 </td></tr>`;
+}
+
+function columnsHtml(
+  block: Extract<CampaignBlock, { type: "columns" }>,
+  brand: EffectiveBrand
+): string {
+  const cells = block.cells.length ? block.cells : [{ text: "" }, { text: "" }];
+  const n = Math.min(cells.length, 3);
+  const cellPct = n === 3 ? 30 : 46;
+  const gapPct = n === 3 ? 5 : 8;
+
+  const renderCell = (c: ColumnCell): string => {
+    const heading = c.heading
+      ? `<div style="font-family:${displayStack(brand)};font-size:18px;line-height:1.25;font-weight:700;color:${brand.primary_color};margin-bottom:8px;">${escapeHtml(c.heading)}</div>`
+      : "";
+    const text = `<div style="font-family:${bodyStack(brand)};font-size:15px;line-height:1.55;color:${brand.text_color};">${sanitizeRichText(c.text)
+      .replace(
+        /<p(\s|>)/g,
+        `<p style="margin:0 0 12px;font-family:${bodyStack(brand)};font-size:15px;line-height:1.55;color:${brand.text_color};"$1`
+      )
+      .replace(
+        /<a(\s|>)/g,
+        `<a style="color:${brand.accent_color};text-decoration:underline;"$1`
+      )}</div>`;
+    return `<td valign="top" class="ff-stack" style="width:${cellPct}%;padding:0;" width="${cellPct}%">${heading}${text}</td>`;
+  };
+
+  const gap = `<td class="ff-gap" style="width:${gapPct}%;" width="${gapPct}%">&nbsp;</td>`;
+  const row = cells.slice(0, 3).map(renderCell).join(gap);
+  const td = `${padCss(block.blockStyle?.padding, "20px 0")}${tdExtraCss(block.blockStyle)}`;
+  return `<tr><td style="${td}">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>${row}</tr></table>
+</td></tr>`;
+}
+
+function socialHtml(
+  block: Extract<CampaignBlock, { type: "social" }>,
+  brand: EffectiveBrand
+): string {
+  const links = (block.links && block.links.length ? block.links : brand.social_links).filter(
+    (s) => /^https?:\/\//i.test(s.url)
+  );
+  if (!links.length) return "";
+  const pills = links
+    .map(
+      (s) =>
+        `<a href="${safeUrl(s.url)}" style="display:inline-block;margin:0 6px 8px 0;padding:7px 14px;border:1px solid ${brand.primary_color};border-radius:999px;color:${brand.primary_color};text-decoration:none;font-family:${bodyStack(brand)};font-size:12px;font-weight:600;letter-spacing:0.04em;">${escapeHtml(SOCIAL_LABELS[s.platform] ?? s.platform)}</a>`
+    )
+    .join("");
+  const align = block.blockStyle?.align ?? "center";
+  const bg = block.blockStyle?.bgColor ? `background:${block.blockStyle.bgColor};` : "";
+  const td = `${padCss(block.blockStyle?.padding, "20px 0")}text-align:${align};${bg}`;
+  return `<tr><td style="${td}">${pills}</td></tr>`;
 }
 
 function renderBlock(block: CampaignBlock, brand: EffectiveBrand): string {
@@ -537,6 +605,10 @@ function renderBlock(block: CampaignBlock, brand: EffectiveBrand): string {
       return imageTextHtml(block, brand);
     case "cta":
       return ctaHtml(block, brand);
+    case "columns":
+      return columnsHtml(block, brand);
+    case "social":
+      return socialHtml(block, brand);
     default:
       return "";
   }
@@ -591,23 +663,37 @@ export function renderCampaignHtml(
   const pageBg = brand.bg_color || "#F7F5F0";
 
   return `<!DOCTYPE html>
-<html><head>
+<html xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office"><head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+<!--[if mso]><noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript><![endif]-->
 ${fontHref ? `<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="${fontHref}" rel="stylesheet">` : ""}
 <title>${escapeHtml(brand.org_name)}</title>
+<style>
+  /* Stack multi-column layouts (columns / image-text) on phones. */
+  @media only screen and (max-width:600px){
+    .ff-stack{display:block!important;width:100%!important;max-width:100%!important;}
+    .ff-gap{display:none!important;width:0!important;height:8px!important;}
+    .ff-container{width:100%!important;}
+    .ff-pad{padding-left:24px!important;padding-right:24px!important;}
+  }
+  a{text-decoration:none;}
+</style>
 </head>
 <body style="margin:0;padding:0;background:${pageBg};font-family:${bodyStack(brand)};-webkit-font-smoothing:antialiased;">
 ${preview}
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${pageBg};padding:40px 0;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${pageBg}" style="background:${pageBg};padding:40px 0;">
 <tr><td align="center">
-<table role="presentation" width="660" cellpadding="0" cellspacing="0" style="max-width:660px;width:100%;background:#ffffff;border-radius:6px;">
+<!--[if mso]><table role="presentation" width="660" align="center" cellpadding="0" cellspacing="0"><tr><td><![endif]-->
+<table role="presentation" width="660" cellpadding="0" cellspacing="0" class="ff-container" bgcolor="#ffffff" style="max-width:660px;width:100%;background:#ffffff;border-radius:6px;">
 ${headerHtml(brand)}
-<tr><td style="padding:20px 56px 40px;">
+<tr><td class="ff-pad" style="padding:20px 56px 40px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rows}</table>
 </td></tr>
 ${brandFooterHtml(brand)}
 </table>
+<!--[if mso]></td></tr></table><![endif]-->
 ${opts.footerHtml ?? ""}
 </td></tr>
 </table>
@@ -703,6 +789,27 @@ export function renderCampaignText(
         lines.push(block.text);
         lines.push(`→ ${block.buttonText}: ${block.buttonUrl}`, "");
         break;
+      case "columns":
+        for (const c of block.cells) {
+          if (c.heading) lines.push(c.heading);
+          lines.push(htmlToPlainText(c.text), "");
+        }
+        break;
+      case "social": {
+        const links = (block.links && block.links.length
+          ? block.links
+          : brand.social_links
+        ).filter((s) => /^https?:\/\//i.test(s.url));
+        if (links.length) {
+          lines.push(
+            links
+              .map((s) => `${SOCIAL_LABELS[s.platform] ?? s.platform}: ${s.url}`)
+              .join("  |  "),
+            ""
+          );
+        }
+        break;
+      }
     }
   }
 
