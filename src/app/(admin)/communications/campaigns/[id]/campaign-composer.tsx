@@ -34,7 +34,10 @@ import {
   type BlockFontFamily,
   type BlockFontWeight,
   type ColumnCell,
+  type SectionLayout,
+  type EmailDesign,
   COLUMN_ALLOWED_TYPES,
+  sectionColumnWeights,
   newBlockId,
 } from "@/lib/campaigns/blocks";
 import type { SocialLink } from "@/services/brand";
@@ -45,6 +48,8 @@ import {
   removeById,
   moveBlock as treeMoveBlock,
   updateBlockById,
+  newSection,
+  newColumn,
   type ContainerId,
 } from "@/lib/campaigns/tree";
 import {
@@ -92,12 +97,6 @@ const ADD_GROUPS: {
     ],
   },
   {
-    group: "Layout+",
-    items: [
-      { type: "columns", label: "Columns" },
-    ],
-  },
-  {
     group: "Media",
     items: [
       { type: "image", label: "Image" },
@@ -112,6 +111,15 @@ const ADD_GROUPS: {
       { type: "social", label: "Social links" },
     ],
   },
+];
+
+// Column-section layout presets for the "Sections" palette tab.
+const SECTION_PRESETS: { layout: SectionLayout; label: string }[] = [
+  { layout: "1-1", label: "2 columns" },
+  { layout: "1-1-1", label: "3 columns" },
+  { layout: "1-1-1-1", label: "4 columns" },
+  { layout: "1-2", label: "1 : 2" },
+  { layout: "2-1", label: "2 : 1" },
 ];
 
 const STATUS_CLASS: Record<string, string> = {
@@ -188,6 +196,8 @@ export function CampaignComposer({
   const [testState, setTestState] = useState<"idle" | "sending" | "done">("idle");
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
+  const [paletteTab, setPaletteTab] = useState<"modules" | "sections">("modules");
+  const [designOpen, setDesignOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [customTemplates, setCustomTemplates] = useState<CustomTemplate[]>([]);
 
@@ -265,16 +275,19 @@ export function CampaignComposer({
     const target = dropTarget(over);
     if (!target) return;
     const data = active.data.current as
-      | { kind?: string; blockType?: CampaignBlockType }
+      | { kind?: string; blockType?: CampaignBlockType; layout?: SectionLayout }
       | undefined;
 
     if (data?.kind === "palette" && data.blockType) {
-      const blk = newBlock(data.blockType);
-      // Only leaf blocks may go inside a column.
+      const blk =
+        data.blockType === "section"
+          ? newSection(data.layout ?? "1-1")
+          : newBlock(data.blockType);
+      // Only leaf blocks may go inside a column (sections never nest).
       if (target.container !== "root" && !COLUMN_ALLOWED_TYPES.has(blk.type))
         return;
       setBody((b) => insertAt(b, target.container, target.index, blk));
-      setSelectedBlockId(blk.id);
+      selectBlock(blk.id);
       return;
     }
     // Reorder an existing block (tree.moveBlock guards bad targets + nesting).
@@ -359,10 +372,36 @@ export function CampaignComposer({
         };
     }
   }
+  // Select a block and leave the global Design panel.
+  function selectBlock(id: string | null) {
+    setSelectedBlockId(id);
+    if (id) setDesignOpen(false);
+  }
   function addBlock(type: CampaignBlockType) {
     const blk = newBlock(type);
     setBody((b) => insertAt(b, "root", b.blocks.length, blk));
-    setSelectedBlockId(blk.id);
+    selectBlock(blk.id);
+  }
+  function addSection(layout: SectionLayout) {
+    const sec = newSection(layout);
+    setBody((b) => insertAt(b, "root", b.blocks.length, sec));
+    selectBlock(sec.id);
+  }
+  // Change a section's layout, reconciling the column count (keep existing
+  // column content where possible; add empty / drop extra columns).
+  function setSectionLayout(id: string, layout: SectionLayout) {
+    const l = findLocation(body, id);
+    if (!l) return;
+    const sec = getContainer(body, l.container)[l.index];
+    if (!sec || sec.type !== "section") return;
+    const want = sectionColumnWeights(layout).length;
+    const cols = [...sec.columns];
+    while (cols.length < want) cols.push(newColumn());
+    if (cols.length > want) cols.length = want;
+    updateBlock(id, { layout, columns: cols });
+  }
+  function updateDesign(patch: Partial<EmailDesign>) {
+    setBody((b) => ({ ...b, design: { ...b.design, ...patch } }));
   }
   function updateBlock(id: string, patch: Partial<CampaignBlock>) {
     setBody((b) => updateBlockById(b, id, patch));
@@ -477,6 +516,15 @@ export function CampaignComposer({
   async function requestLayoutSuggestion() {
     if (body.blocks.length === 0) {
       setErr("Add at least one content block before asking for a suggestion.");
+      return;
+    }
+    // The AI rewrite is section-unaware and would flatten column layouts.
+    if (
+      body.blocks.some((b) => b.type === "section") &&
+      !confirm(
+        "AI layout rebuilds the blocks and will remove your column sections. Continue?"
+      )
+    ) {
       return;
     }
     setErr(null);
@@ -906,36 +954,78 @@ export function CampaignComposer({
         <div className="grid gap-4 lg:grid-cols-[168px_minmax(0,1fr)_340px]">
           {/* Palette */}
           <Card className="self-start lg:sticky lg:top-4">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Add block</CardTitle>
+            <CardHeader className="pb-2 space-y-2">
+              <div className="flex items-center justify-between gap-1">
+                <SegmentedPicker
+                  value={paletteTab}
+                  options={[
+                    { value: "modules", label: "Modules" },
+                    { value: "sections", label: "Sections" },
+                  ]}
+                  onChange={(v) => setPaletteTab(v as "modules" | "sections")}
+                />
+              </div>
+              <Button
+                variant={designOpen ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  setDesignOpen(true);
+                  setSelectedBlockId(null);
+                }}
+                className="h-7 w-full gap-1 text-xs"
+                title="Edit the whole email's background, fonts and colors"
+              >
+                🎨 Design
+              </Button>
             </CardHeader>
             <CardContent className="space-y-3">
               {sent ? (
                 <p className="text-xs text-muted-foreground italic">
                   Sent emails can’t be edited.
                 </p>
-              ) : (
-                ADD_GROUPS.map((g) => (
-                  <div key={g.group} className="space-y-1">
-                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-                      {g.group}
-                    </p>
-                    <div className="flex flex-col gap-1">
-                      {g.items.map((t) => (
-                        <PaletteItem
-                          key={t.type}
-                          type={t.type}
-                          label={t.label}
-                          onClick={() => addBlock(t.type)}
-                        />
-                      ))}
+              ) : paletteTab === "modules" ? (
+                <>
+                  {ADD_GROUPS.map((g) => (
+                    <div key={g.group} className="space-y-1">
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                        {g.group}
+                      </p>
+                      <div className="flex flex-col gap-1">
+                        {g.items.map((t) => (
+                          <PaletteItem
+                            key={t.type}
+                            type={t.type}
+                            label={t.label}
+                            onClick={() => addBlock(t.type)}
+                          />
+                        ))}
+                      </div>
                     </div>
+                  ))}
+                  <p className="pt-1 text-[10px] text-muted-foreground">
+                    Click to add, or drag onto the email.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                    Column layouts
+                  </p>
+                  <div className="flex flex-col gap-1">
+                    {SECTION_PRESETS.map((p) => (
+                      <SectionPaletteItem
+                        key={p.layout}
+                        layout={p.layout}
+                        label={p.label}
+                        onClick={() => addSection(p.layout)}
+                      />
+                    ))}
                   </div>
-                ))
+                  <p className="pt-1 text-[10px] text-muted-foreground">
+                    Drop content into each column after adding.
+                  </p>
+                </>
               )}
-              <p className="pt-1 text-[10px] text-muted-foreground">
-                Click to add, or drag onto the email.
-              </p>
             </CardContent>
           </Card>
 
@@ -959,7 +1049,7 @@ export function CampaignComposer({
                 device={device}
                 selectedId={selectedBlockId}
                 dragActive={activeDrag !== null}
-                onSelect={(id) => setSelectedBlockId(id)}
+                onSelect={(id) => selectBlock(id)}
                 onRemove={removeBlock}
                 onDuplicate={duplicateBlock}
               />
@@ -970,25 +1060,56 @@ export function CampaignComposer({
           <Card className="self-start lg:sticky lg:top-4">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">
-                {selectedBlock ? `Edit ${selectedBlock.type}` : "Inspector"}
+                {designOpen
+                  ? "Template design"
+                  : selectedBlock
+                    ? `Edit ${selectedBlock.type}`
+                    : "Inspector"}
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {selectedBlock ? (
-                <BlockEditor
-                  block={selectedBlock}
+              {designOpen ? (
+                <DesignPanel
+                  design={body.design}
                   disabled={sent}
-                  campaignId={campaign.id}
-                  onChange={(patch) => updateBlock(selectedBlock.id, patch)}
-                  onRemove={() => removeBlock(selectedBlock.id)}
-                  onUp={() => nudgeBlock(selectedBlock.id, -1)}
-                  onDown={() => nudgeBlock(selectedBlock.id, 1)}
-                  canUp={selectedIdx > 0}
-                  canDown={selectedIdx < selectedContainerLen - 1}
+                  onChange={updateDesign}
+                  onClose={() => setDesignOpen(false)}
                 />
+              ) : selectedBlock ? (
+                <div className="space-y-2">
+                  {selectedBlock.type === "section" && (
+                    <SegmentedPicker
+                      label="Layout"
+                      value={selectedBlock.layout}
+                      disabled={sent}
+                      options={[
+                        { value: "1-1", label: "2" },
+                        { value: "1-1-1", label: "3" },
+                        { value: "1-1-1-1", label: "4" },
+                        { value: "1-2", label: "1:2" },
+                        { value: "2-1", label: "2:1" },
+                      ]}
+                      onChange={(v) =>
+                        setSectionLayout(selectedBlock.id, v as SectionLayout)
+                      }
+                    />
+                  )}
+                  <BlockEditor
+                    block={selectedBlock}
+                    disabled={sent}
+                    campaignId={campaign.id}
+                    onChange={(patch) => updateBlock(selectedBlock.id, patch)}
+                    onRemove={() => removeBlock(selectedBlock.id)}
+                    onUp={() => nudgeBlock(selectedBlock.id, -1)}
+                    onDown={() => nudgeBlock(selectedBlock.id, 1)}
+                    canUp={selectedIdx > 0}
+                    canDown={selectedIdx < selectedContainerLen - 1}
+                  />
+                </div>
               ) : (
                 <p className="text-xs text-muted-foreground italic">
-                  Select a block on the canvas to edit its content and style.
+                  Select a block on the canvas, or open{" "}
+                  <span className="font-medium">Design</span> for the whole email.
                 </p>
               )}
             </CardContent>
@@ -1247,6 +1368,215 @@ function PaletteItem({
       <Plus className="h-3 w-3" />
       {label}
     </button>
+  );
+}
+
+// Draggable section-layout preset. Shows a mini column diagram.
+function SectionPaletteItem({
+  layout,
+  label,
+  onClick,
+}: {
+  layout: SectionLayout;
+  label: string;
+  onClick: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `palette:section:${layout}`,
+    data: { kind: "palette", blockType: "section", layout },
+  });
+  const weights = sectionColumnWeights(layout);
+  const total = weights.reduce((a, b) => a + b, 0) || 1;
+  return (
+    <button
+      ref={setNodeRef}
+      type="button"
+      onClick={onClick}
+      {...attributes}
+      {...listeners}
+      className={`flex h-9 items-center gap-2 rounded border px-2 text-left text-xs hover:bg-muted cursor-grab active:cursor-grabbing ${
+        isDragging ? "opacity-50" : ""
+      }`}
+    >
+      <span className="flex h-4 w-10 gap-0.5">
+        {weights.map((w, i) => (
+          <span
+            key={i}
+            className="rounded-sm bg-muted-foreground/30"
+            style={{ flex: `${w / total} 1 0%` }}
+          />
+        ))}
+      </span>
+      {label}
+    </button>
+  );
+}
+
+// Global per-email design overrides (Template design). Writes body.design.
+function DesignPanel({
+  design,
+  disabled,
+  onChange,
+  onClose,
+}: {
+  design: EmailDesign | undefined;
+  disabled: boolean;
+  onChange: (patch: Partial<EmailDesign>) => void;
+  onClose: () => void;
+}) {
+  const d = design ?? {};
+  const setText = (patch: Partial<NonNullable<EmailDesign["text"]>>) =>
+    onChange({ text: { ...d.text, ...patch } });
+  const setHeading = (patch: Partial<NonNullable<EmailDesign["heading"]>>) =>
+    onChange({ heading: { ...d.heading, ...patch } });
+
+  return (
+    <div className="space-y-3">
+      <p className="text-[11px] text-muted-foreground">
+        Applies to the whole email, on top of your Brand Kit. Leave a field blank
+        to keep the brand default.
+      </p>
+
+      <Section title="Background & card">
+        <div className="grid grid-cols-2 gap-1.5">
+          <ColorField
+            label="Page bg"
+            value={d.pageBgColor ?? ""}
+            disabled={disabled}
+            onChange={(v) => onChange({ pageBgColor: v || undefined })}
+          />
+          <ColorField
+            label="Card bg"
+            value={d.contentBgColor ?? ""}
+            disabled={disabled}
+            onChange={(v) => onChange({ contentBgColor: v || undefined })}
+          />
+        </div>
+        <div className="grid grid-cols-3 gap-1.5">
+          <NumField
+            label="Width px"
+            value={d.contentWidthPx}
+            disabled={disabled}
+            onChange={(n) => onChange({ contentWidthPx: n })}
+          />
+          <NumField
+            label="Border"
+            value={d.borderWidth}
+            disabled={disabled}
+            onChange={(n) => onChange({ borderWidth: n })}
+          />
+          <NumField
+            label="Radius"
+            value={d.borderRadiusPx}
+            disabled={disabled}
+            onChange={(n) => onChange({ borderRadiusPx: n })}
+          />
+        </div>
+        <ColorField
+          label="Border color"
+          value={d.borderColor ?? ""}
+          disabled={disabled}
+          onChange={(v) => onChange({ borderColor: v || undefined })}
+        />
+      </Section>
+
+      <Section title="Body text">
+        <div className="grid grid-cols-2 gap-1.5">
+          <SegmentedPicker
+            label="Font"
+            value={d.text?.fontFamily ?? "body"}
+            disabled={disabled}
+            options={[
+              { value: "body", label: "Body" },
+              { value: "display", label: "Display" },
+            ]}
+            onChange={(v) => setText({ fontFamily: v as BlockFontFamily })}
+          />
+          <ColorField
+            label="Text color"
+            value={d.text?.color ?? ""}
+            disabled={disabled}
+            onChange={(v) => setText({ color: v || undefined })}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-1.5">
+          <NumField
+            label="Size px"
+            value={d.text?.sizePx}
+            disabled={disabled}
+            onChange={(n) => setText({ sizePx: n })}
+          />
+          <NumField
+            label="Line ht"
+            value={d.text?.lineHeight}
+            step="0.1"
+            disabled={disabled}
+            onChange={(n) => setText({ lineHeight: n })}
+          />
+        </div>
+      </Section>
+
+      <Section title="Headings & links">
+        <div className="grid grid-cols-2 gap-1.5">
+          <SegmentedPicker
+            label="Font"
+            value={d.heading?.fontFamily ?? "display"}
+            disabled={disabled}
+            options={[
+              { value: "display", label: "Display" },
+              { value: "body", label: "Body" },
+            ]}
+            onChange={(v) => setHeading({ fontFamily: v as BlockFontFamily })}
+          />
+          <ColorField
+            label="Heading color"
+            value={d.heading?.color ?? ""}
+            disabled={disabled}
+            onChange={(v) => setHeading({ color: v || undefined })}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-1.5">
+          <ColorField
+            label="Link color"
+            value={d.linkColor ?? ""}
+            disabled={disabled}
+            onChange={(v) => onChange({ linkColor: v || undefined })}
+          />
+          <ColorField
+            label="Button color"
+            value={d.buttonColor ?? ""}
+            disabled={disabled}
+            onChange={(v) => onChange({ buttonColor: v || undefined })}
+          />
+        </div>
+      </Section>
+
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={onClose}
+        className="h-7 w-full text-xs"
+      >
+        Done
+      </Button>
+    </div>
+  );
+}
+
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5 rounded border p-2">
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+        {title}
+      </p>
+      {children}
+    </div>
   );
 }
 
@@ -1660,6 +1990,7 @@ const STYLEABLE_BLOCKS: ReadonlySet<CampaignBlockType> = new Set([
   "cta",
   "columns",
   "social",
+  "section",
 ]);
 // Blocks whose main text supports font overrides.
 const FONT_BLOCKS: ReadonlySet<CampaignBlockType> = new Set(["heading", "text"]);
