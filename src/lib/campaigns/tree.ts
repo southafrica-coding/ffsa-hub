@@ -109,6 +109,17 @@ export function removeById(body: CampaignBody, blockId: string): CampaignBody {
   );
 }
 
+/** True if a container id refers to root or an existing section column. */
+export function containerExists(
+  body: CampaignBody,
+  container: ContainerId
+): boolean {
+  if (container === ROOT) return true;
+  return body.blocks.some(
+    (b) => isSection(b) && b.columns.some((c) => c.id === container)
+  );
+}
+
 /** Move a block to a destination container+index (used by drag reorder). */
 export function moveBlock(
   body: CampaignBody,
@@ -120,6 +131,11 @@ export function moveBlock(
   if (!loc) return body;
   const block = getContainer(body, loc.container)[loc.index];
   if (!block) return body;
+  // Guard: never lose a block to a non-existent target, and never nest a
+  // section inside a column (keeps the tree at most 2 deep).
+  if (!containerExists(body, destContainer)) return body;
+  if (destContainer !== ROOT && block.type === "section") return body;
+
   let next = removeById(body, blockId);
   // If removing from the same container shifts indices, adjust.
   let idx = destIndex;
@@ -138,17 +154,19 @@ export function updateBlockById(
     b.id === blockId ? ({ ...b, ...patch } as CampaignBlock) : b;
   return {
     ...body,
-    blocks: body.blocks.map((b) =>
-      isSection(b)
-        ? {
-            ...apply(b),
-            columns: (b as SectionBlock).columns.map((c) => ({
-              ...c,
-              blocks: c.blocks.map(apply),
-            })),
-          }
-        : apply(b)
-    ),
+    blocks: body.blocks.map((b) => {
+      // Target is this block (section or leaf) — merge the patch verbatim
+      // (including a `columns`/`layout` patch on a section).
+      if (b.id === blockId) return { ...b, ...patch } as CampaignBlock;
+      // Otherwise recurse into a section's columns to update nested children.
+      if (isSection(b)) {
+        return {
+          ...b,
+          columns: b.columns.map((c) => ({ ...c, blocks: c.blocks.map(apply) })),
+        };
+      }
+      return b;
+    }),
   };
 }
 

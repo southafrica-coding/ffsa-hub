@@ -428,8 +428,9 @@ function fontCss(
 // Header + brand footer
 // ────────────────────────────────────────────────────────────
 
-function headerHtml(brand: EffectiveBrand): string {
-  const band = `<tr><td style="height:4px;background:${brand.primary_color};border-radius:6px 6px 0 0;"></td></tr>`;
+function headerHtml(brand: Theme): string {
+  const r = brand.cardBorderRadius;
+  const band = `<tr><td style="height:4px;background:${brand.primary_color};border-radius:${r}px ${r}px 0 0;"></td></tr>`;
   if (!brand.logo_url) return band;
   return `${band}<tr><td style="padding:36px 56px 8px;text-align:left;">
 <img src="${safeUrl(brand.logo_url)}" alt="${escapeHtml(brand.org_name)}" style="display:inline-block;max-height:48px;max-width:200px;height:auto;border:0;"/>
@@ -763,34 +764,41 @@ function sectionHtml(
   const cols = block.columns ?? [];
   if (cols.length === 0) return "";
   const weights = sectionColumnWeights(block.layout);
-  const total = weights.reduce((a, b) => a + b, 0) || 1;
-  const gapPct = cols.length >= 4 ? 3 : cols.length === 3 ? 4 : 6;
+  // Align weights to the actual column count — guards against layout/columns
+  // drift (e.g. AI-generated or hand-edited bodies) that would otherwise emit
+  // NaN widths.
+  const colWeights = cols.map((_, i) => weights[i] ?? 1);
+  const total = colWeights.reduce((a, b) => a + b, 0) || 1;
+  const gapPct =
+    cols.length >= 4 ? 3 : cols.length === 3 ? 4 : cols.length === 2 ? 6 : 0;
   const usablePct = 100 - gapPct * (cols.length - 1);
-  const innerContentPx = brand.contentWidth - 112; // 56px card padding each side
+  // Integer percentages that sum EXACTLY to usablePct (remainder to the last
+  // column), so total width is precisely 100% — no 101% overflow.
+  const pcts = colWeights.map((w) =>
+    Math.max(1, Math.floor((w / total) * usablePct))
+  );
+  const used = pcts.reduce((a, b) => a + b, 0);
+  pcts[pcts.length - 1] += Math.max(0, usablePct - used);
 
+  // Real percentage-width <td>s sit side-by-side in Outlook natively and stack
+  // on mobile via the .ff-stack media query — no MSO ghost markup needed.
   const cells = cols.map((col, i) => {
-    const pct = Math.max(1, Math.round((weights[i] / total) * usablePct));
-    const msoPx = Math.round(((weights[i] / total) * innerContentPx));
     const inner =
       (col.blocks ?? [])
         .map((child) => renderBlock(child, brand, { nested: true }))
         .join("") || `<tr><td style="height:1px;line-height:0;">&nbsp;</td></tr>`;
     const gap =
       i < cols.length - 1
-        ? `<td class="ff-gap" width="${gapPct}%" style="width:${gapPct}%;">&nbsp;</td>`
+        ? `<td class="ff-gap" width="${gapPct}%" style="width:${gapPct}%;font-size:0;line-height:0;">&nbsp;</td>`
         : "";
-    return `<!--[if mso]><td valign="top" width="${msoPx}"><![endif]-->
-<td class="ff-stack" valign="top" width="${pct}%" style="width:${pct}%;">
+    return `<td class="ff-stack" valign="top" width="${pcts[i]}%" style="width:${pcts[i]}%;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${inner}</table>
-</td>
-<!--[if mso]></td><![endif]-->${gap}`;
+</td>${gap}`;
   });
 
   const td = `${padCss(block.blockStyle?.padding, "12px 0")}${tdExtraCss(block.blockStyle)}`;
   return `<tr><td style="${td}">
-<!--[if mso]><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><![endif]-->
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>${cells.join("")}</tr></table>
-<!--[if mso]></tr></table><![endif]-->
 </td></tr>`;
 }
 

@@ -5,21 +5,20 @@ import { useRouter } from "next/navigation";
 import { Plus, X, GripVertical, Sparkles } from "lucide-react";
 import {
   DndContext,
+  DragOverlay,
   closestCenter,
   KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
+  useDraggable,
   type DragEndEvent,
+  type DragStartEvent,
 } from "@dnd-kit/core";
 import {
-  SortableContext,
-  arrayMove,
   sortableKeyboardCoordinates,
   useSortable,
-  verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,10 +34,19 @@ import {
   type BlockFontFamily,
   type BlockFontWeight,
   type ColumnCell,
+  COLUMN_ALLOWED_TYPES,
   newBlockId,
-  renderCampaignHtml,
 } from "@/lib/campaigns/blocks";
 import type { SocialLink } from "@/services/brand";
+import {
+  findLocation,
+  getContainer,
+  insertAt,
+  removeById,
+  moveBlock as treeMoveBlock,
+  updateBlockById,
+  type ContainerId,
+} from "@/lib/campaigns/tree";
 import {
   CAMPAIGN_TEMPLATES,
   getCampaignTemplate,
@@ -46,6 +54,7 @@ import {
 import type { EffectiveBrand } from "@/services/brand";
 import { RichText } from "@/components/communications/rich-text";
 import { ImageCropDialog } from "@/components/communications/image-crop-dialog";
+import { EmailCanvas } from "./canvas/EmailCanvas";
 
 type Label = { id: string; slug: string; name: string };
 type Identity = { id: string; display_name: string; from_email: string };
@@ -114,6 +123,24 @@ const STATUS_CLASS: Record<string, string> = {
   cancelled: "status-grey",
 };
 
+// Regenerate all block ids (including nested section columns + their children)
+// so an applied template's blocks are unique within this email.
+function reidBlocks(blocks: CampaignBlock[]): CampaignBlock[] {
+  return blocks.map((b) =>
+    b.type === "section"
+      ? {
+          ...b,
+          id: newBlockId(),
+          columns: b.columns.map((c) => ({
+            ...c,
+            id: newBlockId(),
+            blocks: reidBlocks(c.blocks),
+          })),
+        }
+      : { ...b, id: newBlockId() }
+  );
+}
+
 // Echo a scheduled time explicitly in South Africa Standard Time, regardless
 // of the admin's browser timezone, so a mis-set laptop clock is caught.
 function formatSast(when: Date): string {
@@ -161,7 +188,6 @@ export function CampaignComposer({
   const [testState, setTestState] = useState<"idle" | "sending" | "done">("idle");
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
-  const [canvasTab, setCanvasTab] = useState<"build" | "preview">("build");
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [customTemplates, setCustomTemplates] = useState<CustomTemplate[]>([]);
 
@@ -193,28 +219,67 @@ export function CampaignComposer({
     setLabelIds((ids) => ids.filter((x) => x !== id));
   }
 
-  const previewHtml = useMemo(
-    () => renderCampaignHtml(body, { previewText, brand }),
-    [body, previewText, brand]
-  );
-
-  const selectedIdx = body.blocks.findIndex((b) => b.id === selectedBlockId);
-  const selectedBlock = selectedIdx >= 0 ? body.blocks[selectedIdx] : null;
+  // Selection can live at the root or inside a section column.
+  const selLoc = selectedBlockId ? findLocation(body, selectedBlockId) : null;
+  const selectedContainer: ContainerId = selLoc?.container ?? "root";
+  const selectedIdx = selLoc?.index ?? -1;
+  const selectedBlock = selLoc
+    ? getContainer(body, selLoc.container)[selLoc.index] ?? null
+    : null;
+  const selectedContainerLen = getContainer(body, selectedContainer).length;
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
+  const [activeDrag, setActiveDrag] = useState<string | null>(null);
+
+  function handleDragStart(event: DragStartEvent) {
+    const d = event.active.data.current as
+      | { kind?: string; blockType?: string }
+      | undefined;
+    setActiveDrag(d?.kind === "palette" && d.blockType ? d.blockType : "block");
+  }
+
+  // Resolve the drop destination (container + insertion index) from `over`.
+  function dropTarget(
+    over: DragEndEvent["over"]
+  ): { container: ContainerId; index: number } | null {
+    if (!over) return null;
+    const d = over.data.current as
+      | { kind?: string; container?: ContainerId; index?: number }
+      | undefined;
+    if (d?.kind === "dropzone" && d.container != null && d.index != null) {
+      return { container: d.container, index: d.index };
+    }
+    // Dropped over a block → insert before it, within its container.
+    const l = findLocation(body, String(over.id));
+    if (l) return { container: l.container, index: l.index };
+    return null;
+  }
+
   function handleDragEnd(event: DragEndEvent) {
+    setActiveDrag(null);
     const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    setBody((b) => {
-      const oldIdx = b.blocks.findIndex((bl) => bl.id === active.id);
-      const newIdx = b.blocks.findIndex((bl) => bl.id === over.id);
-      if (oldIdx === -1 || newIdx === -1) return b;
-      return { ...b, blocks: arrayMove(b.blocks, oldIdx, newIdx) };
-    });
+    const target = dropTarget(over);
+    if (!target) return;
+    const data = active.data.current as
+      | { kind?: string; blockType?: CampaignBlockType }
+      | undefined;
+
+    if (data?.kind === "palette" && data.blockType) {
+      const blk = newBlock(data.blockType);
+      // Only leaf blocks may go inside a column.
+      if (target.container !== "root" && !COLUMN_ALLOWED_TYPES.has(blk.type))
+        return;
+      setBody((b) => insertAt(b, target.container, target.index, blk));
+      setSelectedBlockId(blk.id);
+      return;
+    }
+    // Reorder an existing block (tree.moveBlock guards bad targets + nesting).
+    const id = String(active.id);
+    setBody((b) => treeMoveBlock(b, id, target.container, target.index));
   }
 
   function newBlock(type: CampaignBlockType): CampaignBlock {
@@ -296,30 +361,32 @@ export function CampaignComposer({
   }
   function addBlock(type: CampaignBlockType) {
     const blk = newBlock(type);
-    setBody((b) => ({ ...b, blocks: [...b.blocks, blk] }));
+    setBody((b) => insertAt(b, "root", b.blocks.length, blk));
     setSelectedBlockId(blk.id);
-    setCanvasTab("build");
   }
   function updateBlock(id: string, patch: Partial<CampaignBlock>) {
-    setBody((b) => ({
-      ...b,
-      blocks: b.blocks.map((bl) =>
-        bl.id === id ? ({ ...bl, ...patch } as CampaignBlock) : bl
-      ),
-    }));
+    setBody((b) => updateBlockById(b, id, patch));
   }
   function removeBlock(id: string) {
-    setBody((b) => ({ ...b, blocks: b.blocks.filter((bl) => bl.id !== id) }));
+    setBody((b) => removeById(b, id));
     setSelectedBlockId((cur) => (cur === id ? null : cur));
   }
-  function moveBlock(idx: number, dir: -1 | 1) {
-    setBody((b) => {
-      const next = [...b.blocks];
-      const j = idx + dir;
-      if (j < 0 || j >= next.length) return b;
-      [next[idx], next[j]] = [next[j], next[idx]];
-      return { ...b, blocks: next };
-    });
+  function duplicateBlock(id: string) {
+    const l = findLocation(body, id);
+    if (!l) return;
+    const src = getContainer(body, l.container)[l.index];
+    if (!src) return;
+    const copy = reidBlocks([src])[0];
+    setBody((b) => insertAt(b, l.container, l.index + 1, copy));
+    setSelectedBlockId(copy.id);
+  }
+  // Move a block one step within its own container (inspector ↑/↓ buttons).
+  function nudgeBlock(id: string, dir: -1 | 1) {
+    const l = findLocation(body, id);
+    if (!l) return;
+    // destIndex is an insertion index; +2 lands one slot down, −1 one slot up.
+    const dest = dir === -1 ? l.index - 1 : l.index + 2;
+    setBody((b) => treeMoveBlock(b, id, l.container, dest));
   }
 
   async function save() {
@@ -442,7 +509,9 @@ export function CampaignComposer({
 
   function acceptSuggestion() {
     if (!suggestion) return;
-    setBody(suggestion);
+    const s = suggestion;
+    // Preserve per-email design overrides — the AI rewrites blocks, not design.
+    setBody((b) => ({ ...s, design: b.design }));
     setSuggestion(null);
     setSuggestionWarnings([]);
     setMsg("Applied AI layout. Save to keep the changes.");
@@ -465,7 +534,8 @@ export function CampaignComposer({
     ) {
       return;
     }
-    setBody(tpl.build(newBlockId));
+    const built = tpl.build(newBlockId);
+    setBody((b) => ({ ...built, design: b.design }));
     setTemplatesOpen(false);
     setMsg(`Applied template: ${tpl.name}. Save to keep the changes.`);
   }
@@ -491,12 +561,9 @@ export function CampaignComposer({
     ) {
       return;
     }
-    // Fresh block ids so they're unique within this email.
-    const blocks = (t.body_source.blocks ?? []).map((b) => ({
-      ...b,
-      id: newBlockId(),
-    }));
-    setBody({ version: 1, blocks });
+    // Fresh block ids (incl. nested section columns/children) so they're unique.
+    const blocks = reidBlocks(t.body_source.blocks ?? []);
+    setBody((b) => ({ version: 1, blocks, design: b.design }));
     setTemplatesOpen(false);
     setMsg(`Applied template: ${t.name}. Save to keep the changes.`);
   }
@@ -829,56 +896,53 @@ export function CampaignComposer({
         </CardContent>
       </Card>
 
-      {/* Three-pane builder: palette · canvas · inspector */}
-      <div className="grid gap-4 lg:grid-cols-[168px_minmax(0,1fr)_340px]">
-        {/* Palette */}
-        <Card className="self-start">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Add block</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {sent ? (
-              <p className="text-xs text-muted-foreground italic">
-                Sent emails can’t be edited.
-              </p>
-            ) : (
-              ADD_GROUPS.map((g) => (
-                <div key={g.group} className="space-y-1">
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-                    {g.group}
-                  </p>
-                  <div className="flex flex-col gap-1">
-                    {g.items.map((t) => (
-                      <Button
-                        key={t.type}
-                        variant="outline"
-                        size="sm"
-                        onClick={() => addBlock(t.type)}
-                        className="justify-start gap-1 h-7 text-xs"
-                      >
-                        <Plus className="h-3 w-3" />
-                        {t.label}
-                      </Button>
-                    ))}
+      {/* Three-pane builder: palette · live canvas · inspector */}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="grid gap-4 lg:grid-cols-[168px_minmax(0,1fr)_340px]">
+          {/* Palette */}
+          <Card className="self-start lg:sticky lg:top-4">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Add block</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {sent ? (
+                <p className="text-xs text-muted-foreground italic">
+                  Sent emails can’t be edited.
+                </p>
+              ) : (
+                ADD_GROUPS.map((g) => (
+                  <div key={g.group} className="space-y-1">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                      {g.group}
+                    </p>
+                    <div className="flex flex-col gap-1">
+                      {g.items.map((t) => (
+                        <PaletteItem
+                          key={t.type}
+                          type={t.type}
+                          label={t.label}
+                          onClick={() => addBlock(t.type)}
+                        />
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
+                ))
+              )}
+              <p className="pt-1 text-[10px] text-muted-foreground">
+                Click to add, or drag onto the email.
+              </p>
+            </CardContent>
+          </Card>
 
-        {/* Canvas — Build / Preview */}
-        <Card className="self-start">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <SegmentedPicker
-              value={canvasTab}
-              options={[
-                { value: "build", label: "Build" },
-                { value: "preview", label: "Preview" },
-              ]}
-              onChange={(v) => setCanvasTab(v as "build" | "preview")}
-            />
-            {canvasTab === "preview" && (
+          {/* Live canvas */}
+          <Card className="self-start">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm">Canvas</CardTitle>
               <SegmentedPicker
                 value={device}
                 options={[
@@ -887,89 +951,57 @@ export function CampaignComposer({
                 ]}
                 onChange={(v) => setDevice(v as "desktop" | "mobile")}
               />
-            )}
-          </CardHeader>
-          <CardContent>
-            {canvasTab === "build" ? (
-              <div className="space-y-2">
-                {body.blocks.length === 0 && (
-                  <p className="text-xs text-muted-foreground italic">
-                    No blocks yet — add one from the left.
-                  </p>
-                )}
-                <DndContext
-                  sensors={sensors}
-                  collisionDetection={closestCenter}
-                  onDragEnd={handleDragEnd}
-                >
-                  <SortableContext
-                    items={body.blocks.map((b) => b.id)}
-                    strategy={verticalListSortingStrategy}
-                  >
-                    {body.blocks.map((block, idx) => (
-                      <SortableBlockCard
-                        key={block.id}
-                        block={block}
-                        selected={block.id === selectedBlockId}
-                        disabled={sent}
-                        onSelect={() => setSelectedBlockId(block.id)}
-                        onRemove={() => removeBlock(block.id)}
-                        onUp={() => moveBlock(idx, -1)}
-                        onDown={() => moveBlock(idx, 1)}
-                        canUp={idx > 0}
-                        canDown={idx < body.blocks.length - 1}
-                      />
-                    ))}
-                  </SortableContext>
-                </DndContext>
-              </div>
-            ) : (
-              <div
-                className={
-                  device === "mobile"
-                    ? "mx-auto w-[375px] max-w-full rounded border"
-                    : "w-full rounded border"
-                }
-              >
-                <iframe
-                  title="Email preview"
-                  srcDoc={previewHtml}
-                  className="w-full rounded"
-                  style={{ height: 560, background: "#fff" }}
-                />
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Inspector */}
-        <Card className="self-start lg:sticky lg:top-4">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">
-              {selectedBlock ? `Edit ${selectedBlock.type}` : "Inspector"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {selectedBlock ? (
-              <BlockEditor
-                block={selectedBlock}
-                disabled={sent}
-                campaignId={campaign.id}
-                onChange={(patch) => updateBlock(selectedBlock.id, patch)}
-                onRemove={() => removeBlock(selectedBlock.id)}
-                onUp={() => moveBlock(selectedIdx, -1)}
-                onDown={() => moveBlock(selectedIdx, 1)}
-                canUp={selectedIdx > 0}
-                canDown={selectedIdx < body.blocks.length - 1}
+            </CardHeader>
+            <CardContent className="p-2">
+              <EmailCanvas
+                body={body}
+                brand={brand}
+                device={device}
+                selectedId={selectedBlockId}
+                onSelect={(id) => setSelectedBlockId(id)}
+                onRemove={removeBlock}
+                onDuplicate={duplicateBlock}
               />
-            ) : (
-              <p className="text-xs text-muted-foreground italic">
-                Select a block in the canvas to edit its content and style.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+            </CardContent>
+          </Card>
+
+          {/* Inspector */}
+          <Card className="self-start lg:sticky lg:top-4">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">
+                {selectedBlock ? `Edit ${selectedBlock.type}` : "Inspector"}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {selectedBlock ? (
+                <BlockEditor
+                  block={selectedBlock}
+                  disabled={sent}
+                  campaignId={campaign.id}
+                  onChange={(patch) => updateBlock(selectedBlock.id, patch)}
+                  onRemove={() => removeBlock(selectedBlock.id)}
+                  onUp={() => nudgeBlock(selectedBlock.id, -1)}
+                  onDown={() => nudgeBlock(selectedBlock.id, 1)}
+                  canUp={selectedIdx > 0}
+                  canDown={selectedIdx < selectedContainerLen - 1}
+                />
+              ) : (
+                <p className="text-xs text-muted-foreground italic">
+                  Select a block on the canvas to edit its content and style.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        <DragOverlay dropAnimation={null}>
+          {activeDrag ? (
+            <div className="rounded border bg-card px-2 py-1 text-xs font-medium shadow">
+              {activeDrag === "block" ? "Moving block…" : `Add ${activeDrag}`}
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
 
       {/* Send */}
       {!sent && (
@@ -1185,120 +1217,35 @@ function TemplateGalleryDialog({
   );
 }
 
-// Plain-text snippet of a block, for the canvas card label.
-function blockText(html: string): string {
-  return html
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-function blockSnippet(block: CampaignBlock): string {
-  switch (block.type) {
-    case "heading":
-      return block.text;
-    case "text":
-      return blockText(block.text);
-    case "button":
-      return block.text;
-    case "image":
-      return block.alt || block.caption || "";
-    case "divider":
-      return `Divider · ${block.style ?? "rule"}`;
-    case "eyebrow":
-      return block.text;
-    case "quote":
-      return block.text;
-    case "spacer":
-      return `Spacer · ${block.size ?? "md"}`;
-    case "image-text":
-      return block.heading || blockText(block.text);
-    case "cta":
-      return block.heading;
-    case "columns":
-      return `${block.cells.length} columns`;
-    case "social":
-      return block.links && block.links.length
-        ? `${block.links.length} social links`
-        : "Social links (from brand)";
-    default:
-      return "";
-  }
-}
-
-// Compact, selectable card shown in the canvas. Editing happens in the
-// inspector; this is just select + reorder + quick actions.
-function SortableBlockCard({
-  block,
-  selected,
-  disabled,
-  onSelect,
-  onRemove,
-  onUp,
-  onDown,
-  canUp,
-  canDown,
+// Draggable palette chip. Click to append to the email; drag onto a canvas
+// drop-zone (including into a section column) to place precisely.
+function PaletteItem({
+  type,
+  label,
+  onClick,
 }: {
-  block: CampaignBlock;
-  selected: boolean;
-  disabled: boolean;
-  onSelect: () => void;
-  onRemove: () => void;
-  onUp: () => void;
-  onDown: () => void;
-  canUp: boolean;
-  canDown: boolean;
+  type: CampaignBlockType;
+  label: string;
+  onClick: () => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: block.id, disabled });
-  const style: React.CSSProperties = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.6 : 1,
-  };
-  const snippet = blockSnippet(block);
-
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `palette:${type}`,
+    data: { kind: "palette", blockType: type },
+  });
   return (
-    <div ref={setNodeRef} style={style}>
-      <div
-        onClick={onSelect}
-        className={`group flex items-center gap-2 rounded-lg border p-2 cursor-pointer transition-colors ${
-          selected
-            ? "border-foreground bg-foreground/5"
-            : "bg-muted/40 hover:bg-muted"
-        }`}
-      >
-        <button
-          type="button"
-          {...attributes}
-          {...listeners}
-          disabled={disabled}
-          onClick={(e) => e.stopPropagation()}
-          className="text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing disabled:opacity-30"
-          aria-label="Drag to reorder"
-        >
-          <GripVertical className="h-3.5 w-3.5" />
-        </button>
-        <div className="min-w-0 flex-1">
-          <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">
-            {block.type}
-          </p>
-          <p className="truncate text-xs">
-            {snippet || <span className="italic text-muted-foreground">Empty</span>}
-          </p>
-        </div>
-        {!disabled && (
-          <div
-            className="flex gap-0.5 opacity-0 group-hover:opacity-100"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Mini onClick={onUp} disabled={!canUp} label="↑" />
-            <Mini onClick={onDown} disabled={!canDown} label="↓" />
-            <Mini onClick={onRemove} label="✕" danger />
-          </div>
-        )}
-      </div>
-    </div>
+    <button
+      ref={setNodeRef}
+      type="button"
+      onClick={onClick}
+      {...attributes}
+      {...listeners}
+      className={`flex h-7 items-center gap-1 rounded border px-2 text-left text-xs hover:bg-muted cursor-grab active:cursor-grabbing ${
+        isDragging ? "opacity-50" : ""
+      }`}
+    >
+      <Plus className="h-3 w-3" />
+      {label}
+    </button>
   );
 }
 
