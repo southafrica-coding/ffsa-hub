@@ -59,16 +59,6 @@ export default async function LibraryPersonsPage({
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
-      <div>
-        <Link
-          href="/records-library"
-          className="text-xs text-muted-foreground hover:text-foreground uppercase"
-          style={{ letterSpacing: "0.15em" }}
-        >
-          ← Records Library
-        </Link>
-      </div>
-
       <div className="flex items-baseline justify-between">
         <div>
           <h1 className="text-2xl font-bold mb-1">All library persons</h1>

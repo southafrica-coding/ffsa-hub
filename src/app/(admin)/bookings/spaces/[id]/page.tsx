@@ -10,7 +10,7 @@ import {
   getBookingAccess,
 } from "@/services/bookings";
 import { Card, CardContent } from "@/components/ui/card";
-import { ArrowLeft, AlertTriangle, Pencil } from "lucide-react";
+import { AlertTriangle, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BookingStatusProvider, LiveStatusPill } from "./status-context";
 import {
@@ -108,14 +108,6 @@ export default async function BookingDetailPage({
   return (
     <BookingStatusProvider initialStatus={booking.status}>
     <div className="max-w-3xl space-y-5">
-      <Link
-        href="/bookings/spaces"
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to bookings
-      </Link>
-
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="flex items-start gap-3">
           <span

@@ -16,12 +16,6 @@ export default async function ProgramBillingPage({
   if (error || !program) {
     return (
       <div className="space-y-4">
-        <Link
-          href="/finance/school-fees"
-          className="text-sm text-muted-foreground hover:underline"
-        >
-          &larr; Back to School Fees
-        </Link>
         <p className="text-destructive">Program not found.</p>
       </div>
     );
@@ -55,13 +49,6 @@ export default async function ProgramBillingPage({
 
   return (
     <div className="space-y-6">
-      <Link
-        href="/finance/school-fees"
-        className="text-sm text-muted-foreground hover:underline"
-      >
-        &larr; Back to School Fees
-      </Link>
-
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="page-eyebrow">FINANCIAL MANAGEMENT</p>

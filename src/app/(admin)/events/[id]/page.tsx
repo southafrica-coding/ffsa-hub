@@ -137,15 +137,6 @@ export default async function EventDetailPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link
-          href="/events"
-          className="text-xs text-muted-foreground hover:text-foreground uppercase"
-          style={{ letterSpacing: "0.15em" }}
-        >
-          ← Events
-        </Link>
-      </div>
       <div className="flex items-center justify-between">
         <div>
           <p className="page-eyebrow">EVENTS &amp; GATHERINGS</p>

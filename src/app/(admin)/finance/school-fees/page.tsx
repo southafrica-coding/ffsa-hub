@@ -26,13 +26,6 @@ export default async function SchoolFeesPage() {
 
   return (
     <div className="space-y-6">
-      <Link
-        href="/finance"
-        className="text-sm text-muted-foreground hover:underline"
-      >
-        &larr; Back to Finance
-      </Link>
-
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="page-eyebrow">FINANCIAL MANAGEMENT</p>

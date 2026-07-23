@@ -1,6 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
-import Link from "next/link";
 import { getEventById } from "@/services/events";
 import { canManageEvents } from "@/lib/api-auth";
 import { Scanner } from "./scanner";
@@ -32,13 +31,6 @@ export default async function CheckInPage({
   return (
     <div className="space-y-6 max-w-2xl mx-auto p-6">
       <div>
-        <Link
-          href={`/events/${id}`}
-          className="text-xs text-muted-foreground hover:text-foreground uppercase"
-          style={{ letterSpacing: "0.15em" }}
-        >
-          ← Event
-        </Link>
         <h1 className="page-title mt-2">Check-in</h1>
         <p className="text-sm text-muted-foreground mt-1">{event.title}</p>
       </div>

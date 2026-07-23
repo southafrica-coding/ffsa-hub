@@ -1,6 +1,5 @@
 export const dynamic = "force-dynamic";
 
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import {
   getOutreachTeamById,
@@ -30,12 +29,6 @@ export default async function OutreachTeamDetailPage({
   if (teamError || !team) {
     return (
       <div className="space-y-4">
-        <Link
-          href="/finance/outreach"
-          className="text-sm text-muted-foreground hover:underline"
-        >
-          &larr; Back to Outreach Finance
-        </Link>
         <p className="text-destructive">Team not found.</p>
       </div>
     );
@@ -84,13 +77,6 @@ export default async function OutreachTeamDetailPage({
 
   return (
     <div className="space-y-6">
-      <Link
-        href="/finance/outreach"
-        className="text-sm text-muted-foreground hover:underline"
-      >
-        &larr; Back to Outreach Finance
-      </Link>
-
       <TeamDetail
         team={team}
         members={members ?? []}

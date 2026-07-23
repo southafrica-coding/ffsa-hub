@@ -1,7 +1,6 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
-import { ArrowLeft, CheckCircle2 } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
 import { requireModuleAccess } from "@/lib/require-permission";
 import {
   getVehicleBookingById,
@@ -48,13 +47,6 @@ export default async function AgreementPage({
 
   return (
     <div className="space-y-5 max-w-3xl">
-      <Link
-        href={`/bookings/vehicles/${id}`}
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to booking
-      </Link>
       <div>
         <p className="page-eyebrow">RESERVATIONS</p>
         <h1 className="page-title">{VEHICLE_POLICY_TITLE}</h1>

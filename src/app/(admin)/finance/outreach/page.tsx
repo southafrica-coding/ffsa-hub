@@ -1,6 +1,5 @@
 export const dynamic = "force-dynamic";
 
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import {
   getOutreachTeams,
@@ -19,13 +18,6 @@ export default async function OutreachFinancePage() {
 
   return (
     <div className="space-y-6">
-      <Link
-        href="/finance"
-        className="text-sm text-muted-foreground hover:underline"
-      >
-        &larr; Back to Finance
-      </Link>
-
       <OutreachDashboardClient
         teams={(teams ?? []) as Parameters<typeof OutreachDashboardClient>[0]["teams"]}
         programs={(programs ?? []) as Parameters<typeof OutreachDashboardClient>[0]["programs"]}

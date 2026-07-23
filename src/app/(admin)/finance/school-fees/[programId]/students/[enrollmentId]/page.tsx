@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getProgramById } from "@/services/schools";
 import {
@@ -37,12 +36,6 @@ export default async function StudentBillingPage({
   if (!enrollment || !program) {
     return (
       <div className="space-y-4">
-        <Link
-          href={`/finance/school-fees/${programId}/students`}
-          className="text-sm text-muted-foreground hover:underline"
-        >
-          &larr; Back
-        </Link>
         <p className="text-destructive">Student or program not found.</p>
       </div>
     );
@@ -63,13 +56,6 @@ export default async function StudentBillingPage({
 
   return (
     <div className="space-y-6">
-      <Link
-        href={`/finance/school-fees/${programId}/students`}
-        className="text-sm text-muted-foreground hover:underline"
-      >
-        &larr; Back to {program.name} students
-      </Link>
-
       <div>
         <p className="page-eyebrow">FINANCIAL MANAGEMENT</p>
         <h1 className="page-title">{studentName(enrollment.users)}</h1>

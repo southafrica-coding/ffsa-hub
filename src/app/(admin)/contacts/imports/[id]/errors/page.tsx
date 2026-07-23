@@ -50,12 +50,6 @@ export default async function ImportErrorsPage({
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
       <div className="space-y-1">
-        <Link
-          href="/contacts/import"
-          className="text-xs text-muted-foreground hover:text-foreground"
-        >
-          ← Back to imports
-        </Link>
         <h1 className="text-2xl font-bold">Errored rows</h1>
         <p className="text-sm text-muted-foreground">
           From{" "}

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { requireModuleAccess } from "@/lib/require-permission";
@@ -9,7 +8,6 @@ import {
   type Venue,
   type Ministry,
 } from "@/services/bookings";
-import { ArrowLeft } from "lucide-react";
 import { VenueAdmin } from "./venue-admin";
 
 export default async function VenuesAdminPage() {
@@ -33,13 +31,6 @@ export default async function VenuesAdminPage() {
 
   return (
     <div className="max-w-3xl space-y-6">
-      <Link
-        href="/bookings/spaces"
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to bookings
-      </Link>
       <div>
         <p className="page-eyebrow">VENUE SCHEDULING</p>
         <h1 className="page-title">Manage venues &amp; ministries</h1>

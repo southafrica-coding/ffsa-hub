@@ -18,7 +18,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import Link from "next/link";
 import { LabelsCard } from "./labels-card";
 import { ListsCard } from "./lists-card";
 import { IdentifiersCard } from "./identifiers-card";
@@ -84,15 +83,6 @@ export default async function ContactDetailPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link
-          href="/contacts"
-          className="text-xs text-muted-foreground hover:text-foreground uppercase tracking-widest"
-          style={{ letterSpacing: "0.15em" }}
-        >
-          ← Contacts
-        </Link>
-      </div>
       <div className="flex items-center justify-between">
         <div>
           <p className="page-eyebrow">PEOPLE &amp; RELATIONSHIPS</p>

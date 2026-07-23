@@ -37,13 +37,6 @@ export default async function FormBuilderPage({
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <Link
-          href={`/events/${eventId}?tab=forms`}
-          className="text-xs text-muted-foreground hover:text-foreground uppercase"
-          style={{ letterSpacing: "0.15em" }}
-        >
-          ← Back to event
-        </Link>
-        <Link
           href={`/events/${eventId}/forms/${formId}/responses`}
           className="text-sm px-3 py-1.5 rounded-full border hover:bg-muted transition-colors"
         >

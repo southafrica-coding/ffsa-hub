@@ -1,6 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
-import Link from "next/link";
 import { requireModuleAccess } from "@/lib/require-permission";
 import {
   getContactListById,
@@ -49,15 +48,6 @@ export default async function ContactListDetailPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link
-          href="/contacts/lists"
-          className="text-xs text-muted-foreground hover:text-foreground uppercase tracking-widest"
-          style={{ letterSpacing: "0.15em" }}
-        >
-          ← Lists
-        </Link>
-      </div>
       <div>
         <p className="page-eyebrow">PEOPLE &amp; RELATIONSHIPS</p>
         <h1 className="page-title">{list.name}</h1>

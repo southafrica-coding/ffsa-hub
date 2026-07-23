@@ -26,12 +26,6 @@ export default async function ProgramStudentsPage({
   if (!program) {
     return (
       <div className="space-y-4">
-        <Link
-          href="/finance/school-fees"
-          className="text-sm text-muted-foreground hover:underline"
-        >
-          &larr; Back to School Fees
-        </Link>
         <p className="text-destructive">Program not found.</p>
       </div>
     );
@@ -66,13 +60,6 @@ export default async function ProgramStudentsPage({
 
   return (
     <div className="space-y-6">
-      <Link
-        href={`/finance/school-fees/${programId}/billing`}
-        className="text-sm text-muted-foreground hover:underline"
-      >
-        &larr; Back to {program.name} courses
-      </Link>
-
       <div>
         <p className="page-eyebrow">FINANCIAL MANAGEMENT</p>
         <h1 className="page-title">{program.name} — Student Billing</h1>

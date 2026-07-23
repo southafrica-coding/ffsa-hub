@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { requireModuleAccess } from "@/lib/require-permission";
 import { getMyRequests, type BookingWithRefs } from "@/services/bookings";
-import { ArrowLeft, Plus, Inbox } from "lucide-react";
+import { Plus, Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -31,13 +31,6 @@ export default async function MyRequestsPage() {
 
   return (
     <div className="space-y-5">
-      <Link
-        href="/bookings/spaces"
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to calendar
-      </Link>
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <p className="page-eyebrow">VENUE SCHEDULING</p>

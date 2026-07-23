@@ -26,16 +26,6 @@ export default async function ImportDetailPage({
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-8">
       <div>
-        <Link
-          href="/records-library"
-          className="text-xs text-muted-foreground hover:text-foreground uppercase"
-          style={{ letterSpacing: "0.15em" }}
-        >
-          ← Records Library
-        </Link>
-      </div>
-
-      <div>
         <h1 className="text-2xl font-bold mb-1">{imp.filename}</h1>
         <p className="text-sm text-muted-foreground">
           <span className="capitalize">{imp.record_type}</span> ·{" "}

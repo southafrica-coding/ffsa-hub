@@ -35,16 +35,6 @@ export default async function PersonDetailPage({
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-8">
-      <div>
-        <Link
-          href="/records-library"
-          className="text-xs text-muted-foreground hover:text-foreground uppercase"
-          style={{ letterSpacing: "0.15em" }}
-        >
-          ← Records Library
-        </Link>
-      </div>
-
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold mb-1">{fullName}</h1>

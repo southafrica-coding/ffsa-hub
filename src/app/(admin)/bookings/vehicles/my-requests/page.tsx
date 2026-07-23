@@ -7,7 +7,7 @@ import {
   purposeLabel,
   type VehicleBookingWithRefs,
 } from "@/services/vehicles";
-import { ArrowLeft, Plus, Inbox } from "lucide-react";
+import { Plus, Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -34,13 +34,6 @@ export default async function MyVehicleRequestsPage() {
 
   return (
     <div className="space-y-5">
-      <Link
-        href="/bookings/vehicles"
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to bookings
-      </Link>
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <p className="page-eyebrow">RESERVATIONS</p>

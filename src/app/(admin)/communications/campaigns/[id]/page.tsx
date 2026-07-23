@@ -1,6 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
-import Link from "next/link";
 import {
   getCampaignById,
   getCampaignAudienceCount,
@@ -51,15 +50,6 @@ export default async function CampaignComposerPage({
 
   return (
     <div className="space-y-4">
-      <div>
-        <Link
-          href="/communications"
-          className="text-xs text-muted-foreground hover:text-foreground uppercase"
-          style={{ letterSpacing: "0.15em" }}
-        >
-          ← Communications
-        </Link>
-      </div>
       {stats && <CampaignAnalytics stats={stats} />}
       <CampaignComposer
         campaign={{

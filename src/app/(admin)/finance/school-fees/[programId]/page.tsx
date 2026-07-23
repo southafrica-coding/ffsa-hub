@@ -25,12 +25,6 @@ export default async function ProgramFeesPage({
   if (programError || !program) {
     return (
       <div className="space-y-4">
-        <Link
-          href="/finance/school-fees"
-          className="text-sm text-muted-foreground hover:underline"
-        >
-          &larr; Back to School Fees
-        </Link>
         <p className="text-destructive">Program not found.</p>
       </div>
     );
@@ -69,12 +63,6 @@ export default async function ProgramFeesPage({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <Link
-          href="/finance/school-fees"
-          className="text-sm text-muted-foreground hover:underline"
-        >
-          &larr; Back to School Fees
-        </Link>
         <Link
           href={`/finance/school-fees/${programId}/billing`}
           className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-muted transition-colors"

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import {
   getEnrollmentById,
@@ -42,12 +41,6 @@ export default async function EnrollmentDetailPage({
   if (error || !enrollment) {
     return (
       <div className="space-y-4">
-        <Link
-          href="/my-schools"
-          className="text-sm text-muted-foreground hover:underline"
-        >
-          &larr; Back to My Training
-        </Link>
         <p className="text-destructive">Enrollment not found.</p>
       </div>
     );
@@ -132,13 +125,6 @@ export default async function EnrollmentDetailPage({
 
   return (
     <div className="space-y-6">
-      <Link
-        href="/my-schools"
-        className="text-sm text-muted-foreground hover:underline"
-      >
-        &larr; Back to My Training
-      </Link>
-
       {/* Program Header */}
       <div className="flex items-center justify-between">
         <div>

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getProgramById, getEnrollmentsByProgram, getGradesByProgram, getQuestionsByProgram, getResponsesByProgram, getRemovedResponsesByProgram, getReferenceSlotsByProgram, getReferenceRequestSummaries, getReferenceQuestionsByProgram } from "@/services/schools";
@@ -79,9 +78,6 @@ export default async function ProgramDetailPage({
   if (programError || !program) {
     return (
       <div className="space-y-4">
-        <Link href="/schools" className="text-sm text-muted-foreground hover:underline">
-          &larr; Back to Training
-        </Link>
         <p className="text-destructive">Program not found.</p>
       </div>
     );

@@ -1,8 +1,6 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect, notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 import { requireModuleAccess } from "@/lib/require-permission";
 import {
   getVehicleBookingById,
@@ -61,13 +59,6 @@ export default async function ReturnInspectionPage({
 
   return (
     <div className="space-y-5 max-w-3xl">
-      <Link
-        href={`/bookings/vehicles/${id}`}
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to booking
-      </Link>
       <div>
         <p className="page-eyebrow">RESERVATIONS</p>
         <h1 className="page-title">Return inspection</h1>

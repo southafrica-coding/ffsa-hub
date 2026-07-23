@@ -1,7 +1,5 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 import { requireModuleAccess } from "@/lib/require-permission";
 import { getVehicles, getVehicleAccess, type Vehicle } from "@/services/vehicles";
 import { FleetAdmin } from "./fleet-admin";
@@ -25,13 +23,6 @@ export default async function FleetPage() {
 
   return (
     <div className="space-y-5 max-w-3xl">
-      <Link
-        href="/bookings/vehicles"
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to bookings
-      </Link>
       <div>
         <p className="page-eyebrow">RESERVATIONS</p>
         <h1 className="page-title">Manage fleet</h1>

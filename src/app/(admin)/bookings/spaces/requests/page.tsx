@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { requireModuleAccess } from "@/lib/require-permission";
@@ -8,7 +7,6 @@ import {
   getBookings,
   type BookingWithRefs,
 } from "@/services/bookings";
-import { ArrowLeft } from "lucide-react";
 import { findConflicts, type BookingWindow } from "@/lib/bookings/conflicts";
 import { timeRangeLabel } from "@/lib/bookings/dates";
 import { RequestsQueue } from "./requests-queue";
@@ -56,13 +54,6 @@ export default async function RequestsPage() {
 
   return (
     <div className="space-y-5">
-      <Link
-        href="/bookings/spaces"
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to calendar
-      </Link>
       <div>
         <p className="page-eyebrow">VENUE SCHEDULING</p>
         <h1 className="page-title">Booking requests</h1>

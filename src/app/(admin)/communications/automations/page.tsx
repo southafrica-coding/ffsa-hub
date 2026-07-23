@@ -48,12 +48,6 @@ export default async function AutomationsPage() {
             Outcomes tab.
           </p>
         </div>
-        <Link
-          href="/communications"
-          className="text-sm px-3 py-1.5 rounded-full border hover:bg-muted transition-colors"
-        >
-          ← Communications
-        </Link>
       </div>
 
       <Card>

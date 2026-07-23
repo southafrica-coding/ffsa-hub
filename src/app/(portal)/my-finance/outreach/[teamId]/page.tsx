@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import {
   getOutreachTeamById,
@@ -38,12 +37,6 @@ export default async function MyOutreachTeamPage({
   if (!team) {
     return (
       <div className="space-y-4">
-        <Link
-          href="/my-finance"
-          className="text-sm text-muted-foreground hover:underline"
-        >
-          &larr; Back to Finance
-        </Link>
         <p className="text-destructive">
           Team not found or you don&apos;t have access.
         </p>
@@ -87,13 +80,6 @@ export default async function MyOutreachTeamPage({
 
   return (
     <div className="space-y-6">
-      <Link
-        href="/my-finance"
-        className="text-sm text-muted-foreground hover:underline"
-      >
-        &larr; Back to Finance
-      </Link>
-
       <div className="flex items-center justify-between">
         <div>
           <h1 className="page-title">

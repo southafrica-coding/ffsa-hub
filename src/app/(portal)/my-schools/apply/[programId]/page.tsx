@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -36,12 +35,6 @@ export default async function ApplyPage({
   if (!program || program.status !== "active" || !program.application_open) {
     return (
       <div className="space-y-4">
-        <Link
-          href="/my-schools"
-          className="text-sm text-muted-foreground hover:underline"
-        >
-          &larr; Back to My Training
-        </Link>
         <p className="text-destructive">
           This application is not currently available.
         </p>
@@ -67,12 +60,6 @@ export default async function ApplyPage({
 
     return (
       <div className="space-y-4">
-        <Link
-          href="/my-schools"
-          className="text-sm text-muted-foreground hover:underline"
-        >
-          &larr; Back to My Training
-        </Link>
         <Card>
           <CardContent className="py-8 text-center space-y-3">
             <h2 className="text-lg font-semibold">Application Already Submitted</h2>
@@ -98,12 +85,6 @@ export default async function ApplyPage({
   if (!questions || questions.length === 0) {
     return (
       <div className="space-y-4">
-        <Link
-          href="/my-schools"
-          className="text-sm text-muted-foreground hover:underline"
-        >
-          &larr; Back to My Training
-        </Link>
         <p className="text-muted-foreground">
           This application has no questions yet. Please check back later.
         </p>
@@ -113,13 +94,6 @@ export default async function ApplyPage({
 
   return (
     <div className="space-y-6">
-      <Link
-        href="/my-schools"
-        className="text-sm text-muted-foreground hover:underline"
-      >
-        &larr; Back to My Training
-      </Link>
-
       <div>
         <h1 className="page-title">
           Apply to {program.name}

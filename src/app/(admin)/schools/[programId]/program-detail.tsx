@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { QuestionTree, type TreeQuestion } from "@/components/admin/question-tree";
 import { ReferenceQuestionsBuilder } from "./reference-questions-builder";
 import { ProgramCoursesManager, type PhaseCourse } from "./program-courses-manager";
@@ -372,11 +371,6 @@ export function ProgramDetail({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <Link href="/schools" className="text-xs text-muted-foreground hover:text-foreground uppercase" style={{ letterSpacing: "0.15em" }}>
-          ← Schools
-        </Link>
-      </div>
       {program.status === "archived" && (
         <div className="flex items-center gap-3 rounded-lg border border-yellow-600/30 bg-yellow-950/20 px-4 py-3">
           <Archive className="h-4 w-4 text-yellow-500 shrink-0" />
