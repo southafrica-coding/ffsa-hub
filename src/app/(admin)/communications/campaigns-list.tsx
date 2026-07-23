@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Plus, X } from "lucide-react";
+import { Plus, X, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +16,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { getLabelColors } from "@/lib/label-color";
-import { CAMPAIGN_TEMPLATES } from "@/lib/campaigns/templates";
 
 type Label = { id: string; slug: string; name: string; color: string | null };
 type Identity = { id: string; display_name: string; from_email: string };
@@ -59,6 +58,21 @@ export function CampaignsList({
   const [templateId, setTemplateId] = useState<string>("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Delete a draft email (only drafts can be deleted from here).
+  async function deleteEmail(id: string, emailName: string) {
+    if (!confirm(`Delete draft "${emailName}"? This can't be undone.`)) return;
+    setDeletingId(id);
+    const res = await fetch(`/api/campaigns/${id}`, { method: "DELETE" });
+    setDeletingId(null);
+    if (res.ok) {
+      router.refresh();
+    } else {
+      const d = (await res.json().catch(() => ({}))) as { error?: string };
+      alert(d.error ?? "Could not delete this email.");
+    }
+  }
 
   const labelById = useMemo(() => {
     const map = new Map<string, Label>();
@@ -130,15 +144,6 @@ export function CampaignsList({
                   tagline="An empty canvas with a single starter block."
                   onClick={() => setTemplateId("")}
                 />
-                {CAMPAIGN_TEMPLATES.map((t) => (
-                  <TemplateChip
-                    key={t.id}
-                    active={templateId === t.id}
-                    name={t.name}
-                    tagline={t.tagline}
-                    onClick={() => setTemplateId(t.id)}
-                  />
-                ))}
               </div>
             </div>
             <Input
@@ -244,6 +249,7 @@ export function CampaignsList({
                   <TableHead>Audience</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>When</TableHead>
+                  <TableHead className="w-10 text-right"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -308,6 +314,20 @@ export function CampaignsList({
                           : c.scheduled_at
                           ? `Scheduled ${new Date(c.scheduled_at).toLocaleString()}`
                           : "—"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {c.status === "draft" && (
+                          <button
+                            type="button"
+                            onClick={() => deleteEmail(c.id, c.name)}
+                            disabled={deletingId === c.id}
+                            title="Delete draft"
+                            aria-label={`Delete draft ${c.name}`}
+                            className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-red-500/10 hover:text-red-500 disabled:opacity-40"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                       </TableCell>
                     </TableRow>
                   );
