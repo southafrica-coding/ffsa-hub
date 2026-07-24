@@ -138,6 +138,13 @@ export function CanvasBlock({
         className="absolute -top-3 right-1 z-10 hidden gap-0.5 rounded border bg-card p-0.5 shadow-sm group-hover:flex"
         onClick={(e) => e.stopPropagation()}
       >
+        <span
+          className="flex cursor-grab items-center p-1 text-muted-foreground active:cursor-grabbing"
+          aria-hidden
+          title="Drag to move"
+        >
+          <GripVertical className="h-3.5 w-3.5" />
+        </span>
         {actions}
       </div>
       <div dangerouslySetInnerHTML={{ __html: html }} />

@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import Cropper, { type Area } from "react-easy-crop";
 import { Button } from "@/components/ui/button";
 
@@ -63,9 +64,27 @@ export function ImageCropDialog({
 }) {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
-  const [aspect, setAspect] = useState<number | undefined>(16 / 9);
+  const [aspect, setAspect] = useState<number | undefined>(undefined);
   const [pixels, setPixels] = useState<Area | null>(null);
   const [working, setWorking] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  // Portal target only exists on the client. Mount flag avoids an SSR mismatch.
+  useEffect(() => setMounted(true), []);
+
+  // Close on Escape and lock background scroll while the dialog is open.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !working) onCancel();
+    };
+    document.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [onCancel, working]);
 
   const onCropComplete = useCallback((_area: Area, areaPixels: Area) => {
     setPixels(areaPixels);
@@ -82,9 +101,21 @@ export function ImageCropDialog({
     }
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-lg rounded-lg border bg-card shadow-lg">
+  if (!mounted) return null;
+
+  // Portalled to <body> so the fixed overlay is never trapped inside the
+  // sticky/positioned inspector panel (which would pin it to the page bottom).
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4"
+      onClick={() => {
+        if (!working) onCancel();
+      }}
+    >
+      <div
+        className="w-full max-w-lg rounded-lg border bg-card shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="border-b px-4 py-2.5">
           <p className="text-sm font-semibold">Crop image</p>
         </div>
@@ -141,6 +172,7 @@ export function ImageCropDialog({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

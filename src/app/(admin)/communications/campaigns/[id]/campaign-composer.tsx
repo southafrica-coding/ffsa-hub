@@ -8,7 +8,8 @@ import {
   DragOverlay,
   closestCenter,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   useDraggable,
@@ -37,6 +38,10 @@ import {
   type SectionLayout,
   type EmailDesign,
   COLUMN_ALLOWED_TYPES,
+  FONT_CATALOG,
+  editorWebFontsHref,
+  resolveTheme,
+  renderBlock,
   sectionColumnWeights,
   newBlockId,
 } from "@/lib/campaigns/blocks";
@@ -238,18 +243,37 @@ export function CampaignComposer({
     : null;
   const selectedContainerLen = getContainer(body, selectedContainer).length;
 
+  // Mouse drags start after a small deliberate move (so a click still selects);
+  // touch drags need a short press-and-hold so scrolling the page still works.
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 160, tolerance: 8 },
+    }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  const [activeDrag, setActiveDrag] = useState<string | null>(null);
+  const previewTheme = useMemo(
+    () => resolveTheme(brand, body.design),
+    [brand, body.design]
+  );
+
+  const [activeDrag, setActiveDrag] = useState<
+    { kind: "palette"; label: string } | { kind: "block"; blockId: string } | null
+  >(null);
 
   function handleDragStart(event: DragStartEvent) {
     const d = event.active.data.current as
       | { kind?: string; blockType?: string }
       | undefined;
-    setActiveDrag(d?.kind === "palette" && d.blockType ? d.blockType : "block");
+    if (d?.kind === "palette") {
+      setActiveDrag({
+        kind: "palette",
+        label: d.blockType === "section" ? "section" : d.blockType ?? "block",
+      });
+    } else {
+      setActiveDrag({ kind: "block", blockId: String(event.active.id) });
+    }
   }
 
   // Resolve the drop destination (container + insertion index) from `over`.
@@ -587,6 +611,18 @@ export function CampaignComposer({
     setTemplatesOpen(false);
     setMsg(`Applied template: ${tpl.name}. Save to keep the changes.`);
   }
+
+  // Load the curated webfonts once so the live canvas preview matches whatever
+  // font the user picks (the sent email loads them via its own <link>).
+  useEffect(() => {
+    const id = "composer-webfonts";
+    if (document.getElementById(id)) return;
+    const link = document.createElement("link");
+    link.id = id;
+    link.rel = "stylesheet";
+    link.href = editorWebFontsHref();
+    document.head.appendChild(link);
+  }, []);
 
   // Load saved custom templates for the gallery.
   useEffect(() => {
@@ -951,9 +987,9 @@ export function CampaignComposer({
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="grid gap-4 lg:grid-cols-[168px_minmax(0,1fr)_340px]">
+        <div className="grid gap-3 -mx-4 md:-mx-6 lg:grid-cols-[200px_minmax(0,1fr)_330px] lg:items-start">
           {/* Palette */}
-          <Card className="self-start lg:sticky lg:top-4">
+          <Card className="self-start lg:sticky lg:top-4 lg:max-h-[calc(100vh-1.5rem)] lg:overflow-y-auto">
             <CardHeader className="pb-2 space-y-2">
               <div className="flex items-center justify-between gap-1">
                 <SegmentedPicker
@@ -1057,7 +1093,7 @@ export function CampaignComposer({
           </Card>
 
           {/* Inspector */}
-          <Card className="self-start lg:sticky lg:top-4">
+          <Card className="self-start lg:sticky lg:top-4 lg:max-h-[calc(100vh-1.5rem)] lg:overflow-y-auto">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">
                 {designOpen
@@ -1118,9 +1154,17 @@ export function CampaignComposer({
 
         <DragOverlay dropAnimation={null}>
           {activeDrag ? (
-            <div className="rounded border bg-card px-2 py-1 text-xs font-medium shadow">
-              {activeDrag === "block" ? "Moving block…" : `Add ${activeDrag}`}
-            </div>
+            activeDrag.kind === "palette" ? (
+              <div className="pointer-events-none flex items-center gap-1.5 rounded-md border border-sky-500 bg-sky-500 px-3 py-2 text-xs font-semibold text-white shadow-lg">
+                <Plus className="h-3.5 w-3.5" /> Add {activeDrag.label}
+              </div>
+            ) : (
+              <BlockDragGhost
+                blockId={activeDrag.blockId}
+                body={body}
+                theme={previewTheme}
+              />
+            )
           ) : null}
         </DragOverlay>
       </DndContext>
@@ -1339,6 +1383,55 @@ function TemplateGalleryDialog({
   );
 }
 
+// Find a block by id anywhere in the tree (root or a section column).
+function findBlockDeep(
+  body: CampaignBody,
+  id: string
+): CampaignBlock | null {
+  for (const b of body.blocks) {
+    if (b.id === id) return b;
+    if (b.type === "section") {
+      for (const col of b.columns) {
+        for (const cb of col.blocks) if (cb.id === id) return cb;
+      }
+    }
+  }
+  return null;
+}
+
+// A floating preview of the block being dragged — the real email HTML in a
+// small card — so you can see what you're moving and where it will land.
+function BlockDragGhost({
+  blockId,
+  body,
+  theme,
+}: {
+  blockId: string;
+  body: CampaignBody;
+  theme: Parameters<typeof renderBlock>[1];
+}) {
+  const block = findBlockDeep(body, blockId);
+  if (!block || block.type === "section") {
+    return (
+      <div className="pointer-events-none rounded-md border-2 border-sky-500 bg-card px-3 py-2 text-xs font-medium shadow-xl">
+        {block?.type === "section" ? "Moving section…" : "Moving block…"}
+      </div>
+    );
+  }
+  const html = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tbody>${renderBlock(
+    block,
+    theme
+  )}</tbody></table>`;
+  return (
+    <div className="pointer-events-none w-[300px] max-w-[80vw] rotate-1 overflow-hidden rounded-md border-2 border-sky-500 bg-white opacity-95 shadow-xl">
+      <div
+        className="px-3 py-1"
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+    </div>
+  );
+}
+
 // Draggable palette chip. Click to append to the email; drag onto a canvas
 // drop-zone (including into a section column) to place precisely.
 function PaletteItem({
@@ -1482,15 +1575,11 @@ function DesignPanel({
 
       <Section title="Body text">
         <div className="grid grid-cols-2 gap-1.5">
-          <SegmentedPicker
+          <FontSelect
             label="Font"
             value={d.text?.fontFamily ?? "body"}
             disabled={disabled}
-            options={[
-              { value: "body", label: "Body" },
-              { value: "display", label: "Display" },
-            ]}
-            onChange={(v) => setText({ fontFamily: v as BlockFontFamily })}
+            onChange={(v) => setText({ fontFamily: v })}
           />
           <ColorField
             label="Text color"
@@ -1518,15 +1607,11 @@ function DesignPanel({
 
       <Section title="Headings & links">
         <div className="grid grid-cols-2 gap-1.5">
-          <SegmentedPicker
+          <FontSelect
             label="Font"
             value={d.heading?.fontFamily ?? "display"}
             disabled={disabled}
-            options={[
-              { value: "display", label: "Display" },
-              { value: "body", label: "Body" },
-            ]}
-            onChange={(v) => setHeading({ fontFamily: v as BlockFontFamily })}
+            onChange={(v) => setHeading({ fontFamily: v })}
           />
           <ColorField
             label="Heading color"
@@ -2061,15 +2146,11 @@ function BlockStylePanel({
           {showFont && (
             <div className="space-y-1.5 border-t pt-2">
               <div className="grid grid-cols-2 gap-1.5">
-                <SegmentedPicker
+                <FontSelect
                   label="Font"
                   value={style.font?.family ?? "body"}
                   disabled={disabled}
-                  options={[
-                    { value: "body", label: "Body" },
-                    { value: "display", label: "Display" },
-                  ]}
-                  onChange={(v) => setFont({ family: v as BlockFontFamily })}
+                  onChange={(v) => setFont({ family: v })}
                 />
                 <ColorField
                   label="Text color"
@@ -2222,6 +2303,53 @@ function SegmentedPicker<T extends string>({
         })}
       </div>
     </div>
+  );
+}
+
+// Grouped font dropdown backed by FONT_CATALOG. Brand fonts first, then a
+// curated menu of web-safe families and Google webfonts, grouped by style.
+const FONT_GROUPS: { label: string; group: string }[] = [
+  { label: "Brand", group: "brand" },
+  { label: "Sans-serif", group: "sans" },
+  { label: "Serif", group: "serif" },
+  { label: "Monospace", group: "mono" },
+];
+
+function FontSelect({
+  label,
+  value,
+  disabled,
+  onChange,
+}: {
+  label?: string;
+  value: BlockFontFamily;
+  disabled?: boolean;
+  onChange: (v: BlockFontFamily) => void;
+}) {
+  return (
+    <label className="block min-w-0">
+      {label && (
+        <span className="block text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-0.5">
+          {label}
+        </span>
+      )}
+      <select
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value as BlockFontFamily)}
+        className="h-7 w-full rounded border bg-background px-1.5 text-[11px] disabled:opacity-30"
+      >
+        {FONT_GROUPS.map((g) => (
+          <optgroup key={g.group} label={g.label}>
+            {FONT_CATALOG.filter((f) => f.group === g.group).map((f) => (
+              <option key={f.key} value={f.key}>
+                {f.label}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+    </label>
   );
 }
 

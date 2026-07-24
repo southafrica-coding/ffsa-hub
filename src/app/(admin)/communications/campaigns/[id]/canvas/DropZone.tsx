@@ -27,9 +27,9 @@ export function DropZone({
     return (
       <div
         ref={setNodeRef}
-        className={`flex min-h-[72px] items-center justify-center rounded border border-dashed text-xs transition-colors ${
+        className={`flex min-h-[80px] items-center justify-center rounded-md border-2 border-dashed text-xs font-medium transition-colors ${
           isOver
-            ? "border-sky-500 bg-sky-400/15 text-sky-600"
+            ? "border-sky-500 bg-sky-400/20 text-sky-600"
             : "border-muted-foreground/30 text-muted-foreground"
         }`}
       >
@@ -38,17 +38,32 @@ export function DropZone({
     );
   }
 
+  // A wider hit area during a drag makes zones easy to target; the visible
+  // indicator is a thin bar that becomes a solid sky line right where the
+  // block will land.
   return (
     <div
       ref={setNodeRef}
       aria-hidden
-      className={`transition-all ${
-        isOver
-          ? "my-1 h-7 rounded border-2 border-dashed border-sky-500 bg-sky-400/20"
-          : dragActive
-            ? "my-0.5 h-4 rounded border border-dashed border-sky-300/60"
-            : "h-2"
+      className={`relative transition-all ${
+        dragActive ? "h-6 my-0.5" : "h-2"
       }`}
-    />
+    >
+      <div
+        className={`absolute inset-x-0 top-1/2 -translate-y-1/2 rounded-full transition-all ${
+          isOver
+            ? "h-1.5 bg-sky-500 shadow-[0_0_0_3px_rgba(14,165,233,0.2)]"
+            : dragActive
+              ? "h-0.5 bg-sky-300/70"
+              : "h-0"
+        }`}
+      />
+      {isOver && (
+        <>
+          <span className="absolute left-0 top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-sky-500" />
+          <span className="absolute right-0 top-1/2 h-2.5 w-2.5 translate-x-1/2 -translate-y-1/2 rounded-full bg-sky-500" />
+        </>
+      )}
+    </div>
   );
 }

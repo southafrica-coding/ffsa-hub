@@ -31,8 +31,89 @@ export type ImageTextLayout = "image-left" | "image-right";
 // ────────────────────────────────────────────────────────────
 
 export type BlockAlign = "left" | "center" | "right";
-export type BlockFontFamily = "display" | "body";
+// "display"/"body" resolve to the two brand fonts; the named keys below are a
+// curated menu (web-safe + Google webfonts) selectable per block or globally.
+export type NamedFont =
+  | "arial"
+  | "helvetica"
+  | "verdana"
+  | "tahoma"
+  | "trebuchet"
+  | "georgia"
+  | "times"
+  | "courier"
+  | "lato"
+  | "roboto"
+  | "opensans"
+  | "montserrat"
+  | "poppins"
+  | "nunito"
+  | "merriweather"
+  | "playfair"
+  | "lora";
+export type BlockFontFamily = "display" | "body" | NamedFont;
 export type BlockFontWeight = 400 | 500 | 600 | 700 | 800;
+
+// ────────────────────────────────────────────────────────────
+// Font catalog — the single source of truth for the composer's
+// font menu and for resolving a family key to an email-safe stack.
+// `google` (when present) is the Google Fonts family to load.
+// ────────────────────────────────────────────────────────────
+
+export type FontGroup = "brand" | "sans" | "serif" | "mono";
+export type FontCatalogEntry = {
+  key: BlockFontFamily;
+  label: string;
+  /** Email-safe CSS font-family stack. Empty for brand keys (resolved live). */
+  stack: string;
+  /** Google Fonts family name when this is a webfont (needs loading). */
+  google?: string;
+  group: FontGroup;
+};
+
+export const FONT_CATALOG: FontCatalogEntry[] = [
+  { key: "body", label: "Body (brand)", stack: "", group: "brand" },
+  { key: "display", label: "Display (brand)", stack: "", group: "brand" },
+  // Web-safe sans
+  { key: "arial", label: "Arial", stack: "Arial, 'Helvetica Neue', Helvetica, sans-serif", group: "sans" },
+  { key: "helvetica", label: "Helvetica", stack: "'Helvetica Neue', Helvetica, Arial, sans-serif", group: "sans" },
+  { key: "verdana", label: "Verdana", stack: "Verdana, Geneva, sans-serif", group: "sans" },
+  { key: "tahoma", label: "Tahoma", stack: "Tahoma, Verdana, Segoe, sans-serif", group: "sans" },
+  { key: "trebuchet", label: "Trebuchet MS", stack: "'Trebuchet MS', Tahoma, sans-serif", group: "sans" },
+  // Web-safe serif / mono
+  { key: "georgia", label: "Georgia", stack: "Georgia, 'Times New Roman', Times, serif", group: "serif" },
+  { key: "times", label: "Times New Roman", stack: "'Times New Roman', Times, serif", group: "serif" },
+  { key: "courier", label: "Courier New", stack: "'Courier New', Courier, monospace", group: "mono" },
+  // Google webfonts (loaded on demand)
+  { key: "lato", label: "Lato", stack: "'Lato', 'Helvetica Neue', Arial, sans-serif", google: "Lato", group: "sans" },
+  { key: "roboto", label: "Roboto", stack: "'Roboto', 'Helvetica Neue', Arial, sans-serif", google: "Roboto", group: "sans" },
+  { key: "opensans", label: "Open Sans", stack: "'Open Sans', 'Helvetica Neue', Arial, sans-serif", google: "Open Sans", group: "sans" },
+  { key: "montserrat", label: "Montserrat", stack: "'Montserrat', 'Helvetica Neue', Arial, sans-serif", google: "Montserrat", group: "sans" },
+  { key: "poppins", label: "Poppins", stack: "'Poppins', 'Helvetica Neue', Arial, sans-serif", google: "Poppins", group: "sans" },
+  { key: "nunito", label: "Nunito", stack: "'Nunito', 'Helvetica Neue', Arial, sans-serif", google: "Nunito", group: "sans" },
+  { key: "merriweather", label: "Merriweather", stack: "'Merriweather', Georgia, serif", google: "Merriweather", group: "serif" },
+  { key: "playfair", label: "Playfair Display", stack: "'Playfair Display', Georgia, serif", google: "Playfair Display", group: "serif" },
+  { key: "lora", label: "Lora", stack: "'Lora', Georgia, serif", google: "Lora", group: "serif" },
+];
+
+const FONT_BY_KEY = new Map<string, FontCatalogEntry>(
+  FONT_CATALOG.map((f) => [f.key, f])
+);
+
+/**
+ * Single <link> href that loads every Google webfont in the catalog — used by
+ * the composer so the live preview matches whatever font the user picks. All
+ * families are known-valid, so the css2 request never 400s.
+ */
+export function editorWebFontsHref(): string {
+  const families = FONT_CATALOG.filter((f) => f.google)
+    .map(
+      (f) =>
+        `family=${encodeURIComponent(f.google as string)}:ital,wght@0,400;0,600;0,700;1,400`
+    )
+    .join("&");
+  return `https://fonts.googleapis.com/css2?${families}&display=swap`;
+}
 
 export type BlockPadding = {
   top?: number;
@@ -336,10 +417,11 @@ function sanitizeRichText(input: string): string {
 // Typography / color helpers
 // ────────────────────────────────────────────────────────────
 
-function googleFontHref(brand: EffectiveBrand): string {
+function googleFontHref(brand: EffectiveBrand, body?: CampaignBody): string {
   const fonts = new Set<string>();
   if (brand.display_font) fonts.add(brand.display_font);
   if (brand.body_font) fonts.add(brand.body_font);
+  if (body) namedGoogleFonts(body).forEach((f) => fonts.add(f));
   if (fonts.size === 0) return "";
   const families = Array.from(fonts)
     .map(
@@ -378,7 +460,31 @@ function familyStack(
   family: BlockFontFamily | undefined,
   brand: EffectiveBrand
 ): string {
-  return family === "display" ? displayStack(brand) : bodyStack(brand);
+  if (!family || family === "body") return bodyStack(brand);
+  if (family === "display") return displayStack(brand);
+  const entry = FONT_BY_KEY.get(family);
+  return entry?.stack || bodyStack(brand);
+}
+
+/** Google Fonts families referenced by named-font picks anywhere in a body. */
+function namedGoogleFonts(body: CampaignBody): Set<string> {
+  const names = new Set<string>();
+  const add = (family?: BlockFontFamily) => {
+    if (!family) return;
+    const g = FONT_BY_KEY.get(family)?.google;
+    if (g) names.add(g);
+  };
+  add(body.design?.text?.fontFamily);
+  add(body.design?.heading?.fontFamily);
+  const walk = (blocks: CampaignBlock[]) => {
+    for (const b of blocks) {
+      const bs = (b as { blockStyle?: BlockStyle }).blockStyle;
+      add(bs?.font?.family);
+      if (b.type === "section") b.columns.forEach((c) => walk(c.blocks));
+    }
+  };
+  walk(body.blocks);
+  return names;
 }
 
 /**
@@ -834,7 +940,7 @@ export function renderCampaignHtml(
   // Per-email design overrides layered over the Brand Kit.
   const brand: Theme = resolveTheme(baseBrand, body.design);
 
-  const fontHref = googleFontHref(brand);
+  const fontHref = googleFontHref(brand, body);
   const testNoticeRow = opts.testNotice
     ? `<tr><td style="background:${softenHex(brand.accent_color, 0.85)};border:1px dashed ${brand.accent_color};border-radius:3px;padding:10px 14px;margin-bottom:18px;">
 <div style="font-family:${bodyStack(brand)};font-size:11px;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:${brand.accent_color};">Preview</div>
