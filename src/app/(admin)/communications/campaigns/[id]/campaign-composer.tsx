@@ -2078,7 +2078,11 @@ const STYLEABLE_BLOCKS: ReadonlySet<CampaignBlockType> = new Set([
   "section",
 ]);
 // Blocks whose main text supports font overrides.
-const FONT_BLOCKS: ReadonlySet<CampaignBlockType> = new Set(["heading", "text"]);
+const FONT_BLOCKS: ReadonlySet<CampaignBlockType> = new Set([
+  "heading",
+  "text",
+  "button",
+]);
 
 function BlockStylePanel({
   block,
@@ -2158,6 +2162,48 @@ function BlockStylePanel({
                   disabled={disabled}
                   onChange={(v) => setFont({ color: v || undefined })}
                 />
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mr-1">
+                  Style
+                </span>
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() =>
+                    setFont({
+                      weight:
+                        (style.font?.weight ?? 0) >= 700
+                          ? undefined
+                          : (700 as BlockFontWeight),
+                    })
+                  }
+                  className={`h-6 w-7 rounded border text-xs font-bold transition-colors disabled:opacity-30 ${
+                    (style.font?.weight ?? 0) >= 700
+                      ? "bg-foreground text-background"
+                      : "bg-background hover:bg-muted text-muted-foreground"
+                  }`}
+                  aria-pressed={(style.font?.weight ?? 0) >= 700}
+                  title="Bold"
+                >
+                  B
+                </button>
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() =>
+                    setFont({ italic: style.font?.italic ? undefined : true })
+                  }
+                  className={`h-6 w-7 rounded border text-xs italic transition-colors disabled:opacity-30 ${
+                    style.font?.italic
+                      ? "bg-foreground text-background"
+                      : "bg-background hover:bg-muted text-muted-foreground"
+                  }`}
+                  aria-pressed={!!style.font?.italic}
+                  title="Italic"
+                >
+                  I
+                </button>
               </div>
               <div className="grid grid-cols-3 gap-1.5">
                 <NumField label="Size px" value={style.font?.sizePx} disabled={disabled} onChange={(n) => setFont({ sizePx: n })} />

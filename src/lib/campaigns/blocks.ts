@@ -126,6 +126,7 @@ export type BlockFont = {
   family?: BlockFontFamily;
   sizePx?: number;
   weight?: BlockFontWeight;
+  italic?: boolean;
   color?: string;
   lineHeight?: number; // unitless
 };
@@ -527,7 +528,8 @@ function fontCss(
   const weight = font?.weight ?? defaults.weight;
   const color = font?.color ?? defaults.color;
   const lh = font?.lineHeight ?? defaults.lineHeight;
-  return `font-family:${family};font-size:${size}px;line-height:${lh};font-weight:${weight};color:${color};`;
+  const italic = font?.italic ? "font-style:italic;" : "";
+  return `font-family:${family};font-size:${size}px;line-height:${lh};font-weight:${weight};${italic}color:${color};`;
 }
 
 // ────────────────────────────────────────────────────────────
@@ -598,23 +600,42 @@ function buttonHtml(
   url: string,
   style: ButtonStyle,
   brand: Theme,
-  colors?: { bgColor?: string; textColor?: string }
+  colors?: { bgColor?: string; textColor?: string },
+  font?: BlockFont
 ): string {
   const label = escapeHtml(text);
   const href = safeUrl(url);
+  // Font overrides (family / weight / italic / size) layered over the per-style
+  // defaults; letter-spacing + uppercase stay so the button keeps its shape.
+  const fam = font?.family ? familyStack(font.family, brand) : bodyStack(brand);
+  const italic = font?.italic ? "font-style:italic;" : "";
+  const typeCss = (sizePx: number, weight: number) =>
+    `font-family:${fam};font-size:${font?.sizePx ?? sizePx}px;font-weight:${
+      font?.weight ?? weight
+    };${italic}`;
   if (style === "link") {
-    const linkColor = colors?.textColor || colors?.bgColor || brand.linkColor;
-    return `<a href="${href}" style="font-family:${bodyStack(brand)};font-size:14px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:${linkColor};text-decoration:none;border-bottom:1.5px solid ${linkColor};padding-bottom:2px;">${label} &nbsp;→</a>`;
+    const linkColor =
+      colors?.textColor || font?.color || colors?.bgColor || brand.linkColor;
+    return `<a href="${href}" style="${typeCss(
+      14,
+      600
+    )}letter-spacing:0.08em;text-transform:uppercase;color:${linkColor};text-decoration:none;border-bottom:1.5px solid ${linkColor};padding-bottom:2px;">${label} &nbsp;→</a>`;
   }
   if (style === "outline") {
     const line = colors?.bgColor || brand.primary_color;
-    const label_color = colors?.textColor || line;
-    return `<a href="${href}" style="display:inline-block;background:transparent;color:${label_color};text-decoration:none;font-family:${bodyStack(brand)};font-size:13px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;padding:13px 28px;border:1.5px solid ${line};border-radius:2px;">${label}</a>`;
+    const label_color = colors?.textColor || font?.color || line;
+    return `<a href="${href}" style="display:inline-block;background:transparent;color:${label_color};text-decoration:none;${typeCss(
+      13,
+      600
+    )}letter-spacing:0.12em;text-transform:uppercase;padding:13px 28px;border:1.5px solid ${line};border-radius:2px;">${label}</a>`;
   }
   // filled (default)
   const fill = colors?.bgColor || brand.buttonFill;
-  const fg = colors?.textColor || "#ffffff";
-  return `<a href="${href}" style="display:inline-block;background:${fill};color:${fg};text-decoration:none;font-family:${bodyStack(brand)};font-size:13px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;padding:14px 30px;border-radius:2px;">${label}</a>`;
+  const fg = colors?.textColor || font?.color || "#ffffff";
+  return `<a href="${href}" style="display:inline-block;background:${fill};color:${fg};text-decoration:none;${typeCss(
+    13,
+    600
+  )}letter-spacing:0.12em;text-transform:uppercase;padding:14px 30px;border-radius:2px;">${label}</a>`;
 }
 
 function dividerHtml(style: DividerStyle, brand: EffectiveBrand): string {
@@ -831,7 +852,7 @@ export function renderBlock(
     }
     case "button": {
       const td = `${padCss(block.blockStyle?.padding, "20px 0")}${tdExtraCss(block.blockStyle)}`;
-      return `<tr><td style="${td}">${buttonHtml(block.text, block.url, block.style ?? "filled", brand, { bgColor: block.bgColor, textColor: block.textColor })}</td></tr>`;
+      return `<tr><td style="${td}">${buttonHtml(block.text, block.url, block.style ?? "filled", brand, { bgColor: block.bgColor, textColor: block.textColor }, block.blockStyle?.font)}</td></tr>`;
     }
     case "image":
       return imageHtml(block, brand, ctx);
