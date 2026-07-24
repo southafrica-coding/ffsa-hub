@@ -212,6 +212,19 @@
     letter-spacing: 0.08em;
   }
 
+  /* The email builder's live canvas renders REAL email HTML inside the app, so
+     app-chrome styles leak in via inheritance — most visibly the uppercase +
+     letter-spacing from the [role="button"] rule above, which dnd-kit stamps
+     onto every draggable block wrapper. Reset the inheritable properties on the
+     rendered email so the preview matches the sent email. Inline styles on the
+     email (buttons, eyebrows) keep their intended uppercase because inline wins
+     over these non-!important rules. */
+  .ff-email-content,
+  .ff-email-content * {
+    text-transform: none;
+    letter-spacing: normal;
+  }
+
   /* ── Input / Textarea / Select ── */
   [data-slot="input"],
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
