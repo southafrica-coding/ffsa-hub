@@ -150,10 +150,17 @@ export const FFSA_LOGOS = {
 export const FFSA_WORDMARK_RATIO = 8.44;
 
 export const FFSA_GRAPHICS = {
-  /** FFX repeat-stamp graphic — yellow display type on blue spray. */
+  /** FFX photo-collage graphic (white FFX over a film-strip grid). */
   FFX: "/brand/ffx-graphic.png",
+  /** Same collage, tinted brand-blue. */
   FFX_BLUE: "/brand/ffx-graphic-blue.png",
+  /** Full portrait banner — the spray artwork on a transparent field. */
   FFX_BANNER: "/brand/ffx-banner.png",
+  /** The signature spray treatment, cropped tight to the FFX band: yellow
+   *  repeat-stamps in a grainy blue spray, transparent background so it
+   *  composites straight over black (per the deck's Graphics page). This
+   *  is the one to use for brand chrome — FFX_BANNER is mostly empty. */
+  FFX_SPRAY: "/brand/ffx-spray.png",
 } as const;
 
 // ── Verbal identity ─────────────────────────────────────────

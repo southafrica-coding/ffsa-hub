@@ -18,55 +18,69 @@ import {
 // Card / Button / input inside inherits it while the Hub admin theme
 // stays exactly as it is.
 
-/** Masthead: FIRE & FRAGRANCE wordmark over the FFX blue spray field,
- *  the deck's signature graphic treatment. */
+/** Masthead: FIRE & FRAGRANCE wordmark over the FFX spray treatment —
+ *  yellow repeat-stamps in a grainy blue spray on true black, the deck's
+ *  signature graphic (Graphics page). The spray art carries its own
+ *  transparency so it sits straight on the black field. */
 function FfxMasthead() {
   return (
     <div
       style={{
         position: "relative",
         overflow: "hidden",
-        background: FFSA_COLORS.BLUE,
+        background: FFSA_COLORS.BLACK,
+        minHeight: 132,
         borderBottom: `2px solid ${FFSA_COLORS.YELLOW}`,
       }}
     >
-      {/* FFX repeat-stamp graphic — the blue/yellow treatment from the
-          deck's Graphics page. Decorative only. */}
+      {/* The spray band, bled across the full width. Right-anchored so the
+          densest FFX stamps sit away from the wordmark. Decorative. */}
       <div
         aria-hidden
         style={{
           position: "absolute",
           inset: 0,
-          backgroundImage: `url(${FFSA_GRAPHICS.FFX_BANNER})`,
+          backgroundImage: `url(${FFSA_GRAPHICS.FFX_SPRAY})`,
           backgroundSize: "cover",
-          backgroundPosition: "center",
-          opacity: 0.55,
+          backgroundPosition: "right center",
+          backgroundRepeat: "no-repeat",
+        }}
+      />
+      {/* Left-side scrim so the wordmark stays legible over the busy art. */}
+      <div
+        aria-hidden
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: `linear-gradient(90deg, ${FFSA_COLORS.BLACK} 8%, rgba(0,0,0,0.55) 34%, rgba(0,0,0,0) 62%)`,
         }}
       />
       <div
         style={{
           position: "relative",
+          minHeight: 132,
           padding: "22px 24px",
           display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 16,
+          flexDirection: "column",
+          alignItems: "flex-start",
+          justifyContent: "flex-end",
+          gap: 8,
         }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={FFSA_LOGOS.WORDMARK_WHITE}
           alt={FFSA_BRAND.legalName}
-          style={{ height: 20, width: "auto", display: "block" }}
+          style={{ height: 22, width: "auto", display: "block" }}
         />
         <span
           style={{
             fontFamily: FFSA_FONTS.MONO,
             fontSize: 10,
             fontWeight: 700,
-            letterSpacing: "0.22em",
+            letterSpacing: "0.24em",
             textTransform: "uppercase",
-            color: FFSA_COLORS.WHITE,
+            color: FFSA_COLORS.YELLOW,
             whiteSpace: "nowrap",
           }}
         >

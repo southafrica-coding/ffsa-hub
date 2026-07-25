@@ -98,14 +98,24 @@ export default async function BrandKitPage() {
         className="rounded-xl overflow-hidden relative"
         style={{ background: FFSA_COLORS.BLACK, border: `1px solid ${FFSA_TINTS.LINE}` }}
       >
+        {/* FFX spray treatment, right-anchored and bled full-height on the
+            black field — the deck's Graphics-page artwork. */}
         <div
           aria-hidden
           className="absolute inset-0"
           style={{
-            backgroundImage: `url(${FFSA_GRAPHICS.FFX_BANNER})`,
+            backgroundImage: `url(${FFSA_GRAPHICS.FFX_SPRAY})`,
             backgroundSize: "cover",
-            backgroundPosition: "center",
-            opacity: 0.4,
+            backgroundPosition: "right center",
+            backgroundRepeat: "no-repeat",
+          }}
+        />
+        {/* Left scrim so the wordmark + copy stay legible over the art. */}
+        <div
+          aria-hidden
+          className="absolute inset-0"
+          style={{
+            background: `linear-gradient(90deg, ${FFSA_COLORS.BLACK} 10%, rgba(0,0,0,0.6) 40%, rgba(0,0,0,0.1) 72%)`,
           }}
         />
         <div className="relative px-6 py-10 sm:px-10 sm:py-14">
