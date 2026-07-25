@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Image from "next/image";
 import Link from "next/link";
+import { FFSA_TAGLINE } from "@/lib/brand/ffsa";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -249,7 +250,7 @@ export default function LoginPage() {
           textTransform: "uppercase",
         }}
       >
-        CATALYSE A GENERATION · EVANGELISE THE WORLD
+        {FFSA_TAGLINE}
       </p>
 
       {/* Bottom rule */}

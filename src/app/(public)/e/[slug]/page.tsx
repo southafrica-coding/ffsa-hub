@@ -6,6 +6,7 @@ import { TheSendStorefront } from "./the-send-storefront";
 import { CampsStorefront } from "./camps-storefront";
 import { PreachersStorefront } from "./preachers-storefront";
 import { PublicFormNotice } from "@/components/public-form-shell";
+import { FFSASurface } from "@/components/brand/ffsa-surface";
 import type { FormField } from "@/lib/forms/schema";
 
 type EventBrand = "ff" | "the_send" | "ffsa_camps" | "preachers";
@@ -110,11 +111,16 @@ export default async function PublicEventPage({
     );
   }
 
+  // brand === "ff" — the FFSA house brand. Wrapped in the shared FFSA
+  // chrome (FFX masthead + deck palette + footer lockup) so it reads as
+  // one identity with the FFSA emails the buyer receives.
   return (
-    <Storefront
-      event={eventProps}
-      ticketTypes={ticketTypes ?? []}
-      checkoutQuestions={checkoutQuestions}
-    />
+    <FFSASurface>
+      <Storefront
+        event={eventProps}
+        ticketTypes={ticketTypes ?? []}
+        checkoutQuestions={checkoutQuestions}
+      />
+    </FFSASurface>
   );
 }

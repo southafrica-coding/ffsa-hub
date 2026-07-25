@@ -2,6 +2,13 @@
 // asks this module for the effective brand kit at render time. Any field left
 // null in the DB falls back to the editorial default below.
 
+import {
+  FFSA_COLORS,
+  FFSA_TINTS,
+  FFSA_LOGOS,
+  FFSA_BRAND,
+} from "@/lib/brand/ffsa";
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
 
@@ -31,20 +38,27 @@ export type BrandKitRow = {
   updated_at: string | null;
 };
 
-// Editorial defaults — strong, magazine-feeling palette and typography.
-// Anything the user fills in on the Brand Settings page overrides these.
+// FFSA brand-deck defaults — see src/lib/brand/ffsa.ts for the source of
+// truth. A sending identity that hasn't been customised renders on-brand
+// out of the box; anything filled in on the Brand Settings page wins.
+//
+// (These were previously a generic slate/fire-orange + Fraunces/Inter
+// editorial set — visually unrelated to the FFSA brand.)
 export const BRAND_DEFAULTS = {
-  logo_url: null as string | null,
-  primary_color: "#0F172A", // deep slate — headline / header band
-  accent_color: "#C2410C", // warm fire-orange — CTAs, links
-  text_color: "#1E293B", // body copy
-  bg_color: "#F8FAFC", // canvas behind the email card
-  display_font: "Fraunces", // editorial serif
-  body_font: "Inter", // clean sans
-  org_name: "Fire & Fragrance South Africa",
-  org_address: "",
-  footer_tagline: "",
-  social_links: [] as SocialLink[],
+  logo_url: FFSA_LOGOS.WORDMARK_BLACK_EMAIL as string | null,
+  primary_color: FFSA_COLORS.BLACK, // headline / header band
+  accent_color: FFSA_COLORS.YELLOW, // CTAs, links
+  text_color: FFSA_TINTS.INK, // body copy
+  bg_color: FFSA_TINTS.PAPER, // canvas behind the email card
+  display_font: "Roboto", // headers set in Roboto Black
+  body_font: "Roboto",
+  org_name: FFSA_BRAND.legalName,
+  org_address: FFSA_BRAND.contact.address,
+  footer_tagline: FFSA_BRAND.slogan.ffsa,
+  social_links: [
+    { platform: "instagram", url: FFSA_BRAND.contact.instagramUrl },
+    { platform: "web", url: FFSA_BRAND.contact.websiteUrl },
+  ] as SocialLink[],
 } as const;
 
 export type EffectiveBrand = {

@@ -6,11 +6,12 @@
 //
 // IMPORTANT: this is the *Fire & Fragrance* brand (the hub's parent),
 // NOT "The Send". The two are distinct identities and must never be
-// designed using each other. F&F = Roboto / Roboto Mono, black + gold
-// + white, black pill buttons (source: fireandfragrance.com). The
-// Send's navy/red/blue ticket aesthetic lives only in its own template.
+// designed using each other. F&F = Roboto / Space Mono, black + yellow
+// + white, black pill buttons (source: the FFSA brand deck, encoded in
+// src/lib/brand/ffsa.ts). The Send's navy/red/blue ticket aesthetic
+// lives only in its own template.
 //
-// Email-safe: inline CSS, single 600px table. Roboto / Roboto Mono are
+// Email-safe: inline CSS, single 600px table. Roboto / Space Mono are
 // loaded via Google Fonts for clients that support webfonts (Apple Mail,
 // iOS); everything falls back to Arial / Courier elsewhere.
 // ============================================================
@@ -56,19 +57,26 @@ import {
   preachersEsc,
   preachersChrome,
 } from "./preachers-shell";
+import {
+  FFSA_COLORS,
+  FFSA_TINTS,
+  FFSA_FONTS,
+  FFSA_FONT_LINK,
+  FFSA_LOGOS,
+} from "@/lib/brand/ffsa";
 
-const BLACK = "#141414"; // masthead / footer
-const INK = "#1A1A1A"; // headings + body text
-const GOLD = "#F5C84B"; // the F&F accent
-const PAPER = "#FBFAF7"; // warm near-white body
+// F&F tokens — canonical, from src/lib/brand/ffsa.ts (the brand deck).
+const BLACK = FFSA_COLORS.BLACK; // masthead / footer
+const INK = FFSA_TINTS.INK; // headings + body text
+const GOLD = FFSA_COLORS.YELLOW; // the F&F accent
+const PAPER = FFSA_TINTS.PAPER; // warm near-white body
 const MUTED = "#6E6E6E";
-const WHITE = "#FFFFFF";
+const WHITE = FFSA_COLORS.WHITE;
 
-const SANS = "'Roboto',Arial,Helvetica,sans-serif";
-const MONO = "'Roboto Mono','Courier New',Courier,monospace";
+const SANS = FFSA_FONTS.BODY;
+const MONO = FFSA_FONTS.MONO;
 
-const FONT_LINK =
-  '<link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,500;0,700;0,900;1,400;1,700&family=Roboto+Mono:wght@400;500;700&display=swap" rel="stylesheet" />';
+const FONT_LINK = FFSA_FONT_LINK;
 
 function esc(s: string | null | undefined): string {
   return String(s ?? "")
@@ -231,7 +239,7 @@ ${preview}
   <tr><td style="background:${BLACK};padding:18px 28px;border-bottom:2px solid ${GOLD};">
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%"><tr>
       <td valign="middle">
-        <img src="${base}/brand/ff-wordmark-white@email.png" alt="Fire &amp; Fragrance" width="148" height="auto" style="display:block;width:148px;height:auto;" />
+        <img src="${base}${FFSA_LOGOS.WORDMARK_WHITE_EMAIL}" alt="Fire &amp; Fragrance" width="148" height="auto" style="display:block;width:148px;height:auto;" />
       </td>
       <td valign="middle" align="right" style="font-family:${MONO};font-size:10px;color:${GOLD};letter-spacing:0.2em;text-transform:uppercase;">South&nbsp;Africa</td>
     </tr></table>
@@ -244,7 +252,7 @@ ${preview}
 
   <!-- Footer -->
   <tr><td style="background:${BLACK};border-top:2px solid ${GOLD};padding:28px 30px;text-align:center;">
-    <img src="${base}/brand/ff-wordmark-white@email.png" alt="Fire &amp; Fragrance" width="124" height="auto" style="display:inline-block;width:124px;height:auto;" />
+    <img src="${base}${FFSA_LOGOS.WORDMARK_WHITE_EMAIL}" alt="Fire &amp; Fragrance" width="124" height="auto" style="display:inline-block;width:124px;height:auto;" />
     <p style="margin:12px 0 0;font-family:${MONO};font-size:10px;color:${GOLD};letter-spacing:0.2em;text-transform:uppercase;">Fire &amp; Fragrance South Africa</p>
     <p style="margin:10px 0 0;font-family:${SANS};font-size:12px;line-height:1.6;color:${WHITE};opacity:0.78;">
       <a href="${esc(opts.prefsUrl)}" style="color:${WHITE};text-decoration:underline;">Manage email preferences</a>

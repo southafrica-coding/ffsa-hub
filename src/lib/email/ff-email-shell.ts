@@ -3,26 +3,36 @@
 // ============================================================
 // Shared wrapper for transactional emails (the scheduling set) so they
 // match the F&F brand used by src/lib/email/workflow-template.ts: black
-// #141414 masthead + gold #F5C84B rule + the wordmark, warm-white paper
-// body, Roboto / Roboto Mono, black footer.
+// masthead + yellow rule + the wordmark, warm-white paper body,
+// Roboto / Space Mono, black footer.
 //
 // NOTE: deliberately NOT src/lib/email/shell.ts (the user's separate
 // uncommitted refactor) — this one is committed + inline-only.
 // ============================================================
 
-const BLACK = "#141414";
-const INK = "#1A1A1A";
-const GOLD = "#F5C84B";
-const PAPER = "#FBFAF7";
-const MUTED = "#6E6E6E";
-const WHITE = "#FFFFFF";
+import {
+  FFSA_COLORS,
+  FFSA_TINTS,
+  FFSA_FONTS,
+  FFSA_FONT_LINK,
+  FFSA_LOGOS,
+} from "@/lib/brand/ffsa";
 
-const SANS = "'Roboto',Arial,Helvetica,sans-serif";
-const MONO = "'Roboto Mono','Courier New',Courier,monospace";
+// Tokens come from the canonical brand kit — see src/lib/brand/ffsa.ts.
+// (These were previously local hexes and had drifted off-deck: a #141414
+// near-black and a #F5C84B gold instead of true black and #FFB801.)
+const BLACK = FFSA_COLORS.BLACK;
+const INK = FFSA_TINTS.INK;
+const GOLD = FFSA_COLORS.YELLOW;
+const PAPER = FFSA_TINTS.PAPER;
+const MUTED = "#6E6E6E";
+const WHITE = FFSA_COLORS.WHITE;
+
+const SANS = FFSA_FONTS.BODY;
+const MONO = FFSA_FONTS.MONO;
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://www.ffsahub.com";
-const FONT_LINK =
-  '<link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,500;0,700;0,900;1,400&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet" />';
+const FONT_LINK = FFSA_FONT_LINK;
 
 export function ffEsc(s: string | null | undefined): string {
   return String(s ?? "")
@@ -93,7 +103,7 @@ ${preview}
 
   <tr><td style="background:${BLACK};padding:18px 28px;border-bottom:2px solid ${GOLD};">
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%"><tr>
-      <td valign="middle"><img src="${base}/brand/ff-wordmark-white@email.png" alt="Fire &amp; Fragrance" width="148" height="auto" style="display:block;width:148px;height:auto;" /></td>
+      <td valign="middle"><img src="${base}${FFSA_LOGOS.WORDMARK_WHITE_EMAIL}" alt="Fire &amp; Fragrance" width="148" height="auto" style="display:block;width:148px;height:auto;" /></td>
       <td valign="middle" align="right" style="font-family:${MONO};font-size:10px;color:${GOLD};letter-spacing:0.2em;text-transform:uppercase;">South&nbsp;Africa</td>
     </tr></table>
   </td></tr>
@@ -103,7 +113,7 @@ ${preview}
   </td></tr>
 
   <tr><td style="background:${BLACK};border-top:2px solid ${GOLD};padding:26px 30px;text-align:center;">
-    <img src="${base}/brand/ff-wordmark-white@email.png" alt="Fire &amp; Fragrance" width="120" height="auto" style="display:inline-block;width:120px;height:auto;" />
+    <img src="${base}${FFSA_LOGOS.WORDMARK_WHITE_EMAIL}" alt="Fire &amp; Fragrance" width="120" height="auto" style="display:inline-block;width:120px;height:auto;" />
     <p style="margin:12px 0 0;font-family:${MONO};font-size:10px;color:${GOLD};letter-spacing:0.2em;text-transform:uppercase;">Fire &amp; Fragrance South Africa</p>
     <p style="margin:7px 0 0;font-family:${MONO};font-size:9px;color:${WHITE};letter-spacing:0.16em;text-transform:uppercase;opacity:0.5;">ffsahub.com</p>
   </td></tr>

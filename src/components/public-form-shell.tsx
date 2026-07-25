@@ -1,5 +1,6 @@
 import Image from "next/image";
 import type { CSSProperties } from "react";
+import { FFSA_SHELL_TOKENS, FFSA_TAGLINE } from "@/lib/brand/ffsa";
 
 // Shared visual shell for all public-facing form/landing pages.
 // Mirrors the renderEmailShell layout so emails and the linked pages
@@ -16,21 +17,9 @@ import type { CSSProperties } from "react";
 
 export type PublicShellBrand = "ff" | "the_send" | "ffsa_camps" | "preachers";
 
-export const PUBLIC_SHELL_TOKENS = {
-  bg: "#0D0B09",
-  card: "#141210",
-  cardElev: "hsl(22 10% 9%)",
-  border: "#2a2420",
-  borderSoft: "hsl(22 8% 18%)",
-  text: "#F0EBE3",
-  textDim: "#B8A898",
-  textDimmer: "#7a6e64",
-  textFaint: "#3a3028",
-  yellow: "#F5C518",
-  yellowHover: "#fdd34c",
-  green: "hsl(142 60% 55%)",
-  red: "hsl(0 75% 65%)",
-} as const;
+// FFSA ('ff') token set — canonical, from the brand deck. See
+// src/lib/brand/ffsa.ts; don't reintroduce local hexes here.
+export const PUBLIC_SHELL_TOKENS = FFSA_SHELL_TOKENS;
 
 // THE SEND token set — same shape as PUBLIC_SHELL_TOKENS so consumers
 // can swap with a single `brand === 'the_send' ? SEND : PUBLIC` switch
@@ -141,7 +130,7 @@ export function PublicFormShell({
           ? "PERMISSION GRANTED"
           : isPreachers
             ? "GO. PREACH."
-            : "CATALYSE A GENERATION · EVANGELISE THE WORLD"
+            : FFSA_TAGLINE
       : tagline;
 
   // SEND + FFSA Camps use a flat cream card with a thick coloured border

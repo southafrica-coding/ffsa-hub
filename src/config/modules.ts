@@ -15,6 +15,7 @@ import {
   History,
   Building2,
   Network,
+  Palette,
   type LucideIcon,
 } from "lucide-react";
 
@@ -132,6 +133,14 @@ export const ADMIN_MODULES: ModuleDefinition[] = [
     icon: HeartHandshake,
     description: "Ministries and their staff teams",
     requiredRoles: ["super_admin", "admin", "ministry_leader"],
+  },
+  {
+    id: "brand-kit",
+    label: "Brand Kit",
+    href: "/brand-kit",
+    icon: Palette,
+    description: "The FFSA brand — palette, type, logos, voice. Drives emails and event pages",
+    requiredRoles: [], // internal reference — visible to ALL authenticated users
   },
   {
     id: "records-library",
