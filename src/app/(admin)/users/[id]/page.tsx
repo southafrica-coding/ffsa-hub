@@ -16,6 +16,7 @@ import {
 } from "@/lib/users/lifecycle";
 import { UserHeader } from "./user-header";
 import { UserTabs } from "./user-tabs";
+import { EditProfileDialog } from "./edit-profile-dialog";
 
 export default async function UserProfilePage({
   params,
@@ -91,6 +92,12 @@ export default async function UserProfilePage({
       />
 
       <ProfileCompletenessCard lifecycle={lifecycle} />
+
+      {isAdmin && (
+        <div className="flex justify-end">
+          <EditProfileDialog user={targetUser} />
+        </div>
+      )}
 
       <section className="grid gap-4 lg:grid-cols-3">
         <InfoCard title="Personal">

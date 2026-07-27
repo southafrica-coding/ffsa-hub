@@ -3,10 +3,20 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Star, UserPlus, X, Check, Plus, Trash2, ChevronUp, ChevronDown } from "lucide-react";
+import { Star, UserPlus, X, Check, Plus, Trash2, ChevronUp, ChevronDown, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import {
@@ -386,14 +396,19 @@ export function MinistryDetail({
     <div className="space-y-8">
       <div>
         <p className="page-eyebrow">MINISTRY</p>
-        <h1 className="page-title">
-          {ministry.name}
-          {!ministry.is_active && (
-            <span className="ml-2 align-middle text-base text-muted-foreground">
-              (retired)
-            </span>
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="page-title">
+            {ministry.name}
+            {!ministry.is_active && (
+              <span className="ml-2 align-middle text-base text-muted-foreground">
+                (retired)
+              </span>
+            )}
+          </h1>
+          {isAdmin && (
+            <MinistryEditDialog ministry={ministry} base={base} busy={busy} call={call} />
           )}
-        </h1>
+        </div>
         {ministry.description && (
           <p className="mt-1 text-sm text-muted-foreground">{ministry.description}</p>
         )}
@@ -459,6 +474,111 @@ export function MinistryDetail({
         )}
       </section>
     </div>
+  );
+}
+
+// Admin control to rename a ministry, edit its description, and retire /
+// reactivate it. Backed by PATCH /api/ministries/[id].
+function MinistryEditDialog({
+  ministry,
+  base,
+  busy,
+  call,
+}: {
+  ministry: Ministry;
+  base: string;
+  busy: boolean;
+  call: (
+    url: string,
+    method: string,
+    body: Record<string, unknown>,
+    okMsg?: string
+  ) => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState<string>(ministry.name ?? "");
+  const [description, setDescription] = useState<string>(
+    ministry.description ?? ""
+  );
+  const [isActive, setIsActive] = useState<boolean>(ministry.is_active ?? true);
+
+  function reset() {
+    setName(ministry.name ?? "");
+    setDescription(ministry.description ?? "");
+    setIsActive(ministry.is_active ?? true);
+  }
+
+  async function submit() {
+    if (!name.trim()) return;
+    await call(
+      base,
+      "PATCH",
+      {
+        name: name.trim(),
+        description: description.trim() || null,
+        is_active: isActive,
+      },
+      "Ministry updated"
+    );
+    setOpen(false);
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (o) reset();
+        setOpen(o);
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm">
+          <Pencil className="mr-1 h-4 w-4" /> Edit
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit ministry</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="ministry-edit-name">Name</Label>
+            <Input
+              id="ministry-edit-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              autoFocus
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="ministry-edit-desc">Description</Label>
+            <Textarea
+              id="ministry-edit-desc"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="What this ministry does"
+            />
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="h-4 w-4"
+              checked={!isActive}
+              onChange={(e) => setIsActive(!e.target.checked)}
+            />
+            Retired (hidden from active ministry lists)
+          </label>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)} disabled={busy}>
+            Cancel
+          </Button>
+          <Button onClick={submit} disabled={busy || !name.trim()}>
+            Save changes
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
