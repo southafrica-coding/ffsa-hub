@@ -4,7 +4,8 @@ import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
 const roboto = Roboto({
-  weight: ["400", "500", "700"],
+  // 900 = Roboto Black, the FFSA brand deck's mandated display weight.
+  weight: ["400", "500", "700", "900"],
   subsets: ["latin"],
   variable: "--font-roboto",
 });

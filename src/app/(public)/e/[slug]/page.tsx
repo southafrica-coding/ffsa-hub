@@ -1,23 +1,23 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getEventBySlug } from "@/services/events";
 import { listTicketTypesByEvent } from "@/services/ticketing";
-import { Storefront } from "./storefront";
+import { FfsaStorefront } from "./ffsa-storefront";
 import { TheSendStorefront } from "./the-send-storefront";
 import { CampsStorefront } from "./camps-storefront";
 import { PreachersStorefront } from "./preachers-storefront";
 import { PublicFormNotice } from "@/components/public-form-shell";
-import { FFSASurface } from "@/components/brand/ffsa-surface";
 import type { FormField } from "@/lib/forms/schema";
 
 type EventBrand = "ff" | "the_send" | "ffsa_camps" | "preachers";
 
 // Bespoke landing pages keyed by the event's brand flag (migration 077 +
-// the ffsa_camps follow-up). THE SEND and FFSA Camps each get their own
-// bespoke storefront; everything else uses the standard Storefront. All
-// are intentionally event-bespoke and not migrated to the shared dark
-// form shell. An explicit brand always wins; the legacy slug/title
-// heuristic only runs for unmigrated rows (brand null/empty) so they
-// still route correctly until every event row has its brand set.
+// the ffsa_camps follow-up). THE SEND, FFSA Camps and PREACHERS each get
+// their own bespoke storefront; the FFSA house brand ('ff', also the
+// default) renders the FfsaStorefront built against the FFSA Brand Deck.
+// All are intentionally event-bespoke and own the full viewport. An
+// explicit brand always wins; the legacy slug/title heuristic only runs
+// for unmigrated rows (brand null/empty) so they still route correctly
+// until every event row has its brand set.
 function resolveEventBrand(event: {
   brand?: string | null;
   public_slug?: string | null;
@@ -114,16 +114,14 @@ export default async function PublicEventPage({
     );
   }
 
-  // brand === "ff" — the FFSA house brand. Wrapped in the shared FFSA
-  // chrome (FFX masthead + deck palette + footer lockup) so it reads as
-  // one identity with the FFSA emails the buyer receives.
+  // brand === "ff" — the FFSA house brand. Bespoke full-viewport
+  // storefront built against the FFSA Brand Deck, reading the same brand
+  // module as the FFSA emails so the buyer's whole journey is one identity.
   return (
-    <FFSASurface>
-      <Storefront
-        event={eventProps}
-        ticketTypes={ticketTypes ?? []}
-        checkoutQuestions={checkoutQuestions}
-      />
-    </FFSASurface>
+    <FfsaStorefront
+      event={eventProps}
+      ticketTypes={ticketTypes ?? []}
+      checkoutQuestions={checkoutQuestions}
+    />
   );
 }
