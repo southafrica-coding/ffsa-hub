@@ -975,7 +975,7 @@ function EnrollmentsTab({
 
   function userName(u: { first_name: string | null; last_name: string | null; preferred_name: string | null; email: string | null }) {
     if (u.first_name) {
-      return `${u.preferred_name ?? u.first_name} ${u.last_name ?? ""}`.trim();
+      return `${u.first_name} ${u.last_name ?? ""}`.trim();
     }
     return u.email ?? "Unknown";
   }
@@ -1328,7 +1328,7 @@ function GradesTab({
   function userName(e: Enrollment) {
     const u = e.users;
     if (u.first_name) {
-      return `${u.preferred_name ?? u.first_name} ${u.last_name ?? ""}`.trim();
+      return `${u.first_name} ${u.last_name ?? ""}`.trim();
     }
     return u.email ?? "Unknown";
   }
@@ -1752,7 +1752,7 @@ function ApplicantsTab({
   function respName(resp: AppResponse) {
     if (resp.users) {
       const u = resp.users;
-      if (u.first_name) return `${u.preferred_name ?? u.first_name} ${u.last_name ?? ""}`.trim();
+      if (u.first_name) return `${u.first_name} ${u.last_name ?? ""}`.trim();
       return u.email ?? "Unknown";
     }
     if (resp.applicant_info) {
