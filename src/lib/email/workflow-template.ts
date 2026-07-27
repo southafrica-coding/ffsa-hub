@@ -57,34 +57,30 @@ import {
   preachersEsc,
   preachersChrome,
 } from "./preachers-shell";
+import { FFSA_FONTS } from "@/lib/brand/ffsa";
 import {
-  FFSA_COLORS,
-  FFSA_TINTS,
-  FFSA_FONTS,
-  FFSA_FONT_LINK,
-  FFSA_LOGOS,
-} from "@/lib/brand/ffsa";
+  FE,
+  feEsc,
+  feEyebrow,
+  feHeading,
+  feButton,
+  feQuote,
+  feDivider,
+  feSpacer,
+  feImage,
+  ffsaEmailDocument,
+} from "./ffsa-chrome";
 
-// F&F tokens — canonical, from src/lib/brand/ffsa.ts (the brand deck).
-const BLACK = FFSA_COLORS.BLACK; // masthead / footer
-const INK = FFSA_TINTS.INK; // headings + body text
-const GOLD = FFSA_COLORS.YELLOW; // the F&F accent
-const PAPER = FFSA_TINTS.PAPER; // warm near-white body
-const MUTED = "#6E6E6E";
-const WHITE = FFSA_COLORS.WHITE;
-
+// F&F campaign/workflow emails now render in the canonical FFSA
+// editorial-black chrome (ffsa-chrome.ts) — the same identity as the
+// ticketing landing page and every other FFSA send. The block editor
+// content is styled onto the black body below; the SEND / Camps /
+// PREACHERS variants further down keep their own chrome.
 const SANS = FFSA_FONTS.BODY;
 const MONO = FFSA_FONTS.MONO;
 
-const FONT_LINK = FFSA_FONT_LINK;
-
 function esc(s: string | null | undefined): string {
-  return String(s ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+  return feEsc(s);
 }
 
 function richText(html: string): string {
@@ -96,7 +92,7 @@ function richText(html: string): string {
         tagName: "a",
         attribs: {
           ...attribs,
-          style: `color:${INK};text-decoration:underline;text-decoration-color:${GOLD};`,
+          style: `color:${FE.YELLOW};text-decoration:underline;text-decoration-color:${FE.YELLOW};`,
           target: "_blank",
           rel: "noopener noreferrer",
         },
@@ -104,76 +100,49 @@ function richText(html: string): string {
       p: () => ({
         tagName: "p",
         attribs: {
-          style: `margin:0 0 2px;font-family:${SANS};font-size:15px;line-height:1.45;color:${INK};`,
+          style: `margin:0 0 4px;font-family:${SANS};font-size:15px;line-height:1.72;color:${FE.BONE};`,
         },
       }),
+      strong: () => ({ tagName: "strong", attribs: { style: `color:${FE.WHITE};font-weight:700;` } }),
+      b: () => ({ tagName: "strong", attribs: { style: `color:${FE.WHITE};font-weight:700;` } }),
     },
   });
-}
-
-function eyebrow(text: string): string {
-  return `<p style="margin:0 0 8px;font-family:${MONO};font-size:11px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;color:${INK};"><span style="color:${GOLD};">&bull;</span>&nbsp;&nbsp;${esc(text)}</p>`;
 }
 
 function renderBlock(b: CampaignBlock): string {
   switch (b.type) {
     case "eyebrow":
-      return eyebrow(b.text);
+      return feEyebrow(b.text);
 
     case "heading":
-      return `${b.eyebrow ? eyebrow(b.eyebrow) : ""}<h1 style="margin:0 0 8px;font-family:${SANS};font-size:30px;line-height:1.06;font-weight:900;letter-spacing:-0.015em;text-transform:uppercase;color:${INK};">${esc(b.text)}</h1>`;
+      return `${b.eyebrow ? feEyebrow(b.eyebrow) : ""}${feHeading(b.text)}`;
 
     case "text":
-      return `<div style="margin:0 0 6px;font-family:${SANS};font-size:15px;line-height:1.45;color:${INK};">${richText(b.text)}</div>`;
+      return `<div style="margin:0 0 6px;">${richText(b.text)}</div>`;
 
     case "button": {
       const style = b.style ?? "filled";
-      if (style === "link") {
-        return `<p style="margin:6px 0 18px;"><a href="${esc(b.url)}" style="font-family:${SANS};font-size:15px;font-weight:700;color:${INK};text-decoration:underline;text-decoration-color:${GOLD};">${esc(b.text)} &rarr;</a></p>`;
-      }
-      const outline = style === "outline";
-      const bg = outline ? PAPER : BLACK;
-      const fg = outline ? INK : WHITE;
-      const border = outline ? `2px solid ${INK}` : `2px solid ${BLACK}`;
-      return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:6px 0 18px;"><tr><td style="border-radius:999px;background:${bg};border:${border};">
-<a href="${esc(b.url)}" style="display:inline-block;padding:13px 30px;font-family:${SANS};font-size:13px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:${fg};text-decoration:none;">${esc(b.text)}</a>
-</td></tr></table>`;
+      return feButton(b.url, b.text, style === "link" ? "link" : style === "outline" ? "outline" : "filled");
     }
 
     case "image":
-      return `<p style="margin:0 0 16px;"><img src="${esc(b.url)}" alt="${esc(b.alt)}" width="544" style="display:block;width:100%;max-width:544px;height:auto;border:0;border-radius:10px;" />${
-        b.caption
-          ? `<span style="display:block;margin-top:6px;font-family:${MONO};font-size:11px;color:${MUTED};">${esc(b.caption)}</span>`
-          : ""
-      }</p>`;
+      return feImage(b.url, b.alt, b.caption);
 
     case "quote":
-      return `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:6px 0 18px;"><tr>
-<td style="border-left:4px solid ${GOLD};padding:4px 0 4px 18px;font-family:${SANS};font-size:18px;line-height:1.5;font-style:italic;color:${INK};">${esc(b.text)}${
-        b.attribution
-          ? `<span style="display:block;margin-top:8px;font-family:${MONO};font-size:11px;font-style:normal;letter-spacing:0.08em;text-transform:uppercase;color:${MUTED};">&mdash; ${esc(b.attribution)}</span>`
-          : ""
-      }</td></tr></table>`;
+      return feQuote(b.text, b.attribution);
 
-    case "divider": {
-      const s = b.style ?? "rule";
-      if (s === "space") return `<div style="height:20px;line-height:20px;font-size:0;">&nbsp;</div>`;
-      if (s === "dots")
-        return `<p style="margin:14px 0;text-align:center;font-family:${MONO};font-size:16px;letter-spacing:0.4em;color:${GOLD};">&middot;&nbsp;&middot;&nbsp;&middot;</p>`;
-      return `<div style="margin:20px 0;border-top:1px solid ${INK};opacity:0.14;line-height:0;font-size:0;">&nbsp;</div>`;
-    }
+    case "divider":
+      return feDivider(b.style ?? "rule");
 
-    case "spacer": {
-      const h = { sm: 8, md: 16, lg: 28, xl: 44 }[b.size ?? "md"];
-      return `<div style="height:${h}px;line-height:${h}px;font-size:0;">&nbsp;</div>`;
-    }
+    case "spacer":
+      return feSpacer(b.size ?? "md");
 
     case "image-text":
-      return `<p style="margin:0 0 8px;"><img src="${esc(b.url)}" alt="${esc(b.alt)}" width="544" style="display:block;width:100%;max-width:544px;height:auto;border:0;border-radius:10px;" /></p>${
+      return `${feImage(b.url, b.alt)}${
         b.heading
-          ? `<h2 style="margin:0 0 4px;font-family:${SANS};font-size:20px;line-height:1.15;font-weight:900;text-transform:uppercase;color:${INK};">${esc(b.heading)}</h2>`
+          ? `<h2 style="margin:0 0 6px;font-family:${FFSA_FONTS.DISPLAY};font-size:20px;line-height:1.1;font-weight:900;letter-spacing:-0.01em;text-transform:uppercase;color:${FE.WHITE};">${esc(b.heading)}</h2>`
           : ""
-      }<div style="margin:0 0 6px;font-family:${SANS};font-size:15px;line-height:1.45;color:${INK};">${richText(b.text)}</div>`;
+      }<div style="margin:0 0 6px;">${richText(b.text)}</div>`;
 
     default:
       return "";
@@ -210,60 +179,29 @@ export function renderWorkflowEmail(
   if (opts.brand === "the_send") {
     return renderTheSendWorkflowEmail(body, opts);
   }
-  const base = opts.baseUrl.replace(/\/$/, "");
   const blocks = (body?.blocks ?? []).map(renderBlock).join("");
 
-  // Optional availability scheduler — a framed card with a pill button to the
-  // magic-token picker. Recipient proposes times; they land on the follow-up.
+  // Optional availability scheduler — an inset panel with a stamped-yellow
+  // button to the magic-token picker.
   const schedulerBlock = opts.scheduler
-    ? `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:24px 0 6px;"><tr><td style="background:${WHITE};border:1px solid rgba(20,20,20,0.14);border-radius:10px;padding:22px;text-align:center;">
-<p style="margin:0 0 14px;font-family:${MONO};font-size:11px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;color:${INK};"><span style="color:${GOLD};">&bull;</span>&nbsp;&nbsp;Find a time to talk</p>
-<table role="presentation" cellpadding="0" cellspacing="0" align="center"><tr><td style="border-radius:999px;background:${BLACK};">
-<a href="${esc(opts.scheduler.url)}" style="display:inline-block;padding:14px 34px;font-family:${SANS};font-size:14px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:${WHITE};text-decoration:none;">${esc(opts.scheduler.label)}</a>
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:26px 0 6px;"><tr><td bgcolor="#0B0B0B" style="background:${FE.SURFACE};border:1px solid ${FE.LINE};border-radius:14px;padding:24px;text-align:center;">
+<p style="margin:0 0 14px;font-family:${MONO};font-size:11px;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:${FE.YELLOW};">&bull;&nbsp;&nbsp;Find a time to talk</p>
+<table role="presentation" cellpadding="0" cellspacing="0" align="center"><tr><td bgcolor="${FE.YELLOW}" style="background:${FE.YELLOW};border-radius:12px;">
+<a href="${esc(opts.scheduler.url)}" style="display:inline-block;padding:15px 34px;font-family:${FFSA_FONTS.DISPLAY};font-size:14px;font-weight:900;letter-spacing:0.04em;text-transform:uppercase;color:${FE.BLACK};text-decoration:none;">${esc(opts.scheduler.label)}&nbsp;&nbsp;&rarr;</a>
 </td></tr></table></td></tr></table>`
     : "";
 
-  const preview = opts.previewText
-    ? `<div style="display:none;max-height:0;overflow:hidden;font-size:1px;line-height:1px;color:${PAPER};">${esc(opts.previewText)}</div>`
-    : "";
+  const prefsLink = `<a href="${esc(opts.prefsUrl)}" style="color:${FE.DIM};text-decoration:underline;">Manage email preferences</a>`;
 
-  return `<!doctype html>
-<html lang="en"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" />${FONT_LINK}</head>
-<body style="margin:0;padding:0;background:${BLACK};font-family:${SANS};color:${INK};">
-${preview}
-<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:${BLACK};padding:28px 10px;">
-<tr><td align="center">
-<table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width:600px;background:${PAPER};table-layout:fixed;border-radius:8px;overflow:hidden;">
-
-  <!-- Masthead -->
-  <tr><td style="background:${BLACK};padding:18px 28px;border-bottom:2px solid ${GOLD};">
-    <table role="presentation" cellpadding="0" cellspacing="0" width="100%"><tr>
-      <td valign="middle">
-        <img src="${base}${FFSA_LOGOS.WORDMARK_WHITE_EMAIL}" alt="Fire &amp; Fragrance" width="148" height="auto" style="display:block;width:148px;height:auto;" />
-      </td>
-      <td valign="middle" align="right" style="font-family:${MONO};font-size:10px;color:${GOLD};letter-spacing:0.2em;text-transform:uppercase;">South&nbsp;Africa</td>
-    </tr></table>
-  </td></tr>
-
-  <!-- Body -->
-  <tr><td style="background:${PAPER};padding:36px 30px 14px 30px;">
-    ${(blocks + schedulerBlock) || `<p style="font-family:${SANS};font-size:15px;color:${INK};">&nbsp;</p>`}
-  </td></tr>
-
-  <!-- Footer -->
-  <tr><td style="background:${BLACK};border-top:2px solid ${GOLD};padding:28px 30px;text-align:center;">
-    <img src="${base}${FFSA_LOGOS.WORDMARK_WHITE_EMAIL}" alt="Fire &amp; Fragrance" width="124" height="auto" style="display:inline-block;width:124px;height:auto;" />
-    <p style="margin:12px 0 0;font-family:${MONO};font-size:10px;color:${GOLD};letter-spacing:0.2em;text-transform:uppercase;">Fire &amp; Fragrance South Africa</p>
-    <p style="margin:10px 0 0;font-family:${SANS};font-size:12px;line-height:1.6;color:${WHITE};opacity:0.78;">
-      <a href="${esc(opts.prefsUrl)}" style="color:${WHITE};text-decoration:underline;">Manage email preferences</a>
-    </p>
-    <p style="margin:8px 0 0;font-family:${MONO};font-size:9px;color:${WHITE};letter-spacing:0.16em;text-transform:uppercase;opacity:0.5;">Powered by FFSA Hub</p>
-  </td></tr>
-
-</table>
-</td></tr>
-</table>
-</body></html>`;
+  return ffsaEmailDocument({
+    title: opts.previewText,
+    previewText: opts.previewText,
+    siteUrl: opts.baseUrl,
+    bodyHtml:
+      (blocks + schedulerBlock) ||
+      `<p style="font-family:${SANS};font-size:15px;color:${FE.BONE};">&nbsp;</p>`,
+    footerExtraHtml: prefsLink,
+  });
 }
 
 // ============================================================
