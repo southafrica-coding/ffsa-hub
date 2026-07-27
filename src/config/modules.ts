@@ -16,6 +16,7 @@ import {
   Building2,
   Network,
   Palette,
+  SlidersHorizontal,
   type LucideIcon,
 } from "lucide-react";
 
@@ -169,6 +170,14 @@ export const SYSTEM_MODULES: ModuleDefinition[] = [
     icon: Shield,
     description: "Role definitions",
     requiredRoles: ["super_admin"],
+  },
+  {
+    id: "settings",
+    label: "Settings",
+    href: "/settings",
+    icon: SlidersHorizontal,
+    description: "Editable dropdown lists",
+    requiredRoles: ["super_admin", "admin"],
   },
 ];
 

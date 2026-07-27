@@ -91,6 +91,36 @@ export default function OnboardingPage() {
   const [agreementVersion, setAgreementVersion] = useState<string | null>(null);
   const [programName, setProgramName] = useState<string | null>(null);
 
+  // Editable dropdown lists (admin-managed in Settings). Start from the
+  // bundled defaults and overwrite once the DB copy loads, so the form works
+  // even if the fetch is slow or the table is empty.
+  const [genderOpts, setGenderOpts] = useState(GENDER_OPTIONS);
+  const [relationshipOpts, setRelationshipOpts] = useState(RELATIONSHIP_OPTIONS);
+  const [insuranceOpts, setInsuranceOpts] = useState(INSURANCE_PROVIDERS);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          "/api/list-options?keys=gender,relationship,insurance_provider"
+        );
+        if (!res.ok) return;
+        const { lists } = await res.json();
+        if (cancelled || !lists) return;
+        if (lists.gender?.length) setGenderOpts(lists.gender);
+        if (lists.relationship?.length) setRelationshipOpts(lists.relationship);
+        if (lists.insurance_provider?.length)
+          setInsuranceOpts(lists.insurance_provider);
+      } catch {
+        // Keep the bundled defaults on any failure.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
     // Users arriving from /join/[code] already set a password during signup,
     // so skip the password step entirely.
@@ -499,7 +529,7 @@ export default function OnboardingPage() {
                       <select id="gender" value={form.gender} onChange={(e) => set("gender", e.target.value)}
                         className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" required>
                         <option value="">Select…</option>
-                        {GENDER_OPTIONS.map((o) => (
+                        {genderOpts.map((o) => (
                           <option key={o.value} value={o.value}>{o.label}</option>
                         ))}
                       </select>
@@ -692,7 +722,7 @@ export default function OnboardingPage() {
                       <select id="emergency_contact_relationship" value={form.emergency_contact_relationship} onChange={(e) => set("emergency_contact_relationship", e.target.value)}
                         className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" required>
                         <option value="">Select…</option>
-                        {RELATIONSHIP_OPTIONS.map((o) => (
+                        {relationshipOpts.map((o) => (
                           <option key={o.value} value={o.value}>{o.label}</option>
                         ))}
                       </select>
@@ -712,7 +742,7 @@ export default function OnboardingPage() {
                             // distinguish "Other (specify)" from a recognised
                             // option, we check membership against the dropdown
                             // list — anything off-list is treated as Other.
-                            const knownValues = new Set(INSURANCE_PROVIDERS.map((o) => o.value));
+                            const knownValues = new Set(insuranceOpts.map((o) => o.value));
                             const isOther = !!form.health_insurance_provider && !knownValues.has(form.health_insurance_provider);
                             const selectValue = isOther ? "other" : form.health_insurance_provider;
                             return (
@@ -731,7 +761,7 @@ export default function OnboardingPage() {
                                   required
                                 >
                                   <option value="">Select…</option>
-                                  {INSURANCE_PROVIDERS.map((o) => (
+                                  {insuranceOpts.map((o) => (
                                     <option key={o.value} value={o.value}>{o.label}</option>
                                   ))}
                                 </select>

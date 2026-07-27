@@ -14,6 +14,7 @@ import {
   deriveUserLifecycle,
   groupMissingFields,
 } from "@/lib/users/lifecycle";
+import { getListOptions, type ListOption } from "@/services/list-options";
 import { UserHeader } from "./user-header";
 import { UserTabs } from "./user-tabs";
 import { EditProfileDialog } from "./edit-profile-dialog";
@@ -63,13 +64,19 @@ export default async function UserProfilePage({
     authLastSignInAt,
     securityEvents,
     { data: insurancePolicies },
+    { data: departmentOptions },
   ] = await Promise.all([
     getUserById(supabase, id),
     getAuthSignIn(id),
     getUserSecurityEvents(id),
     getInsurancePolicies(supabase, id),
+    getListOptions(supabase, "department", { activeOnly: true }),
   ]);
   if (error || !targetUser) notFound();
+
+  const departmentSelectOptions = ((departmentOptions ?? []) as ListOption[]).map(
+    (o) => ({ value: o.value, label: o.label })
+  );
 
   // Feed the real Supabase-Auth last-sign-in so the derived stage matches the
   // Users table (the users.last_sign_in_at column is unmaintained).
@@ -95,7 +102,10 @@ export default async function UserProfilePage({
 
       {isAdmin && (
         <div className="flex justify-end">
-          <EditProfileDialog user={targetUser} />
+          <EditProfileDialog
+            user={targetUser}
+            departmentOptions={departmentSelectOptions}
+          />
         </div>
       )}
 

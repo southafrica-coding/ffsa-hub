@@ -10,6 +10,8 @@ import {
   listContactPhones,
 } from "@/services/contact-identifiers";
 import { getContactDossier } from "@/services/contact-dossier";
+import { getListOptions, type ListOption } from "@/services/list-options";
+import { getAuthedUser, hasAnyRole, hasAnyPermission } from "@/lib/api-auth";
 import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -24,6 +26,7 @@ import { IdentifiersCard } from "./identifiers-card";
 import { MergeButton } from "./merge-button";
 import { Timeline } from "./timeline";
 import { ContactDossier } from "./contact-dossier";
+import { EditContactDialog } from "./edit-contact-dialog";
 
 export default async function ContactDetailPage({
   params,
@@ -65,6 +68,27 @@ export default async function ContactDetailPage({
     getContactDossier(admin, id),
   ]);
 
+  // Who can edit a contact (mirrors the contacts UPDATE RLS policy).
+  const authedUser = await getAuthedUser(supabase);
+  const canEdit = authedUser
+    ? (await hasAnyRole(supabase, authedUser.id, [
+        "super_admin",
+        "admin",
+        "events_admin",
+      ])) ||
+      (await hasAnyPermission(supabase, authedUser.id, [
+        "contacts.edit",
+        "contacts.write",
+      ]))
+    : false;
+  const { data: genderOpts } = await getListOptions(supabase, "gender", {
+    activeOnly: true,
+  });
+  const genderOptions = ((genderOpts ?? []) as ListOption[]).map((o) => ({
+    value: o.value,
+    label: o.label,
+  }));
+
   const contactLabels = contactLabelsRes.data ?? [];
   const allLabels = allLabelsRes.data ?? [];
   const contactLists = contactListsRes.data ?? [];
@@ -100,6 +124,9 @@ export default async function ContactDetailPage({
           <Badge variant={contact.status === "active" ? "default" : "outline"} className="capitalize">
             {contact.status}
           </Badge>
+          {canEdit && (
+            <EditContactDialog contact={contact} genderOptions={genderOptions} />
+          )}
           <MergeButton
             sourceContactId={id}
             sourceName={`${contact.preferred_name ?? contact.first_name} ${contact.last_name}`.trim()}

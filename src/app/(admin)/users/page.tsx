@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getUsers } from "@/services/users";
+import { getListOptions, type ListOption } from "@/services/list-options";
 import { getAuthSignIns } from "@/lib/users/auth-signins";
 import { UsersTable } from "./users-table";
 import { InviteUserForm } from "./invite-user-form";
@@ -18,11 +19,17 @@ export default async function UsersPage() {
       data: { session },
     },
     authSignIns,
+    { data: departmentOptions },
   ] = await Promise.all([
     getUsers(supabase),
     supabase.auth.getSession(),
     getAuthSignIns(),
+    getListOptions(supabase, "department", { activeOnly: true }),
   ]);
+  const departmentLabels: Record<string, string> = {};
+  for (const o of (departmentOptions ?? []) as ListOption[]) {
+    departmentLabels[o.value] = o.label;
+  }
   const { data: users, count, error: usersError } = usersResult;
   if (usersError) {
     console.error("getUsers error:", JSON.stringify(usersError, null, 2));
@@ -88,7 +95,11 @@ export default async function UsersPage() {
         />
       )}
 
-      <UsersTable users={usersWithSignIn} currentUserId={authUser?.id ?? ""} />
+      <UsersTable
+        users={usersWithSignIn}
+        currentUserId={authUser?.id ?? ""}
+        departmentLabels={departmentLabels}
+      />
     </div>
   );
 }

@@ -140,13 +140,18 @@ function displayName(u: UserRow): string {
 export function UsersTable({
   users,
   currentUserId,
+  departmentLabels,
 }: {
   users: UserRow[];
   currentUserId: string;
+  // DB-backed department value→label map (from the editable Settings list).
+  // Falls back to the built-in defaults for any value not present.
+  departmentLabels?: Record<string, string>;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const deptLabels = { ...DEPARTMENT_LABELS, ...(departmentLabels ?? {}) };
 
   const filteredUsers = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -154,7 +159,7 @@ export function UsersTable({
       ? users
       : users.filter((user) => {
           const departmentLabel = user.department
-            ? DEPARTMENT_LABELS[user.department] ?? user.department
+            ? deptLabels[user.department] ?? user.department
             : "";
           return [
             displayName(user),
@@ -308,7 +313,7 @@ export function UsersTable({
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {user.department
-                      ? DEPARTMENT_LABELS[user.department] ?? user.department
+                      ? deptLabels[user.department] ?? user.department
                       : "—"}
                   </TableCell>
                   <TableCell>

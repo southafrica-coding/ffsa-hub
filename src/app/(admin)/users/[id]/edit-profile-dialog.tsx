@@ -29,6 +29,7 @@ type EditableUser = {
   email?: string | null;
   phone?: string | null;
   job_title?: string | null;
+  department?: string | null;
   address_line_1?: string | null;
   address_line_2?: string | null;
   city?: string | null;
@@ -36,6 +37,8 @@ type EditableUser = {
   postal_code?: string | null;
   country?: string | null;
 };
+
+type Option = { value: string; label: string };
 
 // Text fields we render as plain inputs, grouped by section.
 const FIELDS: {
@@ -82,10 +85,17 @@ function initialForm(user: EditableUser): Record<string, string> {
       form[row.key as string] = (user[row.key] as string | null) ?? "";
     }
   }
+  form.department = user.department ?? "";
   return form;
 }
 
-export function EditProfileDialog({ user }: { user: EditableUser }) {
+export function EditProfileDialog({
+  user,
+  departmentOptions = [],
+}: {
+  user: EditableUser;
+  departmentOptions?: Option[];
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -109,6 +119,8 @@ export function EditProfileDialog({ user }: { user: EditableUser }) {
         payload[row.key as string] = v === "" ? null : v;
       }
     }
+    const dept = form.department?.trim() ?? "";
+    payload.department = dept === "" ? null : dept;
 
     const res = await fetch(`/api/users/${user.id}`, {
       method: "PATCH",
@@ -174,6 +186,28 @@ export function EditProfileDialog({ user }: { user: EditableUser }) {
               </div>
             </div>
           ))}
+
+          <div className="space-y-1.5">
+            <Label htmlFor="edit-department">Department</Label>
+            <select
+              id="edit-department"
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              value={form.department ?? ""}
+              onChange={(e) => set("department", e.target.value)}
+            >
+              <option value="">— None —</option>
+              {departmentOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+              {/* Preserve a legacy value that's no longer in the list. */}
+              {form.department &&
+                !departmentOptions.some((o) => o.value === form.department) && (
+                  <option value={form.department}>{form.department}</option>
+                )}
+            </select>
+          </div>
         </div>
 
         <DialogFooter>

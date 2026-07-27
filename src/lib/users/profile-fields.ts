@@ -99,6 +99,28 @@ export const REQUIRED_PROFILE_FIELDS: FieldConfig[] = [
   { field: "health_insurance_expiry_date", label: "Health Insurance Expiry Date", type: "date" },
 ];
 
+// Which required-field maps to which editable list_options key.
+const FIELD_TO_LIST_KEY: Record<string, string> = {
+  gender: "gender",
+  emergency_contact_relationship: "relationship",
+  health_insurance_provider: "insurance_provider",
+  department: "department",
+};
+
+// Override the bundled option arrays with admin-edited lists from
+// public.list_options where one is provided. Any field/list not supplied
+// keeps its built-in defaults, so an empty or unreachable table is safe.
+export function applyListOptions(
+  fields: FieldConfig[],
+  sets: Partial<Record<string, { value: string; label: string }[]>>
+): FieldConfig[] {
+  return fields.map((f) => {
+    const key = FIELD_TO_LIST_KEY[f.field];
+    const opts = key ? sets[key] : undefined;
+    return opts && opts.length > 0 ? { ...f, options: opts } : f;
+  });
+}
+
 export function getMissingProfileFields(
   profile: Record<string, unknown>
 ): FieldConfig[] {

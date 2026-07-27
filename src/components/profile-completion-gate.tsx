@@ -2,8 +2,26 @@ import { createClient } from "@/lib/supabase/server";
 import { ProfileCompletionForm } from "./profile-completion-form";
 import { ConsentAcceptanceForm } from "./consent-acceptance-form";
 import { InsuranceExpiryBanner } from "./insurance-expiry-banner";
-import { getProfileBlock, getInsuranceStatus } from "@/lib/users/profile-fields";
+import {
+  getProfileBlock,
+  getInsuranceStatus,
+  applyListOptions,
+} from "@/lib/users/profile-fields";
+import { getAllListOptions, type ListOption } from "@/services/list-options";
 import { hasUserConsented, getCurrentConsentAgreement } from "@/services/consent";
+
+// Build active {value,label} option sets keyed by list_key from list_options.
+function activeSets(
+  grouped: Record<string, ListOption[]> | null
+): Record<string, { value: string; label: string }[]> {
+  const sets: Record<string, { value: string; label: string }[]> = {};
+  for (const [key, options] of Object.entries(grouped ?? {})) {
+    sets[key] = options
+      .filter((o) => o.is_active)
+      .map((o) => ({ value: o.value, label: o.label }));
+  }
+  return sets;
+}
 
 // Full-screen blocking overlay: blurs and disables the page behind the panel.
 function BlockingOverlay({
@@ -91,11 +109,14 @@ export async function ProfileCompletionGate({
       defaults = { passport_country: "South Africa" };
     }
 
+    const { data: lists } = await getAllListOptions(supabase);
+    const fields = applyListOptions(block.fields, activeSets(lists));
+
     return (
       <BlockingOverlay
         panel={
           <ProfileCompletionForm
-            fields={block.fields}
+            fields={fields}
             reason={block.reason}
             defaults={defaults}
           />
