@@ -11,7 +11,9 @@ export async function getPrograms(
 ) {
   let query = supabase
     .from("programs")
-    .select("*, courses(id)", { count: "exact" })
+    // Count courses from billing_courses — the table the UI actually manages
+    // as "courses" (the academic `courses` table is effectively unused).
+    .select("*, billing_courses(id)", { count: "exact" })
     .order("created_at", { ascending: false });
 
   if (options?.status) {

@@ -21,7 +21,7 @@ type ProgramRow = {
   credit_hours: number;
   status: string;
   created_at: string;
-  courses?: { id: string }[];
+  billing_courses?: { id: string }[];
 };
 
 export function ProgramsTable({
@@ -99,7 +99,7 @@ export function ProgramsTable({
                     {program.code}
                   </TableCell>
                   <TableCell>{program.credit_hours}</TableCell>
-                  <TableCell>{program.courses?.length ?? 0}</TableCell>
+                  <TableCell>{program.billing_courses?.length ?? 0}</TableCell>
                   <TableCell>
                     <Badge
                       variant={
