@@ -35,7 +35,7 @@ export function UserHeader({
   const name =
     user.display_name ??
     (user.first_name
-      ? `${user.preferred_name ?? user.first_name} ${user.last_name ?? ""}`.trim()
+      ? `${user.first_name} ${user.last_name ?? ""}`.trim()
       : user.email ?? "Unknown User");
 
   // Status is DERIVED (same logic as the Users list), not read from the raw
@@ -56,7 +56,7 @@ export function UserHeader({
   const s = stageColors[lifecycle.stage];
 
   const avatarName =
-    user.preferred_name ?? user.first_name ?? user.email ?? "?";
+    user.first_name ?? user.email ?? "?";
 
   return (
     <div className="flex items-start gap-5">

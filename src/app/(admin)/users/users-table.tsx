@@ -132,7 +132,7 @@ function displayName(u: UserRow): string {
   return (
     u.display_name ??
     (u.first_name
-      ? `${u.preferred_name ?? u.first_name} ${u.last_name ?? ""}`.trim()
+      ? `${u.first_name} ${u.last_name ?? ""}`.trim()
       : "—")
   );
 }
@@ -287,7 +287,7 @@ export function UsersTable({
                     <div className="flex items-center gap-3">
                       <UserAvatar
                         src={user.avatar_url}
-                        name={user.preferred_name ?? user.first_name ?? user.email}
+                        name={user.first_name ?? user.email}
                         size={28}
                       />
                       <span className="truncate">{displayName(user)}</span>
