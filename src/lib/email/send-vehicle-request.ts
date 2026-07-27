@@ -11,8 +11,8 @@ import { dateRangeLabel } from "@/lib/bookings/dates";
 import { vehicleRequestReceivedEmailHtml } from "./templates/vehicle-request-received";
 import { vehicleRequestDecisionEmailHtml } from "./templates/vehicle-request-decision";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM = `Fire & Fragrance SA <${process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com"}>`;
+const resend = new Resend(process.env.RESEND_API_KEY?.trim());
+const FROM = `Fire & Fragrance SA <${(process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com").trim()}>`;
 const SITE =
   process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || "https://ffsahub.com";
 

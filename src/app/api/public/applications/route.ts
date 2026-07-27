@@ -17,7 +17,7 @@ import { Resend } from "resend";
 import { applicationConfirmationEmailHtml } from "@/lib/email/templates/application-confirmation";
 import { referenceRequestEmailHtml } from "@/lib/email/templates/reference-request";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = new Resend(process.env.RESEND_API_KEY?.trim());
 
 function findAnswerByType(
   answers: Array<{ question_id: string; question_label: string; answer: string }>,
@@ -261,7 +261,7 @@ export async function POST(request: Request) {
 
   // Create reference requests and send emails to referees
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://ffsahub.com";
-  const fromEmail = process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com";
+  const fromEmail = (process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com").trim();
 
   // Send confirmation email if we have one (include status tracker link)
   const statusTrackerUrl = response.status_token

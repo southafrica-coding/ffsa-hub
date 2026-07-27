@@ -6,7 +6,7 @@ import { Resend } from "resend";
 import { signEmailChangeToken } from "@/lib/tokens/email-change";
 import { emailChangeConfirmHtml } from "@/lib/email/templates/email-change";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = new Resend(process.env.RESEND_API_KEY?.trim());
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -71,7 +71,7 @@ export async function POST(request: Request) {
     .eq("id", user.id)
     .maybeSingle();
 
-  const fromEmail = process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com";
+  const fromEmail = (process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com").trim();
   try {
     await resend.emails.send({
       from: `Fire & Fragrance SA <${fromEmail}>`,

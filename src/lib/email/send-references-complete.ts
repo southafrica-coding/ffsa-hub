@@ -1,7 +1,7 @@
 import { Resend } from "resend";
 import { referencesCompleteEmailHtml } from "./templates/references-complete";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = new Resend(process.env.RESEND_API_KEY?.trim());
 
 // Emails one recipient that every required reference for an application has
 // been submitted — either the assigned staff member, or (when unassigned) a
@@ -22,7 +22,7 @@ export async function sendReferencesCompleteEmail(opts: {
 }) {
   if (!opts.staff.email) return;
 
-  const fromEmail = process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com";
+  const fromEmail = (process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com").trim();
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://ffsahub.com";
   const fromHeader = `Fire & Fragrance SA <${fromEmail}>`;
 

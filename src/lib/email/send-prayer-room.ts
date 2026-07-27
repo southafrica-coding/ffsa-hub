@@ -9,8 +9,8 @@ import { prayerRoomApplicationReceivedEmailHtml } from "./templates/prayer-room-
 import { prayerRoomEvaluatorAssignedEmailHtml } from "./templates/prayer-room-evaluator-assigned";
 import { prayerRoomDecisionEmailHtml } from "./templates/prayer-room-decision";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM = `Fire & Fragrance SA <${process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com"}>`;
+const resend = new Resend(process.env.RESEND_API_KEY?.trim());
+const FROM = `Fire & Fragrance SA <${(process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com").trim()}>`;
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || "https://ffsahub.com";
 
 const ROLE_LABELS: Record<string, string> = {

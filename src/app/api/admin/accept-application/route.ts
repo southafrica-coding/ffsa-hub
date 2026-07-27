@@ -11,7 +11,7 @@ import {
   plainTextToEmailHtml,
 } from "@/lib/email/placeholders";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = new Resend(process.env.RESEND_API_KEY?.trim());
 
 export async function POST(request: Request) {
   // Verify the calling user has schools-management access
@@ -132,7 +132,7 @@ export async function POST(request: Request) {
     const siteUrl =
       process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
     const fromEmail =
-      process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com";
+      (process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com").trim();
 
     // Check if a user with this email already exists
     const { data: existingUser } = await adminSupabase

@@ -1,7 +1,7 @@
 import { Resend } from "resend";
 import { referenceRequestEmailHtml } from "./templates/reference-request";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = new Resend(process.env.RESEND_API_KEY?.trim());
 
 /**
  * Send a referee their reference-request invite for a given token. Shared by
@@ -17,7 +17,7 @@ export async function sendReferenceInvite(params: {
   token: string;
 }) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://ffsahub.com";
-  const fromEmail = process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com";
+  const fromEmail = (process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com").trim();
   const referenceUrl = `${siteUrl}/reference/${params.token}`;
 
   return resend.emails.send({

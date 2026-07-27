@@ -15,8 +15,8 @@ import { buildIcsInvite } from "@/lib/scheduling/ics";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com";
+const resend = new Resend(process.env.RESEND_API_KEY?.trim());
+const FROM_EMAIL = (process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com").trim();
 const FROM_HEADER = `Fire & Fragrance SA <${FROM_EMAIL}>`;
 const SITE_URL =
   process.env.NEXT_PUBLIC_APP_URL ||

@@ -47,11 +47,12 @@ export async function sendRefundEmail(
     .eq("is_active", true)
     .maybeSingle();
 
-  const fromEmail =
+  const fromEmail = (
     identity?.from_email ||
     process.env.MAILTRAP_FROM_EMAIL ||
     process.env.RESEND_FROM_EMAIL ||
-    "noreply@ffsahub.com";
+    "noreply@ffsahub.com"
+  ).trim();
 
   const result = await sendViaMailtrap({
     fromEmail,

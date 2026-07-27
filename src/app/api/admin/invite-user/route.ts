@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Resend } from "resend";
 import { inviteEmailHtml } from "@/lib/email/templates/invite";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = new Resend(process.env.RESEND_API_KEY?.trim());
 
 export async function POST(request: Request) {
   // Verify the calling user is an admin
@@ -74,7 +74,7 @@ export async function POST(request: Request) {
   const inviteUrl = linkData.properties.action_link;
 
   // Send branded email via Resend
-  const fromEmail = process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com";
+  const fromEmail = (process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com").trim();
   const { error: emailError } = await resend.emails.send({
     from: `Fire & Fragrance SA <${fromEmail}>`,
     to: email,

@@ -191,11 +191,12 @@ export async function fulfillOrder(
     .eq("slug", identitySlug)
     .eq("is_active", true)
     .maybeSingle();
-  const fromEmail =
+  const fromEmail = (
     identity?.from_email ||
     process.env.MAILTRAP_FROM_EMAIL ||
     process.env.RESEND_FROM_EMAIL ||
-    "noreply@ffsahub.com";
+    "noreply@ffsahub.com"
+  ).trim();
   const fromName = identity?.from_name || "Fire & Fragrance SA";
   const replyTo = identity?.reply_to ?? null;
   const emailArgs = {

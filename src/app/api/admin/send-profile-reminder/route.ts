@@ -5,7 +5,7 @@ import { Resend } from "resend";
 import { profileReminderEmailHtml } from "@/lib/email/templates/profile-reminder";
 import { getMissingProfileFields } from "@/lib/users/profile-fields";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = new Resend(process.env.RESEND_API_KEY?.trim());
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -68,7 +68,7 @@ export async function POST(request: Request) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
   const signInUrl = `${siteUrl}/sign-in`;
 
-  const fromEmail = process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com";
+  const fromEmail = (process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com").trim();
   const { error: sendError } = await resend.emails.send({
     from: `Fire & Fragrance SA <${fromEmail}>`,
     to: targetUser.email,

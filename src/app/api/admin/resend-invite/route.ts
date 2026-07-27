@@ -5,7 +5,7 @@ import { Resend } from "resend";
 import { applicationAcceptedEmailHtml } from "@/lib/email/templates/application-accepted";
 import { userCanManageApplications } from "@/lib/auth/check-schools-access";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = new Resend(process.env.RESEND_API_KEY?.trim());
 
 export async function POST(request: Request) {
   // Verify the calling user has schools-management access
@@ -141,7 +141,7 @@ export async function POST(request: Request) {
 
   // Send the acceptance email with the new invite URL
   const fromEmail =
-    process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com";
+    (process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com").trim();
 
   const firstName =
     appUser.first_name || applicantInfo?.first_name || "there";

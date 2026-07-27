@@ -16,7 +16,7 @@ import { applicationRejectedEmailHtml } from "@/lib/email/templates/application-
 import { applicationWaitlistedEmailHtml } from "@/lib/email/templates/application-waitlisted";
 import { interviewScheduledEmailHtml } from "@/lib/email/templates/interview-scheduled";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = new Resend(process.env.RESEND_API_KEY?.trim());
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -170,7 +170,7 @@ export async function PUT(request: Request) {
   // ── Bulk status update ──
   if (ids && Array.isArray(ids) && ids.length > 0 && status) {
     const adminSupabase = createAdminClient();
-    const fromEmail = process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com";
+    const fromEmail = (process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com").trim();
     let updated = 0;
 
     for (const responseId of ids) {
@@ -243,7 +243,7 @@ export async function PUT(request: Request) {
       const programName = fullResp.programs?.name ?? "School Program";
       if (email) {
         await sendStatusEmail(
-          process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com",
+          (process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com").trim(),
           email,
           firstName,
           programName,
@@ -354,7 +354,7 @@ export async function PATCH(request: Request) {
 
   if (action === "send_reference_reminder" && reference_request_id) {
     const adminSupabase = createAdminClient();
-    const fromEmail = process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com";
+    const fromEmail = (process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com").trim();
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://ffsahub.com";
 
     const { data: refReq } = await (adminSupabase as any)
