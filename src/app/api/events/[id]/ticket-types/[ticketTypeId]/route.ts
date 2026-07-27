@@ -7,6 +7,7 @@ import {
 } from "@/services/ticketing";
 import { computeDisplayPriceCents } from "@/lib/payments/ticket-pricing";
 import { getAuthedUser, canManageEvents } from "@/lib/api-auth";
+import { sanitizeCheckoutQuestions } from "@/lib/ticketing/checkout-questions";
 
 // PATCH /api/events/[id]/ticket-types/[ticketTypeId]
 // Partial update. If target_net_cents or pricing_mode changes, the
@@ -36,6 +37,7 @@ export async function PATCH(
     sales_end_at?: string | null;
     sort_order?: number;
     is_active?: boolean;
+    questions?: unknown;
   };
   try {
     body = await request.json();
@@ -54,6 +56,9 @@ export async function PATCH(
   if (body.sales_end_at !== undefined) patch.sales_end_at = body.sales_end_at;
   if (body.sort_order !== undefined) patch.sort_order = body.sort_order;
   if (body.is_active !== undefined) patch.is_active = body.is_active;
+  if (body.questions !== undefined) {
+    patch.questions = sanitizeCheckoutQuestions(body.questions);
+  }
 
   // Re-price if either pricing input changed. We need the current
   // row to know the "other" value (e.g. only pricing_mode in the

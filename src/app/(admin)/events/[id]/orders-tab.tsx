@@ -33,11 +33,21 @@ type Order = {
   created_at: string;
   contact_resolution: string;
   custom_answers?: unknown;
+  // Issued tickets + their per-ticket answers (migration 137). Present
+  // once the order is paid and fulfilled.
+  tickets?: TicketWithAnswers[] | null;
   payment_provider: string | null;
   provider_payment_id: string | null;
   // Snapshotted from events.currency at checkout, so an order always
   // renders in the currency it was actually sold in.
   currency: string | null;
+};
+
+type TicketWithAnswers = {
+  id: string;
+  ticket_type_id: string;
+  custom_answers?: unknown;
+  ticket_types?: { name: string } | null;
 };
 
 export type OrderRefund = {
@@ -62,6 +72,24 @@ function answersForOrder(o: Order): CheckoutAnswerSnapshot[] {
   return Array.isArray(o.custom_answers)
     ? (o.custom_answers as CheckoutAnswerSnapshot[])
     : [];
+}
+
+// Issued tickets that actually collected per-tier answers, each with its
+// tier name and answer snapshot. Empty when no ticket carried questions.
+function ticketAnswersForOrder(o: Order): Array<{
+  id: string;
+  tierName: string;
+  answers: CheckoutAnswerSnapshot[];
+}> {
+  return (o.tickets ?? [])
+    .map((t) => ({
+      id: t.id,
+      tierName: t.ticket_types?.name ?? "Ticket",
+      answers: Array.isArray(t.custom_answers)
+        ? (t.custom_answers as CheckoutAnswerSnapshot[])
+        : [],
+    }))
+    .filter((t) => t.answers.length > 0);
 }
 
 const STATUS_VARIANTS: Record<
@@ -210,12 +238,15 @@ export function OrdersTab({
                 <TableBody>
                   {orders.map((o) => {
                     const answers = answersForOrder(o);
+                    const ticketAnswers = ticketAnswersForOrder(o);
                     const orderRefunds = refundsByOrder.get(o.id) ?? [];
                     const hasPending = orderRefunds.some(
                       (r) => r.status === "pending"
                     );
                     const expandable =
-                      answers.length > 0 || orderRefunds.length > 0;
+                      answers.length > 0 ||
+                      ticketAnswers.length > 0 ||
+                      orderRefunds.length > 0;
                     const expanded = expandedId === o.id;
                     return (
                     <Fragment key={o.id}>
@@ -347,6 +378,40 @@ export function OrdersTab({
                                     </div>
                                   ))}
                                 </dl>
+                              </div>
+                            )}
+                            {ticketAnswers.length > 0 && (
+                              <div className="space-y-2">
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                                  Per-ticket answers
+                                </p>
+                                <div className="space-y-3">
+                                  {ticketAnswers.map((t, ti) => (
+                                    <div
+                                      key={t.id}
+                                      className="rounded border bg-background/60 p-2"
+                                    >
+                                      <p className="text-xs font-medium mb-1">
+                                        {t.tierName} · Ticket {ti + 1}
+                                      </p>
+                                      <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
+                                        {t.answers.map((a, i) => (
+                                          <div
+                                            key={a.id ?? i}
+                                            className="flex flex-col"
+                                          >
+                                            <dt className="text-xs text-muted-foreground">
+                                              {a.label}
+                                            </dt>
+                                            <dd className="text-sm whitespace-pre-wrap">
+                                              {formatAnswerValue(a.value) || "—"}
+                                            </dd>
+                                          </div>
+                                        ))}
+                                      </dl>
+                                    </div>
+                                  ))}
+                                </div>
                               </div>
                             )}
                             {orderRefunds.length > 0 && (

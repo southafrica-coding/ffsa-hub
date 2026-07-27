@@ -3,11 +3,16 @@
 import { useMemo, useState } from "react";
 import type { FormField } from "@/lib/forms/schema";
 import { validateCheckoutAnswers } from "@/lib/ticketing/checkout-questions";
+import {
+  computeTicketSlots,
+  collectTicketAnswers,
+} from "@/lib/ticketing/ticket-questions";
 import { formatMoney, providersForCurrency } from "@/lib/currencies";
 import {
   CheckoutQuestionFields,
   type CheckoutFieldClasses,
 } from "./checkout-questions-fields";
+import { TicketQuestionsSection } from "./ticket-questions-section";
 
 // Custom checkout questions, themed to THE SEND's scoped `.tss-*` classes.
 const SEND_CHECKOUT_CLASSES: CheckoutFieldClasses = {
@@ -44,6 +49,7 @@ type TicketType = {
   max_per_order: number | null;
   sales_start_at: string | null;
   sales_end_at: string | null;
+  questions?: FormField[] | null;
 };
 
 type PublicEvent = {
@@ -128,8 +134,33 @@ export function TheSendStorefront({
   const [marketingConsent, setMarketingConsent] = useState(false);
   const [customAnswers, setCustomAnswers] = useState<Record<string, unknown>>({});
   const [customErrors, setCustomErrors] = useState<Record<string, string>>({});
+  const [ticketAnswers, setTicketAnswers] = useState<
+    Record<string, Record<string, unknown>>
+  >({});
+  const [ticketErrors, setTicketErrors] = useState<
+    Record<string, Record<string, string>>
+  >({});
   const [submitting, setSubmitting] = useState<"payfast" | "stripe" | null>(null);
   const [err, setErr] = useState<string | null>(null);
+
+  const questionsByTier = useMemo(() => {
+    const m: Record<string, FormField[]> = {};
+    for (const t of ticketTypes) m[t.id] = t.questions ?? [];
+    return m;
+  }, [ticketTypes]);
+  const ticketSlots = useMemo(
+    () =>
+      computeTicketSlots(
+        Object.values(lines).map((l) => ({
+          ticketTypeId: l.ticketTypeId,
+          ticketTypeName:
+            ticketTypes.find((t) => t.id === l.ticketTypeId)?.name ?? "Ticket",
+          qty: l.qty,
+        })),
+        questionsByTier
+      ),
+    [lines, ticketTypes, questionsByTier]
+  );
 
   function setQty(t: TicketType, qty: number) {
     setLines((prev) => {
@@ -280,6 +311,16 @@ export function TheSendStorefront({
       }
       setCustomErrors({});
     }
+    const ticketCollect = collectTicketAnswers(ticketSlots, ticketAnswers);
+    if (!ticketCollect.valid) {
+      setTicketErrors(ticketCollect.errors);
+      setErr("Answer the required questions for each ticket to deploy.");
+      document
+        .getElementById("tss-buyer")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    setTicketErrors({});
     setSubmitting(provider);
     setErr(null);
 
@@ -302,6 +343,7 @@ export function TheSendStorefront({
         },
         marketing_consent: marketingConsent,
         custom_answers: customAnswers,
+        ticket_answers: ticketCollect.payload,
         payment_provider: provider,
       }),
     });
@@ -616,6 +658,21 @@ export function TheSendStorefront({
                 setCustomAnswers((prev) => ({ ...prev, [k]: val }))
               }
               classes={SEND_CHECKOUT_CLASSES}
+            />
+          )}
+          {ticketSlots.length > 0 && (
+            <TicketQuestionsSection
+              slots={ticketSlots}
+              valuesBySlot={ticketAnswers}
+              errorsBySlot={ticketErrors}
+              onChange={(slotKey, k, val) =>
+                setTicketAnswers((prev) => ({
+                  ...prev,
+                  [slotKey]: { ...(prev[slotKey] ?? {}), [k]: val },
+                }))
+              }
+              classes={SEND_CHECKOUT_CLASSES}
+              titleClassName="tss-label"
             />
           )}
           <label className="tss-consent">

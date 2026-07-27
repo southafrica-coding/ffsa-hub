@@ -116,7 +116,15 @@ export function CheckInTab({
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between gap-4">
-            <CardTitle className="text-base">Attendance roster</CardTitle>
+            <div className="flex items-center gap-3">
+              <CardTitle className="text-base">Attendance roster</CardTitle>
+              <a
+                href={`/api/events/${eventId}/attendees/export`}
+                className="text-xs text-blue-600 hover:underline"
+              >
+                Export attendees (CSV)
+              </a>
+            </div>
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span>
                 Updated {lastRefreshedAt.toLocaleTimeString()}

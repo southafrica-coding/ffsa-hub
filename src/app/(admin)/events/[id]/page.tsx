@@ -34,7 +34,7 @@ import { CheckInTab } from "./check-in-tab";
 import {
   listTicketTypesByEvent,
   listPromoCodesByEvent,
-  listOrdersByEvent,
+  listOrdersWithTicketAnswersByEvent,
   listAttendanceTicketsByEvent,
   getActiveFeeProfiles,
 } from "@/services/ticketing";
@@ -98,7 +98,7 @@ export default async function EventDetailPage({
     listTicketTypesByEvent(supabase, id),
     listPromoCodesByEvent(supabase, id),
     getActiveFeeProfiles(supabase, event.currency),
-    listOrdersByEvent(supabase, id),
+    listOrdersWithTicketAnswersByEvent(supabase, id),
     listAttendanceTicketsByEvent(supabase, id),
     supabase
       .from("sending_identities")

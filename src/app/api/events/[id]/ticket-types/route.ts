@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createTicketType } from "@/services/ticketing";
 import { computeDisplayPriceCents } from "@/lib/payments/ticket-pricing";
 import { getAuthedUser, canManageEvents } from "@/lib/api-auth";
+import { sanitizeCheckoutQuestions } from "@/lib/ticketing/checkout-questions";
 
 // POST /api/events/[id]/ticket-types
 // Body: { name, description?, pricing_mode?, target_net_cents,
@@ -33,6 +34,7 @@ export async function POST(
     sales_end_at?: string | null;
     sort_order?: number;
     is_active?: boolean;
+    questions?: unknown;
   };
   try {
     body = await request.json();
@@ -87,6 +89,9 @@ export async function POST(
     sales_end_at: body.sales_end_at ?? null,
     sort_order: body.sort_order ?? 0,
     is_active: body.is_active ?? true,
+    // Sanitize server-side so a malformed builder payload can never land
+    // an unrenderable question schema on the tier.
+    questions: sanitizeCheckoutQuestions(body.questions),
   });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

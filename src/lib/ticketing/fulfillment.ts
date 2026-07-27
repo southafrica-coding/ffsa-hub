@@ -22,6 +22,10 @@ import { theSendTicketEmailHtml } from "@/lib/email/templates/the-send-ticket-co
 import { campsTicketEmailHtml } from "@/lib/email/templates/ffsa-camps-ticket-confirmation";
 import { preachersTicketEmailHtml } from "@/lib/email/templates/preachers-ticket-confirmation";
 import { resolveOrderToCrm } from "./crm-resolution";
+import {
+  ticketAnswerDrainer,
+  type TicketAnswerGroup,
+} from "./ticket-questions";
 
 export type EventBrand = "ff" | "the_send" | "ffsa_camps" | "preachers";
 
@@ -103,7 +107,7 @@ export async function fulfillOrder(
   const { data: order, error: orderErr } = await supabase
     .from("orders")
     .select(
-      "id, status, total_cents, currency, buyer_first_name, buyer_last_name, buyer_email, lines, event_id, events(id, title, start_date, end_date, location, public_slug, brand)"
+      "id, status, total_cents, currency, buyer_first_name, buyer_last_name, buyer_email, lines, ticket_answers, event_id, events(id, title, start_date, end_date, location, public_slug, brand)"
     )
     .eq("id", orderId)
     .maybeSingle();
@@ -138,12 +142,19 @@ export async function fulfillOrder(
     if (lines.length === 0) {
       return { ok: false, error: `Order ${orderId} has no lines to fulfil` };
     }
+    // Drain the per-ticket answers captured at checkout onto each issued
+    // ticket. Grouped by tier (FIFO), so the i-th kids ticket gets the
+    // i-th kids answer set; tiers without questions get an empty [].
+    const drainAnswers = ticketAnswerDrainer(
+      (order.ticket_answers as TicketAnswerGroup[] | null) ?? []
+    );
     const ticketRows = lines.flatMap((line) =>
       Array.from({ length: line.qty }, () => ({
         order_id: orderId,
         event_id: order.event_id,
         ticket_type_id: line.ticket_type_id,
         code: generateTicketCode(),
+        custom_answers: drainAnswers(line.ticket_type_id),
       }))
     );
     const { data: inserted, error: insertErr } = await supabase

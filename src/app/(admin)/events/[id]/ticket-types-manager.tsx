@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { grossUpToCover, type FeeProfile } from "@/lib/payments/pricing";
 import { currencySymbol, formatMoney } from "@/lib/currencies";
+import type { FormField } from "@/lib/forms/schema";
+import { QuestionsBuilder } from "./questions-builder";
 
 type TicketType = {
   id: string;
@@ -20,6 +22,8 @@ type TicketType = {
   sales_end_at: string | null;
   is_active: boolean;
   sort_order: number;
+  // Per-tier custom questions asked once per ticket (migration 137).
+  questions?: FormField[] | null;
 };
 
 function previewDisplayCents(
@@ -67,6 +71,7 @@ export function TicketTypesManager({
   const [maxPerOrder, setMaxPerOrder] = useState("");
   const [salesStart, setSalesStart] = useState("");
   const [salesEnd, setSalesEnd] = useState("");
+  const [questions, setQuestions] = useState<FormField[]>([]);
 
   function reset() {
     setName("");
@@ -77,6 +82,7 @@ export function TicketTypesManager({
     setMaxPerOrder("");
     setSalesStart("");
     setSalesEnd("");
+    setQuestions([]);
     setErr(null);
   }
 
@@ -105,6 +111,7 @@ export function TicketTypesManager({
         max_per_order: maxPerOrder ? Number.parseInt(maxPerOrder, 10) : null,
         sales_start_at: toIsoOrNull(salesStart),
         sales_end_at: toIsoOrNull(salesEnd),
+        questions,
       }),
     });
     setBusy(false);
@@ -176,8 +183,9 @@ export function TicketTypesManager({
             {ticketTypes.map((t) => (
               <li
                 key={t.id}
-                className="flex items-start justify-between gap-3 border rounded p-3"
+                className="border rounded p-3"
               >
+                <div className="flex items-start justify-between gap-3">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-sm font-medium">{t.name}</p>
@@ -241,6 +249,8 @@ export function TicketTypesManager({
                     Delete
                   </button>
                 </div>
+                </div>
+                <TierQuestionsEditor eventId={eventId} ticket={t} />
               </li>
             ))}
           </ul>
@@ -360,6 +370,21 @@ export function TicketTypesManager({
                 />
               </div>
             </div>
+            <div className="border-t pt-3">
+              <p className="text-xs font-medium text-foreground">
+                Questions for this ticket (optional)
+              </p>
+              <p className="text-xs text-muted-foreground mb-2">
+                Asked once for <em>each</em> ticket of this tier at checkout —
+                e.g. a Kids tier can collect the child&apos;s name and age for
+                every kids ticket in the order.
+              </p>
+              <QuestionsBuilder
+                questions={questions}
+                onChange={setQuestions}
+                emptyHint="No per-ticket questions — buyers just pick the quantity."
+              />
+            </div>
             {err && <p className="text-xs text-red-600">{err}</p>}
             <div className="flex gap-2">
               <button
@@ -386,5 +411,117 @@ export function TicketTypesManager({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+// Per-tier question editor shown under each tier in the list. Collapsed
+// by default to a count; expands to the shared QuestionsBuilder and saves
+// via PATCH. Independent of the add form so questions can be added to a
+// tier that already exists (and has sales).
+function TierQuestionsEditor({
+  eventId,
+  ticket,
+}: {
+  eventId: string;
+  ticket: TicketType;
+}) {
+  const router = useRouter();
+  const initial = useMemo<FormField[]>(
+    () => ticket.questions ?? [],
+    [ticket.questions]
+  );
+  const [open, setOpen] = useState(false);
+  const [questions, setQuestions] = useState<FormField[]>(initial);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const dirty = useMemo(
+    () => JSON.stringify(questions) !== JSON.stringify(initial),
+    [questions, initial]
+  );
+
+  async function save() {
+    setBusy(true);
+    setErr(null);
+    setMsg(null);
+    const res = await fetch(
+      `/api/events/${eventId}/ticket-types/${ticket.id}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ questions }),
+      }
+    );
+    setBusy(false);
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      setErr(data.error ?? "Couldn't save questions.");
+      return;
+    }
+    setMsg("Saved.");
+    router.refresh();
+  }
+
+  return (
+    <div className="mt-2 border-t pt-2">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="text-xs text-muted-foreground hover:text-foreground"
+        aria-expanded={open}
+      >
+        <span className="mr-1">{open ? "▾" : "▸"}</span>
+        Per-ticket questions
+        {initial.length > 0 && (
+          <span className="ml-1.5 px-1.5 py-0.5 rounded bg-blue-100 text-blue-800">
+            {initial.length}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="mt-2 space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Asked once for each <span className="font-medium">{ticket.name}</span>{" "}
+            ticket at checkout.
+          </p>
+          <QuestionsBuilder
+            questions={questions}
+            onChange={(next) => {
+              setMsg(null);
+              setQuestions(next);
+            }}
+            emptyHint="No per-ticket questions for this tier yet."
+          />
+          {err && <p className="text-xs text-red-600">{err}</p>}
+          {msg && !dirty && <p className="text-xs text-green-600">{msg}</p>}
+          {dirty && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={save}
+                disabled={busy}
+                className="px-3 py-1 rounded bg-blue-600 text-white text-xs hover:bg-blue-700 disabled:bg-gray-300"
+              >
+                {busy ? "Saving…" : "Save questions"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setQuestions(initial);
+                  setErr(null);
+                  setMsg(null);
+                }}
+                disabled={busy}
+                className="px-3 py-1 rounded border text-xs hover:bg-gray-50"
+              >
+                Discard
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

@@ -14,6 +14,10 @@ import {
   validateCheckoutAnswers,
   snapshotAnswers,
 } from "@/lib/ticketing/checkout-questions";
+import {
+  buildTicketAnswerGroups,
+  type TicketAnswerGroup,
+} from "@/lib/ticketing/ticket-questions";
 
 // POST /api/events/[id]/checkout
 //
@@ -42,6 +46,13 @@ type Body = {
   };
   marketing_consent?: boolean;
   custom_answers?: Record<string, unknown>;
+  // Per-ticket answers to each tier's questions (migration 137). One
+  // entry per ticket whose tier has questions; validated + snapshotted
+  // server-side against the tier's own schema.
+  ticket_answers?: Array<{
+    ticket_type_id?: string;
+    answers?: Record<string, unknown>;
+  }>;
   payment_provider?: "payfast" | "stripe";
 };
 
@@ -56,6 +67,7 @@ type TicketTypeRow = {
   sales_start_at: string | null;
   sales_end_at: string | null;
   is_active: boolean;
+  questions: FormField[] | null;
 };
 
 type ResolvedLine = {
@@ -199,7 +211,7 @@ export async function POST(
   const { data: typesData, error: typesErr } = await supabase
     .from("ticket_types")
     .select(
-      "id, name, pricing_mode, display_price_cents, capacity, quantity_sold, max_per_order, sales_start_at, sales_end_at, is_active"
+      "id, name, pricing_mode, display_price_cents, capacity, quantity_sold, max_per_order, sales_start_at, sales_end_at, is_active, questions"
     )
     .eq("event_id", eventId)
     .in("id", ticketTypeIds);
@@ -269,6 +281,27 @@ export async function POST(
     }
     resolved.push({ ticketType: tt, qty, perTicketCents });
   }
+
+  // ── Per-ticket tier questions (optional, migration 137) ──────
+  // Validated against each tier's own schema before any inventory is
+  // reserved — a bad/missing per-ticket answer returns a clean 400 with
+  // no rollback. The snapshot rides on the order until fulfilment drains
+  // it onto each issued ticket.
+  const ticketAnswerBuild = buildTicketAnswerGroups(
+    resolved.map((r) => ({
+      ticketTypeId: r.ticketType.id,
+      qty: r.qty,
+      questions: (r.ticketType.questions as FormField[] | null) ?? [],
+    })),
+    Array.isArray(body.ticket_answers) ? body.ticket_answers : []
+  );
+  if (!ticketAnswerBuild.valid) {
+    return NextResponse.json(
+      { error: ticketAnswerBuild.error ?? "Please answer the required questions." },
+      { status: 400 }
+    );
+  }
+  const ticketAnswerGroups: TicketAnswerGroup[] = ticketAnswerBuild.groups;
 
   // ── Reserve inventory atomically ─────────────────────────────
   const reserved: Array<{ ticketTypeId: string; qty: number }> = [];
@@ -438,6 +471,8 @@ export async function POST(
       // Snapshot values originate from the parsed JSON request body, so
       // they're already JSON-serializable; cast past the `unknown` value type.
       custom_answers: customAnswersSnapshot as unknown as Json,
+      // Per-ticket answers, drained onto tickets at fulfilment.
+      ticket_answers: ticketAnswerGroups as unknown as Json,
       expires_at: expiresAt,
     })
     .select("id")

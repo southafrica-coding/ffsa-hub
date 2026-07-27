@@ -66,6 +66,8 @@ export async function createTicketType(
     sales_end_at?: string | null;
     is_active?: boolean;
     sort_order?: number;
+    // Per-tier custom questions (migration 137). Flat FormField[].
+    questions?: unknown;
   }
 ) {
   return supabase.from("ticket_types").insert(data).select().single();
@@ -183,6 +185,23 @@ export async function listOrdersByEvent(
 
 export async function getOrder(supabase: Client, id: string) {
   return supabase.from("orders").select("*").eq("id", id).single();
+}
+
+// Orders for the admin Orders tab, each with its issued tickets and their
+// per-ticket answers (migration 137) so the order detail can show what was
+// collected for each ticket. Same rows/order as listOrdersByEvent, plus a
+// nested tickets array.
+export async function listOrdersWithTicketAnswersByEvent(
+  supabase: Client,
+  eventId: string
+) {
+  return supabase
+    .from("orders")
+    .select(
+      "*, tickets(id, ticket_type_id, custom_answers, ticket_types(name))"
+    )
+    .eq("event_id", eventId)
+    .order("created_at", { ascending: false });
 }
 
 export async function getOrderWithTickets(supabase: Client, id: string) {
