@@ -158,20 +158,29 @@ export function MinistryDetail({
   const base = `/api/ministries/${ministry.id}`;
 
   const hasCategories = subcategories.length > 0;
+  // Order the team leaders-first, then alphabetically by name within each role,
+  // so every group below reads A–Z with its leaders on top.
+  const sortedRoster = [...roster].sort((a, b) => {
+    const aLeader = a.member_role === "leader" ? 0 : 1;
+    const bLeader = b.member_role === "leader" ? 0 : 1;
+    if (aLeader !== bLeader) return aLeader - bLeader;
+    return nameOf(a.user).localeCompare(nameOf(b.user), undefined, {
+      sensitivity: "base",
+    });
+  });
   // Group the whole team (leaders + staff) by sub-category: one bucket per
-  // category (in sort order), plus a trailing "Uncategorized" bucket. `roster`
-  // is already ordered leaders-first, so leaders sit at the top of each group.
+  // category (in sort order), plus a trailing "Uncategorized" bucket.
   // Categories with no one still show, so admins see the empty group they made.
   const groups: { key: string; label: string; rows: Membership[] }[] = [
     ...subcategories.map((c) => ({
       key: c.id,
       label: c.name,
-      rows: roster.filter((r) => r.subcategory_id === c.id),
+      rows: sortedRoster.filter((r) => r.subcategory_id === c.id),
     })),
     {
       key: UNCATEGORIZED,
       label: hasCategories ? "Uncategorized" : "",
-      rows: roster.filter((r) => !r.subcategory_id),
+      rows: sortedRoster.filter((r) => !r.subcategory_id),
     },
   ];
 

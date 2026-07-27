@@ -18,7 +18,6 @@ export async function listMinistries(supabase: Client) {
   return supabase
     .from("staff_ministries")
     .select("id, name, slug, description, is_active, sort_order, staff_ministry_members(count)")
-    .order("sort_order", { ascending: true })
     .order("name", { ascending: true });
 }
 

@@ -150,22 +150,29 @@ export function UsersTable({
 
   const filteredUsers = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return users;
-    return users.filter((user) => {
-      const departmentLabel = user.department
-        ? DEPARTMENT_LABELS[user.department] ?? user.department
-        : "";
-      return [
-        displayName(user),
-        user.email ?? "",
-        user.job_title ?? "",
-        user.department ?? "",
-        departmentLabel,
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(q);
-    });
+    const matched = !q
+      ? users
+      : users.filter((user) => {
+          const departmentLabel = user.department
+            ? DEPARTMENT_LABELS[user.department] ?? user.department
+            : "";
+          return [
+            displayName(user),
+            user.email ?? "",
+            user.job_title ?? "",
+            user.department ?? "",
+            departmentLabel,
+          ]
+            .join(" ")
+            .toLowerCase()
+            .includes(q);
+        });
+    // Alphabetical by the name shown in the table.
+    return [...matched].sort((a, b) =>
+      displayName(a).localeCompare(displayName(b), undefined, {
+        sensitivity: "base",
+      })
+    );
   }, [users, search]);
 
   async function callApi(
