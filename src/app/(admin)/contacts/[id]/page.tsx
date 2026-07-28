@@ -10,6 +10,7 @@ import {
   listContactPhones,
 } from "@/services/contact-identifiers";
 import { getContactDossier } from "@/services/contact-dossier";
+import { getContactEmailHistory } from "@/services/contact-email-history";
 import { getListOptions, type ListOption } from "@/services/list-options";
 import { getAuthedUser, hasAnyRole, hasAnyPermission } from "@/lib/api-auth";
 import { notFound } from "next/navigation";
@@ -25,6 +26,7 @@ import { ListsCard } from "./lists-card";
 import { IdentifiersCard } from "./identifiers-card";
 import { MergeButton } from "./merge-button";
 import { Timeline } from "./timeline";
+import { EmailHistoryCard } from "./email-history-card";
 import { ContactDossier } from "./contact-dossier";
 import { EditContactDialog } from "./edit-contact-dialog";
 
@@ -57,6 +59,7 @@ export default async function ContactDetailPage({
     emailsRes,
     phonesRes,
     dossier,
+    emailHistory,
   ] = await Promise.all([
     getContactLabels(supabase, id),
     getCachedActiveLabels(),
@@ -66,6 +69,10 @@ export default async function ContactDetailPage({
     listContactEmails(admin, id),
     listContactPhones(admin, id),
     getContactDossier(admin, id),
+    // Admin client: same rationale as the identifier reads above — the
+    // page is already admin-gated, and the ledger tables are RLS-gated on
+    // grants a role-based admin may not hold.
+    getContactEmailHistory(admin, id),
   ]);
 
   // Who can edit a contact (mirrors the contacts UPDATE RLS policy).
@@ -213,6 +220,8 @@ export default async function ContactDetailPage({
               </CardContent>
             </Card>
           )}
+
+          <EmailHistoryCard items={emailHistory} />
 
           <Timeline contactId={id} events={events} />
         </div>
