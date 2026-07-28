@@ -4120,6 +4120,38 @@ export type Database = {
         }
         Relationships: []
       }
+      signup_links: {
+        Row: {
+          code: string
+          enabled: boolean
+          regenerated_at: string
+          regenerated_by: string | null
+          type: string
+        }
+        Insert: {
+          code: string
+          enabled?: boolean
+          regenerated_at?: string
+          regenerated_by?: string | null
+          type: string
+        }
+        Update: {
+          code?: string
+          enabled?: boolean
+          regenerated_at?: string
+          regenerated_by?: string | null
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signup_links_regenerated_by_fkey"
+            columns: ["regenerated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       student_fees: {
         Row: {
           accommodation_zar: number
@@ -4695,6 +4727,7 @@ export type Database = {
           postal_code: string | null
           preferred_name: string | null
           province: string | null
+          signup_type: string | null
           status: string
           updated_at: string
           visa_category: string | null
@@ -4737,6 +4770,7 @@ export type Database = {
           postal_code?: string | null
           preferred_name?: string | null
           province?: string | null
+          signup_type?: string | null
           status?: string
           updated_at?: string
           visa_category?: string | null
@@ -4779,6 +4813,7 @@ export type Database = {
           postal_code?: string | null
           preferred_name?: string | null
           province?: string | null
+          signup_type?: string | null
           status?: string
           updated_at?: string
           visa_category?: string | null
