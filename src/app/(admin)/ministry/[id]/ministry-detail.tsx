@@ -356,17 +356,17 @@ export function MinistryDetail({
                 <Star className="mr-1 h-3.5 w-3.5" /> Ministry lead
               </Button>
             )}
+            {/* Demote to plain staff — in place, no removal. */}
             {isAdmin && (
               <Button
                 variant="ghost"
-                size="icon"
+                size="sm"
                 disabled={busy}
-                aria-label="Remove leader"
                 onClick={() =>
-                  call(`${base}/leaders`, "DELETE", { user_id: r.user.id }, "Leader removed")
+                  call(`${base}/leaders`, "DELETE", { user_id: r.user.id }, "Moved to staff")
                 }
               >
-                <X className="h-4 w-4" />
+                Make staff
               </Button>
             )}
           </>
@@ -382,6 +382,21 @@ export function MinistryDetail({
                 }
               >
                 <Check className="mr-1 h-3.5 w-3.5" /> Approve
+              </Button>
+            )}
+            {/* Promote an existing member to leader — in place, so it works even
+                for members whose profile isn't fully set up (the picker filter
+                only gates brand-new adds, not role changes). */}
+            {isAdmin && (
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={busy}
+                onClick={() =>
+                  call(`${base}/leaders`, "POST", { user_id: r.user.id }, "Made a leader")
+                }
+              >
+                <Star className="mr-1 h-3.5 w-3.5" /> Make leader
               </Button>
             )}
             <Button
