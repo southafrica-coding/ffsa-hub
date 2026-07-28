@@ -18,6 +18,11 @@ import {
   buildTicketAnswerGroups,
   type TicketAnswerGroup,
 } from "@/lib/ticketing/ticket-questions";
+import {
+  resolveBuyerFields,
+  buyerFieldMap,
+  BUYER_FIELD_LABELS,
+} from "@/lib/ticketing/buyer-fields";
 
 // POST /api/events/[id]/checkout
 //
@@ -110,35 +115,51 @@ export async function POST(
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  // ── Buyer validation ─────────────────────────────────────────
+  // ── Buyer fields (values) ────────────────────────────────────
+  // Email is always validated below; the requiredness of first/last name
+  // and phone is per-event (buyer_fields, migration 140), so those checks
+  // run after the event is loaded.
   const buyer = body.buyer ?? {};
   const firstName = buyer.first_name?.trim() ?? "";
   const lastName = buyer.last_name?.trim() ?? "";
   const emailRaw = buyer.email?.trim() ?? "";
   const phoneRaw = buyer.phone?.trim() ?? "";
-  if (!firstName || !lastName) {
-    return NextResponse.json(
-      { error: "Please enter your first and last name." },
-      { status: 400 }
-    );
+
+  // ── Event ────────────────────────────────────────────────────
+  const { data: event, error: eventErr } = await supabase
+    .from("events")
+    .select(
+      "id, title, status, ticketing_enabled, public_slug, checkout_questions, buyer_fields, currency"
+    )
+    .eq("id", eventId)
+    .maybeSingle();
+  if (eventErr || !event) {
+    return NextResponse.json({ error: "Event not found." }, { status: 404 });
   }
+
+  // ── Buyer validation (config-driven) ─────────────────────────
+  // Email is always required (receipts + CRM dedup). Other fields are
+  // required only when the organizer enabled + marked them so.
+  const buyerFields = buyerFieldMap(resolveBuyerFields(event.buyer_fields));
   if (!isValidEmail(emailRaw)) {
     return NextResponse.json(
       { error: "Please enter a valid email address." },
       { status: 400 }
     );
   }
-
-  // ── Event ────────────────────────────────────────────────────
-  const { data: event, error: eventErr } = await supabase
-    .from("events")
-    .select(
-      "id, title, status, ticketing_enabled, public_slug, checkout_questions, currency"
-    )
-    .eq("id", eventId)
-    .maybeSingle();
-  if (eventErr || !event) {
-    return NextResponse.json({ error: "Event not found." }, { status: 404 });
+  const requiredValues: Array<["first_name" | "last_name" | "phone", string]> = [
+    ["first_name", firstName],
+    ["last_name", lastName],
+    ["phone", phoneRaw],
+  ];
+  for (const [key, value] of requiredValues) {
+    const cfg = buyerFields[key];
+    if (cfg.enabled && cfg.required && !value) {
+      return NextResponse.json(
+        { error: `Please enter your ${BUYER_FIELD_LABELS[key].toLowerCase()}.` },
+        { status: 400 }
+      );
+    }
   }
   if (
     !event.ticketing_enabled ||

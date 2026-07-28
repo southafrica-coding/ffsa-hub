@@ -5,6 +5,7 @@ import { FfsaStorefront } from "./ffsa-storefront";
 import { TheSendStorefront } from "./the-send-storefront";
 import { CampsStorefront } from "./camps-storefront";
 import { PreachersStorefront } from "./preachers-storefront";
+import { resolveBuyerFields } from "@/lib/ticketing/buyer-fields";
 import { PublicFormNotice } from "@/components/public-form-shell";
 import type { FormField } from "@/lib/forms/schema";
 
@@ -102,6 +103,9 @@ export default async function PublicEventPage({
   const brand = resolveEventBrand(event);
   const checkoutQuestions =
     (event.checkout_questions as FormField[] | null) ?? [];
+  // Resolve once here (email forced on+required, hidden fields never
+  // required) so every storefront gets a complete, safe config.
+  const buyerFields = resolveBuyerFields(event.buyer_fields);
 
   if (brand === "the_send") {
     return (
@@ -109,6 +113,7 @@ export default async function PublicEventPage({
         event={eventProps}
         ticketTypes={ticketTypes ?? []}
         checkoutQuestions={checkoutQuestions}
+        buyerFields={buyerFields}
       />
     );
   }
@@ -118,6 +123,7 @@ export default async function PublicEventPage({
         event={eventProps}
         ticketTypes={ticketTypes ?? []}
         checkoutQuestions={checkoutQuestions}
+        buyerFields={buyerFields}
       />
     );
   }
@@ -127,6 +133,7 @@ export default async function PublicEventPage({
         event={eventProps}
         ticketTypes={ticketTypes ?? []}
         checkoutQuestions={checkoutQuestions}
+        buyerFields={buyerFields}
       />
     );
   }
@@ -139,6 +146,7 @@ export default async function PublicEventPage({
       event={eventProps}
       ticketTypes={ticketTypes ?? []}
       checkoutQuestions={checkoutQuestions}
+      buyerFields={buyerFields}
     />
   );
 }

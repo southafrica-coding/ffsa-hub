@@ -8,6 +8,10 @@ import {
   computeTicketSlots,
   collectTicketAnswers,
 } from "@/lib/ticketing/ticket-questions";
+import {
+  buyerFieldMap,
+  type BuyerFieldConfig,
+} from "@/lib/ticketing/buyer-fields";
 import { formatMoney, providersForCurrency } from "@/lib/currencies";
 import {
   FFSA_BRAND,
@@ -119,11 +123,14 @@ export function FfsaStorefront({
   event,
   ticketTypes,
   checkoutQuestions,
+  buyerFields,
 }: {
   event: PublicEvent;
   ticketTypes: TicketType[];
   checkoutQuestions: FormField[];
+  buyerFields: BuyerFieldConfig[];
 }) {
+  const bf = buyerFieldMap(buyerFields);
   const currency = event.currency;
   const money = (cents: number) => formatMoney(cents, currency);
   const canUsePayfast = providersForCurrency(currency).includes("payfast");
@@ -297,9 +304,12 @@ export function FfsaStorefront({
     setPromoError(null);
   }
 
+  // Email is always required; other fields only block checkout when the
+  // organizer enabled + marked them required (buyer_fields, migration 140).
   const buyerValid =
-    firstName.trim().length > 0 &&
-    lastName.trim().length > 0 &&
+    (!bf.first_name.enabled || !bf.first_name.required || firstName.trim().length > 0) &&
+    (!bf.last_name.enabled || !bf.last_name.required || lastName.trim().length > 0) &&
+    (!bf.phone.enabled || !bf.phone.required || phone.trim().length > 0) &&
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
   async function submit(provider: "payfast" | "stripe" = "payfast") {
@@ -708,30 +718,42 @@ export function FfsaStorefront({
             <p className="ffx-eyebrow">
               <i className="ffx-dot ffx-dot-y" /> Your details
             </p>
-            <div className="ffx-grid2">
-              <div className="ffx-field">
-                <label className="ffx-cq-label">
-                  First name<span className="ffx-req"> *</span>
-                </label>
-                <input
-                  className="ffx-input"
-                  type="text"
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                />
+            {(bf.first_name.enabled || bf.last_name.enabled) && (
+              <div className="ffx-grid2">
+                {bf.first_name.enabled && (
+                  <div className="ffx-field">
+                    <label className="ffx-cq-label">
+                      First name
+                      {bf.first_name.required && (
+                        <span className="ffx-req"> *</span>
+                      )}
+                    </label>
+                    <input
+                      className="ffx-input"
+                      type="text"
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                    />
+                  </div>
+                )}
+                {bf.last_name.enabled && (
+                  <div className="ffx-field">
+                    <label className="ffx-cq-label">
+                      Last name
+                      {bf.last_name.required && (
+                        <span className="ffx-req"> *</span>
+                      )}
+                    </label>
+                    <input
+                      className="ffx-input"
+                      type="text"
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                    />
+                  </div>
+                )}
               </div>
-              <div className="ffx-field">
-                <label className="ffx-cq-label">
-                  Last name<span className="ffx-req"> *</span>
-                </label>
-                <input
-                  className="ffx-input"
-                  type="text"
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                />
-              </div>
-            </div>
+            )}
             <div className="ffx-field">
               <label className="ffx-cq-label">
                 Email<span className="ffx-req"> *</span>
@@ -743,15 +765,20 @@ export function FfsaStorefront({
                 onChange={(e) => setEmail(e.target.value)}
               />
             </div>
-            <div className="ffx-field">
-              <label className="ffx-cq-label">Phone</label>
-              <input
-                className="ffx-input"
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-              />
-            </div>
+            {bf.phone.enabled && (
+              <div className="ffx-field">
+                <label className="ffx-cq-label">
+                  Phone
+                  {bf.phone.required && <span className="ffx-req"> *</span>}
+                </label>
+                <input
+                  className="ffx-input"
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                />
+              </div>
+            )}
 
             {checkoutQuestions.length > 0 && (
               <div className="ffx-cq-block">
@@ -785,14 +812,16 @@ export function FfsaStorefront({
               </div>
             )}
 
-            <label className="ffx-consent">
-              <input
-                type="checkbox"
-                checked={marketingConsent}
-                onChange={(e) => setMarketingConsent(e.target.checked)}
-              />
-              <span>Keep me posted on FFSA events and gatherings by email.</span>
-            </label>
+            {bf.marketing_consent.enabled && (
+              <label className="ffx-consent">
+                <input
+                  type="checkbox"
+                  checked={marketingConsent}
+                  onChange={(e) => setMarketingConsent(e.target.checked)}
+                />
+                <span>Keep me posted on FFSA events and gatherings by email.</span>
+              </label>
+            )}
           </section>
         )}
 

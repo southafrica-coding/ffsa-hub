@@ -214,6 +214,7 @@ export default async function EventDetailPage({
           checkoutQuestions={
             (event.checkout_questions as FormField[] | null) ?? []
           }
+          buyerFields={event.buyer_fields ?? []}
         />
       )}
 

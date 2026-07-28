@@ -2,6 +2,7 @@ import { TicketingSettings } from "./ticketing-settings";
 import { TicketTypesManager } from "./ticket-types-manager";
 import { PromoCodesManager } from "./promo-codes-manager";
 import { CheckoutQuestionsManager } from "./checkout-questions-manager";
+import { BuyerFieldsManager } from "./buyer-fields-manager";
 import type { FeeProfile } from "@/lib/payments/pricing";
 import type { FormField } from "@/lib/forms/schema";
 
@@ -22,6 +23,7 @@ export function TicketsTab({
   promoCodes,
   feeProfiles,
   checkoutQuestions,
+  buyerFields,
   currency,
   currencyLocked,
 }: {
@@ -32,6 +34,7 @@ export function TicketsTab({
   promoCodes: PromoCodeRow[];
   feeProfiles: FeeProfile[];
   checkoutQuestions: FormField[];
+  buyerFields: unknown;
   currency: string;
   currencyLocked: boolean;
 }) {
@@ -56,6 +59,7 @@ export function TicketsTab({
         ticketTypes={ticketTypes.map((t) => ({ id: t.id, name: t.name }))}
         currency={currency}
       />
+      <BuyerFieldsManager eventId={eventId} initialFields={buyerFields} />
       <CheckoutQuestionsManager
         eventId={eventId}
         initialQuestions={checkoutQuestions}

@@ -1751,6 +1751,7 @@ export type Database = {
         Row: {
           base_label_id: string | null
           brand: string
+          buyer_fields: Json
           checkout_questions: Json
           created_at: string
           currency: string
@@ -1775,6 +1776,7 @@ export type Database = {
         Insert: {
           base_label_id?: string | null
           brand?: string
+          buyer_fields?: Json
           checkout_questions?: Json
           created_at?: string
           currency?: string
@@ -1799,6 +1801,7 @@ export type Database = {
         Update: {
           base_label_id?: string | null
           brand?: string
+          buyer_fields?: Json
           checkout_questions?: Json
           created_at?: string
           created_by?: string

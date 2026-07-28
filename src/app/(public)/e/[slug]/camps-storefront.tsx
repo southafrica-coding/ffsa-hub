@@ -7,6 +7,10 @@ import {
   computeTicketSlots,
   collectTicketAnswers,
 } from "@/lib/ticketing/ticket-questions";
+import {
+  buyerFieldMap,
+  type BuyerFieldConfig,
+} from "@/lib/ticketing/buyer-fields";
 import { formatMoney, providersForCurrency } from "@/lib/currencies";
 import {
   CheckoutQuestionFields,
@@ -105,11 +109,14 @@ export function CampsStorefront({
   event,
   ticketTypes,
   checkoutQuestions,
+  buyerFields,
 }: {
   event: PublicEvent;
   ticketTypes: TicketType[];
   checkoutQuestions: FormField[];
+  buyerFields: BuyerFieldConfig[];
 }) {
+  const bf = buyerFieldMap(buyerFields);
   // Every price on this page is in the event's own currency, and
   // PayFast can only take ZAR — so a non-ZAR event is card-only.
   const currency = event.currency;
@@ -288,9 +295,12 @@ export function CampsStorefront({
     setPromoError(null);
   }
 
+  // Email always required; other fields only block checkout when enabled +
+  // marked required (buyer_fields, migration 140).
   const buyerValid =
-    firstName.trim().length > 0 &&
-    lastName.trim().length > 0 &&
+    (!bf.first_name.enabled || !bf.first_name.required || firstName.trim().length > 0) &&
+    (!bf.last_name.enabled || !bf.last_name.required || lastName.trim().length > 0) &&
+    (!bf.phone.enabled || !bf.phone.required || phone.trim().length > 0) &&
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
   async function submit(provider: "payfast" | "stripe" = "payfast") {
@@ -592,32 +602,38 @@ export function CampsStorefront({
             <h2 className="cmp-h2 cmp-h2-blue">YOUR DETAILS</h2>
             <p className="cmp-section-tab">WHO&apos;S COMING</p>
           </div>
-          <div className="cmp-buyer-grid">
-            <div className="cmp-field">
-              <label className="cmp-label" htmlFor="cmp-fn">
-                [ FIRST NAME * ]
-              </label>
-              <input
-                id="cmp-fn"
-                type="text"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                className="cmp-input"
-              />
+          {(bf.first_name.enabled || bf.last_name.enabled) && (
+            <div className="cmp-buyer-grid">
+              {bf.first_name.enabled && (
+                <div className="cmp-field">
+                  <label className="cmp-label" htmlFor="cmp-fn">
+                    [ FIRST NAME{bf.first_name.required ? " *" : ""} ]
+                  </label>
+                  <input
+                    id="cmp-fn"
+                    type="text"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    className="cmp-input"
+                  />
+                </div>
+              )}
+              {bf.last_name.enabled && (
+                <div className="cmp-field">
+                  <label className="cmp-label" htmlFor="cmp-ln">
+                    [ LAST NAME{bf.last_name.required ? " *" : ""} ]
+                  </label>
+                  <input
+                    id="cmp-ln"
+                    type="text"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    className="cmp-input"
+                  />
+                </div>
+              )}
             </div>
-            <div className="cmp-field">
-              <label className="cmp-label" htmlFor="cmp-ln">
-                [ LAST NAME * ]
-              </label>
-              <input
-                id="cmp-ln"
-                type="text"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                className="cmp-input"
-              />
-            </div>
-          </div>
+          )}
           <div className="cmp-field">
             <label className="cmp-label" htmlFor="cmp-em">
               [ EMAIL * ]
@@ -630,18 +646,20 @@ export function CampsStorefront({
               className="cmp-input cmp-input-mono"
             />
           </div>
-          <div className="cmp-field">
-            <label className="cmp-label" htmlFor="cmp-ph">
-              [ PHONE — OPTIONAL ]
-            </label>
-            <input
-              id="cmp-ph"
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className="cmp-input cmp-input-mono"
-            />
-          </div>
+          {bf.phone.enabled && (
+            <div className="cmp-field">
+              <label className="cmp-label" htmlFor="cmp-ph">
+                [ PHONE{bf.phone.required ? " *" : " — OPTIONAL"} ]
+              </label>
+              <input
+                id="cmp-ph"
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className="cmp-input cmp-input-mono"
+              />
+            </div>
+          )}
           {checkoutQuestions.length > 0 && (
             <CheckoutQuestionFields
               questions={checkoutQuestions}
@@ -668,16 +686,18 @@ export function CampsStorefront({
               titleClassName="cmp-label"
             />
           )}
-          <label className="cmp-consent">
-            <input
-              type="checkbox"
-              checked={marketingConsent}
-              onChange={(e) => setMarketingConsent(e.target.checked)}
-            />
-            <span>
-              KEEP ME IN THE LOOP — SEND ME FFSA CAMPS &amp; EVENTS BY EMAIL.
-            </span>
-          </label>
+          {bf.marketing_consent.enabled && (
+            <label className="cmp-consent">
+              <input
+                type="checkbox"
+                checked={marketingConsent}
+                onChange={(e) => setMarketingConsent(e.target.checked)}
+              />
+              <span>
+                KEEP ME IN THE LOOP — SEND ME FFSA CAMPS &amp; EVENTS BY EMAIL.
+              </span>
+            </label>
+          )}
         </section>
       )}
 

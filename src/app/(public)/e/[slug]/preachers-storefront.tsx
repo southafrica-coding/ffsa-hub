@@ -7,6 +7,10 @@ import {
   computeTicketSlots,
   collectTicketAnswers,
 } from "@/lib/ticketing/ticket-questions";
+import {
+  buyerFieldMap,
+  type BuyerFieldConfig,
+} from "@/lib/ticketing/buyer-fields";
 import { formatMoney, providersForCurrency } from "@/lib/currencies";
 import {
   CheckoutQuestionFields,
@@ -143,11 +147,14 @@ export function PreachersStorefront({
   event,
   ticketTypes,
   checkoutQuestions,
+  buyerFields,
 }: {
   event: PublicEvent;
   ticketTypes: TicketType[];
   checkoutQuestions: FormField[];
+  buyerFields: BuyerFieldConfig[];
 }) {
+  const bf = buyerFieldMap(buyerFields);
   // Every price on this page is in the event's own currency, and
   // PayFast can only take ZAR — so a non-ZAR event is card-only.
   const currency = event.currency;
@@ -326,9 +333,12 @@ export function PreachersStorefront({
     setPromoError(null);
   }
 
+  // Email always required; other fields only block checkout when enabled +
+  // marked required (buyer_fields, migration 140).
   const buyerValid =
-    firstName.trim().length > 0 &&
-    lastName.trim().length > 0 &&
+    (!bf.first_name.enabled || !bf.first_name.required || firstName.trim().length > 0) &&
+    (!bf.last_name.enabled || !bf.last_name.required || lastName.trim().length > 0) &&
+    (!bf.phone.enabled || !bf.phone.required || phone.trim().length > 0) &&
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
   async function submit(provider: "payfast" | "stripe" = "payfast") {
@@ -626,32 +636,38 @@ export function PreachersStorefront({
             <h2 className="pr-h2 pr-h2-bone">YOUR DETAILS</h2>
             <p className="pr-section-tab">WHO&apos;S COMING</p>
           </div>
-          <div className="pr-buyer-grid">
-            <div className="pr-field">
-              <label className="pr-label" htmlFor="pr-fn">
-                [ FIRST NAME * ]
-              </label>
-              <input
-                id="pr-fn"
-                type="text"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                className="pr-input"
-              />
+          {(bf.first_name.enabled || bf.last_name.enabled) && (
+            <div className="pr-buyer-grid">
+              {bf.first_name.enabled && (
+                <div className="pr-field">
+                  <label className="pr-label" htmlFor="pr-fn">
+                    [ FIRST NAME{bf.first_name.required ? " *" : ""} ]
+                  </label>
+                  <input
+                    id="pr-fn"
+                    type="text"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    className="pr-input"
+                  />
+                </div>
+              )}
+              {bf.last_name.enabled && (
+                <div className="pr-field">
+                  <label className="pr-label" htmlFor="pr-ln">
+                    [ LAST NAME{bf.last_name.required ? " *" : ""} ]
+                  </label>
+                  <input
+                    id="pr-ln"
+                    type="text"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    className="pr-input"
+                  />
+                </div>
+              )}
             </div>
-            <div className="pr-field">
-              <label className="pr-label" htmlFor="pr-ln">
-                [ LAST NAME * ]
-              </label>
-              <input
-                id="pr-ln"
-                type="text"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                className="pr-input"
-              />
-            </div>
-          </div>
+          )}
           <div className="pr-field">
             <label className="pr-label" htmlFor="pr-em">
               [ EMAIL * ]
@@ -664,18 +680,20 @@ export function PreachersStorefront({
               className="pr-input pr-input-mono"
             />
           </div>
-          <div className="pr-field">
-            <label className="pr-label" htmlFor="pr-ph">
-              [ PHONE — OPTIONAL ]
-            </label>
-            <input
-              id="pr-ph"
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className="pr-input pr-input-mono"
-            />
-          </div>
+          {bf.phone.enabled && (
+            <div className="pr-field">
+              <label className="pr-label" htmlFor="pr-ph">
+                [ PHONE{bf.phone.required ? " *" : " — OPTIONAL"} ]
+              </label>
+              <input
+                id="pr-ph"
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className="pr-input pr-input-mono"
+              />
+            </div>
+          )}
           {checkoutQuestions.length > 0 && (
             <CheckoutQuestionFields
               questions={checkoutQuestions}
@@ -702,14 +720,16 @@ export function PreachersStorefront({
               titleClassName="pr-label"
             />
           )}
-          <label className="pr-consent">
-            <input
-              type="checkbox"
-              checked={marketingConsent}
-              onChange={(e) => setMarketingConsent(e.target.checked)}
-            />
-            <span>KEEP ME IN THE LOOP — SEND ME PREACHERS &amp; EVENTS BY EMAIL.</span>
-          </label>
+          {bf.marketing_consent.enabled && (
+            <label className="pr-consent">
+              <input
+                type="checkbox"
+                checked={marketingConsent}
+                onChange={(e) => setMarketingConsent(e.target.checked)}
+              />
+              <span>KEEP ME IN THE LOOP — SEND ME PREACHERS &amp; EVENTS BY EMAIL.</span>
+            </label>
+          )}
         </section>
       )}
 

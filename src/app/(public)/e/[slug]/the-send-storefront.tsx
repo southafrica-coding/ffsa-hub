@@ -7,6 +7,10 @@ import {
   computeTicketSlots,
   collectTicketAnswers,
 } from "@/lib/ticketing/ticket-questions";
+import {
+  buyerFieldMap,
+  type BuyerFieldConfig,
+} from "@/lib/ticketing/buyer-fields";
 import { formatMoney, providersForCurrency } from "@/lib/currencies";
 import {
   CheckoutQuestionFields,
@@ -104,11 +108,14 @@ export function TheSendStorefront({
   event,
   ticketTypes,
   checkoutQuestions,
+  buyerFields,
 }: {
   event: PublicEvent;
   ticketTypes: TicketType[];
   checkoutQuestions: FormField[];
+  buyerFields: BuyerFieldConfig[];
 }) {
+  const bf = buyerFieldMap(buyerFields);
   // Every price on this page is in the event's own currency, and
   // PayFast can only take ZAR — so a non-ZAR event is card-only.
   const currency = event.currency;
@@ -282,9 +289,12 @@ export function TheSendStorefront({
     setPromoError(null);
   }
 
+  // Email always required; other fields only block checkout when enabled +
+  // marked required (buyer_fields, migration 140).
   const buyerValid =
-    firstName.trim().length > 0 &&
-    lastName.trim().length > 0 &&
+    (!bf.first_name.enabled || !bf.first_name.required || firstName.trim().length > 0) &&
+    (!bf.last_name.enabled || !bf.last_name.required || lastName.trim().length > 0) &&
+    (!bf.phone.enabled || !bf.phone.required || phone.trim().length > 0) &&
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
   async function submit(provider: "payfast" | "stripe" = "payfast") {
@@ -599,32 +609,38 @@ export function TheSendStorefront({
             </h2>
             <p className="tss-section-tab">// DEPLOYMENT&nbsp;DETAILS &mdash; 03</p>
           </div>
-          <div className="tss-buyer-grid">
-            <div className="tss-field">
-              <label className="tss-label" htmlFor="tss-fn">
-                [ FIRST NAME * ]
-              </label>
-              <input
-                id="tss-fn"
-                type="text"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                className="tss-input"
-              />
+          {(bf.first_name.enabled || bf.last_name.enabled) && (
+            <div className="tss-buyer-grid">
+              {bf.first_name.enabled && (
+                <div className="tss-field">
+                  <label className="tss-label" htmlFor="tss-fn">
+                    [ FIRST NAME{bf.first_name.required ? " *" : ""} ]
+                  </label>
+                  <input
+                    id="tss-fn"
+                    type="text"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    className="tss-input"
+                  />
+                </div>
+              )}
+              {bf.last_name.enabled && (
+                <div className="tss-field">
+                  <label className="tss-label" htmlFor="tss-ln">
+                    [ LAST NAME{bf.last_name.required ? " *" : ""} ]
+                  </label>
+                  <input
+                    id="tss-ln"
+                    type="text"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    className="tss-input"
+                  />
+                </div>
+              )}
             </div>
-            <div className="tss-field">
-              <label className="tss-label" htmlFor="tss-ln">
-                [ LAST NAME * ]
-              </label>
-              <input
-                id="tss-ln"
-                type="text"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                className="tss-input"
-              />
-            </div>
-          </div>
+          )}
           <div className="tss-field">
             <label className="tss-label" htmlFor="tss-em">
               [ EMAIL * ]
@@ -637,18 +653,20 @@ export function TheSendStorefront({
               className="tss-input tss-input-mono"
             />
           </div>
-          <div className="tss-field">
-            <label className="tss-label" htmlFor="tss-ph">
-              [ PHONE — OPTIONAL ]
-            </label>
-            <input
-              id="tss-ph"
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className="tss-input tss-input-mono"
-            />
-          </div>
+          {bf.phone.enabled && (
+            <div className="tss-field">
+              <label className="tss-label" htmlFor="tss-ph">
+                [ PHONE{bf.phone.required ? " *" : " — OPTIONAL"} ]
+              </label>
+              <input
+                id="tss-ph"
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className="tss-input tss-input-mono"
+              />
+            </div>
+          )}
           {checkoutQuestions.length > 0 && (
             <CheckoutQuestionFields
               questions={checkoutQuestions}
@@ -675,17 +693,19 @@ export function TheSendStorefront({
               titleClassName="tss-label"
             />
           )}
-          <label className="tss-consent">
-            <input
-              type="checkbox"
-              checked={marketingConsent}
-              onChange={(e) => setMarketingConsent(e.target.checked)}
-            />
-            <span>
-              KEEP ME ON THE FRONTLINE — SEND ME FFSA EVENTS &amp; GATHERINGS BY
-              EMAIL.
-            </span>
-          </label>
+          {bf.marketing_consent.enabled && (
+            <label className="tss-consent">
+              <input
+                type="checkbox"
+                checked={marketingConsent}
+                onChange={(e) => setMarketingConsent(e.target.checked)}
+              />
+              <span>
+                KEEP ME ON THE FRONTLINE — SEND ME FFSA EVENTS &amp; GATHERINGS BY
+                EMAIL.
+              </span>
+            </label>
+          )}
         </section>
       )}
 
