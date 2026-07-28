@@ -1,5 +1,5 @@
 -- ============================================================
--- FFSA Hub — Migration 137: per-tier ticket questions
+-- FFSA Hub — Migration 138: per-tier ticket questions
 -- ============================================================
 -- Extends the custom-checkout-questions idea (migration 094) from
 -- event-level / once-per-order down to the ticket TIER, asked once per
