@@ -236,7 +236,7 @@ export default function OnboardingPage() {
     if (s === 3) {
       if (blank(form.address_line_1)) return "Address line 1 is required.";
       if (blank(form.city)) return "City is required.";
-      if (blank(form.province)) return "Province / state is required.";
+      if (!hideProvince && blank(form.province)) return "Province / state is required.";
       if (blank(form.country)) return "Country is required.";
       if (blank(form.postal_code)) return "Postal code is required.";
       return null;
@@ -341,6 +341,9 @@ export default function OnboardingPage() {
 
   // The active steps for this user. Community members skip the Passport step.
   const isCommunity = signupType === "community";
+  // Province isn't collected for the self-signup membership types.
+  const hideProvince =
+    signupType === "staff" || signupType === "student" || signupType === "community";
   const activeSteps = STEP_DEFS.filter((d) => !(isCommunity && d.key === "passport"));
   const activeNums = activeSteps.map((d) => d.num);
   const currentPos = Math.max(0, activeNums.indexOf(step));
@@ -613,6 +616,7 @@ export default function OnboardingPage() {
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
+                    {!hideProvince && (
                     <div className="space-y-2">
                       <Label htmlFor="province">Province / State *</Label>
                       {form.country === "South Africa" ? (
@@ -627,6 +631,7 @@ export default function OnboardingPage() {
                         <Input id="province" placeholder="State / Province" value={form.province} onChange={(e) => set("province", e.target.value)} required />
                       )}
                     </div>
+                    )}
                     <div className="space-y-2">
                       <Label htmlFor="postal_code">Postal Code *</Label>
                       <Input id="postal_code" placeholder="e.g. 2520" value={form.postal_code} onChange={(e) => set("postal_code", e.target.value)} required />

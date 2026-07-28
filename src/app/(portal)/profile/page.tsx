@@ -10,6 +10,7 @@ import {
   type InsurancePolicyRow,
 } from "@/components/profile/insurance-history";
 import { PROFILE_SECTIONS } from "@/lib/users/profile-sections";
+import { excludedProfileFields } from "@/lib/users/profile-fields";
 
 export default async function ProfilePage() {
   const supabase = await createClient();
@@ -102,7 +103,18 @@ export default async function ProfilePage() {
           </p>
         </div>
         <div className="grid gap-4 lg:grid-cols-2">
-          {PROFILE_SECTIONS.map((section) => (
+          {PROFILE_SECTIONS.map((rawSection) => {
+            // Hide fields that don't apply to this user's signup type
+            // (province for staff/student/community; department for
+            // student/community).
+            const excluded = excludedProfileFields(
+              row.signup_type as string | null | undefined
+            );
+            const section = {
+              ...rawSection,
+              fields: rawSection.fields.filter((f) => !excluded.has(f.field)),
+            };
+            return (
             <EditableProfileSection
               key={section.id}
               section={section}
@@ -116,7 +128,8 @@ export default async function ProfilePage() {
                 ) : undefined
               }
             />
-          ))}
+            );
+          })}
         </div>
       </section>
 

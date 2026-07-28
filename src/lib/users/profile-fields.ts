@@ -121,10 +121,30 @@ export function applyListOptions(
   });
 }
 
+// Fields that don't apply to certain self-signup membership types, so they
+// are neither collected nor required for them:
+//   - province:   removed for staff / student / community
+//   - department: removed for student / community (staff keep it)
+// Invited/legacy users (signup_type = null) keep every field.
+export function excludedProfileFields(
+  signupType: string | null | undefined
+): Set<string> {
+  const excluded = new Set<string>();
+  if (signupType === "staff" || signupType === "student" || signupType === "community") {
+    excluded.add("province");
+  }
+  if (signupType === "student" || signupType === "community") {
+    excluded.add("department");
+  }
+  return excluded;
+}
+
 export function getMissingProfileFields(
   profile: Record<string, unknown>
 ): FieldConfig[] {
+  const excluded = excludedProfileFields(profile.signup_type as string | null | undefined);
   return REQUIRED_PROFILE_FIELDS.filter((f) => {
+    if (excluded.has(f.field)) return false;
     const value = profile[f.field];
     return value === null || value === undefined || value === "";
   });
