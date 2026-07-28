@@ -30,6 +30,8 @@ export async function sendRefundEmail(
     isFullRefund: boolean;
     /** The order's currency (orders.currency). */
     currency: string;
+    /** Buyer-facing note, e.g. why the event was cancelled. */
+    cancellationMessage?: string | null;
   }
 ): Promise<{ sent: boolean; error?: string }> {
   if (!process.env.MAILTRAP_API_TOKEN) {
@@ -71,6 +73,7 @@ export async function sendRefundEmail(
       orderTotalCents: opts.orderTotalCents,
       isFullRefund: opts.isFullRefund,
       currency: opts.currency,
+      cancellationMessage: opts.cancellationMessage ?? null,
       siteUrl: process.env.NEXT_PUBLIC_SITE_URL || "https://www.ffsahub.com",
     }),
     category: "refund_confirmation",

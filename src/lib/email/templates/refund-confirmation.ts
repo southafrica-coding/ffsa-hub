@@ -33,9 +33,12 @@ export function refundConfirmationEmailHtml(opts: {
   siteUrl: string;
   /** ISO 4217 code from orders.currency. */
   currency: string;
+  /** Buyer-facing note, e.g. why the event was cancelled. */
+  cancellationMessage?: string | null;
 }): string {
   const money = (cents: number) => formatMoney(cents, opts.currency);
   const base = opts.siteUrl.replace(/\/$/, "");
+  const note = opts.cancellationMessage?.trim() || null;
 
   // A partial refund leaves the buyer holding valid tickets — saying
   // "your tickets have been cancelled" there would be wrong.
@@ -87,6 +90,24 @@ export function refundConfirmationEmailHtml(opts: {
             <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:14px;color:${TEXT};line-height:1.6;">Hi ${escapeHtml(opts.buyerFirstName)}, we've refunded your order. ${escapeHtml(ticketLine)}</p>
           </td>
         </tr>
+
+        ${
+          note
+            ? `<!-- Organiser note (e.g. why the event was cancelled) -->
+        <tr>
+          <td style="padding:16px 32px 0 32px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+              <tr>
+                <td style="padding:16px 18px;border:1px solid ${BORDER};border-left:3px solid ${YELLOW};border-radius:10px;background:${INSET};">
+                  <p style="margin:0 0 6px 0;font-family:Helvetica,Arial,sans-serif;font-size:10px;color:${YELLOW};letter-spacing:0.22em;text-transform:uppercase;font-weight:700;">A note from the organisers</p>
+                  <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:14px;color:${TEXT};line-height:1.6;white-space:pre-wrap;">${escapeHtml(note)}</p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>`
+            : ""
+        }
 
         <tr><td style="height:22px;line-height:22px;font-size:0;">&nbsp;</td></tr>
 

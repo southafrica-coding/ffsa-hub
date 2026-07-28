@@ -30,6 +30,7 @@ export async function PATCH(
     is_public?: boolean;
     registration_required?: boolean;
     brand?: string;
+    cancellation_message?: string | null;
   };
   try {
     body = await request.json();
@@ -50,6 +51,12 @@ export async function PATCH(
     }
     patch.status = body.status;
   }
+
+  // Cancellation message (migration 139) — buyer-facing note shown on the
+  // public event page while cancelled and in ticket refund emails. Empty
+  // string clears it.
+  if ("cancellation_message" in body)
+    patch.cancellation_message = body.cancellation_message?.trim() || null;
 
   // Core event details — editable from the event page.
   const dateRe = /^\d{4}-\d{2}-\d{2}$/;

@@ -19,6 +19,7 @@ import {
 } from "@/lib/ticketing/checkout-questions";
 import { OrdersExportPanel } from "./orders-export-panel";
 import { RefundDialog } from "./refund-dialog";
+import { RefundAllButton } from "./refund-all-button";
 import { formatMoney } from "@/lib/currencies";
 
 type Order = {
@@ -134,6 +135,11 @@ export function OrdersTab({
   const totalRevenueCents = everPaid.reduce((s, o) => s + o.total_cents, 0);
   const totalRefundedCents = everPaid.reduce((s, o) => s + o.refund_cents, 0);
   const netCents = totalRevenueCents - totalRefundedCents;
+  // Money still sitting on refundable orders — the "refund all" target.
+  const outstandingCents = stillPaid.reduce(
+    (s, o) => s + (o.total_cents - o.refund_cents),
+    0
+  );
 
   const refundsByOrder = new Map<string, OrderRefund[]>();
   for (const r of refunds) {
@@ -214,7 +220,17 @@ export function OrdersTab({
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <CardTitle className="text-base">Orders</CardTitle>
-          {orders.length > 0 && <OrdersExportPanel eventId={eventId} />}
+          {orders.length > 0 && (
+            <div className="flex items-center gap-2">
+              <RefundAllButton
+                eventId={eventId}
+                outstandingCount={stillPaid.length}
+                outstandingCents={outstandingCents}
+                formatMoney={(cents) => money(cents)}
+              />
+              <OrdersExportPanel eventId={eventId} />
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           {orders.length === 0 ? (

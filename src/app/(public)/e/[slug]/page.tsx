@@ -47,6 +47,23 @@ export default async function PublicEventPage({
   const supabase = createAdminClient();
 
   const { data: event } = await getEventBySlug(supabase, slug);
+
+  // A cancelled event that ticket holders may be revisiting: show the
+  // organiser's cancellation note rather than the generic notice, so
+  // people who bought tickets understand what happened.
+  if (event?.status === "cancelled") {
+    return (
+      <PublicFormNotice
+        eyebrow="Event cancelled"
+        heading={`${event.title} has been cancelled`}
+        body={
+          event.cancellation_message?.trim() ||
+          "This event is no longer going ahead. If you bought a ticket, you'll be refunded to the card or account you paid from."
+        }
+      />
+    );
+  }
+
   if (
     !event ||
     !event.ticketing_enabled ||

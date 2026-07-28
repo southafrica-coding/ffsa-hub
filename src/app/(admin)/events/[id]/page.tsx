@@ -149,7 +149,11 @@ export default async function EventDetailPage({
             {event.location ? ` · ${event.location}` : ""}
           </p>
         </div>
-        <EventStatusControl eventId={id} status={event.status} />
+        <EventStatusControl
+          eventId={id}
+          status={event.status}
+          cancellationMessage={event.cancellation_message ?? null}
+        />
       </div>
 
       {/* Tab navigation */}

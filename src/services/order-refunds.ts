@@ -42,6 +42,12 @@ export type RefundInput = {
   amountCents?: number;
   reason?: string | null;
   method?: RefundMethod;
+  /**
+   * Message shown to the buyer in the refund email — e.g. why the event
+   * was cancelled. Distinct from `reason` (internal + sent to the
+   * provider); this is buyer-facing prose. Omitted → no such block.
+   */
+  cancellationMessage?: string | null;
   /** Build + return the provider request without sending it. */
   dryRun?: boolean;
 };
@@ -310,6 +316,7 @@ export async function refundOrder(
       orderTotalCents: order.total_cents,
       isFullRefund,
       currency: order.currency ?? "ZAR",
+      cancellationMessage: input.cancellationMessage?.trim() || null,
     });
     emailSent = result.sent;
   } catch (e) {
@@ -423,6 +430,72 @@ export async function syncPendingRefunds(
   }
 
   return { checked: rows.length, updated };
+}
+
+export type RefundAllResult = {
+  /** Orders that held money and were attempted. */
+  attempted: number;
+  /** Provider accepted the refund (includes PayFast 'pending'). */
+  refunded: number;
+  /** Provider refused, or the order can't be auto-refunded (e.g. EFT). */
+  failed: number;
+  totalRefundedCents: number;
+  failures: Array<{ orderId: string; error: string }>;
+};
+
+/**
+ * Refund every still-outstanding order on an event in one pass — the
+ * "we're cancelling this event, give everyone their money back" button.
+ *
+ * Runs each order through refundOrder() so every guarantee still holds
+ * per order (ledger row, tickets voided, inventory released, buyer
+ * emailed). Orders with no auto-refundable provider (manual/EFT, missing
+ * provider id) come back as failures with a clear reason so staff know to
+ * refund those by hand — the bulk action never silently skips money.
+ *
+ * Sequential on purpose: providers rate-limit, and a burst of concurrent
+ * Stripe/PayFast calls is more likely to trip a limit than to finish
+ * faster at this scale.
+ */
+export async function refundEventOrders(
+  supabase: Client,
+  userId: string,
+  eventId: string,
+  opts?: { reason?: string | null; cancellationMessage?: string | null }
+): Promise<RefundAllResult> {
+  const { data: orders } = await supabase
+    .from("orders")
+    .select("id")
+    .eq("event_id", eventId)
+    .in("status", ["paid", "partially_refunded"])
+    .order("created_at", { ascending: true });
+
+  const rows = (orders ?? []) as Array<{ id: string }>;
+  const result: RefundAllResult = {
+    attempted: rows.length,
+    refunded: 0,
+    failed: 0,
+    totalRefundedCents: 0,
+    failures: [],
+  };
+
+  for (const row of rows) {
+    const r = await refundOrder(supabase, userId, {
+      orderId: row.id,
+      reason: opts?.reason ?? null,
+      cancellationMessage: opts?.cancellationMessage ?? null,
+      method: "provider",
+    });
+    if (r.ok) {
+      result.refunded++;
+      result.totalRefundedCents += r.amountCents;
+    } else {
+      result.failed++;
+      result.failures.push({ orderId: row.id, error: r.error });
+    }
+  }
+
+  return result;
 }
 
 /** Refund history for a set of orders, newest first. */
