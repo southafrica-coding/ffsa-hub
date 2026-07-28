@@ -1,22 +1,25 @@
 // ────────────────────────────────────────────────────────────
 // Dashboard widget registry
 // ────────────────────────────────────────────────────────────
-// The single source of truth for what CAN appear on the dashboard.
-// Adding a widget anywhere in the Hub is one entry in WIDGET_REGISTRY
-// plus a component wired into the render map in `dashboard-grid.tsx`.
+// The single source of truth for what CAN appear on the dashboard and what
+// is on by DEFAULT — both now role-aware. Adding a widget is one entry here
+// plus a component wired into the render map in `dashboard/page.tsx`.
 //
 // Permission is TWO-LAYER, and the split matters:
 //
-//   1. `gate` here decides what the Customise panel OFFERS a user.
+//   1. `gate(ctx)` decides what the Customise panel OFFERS a user, and
+//      `defaultEnabled(ctx)` decides what starts ON for a user with no saved
+//      layout. Both are cheap sync predicates over a precomputed
+//      DashboardContext (see context.ts).
 //   2. The widget's own API route re-checks permission server-side.
 //
 // A stored layout is a preference, never an authorisation. Someone who
-// hand-crafts a PUT enabling `schools-counts` without schools access
-// gets an empty widget, not data. Never let layer 1 be the only check.
+// hand-crafts a PUT enabling `schools-counts` without schools access gets an
+// empty widget, not data. Never let layer 1 be the only check.
 // ────────────────────────────────────────────────────────────
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getSchoolsCountScopes } from "@/lib/auth/schools-count-scopes";
+import { buildDashboardContext, type DashboardContext } from "./context";
 import { getStoredLayout } from "@/services/dashboard";
 
 export type WidgetCategory =
@@ -34,43 +37,24 @@ export type WidgetDef = {
   // person choosing, not for the developer.
   description: string;
   category: WidgetCategory;
-  defaultEnabled: boolean;
-  // Position when a user has no saved preference for this widget. These
-  // reproduce the pre-customisation dashboard exactly.
+  // Position when a user has no saved preference for this widget.
   defaultOrder: number;
-  // Whether the widget spans both columns of the dashboard grid. This is a
-  // property of the widget (a wide table needs the room; a compact list does
-  // not), NOT a user preference — users choose what and in what order, the
-  // widget decides how much room it needs.
+  // Whether the widget spans both columns of the dashboard grid.
   fullWidth: boolean;
-  // Optional access check. Omit for widgets everyone may use (baseline
-  // access). Returning false hides the widget from the Customise panel
-  // AND strips it from the resolved layout.
-  gate?: (supabase: SupabaseClient, userId: string) => Promise<boolean>;
+  // Availability: can this widget appear in the Customise panel / resolve at
+  // all for this user? Omit for widgets everyone may use.
+  gate?: (ctx: DashboardContext) => boolean;
+  // On-by-default for a user with no saved layout. Role-aware.
+  defaultEnabled: (ctx: DashboardContext) => boolean;
 };
-
-// ────────────────────────────────────────────────────────────
-// GATES
-// ────────────────────────────────────────────────────────────
-
-// Any visibility into schools application/enrolment counts — a program-scoped
-// grant or an admin/leader role. Mirrors the check the analytics route makes.
-async function hasSchoolsCountAccess(
-  supabase: SupabaseClient,
-  userId: string
-): Promise<boolean> {
-  const { globalLevel, programLevels } = await getSchoolsCountScopes(
-    supabase,
-    userId
-  );
-  return globalLevel !== null || Object.keys(programLevels).length > 0;
-}
 
 // ────────────────────────────────────────────────────────────
 // REGISTRY
 // ────────────────────────────────────────────────────────────
-// defaultOrder values are spaced by 10 so widgets can be slotted between
-// existing ones later without renumbering the whole registry.
+// defaultOrder values are spaced so widgets can be slotted between existing
+// ones later. Admins ("dev team") keep the pre-role-based default set, so
+// their defaultEnabled mirrors the old global defaults; everyone else gets a
+// strictly curated set — only the widgets their roles call for.
 
 export const WIDGET_REGISTRY: WidgetDef[] = [
   {
@@ -79,36 +63,59 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
     description:
       "Actionable items from across the Hub — booking requests, staff awaiting approval, records to match.",
     category: "Overview",
-    defaultEnabled: true,
     defaultOrder: 10,
     fullWidth: true,
+    defaultEnabled: (c) => c.isAdmin,
+  },
+  {
+    key: "staff-insurance",
+    title: "Staff insurance alerts",
+    description:
+      "Your team members whose health insurance is missing, expired, or expiring soon. Ministry leaders see their ministry; the dev team sees everyone.",
+    category: "Overview",
+    defaultOrder: 15,
+    fullWidth: true,
+    gate: (c) => c.isAdmin || c.isMinistryLeader,
+    defaultEnabled: (c) => c.isAdmin || c.isMinistryLeader,
   },
   {
     key: "upcoming-events",
     title: "Upcoming events ticker",
     description: "Scrolling view of what's next on the FFSA base calendar.",
     category: "Overview",
-    defaultEnabled: true,
     defaultOrder: 20,
     fullWidth: false,
+    defaultEnabled: (c) =>
+      c.isAdmin || c.hasStaffRole || c.hasSchoolsAccess || c.isMinistryLeader,
   },
   {
     key: "my-bookings",
     title: "My space bookings",
     description: "Rooms and spaces you have booked, and their approval status.",
     category: "Bookings",
-    defaultEnabled: true,
     defaultOrder: 30,
     fullWidth: false,
+    defaultEnabled: (c) => c.isAdmin || c.isMinistryLeader,
+  },
+  {
+    key: "vehicles",
+    title: "Vehicle requests",
+    description:
+      "Vehicle bookings awaiting approval. For vehicle managers and approvers.",
+    category: "Bookings",
+    defaultOrder: 35,
+    fullWidth: false,
+    gate: (c) => c.isAdmin || c.isVehiclesPerson,
+    defaultEnabled: (c) => c.isAdmin || c.isVehiclesPerson,
   },
   {
     key: "prayer-week",
     title: "Prayer room — this week",
     description: "This week's prayer room schedule and your own slots.",
     category: "Prayer Room",
-    defaultEnabled: true,
     defaultOrder: 40,
     fullWidth: true,
+    defaultEnabled: (c) => c.isAdmin || c.isPrayerRoomStaff,
   },
   {
     key: "stat-cards",
@@ -116,9 +123,9 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
     description:
       "Active contacts, published events, active users and recent registrations.",
     category: "Overview",
-    defaultEnabled: true,
     defaultOrder: 50,
     fullWidth: true,
+    defaultEnabled: (c) => c.isAdmin,
   },
   {
     key: "schools-counts",
@@ -126,10 +133,10 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
     description:
       "How many students have applied to each school, how many were accepted, and how many are enrolled.",
     category: "Schools",
-    defaultEnabled: true,
     defaultOrder: 60,
     fullWidth: true,
-    gate: hasSchoolsCountAccess,
+    gate: (c) => c.hasSchoolsAccess,
+    defaultEnabled: (c) => c.isAdmin || c.hasSchoolsAccess,
   },
   {
     key: "schools-pipeline",
@@ -137,10 +144,10 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
     description:
       "Where students fall out between applying and arriving — acceptance rate and accepted-to-arrival conversion per school.",
     category: "Schools",
-    defaultEnabled: true,
     defaultOrder: 70,
     fullWidth: true,
-    gate: hasSchoolsCountAccess,
+    gate: (c) => c.hasSchoolsAccess,
+    defaultEnabled: (c) => c.isAdmin || c.hasSchoolsAccess,
   },
   {
     key: "students-by-tier",
@@ -148,10 +155,10 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
     description:
       "How many students fall into each fee tier (A full price, B reduced, C heavily reduced) per school.",
     category: "Schools",
-    defaultEnabled: false,
     defaultOrder: 72,
     fullWidth: true,
-    gate: hasSchoolsCountAccess,
+    gate: (c) => c.hasSchoolsAccess,
+    defaultEnabled: () => false,
   },
   {
     key: "students-by-nationality",
@@ -159,20 +166,20 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
     description:
       "Share of students by country, ranked, across all schools or one you pick.",
     category: "Schools",
-    defaultEnabled: false,
     defaultOrder: 74,
     fullWidth: true,
-    gate: hasSchoolsCountAccess,
+    gate: (c) => c.hasSchoolsAccess,
+    defaultEnabled: () => false,
   },
   {
     key: "students-by-gender",
     title: "Gender split by school",
     description: "The male / female balance of each school's students.",
     category: "Schools",
-    defaultEnabled: false,
     defaultOrder: 76,
     fullWidth: true,
-    gate: hasSchoolsCountAccess,
+    gate: (c) => c.hasSchoolsAccess,
+    defaultEnabled: () => false,
   },
   {
     key: "my-assignments",
@@ -180,9 +187,9 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
     description:
       "Applicants and students assigned to you for follow-up. Only shows if you have assignments.",
     category: "Schools",
-    defaultEnabled: true,
     defaultOrder: 80,
     fullWidth: true,
+    defaultEnabled: (c) => c.isAdmin || c.hasSchoolsAccess,
   },
   {
     key: "staff-workload",
@@ -190,27 +197,27 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
     description:
       "How assigned applicants and students are spread across your team.",
     category: "Schools",
-    defaultEnabled: true,
     defaultOrder: 90,
     fullWidth: true,
+    defaultEnabled: (c) => c.isAdmin || c.hasSchoolsAccess,
   },
   {
     key: "events-table",
     title: "Upcoming events list",
     description: "The next published events, with dates and locations.",
     category: "Overview",
-    defaultEnabled: true,
     defaultOrder: 100,
     fullWidth: false,
+    defaultEnabled: (c) => c.isAdmin,
   },
   {
     key: "recent-registrations",
     title: "Recent registrations",
     description: "The latest event registrations as they come in.",
     category: "Overview",
-    defaultEnabled: true,
     defaultOrder: 110,
     fullWidth: false,
+    defaultEnabled: (c) => c.isAdmin,
   },
 ];
 
@@ -227,52 +234,33 @@ export function getWidget(key: string): WidgetDef | undefined {
 export type LayoutEntry = { key: string; enabled: boolean };
 
 export type ResolvedLayout = {
-  // Every widget the user is allowed to use, in their chosen order, each
-  // flagged enabled/disabled. The Customise panel renders this whole list.
   entries: LayoutEntry[];
-  // Convenience: just the enabled keys, in order. This is what the grid renders.
   enabledKeys: string[];
-  // True when the user has never customised — lets the UI say so.
   isDefault: boolean;
 };
 
-// Which widgets may this user use at all? Gates run in parallel; a gate that
-// throws is treated as "no access" so one broken gate can't blank the dashboard.
-export async function getPermittedWidgets(
-  supabase: SupabaseClient,
-  userId: string
-): Promise<WidgetDef[]> {
-  const results = await Promise.all(
-    WIDGET_REGISTRY.map(async (widget) => {
-      if (!widget.gate) return widget;
-      try {
-        return (await widget.gate(supabase, userId)) ? widget : null;
-      } catch {
-        return null;
-      }
-    })
-  );
-  return results.filter((w): w is WidgetDef => w !== null);
+// Which widgets may this user use at all? Sync filter over the precomputed
+// context — gates must stay pure predicates.
+export function getPermittedWidgets(ctx: DashboardContext): WidgetDef[] {
+  return WIDGET_REGISTRY.filter((w) => (w.gate ? w.gate(ctx) : true));
 }
 
 // Merge a stored layout over registry defaults.
 //
-// Two properties this has to hold, both about surviving registry changes:
-//   - Unknown keys are DROPPED, so deleting a widget from the registry can
-//     never break someone's saved layout.
-//   - Widgets missing from the stored layout are INSERTED at defaultOrder,
-//     so a newly shipped widget appears for existing users instead of
-//     staying invisible to everyone who ever hit Save.
+//   - Unknown keys are DROPPED, so deleting a widget can't break saved layouts.
+//   - Widgets missing from the stored layout are INSERTED at defaultOrder, so
+//     a newly shipped widget appears for existing users.
 export function mergeLayout(
   stored: LayoutEntry[] | null,
-  permitted: WidgetDef[]
+  permitted: WidgetDef[],
+  ctx: DashboardContext
 ): ResolvedLayout {
   const permittedByKey = new Map(permitted.map((w) => [w.key, w]));
 
   if (!stored || stored.length === 0) {
     const entries = [...permitted]
       .sort((a, b) => a.defaultOrder - b.defaultOrder)
-      .map((w) => ({ key: w.key, enabled: w.defaultEnabled }));
+      .map((w) => ({ key: w.key, enabled: w.defaultEnabled(ctx) }));
     return {
       entries,
       enabledKeys: entries.filter((e) => e.enabled).map((e) => e.key),
@@ -290,19 +278,18 @@ export function mergeLayout(
     merged.push({ key: entry.key, enabled: entry.enabled !== false });
   }
 
-  // Anything new since they last saved slots in at its default position.
+  // Anything new since they last saved slots in at its default position and
+  // default-enabled state.
   const newcomers = permitted
     .filter((w) => !seen.has(w.key))
     .sort((a, b) => a.defaultOrder - b.defaultOrder);
 
   for (const widget of newcomers) {
-    // Find the first existing entry that should sort after this newcomer,
-    // and insert ahead of it — keeping the user's ordering intact around it.
     const insertAt = merged.findIndex((e) => {
       const existing = permittedByKey.get(e.key);
       return existing !== undefined && existing.defaultOrder > widget.defaultOrder;
     });
-    const item = { key: widget.key, enabled: widget.defaultEnabled };
+    const item = { key: widget.key, enabled: widget.defaultEnabled(ctx) };
     if (insertAt === -1) merged.push(item);
     else merged.splice(insertAt, 0, item);
   }
@@ -315,13 +302,15 @@ export function mergeLayout(
 }
 
 // Read a user's stored layout and resolve it against the registry + their
-// permissions. Call this from the dashboard page (server) and the layout API.
+// role-derived context. Call this from the dashboard page (server) and the
+// layout API.
 export async function resolveLayout(
   supabase: SupabaseClient,
   userId: string
 ): Promise<ResolvedLayout> {
+  const ctx = await buildDashboardContext(supabase, userId);
   const [permitted, stored] = await Promise.all([
-    getPermittedWidgets(supabase, userId),
+    Promise.resolve(getPermittedWidgets(ctx)),
     getStoredLayout(supabase, userId),
   ]);
 
@@ -333,5 +322,15 @@ export async function resolveLayout(
       ) as LayoutEntry[])
     : null;
 
-  return mergeLayout(parsed, permitted);
+  return mergeLayout(parsed, permitted, ctx);
+}
+
+// Convenience for the layout PUT route, which only needs the permitted set to
+// filter an incoming layout.
+export async function resolvePermittedWidgets(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<WidgetDef[]> {
+  const ctx = await buildDashboardContext(supabase, userId);
+  return getPermittedWidgets(ctx);
 }

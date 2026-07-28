@@ -5,8 +5,10 @@ import {
   getPermittedWidgets,
   mergeLayout,
   resolveLayout,
+  resolvePermittedWidgets,
   type LayoutEntry,
 } from "@/lib/dashboard/widget-registry";
+import { buildDashboardContext } from "@/lib/dashboard/context";
 
 // GET — the caller's resolved layout, plus the catalogue of widgets they are
 // allowed to use. The Customise panel needs both: the order/toggles, and the
@@ -23,7 +25,7 @@ export async function GET() {
 
   const [layout, permitted] = await Promise.all([
     resolveLayout(supabase, user.id),
-    getPermittedWidgets(supabase, user.id),
+    resolvePermittedWidgets(supabase, user.id),
   ]);
 
   return NextResponse.json({
@@ -70,7 +72,8 @@ export async function PUT(request: Request) {
     );
   }
 
-  const permitted = await getPermittedWidgets(supabase, user.id);
+  const ctx = await buildDashboardContext(supabase, user.id);
+  const permitted = getPermittedWidgets(ctx);
   const permittedKeys = new Set(permitted.map((w) => w.key));
 
   const seen = new Set<string>();
@@ -100,7 +103,7 @@ export async function PUT(request: Request) {
 
   // Return the merged result so the client renders exactly what was stored,
   // including any widget that slotted in at its default position.
-  const resolved = mergeLayout(cleaned, permitted);
+  const resolved = mergeLayout(cleaned, permitted, ctx);
   return NextResponse.json({
     success: true,
     layout: resolved.entries,

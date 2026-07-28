@@ -11,6 +11,8 @@ import { StaffWorkloadCard } from "./staff-workload-card";
 import { NotificationFeed } from "./notification-feed";
 import { UpcomingEventsWidget } from "./upcoming-events-widget";
 import { MyBookingsCard } from "./my-bookings-card";
+import { StaffInsuranceCard } from "./staff-insurance-card";
+import { VehiclesCard } from "./vehicles-card";
 import { PrayerWeekCard } from "./prayer-week-card";
 import { SchoolsCountsCard } from "./schools-counts-card";
 import { SchoolsPipelineCard } from "./schools-pipeline-card";
@@ -92,8 +94,10 @@ export default async function DashboardPage() {
     "notification-feed": (
       <NotificationFeed initial={notifications?.notifications ?? []} />
     ),
+    "staff-insurance": <StaffInsuranceCard />,
     "upcoming-events": <UpcomingEventsWidget />,
     "my-bookings": <MyBookingsCard />,
+    vehicles: <VehiclesCard />,
     "prayer-week": <PrayerWeekCard />,
     "stat-cards": (
       <StatCards
