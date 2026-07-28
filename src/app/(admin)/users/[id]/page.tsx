@@ -78,6 +78,15 @@ export default async function UserProfilePage({
     (o) => ({ value: o.value, label: o.label })
   );
 
+  // Only staff (or other elevated roles) may carry a department — students and
+  // community members are department-less, so hide the field for them.
+  const membershipOnly = new Set(["student", "community_member", "self_service"]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const targetRoleNames = (((targetUser as any).user_roles ?? []) as Array<any>)
+    .map((ur) => ur?.roles?.name)
+    .filter((n): n is string => !!n);
+  const departmentEditable = targetRoleNames.some((n) => !membershipOnly.has(n));
+
   // Feed the real Supabase-Auth last-sign-in so the derived stage matches the
   // Users table (the users.last_sign_in_at column is unmaintained).
   const lifecycle = deriveUserLifecycle({
@@ -105,6 +114,7 @@ export default async function UserProfilePage({
           <EditProfileDialog
             user={targetUser}
             departmentOptions={departmentSelectOptions}
+            departmentEditable={departmentEditable}
           />
         </div>
       )}

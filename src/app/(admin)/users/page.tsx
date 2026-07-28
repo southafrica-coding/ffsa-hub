@@ -135,6 +135,7 @@ export default async function UsersPage() {
         users={usersWithSignIn}
         currentUserId={authUser?.id ?? ""}
         departmentLabels={departmentLabels}
+        isSuperAdmin={isSuperAdmin}
       />
     </div>
   );

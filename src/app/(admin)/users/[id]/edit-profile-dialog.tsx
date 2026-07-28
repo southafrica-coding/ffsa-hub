@@ -92,9 +92,12 @@ function initialForm(user: EditableUser): Record<string, string> {
 export function EditProfileDialog({
   user,
   departmentOptions = [],
+  departmentEditable = true,
 }: {
   user: EditableUser;
   departmentOptions?: Option[];
+  // Students & community members are department-less; hide the field for them.
+  departmentEditable?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -187,6 +190,7 @@ export function EditProfileDialog({
             </div>
           ))}
 
+          {departmentEditable && (
           <div className="space-y-1.5">
             <Label htmlFor="edit-department">Department</Label>
             <select
@@ -208,6 +212,7 @@ export function EditProfileDialog({
                 )}
             </select>
           </div>
+          )}
         </div>
 
         <DialogFooter>

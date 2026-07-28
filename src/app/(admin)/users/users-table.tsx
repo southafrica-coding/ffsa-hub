@@ -71,9 +71,28 @@ type UserRow = {
   user_roles: Array<{
     id: string;
     scope_type: string | null;
-    roles: { display_name: string } | null;
+    roles: { display_name: string; name?: string } | null;
   }>;
 };
+
+const MEMBERSHIP_OPTIONS = [
+  { value: "none", label: "—" },
+  { value: "staff", label: "Staff" },
+  { value: "student", label: "Student" },
+  { value: "community", label: "Community" },
+] as const;
+
+// The single membership role shown/edited in the Users list. Staff wins over
+// student, student over community (mirrors the app's precedence).
+function currentMembership(user: UserRow): "staff" | "student" | "community" | "none" {
+  const names = new Set(
+    user.user_roles.map((ur) => ur.roles?.name).filter((n): n is string => !!n)
+  );
+  if (names.has("staff")) return "staff";
+  if (names.has("student")) return "student";
+  if (names.has("community_member")) return "community";
+  return "none";
+}
 
 const DEPARTMENT_LABELS: Record<string, string> = {
   leadership_team: "Leadership Team",
@@ -141,15 +160,32 @@ export function UsersTable({
   users,
   currentUserId,
   departmentLabels,
+  isSuperAdmin = false,
 }: {
   users: UserRow[];
   currentUserId: string;
   // DB-backed department value→label map (from the editable Settings list).
   // Falls back to the built-in defaults for any value not present.
   departmentLabels?: Record<string, string>;
+  // Super admins get the inline membership-role picker in the Role column.
+  isSuperAdmin?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
+
+  async function handleSetMembership(userId: string, role: string) {
+    setBusy(userId);
+    try {
+      const res = await fetch("/api/admin/set-membership-role", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: userId, role }),
+      });
+      if (res.ok) router.refresh();
+    } finally {
+      setBusy(null);
+    }
+  }
   const [search, setSearch] = useState("");
   const deptLabels = { ...DEPARTMENT_LABELS, ...(departmentLabels ?? {}) };
 
@@ -267,6 +303,7 @@ export function UsersTable({
             <TableHead>Email</TableHead>
             <TableHead>Job Title</TableHead>
             <TableHead>Department</TableHead>
+            <TableHead>Role</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Activity</TableHead>
             <TableHead className="w-[60px]" />
@@ -276,7 +313,7 @@ export function UsersTable({
           {filteredUsers.length === 0 ? (
             <TableRow>
               <TableCell
-                colSpan={7}
+                colSpan={8}
                 className="text-center text-muted-foreground py-8"
               >
                 No users found
@@ -315,6 +352,27 @@ export function UsersTable({
                     {user.department
                       ? deptLabels[user.department] ?? user.department
                       : "—"}
+                  </TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    {isSuperAdmin ? (
+                      <select
+                        className="h-8 rounded-md border border-input bg-transparent px-2 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+                        value={currentMembership(user)}
+                        disabled={isBusy}
+                        onChange={(e) => handleSetMembership(user.id, e.target.value)}
+                        aria-label="Membership role"
+                      >
+                        {MEMBERSHIP_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">
+                        {MEMBERSHIP_OPTIONS.find((o) => o.value === currentMembership(user))?.label ?? "—"}
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-col gap-1 items-start">

@@ -88,6 +88,17 @@ export async function ensureStudentRole(
     }
   }
 
+  // Department rule: only staff (or other elevated roles) may carry a
+  // department. Becoming a student clears it unless the user still holds an
+  // elevated role. (staff already returned above.)
+  const finalNames = new Set(names);
+  finalNames.delete("community_member");
+  finalNames.add("student");
+  const isElevated = [...finalNames].some((n) => !MEMBERSHIP_ONLY.has(n));
+  if (!isElevated) {
+    await admin.from("users").update({ department: null }).eq("id", userId);
+  }
+
   if (changed) {
     await admin.from("audit_logs").insert({
       user_id: assignedBy,
