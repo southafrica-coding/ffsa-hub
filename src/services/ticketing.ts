@@ -448,3 +448,32 @@ export async function redeemPromoCode(supabase: Client, promoCodeId: string) {
     p_promo_code_id: promoCodeId,
   });
 }
+
+/**
+ * Latest ticket-confirmation email delivery status per order (migration
+ * 141). Powers the delivery badge in the Orders tab so staff can see, at
+ * a glance, whether a buyer's confirmation actually reached them —
+ * instead of learning it failed only when they complain.
+ *
+ * Returns every ticket_confirmation ledger row for the given orders
+ * (newest first); the caller keeps the latest per order. Gracefully
+ * returns empty if the migration hasn't been applied yet, mirroring
+ * listRefundsForOrders — so the Orders tab never hard-fails on a
+ * not-yet-migrated database.
+ */
+export async function listTicketEmailsForOrders(
+  supabase: Client,
+  orderIds: string[]
+) {
+  if (orderIds.length === 0) return { data: [] as unknown[] };
+  const res = await supabase
+    .from("email_messages")
+    .select(
+      "id, order_id, to_email, status, error, sent_at, delivered_at, opened_at, bounced_at, complained_at, created_at"
+    )
+    .eq("category", "ticket_confirmation")
+    .in("order_id", orderIds)
+    .order("created_at", { ascending: false });
+  if (res.error) return { data: [] as unknown[] };
+  return res;
+}

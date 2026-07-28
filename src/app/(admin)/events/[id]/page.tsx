@@ -36,6 +36,7 @@ import {
   listPromoCodesByEvent,
   listOrdersWithTicketAnswersByEvent,
   listAttendanceTicketsByEvent,
+  listTicketEmailsForOrders,
   getActiveFeeProfiles,
 } from "@/services/ticketing";
 import type { FeeProfile } from "@/lib/payments/pricing";
@@ -111,6 +112,14 @@ export default async function EventDetailPage({
   // ids, so it can't join the Promise.all above. Returns empty if the
   // migration has not been applied yet.
   const { data: orderRefunds } = await listRefundsForOrders(
+    supabase,
+    (orders ?? []).map((o: { id: string }) => o.id)
+  );
+
+  // Ticket-email delivery status for the Orders tab (migration 141).
+  // Same order-ids dependency as refunds, so it can't join the Promise.all
+  // above. Returns empty if the migration hasn't been applied yet.
+  const { data: ticketEmails } = await listTicketEmailsForOrders(
     supabase,
     (orders ?? []).map((o: { id: string }) => o.id)
   );
@@ -223,6 +232,7 @@ export default async function EventDetailPage({
           eventId={id}
           orders={orders ?? []}
           refunds={orderRefunds ?? []}
+          ticketEmails={ticketEmails ?? []}
           currency={event.currency}
         />
       )}

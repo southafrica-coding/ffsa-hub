@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  applyProviderEvent,
+  type NormalizedDeliveryEvent,
+} from "@/lib/email/ledger";
 
 // POST /api/integrations/mailtrap/webhook — Mailtrap delivery events.
 // Mailtrap posts { events: [ { event, message_id, email, ... } ] }.
@@ -95,17 +99,26 @@ export async function POST(request: Request) {
         .select("id, workflow_id, contact_id, outcome_label_id")
         .eq("provider_message_id", ev.message_id)
         .maybeSingle();
-      if (!wsend) continue; // unknown message — ignore gracefully
 
-      await admin.from("workflow_email_sends").update(patch).eq("id", wsend.id);
-      if (activityType && wsend.contact_id) {
-        await admin.from("activity_events").insert({
-          contact_id: wsend.contact_id,
-          event_type: activityType,
-          related_label_id: wsend.outcome_label_id ?? null,
-          occurred_at: at,
-          payload: { workflow_id: wsend.workflow_id, source: "workflow" },
-        });
+      if (wsend) {
+        await admin.from("workflow_email_sends").update(patch).eq("id", wsend.id);
+        if (activityType && wsend.contact_id) {
+          await admin.from("activity_events").insert({
+            contact_id: wsend.contact_id,
+            event_type: activityType,
+            related_label_id: wsend.outcome_label_id ?? null,
+            occurred_at: at,
+            payload: { workflow_id: wsend.workflow_id, source: "workflow" },
+          });
+        }
+      } else {
+        // Third bucket: transactional / ticket emails logged in the
+        // email_messages ledger (migration 141). Neither a campaign nor a
+        // workflow row owns this message id, so reconcile it there.
+        // applyProviderEvent is a no-op for an unknown id, so a genuinely
+        // stray event just falls through to the suppression feed below.
+        const normalized = normalizeForLedger(ev);
+        if (normalized) await applyProviderEvent(admin, "mailtrap", normalized);
       }
     }
 
@@ -135,3 +148,30 @@ type MailtrapEvent = {
   timestamp?: number;
   reason?: string;
 };
+
+// Map a Mailtrap delivery event onto the email_messages ledger's
+// normalized shape (migration 141). Returns null for events the ledger
+// doesn't model (e.g. unsubscribe), which are handled elsewhere.
+function normalizeForLedger(
+  ev: MailtrapEvent
+): NormalizedDeliveryEvent | null {
+  if (!ev.message_id) return null;
+  const base = { providerMessageId: String(ev.message_id), raw: ev };
+  switch (ev.event) {
+    case "delivery":
+      return { ...base, status: "delivered" };
+    case "open":
+    case "click":
+      return { ...base, status: "opened" };
+    case "bounce":
+      return { ...base, status: "bounced", bounceType: "hard", reason: ev.reason ?? "bounced" };
+    case "soft bounce":
+      return { ...base, status: "bounced", bounceType: "soft", reason: ev.reason ?? "soft bounce" };
+    case "suspension":
+      return { ...base, status: "dropped", reason: ev.reason ?? "suspension" };
+    case "spam":
+      return { ...base, status: "complained", reason: "spam complaint" };
+    default:
+      return null;
+  }
+}

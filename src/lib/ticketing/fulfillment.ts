@@ -17,6 +17,8 @@
 
 import { randomBytes } from "node:crypto";
 import { sendViaMailtrap } from "@/lib/email/mailtrap";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { recordEmail, markSent, markFailed } from "@/lib/email/ledger";
 import { ticketConfirmationEmailHtml } from "@/lib/email/templates/ticket-confirmation";
 import { theSendTicketEmailHtml } from "@/lib/email/templates/the-send-ticket-confirmation";
 import { campsTicketEmailHtml } from "@/lib/email/templates/ffsa-camps-ticket-confirmation";
@@ -107,7 +109,7 @@ export async function fulfillOrder(
   const { data: order, error: orderErr } = await supabase
     .from("orders")
     .select(
-      "id, status, total_cents, currency, buyer_first_name, buyer_last_name, buyer_email, lines, ticket_answers, event_id, events(id, title, start_date, end_date, location, public_slug, brand)"
+      "id, status, total_cents, currency, buyer_first_name, buyer_last_name, buyer_email, buyer_contact_id, lines, ticket_answers, event_id, events(id, title, start_date, end_date, location, public_slug, brand)"
     )
     .eq("id", orderId)
     .maybeSingle();
@@ -224,19 +226,38 @@ export async function fulfillOrder(
     currency: order.currency ?? "ZAR",
     siteUrl,
   };
+  const subject =
+    brand === "the_send"
+      ? `You're in — ${order.events.title} →`
+      : brand === "ffsa_camps"
+        ? `you're in 🤞 — ${order.events.title}`
+        : brand === "preachers"
+          ? `You're in — ${order.events.title} ⚡`
+          : `Your tickets for ${order.events.title}`;
+
+  // Record the send in the email ledger (migration 141) BEFORE we send,
+  // so a confirmation email can never again vanish without a trace. The
+  // ledger always writes via the service-role client (this path runs
+  // both from the PayFast webhook with an admin client and from the
+  // admin "resend" route with a user-scoped one). All ledger calls are
+  // best-effort and never block the actual send.
+  const admin = createAdminClient();
+  const ledgerId = await recordEmail(admin, {
+    toEmail: order.buyer_email,
+    provider: "mailtrap",
+    category: "ticket_confirmation",
+    subject,
+    contactId: order.buyer_contact_id ?? null,
+    eventId: order.event_id,
+    orderId,
+  });
+
   const sendResult = await sendViaMailtrap({
     fromEmail,
     fromName,
     replyTo,
     to: order.buyer_email,
-    subject:
-      brand === "the_send"
-        ? `You're in — ${order.events.title} →`
-        : brand === "ffsa_camps"
-          ? `you're in 🤞 — ${order.events.title}`
-          : brand === "preachers"
-            ? `You're in — ${order.events.title} ⚡`
-            : `Your tickets for ${order.events.title}`,
+    subject,
     html:
       brand === "the_send"
         ? theSendTicketEmailHtml(emailArgs)
@@ -252,8 +273,11 @@ export async function fulfillOrder(
       "[fulfillment] failed to send confirmation email:",
       sendResult.error
     );
+    await markFailed(admin, ledgerId, sendResult.error);
     // Tickets are issued — staff can resend the email from the admin
     // orders view. Don't fail fulfilment for an email-only issue.
+  } else {
+    await markSent(admin, ledgerId, sendResult.messageId);
   }
 
   // 5. CRM resolution (async-spirit: never fails fulfilment).

@@ -51,6 +51,23 @@ type TicketWithAnswers = {
   ticket_types?: { name: string } | null;
 };
 
+// Latest ticket-confirmation email delivery state per order (migration
+// 141). status advances queued → sent → delivered / opened, or lands on
+// bounced / complained / failed / dropped.
+export type TicketEmailStatus = {
+  id: string;
+  order_id: string;
+  to_email: string;
+  status: string;
+  error: string | null;
+  sent_at: string | null;
+  delivered_at: string | null;
+  opened_at: string | null;
+  bounced_at: string | null;
+  complained_at: string | null;
+  created_at: string;
+};
+
 export type OrderRefund = {
   id: string;
   order_id: string;
@@ -109,11 +126,13 @@ export function OrdersTab({
   eventId,
   orders,
   refunds = [],
+  ticketEmails = [],
   currency,
 }: {
   eventId: string;
   orders: Order[];
   refunds?: OrderRefund[];
+  ticketEmails?: TicketEmailStatus[];
   // The event's selling currency — used for the aggregate stat cards.
   // Individual rows prefer the order's own snapshot.
   currency: string;
@@ -146,6 +165,13 @@ export function OrdersTab({
     const list = refundsByOrder.get(r.order_id) ?? [];
     list.push(r);
     refundsByOrder.set(r.order_id, list);
+  }
+
+  // ticketEmails arrive newest-first, so the first row seen for an order
+  // is its latest confirmation-email attempt — the one worth showing.
+  const emailByOrder = new Map<string, TicketEmailStatus>();
+  for (const e of ticketEmails) {
+    if (!emailByOrder.has(e.order_id)) emailByOrder.set(e.order_id, e);
   }
 
   function settledRefundCents(orderId: string): number {
@@ -247,6 +273,7 @@ export function OrdersTab({
                     <TableHead>Buyer</TableHead>
                     <TableHead>Total</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Email</TableHead>
                     <TableHead>Paid</TableHead>
                     <TableHead className="text-right">Action</TableHead>
                   </TableRow>
@@ -320,6 +347,9 @@ export function OrdersTab({
                           {o.status.replace(/_/g, " ")}
                         </Badge>
                       </TableCell>
+                      <TableCell>
+                        <DeliveryBadge email={emailByOrder.get(o.id)} />
+                      </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
                         {o.paid_at
                           ? new Date(o.paid_at).toLocaleString()
@@ -375,7 +405,7 @@ export function OrdersTab({
                     </TableRow>
                     {expanded && expandable && (
                       <TableRow>
-                        <TableCell colSpan={6} className="bg-muted/30">
+                        <TableCell colSpan={7} className="bg-muted/30">
                           <div className="py-1 space-y-4">
                             {answers.length > 0 && (
                               <div className="space-y-2">
@@ -509,6 +539,50 @@ export function OrdersTab({
         />
       )}
     </div>
+  );
+}
+
+// Confirmation-email delivery at a glance. Distinguishes the states that
+// matter operationally: delivered/opened (good), bounced/complained/failed
+// (needs attention), sent (accepted by provider, awaiting a delivery
+// webhook), and "—" when there's no ledger row yet (e.g. before migration
+// 141 is applied, or an order that predates it).
+function DeliveryBadge({ email }: { email?: TicketEmailStatus }) {
+  if (!email) {
+    return <span className="text-xs text-muted-foreground">—</span>;
+  }
+  const map: Record<
+    string,
+    { label: string; variant: "default" | "secondary" | "destructive" | "outline" }
+  > = {
+    delivered: { label: "Delivered", variant: "secondary" },
+    opened: { label: "Opened", variant: "secondary" },
+    sent: { label: "Sent", variant: "outline" },
+    queued: { label: "Queued", variant: "outline" },
+    bounced: { label: "Bounced", variant: "destructive" },
+    complained: { label: "Spam", variant: "destructive" },
+    dropped: { label: "Dropped", variant: "destructive" },
+    failed: { label: "Failed", variant: "destructive" },
+  };
+  const meta = map[email.status] ?? { label: email.status, variant: "outline" as const };
+  const when =
+    email.delivered_at ??
+    email.opened_at ??
+    email.bounced_at ??
+    email.complained_at ??
+    email.sent_at ??
+    email.created_at;
+  const title = [
+    `${meta.label} → ${email.to_email}`,
+    when ? new Date(when).toLocaleString() : null,
+    email.error ? `Reason: ${email.error}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+  return (
+    <Badge variant={meta.variant} className="cursor-default" title={title}>
+      {meta.label}
+    </Badge>
   );
 }
 
