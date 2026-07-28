@@ -27,27 +27,40 @@ export async function POST(request: Request) {
 
   const adminSupabase = createAdminClient();
 
-  // Validate the code against the singleton settings row.
+  // Resolve the code to its signup link type. The type is resolved
+  // server-side from the code (authoritative) — never trust a type
+  // sent by the client.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: settings } = await (adminSupabase as any)
-    .from("public_signup_settings")
-    .select("code, enabled")
-    .eq("id", 1)
-    .single();
+  const { data: link } = await (adminSupabase as any)
+    .from("signup_links")
+    .select("type, enabled")
+    .eq("code", code)
+    .maybeSingle();
 
-  if (!settings || settings.code !== code) {
+  if (!link) {
     return NextResponse.json(
       { error: "This invite link is no longer valid. Ask a super admin for an updated link." },
       { status: 403 }
     );
   }
 
-  if (!settings.enabled) {
+  if (!link.enabled) {
     return NextResponse.json(
-      { error: "Public signup is currently disabled. Ask a super admin to invite you directly." },
+      { error: "This signup link is currently disabled. Ask a super admin to invite you directly." },
       { status: 403 }
     );
   }
+
+  const signupType = link.type as "staff" | "student" | "community";
+
+  // Map the signup type to the access role granted on top of the
+  // self_service floor.
+  const typeRoleName =
+    signupType === "staff"
+      ? "staff"
+      : signupType === "student"
+      ? "student"
+      : "community_member";
 
   const normalisedEmail = email.trim().toLowerCase();
 
@@ -86,11 +99,13 @@ export async function POST(request: Request) {
 
   const newUserId = created.user.id;
 
-  const { error: insertError } = await adminSupabase.from("users").insert({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error: insertError } = await (adminSupabase as any).from("users").insert({
     id: newUserId,
     email: normalisedEmail,
     first_name: first_name?.trim() || null,
     last_name: last_name?.trim() || null,
+    signup_type: signupType,
     invited_at: new Date().toISOString(),
     accepted_at: new Date().toISOString(),
   });
@@ -105,19 +120,24 @@ export async function POST(request: Request) {
     );
   }
 
-  // Assign the default self_service role.
-  const { data: selfServiceRole } = await adminSupabase
+  // Grant the self_service floor plus the role that matches the
+  // signup link type (staff / student / community_member). Every
+  // user needs self_service for base access; the type role is
+  // granted in addition.
+  const roleNames = Array.from(new Set(["self_service", typeRoleName]));
+  const { data: rolesToGrant } = await adminSupabase
     .from("roles")
     .select("id")
-    .eq("name", "self_service")
-    .single();
+    .in("name", roleNames);
 
-  if (selfServiceRole) {
-    await adminSupabase.from("user_roles").insert({
-      user_id: newUserId,
-      role_id: selfServiceRole.id,
-      assigned_by: newUserId,
-    });
+  if (rolesToGrant && rolesToGrant.length > 0) {
+    await adminSupabase.from("user_roles").insert(
+      rolesToGrant.map((role: { id: string }) => ({
+        user_id: newUserId,
+        role_id: role.id,
+        assigned_by: newUserId,
+      }))
+    );
   }
 
   // Records Library auto-match (same behaviour as the email invite flow).
@@ -135,7 +155,7 @@ export async function POST(request: Request) {
     action: "create",
     resource_type: "users",
     resource_id: newUserId,
-    changes: { email: normalisedEmail, source: "public_signup_link" },
+    changes: { email: normalisedEmail, source: `public_signup_link:${signupType}` },
   });
 
   return NextResponse.json({ success: true, user_id: newUserId });

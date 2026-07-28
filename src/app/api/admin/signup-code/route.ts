@@ -26,23 +26,41 @@ async function requireSuperAdmin() {
   return { authUser };
 }
 
-export async function GET() {
+const VALID_TYPES = ["staff", "student", "community"] as const;
+type SignupType = (typeof VALID_TYPES)[number];
+
+function parseType(value: string | null): SignupType | null {
+  return VALID_TYPES.includes(value as SignupType) ? (value as SignupType) : null;
+}
+
+export async function GET(request: Request) {
   const auth = await requireSuperAdmin();
   if ("error" in auth) return auth.error;
 
+  const type = parseType(new URL(request.url).searchParams.get("type"));
+
   const adminSupabase = createAdminClient();
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (adminSupabase as any)
-    .from("public_signup_settings")
-    .select("code, enabled, regenerated_at")
-    .eq("id", 1)
-    .single();
+  if (type) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (adminSupabase as any)
+      .from("signup_links")
+      .select("type, code, enabled, regenerated_at")
+      .eq("type", type)
+      .single();
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(data);
   }
 
+  // No type → return all three links.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (adminSupabase as any)
+    .from("signup_links")
+    .select("type, code, enabled, regenerated_at")
+    .order("type");
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data);
 }
 
@@ -51,8 +69,15 @@ export async function PATCH(request: Request) {
   if ("error" in auth) return auth.error;
 
   const body = await request.json().catch(() => ({}));
-  const { enabled } = body as { enabled?: boolean };
+  const { enabled, type: rawType } = body as { enabled?: boolean; type?: string };
 
+  const type = parseType(rawType ?? null);
+  if (!type) {
+    return NextResponse.json(
+      { error: "type must be one of staff, student, community" },
+      { status: 400 }
+    );
+  }
   if (typeof enabled !== "boolean") {
     return NextResponse.json({ error: "enabled (boolean) is required" }, { status: 400 });
   }
@@ -61,10 +86,10 @@ export async function PATCH(request: Request) {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (adminSupabase as any)
-    .from("public_signup_settings")
+    .from("signup_links")
     .update({ enabled })
-    .eq("id", 1)
-    .select("code, enabled, regenerated_at")
+    .eq("type", type)
+    .select("type, code, enabled, regenerated_at")
     .single();
 
   if (error) {

@@ -20,15 +20,20 @@ import {
 } from "@/lib/profile/options";
 import Image from "next/image";
 
-const TOTAL_STEPS = 6;
+// Ordered step definitions. Which steps are shown depends on the user's
+// signup type — community members skip the Passport & Visa step (that's
+// staff/international-traveller data). `num` is the stable identity used by
+// the per-step JSX blocks; the visible position/total are derived from the
+// active subset at render time.
+type StepKey = "password" | "personal" | "address" | "passport" | "emergency" | "consent";
 
-const STEP_LABELS = [
-  "Password",
-  "Personal",
-  "Address",
-  "Passport",
-  "Emergency",
-  "Consent",
+const STEP_DEFS: { num: number; key: StepKey; label: string }[] = [
+  { num: 1, key: "password", label: "Password" },
+  { num: 2, key: "personal", label: "Personal" },
+  { num: 3, key: "address", label: "Address" },
+  { num: 4, key: "passport", label: "Passport" },
+  { num: 5, key: "emergency", label: "Emergency" },
+  { num: 6, key: "consent", label: "Consent" },
 ];
 
 interface FormData {
@@ -90,6 +95,7 @@ export default function OnboardingPage() {
   const [consentAccepted, setConsentAccepted] = useState(false);
   const [agreementVersion, setAgreementVersion] = useState<string | null>(null);
   const [programName, setProgramName] = useState<string | null>(null);
+  const [signupType, setSignupType] = useState<string | null>(null);
 
   // Editable dropdown lists (admin-managed in Settings). Start from the
   // bundled defaults and overwrite once the DB copy loads, so the form works
@@ -171,6 +177,7 @@ export default function OnboardingPage() {
         health_insurance_policy_number: appUser.health_insurance_policy_number ?? "",
         health_insurance_expiry_date: appUser.health_insurance_expiry_date ?? "",
       });
+      setSignupType(appUser.signup_type ?? null);
 
       // Fetch the current consent agreement version so we know what the user
       // is accepting at the moment they tick the box.
@@ -252,11 +259,15 @@ export default function OnboardingPage() {
       if (blank(form.emergency_contact_name)) return "Emergency contact name is required.";
       if (blank(form.emergency_contact_phone)) return "Emergency contact phone is required.";
       if (blank(form.emergency_contact_relationship)) return "Emergency contact relationship is required.";
-      if (blank(form.health_insurance_provider)) return "Health insurance provider is required.";
-      if (blank(form.health_insurance_policy_number)) return "Health insurance policy number is required.";
-      if (blank(form.health_insurance_expiry_date)) return "Health insurance expiry date is required.";
-      if (isExpiryDatePast(form.health_insurance_expiry_date))
-        return "Your health insurance has expired. Please enter the date your current policy expires.";
+      // Health-insurance is a staff/student benefit field — optional for
+      // community members.
+      if (signupType !== "community") {
+        if (blank(form.health_insurance_provider)) return "Health insurance provider is required.";
+        if (blank(form.health_insurance_policy_number)) return "Health insurance policy number is required.";
+        if (blank(form.health_insurance_expiry_date)) return "Health insurance expiry date is required.";
+        if (isExpiryDatePast(form.health_insurance_expiry_date))
+          return "Your health insurance has expired. Please enter the date your current policy expires.";
+      }
       return null;
     }
     return null;
@@ -328,7 +339,16 @@ export default function OnboardingPage() {
     );
   }
 
-  const progress = (step / TOTAL_STEPS) * 100;
+  // The active steps for this user. Community members skip the Passport step.
+  const isCommunity = signupType === "community";
+  const activeSteps = STEP_DEFS.filter((d) => !(isCommunity && d.key === "passport"));
+  const activeNums = activeSteps.map((d) => d.num);
+  const currentPos = Math.max(0, activeNums.indexOf(step));
+  const totalSteps = activeSteps.length;
+  const isLastStep = step === activeNums[activeNums.length - 1];
+  const nextStep = () => activeNums[Math.min(currentPos + 1, activeNums.length - 1)];
+  const prevStep = () => activeNums[Math.max(currentPos - 1, 0)];
+  const progress = ((currentPos + 1) / totalSteps) * 100;
 
   return (
     <div
@@ -355,10 +375,10 @@ export default function OnboardingPage() {
       {/* Step indicator */}
       <div style={{ borderBottom: "1px solid hsl(22 8% 12%)" }}>
         <div className="flex">
-          {STEP_LABELS.map((label, i) => {
-            const stepNum = i + 1;
-            const isDone = step > stepNum;
-            const isActive = step === stepNum;
+          {activeSteps.map((def, i) => {
+            const label = def.label;
+            const isDone = currentPos > i;
+            const isActive = step === def.num;
             return (
               <div
                 key={label}
@@ -433,42 +453,42 @@ export default function OnboardingPage() {
             {/* Card header */}
             <div style={{ padding: "1.75rem 2rem 1.25rem", borderBottom: "1px solid hsl(22 8% 12%)" }}>
               {step === 1 && <>
-                <p className="page-eyebrow" style={{ marginBottom: "6px" }}>Step 1 of {TOTAL_STEPS}</p>
+                <p className="page-eyebrow" style={{ marginBottom: "6px" }}>Step {currentPos + 1} of {totalSteps}</p>
                 <h2 style={{ fontFamily: "var(--font-bebas,'Arial Black',sans-serif)", fontSize: "2rem", letterSpacing: "0.04em", color: "#F0EBE3", lineHeight: 1 }}>
                   Set Your Password
                 </h2>
                 <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>Create a secure password to log in later.</p>
               </>}
               {step === 2 && <>
-                <p className="page-eyebrow" style={{ marginBottom: "6px" }}>Step 2 of {TOTAL_STEPS}</p>
+                <p className="page-eyebrow" style={{ marginBottom: "6px" }}>Step {currentPos + 1} of {totalSteps}</p>
                 <h2 style={{ fontFamily: "var(--font-bebas,'Arial Black',sans-serif)", fontSize: "2rem", letterSpacing: "0.04em", color: "#F0EBE3", lineHeight: 1 }}>
                   Personal Information
                 </h2>
                 <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>Tell us about yourself. Fields marked * are required.</p>
               </>}
               {step === 3 && <>
-                <p className="page-eyebrow" style={{ marginBottom: "6px" }}>Step 3 of {TOTAL_STEPS}</p>
+                <p className="page-eyebrow" style={{ marginBottom: "6px" }}>Step {currentPos + 1} of {totalSteps}</p>
                 <h2 style={{ fontFamily: "var(--font-bebas,'Arial Black',sans-serif)", fontSize: "2rem", letterSpacing: "0.04em", color: "#F0EBE3", lineHeight: 1 }}>
                   Address
                 </h2>
                 <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>Your current address or on-base address. Fields marked * are required.</p>
               </>}
               {step === 4 && <>
-                <p className="page-eyebrow" style={{ marginBottom: "6px" }}>Step 4 of {TOTAL_STEPS}</p>
+                <p className="page-eyebrow" style={{ marginBottom: "6px" }}>Step {currentPos + 1} of {totalSteps}</p>
                 <h2 style={{ fontFamily: "var(--font-bebas,'Arial Black',sans-serif)", fontSize: "2rem", letterSpacing: "0.04em", color: "#F0EBE3", lineHeight: 1 }}>
                   Passport &amp; Visa
                 </h2>
                 <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>Your passport details are required for everyone. The visa section is only for international staff.</p>
               </>}
               {step === 5 && <>
-                <p className="page-eyebrow" style={{ marginBottom: "6px" }}>Step 5 of {TOTAL_STEPS}</p>
+                <p className="page-eyebrow" style={{ marginBottom: "6px" }}>Step {currentPos + 1} of {totalSteps}</p>
                 <h2 style={{ fontFamily: "var(--font-bebas,'Arial Black',sans-serif)", fontSize: "2rem", letterSpacing: "0.04em", color: "#F0EBE3", lineHeight: 1 }}>
                   Emergency &amp; Health
                 </h2>
                 <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>Emergency contact and health insurance details. Fields marked * are required.</p>
               </>}
               {step === 6 && <>
-                <p className="page-eyebrow" style={{ marginBottom: "6px" }}>Step 6 of {TOTAL_STEPS}</p>
+                <p className="page-eyebrow" style={{ marginBottom: "6px" }}>Step {currentPos + 1} of {totalSteps}</p>
                 <h2 style={{ fontFamily: "var(--font-bebas,'Arial Black',sans-serif)", fontSize: "2rem", letterSpacing: "0.04em", color: "#F0EBE3", lineHeight: 1 }}>
                   Privacy &amp; Consent
                 </h2>
@@ -859,11 +879,11 @@ export default function OnboardingPage() {
               className="flex justify-between items-center"
               style={{ padding: "1rem 2rem", borderTop: "1px solid hsl(22 8% 12%)" }}
             >
-              <Button variant="outline" onClick={() => setStep((s) => s - 1)} disabled={step === 1}>
+              <Button variant="outline" onClick={() => setStep(prevStep())} disabled={step === 1}>
                 Back
               </Button>
 
-              {step < TOTAL_STEPS ? (
+              {!isLastStep ? (
                 <Button
                   disabled={saving}
                   onClick={async () => {
@@ -876,12 +896,12 @@ export default function OnboardingPage() {
                       setSaving(false);
                       if (pwError) { setError(pwError.message); return; }
                       setPasswordSet(true);
-                      setStep((s) => s + 1);
+                      setStep(nextStep());
                       return;
                     }
                     const stepError = validateStep(step);
                     if (stepError) { setError(stepError); return; }
-                    setStep((s) => s + 1);
+                    setStep(nextStep());
                   }}
                 >
                   {step === 1 && !passwordSet ? (saving ? "Setting…" : "Set Password & Continue") : "Continue"}

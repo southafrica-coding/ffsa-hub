@@ -11,18 +11,20 @@ export default async function JoinPage({ params }: { params: Promise<Params> }) 
 
   const adminSupabase = createAdminClient();
 
+  // Resolve the code to its signup link type. Valid iff a row
+  // exists for the code and that link is enabled.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data } = await (adminSupabase as any)
-    .from("public_signup_settings")
-    .select("code, enabled")
-    .eq("id", 1)
-    .single();
+    .from("signup_links")
+    .select("type, enabled")
+    .eq("code", code)
+    .maybeSingle();
 
-  const valid = !!data && data.code === code && data.enabled === true;
+  const valid = !!data && data.enabled === true;
 
   if (!valid) {
     return <JoinInvalid />;
   }
 
-  return <JoinForm code={code} />;
+  return <JoinForm code={code} type={data.type} />;
 }

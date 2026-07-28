@@ -6,12 +6,22 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Copy, RefreshCw, Check, Link as LinkIcon, Power } from "lucide-react";
 
 type Props = {
+  type: "staff" | "student" | "community";
+  label: string;
+  description: string;
   initialCode: string;
   initialEnabled: boolean;
   baseUrl: string;
 };
 
-export function PublicSignupLinkCard({ initialCode, initialEnabled, baseUrl }: Props) {
+export function PublicSignupLinkCard({
+  type,
+  label,
+  description,
+  initialCode,
+  initialEnabled,
+  baseUrl,
+}: Props) {
   const [code, setCode] = useState(initialCode);
   const [enabled, setEnabled] = useState(initialEnabled);
   const [copied, setCopied] = useState(false);
@@ -38,7 +48,11 @@ export function PublicSignupLinkCard({ initialCode, initialEnabled, baseUrl }: P
     setError(null);
     setRegenerating(true);
     try {
-      const res = await fetch("/api/admin/signup-code/regenerate", { method: "POST" });
+      const res = await fetch("/api/admin/signup-code/regenerate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type }),
+      });
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || "Failed to regenerate");
@@ -59,7 +73,7 @@ export function PublicSignupLinkCard({ initialCode, initialEnabled, baseUrl }: P
       const res = await fetch("/api/admin/signup-code", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled: !enabled }),
+        body: JSON.stringify({ type, enabled: !enabled }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -81,7 +95,7 @@ export function PublicSignupLinkCard({ initialCode, initialEnabled, baseUrl }: P
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <LinkIcon className="h-4 w-4 text-muted-foreground" />
-              <h3 className="text-sm font-semibold">Public signup link</h3>
+              <h3 className="text-sm font-semibold">{label}</h3>
               <span
                 className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${
                   enabled
@@ -92,9 +106,7 @@ export function PublicSignupLinkCard({ initialCode, initialEnabled, baseUrl }: P
                 {enabled ? "Active" : "Disabled"}
               </span>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Share this link via WhatsApp, email, or anywhere — anyone with it can sign up and onboard themselves.
-            </p>
+            <p className="text-xs text-muted-foreground">{description}</p>
           </div>
           <Button
             variant="ghost"

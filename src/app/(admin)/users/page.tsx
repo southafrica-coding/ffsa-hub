@@ -57,7 +57,8 @@ export default async function UsersPage() {
     isSuperAdmin = (superCheck?.length ?? 0) > 0;
   }
 
-  let signupCode: { code: string; enabled: boolean } | null = null;
+  type SignupLink = { type: "staff" | "student" | "community"; code: string; enabled: boolean };
+  let signupLinks: SignupLink[] = [];
   let baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "";
   if (isSuperAdmin) {
     if (!baseUrl) {
@@ -68,12 +69,10 @@ export default async function UsersPage() {
     }
     const adminSupabase = createAdminClient();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: settings } = await (adminSupabase as any)
-      .from("public_signup_settings")
-      .select("code, enabled")
-      .eq("id", 1)
-      .single();
-    if (settings) signupCode = settings;
+    const { data: links } = await (adminSupabase as any)
+      .from("signup_links")
+      .select("type, code, enabled");
+    if (links) signupLinks = links as SignupLink[];
   }
 
   return (
@@ -87,12 +86,49 @@ export default async function UsersPage() {
         {isSuperAdmin && <InviteUserForm />}
       </div>
 
-      {isSuperAdmin && signupCode && (
-        <PublicSignupLinkCard
-          initialCode={signupCode.code}
-          initialEnabled={signupCode.enabled}
-          baseUrl={baseUrl}
-        />
+      {isSuperAdmin && signupLinks.length > 0 && (
+        <div className="space-y-3">
+          <div>
+            <h2 className="text-sm font-semibold">Public signup links</h2>
+            <p className="text-xs text-muted-foreground">
+              Share the right link per audience — each one grants the matching role and tailors onboarding.
+            </p>
+          </div>
+          {(
+            [
+              {
+                type: "staff" as const,
+                label: "Staff signup link",
+                description:
+                  "For staff members. Grants staff access — share only with vetted staff. Disabled by default.",
+              },
+              {
+                type: "student" as const,
+                label: "Student signup link",
+                description: "For students enrolling in a program. Grants student access.",
+              },
+              {
+                type: "community" as const,
+                label: "Community signup link",
+                description: "For community members. Grants base self-service access; skips staff-only onboarding.",
+              },
+            ]
+          ).map((meta) => {
+            const link = signupLinks.find((l) => l.type === meta.type);
+            if (!link) return null;
+            return (
+              <PublicSignupLinkCard
+                key={meta.type}
+                type={meta.type}
+                label={meta.label}
+                description={meta.description}
+                initialCode={link.code}
+                initialEnabled={link.enabled}
+                baseUrl={baseUrl}
+              />
+            );
+          })}
+        </div>
       )}
 
       <UsersTable

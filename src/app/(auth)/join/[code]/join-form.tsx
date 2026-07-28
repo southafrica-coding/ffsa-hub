@@ -7,9 +7,29 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { validatePassword } from "@/lib/auth/password";
 
-type Props = { code: string };
+type SignupType = "staff" | "student" | "community";
 
-export function JoinForm({ code }: Props) {
+type Props = { code: string; type: SignupType };
+
+const TYPE_COPY: Record<SignupType, { eyebrow: string; blurb: string }> = {
+  staff: {
+    eyebrow: "Staff sign-up",
+    blurb:
+      "Set up your staff profile in a few minutes. You'll add your details, then access the platform straight away.",
+  },
+  student: {
+    eyebrow: "Student sign-up",
+    blurb:
+      "Set up your student profile in a few minutes. You'll add your details, then access the platform straight away.",
+  },
+  community: {
+    eyebrow: "Community sign-up",
+    blurb:
+      "Set up your profile in a few minutes. You'll add a few details, then access the platform straight away.",
+  },
+};
+
+export function JoinForm({ code, type }: Props) {
   const router = useRouter();
   const supabase = createClient();
 
@@ -50,6 +70,7 @@ export function JoinForm({ code }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           code,
+          type,
           email: email.trim(),
           password,
           first_name: firstName.trim(),
@@ -155,7 +176,7 @@ export function JoinForm({ code }: Props) {
               marginBottom: "8px",
             }}
           >
-            Create your account
+            {TYPE_COPY[type].eyebrow}
           </p>
           <h1
             style={{
@@ -170,8 +191,7 @@ export function JoinForm({ code }: Props) {
             Welcome to the Hub
           </h1>
           <p style={{ fontSize: "13px", color: "hsl(30 8% 55%)", lineHeight: 1.6 }}>
-            Set up your profile in a few minutes. You&apos;ll add your details, then
-            access the platform straight away.
+            {TYPE_COPY[type].blurb}
           </p>
         </div>
 
