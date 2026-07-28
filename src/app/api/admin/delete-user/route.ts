@@ -48,13 +48,55 @@ export async function POST(request: Request) {
   // Verify user exists
   const { data: targetUser } = await adminSupabase
     .from("users")
-    .select("id")
+    .select("id, email, first_name, last_name, display_name")
     .eq("id", user_id)
     .single();
 
   if (!targetUser) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
+
+  // Preserve an alternate identifier on records that require one, so the
+  // ON DELETE SET NULL on their user_id doesn't violate their
+  // "at least one identifier" check constraint when the user is removed.
+  // (consent_records: user_id OR applicant_email; event_roles: user_id OR
+  //  contact_id OR display_name.)
+  const tu = targetUser as {
+    email: string | null;
+    first_name: string | null;
+    last_name: string | null;
+    display_name: string | null;
+  };
+  const fallbackName =
+    tu.display_name?.trim() ||
+    [tu.first_name, tu.last_name].filter(Boolean).join(" ").trim() ||
+    tu.email ||
+    "Former user";
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = adminSupabase as any;
+
+  if (tu.email) {
+    await admin
+      .from("consent_records")
+      .update({ applicant_email: tu.email })
+      .eq("user_id", user_id)
+      .is("applicant_email", null);
+  } else {
+    // No email to fall back on — drop the orphan-able consent rows.
+    await admin
+      .from("consent_records")
+      .delete()
+      .eq("user_id", user_id)
+      .is("applicant_email", null);
+  }
+
+  await admin
+    .from("event_roles")
+    .update({ display_name: fallbackName })
+    .eq("user_id", user_id)
+    .is("contact_id", null)
+    .is("display_name", null);
 
   // 1. Delete user_roles
   await adminSupabase.from("user_roles").delete().eq("user_id", user_id);
