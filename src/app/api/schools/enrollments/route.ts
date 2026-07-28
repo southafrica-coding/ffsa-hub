@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { userCanManageApplications } from "@/lib/auth/check-schools-access";
+import { deactivateMembershipProfile } from "@/lib/auth/membership-roles";
 import {
   createEnrollment,
   updateEnrollmentStatus,
@@ -67,6 +68,12 @@ export async function PUT(request: Request) {
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // A dismissed student is deactivated. Guarded in the helper so staff/admin
+  // accounts are never touched.
+  if (status === "dismissed" && data?.user_id) {
+    await deactivateMembershipProfile(createAdminClient(), data.user_id, "enrollment_dismissed");
   }
 
   return NextResponse.json({ success: true, enrollment: data });

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { ensureStudentRole } from "@/lib/auth/membership-roles";
 import { setupProgramBillingOnAcceptance } from "@/services/billing-generation";
 import { Resend } from "resend";
 import { applicationAcceptedEmailHtml } from "@/lib/email/templates/application-accepted";
@@ -296,6 +297,11 @@ export async function POST(request: Request) {
       });
     }
   }
+
+  // Being accepted into a school makes the person a student (staff stays
+  // staff, community_member becomes student). Covers pre-linked, existing,
+  // and newly-created accounts.
+  await ensureStudentRole(adminSupabase, userId, authUser.id);
 
   // Create enrollment
   const { data: enrollRow, error: enrollError } = await adminSupabase

@@ -9,6 +9,7 @@ import {
   setResponseRemoved,
 } from "@/services/schools";
 import { userCanManageApplications } from "@/lib/auth/check-schools-access";
+import { ensureStudentRole, deactivateMembershipProfile } from "@/lib/auth/membership-roles";
 import { Resend } from "resend";
 import { sendReferenceInvite } from "@/lib/email/send-reference-invite";
 import { referenceReminderEmailHtml } from "@/lib/email/templates/reference-reminder";
@@ -83,6 +84,10 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  // Applying for a school makes the applicant a student (staff stays staff;
+  // community_member becomes student). Uses the admin client to write the role.
+  await ensureStudentRole(createAdminClient(), user.id, user.id);
 
   // Create reference requests and send emails
   if (references && Array.isArray(references) && references.length > 0) {
@@ -184,6 +189,12 @@ export async function PUT(request: Request) {
       if (!error && resp) {
         updated++;
 
+        // Leaving a school (rejected/cancelled) deactivates a student-level
+        // account. Guarded in the helper so staff/admin are never touched.
+        if ((status === "rejected" || status === "cancelled") && resp.user_id) {
+          await deactivateMembershipProfile(adminSupabase, resp.user_id, `application_${status}`);
+        }
+
         // Send notification email for bulk updates too
         if (send_email) {
           const { data: fullResp } = await adminSupabase
@@ -228,6 +239,12 @@ export async function PUT(request: Request) {
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // Leaving a school (rejected/cancelled) deactivates a student-level account.
+  // Guarded in the helper so staff/admin accounts are never touched.
+  if ((status === "rejected" || status === "cancelled") && data?.user_id) {
+    await deactivateMembershipProfile(adminSupabase, data.user_id, `application_${status}`);
   }
 
   // Send notification email if status actually changed

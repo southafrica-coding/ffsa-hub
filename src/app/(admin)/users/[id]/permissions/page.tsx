@@ -78,11 +78,12 @@ export default async function UserPermissionsPage({
       .eq("user_id", id),
     // Non-system roles are the normal "job titles". program_leader is a
     // system role but is assignable here (scoped to a program) — allow it
-    // through explicitly.
+    // through explicitly. The membership roles (staff/student/community_member)
+    // are system roles too, but a super admin sets them by hand here.
     supabase
       .from("roles")
       .select("id, name, display_name")
-      .or("is_system.eq.false,name.eq.program_leader")
+      .or("is_system.eq.false,name.eq.program_leader,name.in.(staff,student,community_member)")
       .order("display_name", { ascending: true }),
   ]);
 
@@ -107,8 +108,16 @@ export default async function UserPermissionsPage({
         is_system: !!role?.is_system,
       };
     })
-    // Show non-system job titles, plus the scoped program_leader chip.
-    .filter((r) => !r.is_system || r.name === "program_leader")
+    // Show non-system job titles, plus the scoped program_leader chip and the
+    // membership roles (staff/student/community_member) so they can be removed.
+    .filter(
+      (r) =>
+        !r.is_system ||
+        r.name === "program_leader" ||
+        r.name === "staff" ||
+        r.name === "student" ||
+        r.name === "community_member"
+    )
     .map((r) => ({
       id: r.id,
       role_id: r.role_id,
