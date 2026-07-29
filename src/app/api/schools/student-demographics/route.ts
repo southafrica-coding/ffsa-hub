@@ -117,6 +117,26 @@ export async function GET() {
   }
   const userById = new Map(usersResult.data.map((u) => [u.id, u]));
 
+  // Citizenship captured on the application form (applicant_info.nationality) is
+  // far more complete than the sparse users.nationality profile field, so we
+  // prefer it — including for enrolled students, whose enrollment row carries no
+  // nationality of its own. Keyed by user because nationality is a personal
+  // attribute: any of a person's applications (any status) carries the same
+  // citizenship, so we scan the full application set, not just accepted ones.
+  const appNationalityByUser = new Map<string, string>();
+  for (const a of applicantResult.data as ApplicantPerson[]) {
+    const nat = a.applicant_info?.nationality?.trim();
+    if (a.user_id && nat && !appNationalityByUser.has(a.user_id)) {
+      appNationalityByUser.set(a.user_id, nat);
+    }
+  }
+  // Application first, then the users profile as a fallback. Null for people
+  // with no user id (handled inline where an application row is in hand).
+  const nationalityFor = (userId: string | null): string | null => {
+    if (!userId) return null;
+    return appNationalityByUser.get(userId) ?? userById.get(userId)?.nationality ?? null;
+  };
+
   const byProgram = new Map<string, Breakdown>(
     programIds.map((id) => [id, emptyBreakdown()])
   );
@@ -135,7 +155,7 @@ export async function GET() {
     const u = userById.get(row.user_id);
     const person: Person = {
       programId: row.program_id,
-      nationality: u?.nationality ?? null,
+      nationality: nationalityFor(row.user_id),
       gender: u?.gender ?? null,
     };
     addPerson(target, person, tierMap as Record<string, Tier>);
@@ -152,11 +172,13 @@ export async function GET() {
       continue;
     }
     const u = row.user_id ? userById.get(row.user_id) : undefined;
-    // Anonymous applicants: nationality comes off applicant_info, and gender
-    // simply isn't collected on the public form — it lands in "Not recorded".
+    // Nationality from this application first (incl. anonymous applicants, who
+    // have no user row), then any other application / users profile. Gender
+    // isn't collected on the public form, so it only ever comes from a user.
     const person: Person = {
       programId: row.program_id,
-      nationality: u?.nationality ?? row.applicant_info?.nationality ?? null,
+      nationality:
+        row.applicant_info?.nationality?.trim() || nationalityFor(row.user_id),
       gender: u?.gender ?? null,
     };
     addPerson(target, person, tierMap as Record<string, Tier>);
