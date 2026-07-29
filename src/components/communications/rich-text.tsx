@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
@@ -361,13 +362,45 @@ function SpacingControl({
   disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(
+    null
+  );
   const wrapRef = useRef<HTMLDivElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+  const POP_WIDTH = 240;
+
+  // Position the popover (rendered in a portal) just under the button, right-
+  // aligned to it, and clamped to stay fully on-screen. A portal + fixed
+  // positioning means no scroll/overflow ancestor can clip it.
+  useLayoutEffect(() => {
+    if (!open) return;
+    function place() {
+      const r = wrapRef.current?.getBoundingClientRect();
+      if (!r) return;
+      const left = Math.max(
+        8,
+        Math.min(r.right - POP_WIDTH, window.innerWidth - POP_WIDTH - 8)
+      );
+      setCoords({ top: r.bottom + 4, left });
+    }
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open]);
 
   // Close on outside click / Escape.
   useEffect(() => {
     if (!open) return;
     function onDown(e: MouseEvent) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+      const t = e.target as Node;
+      if (
+        !wrapRef.current?.contains(t) &&
+        !popRef.current?.contains(t)
+      ) {
         setOpen(false);
       }
     }
@@ -453,9 +486,21 @@ function SpacingControl({
       >
         <MoveVertical className="h-3.5 w-3.5" />
       </ToolButton>
-      {open && (
-        <div className="absolute right-0 top-full z-20 mt-1 w-60 rounded-md border bg-popover p-3 shadow-md">
-          {count === 0 ? (
+      {open &&
+        coords &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            ref={popRef}
+            style={{
+              position: "fixed",
+              top: coords.top,
+              left: coords.left,
+              width: POP_WIDTH,
+            }}
+            className="z-50 rounded-md border bg-popover p-3 shadow-md"
+          >
+            {count === 0 ? (
             <p className="text-[11px] text-muted-foreground">
               Click into a line, or select several lines, to set their spacing.
             </p>
@@ -511,8 +556,9 @@ function SpacingControl({
               </button>
             </div>
           )}
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
