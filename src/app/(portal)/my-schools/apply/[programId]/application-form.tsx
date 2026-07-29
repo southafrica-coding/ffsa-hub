@@ -19,6 +19,7 @@ type Question = {
   options: string[] | null;
   parent_question_id?: string | null;
   show_when_answer?: string | null;
+  system_key?: string | null;
 };
 
 function isVisible(
@@ -50,10 +51,14 @@ export function ApplicationForm({
   programId,
   questions,
   referenceSlots = [],
+  countries = [],
+  initialNationality = "",
 }: {
   programId: string;
   questions: Question[];
   referenceSlots?: ReferenceSlot[];
+  countries?: string[];
+  initialNationality?: string;
 }) {
   const router = useRouter();
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -62,6 +67,19 @@ export function ApplicationForm({
   const [submitted, setSubmitted] = useState(false);
   const [refNames, setRefNames] = useState<Record<string, string>>({});
   const [refEmails, setRefEmails] = useState<Record<string, string>>({});
+  // Nationality (prefilled from profile) drives the fee tier; home country is
+  // kept for records. Both render as country dropdowns and are required.
+  const [nationality, setNationality] = useState(
+    // Only prefill when the stored value exactly matches a dropdown option, so
+    // the selected value always reflects what's shown (never a hidden mismatch).
+    initialNationality && countries.includes(initialNationality)
+      ? initialNationality
+      : ""
+  );
+  const [homeCountry, setHomeCountry] = useState("");
+
+  const isSystemCountry = (q: Question) =>
+    q.system_key === "nationality" || q.system_key === "home_country";
 
   const questionsById = useMemo(
     () => new Map(questions.map((q) => [q.id, q])),
@@ -94,12 +112,32 @@ export function ApplicationForm({
     e.preventDefault();
     setError(null);
 
-    // Validate required fields (only those currently visible).
+    // Validate required fields (only those currently visible). System country
+    // fields are validated separately below — they live in their own state, not
+    // the answers map.
     for (const q of visibleQuestions) {
+      if (isSystemCountry(q)) continue;
       if (q.is_required && !answers[q.id]?.trim()) {
         setError(`Please answer: "${q.label}"`);
         return;
       }
+    }
+
+    // Nationality / home country are required whenever the program includes the
+    // system question (it is seeded for every program).
+    const hasNationalityQ = visibleQuestions.some(
+      (q) => q.system_key === "nationality"
+    );
+    const hasHomeCountryQ = visibleQuestions.some(
+      (q) => q.system_key === "home_country"
+    );
+    if (hasNationalityQ && !nationality) {
+      setError("Please select your nationality.");
+      return;
+    }
+    if (hasHomeCountryQ && !homeCountry) {
+      setError("Please select your home country.");
+      return;
     }
 
     for (const slot of referenceSlots) {
@@ -112,7 +150,7 @@ export function ApplicationForm({
     setLoading(true);
 
     const formattedAnswers = questions
-      .filter((q) => visibleIds.has(q.id))
+      .filter((q) => visibleIds.has(q.id) && !isSystemCountry(q))
       .map((q) => ({
         question_id: q.id,
         question_label: q.label,
@@ -126,6 +164,8 @@ export function ApplicationForm({
         body: JSON.stringify({
           program_id: programId,
           answers: formattedAnswers,
+          nationality: nationality.trim(),
+          home_country: homeCountry.trim(),
           references: referenceSlots
             .filter((slot) => refNames[slot.id]?.trim() && refEmails[slot.id]?.trim())
             .map((slot) => ({
@@ -173,6 +213,45 @@ export function ApplicationForm({
     <form onSubmit={handleSubmit} className="space-y-6">
       {visibleQuestions.map((q, idx) => {
         const depth = depthById.get(q.id) ?? 0;
+
+        // System country fields (Nationality / Home Country) render as country
+        // dropdowns bound to their own state, matching the public apply form.
+        if (isSystemCountry(q)) {
+          const isNat = q.system_key === "nationality";
+          const value = isNat ? nationality : homeCountry;
+          const setter = isNat ? setNationality : setHomeCountry;
+          return (
+            <div
+              key={q.id}
+              className="space-y-2"
+              style={depth > 0 ? { marginLeft: `${depth * 16}px` } : undefined}
+            >
+              <Label className="text-sm font-medium">
+                {idx + 1}. {q.label}
+                <span className="text-destructive ml-1">*</span>
+              </Label>
+              {q.description && (
+                <p className="text-xs text-muted-foreground">{q.description}</p>
+              )}
+              <select
+                value={value}
+                onChange={(e) => setter(e.target.value)}
+                required
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="" disabled>
+                  Select…
+                </option>
+                {countries.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+          );
+        }
+
         return (
           <div
             key={q.id}

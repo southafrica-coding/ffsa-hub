@@ -552,6 +552,9 @@ export async function createResponse(supabase: Client, data: {
   user_id: string;
   answers: Array<{ question_id: string; question_label: string; answer: string }>;
   applicant_email?: string | null;
+  // System fields (nationality / home country) captured on the authenticated
+  // apply flow, mirroring createPublicResponse. Omitted when not collected.
+  applicant_info?: Record<string, unknown> | null;
 }) {
   return supabase.from("application_responses").insert(data).select().single();
 }

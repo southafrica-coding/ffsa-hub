@@ -5,6 +5,7 @@ import {
   createResponse,
   updateResponseStatus,
   getReferenceSlotsByProgram,
+  getQuestionsByProgram,
   createReferenceRequest,
   setResponseRemoved,
 } from "@/services/schools";
@@ -31,12 +32,52 @@ export async function POST(request: Request) {
 
   const body = await request.json();
   const { program_id, answers, references } = body;
+  const nationality =
+    typeof body.nationality === "string" ? body.nationality.trim() : "";
+  const homeCountry =
+    typeof body.home_country === "string" ? body.home_country.trim() : "";
 
   if (!program_id || !answers || !Array.isArray(answers)) {
     return NextResponse.json(
       { error: "program_id and answers array are required" },
       { status: 400 }
     );
+  }
+
+  // Required-field validation, authoritative regardless of what the client did.
+  // A required field is required whether or not the applicant is logged in.
+  const { data: questions } = await getQuestionsByProgram(supabase, program_id);
+  const questionList = (questions ?? []) as Array<{
+    id: string;
+    is_required: boolean;
+    system_key?: string | null;
+  }>;
+  const hasNationalityQ = questionList.some((q) => q.system_key === "nationality");
+  const hasHomeCountryQ = questionList.some((q) => q.system_key === "home_country");
+  if (hasNationalityQ && !nationality) {
+    return NextResponse.json({ error: "Nationality is required." }, { status: 400 });
+  }
+  if (hasHomeCountryQ && !homeCountry) {
+    return NextResponse.json({ error: "Home country is required." }, { status: 400 });
+  }
+  // Required non-system answers (system country fields are validated above and
+  // travel outside the answers array).
+  const requiredIds = new Set(
+    questionList
+      .filter((q) => q.is_required && !q.system_key)
+      .map((q) => q.id)
+  );
+  for (const a of answers as Array<{
+    question_id: string;
+    question_label: string;
+    answer: string;
+  }>) {
+    if (requiredIds.has(a.question_id) && !a.answer?.trim()) {
+      return NextResponse.json(
+        { error: `Please answer the required question: "${a.question_label}"` },
+        { status: 400 }
+      );
+    }
   }
 
   // Enforce required references server-side (the client form validates too).
@@ -65,14 +106,31 @@ export async function POST(request: Request) {
     }
   }
 
+  // Persist nationality / home country the same way the public flow does, so
+  // the fee-tier and demographics reads (applicant_info.nationality) work for
+  // logged-in applicants too. Surface them in the answers list for reviewers.
+  const applicantInfo: Record<string, unknown> = {};
+  if (nationality) applicantInfo.nationality = nationality;
+  if (homeCountry) applicantInfo.home_country = homeCountry;
+  const answersWithCountry = [
+    ...(nationality
+      ? [{ question_id: "nationality", question_label: "Nationality", answer: nationality }]
+      : []),
+    ...(homeCountry
+      ? [{ question_id: "home_country", question_label: "Home Country", answer: homeCountry }]
+      : []),
+    ...answers,
+  ];
+
   const { data, error } = await createResponse(supabase, {
     program_id,
     user_id: user.id,
-    answers,
+    answers: answersWithCountry,
     // Always stamp the applicant's email onto the row itself, so downstream
     // flows (acceptance, resend-invite, export) never depend on the linked
     // users join being readable. Signed-in applicants otherwise left this null.
     applicant_email: user.email ?? null,
+    applicant_info: Object.keys(applicantInfo).length > 0 ? applicantInfo : null,
   });
 
   if (error) {
@@ -83,6 +141,18 @@ export async function POST(request: Request) {
       );
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // Keep the applicant's profile nationality in sync with what they just
+  // declared on the application, so everything else in the Hub that reads
+  // users.nationality benefits (their profile was likely blank before). Admin
+  // client so it isn't blocked by users-table update RLS; scoped to their own
+  // row. Best-effort — never fail the submission on this.
+  if (nationality) {
+    await createAdminClient()
+      .from("users")
+      .update({ nationality })
+      .eq("id", user.id);
   }
 
   // Applying for a school makes the applicant a student (staff stays staff;

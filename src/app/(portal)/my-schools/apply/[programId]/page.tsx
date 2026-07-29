@@ -5,6 +5,7 @@ import {
   getResponseByUserAndProgram,
   getReferenceSlotsByProgram,
 } from "@/services/schools";
+import { getCountryTiers } from "@/services/school-fees";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { ApplicationForm } from "./application-form";
@@ -82,6 +83,22 @@ export default async function ApplyPage({
   const { data: questions } = await getQuestionsByProgram(supabase, programId);
   const { data: referenceSlots } = await getReferenceSlotsByProgram(supabase, programId);
 
+  // Country list for the nationality / home-country dropdowns — the same
+  // tier-keyed country names the public form and fee-tier logic use. Reference
+  // data, readable by any authenticated user.
+  const { data: countryRows } = await getCountryTiers(supabase);
+  const countries = (countryRows ?? []).map(
+    (c: { country_name: string }) => c.country_name
+  );
+
+  // Prefill nationality from the applicant's profile when it's already set
+  // (still required — they can confirm or change it).
+  const { data: profile } = await supabase
+    .from("users")
+    .select("nationality")
+    .eq("id", user.id)
+    .maybeSingle();
+
   if (!questions || questions.length === 0) {
     return (
       <div className="space-y-4">
@@ -104,7 +121,13 @@ export default async function ApplyPage({
         </p>
       </div>
 
-      <ApplicationForm programId={programId} questions={questions} referenceSlots={referenceSlots ?? []} />
+      <ApplicationForm
+        programId={programId}
+        questions={questions}
+        referenceSlots={referenceSlots ?? []}
+        countries={countries}
+        initialNationality={profile?.nationality ?? ""}
+      />
     </div>
   );
 }
