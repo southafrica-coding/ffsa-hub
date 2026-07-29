@@ -35,9 +35,11 @@ export function EmailsTab({
       <div className="rounded-md border bg-muted/30 px-4 py-3">
         <p className="text-sm text-muted-foreground">
           Control the emails sent to applicants during this school&apos;s
-          process. Leave a field blank to use the FFSA default. Your text is
-          automatically wrapped in FFSA branding, and any required buttons
-          (status link, reference link) are always included.
+          process. Each field below shows the <strong>wording that&apos;s
+          sent today</strong> — edit it to make it your own, or clear a field
+          to fall back to the FFSA default. Your text is automatically wrapped
+          in FFSA branding, and any required buttons (status link, reference
+          link) are always included.
         </p>
         <p className="text-xs text-muted-foreground mt-2">
           The <strong>acceptance email</strong> is edited under the{" "}
@@ -67,9 +69,15 @@ function EmailTypeEditor({
   initial?: TemplateRow;
 }) {
   const router = useRouter();
+  // Fields start on the current wording: a saved override if there is one,
+  // otherwise the built-in FFSA default so the leader sees exactly what's
+  // sent today and edits from there.
+  const baseSubject = initial?.subject ?? type.defaultSubject;
+  const baseBody = initial?.body ?? type.defaultBody;
+
   const [enabled, setEnabled] = useState(initial?.enabled ?? true);
-  const [subject, setSubject] = useState(initial?.subject ?? "");
-  const [body, setBody] = useState(initial?.body ?? "");
+  const [subject, setSubject] = useState(baseSubject);
+  const [body, setBody] = useState(baseBody);
   const [reminderDays, setReminderDays] = useState(
     initial?.reminder_after_days != null ? String(initial.reminder_after_days) : ""
   );
@@ -83,13 +91,16 @@ function EmailTypeEditor({
       : "";
   const dirty =
     enabled !== (initial?.enabled ?? true) ||
-    subject !== (initial?.subject ?? "") ||
-    body !== (initial?.body ?? "") ||
+    subject !== baseSubject ||
+    body !== baseBody ||
     reminderDays !== initialReminder;
 
   async function save() {
     setSaving(true);
     setError(null);
+    // Text left exactly on the FFSA default is stored as "no override" so
+    // the polished default template keeps sending — only genuine edits
+    // become a custom template.
     const res = await fetch(
       `/api/schools/programs/${programId}/email-templates`,
       {
@@ -98,8 +109,8 @@ function EmailTypeEditor({
         body: JSON.stringify({
           emailType: type.key,
           enabled,
-          subject,
-          body,
+          subject: subject === type.defaultSubject ? "" : subject,
+          body: body === type.defaultBody ? "" : body,
           reminderAfterDays: reminderDays.trim()
             ? Number(reminderDays)
             : null,
@@ -149,7 +160,7 @@ function EmailTypeEditor({
           <Input
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
-            placeholder="Leave blank to use the default subject"
+            placeholder="Cleared — the FFSA default subject will be used"
             disabled={!enabled}
           />
         </div>
@@ -160,7 +171,7 @@ function EmailTypeEditor({
           <Textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            placeholder="Leave blank to use the default message. Type here to write your own — plain text, one idea per paragraph."
+            placeholder="Cleared — the FFSA default message will be used. Type here to write your own; plain text, one idea per paragraph."
             rows={5}
             disabled={!enabled}
           />

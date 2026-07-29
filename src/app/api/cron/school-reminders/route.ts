@@ -98,8 +98,12 @@ export async function GET(request: Request) {
           "reference_reminder",
           defaults,
           {
-            programName,
-            heading: "A reference is waiting",
+            values: {
+              program_name: programName,
+              applicant_name: applicantName,
+              referee_name: req.referee_name,
+              reference_type: req.reference_slots?.label ?? "Reference",
+            },
             cta: { label: "Complete the reference", url: referenceUrl },
             siteUrl,
           }

@@ -45,8 +45,12 @@ export async function sendReferenceInvite(params: {
       "reference_request",
       defaults,
       {
-        programName: params.programName,
-        heading: "A reference is requested",
+        values: {
+          program_name: params.programName,
+          applicant_name: params.applicantName,
+          referee_name: params.refereeName,
+          reference_type: params.slotLabel,
+        },
         cta: { label: "Complete the reference", url: referenceUrl },
         siteUrl,
       }

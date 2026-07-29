@@ -282,9 +282,10 @@ export async function POST(request: Request) {
       "application_received",
       receivedDefaults,
       {
-        firstName: firstName || "Applicant",
-        programName: program.name,
-        heading: "Application received",
+        values: {
+          first_name: firstName || "Applicant",
+          program_name: program.name,
+        },
         cta: statusTrackerUrl
           ? { label: "Track your application", url: statusTrackerUrl }
           : undefined,
@@ -343,8 +344,12 @@ export async function POST(request: Request) {
           "reference_request",
           refDefaults,
           {
-            programName: program.name,
-            heading: "A reference is requested",
+            values: {
+              program_name: program.name,
+              applicant_name: applicantName,
+              referee_name: ref.referee_name,
+              reference_type: slot?.label ?? "Reference",
+            },
             cta: { label: "Complete the reference", url: referenceUrl },
             siteUrl,
           }

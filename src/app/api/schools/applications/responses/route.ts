@@ -359,19 +359,16 @@ async function sendStatusEmail(
     let emailType: string;
     let defaultSubject: string;
     let defaultHtml: string;
-    let heading: string;
     switch (status) {
       case "rejected":
         emailType = "application_rejected";
         defaultSubject = `Application Update — ${programName}`;
         defaultHtml = applicationRejectedEmailHtml({ firstName, programName });
-        heading = "Application update";
         break;
       case "waitlisted":
         emailType = "application_waitlisted";
         defaultSubject = `Application Update — ${programName}`;
         defaultHtml = applicationWaitlistedEmailHtml({ firstName, programName });
-        heading = "Application update";
         break;
       case "interview_scheduled":
         emailType = "interview_scheduled";
@@ -382,7 +379,6 @@ async function sendStatusEmail(
           interviewDate: undefined,
           interviewNotes: notes || undefined,
         });
-        heading = "Interview scheduled";
         break;
       // "accepted" is handled by accept-application route
       // "references_received" and "submitted" don't need emails
@@ -400,9 +396,7 @@ async function sendStatusEmail(
         emailType,
         { subject: defaultSubject, html: defaultHtml },
         {
-          firstName,
-          programName,
-          heading,
+          values: { first_name: firstName, program_name: programName },
           siteUrl: process.env.NEXT_PUBLIC_SITE_URL,
         }
       );
@@ -518,8 +512,12 @@ export async function PATCH(request: Request) {
         "reference_reminder",
         reminderDefaults,
         {
-          programName: reminderProgramName,
-          heading: "A reference is waiting",
+          values: {
+            program_name: reminderProgramName,
+            applicant_name: applicantName,
+            referee_name: refReq.referee_name,
+            reference_type: refReq.reference_slots?.label ?? "Reference",
+          },
           cta: { label: "Complete the reference", url: referenceUrl },
           siteUrl,
         }
