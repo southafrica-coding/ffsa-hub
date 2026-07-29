@@ -1558,6 +1558,51 @@ const ALL_STATUSES = [
   { key: "cancelled", label: "Cancelled" },
 ] as const;
 
+type ApplicantEmailRow = {
+  id: string;
+  category: string | null;
+  subject: string | null;
+  to_email: string;
+  status: string;
+  error: string | null;
+  sent_at: string | null;
+  delivered_at: string | null;
+  opened_at: string | null;
+  bounced_at: string | null;
+  complained_at: string | null;
+  created_at: string;
+};
+
+function prettyCategory(c: string | null): string {
+  if (!c) return "Email";
+  return c
+    .split("_")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+function ApplicantEmailStatusBadge({ status }: { status: string }) {
+  const map: Record<
+    string,
+    { label: string; variant: "default" | "secondary" | "destructive" | "outline" }
+  > = {
+    delivered: { label: "Delivered", variant: "secondary" },
+    opened: { label: "Opened", variant: "secondary" },
+    sent: { label: "Sent", variant: "outline" },
+    queued: { label: "Queued", variant: "outline" },
+    bounced: { label: "Bounced", variant: "destructive" },
+    complained: { label: "Spam", variant: "destructive" },
+    dropped: { label: "Dropped", variant: "destructive" },
+    failed: { label: "Failed", variant: "destructive" },
+  };
+  const meta = map[status] ?? { label: status, variant: "outline" as const };
+  return (
+    <Badge variant={meta.variant} className="shrink-0">
+      {meta.label}
+    </Badge>
+  );
+}
+
 function ApplicantsTab({
   programId,
   programCode,
@@ -1583,6 +1628,24 @@ function ApplicantsTab({
   // Reference display in review dialog
   const [reviewReferences, setReviewReferences] = useState<ReferenceRequest[]>([]);
   const [refsLoading, setRefsLoading] = useState(false);
+
+  // Email delivery history for the applicant under review.
+  const [applicantEmails, setApplicantEmails] = useState<ApplicantEmailRow[]>([]);
+
+  async function fetchApplicantEmails(applicationId: string) {
+    setApplicantEmails([]);
+    try {
+      const res = await fetch(
+        `/api/schools/programs/${programId}/applicant-emails?applicationId=${applicationId}`
+      );
+      if (res.ok) {
+        const data = (await res.json()) as { emails: ApplicantEmailRow[] };
+        setApplicantEmails(data.emails ?? []);
+      }
+    } catch {
+      // Non-critical panel — leave it empty on failure.
+    }
+  }
 
   // Bulk selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -2461,6 +2524,7 @@ function ApplicantsTab({
                             setReviewStatus(resp.status);
                             setReviewNotes(resp.admin_notes ?? "");
                             fetchReferences(resp.id);
+                            fetchApplicantEmails(resp.id);
                           }}
                         >
                           Review
@@ -2561,6 +2625,45 @@ function ApplicantsTab({
                       <p>City: {reviewingResponse.applicant_info.city}</p>
                     )}
                   </div>
+                )}
+              </div>
+
+              {/* Email history */}
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-foreground uppercase tracking-wider">
+                  Email history
+                </p>
+                {applicantEmails.length === 0 ? (
+                  <p className="text-sm text-muted-foreground italic">
+                    No emails recorded for this applicant yet.
+                  </p>
+                ) : (
+                  <ul className="divide-y rounded-md border">
+                    {applicantEmails.map((em) => (
+                      <li
+                        key={em.id}
+                        className="flex items-center justify-between gap-3 px-3 py-2"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm truncate">
+                            {em.subject || prettyCategory(em.category)}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(
+                              em.sent_at ?? em.created_at
+                            ).toLocaleString()}
+                          </p>
+                          {em.error &&
+                            ["bounced", "complained", "failed", "dropped"].includes(
+                              em.status
+                            ) && (
+                              <p className="text-xs text-red-600">{em.error}</p>
+                            )}
+                        </div>
+                        <ApplicantEmailStatusBadge status={em.status} />
+                      </li>
+                    ))}
+                  </ul>
                 )}
               </div>
 
