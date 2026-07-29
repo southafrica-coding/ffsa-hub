@@ -12,6 +12,7 @@ import {
 import { userCanManageApplications } from "@/lib/auth/check-schools-access";
 import { ensureStudentRole, deactivateMembershipProfile } from "@/lib/auth/membership-roles";
 import { sendTransactional } from "@/lib/email/send-transactional";
+import { resolveProgramEmail } from "@/lib/email/render-program-email";
 import { sendReferenceInvite } from "@/lib/email/send-reference-invite";
 import { referenceReminderEmailHtml } from "@/lib/email/templates/reference-reminder";
 import { applicationRejectedEmailHtml } from "@/lib/email/templates/application-rejected";
@@ -201,6 +202,7 @@ export async function POST(request: Request) {
           programName: program?.name ?? "School Program",
           slotLabel: slot?.label ?? "Reference",
           token: refRequest.token,
+          programId: program_id,
         });
 
         await (adminSupabase as any)
@@ -275,7 +277,7 @@ export async function PUT(request: Request) {
             const { email, firstName } = getApplicantDetails(fullResp);
             const programName = fullResp.programs?.name ?? "School Program";
             if (email) {
-              await sendStatusEmail(email, firstName, programName, status, admin_notes, responseId);
+              await sendStatusEmail(email, firstName, programName, status, admin_notes, responseId, fullResp.program_id);
             }
           }
         }
@@ -333,7 +335,8 @@ export async function PUT(request: Request) {
           programName,
           status,
           admin_notes,
-          id
+          id,
+          fullResp.program_id
         );
       }
     }
@@ -348,47 +351,74 @@ async function sendStatusEmail(
   programName: string,
   status: string,
   notes?: string | null,
-  responseId?: string | null
+  responseId?: string | null,
+  programId?: string | null
 ) {
   try {
-    const common = {
-      to: toEmail,
-      sourceType: "school_application",
-      sourceId: responseId ?? null,
-    };
+    // Map the status to its email type + built-in default copy.
+    let emailType: string;
+    let defaultSubject: string;
+    let defaultHtml: string;
+    let heading: string;
     switch (status) {
       case "rejected":
-        await sendTransactional({
-          ...common,
-          subject: `Application Update — ${programName}`,
-          html: applicationRejectedEmailHtml({ firstName, programName }),
-          category: "application_rejected",
-        });
+        emailType = "application_rejected";
+        defaultSubject = `Application Update — ${programName}`;
+        defaultHtml = applicationRejectedEmailHtml({ firstName, programName });
+        heading = "Application update";
         break;
       case "waitlisted":
-        await sendTransactional({
-          ...common,
-          subject: `Application Update — ${programName}`,
-          html: applicationWaitlistedEmailHtml({ firstName, programName }),
-          category: "application_waitlisted",
-        });
+        emailType = "application_waitlisted";
+        defaultSubject = `Application Update — ${programName}`;
+        defaultHtml = applicationWaitlistedEmailHtml({ firstName, programName });
+        heading = "Application update";
         break;
       case "interview_scheduled":
-        await sendTransactional({
-          ...common,
-          subject: `Interview Scheduled — ${programName}`,
-          html: interviewScheduledEmailHtml({
-            firstName,
-            programName,
-            interviewDate: undefined,
-            interviewNotes: notes || undefined,
-          }),
-          category: "interview_scheduled",
+        emailType = "interview_scheduled";
+        defaultSubject = `Interview Scheduled — ${programName}`;
+        defaultHtml = interviewScheduledEmailHtml({
+          firstName,
+          programName,
+          interviewDate: undefined,
+          interviewNotes: notes || undefined,
         });
+        heading = "Interview scheduled";
         break;
       // "accepted" is handled by accept-application route
       // "references_received" and "submitted" don't need emails
+      default:
+        return;
     }
+
+    // Apply the school's per-program override (on/off + subject + body).
+    let subject = defaultSubject;
+    let html = defaultHtml;
+    if (programId) {
+      const resolved = await resolveProgramEmail(
+        createAdminClient(),
+        programId,
+        emailType,
+        { subject: defaultSubject, html: defaultHtml },
+        {
+          firstName,
+          programName,
+          heading,
+          siteUrl: process.env.NEXT_PUBLIC_SITE_URL,
+        }
+      );
+      if (resolved.skip) return; // leader switched this email off
+      subject = resolved.subject;
+      html = resolved.html;
+    }
+
+    await sendTransactional({
+      to: toEmail,
+      sourceType: "school_application",
+      sourceId: responseId ?? null,
+      subject,
+      html,
+      category: emailType,
+    });
   } catch {
     // Don't fail the status update if email fails
     console.error(`Failed to send status email to ${toEmail}`);
@@ -465,17 +495,46 @@ export async function PATCH(request: Request) {
       : [app?.applicant_info?.first_name, app?.applicant_info?.last_name].filter(Boolean).join(" ") || "An applicant";
 
     const referenceUrl = `${siteUrl}/reference/${refReq.token}`;
-
-    await sendTransactional({
-      to: refReq.referee_email,
-      subject: `Reference Reminder — ${app?.programs?.name ?? "School Program"}`,
+    const reminderProgramName = app?.programs?.name ?? "School Program";
+    const reminderDefaults = {
+      subject: `Reference Reminder — ${reminderProgramName}`,
       html: referenceReminderEmailHtml({
         refereeName: refReq.referee_name,
         applicantName,
-        programName: app?.programs?.name ?? "School Program",
+        programName: reminderProgramName,
         slotLabel: refReq.reference_slots?.label ?? "Reference",
         referenceUrl,
       }),
+    };
+
+    // Apply the school's per-program override; a custom body still gets the
+    // "complete the reference" button re-appended so the link is never lost.
+    let reminderSubject = reminderDefaults.subject;
+    let reminderHtml = reminderDefaults.html;
+    if (app?.program_id) {
+      const resolved = await resolveProgramEmail(
+        adminSupabase,
+        app.program_id,
+        "reference_reminder",
+        reminderDefaults,
+        {
+          programName: reminderProgramName,
+          heading: "A reference is waiting",
+          cta: { label: "Complete the reference", url: referenceUrl },
+          siteUrl,
+        }
+      );
+      if (resolved.skip) {
+        return NextResponse.json({ success: true, skipped: true });
+      }
+      reminderSubject = resolved.subject;
+      reminderHtml = resolved.html;
+    }
+
+    await sendTransactional({
+      to: refReq.referee_email,
+      subject: reminderSubject,
+      html: reminderHtml,
       category: "reference_reminder",
       sourceType: "school_application",
       sourceId: app?.id ?? null,

@@ -14,6 +14,7 @@ import {
 } from "@/services/consent";
 import { notifyApplicationSubmitted } from "@/lib/slack/notify";
 import { sendTransactional } from "@/lib/email/send-transactional";
+import { resolveProgramEmail } from "@/lib/email/render-program-email";
 import { applicationConfirmationEmailHtml } from "@/lib/email/templates/application-confirmation";
 import { referenceRequestEmailHtml } from "@/lib/email/templates/reference-request";
 
@@ -267,18 +268,39 @@ export async function POST(request: Request) {
     : null;
 
   if (email) {
-    await sendTransactional({
-      to: email,
+    const receivedDefaults = {
       subject: `Application Received — ${program.name}`,
       html: applicationConfirmationEmailHtml({
         firstName: firstName || "Applicant",
         programName: program.name,
         statusUrl: statusTrackerUrl,
       }),
-      category: "application_received",
-      sourceType: "school_application",
-      sourceId: response.id,
-    });
+    };
+    const resolved = await resolveProgramEmail(
+      supabase,
+      program_id,
+      "application_received",
+      receivedDefaults,
+      {
+        firstName: firstName || "Applicant",
+        programName: program.name,
+        heading: "Application received",
+        cta: statusTrackerUrl
+          ? { label: "Track your application", url: statusTrackerUrl }
+          : undefined,
+        siteUrl,
+      }
+    );
+    if (!resolved.skip) {
+      await sendTransactional({
+        to: email,
+        subject: resolved.subject,
+        html: resolved.html,
+        category: "application_received",
+        sourceType: "school_application",
+        sourceId: response.id,
+      });
+    }
   }
   const referenceLinks: Array<{ label: string; url: string }> = [];
 
@@ -305,8 +327,7 @@ export async function POST(request: Request) {
           url: referenceUrl,
         });
 
-        await sendTransactional({
-          to: ref.referee_email,
+        const refDefaults = {
           subject: `Reference Request — ${program.name}`,
           html: referenceRequestEmailHtml({
             refereeName: ref.referee_name,
@@ -315,10 +336,29 @@ export async function POST(request: Request) {
             slotLabel: slot?.label ?? "Reference",
             referenceUrl,
           }),
-          category: "reference_request",
-          sourceType: "school_application",
-          sourceId: response.id,
-        });
+        };
+        const resolvedRef = await resolveProgramEmail(
+          supabase,
+          program_id,
+          "reference_request",
+          refDefaults,
+          {
+            programName: program.name,
+            heading: "A reference is requested",
+            cta: { label: "Complete the reference", url: referenceUrl },
+            siteUrl,
+          }
+        );
+        if (!resolvedRef.skip) {
+          await sendTransactional({
+            to: ref.referee_email,
+            subject: resolvedRef.subject,
+            html: resolvedRef.html,
+            category: "reference_request",
+            sourceType: "school_application",
+            sourceId: response.id,
+          });
+        }
 
         await (supabase as any)
           .from("reference_requests")

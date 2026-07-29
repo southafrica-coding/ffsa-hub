@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getProgramById, getEnrollmentsByProgram, getGradesByProgram, getQuestionsByProgram, getResponsesByProgram, getRemovedResponsesByProgram, getReferenceSlotsByProgram, getReferenceRequestSummaries, getReferenceQuestionsByProgram } from "@/services/schools";
 import { fetchAssignableContacts } from "@/lib/auth/assignable-contacts";
 import { listProgramLeaders } from "@/services/program-leaders";
+import { listProgramEmailTemplates } from "@/services/program-email-templates";
 import { ProgramDetail } from "./program-detail";
 
 type UserIdentity = {
@@ -143,12 +144,20 @@ export default async function ProgramDetailPage({
   // reviewers, matching how enrollments/responses are hydrated above.
   const { data: leaders } = await listProgramLeaders(admin, programId);
 
+  // Per-program email overrides (migration 146). Empty until a leader
+  // customizes an email; the resolver falls back to defaults meanwhile.
+  const { data: emailTemplates } = await listProgramEmailTemplates(
+    admin,
+    programId
+  );
+
   return (
     <div className="space-y-6">
       <ProgramDetail
         program={program}
         enrollments={enrollments ?? []}
         leaders={leaders ?? []}
+        emailTemplates={emailTemplates ?? []}
         grades={grades ?? []}
         allUsers={allUsers ?? []}
         staffOptions={staffOptions}

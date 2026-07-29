@@ -6,6 +6,7 @@ import { QuestionTree, type TreeQuestion } from "@/components/admin/question-tre
 import { ReferenceQuestionsBuilder } from "./reference-questions-builder";
 import { ProgramCoursesManager, type PhaseCourse } from "./program-courses-manager";
 import { LeadersTab, type ProgramLeaderRow } from "./leaders-tab";
+import { EmailsTab } from "./emails-tab";
 import { StudentsExportPanel } from "./students-export-panel";
 import { ENROLLMENT_STATUS_LABELS } from "@/lib/schools/student-export-columns";
 import { Badge } from "@/components/ui/badge";
@@ -305,6 +306,7 @@ export function ProgramDetail({
   program,
   enrollments,
   leaders,
+  emailTemplates,
   grades,
   allUsers,
   staffOptions,
@@ -320,6 +322,12 @@ export function ProgramDetail({
   program: Program;
   enrollments: Enrollment[];
   leaders: ProgramLeaderRow[];
+  emailTemplates: {
+    email_type: string;
+    enabled: boolean;
+    subject: string | null;
+    body: string | null;
+  }[];
   grades: GradeRow[];
   allUsers: UserOption[];
   staffOptions: StaffUser[];
@@ -454,6 +462,9 @@ export function ProgramDetail({
           <TabsTrigger value="leaders">
             Leaders ({leaders.length})
           </TabsTrigger>
+          <TabsTrigger value="emails">
+            Emails
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="courses" className="mt-4">
@@ -515,6 +526,10 @@ export function ProgramDetail({
             leaders={leaders}
             allUsers={allUsers}
           />
+        </TabsContent>
+
+        <TabsContent value="emails" className="mt-4">
+          <EmailsTab programId={program.id} templates={emailTemplates} />
         </TabsContent>
       </Tabs>
     </div>
