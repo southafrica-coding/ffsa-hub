@@ -9,7 +9,7 @@ import { WidgetShell, WidgetEmpty } from "./widget-shell";
 
 const TOP_N = 8;
 
-// Citizenship mix of accepted and arrived students, ranked, with a school
+// Citizenship mix of accepted and enrolled students, ranked, with a school
 // filter. Percentages are of the total INCLUDING unrecorded nationalities, so
 // the list always sums to 100 and a patchy dataset looks patchy rather than
 // confidently wrong.

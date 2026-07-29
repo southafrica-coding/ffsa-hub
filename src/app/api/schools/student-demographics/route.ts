@@ -24,17 +24,17 @@ import {
 // Fee tier / nationality / gender breakdowns for the dashboard.
 //
 // The population is ONE deduped set: every person with an accepted application
-// OR an arrived enrollment, counted once. An arrived student almost always has
-// an accepted application row too, so we dedup per (program, user) to avoid
-// counting the same person twice. This deliberately excludes rejected /
-// waitlisted / cancelled applicants and waiting_for_arrival / dismissed /
+// OR an enrollment that is awaiting arrival or arrived, counted once. Such a
+// student almost always has an accepted application row too, so we dedup per
+// (program, user) to avoid counting the same person twice. This deliberately
+// excludes rejected / waitlisted / cancelled applicants and dismissed /
 // decided_to_leave / graduated enrollments — the question is "who is accepted
-// or here", not "who is on the roster" or "who ever applied".
+// or coming/here", not "who is on the roster" or "who ever applied".
 //
 // On the service-role client, see the note in services/schools-demographics.ts.
 // Scope is enforced here; only aggregate counts leave this handler.
 
-const ARRIVED_STATUS = "arrived";
+const ENROLLED_STATUSES = ["waiting_for_arrival", "arrived"];
 const ACCEPTED_STATUS = "accepted";
 
 export async function GET() {
@@ -95,8 +95,8 @@ export async function GET() {
     );
   }
 
-  const enrolments = (enrolResult.data as EnrollmentPerson[]).filter(
-    (e) => e.status === ARRIVED_STATUS
+  const enrolments = (enrolResult.data as EnrollmentPerson[]).filter((e) =>
+    ENROLLED_STATUSES.includes(e.status)
   );
   const applicants = (applicantResult.data as ApplicantPerson[]).filter(
     (a) => a.status === ACCEPTED_STATUS
@@ -121,13 +121,14 @@ export async function GET() {
     programIds.map((id) => [id, emptyBreakdown()])
   );
   // Tracks which users are already counted in a program, so an accepted
-  // applicant who has also arrived isn't counted twice. Keyed per program:
+  // applicant who is also enrolled isn't counted twice. Keyed per program:
   // the same person may legitimately appear in two different schools.
   const countedByProgram = new Map<string, Set<string>>(
     programIds.map((id) => [id, new Set<string>()])
   );
 
-  // Arrived enrollees first — they anchor the dedup set.
+  // Enrolled (awaiting-arrival or arrived) students first — they anchor the
+  // dedup set.
   for (const row of enrolments) {
     const target = byProgram.get(row.program_id);
     if (!target) continue;
@@ -141,8 +142,8 @@ export async function GET() {
     countedByProgram.get(row.program_id)?.add(row.user_id);
   }
 
-  // Accepted applicants, skipping anyone already counted as arrived in the same
-  // program. Anonymous applicants (no user row) can't be deduped and each
+  // Accepted applicants, skipping anyone already counted as enrolled in the
+  // same program. Anonymous applicants (no user row) can't be deduped and each
   // represents a distinct person, so they're always counted.
   for (const row of applicants) {
     const target = byProgram.get(row.program_id);

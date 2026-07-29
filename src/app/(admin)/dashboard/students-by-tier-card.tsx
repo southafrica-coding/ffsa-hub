@@ -4,9 +4,9 @@ import { useStudentDemographics } from "./use-student-demographics";
 import { WidgetShell, WidgetEmpty } from "./widget-shell";
 import { StackedBar, Legend, TIER_COLORS } from "./demographics-controls";
 
-// Country fee-tier mix per school, for accepted and arrived students. Tiers are
-// A/B/C to match the billing screens (A = full price, B = reduced, C = heavily
-// reduced).
+// Country fee-tier mix per school, for accepted and enrolled students. Tiers
+// are A/B/C to match the billing screens (A = full price, B = reduced,
+// C = heavily reduced).
 export function StudentsByTierCard() {
   const state = useStudentDemographics();
 

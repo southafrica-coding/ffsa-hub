@@ -153,7 +153,7 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
     key: "students-by-tier",
     title: "ABC Country",
     description:
-      "Accepted and arrived students split by country fee tier (A full price, B reduced, C heavily reduced) per school.",
+      "Accepted and enrolled students split by country fee tier (A full price, B reduced, C heavily reduced) per school.",
     category: "Schools",
     defaultOrder: 72,
     fullWidth: true,
@@ -164,7 +164,7 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
     key: "students-by-nationality",
     title: "Student Citizenship",
     description:
-      "Accepted and arrived students by country of citizenship, ranked, across all schools or one you pick.",
+      "Accepted and enrolled students by country of citizenship, ranked, across all schools or one you pick.",
     category: "Schools",
     defaultOrder: 74,
     fullWidth: true,
@@ -175,7 +175,7 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
     key: "students-by-gender",
     title: "Gender split by school",
     description:
-      "The male / female balance of each school's accepted and arrived students.",
+      "The male / female balance of each school's accepted and enrolled students.",
     category: "Schools",
     defaultOrder: 76,
     fullWidth: true,
