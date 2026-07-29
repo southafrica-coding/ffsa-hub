@@ -273,8 +273,16 @@ export const payfastProvider: PaymentProvider = {
 
     const body: Record<string, string | number> = {
       // PayFast takes the refund amount in CENTS, same unit as
-      // orders.total_cents — do not convert to rands here.
+      // orders.total_cents — do not convert to rands here. (PayFast is
+      // inconsistent: the checkout redirect wants rands, but the REST API
+      // wants cents.)
       amount: req.amountCents,
+      // Required by the refund API — omitting it returns HTTP 400 "This
+      // field is required" (see PayFast's own SDK example + test, which
+      // always send it). Valid values are 'current' | 'savings'. For a
+      // card refund PayFast reverses to the original card regardless, so
+      // this is a required-but-inert formality; 'current' is the default.
+      acc_type: "current",
       // The Hub sends its own branded refund email, so PayFast's
       // notice is off unless a caller explicitly asks for it.
       notify_buyer: req.notifyBuyer ? 1 : 0,
