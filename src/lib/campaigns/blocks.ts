@@ -432,16 +432,24 @@ function styleParagraphs(
   pFont: string,
   defaultMarginBottomPx: number
 ): string {
-  return html.replace(/<p([^>]*)>/gi, (_m, rawAttrs: string) => {
-    const inline = /style="([^"]*)"/i.exec(rawAttrs)?.[1] ?? "";
-    const lh = /line-height:\s*([\d.]+)/i.exec(inline)?.[1];
-    const mb = /margin-bottom:\s*(\d+)px/i.exec(inline)?.[1];
-    // pFont already carries a line-height; swap in the paragraph override.
-    const font = lh
-      ? pFont.replace(/line-height:[^;]*;?/i, `line-height:${lh};`)
-      : pFont;
-    return `<p style="margin:0 0 ${mb ?? defaultMarginBottomPx}px;${font}">`;
-  });
+  return (
+    html
+      .replace(/<p([^>]*)>/gi, (_m, rawAttrs: string) => {
+        const inline = /style="([^"]*)"/i.exec(rawAttrs)?.[1] ?? "";
+        const lh = /line-height:\s*([\d.]+)/i.exec(inline)?.[1];
+        const mb = /margin-bottom:\s*(\d+)px/i.exec(inline)?.[1];
+        // pFont already carries a line-height; swap in the paragraph override.
+        const font = lh
+          ? pFont.replace(/line-height:[^;]*;?/i, `line-height:${lh};`)
+          : pFont;
+        return `<p style="margin:0 0 ${mb ?? defaultMarginBottomPx}px;${font}">`;
+      })
+      // An empty paragraph (a blank line the author added by pressing Enter)
+      // has no line box, so it would collapse to nothing in the sent email
+      // even though the editor shows it. Give it a non-breaking space so it
+      // renders as a real blank line — matching what the author sees.
+      .replace(/(<p\b[^>]*>)\s*(<\/p>)/gi, "$1&nbsp;$2")
+  );
 }
 
 // ────────────────────────────────────────────────────────────
