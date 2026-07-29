@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { Resend } from "resend";
 import { profileReminderEmailHtml } from "@/lib/email/templates/profile-reminder";
 import { getMissingProfileFields } from "@/lib/users/profile-fields";
-
-const resend = new Resend(process.env.RESEND_API_KEY?.trim());
+import { sendTransactional } from "@/lib/email/send-transactional";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -68,9 +66,7 @@ export async function POST(request: Request) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
   const signInUrl = `${siteUrl}/sign-in`;
 
-  const fromEmail = (process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com").trim();
-  const { error: sendError } = await resend.emails.send({
-    from: `Fire & Fragrance SA <${fromEmail}>`,
+  const sendResult = await sendTransactional({
     to: targetUser.email,
     subject: "A few details needed to finish your FFSA Hub profile",
     html: profileReminderEmailHtml({
@@ -78,11 +74,14 @@ export async function POST(request: Request) {
       missingLabels: missingFields.map((f) => f.label),
       signInUrl,
     }),
+    category: "profile_reminder",
+    sourceType: "user",
+    sourceId: user_id,
   });
 
-  if (sendError) {
+  if (!sendResult.ok) {
     return NextResponse.json(
-      { error: `Failed to send reminder email: ${sendError.message}` },
+      { error: `Failed to send reminder email: ${sendResult.error}` },
       { status: 500 }
     );
   }

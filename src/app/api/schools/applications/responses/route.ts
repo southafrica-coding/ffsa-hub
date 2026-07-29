@@ -11,14 +11,13 @@ import {
 } from "@/services/schools";
 import { userCanManageApplications } from "@/lib/auth/check-schools-access";
 import { ensureStudentRole, deactivateMembershipProfile } from "@/lib/auth/membership-roles";
-import { Resend } from "resend";
+import { sendTransactional } from "@/lib/email/send-transactional";
 import { sendReferenceInvite } from "@/lib/email/send-reference-invite";
 import { referenceReminderEmailHtml } from "@/lib/email/templates/reference-reminder";
 import { applicationRejectedEmailHtml } from "@/lib/email/templates/application-rejected";
 import { applicationWaitlistedEmailHtml } from "@/lib/email/templates/application-waitlisted";
 import { interviewScheduledEmailHtml } from "@/lib/email/templates/interview-scheduled";
 
-const resend = new Resend(process.env.RESEND_API_KEY?.trim());
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -245,7 +244,6 @@ export async function PUT(request: Request) {
   // ── Bulk status update ──
   if (ids && Array.isArray(ids) && ids.length > 0 && status) {
     const adminSupabase = createAdminClient();
-    const fromEmail = (process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com").trim();
     let updated = 0;
 
     for (const responseId of ids) {
@@ -277,7 +275,7 @@ export async function PUT(request: Request) {
             const { email, firstName } = getApplicantDetails(fullResp);
             const programName = fullResp.programs?.name ?? "School Program";
             if (email) {
-              await sendStatusEmail(fromEmail, email, firstName, programName, status, admin_notes);
+              await sendStatusEmail(email, firstName, programName, status, admin_notes, responseId);
             }
           }
         }
@@ -330,12 +328,12 @@ export async function PUT(request: Request) {
       const programName = fullResp.programs?.name ?? "School Program";
       if (email) {
         await sendStatusEmail(
-          (process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com").trim(),
           email,
           firstName,
           programName,
           status,
-          admin_notes
+          admin_notes,
+          id
         );
       }
     }
@@ -345,35 +343,39 @@ export async function PUT(request: Request) {
 }
 
 async function sendStatusEmail(
-  fromEmail: string,
   toEmail: string,
   firstName: string,
   programName: string,
   status: string,
-  notes?: string | null
+  notes?: string | null,
+  responseId?: string | null
 ) {
   try {
+    const common = {
+      to: toEmail,
+      sourceType: "school_application",
+      sourceId: responseId ?? null,
+    };
     switch (status) {
       case "rejected":
-        await resend.emails.send({
-          from: `Fire & Fragrance SA <${fromEmail}>`,
-          to: toEmail,
+        await sendTransactional({
+          ...common,
           subject: `Application Update — ${programName}`,
           html: applicationRejectedEmailHtml({ firstName, programName }),
+          category: "application_rejected",
         });
         break;
       case "waitlisted":
-        await resend.emails.send({
-          from: `Fire & Fragrance SA <${fromEmail}>`,
-          to: toEmail,
+        await sendTransactional({
+          ...common,
           subject: `Application Update — ${programName}`,
           html: applicationWaitlistedEmailHtml({ firstName, programName }),
+          category: "application_waitlisted",
         });
         break;
       case "interview_scheduled":
-        await resend.emails.send({
-          from: `Fire & Fragrance SA <${fromEmail}>`,
-          to: toEmail,
+        await sendTransactional({
+          ...common,
           subject: `Interview Scheduled — ${programName}`,
           html: interviewScheduledEmailHtml({
             firstName,
@@ -381,6 +383,7 @@ async function sendStatusEmail(
             interviewDate: undefined,
             interviewNotes: notes || undefined,
           }),
+          category: "interview_scheduled",
         });
         break;
       // "accepted" is handled by accept-application route
@@ -441,12 +444,11 @@ export async function PATCH(request: Request) {
 
   if (action === "send_reference_reminder" && reference_request_id) {
     const adminSupabase = createAdminClient();
-    const fromEmail = (process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com").trim();
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://ffsahub.com";
 
     const { data: refReq } = await (adminSupabase as any)
       .from("reference_requests")
-      .select("*, reference_slots(label), application_responses(applicant_info, applicant_email, user_id, program_id, users!application_responses_user_id_fkey(first_name, last_name), programs(name))")
+      .select("*, reference_slots(label), application_responses(id, applicant_info, applicant_email, user_id, program_id, users!application_responses_user_id_fkey(first_name, last_name), programs(name))")
       .eq("id", reference_request_id)
       .single();
 
@@ -464,8 +466,7 @@ export async function PATCH(request: Request) {
 
     const referenceUrl = `${siteUrl}/reference/${refReq.token}`;
 
-    await resend.emails.send({
-      from: `Fire & Fragrance SA <${fromEmail}>`,
+    await sendTransactional({
       to: refReq.referee_email,
       subject: `Reference Reminder — ${app?.programs?.name ?? "School Program"}`,
       html: referenceReminderEmailHtml({
@@ -475,6 +476,9 @@ export async function PATCH(request: Request) {
         slotLabel: refReq.reference_slots?.label ?? "Reference",
         referenceUrl,
       }),
+      category: "reference_reminder",
+      sourceType: "school_application",
+      sourceId: app?.id ?? null,
     });
 
     // Update reminder_sent_at

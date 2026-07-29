@@ -13,11 +13,10 @@ import {
   recordConsent,
 } from "@/services/consent";
 import { notifyApplicationSubmitted } from "@/lib/slack/notify";
-import { Resend } from "resend";
+import { sendTransactional } from "@/lib/email/send-transactional";
 import { applicationConfirmationEmailHtml } from "@/lib/email/templates/application-confirmation";
 import { referenceRequestEmailHtml } from "@/lib/email/templates/reference-request";
 
-const resend = new Resend(process.env.RESEND_API_KEY?.trim());
 
 function findAnswerByType(
   answers: Array<{ question_id: string; question_label: string; answer: string }>,
@@ -261,7 +260,6 @@ export async function POST(request: Request) {
 
   // Create reference requests and send emails to referees
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://ffsahub.com";
-  const fromEmail = (process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com").trim();
 
   // Send confirmation email if we have one (include status tracker link)
   const statusTrackerUrl = response.status_token
@@ -269,8 +267,7 @@ export async function POST(request: Request) {
     : null;
 
   if (email) {
-    await resend.emails.send({
-      from: `Fire & Fragrance SA <${fromEmail}>`,
+    await sendTransactional({
       to: email,
       subject: `Application Received — ${program.name}`,
       html: applicationConfirmationEmailHtml({
@@ -278,6 +275,9 @@ export async function POST(request: Request) {
         programName: program.name,
         statusUrl: statusTrackerUrl,
       }),
+      category: "application_received",
+      sourceType: "school_application",
+      sourceId: response.id,
     });
   }
   const referenceLinks: Array<{ label: string; url: string }> = [];
@@ -305,8 +305,7 @@ export async function POST(request: Request) {
           url: referenceUrl,
         });
 
-        await resend.emails.send({
-          from: `Fire & Fragrance SA <${fromEmail}>`,
+        await sendTransactional({
           to: ref.referee_email,
           subject: `Reference Request — ${program.name}`,
           html: referenceRequestEmailHtml({
@@ -316,6 +315,9 @@ export async function POST(request: Request) {
             slotLabel: slot?.label ?? "Reference",
             referenceUrl,
           }),
+          category: "reference_request",
+          sourceType: "school_application",
+          sourceId: response.id,
         });
 
         await (supabase as any)

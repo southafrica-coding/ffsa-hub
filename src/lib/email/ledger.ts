@@ -99,6 +99,23 @@ export async function markSent(
   }
 }
 
+/** Recipient was on the suppression list — never sent. */
+export async function markDropped(
+  admin: Client,
+  id: string | null,
+  reason: string
+): Promise<void> {
+  if (!id) return;
+  try {
+    await admin
+      .from("email_messages")
+      .update({ status: "dropped", error: reason })
+      .eq("id", id);
+  } catch (e) {
+    console.warn("[email-ledger] markDropped threw (non-blocking):", e);
+  }
+}
+
 /** Our send call errored before the provider saw it. */
 export async function markFailed(
   admin: Client,

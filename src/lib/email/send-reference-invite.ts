@@ -1,7 +1,5 @@
-import { Resend } from "resend";
 import { referenceRequestEmailHtml } from "./templates/reference-request";
-
-const resend = new Resend(process.env.RESEND_API_KEY?.trim());
+import { sendTransactional } from "./send-transactional";
 
 /**
  * Send a referee their reference-request invite for a given token. Shared by
@@ -17,11 +15,9 @@ export async function sendReferenceInvite(params: {
   token: string;
 }) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://ffsahub.com";
-  const fromEmail = (process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com").trim();
   const referenceUrl = `${siteUrl}/reference/${params.token}`;
 
-  return resend.emails.send({
-    from: `Fire & Fragrance SA <${fromEmail}>`,
+  return sendTransactional({
     to: params.toEmail,
     subject: `Reference Request — ${params.programName}`,
     html: referenceRequestEmailHtml({
@@ -32,5 +28,7 @@ export async function sendReferenceInvite(params: {
       referenceUrl,
       siteUrl,
     }),
+    category: "reference_request",
+    sourceType: "reference_request",
   });
 }

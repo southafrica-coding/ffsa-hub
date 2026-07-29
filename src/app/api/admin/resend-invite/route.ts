@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { Resend } from "resend";
 import { applicationAcceptedEmailHtml } from "@/lib/email/templates/application-accepted";
 import { userCanManageApplications } from "@/lib/auth/check-schools-access";
-
-const resend = new Resend(process.env.RESEND_API_KEY?.trim());
+import { sendTransactional } from "@/lib/email/send-transactional";
+import {
+  substitutePlaceholders,
+  plainTextToEmailHtml,
+} from "@/lib/email/placeholders";
 
 export async function POST(request: Request) {
   // Verify the calling user has schools-management access
@@ -38,7 +40,9 @@ export async function POST(request: Request) {
   // Fetch the application response with program info
   const { data: rawResponse, error: fetchError } = await adminSupabase
     .from("application_responses")
-    .select("*, programs(id, name, code)")
+    .select(
+      "*, programs(id, name, code, acceptance_email_subject, acceptance_email_body)"
+    )
     .eq("id", response_id)
     .single();
 
@@ -53,7 +57,13 @@ export async function POST(request: Request) {
     applicant_email: string | null;
     applicant_info: Record<string, string> | null;
     user_id: string | null;
-    programs: { id: string; name: string; code: string };
+    programs: {
+      id: string;
+      name: string;
+      code: string;
+      acceptance_email_subject: string | null;
+      acceptance_email_body: string | null;
+    };
   };
 
   const applicantInfo = appResponse.applicant_info as {
@@ -139,27 +149,50 @@ export async function POST(request: Request) {
 
   const inviteUrl = linkData.properties.action_link;
 
-  // Send the acceptance email with the new invite URL
-  const fromEmail =
-    (process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com").trim();
-
+  // Send the acceptance email with the new invite URL. Honor the same
+  // per-program subject/body overrides the accept route uses, so a
+  // re-sent invite matches the customized acceptance email instead of
+  // silently reverting to the hardcoded default.
   const firstName =
     appUser.first_name || applicantInfo?.first_name || "there";
 
-  const { error: sendError } = await resend.emails.send({
-    from: `Fire & Fragrance SA <${fromEmail}>`,
+  const placeholders = {
+    first_name: firstName,
+    program_name: appResponse.programs.name,
+  };
+  const customSubject = appResponse.programs.acceptance_email_subject
+    ? substitutePlaceholders(
+        appResponse.programs.acceptance_email_subject,
+        placeholders
+      )
+    : null;
+  const customBodyHtml = appResponse.programs.acceptance_email_body
+    ? plainTextToEmailHtml(
+        substitutePlaceholders(
+          appResponse.programs.acceptance_email_body,
+          placeholders
+        )
+      )
+    : null;
+
+  const sendResult = await sendTransactional({
     to: applicantEmail,
-    subject: `You've been accepted to ${appResponse.programs.name}`,
+    subject:
+      customSubject ?? `You've been accepted to ${appResponse.programs.name}`,
     html: applicationAcceptedEmailHtml({
       firstName,
       programName: appResponse.programs.name,
       inviteUrl,
+      customBodyHtml,
     }),
+    category: "application_accepted",
+    sourceType: "school_application",
+    sourceId: response_id,
   });
 
-  if (sendError) {
+  if (!sendResult.ok) {
     return NextResponse.json(
-      { error: `Failed to send invite email: ${sendError.message}` },
+      { error: `Failed to send invite email: ${sendResult.error}` },
       { status: 500 }
     );
   }

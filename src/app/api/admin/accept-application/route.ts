@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ensureStudentRole } from "@/lib/auth/membership-roles";
 import { setupProgramBillingOnAcceptance } from "@/services/billing-generation";
-import { Resend } from "resend";
+import { sendTransactional } from "@/lib/email/send-transactional";
 import { applicationAcceptedEmailHtml } from "@/lib/email/templates/application-accepted";
 import { enrollmentConfirmationEmailHtml } from "@/lib/email/templates/enrollment-confirmation";
 import { userCanManageApplications } from "@/lib/auth/check-schools-access";
@@ -12,7 +12,6 @@ import {
   plainTextToEmailHtml,
 } from "@/lib/email/placeholders";
 
-const resend = new Resend(process.env.RESEND_API_KEY?.trim());
 
 export async function POST(request: Request) {
   // Verify the calling user has schools-management access
@@ -132,8 +131,6 @@ export async function POST(request: Request) {
   if (!userId) {
     const siteUrl =
       process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
-    const fromEmail =
-      (process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com").trim();
 
     // Check if a user with this email already exists
     const { data: existingUser } = await adminSupabase
@@ -176,8 +173,7 @@ export async function POST(request: Request) {
           )
         : null;
 
-      await resend.emails.send({
-        from: `Fire & Fragrance SA <${fromEmail}>`,
+      await sendTransactional({
         to: applicantEmail,
         subject: customSubject ?? `You're enrolled in ${appResponse.programs.name}`,
         html: enrollmentConfirmationEmailHtml({
@@ -186,6 +182,9 @@ export async function POST(request: Request) {
           siteUrl,
           customBodyHtml,
         }),
+        category: "enrollment_confirmation",
+        sourceType: "school_application",
+        sourceId: response_id,
       });
     } else {
       // Create new user via Supabase Auth invite
@@ -283,8 +282,7 @@ export async function POST(request: Request) {
           )
         : null;
 
-      await resend.emails.send({
-        from: `Fire & Fragrance SA <${fromEmail}>`,
+      await sendTransactional({
         to: applicantEmail,
         subject:
           customSubject ?? `You've been accepted to ${appResponse.programs.name}`,
@@ -294,6 +292,9 @@ export async function POST(request: Request) {
           inviteUrl,
           customBodyHtml,
         }),
+        category: "application_accepted",
+        sourceType: "school_application",
+        sourceId: response_id,
       });
     }
   }
