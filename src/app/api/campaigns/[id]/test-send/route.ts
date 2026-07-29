@@ -79,16 +79,29 @@ export async function POST(
   const testNotice = `Preview send to ${to}. Recipients won't see this notice. The rest of the email is exactly what would be sent.`;
 
   // Resolve [First Name] / {{first_name}} tokens the same way a real send
-  // does, so the preview is honest. Use the test recipient's own contact
-  // first name when we have one on file, else fall back to "there".
+  // does, so the preview is honest. Prefer the test recipient's own contact
+  // first name; if the test address isn't a contact, fall back to the
+  // sender's own name so the merge field visibly resolves in the preview
+  // (instead of the bare "there" a nameless recipient would get); only then
+  // "there".
   const { data: testContact } = await supabase
     .from("contacts")
     .select("first_name")
     .ilike("email", to)
     .limit(1)
     .maybeSingle();
-  const firstName =
-    (testContact?.first_name as string | null)?.trim() || "there";
+  let firstName = (testContact?.first_name as string | null)?.trim() || "";
+  if (!firstName) {
+    const { data: me } = await supabase
+      .from("users")
+      .select("first_name, preferred_name")
+      .eq("id", user.id)
+      .maybeSingle();
+    firstName =
+      (me?.preferred_name as string | null)?.trim() ||
+      (me?.first_name as string | null)?.trim() ||
+      "there";
+  }
 
   const html = substituteFirstName(
     renderCampaignHtml(source, {

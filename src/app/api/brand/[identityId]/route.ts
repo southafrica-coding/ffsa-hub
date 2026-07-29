@@ -51,7 +51,7 @@ export async function PATCH(
   const user = await getAuthedUser(supabase);
   if (!user)
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  if (!(await canManageComms(supabase, user.id))) {
+  if (!(await canManageComms(supabase, user.id, ["communications.manage_brand_kits"]))) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
