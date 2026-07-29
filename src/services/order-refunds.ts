@@ -71,7 +71,7 @@ const PROVIDERS: Record<ProviderName, PaymentProvider> = {
 };
 
 const ORDER_FIELDS =
-  "id, status, total_cents, refund_cents, currency, lines, buyer_contact_id, buyer_first_name, buyer_email, event_id, payment_provider, provider_payment_id, events(id, title, brand, public_slug)";
+  "id, status, total_cents, refund_cents, currency, lines, buyer_contact_id, buyer_first_name, buyer_email, event_id, payment_provider, provider_payment_id, events(id, title, brand, public_slug, status, cancellation_message)";
 
 /**
  * Sum of refunds that actually settled. Authoritative over
@@ -316,7 +316,15 @@ export async function refundOrder(
       orderTotalCents: order.total_cents,
       isFullRefund,
       currency: order.currency ?? "ZAR",
-      cancellationMessage: input.cancellationMessage?.trim() || null,
+      // Prefer an explicit note from the caller (bulk refund passes one);
+      // otherwise, if the event is cancelled and carries a reason, fall
+      // back to it so a single-order refund on a cancelled event still
+      // explains why — no matter which button triggered it.
+      cancellationMessage:
+        input.cancellationMessage?.trim() ||
+        (order.events?.status === "cancelled"
+          ? (order.events?.cancellation_message ?? null)
+          : null),
     });
     emailSent = result.sent;
   } catch (e) {

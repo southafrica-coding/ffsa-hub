@@ -234,6 +234,8 @@ export default async function EventDetailPage({
           refunds={orderRefunds ?? []}
           ticketEmails={ticketEmails ?? []}
           currency={event.currency}
+          eventStatus={event.status}
+          hasCancellationMessage={!!event.cancellation_message?.trim()}
         />
       )}
 

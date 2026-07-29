@@ -20,6 +20,7 @@ import {
 import { OrdersExportPanel } from "./orders-export-panel";
 import { RefundDialog } from "./refund-dialog";
 import { RefundAllButton } from "./refund-all-button";
+import { CancellationNoticeButton } from "./cancellation-notice-button";
 import { formatMoney } from "@/lib/currencies";
 
 type Order = {
@@ -128,6 +129,8 @@ export function OrdersTab({
   refunds = [],
   ticketEmails = [],
   currency,
+  eventStatus,
+  hasCancellationMessage = false,
 }: {
   eventId: string;
   orders: Order[];
@@ -136,6 +139,10 @@ export function OrdersTab({
   // The event's selling currency — used for the aggregate stat cards.
   // Individual rows prefer the order's own snapshot.
   currency: string;
+  // Lifecycle status + whether a cancellation reason is saved — gate the
+  // "email cancellation reason" action to cancelled events.
+  eventStatus?: string;
+  hasCancellationMessage?: boolean;
 }) {
   const router = useRouter();
   const money = (cents: number, c?: string | null) =>
@@ -248,6 +255,12 @@ export function OrdersTab({
           <CardTitle className="text-base">Orders</CardTitle>
           {orders.length > 0 && (
             <div className="flex items-center gap-2">
+              {eventStatus === "cancelled" && (
+                <CancellationNoticeButton
+                  eventId={eventId}
+                  hasCancellationMessage={hasCancellationMessage}
+                />
+              )}
               <RefundAllButton
                 eventId={eventId}
                 outstandingCount={stillPaid.length}
