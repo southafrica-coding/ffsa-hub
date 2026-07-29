@@ -1,18 +1,67 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
-import { Bold, Italic, Link2, Link2Off, Sparkles, User } from "lucide-react";
+import Paragraph from "@tiptap/extension-paragraph";
+import {
+  Bold,
+  Italic,
+  Underline as UnderlineIcon,
+  Strikethrough,
+  Link2,
+  Link2Off,
+  Sparkles,
+  User,
+  MoveVertical,
+  RotateCcw,
+} from "lucide-react";
 
 // Minimal rich text editor for campaign text blocks. The editorial
 // rendering pipeline accepts only the marks below — anything else gets
 // stripped by the sanitizer in src/lib/campaigns/blocks.ts.
 
+// Paragraph node that carries optional per-paragraph spacing:
+//   • lineHeight   — unitless leading for the lines inside this paragraph
+//   • marginBottom — px gap after this paragraph
+// Both are stored as inline styles so they survive the HTML sanitizer
+// (which whitelists line-height + margin-bottom on <p>) and are merged
+// with the block/email defaults at render time (see blocks.ts).
+const SpacedParagraph = Paragraph.extend({
+  addAttributes() {
+    return {
+      lineHeight: {
+        default: null as string | null,
+        parseHTML: (el) => (el as HTMLElement).style.lineHeight || null,
+        renderHTML: (attrs) =>
+          attrs.lineHeight ? { style: `line-height:${attrs.lineHeight}` } : {},
+      },
+      marginBottom: {
+        default: null as number | null,
+        parseHTML: (el) => {
+          const raw = (el as HTMLElement).style.marginBottom;
+          if (!raw) return null;
+          const n = parseInt(raw, 10);
+          return Number.isFinite(n) ? n : null;
+        },
+        renderHTML: (attrs) =>
+          attrs.marginBottom != null
+            ? { style: `margin-bottom:${attrs.marginBottom}px` }
+            : {},
+      },
+    };
+  },
+});
+
 const EXTENSIONS = [
   StarterKit.configure({
     // Keep the editor focused on inline emphasis + line structure.
+    // Paragraph is replaced by SpacedParagraph below; bold/italic/
+    // underline/strike marks stay on. Link is replaced by the custom
+    // configuration below.
+    paragraph: false,
+    link: false,
     heading: false,
     bulletList: false,
     orderedList: false,
@@ -22,6 +71,7 @@ const EXTENSIONS = [
     code: false,
     horizontalRule: false,
   }),
+  SpacedParagraph,
   Link.configure({
     openOnClick: false,
     autolink: true,
@@ -109,7 +159,9 @@ export function RichText({
       <EditorContent editor={editor} />
       <p className="border-t bg-muted/20 px-3 py-1 text-[11px] text-muted-foreground">
         <kbd className="font-sans font-medium">Enter</kbd> = new paragraph ·{" "}
-        <kbd className="font-sans font-medium">Shift+Enter</kbd> = line break
+        <kbd className="font-sans font-medium">Shift+Enter</kbd> = line break ·{" "}
+        <MoveVertical className="inline h-3 w-3 -mt-0.5" aria-hidden /> = spacing
+        for this paragraph
       </p>
     </div>
   );
@@ -129,6 +181,8 @@ function Toolbar({
   const [polishing, setPolishing] = useState(false);
   const isBold = editor.isActive("bold");
   const isItalic = editor.isActive("italic");
+  const isUnderline = editor.isActive("underline");
+  const isStrike = editor.isActive("strike");
   const isLink = editor.isActive("link");
 
   function toggleBold() {
@@ -136,6 +190,12 @@ function Toolbar({
   }
   function toggleItalic() {
     editor.chain().focus().toggleItalic().run();
+  }
+  function toggleUnderline() {
+    editor.chain().focus().toggleUnderline().run();
+  }
+  function toggleStrike() {
+    editor.chain().focus().toggleStrike().run();
   }
   function toggleLink() {
     if (isLink) {
@@ -190,6 +250,22 @@ function Toolbar({
         <Italic className="h-3.5 w-3.5" />
       </ToolButton>
       <ToolButton
+        active={isUnderline}
+        disabled={disabled}
+        onClick={toggleUnderline}
+        label="Underline (⌘U)"
+      >
+        <UnderlineIcon className="h-3.5 w-3.5" />
+      </ToolButton>
+      <ToolButton
+        active={isStrike}
+        disabled={disabled}
+        onClick={toggleStrike}
+        label="Strikethrough"
+      >
+        <Strikethrough className="h-3.5 w-3.5" />
+      </ToolButton>
+      <ToolButton
         active={isLink}
         disabled={disabled}
         onClick={toggleLink}
@@ -201,15 +277,15 @@ function Toolbar({
           <Link2 className="h-3.5 w-3.5" />
         )}
       </ToolButton>
+      <span className="h-3.5 w-px bg-border mx-1" aria-hidden />
+      <SpacingControl editor={editor} disabled={disabled} />
       {onPolish && (
         <>
           <span className="h-3.5 w-px bg-border mx-1" aria-hidden />
           <ToolButton
             disabled={disabled || polishing}
             onClick={polishNow}
-            label={
-              polishing ? "Polishing…" : "Polish copy with AI"
-            }
+            label={polishing ? "Polishing…" : "Polish copy with AI"}
           >
             <Sparkles
               className={`h-3.5 w-3.5 ${polishing ? "animate-pulse text-amber-400" : ""}`}
@@ -234,6 +310,137 @@ function Toolbar({
             </button>
           ))}
         </>
+      )}
+    </div>
+  );
+}
+
+// Per-paragraph spacing popover. Acts on the paragraph containing the
+// cursor: leading (line-height) + the gap after it (margin-bottom).
+// Empty inputs clear the override and fall back to the block/email default.
+function SpacingControl({
+  editor,
+  disabled,
+}: {
+  editor: Editor;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  // Close on outside click / Escape.
+  useEffect(() => {
+    if (!open) return;
+    function onDown(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const attrs = editor.getAttributes("paragraph") as {
+    lineHeight?: string | null;
+    marginBottom?: number | null;
+  };
+  const inParagraph = editor.isActive("paragraph");
+  const hasOverride =
+    attrs.lineHeight != null || attrs.marginBottom != null;
+
+  function setLineHeight(v: string) {
+    const val = v.trim();
+    editor
+      .chain()
+      .focus()
+      .updateAttributes("paragraph", { lineHeight: val === "" ? null : val })
+      .run();
+  }
+  function setMargin(v: string) {
+    const val = v.trim();
+    const n = val === "" ? null : parseInt(val, 10);
+    editor
+      .chain()
+      .focus()
+      .updateAttributes("paragraph", {
+        marginBottom: n != null && Number.isFinite(n) ? n : null,
+      })
+      .run();
+  }
+  function reset() {
+    editor
+      .chain()
+      .focus()
+      .updateAttributes("paragraph", { lineHeight: null, marginBottom: null })
+      .run();
+  }
+
+  return (
+    <div className="relative" ref={wrapRef}>
+      <ToolButton
+        active={hasOverride}
+        disabled={disabled}
+        onClick={() => setOpen((o) => !o)}
+        label="Spacing for this paragraph"
+      >
+        <MoveVertical className="h-3.5 w-3.5" />
+      </ToolButton>
+      {open && (
+        <div className="absolute left-0 top-full z-20 mt-1 w-56 rounded-md border bg-popover p-3 shadow-md">
+          {!inParagraph ? (
+            <p className="text-[11px] text-muted-foreground">
+              Click into a paragraph to set its spacing.
+            </p>
+          ) : (
+            <div className="space-y-2.5">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                This paragraph
+              </p>
+              <label className="flex items-center justify-between gap-2 text-xs">
+                <span className="text-muted-foreground">Line height</span>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0.8"
+                  max="3"
+                  value={attrs.lineHeight ?? ""}
+                  placeholder="auto"
+                  onChange={(e) => setLineHeight(e.target.value)}
+                  className="w-20 rounded border bg-background px-2 py-1 text-xs"
+                />
+              </label>
+              <label className="flex items-center justify-between gap-2 text-xs">
+                <span className="text-muted-foreground">Gap after (px)</span>
+                <input
+                  type="number"
+                  step="1"
+                  min="0"
+                  max="120"
+                  value={attrs.marginBottom ?? ""}
+                  placeholder="auto"
+                  onChange={(e) => setMargin(e.target.value)}
+                  className="w-20 rounded border bg-background px-2 py-1 text-xs"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={reset}
+                disabled={!hasOverride}
+                className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-30"
+              >
+                <RotateCcw className="h-3 w-3" />
+                Reset to email default
+              </button>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

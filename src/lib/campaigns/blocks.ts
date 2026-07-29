@@ -398,8 +398,16 @@ function sanitizeRichText(input: string): string {
     return escapeHtml(value).replace(/\n/g, "<br/>");
   }
   return sanitizeHtml(value, {
-    allowedTags: ["p", "br", "strong", "b", "em", "i", "a"],
-    allowedAttributes: { a: ["href", "target", "rel"] },
+    allowedTags: ["p", "br", "strong", "b", "em", "i", "u", "s", "a"],
+    allowedAttributes: { a: ["href", "target", "rel"], p: ["style"] },
+    // Only per-paragraph spacing is allowed through on <p>; everything
+    // else (colors, fonts, etc.) is applied by the render pipeline.
+    allowedStyles: {
+      p: {
+        "line-height": [/^\d+(\.\d+)?$/],
+        "margin-bottom": [/^\d+px$/],
+      },
+    },
     allowedSchemes: ["http", "https", "mailto"],
     transformTags: {
       a: (tagName, attribs) => ({
@@ -411,6 +419,28 @@ function sanitizeRichText(input: string): string {
         },
       }),
     },
+  });
+}
+
+// Applies the default paragraph style to every <p>, honouring any
+// per-paragraph overrides the author set in the editor (line-height +
+// margin-bottom, whitelisted by the sanitizer above). Merging here — rather
+// than blindly prepending a second style attribute — keeps the emitted HTML
+// valid so email clients don't drop the override.
+function styleParagraphs(
+  html: string,
+  pFont: string,
+  defaultMarginBottomPx: number
+): string {
+  return html.replace(/<p([^>]*)>/gi, (_m, rawAttrs: string) => {
+    const inline = /style="([^"]*)"/i.exec(rawAttrs)?.[1] ?? "";
+    const lh = /line-height:\s*([\d.]+)/i.exec(inline)?.[1];
+    const mb = /margin-bottom:\s*(\d+)px/i.exec(inline)?.[1];
+    // pFont already carries a line-height; swap in the paragraph override.
+    const font = lh
+      ? pFont.replace(/line-height:[^;]*;?/i, `line-height:${lh};`)
+      : pFont;
+    return `<p style="margin:0 0 ${mb ?? defaultMarginBottomPx}px;${font}">`;
   });
 }
 
@@ -716,15 +746,15 @@ function imageTextHtml(
   const heading = block.heading
     ? `<div style="font-family:${displayStack(brand)};font-size:22px;line-height:1.2;font-weight:700;letter-spacing:-0.015em;color:${brand.primary_color};margin-bottom:10px;">${escapeHtml(block.heading)}</div>`
     : "";
-  const text = `<div style="font-family:${bodyStack(brand)};font-size:15px;line-height:1.5;color:${brand.text_color};">${sanitizeRichText(block.text)
-    .replace(
-      /<p(\s|>)/g,
-      `<p style="margin:0 0 12px;font-family:${bodyStack(brand)};font-size:15px;line-height:1.5;color:${brand.text_color};"$1`
-    )
-    .replace(
-      /<a(\s|>)/g,
-      `<a style="color:${brand.accent_color};text-decoration:underline;"$1`
-    )}</div>`;
+  const textPFont = `font-family:${bodyStack(brand)};font-size:15px;line-height:1.5;color:${brand.text_color};`;
+  const text = `<div style="${textPFont}">${styleParagraphs(
+    sanitizeRichText(block.text),
+    textPFont,
+    12
+  ).replace(
+    /<a(\s|>)/g,
+    `<a style="color:${brand.accent_color};text-decoration:underline;"$1`
+  )}</div>`;
 
   const imageCell = `<td valign="middle" class="ff-stack" style="width:46%;padding:0;" width="46%">${img}</td>`;
   const textCell = `<td valign="middle" class="ff-stack" style="width:46%;padding:0;" width="46%">${heading}${text}</td>`;
@@ -772,15 +802,15 @@ function columnsHtml(
     const heading = c.heading
       ? `<div style="font-family:${displayStack(brand)};font-size:18px;line-height:1.25;font-weight:700;color:${brand.primary_color};margin-bottom:8px;">${escapeHtml(c.heading)}</div>`
       : "";
-    const text = `<div style="font-family:${bodyStack(brand)};font-size:15px;line-height:1.55;color:${brand.text_color};">${sanitizeRichText(c.text)
-      .replace(
-        /<p(\s|>)/g,
-        `<p style="margin:0 0 12px;font-family:${bodyStack(brand)};font-size:15px;line-height:1.55;color:${brand.text_color};"$1`
-      )
-      .replace(
-        /<a(\s|>)/g,
-        `<a style="color:${brand.accent_color};text-decoration:underline;"$1`
-      )}</div>`;
+    const cellPFont = `font-family:${bodyStack(brand)};font-size:15px;line-height:1.55;color:${brand.text_color};`;
+    const text = `<div style="${cellPFont}">${styleParagraphs(
+      sanitizeRichText(c.text),
+      cellPFont,
+      12
+    ).replace(
+      /<a(\s|>)/g,
+      `<a style="color:${brand.accent_color};text-decoration:underline;"$1`
+    )}</div>`;
     return `<td valign="top" class="ff-stack" style="width:${cellPct}%;padding:0;" width="${cellPct}%">${heading}${text}</td>`;
   };
 
@@ -840,12 +870,10 @@ export function renderBlock(
         color: brand.textColor,
         lineHeight: brand.textLineHeight,
       });
-      const safe = sanitizeRichText(block.text)
-        .replace(/<p(\s|>)/g, `<p style="margin:0 0 16px;${pFont}"$1`)
-        .replace(
-          /<a(\s|>)/g,
-          `<a style="color:${brand.linkColor};text-decoration:underline;text-underline-offset:2px;"$1`
-        );
+      const safe = styleParagraphs(sanitizeRichText(block.text), pFont, 16).replace(
+        /<a(\s|>)/g,
+        `<a style="color:${brand.linkColor};text-decoration:underline;text-underline-offset:2px;"$1`
+      );
       const final = block.dropCap ? dropCapWrap(safe, brand) : safe;
       const td = `${padCss(block.blockStyle?.padding, "2px 0")}${tdExtraCss(block.blockStyle)}${pFont}`;
       return `<tr><td style="${td}">${final}</td></tr>`;
