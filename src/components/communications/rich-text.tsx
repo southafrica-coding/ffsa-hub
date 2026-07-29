@@ -192,8 +192,9 @@ export function RichText({
       <p className="border-t bg-muted/20 px-3 py-1 text-[11px] text-muted-foreground rounded-b-[3px]">
         <kbd className="font-sans font-medium">Enter</kbd> = new paragraph ·{" "}
         <kbd className="font-sans font-medium">Shift+Enter</kbd> = line break ·{" "}
-        <MoveVertical className="inline h-3 w-3 -mt-0.5" aria-hidden /> = spacing
-        for this paragraph
+        select lines then{" "}
+        <MoveVertical className="inline h-3 w-3 -mt-0.5" aria-hidden /> to set
+        their spacing
       </p>
     </div>
   );
@@ -347,9 +348,11 @@ function Toolbar({
   );
 }
 
-// Per-paragraph spacing popover. Acts on the paragraph containing the
-// cursor: leading (line-height) + the gap after it (margin-bottom).
-// Empty inputs clear the override and fall back to the block/email default.
+// Spacing popover. Acts on every paragraph in the current selection —
+// select one line or drag across several, then set the leading (line-height,
+// the space between wrapped lines inside a paragraph) and/or the gap after
+// each paragraph (margin-bottom, the space between paragraphs). Empty inputs
+// clear the override and fall back to the block/email default.
 function SpacingControl({
   editor,
   disabled,
@@ -379,13 +382,39 @@ function SpacingControl({
     };
   }, [open]);
 
-  const attrs = editor.getAttributes("paragraph") as {
-    lineHeight?: string | null;
-    marginBottom?: number | null;
+  // Every paragraph the selection touches (deduped by position). A collapsed
+  // cursor still yields the one paragraph it sits in.
+  const { $from, $to } = editor.state.selection;
+  const paras = new Map<
+    number,
+    { lineHeight?: string | null; marginBottom?: number | null }
+  >();
+  editor.state.doc.nodesBetween($from.pos, $to.pos, (node, pos) => {
+    if (node.type.name === "paragraph") paras.set(pos, node.attrs);
+  });
+  for (let d = $from.depth; d >= 1; d--) {
+    const n = $from.node(d);
+    if (n.type.name === "paragraph") {
+      if (!paras.has($from.before(d))) paras.set($from.before(d), n.attrs);
+      break;
+    }
+  }
+  const list = [...paras.values()];
+  const count = list.length;
+
+  // Shared value across the selection, or undefined when they differ ("mixed").
+  const shared = <T,>(get: (a: (typeof list)[number]) => T): T | undefined => {
+    if (!count) return undefined;
+    const first = get(list[0]);
+    return list.every((a) => get(a) === first) ? first : undefined;
   };
-  const inParagraph = editor.isActive("paragraph");
-  const hasOverride =
-    attrs.lineHeight != null || attrs.marginBottom != null;
+  const lh = shared((a) => a.lineHeight ?? null);
+  const mb = shared((a) => a.marginBottom ?? null);
+  const mixedLh = count > 1 && lh === undefined;
+  const mixedMb = count > 1 && mb === undefined;
+  const hasOverride = list.some(
+    (a) => a.lineHeight != null || a.marginBottom != null
+  );
 
   function setLineHeight(v: string) {
     const val = v.trim();
@@ -420,43 +449,53 @@ function SpacingControl({
         active={hasOverride}
         disabled={disabled}
         onClick={() => setOpen((o) => !o)}
-        label="Spacing for this paragraph"
+        label="Line spacing (select lines first)"
       >
         <MoveVertical className="h-3.5 w-3.5" />
       </ToolButton>
       {open && (
-        <div className="absolute right-0 top-full z-20 mt-1 w-56 rounded-md border bg-popover p-3 shadow-md">
-          {!inParagraph ? (
+        <div className="absolute right-0 top-full z-20 mt-1 w-60 rounded-md border bg-popover p-3 shadow-md">
+          {count === 0 ? (
             <p className="text-[11px] text-muted-foreground">
-              Click into a paragraph to set its spacing.
+              Click into a line, or select several lines, to set their spacing.
             </p>
           ) : (
             <div className="space-y-2.5">
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-                This paragraph
+                {count === 1 ? "This paragraph" : `${count} paragraphs selected`}
               </p>
               <label className="flex items-center justify-between gap-2 text-xs">
-                <span className="text-muted-foreground">Line height</span>
+                <span className="text-muted-foreground">
+                  Line height
+                  <span className="block text-[10px] opacity-70">
+                    within a paragraph
+                  </span>
+                </span>
                 <input
                   type="number"
                   step="0.1"
                   min="0.8"
                   max="3"
-                  value={attrs.lineHeight ?? ""}
-                  placeholder="auto"
+                  value={lh ?? ""}
+                  placeholder={mixedLh ? "mixed" : "auto"}
                   onChange={(e) => setLineHeight(e.target.value)}
                   className="w-20 rounded border bg-background px-2 py-1 text-xs"
                 />
               </label>
               <label className="flex items-center justify-between gap-2 text-xs">
-                <span className="text-muted-foreground">Gap after (px)</span>
+                <span className="text-muted-foreground">
+                  Gap after (px)
+                  <span className="block text-[10px] opacity-70">
+                    space below each
+                  </span>
+                </span>
                 <input
                   type="number"
                   step="1"
                   min="0"
                   max="120"
-                  value={attrs.marginBottom ?? ""}
-                  placeholder="auto"
+                  value={mb ?? ""}
+                  placeholder={mixedMb ? "mixed" : "auto"}
                   onChange={(e) => setMargin(e.target.value)}
                   className="w-20 rounded border bg-background px-2 py-1 text-xs"
                 />
