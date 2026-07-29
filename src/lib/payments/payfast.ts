@@ -277,17 +277,21 @@ export const payfastProvider: PaymentProvider = {
       // inconsistent: the checkout redirect wants rands, but the REST API
       // wants cents.)
       amount: req.amountCents,
-      // Required by the refund API — omitting it returns HTTP 400 "This
-      // field is required" (see PayFast's own SDK example + test, which
-      // always send it). Valid values are 'current' | 'savings'. For a
-      // card refund PayFast reverses to the original card regardless, so
-      // this is a required-but-inert formality; 'current' is the default.
+      // REQUIRED by the live refund API. Omitting it returns HTTP 400
+      // "This field is required" — PayFast uses the reason on the refund
+      // and (optionally) in the customer notice. Our caller's reason is
+      // optional (the bulk "Refund all" often has none), so never let it
+      // reach PayFast empty: fall back to a sensible default. Capped at
+      // PayFast's 255-char limit.
+      reason: (req.reason?.trim() || "Ticket refund").slice(0, 255),
+      // Bank account type ('current' | 'savings'). The refund API expects
+      // it; for a card refund PayFast reverses to the original card
+      // regardless, so it's an inert formality — 'current' is the default.
       acc_type: "current",
       // The Hub sends its own branded refund email, so PayFast's
       // notice is off unless a caller explicitly asks for it.
       notify_buyer: req.notifyBuyer ? 1 : 0,
     };
-    if (req.reason) body.reason = req.reason.slice(0, 255);
 
     const built = buildApiRequest(cfg, {
       method: "POST",
