@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getProgramById, getEnrollmentsByProgram, getGradesByProgram, getQuestionsByProgram, getResponsesByProgram, getRemovedResponsesByProgram, getReferenceSlotsByProgram, getReferenceRequestSummaries, getReferenceQuestionsByProgram } from "@/services/schools";
 import { fetchAssignableContacts } from "@/lib/auth/assignable-contacts";
+import { listProgramLeaders } from "@/services/program-leaders";
 import { ProgramDetail } from "./program-detail";
 
 type UserIdentity = {
@@ -137,11 +138,17 @@ export default async function ProgramDetailPage({
   // trusted with this program.
   const staffOptions = await fetchAssignableContacts(admin, programId);
 
+  // Leader team for this school (migration 145). Read via the admin
+  // client so the embedded user identities populate for non-admin
+  // reviewers, matching how enrollments/responses are hydrated above.
+  const { data: leaders } = await listProgramLeaders(admin, programId);
+
   return (
     <div className="space-y-6">
       <ProgramDetail
         program={program}
         enrollments={enrollments ?? []}
+        leaders={leaders ?? []}
         grades={grades ?? []}
         allUsers={allUsers ?? []}
         staffOptions={staffOptions}

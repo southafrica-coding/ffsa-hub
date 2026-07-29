@@ -35,3 +35,26 @@ export async function userCanManageApplications(
 
   return !!perms && perms.length > 0;
 }
+
+/**
+ * Program-scoped variant: can this user manage THIS specific program?
+ * True for global schools managers/admins, and for anyone named a leader
+ * of the program (program_leaders, migration 145). Mirrors the DB
+ * has_schools_access(program_id) check for the app layer.
+ */
+export async function userCanManageProgram(
+  supabase: SupabaseClient,
+  userId: string,
+  programId: string
+): Promise<boolean> {
+  if (await userCanManageApplications(supabase, userId)) return true;
+
+  const { data } = await supabase
+    .from("program_leaders")
+    .select("id")
+    .eq("program_id", programId)
+    .eq("user_id", userId)
+    .limit(1);
+
+  return !!data && data.length > 0;
+}

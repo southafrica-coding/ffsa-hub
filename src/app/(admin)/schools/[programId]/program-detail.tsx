@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { QuestionTree, type TreeQuestion } from "@/components/admin/question-tree";
 import { ReferenceQuestionsBuilder } from "./reference-questions-builder";
 import { ProgramCoursesManager, type PhaseCourse } from "./program-courses-manager";
+import { LeadersTab, type ProgramLeaderRow } from "./leaders-tab";
 import { StudentsExportPanel } from "./students-export-panel";
 import { ENROLLMENT_STATUS_LABELS } from "@/lib/schools/student-export-columns";
 import { Badge } from "@/components/ui/badge";
@@ -303,6 +304,7 @@ type RefRequestSummary = {
 export function ProgramDetail({
   program,
   enrollments,
+  leaders,
   grades,
   allUsers,
   staffOptions,
@@ -317,6 +319,7 @@ export function ProgramDetail({
 }: {
   program: Program;
   enrollments: Enrollment[];
+  leaders: ProgramLeaderRow[];
   grades: GradeRow[];
   allUsers: UserOption[];
   staffOptions: StaffUser[];
@@ -448,6 +451,9 @@ export function ProgramDetail({
           <TabsTrigger value="applicants">
             Applicants ({responses.length})
           </TabsTrigger>
+          <TabsTrigger value="leaders">
+            Leaders ({leaders.length})
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="courses" className="mt-4">
@@ -500,6 +506,14 @@ export function ProgramDetail({
             refRequestSummaries={refRequestSummaries}
             questions={questions}
             staffOptions={staffOptions}
+          />
+        </TabsContent>
+
+        <TabsContent value="leaders" className="mt-4">
+          <LeadersTab
+            programId={program.id}
+            leaders={leaders}
+            allUsers={allUsers}
           />
         </TabsContent>
       </Tabs>
