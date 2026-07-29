@@ -1,10 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { useStudentDemographics, type Scope } from "./use-student-demographics";
+import { useStudentDemographics } from "./use-student-demographics";
 import { WidgetShell, WidgetEmpty } from "./widget-shell";
 import {
-  ScopeToggle,
   StackedBar,
   Legend,
   GENDER_COLORS,
@@ -26,11 +24,10 @@ function colorFor(key: string): string {
 }
 
 export function StudentsByGenderCard() {
-  const [scope, setScope] = useState<Scope>("students");
   const state = useStudentDemographics();
 
   if (state.status !== "ready") return null;
-  const data = scope === "students" ? state.data.students : state.data.applicants;
+  const data = state.data.population;
   if (!data || data.perProgram.length === 0) return null;
 
   const withPeople = data.perProgram.filter((p) => p.total > 0);
@@ -53,11 +50,10 @@ export function StudentsByGenderCard() {
             color: colorFor(k),
           }))}
         />
-        <ScopeToggle scope={scope} onChange={setScope} />
       </div>
 
       {withPeople.length === 0 ? (
-        <WidgetEmpty>No {scope} yet</WidgetEmpty>
+        <WidgetEmpty>No students yet</WidgetEmpty>
       ) : (
         <div>
           {withPeople.map((p) => {

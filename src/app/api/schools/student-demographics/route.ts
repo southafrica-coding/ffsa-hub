@@ -21,18 +21,21 @@ import {
   type Tier,
 } from "@/lib/schools/demographics";
 
-// Fee tier / nationality / gender breakdowns for the dashboard, served for
-// BOTH scopes in one pass so the widgets can toggle without re-fetching.
+// Fee tier / nationality / gender breakdowns for the dashboard.
 //
-// Students and applicants are returned SEPARATELY on purpose. An enrolled
-// student almost always has an application row too, so unioning them would
-// double-count the same person — the two are different questions ("who is on
-// our roster" vs "who applied"), not two halves of one number.
+// The population is ONE deduped set: every person with an accepted application
+// OR an arrived enrollment, counted once. An arrived student almost always has
+// an accepted application row too, so we dedup per (program, user) to avoid
+// counting the same person twice. This deliberately excludes rejected /
+// waitlisted / cancelled applicants and waiting_for_arrival / dismissed /
+// decided_to_leave / graduated enrollments — the question is "who is accepted
+// or here", not "who is on the roster" or "who ever applied".
 //
 // On the service-role client, see the note in services/schools-demographics.ts.
 // Scope is enforced here; only aggregate counts leave this handler.
 
-const ENROLLED_STATUSES = ["waiting_for_arrival", "arrived", "graduated"];
+const ARRIVED_STATUS = "arrived";
+const ACCEPTED_STATUS = "accepted";
 
 export async function GET() {
   const supabase = await createClient();
@@ -72,7 +75,7 @@ export async function GET() {
   const programIds = programRows.map((p) => p.id);
 
   if (programIds.length === 0) {
-    return NextResponse.json({ programs: [], students: null, applicants: null });
+    return NextResponse.json({ programs: [], population: null });
   }
 
   const admin = createAdminClient();
@@ -92,10 +95,12 @@ export async function GET() {
     );
   }
 
-  const enrolments = (enrolResult.data as EnrollmentPerson[]).filter((e) =>
-    ENROLLED_STATUSES.includes(e.status)
+  const enrolments = (enrolResult.data as EnrollmentPerson[]).filter(
+    (e) => e.status === ARRIVED_STATUS
   );
-  const applicants = applicantResult.data as ApplicantPerson[];
+  const applicants = (applicantResult.data as ApplicantPerson[]).filter(
+    (a) => a.status === ACCEPTED_STATUS
+  );
 
   // One users lookup covering both scopes.
   const userIds = Array.from(
@@ -112,15 +117,19 @@ export async function GET() {
   }
   const userById = new Map(usersResult.data.map((u) => [u.id, u]));
 
-  const studentsByProgram = new Map<string, Breakdown>(
+  const byProgram = new Map<string, Breakdown>(
     programIds.map((id) => [id, emptyBreakdown()])
   );
-  const applicantsByProgram = new Map<string, Breakdown>(
-    programIds.map((id) => [id, emptyBreakdown()])
+  // Tracks which users are already counted in a program, so an accepted
+  // applicant who has also arrived isn't counted twice. Keyed per program:
+  // the same person may legitimately appear in two different schools.
+  const countedByProgram = new Map<string, Set<string>>(
+    programIds.map((id) => [id, new Set<string>()])
   );
 
+  // Arrived enrollees first — they anchor the dedup set.
   for (const row of enrolments) {
-    const target = studentsByProgram.get(row.program_id);
+    const target = byProgram.get(row.program_id);
     if (!target) continue;
     const u = userById.get(row.user_id);
     const person: Person = {
@@ -129,11 +138,18 @@ export async function GET() {
       gender: u?.gender ?? null,
     };
     addPerson(target, person, tierMap as Record<string, Tier>);
+    countedByProgram.get(row.program_id)?.add(row.user_id);
   }
 
+  // Accepted applicants, skipping anyone already counted as arrived in the same
+  // program. Anonymous applicants (no user row) can't be deduped and each
+  // represents a distinct person, so they're always counted.
   for (const row of applicants) {
-    const target = applicantsByProgram.get(row.program_id);
+    const target = byProgram.get(row.program_id);
     if (!target) continue;
+    if (row.user_id && countedByProgram.get(row.program_id)?.has(row.user_id)) {
+      continue;
+    }
     const u = row.user_id ? userById.get(row.user_id) : undefined;
     // Anonymous applicants: nationality comes off applicant_info, and gender
     // simply isn't collected on the public form — it lands in "Not recorded".
@@ -143,6 +159,7 @@ export async function GET() {
       gender: u?.gender ?? null,
     };
     addPerson(target, person, tierMap as Record<string, Tier>);
+    if (row.user_id) countedByProgram.get(row.program_id)?.add(row.user_id);
   }
 
   const shape = (byProgram: Map<string, Breakdown>) => {
@@ -173,7 +190,6 @@ export async function GET() {
 
   return NextResponse.json({
     programs: programRows.map((p) => ({ id: p.id, name: p.name, code: p.code })),
-    students: shape(studentsByProgram),
-    applicants: shape(applicantsByProgram),
+    population: shape(byProgram),
   });
 }

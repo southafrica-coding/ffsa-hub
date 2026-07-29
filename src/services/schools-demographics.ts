@@ -44,6 +44,7 @@ export type EnrollmentPerson = { program_id: string; user_id: string; status: st
 export type ApplicantPerson = {
   program_id: string;
   user_id: string | null;
+  status: string;
   // Anonymous public applicants have no user row; their nationality lives here
   // (see src/app/api/public/applications/route.ts). Gender is NOT collected on
   // the public form, so it is only ever known via a linked user.
@@ -73,7 +74,7 @@ export async function getApplicantPeople(admin: Client, programIds: string[]) {
   return fetchAllPages<ApplicantPerson>((from, to) =>
     admin
       .from("application_responses")
-      .select("program_id, user_id, applicant_info")
+      .select("program_id, user_id, status, applicant_info")
       .in("program_id", programIds)
       .is("removed_at", null)
       .range(from, to)

@@ -1,49 +1,5 @@
 "use client";
 
-import type { Scope } from "./use-student-demographics";
-
-// Students vs applicants. Deliberately a switch and not a sum: an enrolled
-// student normally has an application row too, so adding them double-counts.
-export function ScopeToggle({
-  scope,
-  onChange,
-}: {
-  scope: Scope;
-  onChange: (s: Scope) => void;
-}) {
-  return (
-    <div
-      className="flex"
-      style={{
-        gap: "2px",
-        background: "hsl(22 8% 12%)",
-        borderRadius: "7px",
-        padding: "2px",
-      }}
-    >
-      {(["students", "applicants"] as Scope[]).map((s) => (
-        <button
-          key={s}
-          type="button"
-          onClick={() => onChange(s)}
-          style={{
-            padding: "4px 9px",
-            borderRadius: "5px",
-            fontSize: "8px",
-            letterSpacing: "0.14em",
-            fontWeight: 700,
-            textTransform: "uppercase",
-            background: scope === s ? "hsl(42 95% 55%)" : "transparent",
-            color: scope === s ? "hsl(22 30% 10%)" : "hsl(30 8% 50%)",
-          }}
-        >
-          {s}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 // Horizontal proportion bar. Segments with a zero count are skipped so the
 // bar never renders slivers that can't be read.
 export function StackedBar({

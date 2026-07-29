@@ -26,13 +26,10 @@ export type ScopeData = {
 
 export type Demographics = {
   programs: { id: string; name: string; code: string }[];
-  students: ScopeData | null;
-  applicants: ScopeData | null;
+  // One deduped population: accepted applicants OR arrived enrollees, counted
+  // once. See src/app/api/schools/student-demographics/route.ts.
+  population: ScopeData | null;
 };
-
-// Students and applicants are separate views, never summed — an enrolled
-// student usually has an application row too.
-export type Scope = "students" | "applicants";
 
 export type DemographicsState =
   | { status: "loading" }

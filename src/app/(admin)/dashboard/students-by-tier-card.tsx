@@ -1,24 +1,23 @@
 "use client";
 
-import { useState } from "react";
-import { useStudentDemographics, type Scope } from "./use-student-demographics";
+import { useStudentDemographics } from "./use-student-demographics";
 import { WidgetShell, WidgetEmpty } from "./widget-shell";
-import { ScopeToggle, StackedBar, Legend, TIER_COLORS } from "./demographics-controls";
+import { StackedBar, Legend, TIER_COLORS } from "./demographics-controls";
 
-// Fee-tier mix per school. Tiers are A/B/C to match the billing screens
-// (A = full price, B = reduced, C = heavily reduced).
+// Country fee-tier mix per school, for accepted and arrived students. Tiers are
+// A/B/C to match the billing screens (A = full price, B = reduced, C = heavily
+// reduced).
 export function StudentsByTierCard() {
-  const [scope, setScope] = useState<Scope>("students");
   const state = useStudentDemographics();
 
   if (state.status !== "ready") return null;
-  const data = scope === "students" ? state.data.students : state.data.applicants;
+  const data = state.data.population;
   if (!data || data.perProgram.length === 0) return null;
 
   const withPeople = data.perProgram.filter((p) => p.total > 0);
 
   return (
-    <WidgetShell title="Fee Tier by School" href="/schools">
+    <WidgetShell title="ABC Country" href="/schools">
       <div
         className="flex items-center justify-between"
         style={{
@@ -35,11 +34,10 @@ export function StudentsByTierCard() {
             { label: "Unknown", value: data.overall.tiers.unknown, color: TIER_COLORS.unknown },
           ]}
         />
-        <ScopeToggle scope={scope} onChange={setScope} />
       </div>
 
       {withPeople.length === 0 ? (
-        <WidgetEmpty>No {scope} yet</WidgetEmpty>
+        <WidgetEmpty>No students yet</WidgetEmpty>
       ) : (
         <div>
           {withPeople.map((p) => (

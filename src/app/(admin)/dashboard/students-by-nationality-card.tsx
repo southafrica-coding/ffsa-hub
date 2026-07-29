@@ -4,24 +4,22 @@ import { useState } from "react";
 import {
   useStudentDemographics,
   pickerStyle,
-  type Scope,
 } from "./use-student-demographics";
 import { WidgetShell, WidgetEmpty } from "./widget-shell";
-import { ScopeToggle } from "./demographics-controls";
 
 const TOP_N = 8;
 
-// Country mix, ranked, with a school filter. Percentages are of the total
-// INCLUDING unrecorded nationalities, so the list always sums to 100 and a
-// patchy dataset looks patchy rather than confidently wrong.
+// Citizenship mix of accepted and arrived students, ranked, with a school
+// filter. Percentages are of the total INCLUDING unrecorded nationalities, so
+// the list always sums to 100 and a patchy dataset looks patchy rather than
+// confidently wrong.
 export function StudentsByNationalityCard() {
-  const [scope, setScope] = useState<Scope>("students");
   const [programId, setProgramId] = useState<string>("all");
   const [expanded, setExpanded] = useState(false);
   const state = useStudentDemographics();
 
   if (state.status !== "ready") return null;
-  const data = scope === "students" ? state.data.students : state.data.applicants;
+  const data = state.data.population;
   if (!data) return null;
 
   const source =
@@ -35,7 +33,7 @@ export function StudentsByNationalityCard() {
   const remainder = ranked.length - shown.length;
 
   return (
-    <WidgetShell title="Where Students Come From" href="/schools">
+    <WidgetShell title="Student Citizenship" href="/schools">
       <div
         className="flex items-center justify-between flex-wrap"
         style={{
@@ -60,11 +58,10 @@ export function StudentsByNationalityCard() {
             </option>
           ))}
         </select>
-        <ScopeToggle scope={scope} onChange={setScope} />
       </div>
 
       {total === 0 ? (
-        <WidgetEmpty>No {scope} yet</WidgetEmpty>
+        <WidgetEmpty>No students yet</WidgetEmpty>
       ) : (
         <>
           <div style={{ padding: "0.5rem 0" }}>
