@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getUsers } from "@/services/users";
-import { getListOptions, type ListOption } from "@/services/list-options";
+import { listMinistries } from "@/services/ministries";
 import { getAuthSignIns } from "@/lib/users/auth-signins";
 import { UsersTable } from "./users-table";
 import { InviteUserForm } from "./invite-user-form";
@@ -19,16 +19,18 @@ export default async function UsersPage() {
       data: { session },
     },
     authSignIns,
-    { data: departmentOptions },
+    { data: ministries },
   ] = await Promise.all([
     getUsers(supabase),
     supabase.auth.getSession(),
     getAuthSignIns(),
-    getListOptions(supabase, "department", { activeOnly: true }),
+    // Department slug→name labels come from the Ministry tab (all ministries,
+    // incl. retired, so a since-retired department still renders a proper name).
+    listMinistries(supabase),
   ]);
   const departmentLabels: Record<string, string> = {};
-  for (const o of (departmentOptions ?? []) as ListOption[]) {
-    departmentLabels[o.value] = o.label;
+  for (const m of (ministries ?? []) as Array<{ slug: string; name: string }>) {
+    departmentLabels[m.slug] = m.name;
   }
   const { data: users, count, error: usersError } = usersResult;
   if (usersError) {

@@ -10,8 +10,9 @@ import { Badge } from "@/components/ui/badge";
 import type { ListOption } from "@/services/list-options";
 
 // Friendly titles + descriptions for each editable list.
+// NOTE: departments are managed in the Ministry tab (staff_ministries), not
+// here — the profile Department dropdown is sourced live from there.
 const LIST_META: { key: string; title: string; blurb: string }[] = [
-  { key: "department", title: "Staff departments", blurb: "Teams a staff member can belong to." },
   { key: "insurance_provider", title: "Health insurance providers", blurb: "Schemes shown in the insurance dropdown. “Other” stays built-in." },
   { key: "gender", title: "Gender", blurb: "Options for the gender field." },
   { key: "relationship", title: "Emergency-contact relationship", blurb: "How an emergency contact relates to the person." },

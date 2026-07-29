@@ -16,13 +16,30 @@ export type ListOption = {
   is_system: boolean;
 };
 
+// NOTE: "department" is intentionally absent — departments are managed in the
+// Ministry tab (public.staff_ministries) and sourced live from there, so they
+// are not separately editable in the Settings list-options UI.
 export const LIST_KEYS = [
-  "department",
   "insurance_provider",
   "gender",
   "relationship",
 ] as const;
 export type ListKey = (typeof LIST_KEYS)[number];
+
+// Build active {value,label} option sets keyed by list_key, from the grouped
+// output of getAllListOptions. Shared by the profile-completion gate and the
+// editable profile page so both build their override sets identically.
+export function activeSets(
+  grouped: Record<string, ListOption[]> | null
+): Record<string, { value: string; label: string }[]> {
+  const sets: Record<string, { value: string; label: string }[]> = {};
+  for (const [key, options] of Object.entries(grouped ?? {})) {
+    sets[key] = options
+      .filter((o) => o.is_active)
+      .map((o) => ({ value: o.value, label: o.label }));
+  }
+  return sets;
+}
 
 // Options for a single list, in display order.
 export async function getListOptions(

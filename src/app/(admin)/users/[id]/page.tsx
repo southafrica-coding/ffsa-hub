@@ -14,7 +14,7 @@ import {
   deriveUserLifecycle,
   groupMissingFields,
 } from "@/lib/users/lifecycle";
-import { getListOptions, type ListOption } from "@/services/list-options";
+import { listActiveMinistries } from "@/services/ministries";
 import { UserHeader } from "./user-header";
 import { UserTabs } from "./user-tabs";
 import { EditProfileDialog } from "./edit-profile-dialog";
@@ -64,19 +64,21 @@ export default async function UserProfilePage({
     authLastSignInAt,
     securityEvents,
     { data: insurancePolicies },
-    { data: departmentOptions },
+    { data: ministries },
   ] = await Promise.all([
     getUserById(supabase, id),
     getAuthSignIn(id),
     getUserSecurityEvents(id),
     getInsurancePolicies(supabase, id),
-    getListOptions(supabase, "department", { activeOnly: true }),
+    // Department options come from the Ministry tab (active ministries). The
+    // dialog appends the user's current value if it's a since-retired one.
+    listActiveMinistries(supabase),
   ]);
   if (error || !targetUser) notFound();
 
-  const departmentSelectOptions = ((departmentOptions ?? []) as ListOption[]).map(
-    (o) => ({ value: o.value, label: o.label })
-  );
+  const departmentSelectOptions = (
+    (ministries ?? []) as Array<{ slug: string; name: string }>
+  ).map((m) => ({ value: m.slug, label: m.name }));
 
   // Only staff (or other elevated roles) may carry a department — students and
   // community members are department-less, so hide the field for them.

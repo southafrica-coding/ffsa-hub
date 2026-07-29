@@ -10,7 +10,9 @@ import {
   type InsurancePolicyRow,
 } from "@/components/profile/insurance-history";
 import { PROFILE_SECTIONS } from "@/lib/users/profile-sections";
-import { excludedProfileFields } from "@/lib/users/profile-fields";
+import { excludedProfileFields, applyListOptions } from "@/lib/users/profile-fields";
+import { getAllListOptions, activeSets } from "@/services/list-options";
+import { listActiveMinistries } from "@/services/ministries";
 
 export default async function ProfilePage() {
   const supabase = await createClient();
@@ -19,6 +21,18 @@ export default async function ProfilePage() {
   if (!user) redirect("/login");
 
   const { data: insurancePolicies } = await getInsurancePolicies(supabase, user.id);
+
+  // Admin-editable dropdown vocabularies (gender/insurance/relationship) plus
+  // Department, which is sourced live from the Ministry tab (staff_ministries)
+  // and overrides any list_options department rows.
+  const { data: lists } = await getAllListOptions(supabase);
+  const sets = activeSets(lists);
+  const { data: mins } = await listActiveMinistries(supabase);
+  if (mins?.length) {
+    sets.department = mins.map(
+      (m: { slug: string; name: string }) => ({ value: m.slug, label: m.name })
+    );
+  }
 
   const row = user as Record<string, unknown>;
   const roles = user.user_roles ?? [];
@@ -112,7 +126,10 @@ export default async function ProfilePage() {
             );
             const section = {
               ...rawSection,
-              fields: rawSection.fields.filter((f) => !excluded.has(f.field)),
+              fields: applyListOptions(
+                rawSection.fields.filter((f) => !excluded.has(f.field)),
+                sets
+              ),
             };
             return (
             <EditableProfileSection

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAuthedUser, hasAnyRole } from "@/lib/api-auth";
+import { getMinistryBySlug } from "@/services/ministries";
 
 const ADMIN_ROLES = ["super_admin", "admin"];
 
@@ -55,6 +56,22 @@ export async function PATCH(
       { error: "No valid fields to update" },
       { status: 400 }
     );
+  }
+
+  // Department must be a real ministry slug (staff_ministries is the source of
+  // truth, validated here since the static DB CHECK was dropped). Any existing
+  // slug is accepted — active or retired.
+  if ("department" in updateData && String(updateData.department ?? "").trim() !== "") {
+    const { data: ministry } = await getMinistryBySlug(
+      supabase,
+      String(updateData.department)
+    );
+    if (!ministry) {
+      return NextResponse.json(
+        { error: "Please select a valid department." },
+        { status: 400 }
+      );
+    }
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -94,11 +94,13 @@ function currentMembership(user: UserRow): "staff" | "student" | "community" | "
   return "none";
 }
 
+// Fallback only — real labels come from staff_ministries (departmentLabels
+// prop). Kept in sync with the ministry names for slugs not found there.
 const DEPARTMENT_LABELS: Record<string, string> = {
   leadership_team: "Leadership Team",
-  prayer_and_worship: "Prayer and Worship",
+  prayer_and_worship: "Prayer & Worship",
   media: "Media",
-  hulk: "Hulk",
+  hulk: "HULC",
   operations: "Operations",
   training: "Training",
   project_54: "Project 54",

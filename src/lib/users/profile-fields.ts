@@ -64,14 +64,17 @@ export const REQUIRED_PROFILE_FIELDS: FieldConfig[] = [
   { field: "nationality", label: "Nationality", type: "select", options: COUNTRY_OPTIONS },
   { field: "phone", label: "Phone Number", type: "phone" },
   {
+    // Options are sourced live from the Ministry tab (staff_ministries) via
+    // applyListOptions; this list is only the fallback when that table is
+    // empty/unreachable, so its labels are kept matching the ministry names.
     field: "department",
     label: "Department",
     type: "select",
     options: [
       { value: "leadership_team", label: "Leadership Team" },
-      { value: "prayer_and_worship", label: "Prayer and Worship" },
+      { value: "prayer_and_worship", label: "Prayer & Worship" },
       { value: "media", label: "Media" },
-      { value: "hulk", label: "Hulk" },
+      { value: "hulk", label: "HULC" },
       { value: "operations", label: "Operations" },
       { value: "training", label: "Training" },
       { value: "project_54", label: "Project 54" },

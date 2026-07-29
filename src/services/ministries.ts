@@ -21,6 +21,34 @@ export async function listMinistries(supabase: Client) {
     .order("name", { ascending: true });
 }
 
+/**
+ * Active staff ministries (slug + name), for the profile Department picker.
+ * The Ministry tab is the single source of truth for departments; callers map
+ * rows to { value: slug, label: name }. RLS is `auth.uid() IS NOT NULL`, so the
+ * normal server client suffices.
+ */
+export async function listActiveMinistries(supabase: Client) {
+  return supabase
+    .from("staff_ministries")
+    .select("name, slug")
+    .eq("is_active", true)
+    .order("sort_order", { ascending: true })
+    .order("name", { ascending: true });
+}
+
+/**
+ * The matching ministry row (or null) for a slug — active or retired. Used to
+ * validate a department value on profile writes now that the static DB CHECK
+ * is gone.
+ */
+export async function getMinistryBySlug(supabase: Client, slug: string) {
+  return supabase
+    .from("staff_ministries")
+    .select("slug")
+    .eq("slug", slug)
+    .maybeSingle();
+}
+
 export async function getMinistry(supabase: Client, id: string) {
   return supabase
     .from("staff_ministries")

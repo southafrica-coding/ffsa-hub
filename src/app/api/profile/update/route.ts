@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isExpiryDatePast } from "@/lib/users/profile-fields";
+import { getMinistryBySlug } from "@/services/ministries";
 
 export async function PUT(request: Request) {
   const supabase = await createClient();
@@ -62,6 +63,23 @@ export async function PUT(request: Request) {
       },
       { status: 400 }
     );
+  }
+
+  // Department must be a real ministry slug (staff_ministries is the source of
+  // truth). Validated here rather than a static DB CHECK so admin-added
+  // ministries save without a migration. Any existing slug is accepted —
+  // active or retired — so a user on a since-retired ministry isn't locked out.
+  if ("department" in updateData && String(updateData.department ?? "").trim() !== "") {
+    const { data: ministry } = await getMinistryBySlug(
+      supabase,
+      String(updateData.department)
+    );
+    if (!ministry) {
+      return NextResponse.json(
+        { error: "Please select a valid department." },
+        { status: 400 }
+      );
+    }
   }
 
   const { error } = await supabase
