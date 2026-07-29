@@ -52,6 +52,38 @@ const SpacedParagraph = Paragraph.extend({
       },
     };
   },
+  addKeyboardShortcuts() {
+    return {
+      // Pressing Enter should always add a normally-spaced paragraph.
+      // ProseMirror copies node attributes across a split, so without this
+      // a custom "gap after" would stick to every new paragraph (and, since
+      // the rendered email only uses bottom margins, collapse the gap).
+      // We clear the current paragraph's gap before splitting so both the
+      // paragraph left behind and the new one fall back to the default gap.
+      Enter: () =>
+        this.editor
+          .chain()
+          .command(({ tr, state, dispatch }) => {
+            const { $from } = state.selection;
+            const pos = $from.before($from.depth);
+            const node = state.doc.nodeAt(pos);
+            if (
+              node?.type.name === this.name &&
+              node.attrs.marginBottom != null
+            ) {
+              if (dispatch) {
+                tr.setNodeMarkup(pos, undefined, {
+                  ...node.attrs,
+                  marginBottom: null,
+                });
+              }
+            }
+            return true;
+          })
+          .splitBlock()
+          .run(),
+    };
+  },
 });
 
 const EXTENSIONS = [
@@ -149,7 +181,7 @@ export function RichText({
   }
 
   return (
-    <div className="rounded border bg-background overflow-hidden">
+    <div className="rounded border bg-background">
       <Toolbar
         editor={editor}
         disabled={disabled}
@@ -157,7 +189,7 @@ export function RichText({
         mergeFields={mergeFields}
       />
       <EditorContent editor={editor} />
-      <p className="border-t bg-muted/20 px-3 py-1 text-[11px] text-muted-foreground">
+      <p className="border-t bg-muted/20 px-3 py-1 text-[11px] text-muted-foreground rounded-b-[3px]">
         <kbd className="font-sans font-medium">Enter</kbd> = new paragraph ·{" "}
         <kbd className="font-sans font-medium">Shift+Enter</kbd> = line break ·{" "}
         <MoveVertical className="inline h-3 w-3 -mt-0.5" aria-hidden /> = spacing
@@ -232,7 +264,7 @@ function Toolbar({
   }
 
   return (
-    <div className="flex items-center gap-0.5 border-b bg-muted/40 px-1.5 py-1">
+    <div className="flex items-center gap-0.5 border-b bg-muted/40 px-1.5 py-1 rounded-t-[3px]">
       <ToolButton
         active={isBold}
         disabled={disabled}
@@ -393,7 +425,7 @@ function SpacingControl({
         <MoveVertical className="h-3.5 w-3.5" />
       </ToolButton>
       {open && (
-        <div className="absolute left-0 top-full z-20 mt-1 w-56 rounded-md border bg-popover p-3 shadow-md">
+        <div className="absolute right-0 top-full z-20 mt-1 w-56 rounded-md border bg-popover p-3 shadow-md">
           {!inParagraph ? (
             <p className="text-[11px] text-muted-foreground">
               Click into a paragraph to set its spacing.
