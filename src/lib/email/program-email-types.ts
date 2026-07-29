@@ -14,6 +14,11 @@ export type ProgramEmailType = {
   audience: "applicant" | "referee";
   /** Merge tokens the copy supports (rendered in the editor as hints). */
   mergeFields: string[];
+  /**
+   * When set, this email can auto-send on a delay via the reminders cron.
+   * `trigger` describes what the delay is measured from (shown in the UI).
+   */
+  autoReminder?: { trigger: string };
 };
 
 // Applicant emails support {{first_name}} + {{program_name}}. Referee
@@ -42,9 +47,10 @@ export const PROGRAM_EMAIL_TYPES: ProgramEmailType[] = [
     key: "reference_reminder",
     label: "Reference reminder",
     description:
-      "A nudge to a referee who hasn't completed their reference yet (sent when you click remind).",
+      "A nudge to a referee who hasn't completed their reference yet. Send it manually, or set it to go out automatically after a few days.",
     audience: "referee",
     mergeFields: REFEREE_FIELDS,
+    autoReminder: { trigger: "the reference was requested" },
   },
   {
     key: "application_rejected",

@@ -327,6 +327,7 @@ export function ProgramDetail({
     enabled: boolean;
     subject: string | null;
     body: string | null;
+    reminder_after_days: number | null;
   }[];
   grades: GradeRow[];
   allUsers: UserOption[];

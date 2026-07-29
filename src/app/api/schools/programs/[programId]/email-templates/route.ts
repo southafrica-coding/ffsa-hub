@@ -55,6 +55,7 @@ export async function PUT(
     enabled?: boolean;
     subject?: string | null;
     body?: string | null;
+    reminderAfterDays?: number | null;
   };
 
   if (!body.emailType || !isProgramEmailType(body.emailType)) {
@@ -62,6 +63,19 @@ export async function PUT(
       { error: "Unknown email type" },
       { status: 400 }
     );
+  }
+
+  // Auto-reminder days: clamp to the DB's 1..90 window, or null for off.
+  let reminderAfterDays: number | null = null;
+  if (body.reminderAfterDays != null && body.reminderAfterDays !== 0) {
+    const n = Math.round(Number(body.reminderAfterDays));
+    if (!Number.isFinite(n) || n < 1 || n > 90) {
+      return NextResponse.json(
+        { error: "Reminder days must be between 1 and 90" },
+        { status: 400 }
+      );
+    }
+    reminderAfterDays = n;
   }
 
   const admin = createAdminClient();
@@ -76,6 +90,7 @@ export async function PUT(
     enabled: body.enabled ?? true,
     subject: trimmedSubject,
     body: trimmedBody,
+    reminderAfterDays,
     updatedBy: auth.user.id,
   });
   if (error) {

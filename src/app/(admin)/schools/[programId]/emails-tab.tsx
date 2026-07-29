@@ -18,6 +18,7 @@ type TemplateRow = {
   enabled: boolean;
   subject: string | null;
   body: string | null;
+  reminder_after_days: number | null;
 };
 
 export function EmailsTab({
@@ -69,14 +70,22 @@ function EmailTypeEditor({
   const [enabled, setEnabled] = useState(initial?.enabled ?? true);
   const [subject, setSubject] = useState(initial?.subject ?? "");
   const [body, setBody] = useState(initial?.body ?? "");
+  const [reminderDays, setReminderDays] = useState(
+    initial?.reminder_after_days != null ? String(initial.reminder_after_days) : ""
+  );
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const initialReminder =
+    initial?.reminder_after_days != null
+      ? String(initial.reminder_after_days)
+      : "";
   const dirty =
     enabled !== (initial?.enabled ?? true) ||
     subject !== (initial?.subject ?? "") ||
-    body !== (initial?.body ?? "");
+    body !== (initial?.body ?? "") ||
+    reminderDays !== initialReminder;
 
   async function save() {
     setSaving(true);
@@ -91,6 +100,9 @@ function EmailTypeEditor({
           enabled,
           subject,
           body,
+          reminderAfterDays: reminderDays.trim()
+            ? Number(reminderDays)
+            : null,
         }),
       }
     );
@@ -164,6 +176,32 @@ function EmailTypeEditor({
             ))}
           </p>
         </div>
+        {type.autoReminder && (
+          <div className="rounded-md border bg-muted/30 px-3 py-2.5 space-y-1.5">
+            <label className="text-xs font-medium">Automatic reminder</label>
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-muted-foreground">Auto-send after</span>
+              <Input
+                type="number"
+                min={1}
+                max={90}
+                value={reminderDays}
+                onChange={(e) => setReminderDays(e.target.value)}
+                placeholder="—"
+                className="w-20"
+                disabled={!enabled}
+              />
+              <span className="text-muted-foreground">
+                days from when {type.autoReminder.trigger}.
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Leave blank to only send this reminder manually. It never sends
+              once the reference is in.
+            </p>
+          </div>
+        )}
+
         <div className="flex items-center gap-3">
           <Button type="button" onClick={save} disabled={!dirty || saving} size="sm">
             {saving ? (

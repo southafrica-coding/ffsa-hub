@@ -9,6 +9,7 @@ export type ProgramEmailTemplateRow = {
   enabled: boolean;
   subject: string | null;
   body: string | null;
+  reminder_after_days: number | null;
   updated_at: string;
 };
 
@@ -18,7 +19,9 @@ export async function listProgramEmailTemplates(
 ) {
   return client
     .from("program_email_templates")
-    .select("email_type, enabled, subject, body, updated_at")
+    .select(
+      "email_type, enabled, subject, body, reminder_after_days, updated_at"
+    )
     .eq("program_id", programId);
 }
 
@@ -30,6 +33,7 @@ export async function upsertProgramEmailTemplate(
     enabled: boolean;
     subject: string | null;
     body: string | null;
+    reminderAfterDays: number | null;
     updatedBy: string;
   }
 ) {
@@ -40,6 +44,7 @@ export async function upsertProgramEmailTemplate(
       enabled: input.enabled,
       subject: input.subject,
       body: input.body,
+      reminder_after_days: input.reminderAfterDays,
       updated_by: input.updatedBy,
     },
     { onConflict: "program_id,email_type" }
