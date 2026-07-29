@@ -163,6 +163,33 @@ function pluck(obj: unknown, keys: string[]): string | null {
   return null;
 }
 
+// Turn a PayFast refund rejection into a message that explains itself:
+// the HTTP status, PayFast's own message/detail when it gives one, and a
+// raw-body snippet as a fallback. Stored verbatim in
+// order_refunds.error_message, so a bare "Failed" never hides the reason
+// again. The HTTP status alone is diagnostic — 400 tends to mean a bad
+// request/signature, 401/403 that the refund API isn't enabled on the
+// account, 404 that the payment can't be found or isn't refundable.
+function describeRefundFailure(
+  httpStatus: number,
+  json: unknown,
+  rawText: string
+): string {
+  const detail = pluck(json, [
+    "message",
+    "error",
+    "errors",
+    "detail",
+    "reason",
+  ]);
+  const raw = rawText.trim().slice(0, 400);
+  const parts = [`PayFast rejected the refund (HTTP ${httpStatus})`];
+  // Skip a bare "failed" token — it adds nothing; the raw body has more.
+  if (detail && detail.toLowerCase() !== "failed") parts.push(detail);
+  if (raw) parts.push(`Response: ${raw}`);
+  return parts.join(" — ");
+}
+
 // PayFast refund states seen in the wild: PENDING / PROCESSING while the
 // payout is queued, COMPLETE once it lands, FAILED / CANCELLED otherwise.
 // Anything unrecognised stays pending so we never claim a false success.
@@ -313,24 +340,47 @@ export const payfastProvider: PaymentProvider = {
       // Non-JSON body (HTML error page) — surfaced via the raw text below.
     }
 
+    // Whatever happens next, keep PayFast's actual words. The old code
+    // collapsed every rejection to a single plucked token ("Failed"),
+    // which told us nothing — the HTTP status and the raw envelope are
+    // what actually distinguish "API not enabled" from "signature
+    // mismatch" from "payment not refundable". Log it and carry it
+    // through to order_refunds.error_message so it is readable later.
+    console.error(
+      `[payfast] refund ${req.providerPaymentId} → HTTP ${res.status}: ${text.slice(0, 800)}`
+    );
+
     if (!res.ok) {
       return {
         status: "failed",
         providerRefundId: null,
         amountCents: null,
-        error:
-          pluck(json, ["message", "error", "errors"]) ??
-          `PayFast returned ${res.status}${text ? `: ${text.slice(0, 300)}` : ""}`,
+        error: describeRefundFailure(res.status, json, text),
       };
     }
 
-    // A 200 means PayFast ACCEPTED the refund, not that it has settled —
-    // the payout is queued and there is no ITN for refunds. The caller
-    // records it as pending and syncs later via fetchRefund.
-    const refundId = pluck(json, ["uuid", "id", "refund_id"]);
+    // PayFast often returns HTTP 200 with a LOGICAL failure in the body
+    // (`response: false`, or `status: "failed"`). That path used to
+    // return error: null, silently discarding the reason — the exact gap
+    // that hid why these refunds failed. Treat a logical failure the same
+    // as an HTTP failure and surface the body.
     const reported = pluck(json, ["status"]);
+    const mapped = reported ? mapRefundStatus(reported) : null;
+    if (mapped === "failed") {
+      return {
+        status: "failed",
+        providerRefundId: null,
+        amountCents: null,
+        error: describeRefundFailure(res.status, json, text),
+      };
+    }
+
+    // A genuine 200 means PayFast ACCEPTED the refund, not that it has
+    // settled — the payout is queued and there is no ITN for refunds. The
+    // caller records it as pending and syncs later via fetchRefund.
+    const refundId = pluck(json, ["uuid", "id", "refund_id"]);
     return {
-      status: reported ? mapRefundStatus(reported) : "pending",
+      status: mapped ?? "pending",
       providerRefundId: refundId,
       amountCents: req.amountCents,
       error: null,
