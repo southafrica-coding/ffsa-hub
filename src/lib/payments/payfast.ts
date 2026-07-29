@@ -284,14 +284,17 @@ export const payfastProvider: PaymentProvider = {
       // reach PayFast empty: fall back to a sensible default. Capped at
       // PayFast's 255-char limit.
       reason: (req.reason?.trim() || "Ticket refund").slice(0, 255),
-      // Bank account type ('current' | 'savings'). The refund API expects
-      // it; for a card refund PayFast reverses to the original card
-      // regardless, so it's an inert formality — 'current' is the default.
-      acc_type: "current",
       // The Hub sends its own branded refund email, so PayFast's
       // notice is off unless a caller explicitly asks for it.
       notify_buyer: req.notifyBuyer ? 1 : 0,
     };
+    // NOTE: deliberately NOT sending acc_type / bank details. Supplying
+    // acc_type makes PayFast treat the refund as an EFT payout to a bank
+    // account and then demand full bank details ("Provided bank details
+    // are incomplete"). These orders were paid by card, so we want the
+    // default behaviour: PayFast reverses the refund to the original card,
+    // which needs no bank details. Matches PayFast's working API examples
+    // ({ amount, reason, notify_buyer }).
 
     const built = buildApiRequest(cfg, {
       method: "POST",
