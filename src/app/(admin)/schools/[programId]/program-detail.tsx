@@ -308,6 +308,7 @@ type RefRequestSummary = {
 
 export function ProgramDetail({
   program,
+  initialTab,
   enrollments,
   arrivalInsurance,
   leaders,
@@ -325,6 +326,7 @@ export function ProgramDetail({
   refRequestSummaries,
 }: {
   program: Program;
+  initialTab?: string;
   enrollments: Enrollment[];
   arrivalInsurance: Record<string, ArrivalInsuranceInfo>;
   leaders: ProgramLeaderRow[];
@@ -452,7 +454,14 @@ export function ProgramDetail({
       </Dialog>
 
       {/* Tabs */}
-      <Tabs defaultValue="courses">
+      <Tabs
+        defaultValue={
+          initialTab &&
+          ["courses", "enrollments", "arrival", "application", "applicants", "leaders", "emails"].includes(initialTab)
+            ? initialTab
+            : "courses"
+        }
+      >
         <TabsList>
           <TabsTrigger value="courses">
             Courses ({billingCourses.length})

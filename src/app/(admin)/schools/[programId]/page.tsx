@@ -64,10 +64,13 @@ async function hydrateUserIdentities(
 
 export default async function ProgramDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ programId: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }) {
   const { programId } = await params;
+  const { tab } = await searchParams;
   const supabase = await createClient();
   // Service-role client for reading applicant/user *identities* only (name +
   // email). The RLS-scoped `supabase` client above can't read other users'
@@ -166,6 +169,7 @@ export default async function ProgramDetailPage({
     <div className="space-y-6">
       <ProgramDetail
         program={program}
+        initialTab={tab}
         enrollments={enrollments ?? []}
         arrivalInsurance={arrivalInsurance}
         leaders={leaders ?? []}
