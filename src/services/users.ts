@@ -138,6 +138,16 @@ export async function getInsurancePolicies(supabase: Client, userId: string) {
     .order("recorded_at", { ascending: false });
 }
 
+/**
+ * Delete a single insurance policy history row by id. Callers are
+ * responsible for the ownership + "only a duplicate, never the current /
+ * last" checks — RLS on user_insurance_policies is SELECT-only, so this
+ * must run with the admin (service-role) client.
+ */
+export async function deleteInsurancePolicy(supabase: Client, policyId: string) {
+  return supabase.from("user_insurance_policies").delete().eq("id", policyId);
+}
+
 /** Count users currently awaiting approval. */
 export async function getPendingApprovalCount(supabase: Client) {
   const { count } = await supabase

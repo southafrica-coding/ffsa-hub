@@ -9,6 +9,7 @@ import {
   InsuranceHistory,
   type InsurancePolicyRow,
 } from "@/components/profile/insurance-history";
+import { currentPolicyId } from "@/lib/users/insurance-policies";
 import { PROFILE_SECTIONS } from "@/lib/users/profile-sections";
 import { excludedProfileFields, applyListOptions } from "@/lib/users/profile-fields";
 import { getAllListOptions, activeSets } from "@/services/list-options";
@@ -21,6 +22,7 @@ export default async function ProfilePage() {
   if (!user) redirect("/login");
 
   const { data: insurancePolicies } = await getInsurancePolicies(supabase, user.id);
+  const insuranceRows = (insurancePolicies ?? []) as InsurancePolicyRow[];
 
   // Admin-editable dropdown vocabularies (gender/insurance/relationship) plus
   // Department, which is sourced live from the Ministry tab (staff_ministries)
@@ -36,6 +38,13 @@ export default async function ProfilePage() {
 
   const row = user as Record<string, unknown>;
   const roles = user.user_roles ?? [];
+
+  // Which history row is the current active policy — protected from deletion.
+  const insuranceCurrentId = currentPolicyId(insuranceRows, {
+    provider: row.health_insurance_provider as string | null | undefined,
+    policy_number: row.health_insurance_policy_number as string | null | undefined,
+    expiry_date: row.health_insurance_expiry_date as string | null | undefined,
+  });
 
   const fullName =
     [user.preferred_name ?? user.first_name, user.last_name]
@@ -140,7 +149,9 @@ export default async function ProfilePage() {
               footer={
                 section.id === "insurance" ? (
                   <InsuranceHistory
-                    policies={(insurancePolicies ?? []) as InsurancePolicyRow[]}
+                    policies={insuranceRows}
+                    currentPolicyId={insuranceCurrentId}
+                    canDelete
                   />
                 ) : undefined
               }

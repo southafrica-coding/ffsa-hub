@@ -1,9 +1,12 @@
 import { getInsuranceStatus } from "@/lib/users/profile-fields";
+import { deletablePolicyIds } from "@/lib/users/insurance-policies";
+import { DeletePolicyButton } from "@/components/profile/delete-policy-button";
 
-// A read-only list of a person's health-insurance policies — the current one
-// plus every previous policy kept on record (migration 130). Rendered under
-// the Health Insurance card on the profile page and on the admin user detail
-// page. Presentational only; the caller fetches via getInsurancePolicies().
+// A list of a person's health-insurance policies — the current one plus every
+// previous policy kept on record (migration 130). Rendered under the Health
+// Insurance card on the profile page and on the admin user detail page. When
+// `canDelete` is set (own profile), duplicate rows show a delete control; the
+// caller fetches via getInsurancePolicies() and passes the current policy id.
 
 export type InsurancePolicyRow = {
   id: string;
@@ -27,7 +30,15 @@ function fmt(value: string): string {
   }).format(new Date(ms));
 }
 
-export function InsuranceHistory({ policies }: { policies: InsurancePolicyRow[] }) {
+export function InsuranceHistory({
+  policies,
+  currentPolicyId,
+  canDelete = false,
+}: {
+  policies: InsurancePolicyRow[];
+  currentPolicyId?: string | null;
+  canDelete?: boolean;
+}) {
   if (!policies || policies.length === 0) {
     return (
       <p className="text-xs text-muted-foreground">
@@ -35,6 +46,10 @@ export function InsuranceHistory({ policies }: { policies: InsurancePolicyRow[] 
       </p>
     );
   }
+
+  const deletable = canDelete
+    ? deletablePolicyIds(policies, currentPolicyId ?? null)
+    : new Set<string>();
 
   return (
     <div className="space-y-2">
@@ -53,11 +68,14 @@ export function InsuranceHistory({ policies }: { policies: InsurancePolicyRow[] 
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="font-medium break-words">{p.provider}</span>
-                {isCurrent && (
-                  <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Current
-                  </span>
-                )}
+                <div className="flex shrink-0 items-center gap-1">
+                  {isCurrent && (
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Current
+                    </span>
+                  )}
+                  {deletable.has(p.id) && <DeletePolicyButton policyId={p.id} />}
+                </div>
               </div>
               {p.policy_number && (
                 <div className="text-xs text-muted-foreground mt-0.5">
