@@ -198,6 +198,23 @@ export async function updateEnrollmentStatus(
 }
 
 /**
+ * Record (or clear) the arrival-day health-insurance check on an enrollment.
+ * `verified: true` stamps who/when; `verified: false` clears both columns.
+ * This is the physical on-arrival check — distinct from the auto-computed
+ * validity of the policy the student entered on their profile.
+ */
+export async function setEnrollmentInsuranceVerified(
+  supabase: Client,
+  id: string,
+  verifiedBy: string | null
+) {
+  const data = verifiedBy
+    ? { insurance_verified_at: new Date().toISOString(), insurance_verified_by: verifiedBy }
+    : { insurance_verified_at: null, insurance_verified_by: null };
+  return supabase.from("enrollments").update(data).eq("id", id).select().single();
+}
+
+/**
  * Reversibly remove (or restore) an enrollment. A removed enrollment keeps
  * its status/grades/fees and simply drops off the active roster — pass
  * `removedBy: null` to restore it.

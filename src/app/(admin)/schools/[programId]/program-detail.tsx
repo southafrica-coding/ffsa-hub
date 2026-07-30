@@ -9,7 +9,9 @@ import { LeadersTab, type ProgramLeaderRow } from "./leaders-tab";
 import { EmailsTab } from "./emails-tab";
 import { StudentsExportPanel } from "./students-export-panel";
 import { ENROLLMENT_STATUS_LABELS } from "@/lib/schools/student-export-columns";
+import type { ArrivalInsuranceInfo } from "@/lib/schools/arrival-insurance";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,7 +39,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Trash2, Download, ChevronUp, ChevronDown, Edit2, ClipboardList, Copy, Check, Link as LinkIcon, Archive, BookTemplate, Upload, Loader2, FileText, Send, BarChart3, Calendar, RefreshCw, CheckSquare, Search, Users, MoreHorizontal, UserMinus, RotateCcw, AlertTriangle } from "lucide-react";
+import { Plus, Trash2, Download, ChevronUp, ChevronDown, Edit2, ClipboardList, Copy, Check, Link as LinkIcon, Archive, BookTemplate, Upload, Loader2, FileText, Send, BarChart3, Calendar, RefreshCw, CheckSquare, Search, Users, MoreHorizontal, UserMinus, RotateCcw, AlertTriangle, ShieldCheck } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -75,6 +77,8 @@ type Enrollment = {
   removed_by: string | null;
   assigned_staff_id: string | null;
   assigned_staff: StaffUser | null;
+  insurance_verified_at: string | null;
+  insurance_verified_by: string | null;
   users: {
     id: string;
     first_name: string | null;
@@ -305,6 +309,7 @@ type RefRequestSummary = {
 export function ProgramDetail({
   program,
   enrollments,
+  arrivalInsurance,
   leaders,
   emailTemplates,
   grades,
@@ -321,6 +326,7 @@ export function ProgramDetail({
 }: {
   program: Program;
   enrollments: Enrollment[];
+  arrivalInsurance: Record<string, ArrivalInsuranceInfo>;
   leaders: ProgramLeaderRow[];
   emailTemplates: {
     email_type: string;
@@ -454,6 +460,9 @@ export function ProgramDetail({
           <TabsTrigger value="enrollments">
             Enrollments ({enrollments.length})
           </TabsTrigger>
+          <TabsTrigger value="arrival">
+            Arrival
+          </TabsTrigger>
           <TabsTrigger value="application">
             Application
           </TabsTrigger>
@@ -482,6 +491,13 @@ export function ProgramDetail({
             enrollments={enrollments}
             allUsers={allUsers}
             staffOptions={staffOptions}
+          />
+        </TabsContent>
+
+        <TabsContent value="arrival" className="mt-4">
+          <ArrivalTab
+            enrollments={enrollments}
+            arrivalInsurance={arrivalInsurance}
           />
         </TabsContent>
 
@@ -872,6 +888,307 @@ function StaffAssignSelect({
         ))}
       </SelectContent>
     </Select>
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+// ARRIVAL TAB
+// ────────────────────────────────────────────────────────────
+// Arrival-day checklist: for each arriving student, is their profile filled
+// in (or not started yet), is their health insurance valid, and has a staff
+// member physically checked it on arrival. Insurance/profile status is derived
+// server-side (see lib/schools/arrival-insurance.ts) and passed in as a compact
+// per-user summary keyed by user id.
+
+// The two arrival-relevant enrollment statuses. Everyone else (dismissed,
+// graduated, decided_to_leave, removed) has already come and gone.
+const ARRIVAL_STATUSES = ["waiting_for_arrival", "arrived"];
+
+function ProfileBadge({ info }: { info: ArrivalInsuranceInfo | undefined }) {
+  if (!info) {
+    return <Badge variant="secondary">Unknown</Badge>;
+  }
+  if (info.profileStage === "invited") {
+    return (
+      <Badge variant="destructive" title="Accepted but hasn't signed in or started a profile yet">
+        No profile yet
+      </Badge>
+    );
+  }
+  if (info.profileStage === "inactive") {
+    return <Badge variant="secondary">Inactive</Badge>;
+  }
+  if (info.profileStage === "profile_incomplete") {
+    return (
+      <Badge
+        variant="outline"
+        className="border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+        title={
+          info.missingSections.length
+            ? `Missing: ${info.missingSections.join(", ")}`
+            : "Profile incomplete"
+        }
+      >
+        Incomplete ({info.completedRequired}/{info.totalRequired})
+      </Badge>
+    );
+  }
+  return (
+    <Badge
+      variant="outline"
+      className="border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+    >
+      Complete
+    </Badge>
+  );
+}
+
+function InsuranceBadge({ info }: { info: ArrivalInsuranceInfo | undefined }) {
+  const state = info?.insurance.state ?? "missing";
+  const daysLeft = info?.insurance.daysLeft ?? null;
+  if (state === "ok") {
+    return (
+      <Badge
+        variant="outline"
+        className="border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+      >
+        Valid
+      </Badge>
+    );
+  }
+  if (state === "expiring") {
+    return (
+      <Badge
+        variant="outline"
+        className="border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+      >
+        Expires in {daysLeft ?? "?"} day{daysLeft === 1 ? "" : "s"}
+      </Badge>
+    );
+  }
+  if (state === "expired") {
+    return <Badge variant="destructive">Expired</Badge>;
+  }
+  return <Badge variant="destructive">No insurance on file</Badge>;
+}
+
+function ArrivalTab({
+  enrollments,
+  arrivalInsurance,
+}: {
+  enrollments: Enrollment[];
+  arrivalInsurance: Record<string, ArrivalInsuranceInfo>;
+}) {
+  const router = useRouter();
+  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [attentionOnly, setAttentionOnly] = useState(false);
+
+  function userName(u: Enrollment["users"]) {
+    const name = [u.first_name, u.last_name].filter(Boolean).join(" ");
+    return u.preferred_name || name || u.email || "Unknown";
+  }
+
+  const needsAttention = (e: Enrollment) => {
+    const info = arrivalInsurance[e.user_id];
+    const profileDone =
+      info?.profileStage === "active" || info?.profileStage === "pending_approval";
+    const insuranceOk = info?.insurance.state === "ok";
+    return !profileDone || !insuranceOk;
+  };
+
+  const roster = enrollments.filter(
+    (e) => !e.removed_at && ARRIVAL_STATUSES.includes(e.status)
+  );
+  const noProfileCount = roster.filter(
+    (e) => arrivalInsurance[e.user_id]?.profileStage === "invited"
+  ).length;
+  const insuranceProblemCount = roster.filter((e) => {
+    const s = arrivalInsurance[e.user_id]?.insurance.state;
+    return s === "missing" || s === "expired";
+  }).length;
+
+  const visible = attentionOnly ? roster.filter(needsAttention) : roster;
+
+  const statusColors: Record<string, "default" | "secondary" | "destructive"> = {
+    waiting_for_arrival: "secondary",
+    arrived: "default",
+  };
+
+  async function handleStatusChange(enrollmentId: string, newStatus: string) {
+    setUpdatingStatus(enrollmentId);
+    try {
+      const res = await fetch("/api/schools/enrollments", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: enrollmentId, status: newStatus }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || "Failed to update status");
+        return;
+      }
+      router.refresh();
+    } catch {
+      alert("Failed to update status");
+    } finally {
+      setUpdatingStatus(null);
+    }
+  }
+
+  async function handleVerify(enrollmentId: string, verified: boolean) {
+    setVerifyingId(enrollmentId);
+    try {
+      const res = await fetch("/api/schools/enrollments/insurance-verify", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: enrollmentId, verified }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || "Failed to update insurance check");
+        return;
+      }
+      router.refresh();
+    } catch {
+      alert("Failed to update insurance check");
+    } finally {
+      setVerifyingId(null);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1">
+            No profile yet
+            <span className="rounded-full bg-background/60 px-1.5 py-0.5 text-[10px] font-bold">
+              {noProfileCount}
+            </span>
+          </span>
+          <span className="flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1">
+            Insurance missing / expired
+            <span className="rounded-full bg-background/60 px-1.5 py-0.5 text-[10px] font-bold">
+              {insuranceProblemCount}
+            </span>
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={() => setAttentionOnly((v) => !v)}
+          className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+            attentionOnly
+              ? "border-primary bg-primary/15 text-primary"
+              : "border-border text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Needs attention only
+        </button>
+      </div>
+
+      <div className="rounded-lg border bg-card">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Student</TableHead>
+              <TableHead>Profile</TableHead>
+              <TableHead>Arrival</TableHead>
+              <TableHead>Insurance</TableHead>
+              <TableHead>Details</TableHead>
+              <TableHead className="text-center">Checked on arrival</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {visible.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                  {roster.length === 0
+                    ? "No students waiting for arrival or arrived yet."
+                    : "No students match the current filter."}
+                </TableCell>
+              </TableRow>
+            ) : (
+              visible.map((enrollment) => {
+                const info = arrivalInsurance[enrollment.user_id];
+                const verified = !!enrollment.insurance_verified_at;
+                return (
+                  <TableRow key={enrollment.id}>
+                    <TableCell className="font-medium">
+                      {userName(enrollment.users)}
+                      <div className="text-xs text-muted-foreground">
+                        {enrollment.users.email ?? "—"}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <ProfileBadge info={info} />
+                    </TableCell>
+                    <TableCell>
+                      <Select
+                        value={enrollment.status}
+                        onValueChange={(val) => handleStatusChange(enrollment.id, val)}
+                        disabled={updatingStatus === enrollment.id}
+                      >
+                        <SelectTrigger className="w-[160px]">
+                          <Badge variant={statusColors[enrollment.status] ?? "secondary"}>
+                            {ENROLLMENT_STATUS_LABELS[enrollment.status] ?? enrollment.status}
+                          </Badge>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="waiting_for_arrival">Waiting for Arrival</SelectItem>
+                          <SelectItem value="arrived">Arrived</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell>
+                      <InsuranceBadge info={info} />
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {info?.provider ? (
+                        <div className="space-y-0.5">
+                          <div className="text-foreground">{info.provider}</div>
+                          {info.policyNumber && <div>Policy {info.policyNumber}</div>}
+                          {info.insurance.expiryDate && (
+                            <div>
+                              Expires{" "}
+                              {new Date(info.insurance.expiryDate).toLocaleDateString()}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        "—"
+                      )}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <div
+                        className="flex items-center justify-center"
+                        title={
+                          verified && enrollment.insurance_verified_at
+                            ? `Checked ${new Date(enrollment.insurance_verified_at).toLocaleString()}`
+                            : "Mark once you've physically checked their insurance"
+                        }
+                      >
+                        <Checkbox
+                          checked={verified}
+                          disabled={verifyingId === enrollment.id}
+                          onCheckedChange={(val) =>
+                            handleVerify(enrollment.id, val === true)
+                          }
+                          aria-label="Insurance checked on arrival"
+                        />
+                        {verified && (
+                          <ShieldCheck className="ml-2 h-4 w-4 text-emerald-500" />
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
   );
 }
 

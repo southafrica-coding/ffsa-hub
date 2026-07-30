@@ -4,6 +4,7 @@ import { getProgramById, getEnrollmentsByProgram, getGradesByProgram, getQuestio
 import { fetchAssignableContacts } from "@/lib/auth/assignable-contacts";
 import { listProgramLeaders } from "@/services/program-leaders";
 import { listProgramEmailTemplates } from "@/services/program-email-templates";
+import { getArrivalInsuranceInfo } from "@/lib/schools/arrival-insurance";
 import { ProgramDetail } from "./program-detail";
 
 type UserIdentity = {
@@ -90,6 +91,16 @@ export default async function ProgramDetailPage({
     ["user_id", "users"],
     ["assigned_staff_id", "assigned_staff"],
   ]);
+
+  // Arrival-day profile + health-insurance summary for the enrolled students.
+  // Read via the service-role client (insurance/profile fields on `users` are
+  // RLS-nulled for non-admin program leaders) and reduced to a compact,
+  // PII-safe summary before it reaches the client. See the lib helper.
+  const arrivalInsurance = await getArrivalInsuranceInfo(
+    admin,
+    (enrollments ?? []).map((e: any) => e.user_id)
+  );
+
   const { data: grades } = await getGradesByProgram(supabase, programId);
 
   // Phase-courses (billing_courses) — the unified course concept managed here.
@@ -156,6 +167,7 @@ export default async function ProgramDetailPage({
       <ProgramDetail
         program={program}
         enrollments={enrollments ?? []}
+        arrivalInsurance={arrivalInsurance}
         leaders={leaders ?? []}
         emailTemplates={emailTemplates ?? []}
         grades={grades ?? []}
