@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { isPrayerRoomStaff, isPrayerRoomEvaluator } from "@/lib/auth/prayer-room-access";
+import { isPrayerRoomStaff, isPrayerRoomEvaluator, canViewDirectory } from "@/lib/auth/prayer-room-access";
 import { getPendingApplicationCount } from "@/services/prayer-room";
 import { getMemberFlags } from "@/services/prayer-room-members";
 import PrayerRoomClient from "./prayer-room-client";
@@ -11,9 +11,10 @@ export default async function PrayerRoomPage() {
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const [isStaff, isEvaluator, memberRes] = await Promise.all([
+  const [isStaff, isEvaluator, canSeeDirectory, memberRes] = await Promise.all([
     isPrayerRoomStaff(supabase, user.id),
     isPrayerRoomEvaluator(supabase, user.id),
+    canViewDirectory(supabase, user.id),
     getMemberFlags(supabase, user.id),
   ]);
 
@@ -28,6 +29,7 @@ export default async function PrayerRoomPage() {
       isStaff={isStaff}
       isMember={isMember}
       isEvaluator={isEvaluator}
+      canViewDirectory={canSeeDirectory}
       pendingCount={pendingCount}
     />
   );

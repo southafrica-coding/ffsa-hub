@@ -58,6 +58,24 @@ export async function isPrayerRoomEvaluator(supabase: Client, userId: string): P
   return !!(viaRole && viaRole.length > 0);
 }
 
+/**
+ * Baseline staff who may view the read-only Prayer Room Directory.
+ * The general `staff` role (plus the managing roles) can see the directory
+ * without gaining Evaluations or Manage access, which stay gated on
+ * `isPrayerRoomStaff` / `isPrayerRoomEvaluator`.
+ */
+const DIRECTORY_ROLES = ["staff", ...STAFF_ROLES];
+
+export async function canViewDirectory(supabase: Client, userId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from("user_roles")
+    .select("roles!inner(name)")
+    .eq("user_id", userId)
+    .in("roles.name", DIRECTORY_ROLES)
+    .limit(1);
+  return !!(data && data.length > 0);
+}
+
 /** Active, approved prayer-room team member. */
 export async function isApprovedMember(supabase: Client, userId: string): Promise<boolean> {
   const { data } = await supabase

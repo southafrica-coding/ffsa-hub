@@ -15,13 +15,14 @@ interface Props {
   isStaff: boolean;
   isMember: boolean;
   isEvaluator: boolean;
+  canViewDirectory: boolean;
   pendingCount: number;
 }
 
-export default function PrayerRoomClient({ userId, isStaff, isMember, isEvaluator, pendingCount }: Props) {
+export default function PrayerRoomClient({ userId, isStaff, isMember, isEvaluator, canViewDirectory, pendingCount }: Props) {
   const [activeTab, setActiveTab] = useState("schedule");
   const showEvaluations = isEvaluator || isStaff;
-  const showDirectory = isMember || isStaff;
+  const showDirectory = isMember || isStaff || canViewDirectory;
 
   return (
     <div>

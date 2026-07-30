@@ -8,7 +8,7 @@ import {
   setMemberStatus,
   setCoordinator,
 } from "@/services/prayer-room-members";
-import { isPrayerRoomStaff, isApprovedMember } from "@/lib/auth/prayer-room-access";
+import { isPrayerRoomStaff, isApprovedMember, canViewDirectory } from "@/lib/auth/prayer-room-access";
 
 // GET — the team directory. Names + skills are for staff and approved members
 // (not the public schedule). Contact details require the same and are returned
@@ -19,7 +19,10 @@ export async function GET(request: Request) {
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const staff = await isPrayerRoomStaff(supabase, user.id);
-  const trusted = staff || (await isApprovedMember(supabase, user.id));
+  const trusted =
+    staff ||
+    (await isApprovedMember(supabase, user.id)) ||
+    (await canViewDirectory(supabase, user.id));
   if (!trusted) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
 
   const url = new URL(request.url);
