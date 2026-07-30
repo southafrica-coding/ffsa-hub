@@ -63,22 +63,9 @@ export function refundConfirmationEmailHtml(opts: {
           <td style="height:5px;background:${YELLOW};line-height:5px;font-size:0;">&nbsp;</td>
         </tr>
 
-        <!-- Brand wordmark -->
+        <!-- Header (logo intentionally omitted) -->
         <tr>
-          <td align="center" style="padding:26px 32px 4px 32px;">
-            <img
-              src="${base}/brand/ff-wordmark-white@email.png"
-              alt="Fire &amp; Fragrance"
-              width="180"
-              height="21"
-              style="display:block;margin:0 auto;width:180px;height:auto;max-width:55%;"
-            />
-          </td>
-        </tr>
-
-        <!-- Header -->
-        <tr>
-          <td style="padding:18px 32px 8px 32px;">
+          <td style="padding:26px 32px 8px 32px;">
             <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:10px;font-weight:700;color:${YELLOW};letter-spacing:0.3em;text-transform:uppercase;">${opts.isFullRefund ? "Refund Processed" : "Partial Refund"}</p>
             <h1 style="margin:10px 0 0 0;font-family:'Arial Black','Helvetica Neue',Arial,sans-serif;font-size:32px;line-height:1.05;color:${TEXT};font-weight:900;letter-spacing:0.04em;text-transform:uppercase;">${escapeHtml(opts.eventTitle)}</h1>
           </td>

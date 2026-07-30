@@ -25,7 +25,6 @@ import {
   FFSA_COLORS,
   FFSA_FONTS,
   FFSA_FONT_LINK,
-  FFSA_LOGOS,
 } from "@/lib/brand/ffsa";
 
 // ── Tokens (solid hexes — email clients are unreliable with rgba) ──
@@ -47,16 +46,6 @@ const DISPLAY = "'Roboto','Arial Black','Helvetica Neue',Arial,sans-serif";
 const BODY = FFSA_FONTS.BODY;
 const MONO = FFSA_FONTS.MONO;
 
-const DEFAULT_SITE_URL = "https://www.ffsahub.com";
-
-function siteBase(siteUrl?: string | null): string {
-  const raw =
-    siteUrl?.trim() ||
-    process.env.NEXT_PUBLIC_APP_URL ||
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    DEFAULT_SITE_URL;
-  return raw.replace(/\/$/, "");
-}
 
 export function feEsc(s: string | null | undefined): string {
   return String(s ?? "")
@@ -182,8 +171,6 @@ export interface FfsaEmailDocOptions {
 }
 
 export function ffsaEmailDocument(opts: FfsaEmailDocOptions): string {
-  const base = siteBase(opts.siteUrl);
-  const wordmark = `${base}${FFSA_LOGOS.WORDMARK_WHITE_EMAIL}`;
   const title = opts.title ?? "Fire & Fragrance South Africa";
   const preview = opts.previewText
     ? `<div style="display:none;max-height:0;overflow:hidden;font-size:1px;line-height:1px;color:${FE.BLACK};">${feEsc(opts.previewText)}</div>`
@@ -214,7 +201,7 @@ export function ffsaEmailDocument(opts: FfsaEmailDocOptions): string {
         <!-- Masthead -->
         <tr><td bgcolor="#000000" style="background:${FE.BLACK};padding:20px 30px;border-bottom:1px solid ${FE.LINE};">
           <table role="presentation" cellpadding="0" cellspacing="0" width="100%"><tr>
-            <td valign="middle"><img src="${wordmark}" alt="Fire &amp; Fragrance" width="150" height="auto" style="display:block;width:150px;height:auto;border:0;" /></td>
+            <td valign="middle" style="font-family:${DISPLAY};font-size:16px;font-weight:900;letter-spacing:0.02em;text-transform:uppercase;color:${FE.WHITE};">Fire &amp; Fragrance</td>
             <td valign="middle" align="right" style="font-family:${MONO};font-size:10px;font-weight:700;color:${FE.BONE};letter-spacing:0.22em;text-transform:uppercase;">South&nbsp;Africa</td>
           </tr></table>
         </td></tr>
@@ -231,8 +218,7 @@ export function ffsaEmailDocument(opts: FfsaEmailDocOptions): string {
 
         <!-- Footer — deck cover contact row -->
         <tr><td bgcolor="#000000" align="center" style="background:${FE.BLACK};border-top:1px solid ${FE.LINE};padding:34px 30px 40px 30px;">
-          <img src="${wordmark}" alt="Fire &amp; Fragrance" width="120" height="auto" style="display:inline-block;width:120px;height:auto;border:0;" />
-          <p style="margin:16px 0 0;font-family:${MONO};font-size:10px;font-weight:700;color:${FE.YELLOW};letter-spacing:0.2em;text-transform:uppercase;">${feEsc(FFSA_BRAND.slogan.ffsa)}</p>
+          <p style="margin:0;font-family:${MONO};font-size:10px;font-weight:700;color:${FE.YELLOW};letter-spacing:0.2em;text-transform:uppercase;">${feEsc(FFSA_BRAND.slogan.ffsa)}</p>
           <p style="margin:14px 0 0;font-family:${MONO};font-size:10px;color:${FE.FAINT};letter-spacing:0.08em;line-height:1.7;">
             ${feEsc(contact.instagram)}&nbsp;&nbsp;&middot;&nbsp;&nbsp;${feEsc(contact.website)}<br />${feEsc(contact.address)}
           </p>
