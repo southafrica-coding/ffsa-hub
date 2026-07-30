@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Star, UserPlus, X, Check, Plus, Trash2, ChevronUp, ChevronDown, Pencil } from "lucide-react";
+import { Star, UserPlus, X, Check, Plus, Trash2, ChevronUp, ChevronDown, Pencil, MoreHorizontal, FolderInput } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -20,13 +20,6 @@ import {
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Command,
   CommandInput,
   CommandList,
@@ -34,6 +27,18 @@ import {
   CommandGroup,
   CommandItem,
 } from "@/components/ui/command";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+} from "@/components/ui/dropdown-menu";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PickUser = any;
@@ -237,6 +242,39 @@ export function MinistryDetail({
     // r.subcategory_id === groupKey here, so this flag is the point leader of
     // THIS category. Only meaningful inside a real category group.
     const isCategoryLead = inCategory && r.is_category_point_leader;
+    // "Move to category" submenu — same PATCH the old inline Select fired.
+    const categoryMenu = hasCategories ? (
+      <DropdownMenuSub>
+        <DropdownMenuSubTrigger>
+          <FolderInput className="mr-2 h-3.5 w-3.5" /> Move to category
+        </DropdownMenuSubTrigger>
+        <DropdownMenuSubContent>
+          <DropdownMenuRadioGroup
+            value={r.subcategory_id ?? UNCATEGORIZED}
+            onValueChange={(v) =>
+              call(
+                `${base}/members`,
+                "PATCH",
+                {
+                  membership_id: r.id,
+                  subcategory_id: v === UNCATEGORIZED ? null : v,
+                },
+                "Moved"
+              )
+            }
+          >
+            <DropdownMenuRadioItem value={UNCATEGORIZED}>
+              Uncategorized
+            </DropdownMenuRadioItem>
+            {subcategories.map((c) => (
+              <DropdownMenuRadioItem key={c.id} value={c.id}>
+                {c.name}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+    ) : null;
     return (
       <PersonRow
         key={r.id}
@@ -260,158 +298,126 @@ export function MinistryDetail({
           </>
         }
       >
-        {hasCategories && (
-          <Select
-            value={r.subcategory_id ?? UNCATEGORIZED}
-            onValueChange={(v) =>
-              call(
-                `${base}/members`,
-                "PATCH",
-                {
-                  membership_id: r.id,
-                  subcategory_id: v === UNCATEGORIZED ? null : v,
-                },
-                "Moved"
-              )
-            }
-            disabled={busy}
-          >
-            <SelectTrigger className="h-8 w-40" aria-label="Category">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={UNCATEGORIZED}>Uncategorized</SelectItem>
-              {subcategories.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-
-        {isLeader ? (
-          <>
-            {/* Point leader OF THIS CATEGORY (only inside a real category). */}
-            {inCategory &&
-              (isCategoryLead ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={busy}
-                  onClick={() =>
-                    call(
-                      `${base}/subcategories/${groupKey}/point-leader`,
-                      "PATCH",
-                      { user_id: null },
-                      "Category point leader cleared"
-                    )
-                  }
-                >
-                  Clear category lead
-                </Button>
-              ) : (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={busy}
-                  onClick={() =>
-                    call(
-                      `${base}/subcategories/${groupKey}/point-leader`,
-                      "PATCH",
-                      { user_id: r.user.id },
-                      "Category point leader set"
-                    )
-                  }
-                >
-                  <Star className="mr-1 h-3.5 w-3.5" /> Category lead
-                </Button>
-              ))}
-            {/* Overall MINISTRY point leader (one per ministry). */}
-            {r.is_point_leader ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={busy}
-                onClick={() =>
-                  call(`${base}/point-leader`, "PATCH", { user_id: null }, "Ministry point leader cleared")
-                }
-              >
-                Clear ministry lead
-              </Button>
-            ) : (
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={busy}
-                onClick={() =>
-                  call(
-                    `${base}/point-leader`,
-                    "PATCH",
-                    { user_id: r.user.id },
-                    "Ministry point leader updated"
-                  )
-                }
-              >
-                <Star className="mr-1 h-3.5 w-3.5" /> Ministry lead
-              </Button>
-            )}
-            {/* Demote to plain staff — in place, no removal. */}
-            {isAdmin && (
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={busy}
-                onClick={() =>
-                  call(`${base}/leaders`, "DELETE", { user_id: r.user.id }, "Moved to staff")
-                }
-              >
-                Make staff
-              </Button>
-            )}
-          </>
-        ) : (
-          <>
-            {r.status === "pending" && (
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={busy}
-                onClick={() =>
-                  call(`${base}/members`, "PATCH", { membership_id: r.id }, "Approved")
-                }
-              >
-                <Check className="mr-1 h-3.5 w-3.5" /> Approve
-              </Button>
-            )}
-            {/* Promote an existing member to leader — in place, so it works even
-                for members whose profile isn't fully set up (the picker filter
-                only gates brand-new adds, not role changes). */}
-            {isAdmin && (
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={busy}
-                onClick={() =>
-                  call(`${base}/leaders`, "POST", { user_id: r.user.id }, "Made a leader")
-                }
-              >
-                <Star className="mr-1 h-3.5 w-3.5" /> Make leader
-              </Button>
-            )}
+        {/* All row actions live behind a single overflow menu so the roster
+            reads clean; every item calls the same endpoints as before. */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
               size="icon"
               disabled={busy}
-              aria-label="Remove from ministry"
-              onClick={() =>
-                call(`${base}/members`, "DELETE", { membership_id: r.id }, "Removed")
-              }
+              aria-label="Actions"
             >
-              <X className="h-4 w-4" />
+              <MoreHorizontal className="h-4 w-4" />
             </Button>
-          </>
-        )}
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52">
+            {isLeader ? (
+              <>
+                {/* Point leader OF THIS CATEGORY (only inside a real category). */}
+                {inCategory &&
+                  (isCategoryLead ? (
+                    <DropdownMenuItem
+                      onClick={() =>
+                        call(
+                          `${base}/subcategories/${groupKey}/point-leader`,
+                          "PATCH",
+                          { user_id: null },
+                          "Category point leader cleared"
+                        )
+                      }
+                    >
+                      Clear category lead
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem
+                      onClick={() =>
+                        call(
+                          `${base}/subcategories/${groupKey}/point-leader`,
+                          "PATCH",
+                          { user_id: r.user.id },
+                          "Category point leader set"
+                        )
+                      }
+                    >
+                      <Star className="mr-2 h-3.5 w-3.5" /> Make category lead
+                    </DropdownMenuItem>
+                  ))}
+                {/* Overall MINISTRY point leader (one per ministry). */}
+                {r.is_point_leader ? (
+                  <DropdownMenuItem
+                    onClick={() =>
+                      call(`${base}/point-leader`, "PATCH", { user_id: null }, "Ministry point leader cleared")
+                    }
+                  >
+                    Clear ministry lead
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem
+                    onClick={() =>
+                      call(
+                        `${base}/point-leader`,
+                        "PATCH",
+                        { user_id: r.user.id },
+                        "Ministry point leader updated"
+                      )
+                    }
+                  >
+                    <Star className="mr-2 h-3.5 w-3.5" /> Make ministry lead
+                  </DropdownMenuItem>
+                )}
+                {categoryMenu}
+                {/* Demote to plain staff — in place, no removal. */}
+                {isAdmin && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() =>
+                        call(`${base}/leaders`, "DELETE", { user_id: r.user.id }, "Moved to staff")
+                      }
+                    >
+                      Make staff
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </>
+            ) : (
+              <>
+                {r.status === "pending" && (
+                  <DropdownMenuItem
+                    onClick={() =>
+                      call(`${base}/members`, "PATCH", { membership_id: r.id }, "Approved")
+                    }
+                  >
+                    <Check className="mr-2 h-3.5 w-3.5" /> Approve
+                  </DropdownMenuItem>
+                )}
+                {/* Promote an existing member to leader — in place, so it works even
+                    for members whose profile isn't fully set up (the picker filter
+                    only gates brand-new adds, not role changes). */}
+                {isAdmin && (
+                  <DropdownMenuItem
+                    onClick={() =>
+                      call(`${base}/leaders`, "POST", { user_id: r.user.id }, "Made a leader")
+                    }
+                  >
+                    <Star className="mr-2 h-3.5 w-3.5" /> Make leader
+                  </DropdownMenuItem>
+                )}
+                {categoryMenu}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onClick={() =>
+                    call(`${base}/members`, "DELETE", { membership_id: r.id }, "Removed")
+                  }
+                >
+                  <X className="mr-2 h-4 w-4" /> Remove from ministry
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </PersonRow>
     );
   }
