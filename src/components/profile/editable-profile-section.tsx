@@ -4,6 +4,14 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   FieldControl,
   OTHER_SENTINEL,
   seedOtherActive,
@@ -39,6 +47,11 @@ export function EditableProfileSection({
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  // Health insurance is self-attested coverage data, so we make the staff
+  // member explicitly confirm accuracy before it's saved.
+  const requiresConfirm = section.id === "insurance";
 
   function startEdit() {
     setDraft(values);
@@ -52,7 +65,7 @@ export function EditableProfileSection({
     setError(null);
   }
 
-  async function save(e: React.FormEvent) {
+  function save(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
@@ -71,6 +84,16 @@ export function EditableProfileSection({
       }
     }
 
+    // Insurance is self-attested — confirm accuracy before persisting.
+    if (requiresConfirm) {
+      setConfirmOpen(true);
+      return;
+    }
+    void persist();
+  }
+
+  async function persist() {
+    setError(null);
     // Only this section's fields go up.
     const payload: Record<string, string> = {};
     for (const f of section.fields) payload[f.field] = draft[f.field] ?? "";
@@ -96,6 +119,7 @@ export function EditableProfileSection({
       setError("Network error. Please try again.");
     } finally {
       setLoading(false);
+      setConfirmOpen(false);
     }
   }
 
@@ -172,6 +196,34 @@ export function EditableProfileSection({
           ))}
           {footer && <div className="pt-1">{footer}</div>}
         </div>
+      )}
+
+      {requiresConfirm && (
+        <Dialog open={confirmOpen} onOpenChange={(o) => !loading && setConfirmOpen(o)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Confirm your health insurance details</DialogTitle>
+              <DialogDescription>
+                By continuing, you confirm that the health insurance information
+                you&apos;ve provided is correct and reflects your current coverage.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={loading}
+                onClick={() => setConfirmOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="button" size="sm" disabled={loading} onClick={() => void persist()}>
+                {loading ? "Saving..." : "Confirm & save"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );
