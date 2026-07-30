@@ -45,10 +45,15 @@ export type ApplicantPerson = {
   program_id: string;
   user_id: string | null;
   status: string;
-  // Anonymous public applicants have no user row; their nationality lives here
-  // (see src/app/api/public/applications/route.ts). Gender is NOT collected on
-  // the public form, so it is only ever known via a linked user.
-  applicant_info: { nationality?: string | null } | null;
+  // Anonymous public applicants have no user row; their nationality and gender
+  // live here (see src/app/api/public/applications/route.ts, which copies both
+  // off the application onto applicant_info). Gender is collected as a per-program
+  // question, so — like nationality — it may be present on the application even
+  // when the linked user's profile is blank.
+  applicant_info: {
+    nationality?: string | null;
+    gender?: string | null;
+  } | null;
 };
 
 export type UserDemographics = {

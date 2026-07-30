@@ -21,6 +21,30 @@ export const GENDER_LABELS: Record<string, string> = {
   prefer_not_to_say: "Prefer not to say",
 };
 
+// Map a free-text or select gender value onto the canonical keys the dashboard
+// buckets by (see GENDER_LABELS). Gender on applications comes from a per-program
+// question whose answers are effectively "Male"/"Female", but this is forgiving
+// of casing and a few common spellings. Anything unrecognised returns null —
+// we never invent a bucket from junk (mirrors how tierFor treats an unmapped
+// nationality). Keep this in sync with the SQL in migration 148.
+export function normaliseGender(
+  raw: string | null | undefined
+): "male" | "female" | "prefer_not_to_say" | null {
+  if (!raw) return null;
+  const v = raw.trim().toLowerCase();
+  if (v === "male" || v === "m" || v === "man") return "male";
+  if (v === "female" || v === "f" || v === "woman") return "female";
+  if (
+    v === "prefer_not_to_say" ||
+    v === "prefer not to say" ||
+    v === "prefer not to answer" ||
+    v === "unspecified"
+  ) {
+    return "prefer_not_to_say";
+  }
+  return null;
+}
+
 // A person counted in a breakdown. `nationality` may come from a user record
 // or, for anonymous applicants, from applicant_info.
 export type Person = {

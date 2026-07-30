@@ -15,6 +15,7 @@ import {
   addPerson,
   combineBreakdowns,
   emptyBreakdown,
+  normaliseGender,
   rankCountries,
   type Breakdown,
   type Person,
@@ -137,6 +138,27 @@ export async function GET() {
     return appNationalityByUser.get(userId) ?? userById.get(userId)?.nationality ?? null;
   };
 
+  // Gender is collected as a per-program application question and copied onto
+  // applicant_info.gender (see the apply routes + migration 148). Like
+  // nationality, it's far more complete there than the sparse users.gender
+  // profile field — and enrolled students carry no gender on the enrollment
+  // row — so we prefer the application value, keyed per user.
+  const appGenderByUser = new Map<string, string>();
+  for (const a of applicantResult.data as ApplicantPerson[]) {
+    const g = normaliseGender(a.applicant_info?.gender);
+    if (a.user_id && g && !appGenderByUser.has(a.user_id)) {
+      appGenderByUser.set(a.user_id, g);
+    }
+  }
+  const genderFor = (userId: string | null): string | null => {
+    if (!userId) return null;
+    return (
+      appGenderByUser.get(userId) ??
+      normaliseGender(userById.get(userId)?.gender) ??
+      null
+    );
+  };
+
   const byProgram = new Map<string, Breakdown>(
     programIds.map((id) => [id, emptyBreakdown()])
   );
@@ -152,11 +174,10 @@ export async function GET() {
   for (const row of enrolments) {
     const target = byProgram.get(row.program_id);
     if (!target) continue;
-    const u = userById.get(row.user_id);
     const person: Person = {
       programId: row.program_id,
       nationality: nationalityFor(row.user_id),
-      gender: u?.gender ?? null,
+      gender: genderFor(row.user_id),
     };
     addPerson(target, person, tierMap as Record<string, Tier>);
     countedByProgram.get(row.program_id)?.add(row.user_id);
@@ -171,15 +192,14 @@ export async function GET() {
     if (row.user_id && countedByProgram.get(row.program_id)?.has(row.user_id)) {
       continue;
     }
-    const u = row.user_id ? userById.get(row.user_id) : undefined;
-    // Nationality from this application first (incl. anonymous applicants, who
-    // have no user row), then any other application / users profile. Gender
-    // isn't collected on the public form, so it only ever comes from a user.
+    // Nationality and gender from this application first (incl. anonymous
+    // applicants, who have no user row), then any other application / users
+    // profile.
     const person: Person = {
       programId: row.program_id,
       nationality:
         row.applicant_info?.nationality?.trim() || nationalityFor(row.user_id),
-      gender: u?.gender ?? null,
+      gender: normaliseGender(row.applicant_info?.gender) ?? genderFor(row.user_id),
     };
     addPerson(target, person, tierMap as Record<string, Tier>);
     if (row.user_id) countedByProgram.get(row.program_id)?.add(row.user_id);

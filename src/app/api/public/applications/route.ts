@@ -14,6 +14,7 @@ import {
 } from "@/services/consent";
 import { notifyApplicationSubmitted } from "@/lib/slack/notify";
 import { syncApplicantToContact } from "@/lib/applications/sync-contact";
+import { normaliseGender } from "@/lib/schools/demographics";
 import { sendTransactional } from "@/lib/email/send-transactional";
 import { resolveProgramEmail } from "@/lib/email/render-program-email";
 import { applicationConfirmationEmailHtml } from "@/lib/email/templates/application-confirmation";
@@ -205,6 +206,12 @@ export async function POST(request: Request) {
   // Home country is kept separately as the applicant's country of residence.
   applicantInfo.nationality = nationality;
   applicantInfo.home_country = homeCountry;
+  // Gender is asked as a normal program question (not a system field), so pull
+  // it off the answers and normalise it onto applicant_info — mirroring
+  // nationality — so the demographics dashboard can read it without depending on
+  // the applicant's profile. Unrecognised answers are simply not stored.
+  const gender = normaliseGender(findAnswerByLabel(answers, ["gender"]));
+  if (gender) applicantInfo.gender = gender;
   if (files && Array.isArray(files) && files.length > 0) {
     applicantInfo.files = files;
   }

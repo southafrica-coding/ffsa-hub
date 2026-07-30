@@ -10,6 +10,7 @@ import {
   setResponseRemoved,
 } from "@/services/schools";
 import { userCanManageApplications } from "@/lib/auth/check-schools-access";
+import { normaliseGender } from "@/lib/schools/demographics";
 import { ensureStudentRole, deactivateMembershipProfile } from "@/lib/auth/membership-roles";
 import { sendTransactional } from "@/lib/email/send-transactional";
 import { resolveProgramEmail } from "@/lib/email/render-program-email";
@@ -113,6 +114,14 @@ export async function POST(request: Request) {
   const applicantInfo: Record<string, unknown> = {};
   if (nationality) applicantInfo.nationality = nationality;
   if (homeCountry) applicantInfo.home_country = homeCountry;
+  // Gender is asked as a normal program question; normalise it onto
+  // applicant_info so the demographics dashboard reads it the same way it reads
+  // nationality (see migration 148). Unrecognised answers are not stored.
+  const genderAnswer = (answers as Array<{ question_label?: string; answer?: string }>).find(
+    (a) => (a.question_label ?? "").toLowerCase().includes("gender") && a.answer?.trim()
+  );
+  const gender = normaliseGender(genderAnswer?.answer ?? null);
+  if (gender) applicantInfo.gender = gender;
   const answersWithCountry = [
     ...(nationality
       ? [{ question_id: "nationality", question_label: "Nationality", answer: nationality }]
@@ -169,15 +178,18 @@ export async function POST(request: Request) {
     console.error("[applications] contact sync failed", err)
   );
 
-  // Keep the applicant's profile nationality in sync with what they just
-  // declared on the application, so everything else in the Hub that reads
-  // users.nationality benefits (their profile was likely blank before). Admin
-  // client so it isn't blocked by users-table update RLS; scoped to their own
-  // row. Best-effort — never fail the submission on this.
-  if (nationality) {
+  // Keep the applicant's profile nationality (and gender) in sync with what
+  // they just declared on the application, so everything else in the Hub that
+  // reads users.nationality / users.gender benefits (their profile was likely
+  // blank before). Admin client so it isn't blocked by users-table update RLS;
+  // scoped to their own row. Best-effort — never fail the submission on this.
+  const profileSync: Record<string, string> = {};
+  if (nationality) profileSync.nationality = nationality;
+  if (gender) profileSync.gender = gender;
+  if (Object.keys(profileSync).length > 0) {
     await createAdminClient()
       .from("users")
-      .update({ nationality })
+      .update(profileSync)
       .eq("id", user.id);
   }
 
