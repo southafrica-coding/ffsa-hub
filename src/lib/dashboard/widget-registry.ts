@@ -150,17 +150,6 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
     defaultEnabled: (c) => c.isAdmin || c.hasSchoolsAccess,
   },
   {
-    key: "arrival-insurance",
-    title: "Arrival — profile & insurance",
-    description:
-      "Arriving students who haven't started a profile yet, or whose health insurance is missing or expired. For schools staff, on arrival day.",
-    category: "Schools",
-    defaultOrder: 71,
-    fullWidth: true,
-    gate: (c) => c.hasSchoolsAccess,
-    defaultEnabled: (c) => c.isAdmin || c.hasSchoolsAccess,
-  },
-  {
     key: "students-by-tier",
     title: "ABC Country",
     description:

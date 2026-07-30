@@ -156,19 +156,6 @@ export async function getEnrollmentsWithPiiByProgram(
     .order("enrolled_at", { ascending: false });
 }
 
-// Enrollments in an arrival-relevant status (waiting for arrival / arrived),
-// across every program. Read under RLS so the viewer only sees enrollments in
-// programs they have schools access to — this doubles as the dashboard widget's
-// server-side permission check. Selects no user PII (the arrival summary is
-// hydrated separately via the admin client).
-export async function getArrivingEnrollments(supabase: Client) {
-  return supabase
-    .from("enrollments")
-    .select("id, program_id, user_id, status, insurance_verified_at")
-    .in("status", ["waiting_for_arrival", "arrived"])
-    .is("removed_at", null);
-}
-
 export async function getEnrollmentsByUser(supabase: Client, userId: string) {
   return supabase
     .from("enrollments")
