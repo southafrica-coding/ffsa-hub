@@ -7,6 +7,8 @@ import { ReferenceQuestionsBuilder } from "./reference-questions-builder";
 import { ProgramCoursesManager, type PhaseCourse } from "./program-courses-manager";
 import { LeadersTab, type ProgramLeaderRow } from "./leaders-tab";
 import { EmailsTab } from "./emails-tab";
+import { PersonQuickView } from "@/components/people/person-quick-view";
+import type { PersonRef } from "@/services/person-quick-view";
 import { StudentsExportPanel } from "./students-export-panel";
 import { ENROLLMENT_STATUS_LABELS } from "@/lib/schools/student-export-columns";
 import { Badge } from "@/components/ui/badge";
@@ -897,6 +899,7 @@ function EnrollmentsTab({
   const [error, setError] = useState<string | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
   const [unassignedOnly, setUnassignedOnly] = useState(false);
+  const [quickPerson, setQuickPerson] = useState<PersonRef | null>(null);
   const [showRemoved, setShowRemoved] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -1208,7 +1211,19 @@ function EnrollmentsTab({
                   className={enrollment.removed_at ? "opacity-60" : undefined}
                 >
                   <TableCell className="font-medium">
-                    {userName(enrollment.users)}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setQuickPerson({
+                          userId: enrollment.user_id,
+                          email: enrollment.users.email,
+                          name: userName(enrollment.users),
+                        })
+                      }
+                      className="hover:underline text-left"
+                    >
+                      {userName(enrollment.users)}
+                    </button>
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {enrollment.users.email ?? "—"}
@@ -1295,6 +1310,11 @@ function EnrollmentsTab({
           </TableBody>
         </Table>
       </div>
+
+      <PersonQuickView
+        personRef={quickPerson}
+        onClose={() => setQuickPerson(null)}
+      />
     </div>
   );
 }
@@ -1624,6 +1644,7 @@ function ApplicantsTab({
 }) {
   const router = useRouter();
   const [reviewingResponse, setReviewingResponse] = useState<AppResponse | null>(null);
+  const [quickPerson, setQuickPerson] = useState<PersonRef | null>(null);
 
   // Reference display in review dialog
   const [reviewReferences, setReviewReferences] = useState<ReferenceRequest[]>([]);
@@ -2398,7 +2419,20 @@ function ApplicantsTab({
                     )}
                   </TableCell>
                   <TableCell className="font-medium">
-                    {respName(resp)}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const em = respEmail(resp);
+                        setQuickPerson({
+                          userId: resp.user_id,
+                          email: em.includes("@") ? em : undefined,
+                          name: respName(resp),
+                        });
+                      }}
+                      className="hover:underline text-left"
+                    >
+                      {respName(resp)}
+                    </button>
                     {!resp.user_id && (
                       <Badge variant="secondary" className="ml-2 text-xs">Public</Badge>
                     )}
@@ -3046,6 +3080,11 @@ function ApplicantsTab({
           )}
         </DialogContent>
       </Dialog>
+
+      <PersonQuickView
+        personRef={quickPerson}
+        onClose={() => setQuickPerson(null)}
+      />
     </div>
   );
 }

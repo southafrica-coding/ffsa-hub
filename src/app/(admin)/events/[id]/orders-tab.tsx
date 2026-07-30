@@ -21,6 +21,8 @@ import { OrdersExportPanel } from "./orders-export-panel";
 import { RefundDialog } from "./refund-dialog";
 import { RefundAllButton } from "./refund-all-button";
 import { CancellationNoticeButton } from "./cancellation-notice-button";
+import { PersonQuickView } from "@/components/people/person-quick-view";
+import type { PersonRef } from "@/services/person-quick-view";
 import { formatMoney } from "@/lib/currencies";
 
 type Order = {
@@ -148,6 +150,7 @@ export function OrdersTab({
   const money = (cents: number, c?: string | null) =>
     formatMoney(cents, c ?? currency);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [quickPerson, setQuickPerson] = useState<PersonRef | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [recentlySentId, setRecentlySentId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -337,9 +340,18 @@ export function OrdersTab({
                         )}
                       </TableCell>
                       <TableCell>
-                        <div className="text-sm">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setQuickPerson({
+                              email: o.buyer_email,
+                              name: `${o.buyer_first_name} ${o.buyer_last_name}`.trim(),
+                            })
+                          }
+                          className="text-sm hover:underline text-left"
+                        >
                           {o.buyer_first_name} {o.buyer_last_name}
-                        </div>
+                        </button>
                         <div className="text-xs text-muted-foreground">
                           {o.buyer_email}
                         </div>
@@ -551,6 +563,11 @@ export function OrdersTab({
           }}
         />
       )}
+
+      <PersonQuickView
+        personRef={quickPerson}
+        onClose={() => setQuickPerson(null)}
+      />
     </div>
   );
 }
