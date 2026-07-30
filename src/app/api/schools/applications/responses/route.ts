@@ -14,6 +14,7 @@ import { ensureStudentRole, deactivateMembershipProfile } from "@/lib/auth/membe
 import { sendTransactional } from "@/lib/email/send-transactional";
 import { resolveProgramEmail } from "@/lib/email/render-program-email";
 import { sendReferenceInvite } from "@/lib/email/send-reference-invite";
+import { syncApplicantToContact } from "@/lib/applications/sync-contact";
 import { referenceReminderEmailHtml } from "@/lib/email/templates/reference-reminder";
 import { applicationRejectedEmailHtml } from "@/lib/email/templates/application-rejected";
 import { applicationWaitlistedEmailHtml } from "@/lib/email/templates/application-waitlisted";
@@ -142,6 +143,31 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  // Add the applicant to the CRM contact base (email-deduped) and tag them
+  // "FFSA Family". Fire-and-forget — never blocks or fails the submission. Uses
+  // the admin client for the name read (bypasses users-table RLS) and the
+  // contact upsert.
+  void (async () => {
+    const admin = createAdminClient();
+    const { data: nameRow } = await admin
+      .from("users")
+      .select("first_name, last_name")
+      .eq("id", user.id)
+      .maybeSingle();
+    await syncApplicantToContact(admin, {
+      email: user.email,
+      firstName: nameRow?.first_name ?? null,
+      lastName: nameRow?.last_name ?? null,
+      nationality,
+      homeCountry,
+      userId: user.id,
+      programId: program_id,
+      applicationId: data.id,
+    });
+  })().catch((err) =>
+    console.error("[applications] contact sync failed", err)
+  );
 
   // Keep the applicant's profile nationality in sync with what they just
   // declared on the application, so everything else in the Hub that reads

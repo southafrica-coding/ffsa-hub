@@ -13,6 +13,7 @@ import {
   recordConsent,
 } from "@/services/consent";
 import { notifyApplicationSubmitted } from "@/lib/slack/notify";
+import { syncApplicantToContact } from "@/lib/applications/sync-contact";
 import { sendTransactional } from "@/lib/email/send-transactional";
 import { resolveProgramEmail } from "@/lib/email/render-program-email";
 import { applicationConfirmationEmailHtml } from "@/lib/email/templates/application-confirmation";
@@ -233,8 +234,7 @@ export async function POST(request: Request) {
   }
 
   // Fire-and-forget Slack notification — never blocks the applicant's
-  // submission. School applications aren't CRM contacts, so this is a
-  // direct notify rather than going through the activity_events pipeline.
+  // submission.
   void notifyApplicationSubmitted({
     applicantName: [firstName, lastName].filter(Boolean).join(" ") || null,
     programName: program.name,
@@ -242,6 +242,22 @@ export async function POST(request: Request) {
     applicantEmail: email ?? null,
   }).catch((err) =>
     console.error("[applications] slack notify failed", err)
+  );
+
+  // Applicants join the CRM contact base (email-deduped) and are tagged
+  // "FFSA Family". Fire-and-forget — never blocks or fails the submission.
+  void syncApplicantToContact(supabase, {
+    email,
+    firstName,
+    lastName,
+    nationality,
+    homeCountry,
+    userId: null,
+    programId: program_id,
+    programCode: program.code,
+    applicationId: response.id,
+  }).catch((err) =>
+    console.error("[applications] contact sync failed", err)
   );
 
   // Record the consent acceptance. We deliberately don't fail the submission
