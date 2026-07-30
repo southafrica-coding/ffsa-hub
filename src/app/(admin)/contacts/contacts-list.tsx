@@ -279,7 +279,11 @@ export function ContactsList({
                           name: displayName(contact),
                         })
                       }
-                      className="font-medium hover:underline text-left"
+                      // normal-case + tracking-normal override the global
+                      // `button { text-transform: uppercase }` chrome style so
+                      // real names render as stored (e.g. "Ashfaq Masih"), not
+                      // shouty caps.
+                      className="font-medium hover:underline text-left normal-case tracking-normal"
                     >
                       {displayName(contact)}
                     </button>
