@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { PersonQuickView } from "@/components/people/person-quick-view";
+import type { PersonRef } from "@/services/person-quick-view";
 import {
   ChevronRight,
   MoreHorizontal,
@@ -174,6 +176,8 @@ export function UsersTable({
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
+  // Person quick-view side panel (opens on a row click).
+  const [quickPerson, setQuickPerson] = useState<PersonRef | null>(null);
 
   async function handleSetMembership(userId: string, role: string) {
     setBusy(userId);
@@ -332,7 +336,9 @@ export function UsersTable({
                 <TableRow
                   key={user.id}
                   className="cursor-pointer"
-                  onClick={() => router.push(`/users/${user.id}`)}
+                  onClick={() =>
+                    setQuickPerson({ userId: user.id, name: displayName(user) })
+                  }
                 >
                   <TableCell className="font-medium">
                     <div className="flex items-center gap-3">
@@ -510,6 +516,11 @@ export function UsersTable({
           )}
         </TableBody>
       </Table>
+
+      <PersonQuickView
+        personRef={quickPerson}
+        onClose={() => setQuickPerson(null)}
+      />
     </div>
   );
 }

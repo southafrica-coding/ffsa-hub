@@ -71,6 +71,32 @@ export async function canWriteContacts(
   return hasAnyPermission(supabase, userId, CONTACTS_WRITE_PERMS);
 }
 
+// Roles / permissions that allow READING contact data. Mirrors the
+// contacts SELECT RLS policy (migration 087): staff + admin roles, or a
+// granular contacts.view / contacts.read grant (write implies read).
+export const CONTACTS_VIEW_ROLES = [
+  "super_admin",
+  "admin",
+  "staff",
+  "events_admin",
+  "comms_admin",
+  "contacts_admin",
+];
+export const CONTACTS_VIEW_PERMS = [
+  "contacts.view",
+  "contacts.read",
+  ...CONTACTS_WRITE_PERMS,
+];
+
+/** True if the user may view contact data (person quick-view, contact list). */
+export async function canViewContacts(
+  supabase: Client,
+  userId: string
+): Promise<boolean> {
+  if (await hasAnyRole(supabase, userId, CONTACTS_VIEW_ROLES)) return true;
+  return hasAnyPermission(supabase, userId, CONTACTS_VIEW_PERMS);
+}
+
 /**
  * True if the user may manage events — either via a managing role
  * (EVENTS_MANAGE_ROLES) or a granular events permission. Mirrors the events

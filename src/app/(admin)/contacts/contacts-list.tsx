@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { PersonQuickView } from "@/components/people/person-quick-view";
+import type { PersonRef } from "@/services/person-quick-view";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -85,6 +87,8 @@ export function ContactsList({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [search, setSearch] = useState(searchQuery ?? "");
+  // Person quick-view side panel (opens on a name click).
+  const [quickPerson, setQuickPerson] = useState<PersonRef | null>(null);
 
   // Multi-select for bulk "Add to list". Keyed by contact id, scoped to the
   // current page (selection clears when the visible rows change).
@@ -267,12 +271,18 @@ export function ContactsList({
                     />
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
-                    <Link
-                      href={`/contacts/${contact.id}`}
-                      className="font-medium hover:underline"
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setQuickPerson({
+                          contactId: contact.id,
+                          name: displayName(contact),
+                        })
+                      }
+                      className="font-medium hover:underline text-left"
                     >
                       {displayName(contact)}
-                    </Link>
+                    </button>
                     {contact.preferred_name && (
                       <span className="ml-1 text-xs text-muted-foreground">
                         ({contact.first_name})
@@ -379,6 +389,11 @@ export function ContactsList({
           </div>
         </div>
       )}
+
+      <PersonQuickView
+        personRef={quickPerson}
+        onClose={() => setQuickPerson(null)}
+      />
     </div>
   );
 }
