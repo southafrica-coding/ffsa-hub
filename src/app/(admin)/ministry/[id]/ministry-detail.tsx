@@ -163,12 +163,20 @@ export function MinistryDetail({
   const base = `/api/ministries/${ministry.id}`;
 
   const hasCategories = subcategories.length > 0;
-  // Order the team leaders-first, then alphabetically by name within each role,
-  // so every group below reads A–Z with its leaders on top.
+  // Rank within a group: point leaders first (ministry, then category), then
+  // other leaders, then staff — so every group reads with its point leader on
+  // top, remaining leaders next, and members below, each tier A–Z by name.
+  const rankOf = (r: Membership) =>
+    r.is_point_leader
+      ? 0
+      : r.is_category_point_leader
+        ? 1
+        : r.member_role === "leader"
+          ? 2
+          : 3;
   const sortedRoster = [...roster].sort((a, b) => {
-    const aLeader = a.member_role === "leader" ? 0 : 1;
-    const bLeader = b.member_role === "leader" ? 0 : 1;
-    if (aLeader !== bLeader) return aLeader - bLeader;
+    const rank = rankOf(a) - rankOf(b);
+    if (rank !== 0) return rank;
     return nameOf(a.user).localeCompare(nameOf(b.user), undefined, {
       sensitivity: "base",
     });
