@@ -1571,6 +1571,16 @@ function DesignPanel({
           disabled={disabled}
           onChange={(v) => onChange({ borderColor: v || undefined })}
         />
+        <label className="flex items-center gap-2 text-xs text-muted-foreground select-none">
+          <input
+            type="checkbox"
+            checked={d.showHeader ?? true}
+            onChange={(e) => onChange({ showHeader: e.target.checked })}
+            disabled={disabled}
+            className="rounded"
+          />
+          Show Fire &amp; Fragrance header
+        </label>
       </Section>
 
       <Section title="Body text">

@@ -48,22 +48,26 @@ export function EmailCanvas({
             : undefined,
         }}
       >
-        <div
-          style={{
-            height: 4,
-            background: theme.primary_color,
-            borderRadius: `${theme.cardBorderRadius}px ${theme.cardBorderRadius}px 0 0`,
-          }}
-        />
-        {theme.logo_url && (
-          <div style={{ padding: "28px 56px 4px" }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={theme.logo_url}
-              alt={theme.org_name}
-              style={{ maxHeight: 48, maxWidth: 200, height: "auto" }}
+        {theme.showHeader && (
+          <>
+            <div
+              style={{
+                height: 4,
+                background: theme.primary_color,
+                borderRadius: `${theme.cardBorderRadius}px ${theme.cardBorderRadius}px 0 0`,
+              }}
             />
-          </div>
+            {theme.logo_url && (
+              <div style={{ padding: "28px 56px 4px" }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={theme.logo_url}
+                  alt={theme.org_name}
+                  style={{ maxHeight: 48, maxWidth: 200, height: "auto" }}
+                />
+              </div>
+            )}
+          </>
         )}
         <div
           style={{

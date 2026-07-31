@@ -284,6 +284,7 @@ export type EmailDesign = {
   heading?: { fontFamily?: BlockFontFamily; color?: string };
   linkColor?: string;
   buttonColor?: string;
+  showHeader?: boolean;
 };
 
 export type CampaignBlockType = CampaignBlock["type"];
@@ -316,6 +317,7 @@ export type Theme = EffectiveBrand & {
   textLineHeight: number;
   headingFontFamily: BlockFontFamily;
   headingColor: string;
+  showHeader: boolean;
 };
 
 export function resolveTheme(
@@ -338,6 +340,7 @@ export function resolveTheme(
     textLineHeight: design?.text?.lineHeight ?? 1.5,
     headingFontFamily: design?.heading?.fontFamily || "display",
     headingColor: design?.heading?.color || brand.primary_color,
+    showHeader: design?.showHeader ?? true,
   };
 }
 
@@ -575,6 +578,7 @@ function fontCss(
 // ────────────────────────────────────────────────────────────
 
 function headerHtml(brand: Theme): string {
+  if (brand.showHeader === false) return "";
   const r = brand.cardBorderRadius;
   const band = `<tr><td style="height:4px;background:${brand.primary_color};border-radius:${r}px ${r}px 0 0;"></td></tr>`;
   if (!brand.logo_url) return band;
