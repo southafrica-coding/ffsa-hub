@@ -19,6 +19,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { callerIsAdmin, getLedMinistryIds } from "@/lib/auth/check-ministry-access";
 import {
   getInsuranceStatus,
+  hasValidQueuedPolicy,
   INSURANCE_LEADER_ALERT_DAYS,
   INSURANCE_DEV_TEAM_ALERT_DAYS,
 } from "@/lib/users/profile-fields";
@@ -276,7 +277,7 @@ async function insuranceExpiryNotifs(supabase: Client, userId: string): Promise<
     .select(
       `user_id, member_role, is_point_leader, staff_ministry_id,
        ministry:staff_ministries!staff_ministry_id(id, name, slug),
-       user:users!user_id(id, first_name, last_name, display_name, email, health_insurance_expiry_date)`
+       user:users!user_id(id, first_name, last_name, display_name, email, health_insurance_expiry_date, next_health_insurance_provider, next_health_insurance_expiry_date)`
     )
     .eq("status", "active");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -297,6 +298,17 @@ async function insuranceExpiryNotifs(supabase: Client, userId: string): Promise<
   for (const r of all) {
     const personId: string = r.user_id;
     if (personId === userId) continue; // never notify someone about themselves
+
+    // Covered: a valid successor is queued and auto-takes-over when the current
+    // policy lapses, so their leaders don't need an expiry alert.
+    if (
+      hasValidQueuedPolicy({
+        next_health_insurance_provider: r.user?.next_health_insurance_provider,
+        next_health_insurance_expiry_date: r.user?.next_health_insurance_expiry_date,
+      })
+    ) {
+      continue;
+    }
 
     const status = getInsuranceStatus({
       health_insurance_expiry_date: r.user?.health_insurance_expiry_date,

@@ -5,6 +5,7 @@ import { InsuranceExpiryBanner } from "./insurance-expiry-banner";
 import {
   getProfileBlock,
   getInsuranceStatus,
+  hasValidQueuedPolicy,
   applyListOptions,
 } from "@/lib/users/profile-fields";
 import { getAllListOptions, activeSets } from "@/services/list-options";
@@ -145,9 +146,11 @@ export async function ProfileCompletionGate({
     }
   }
 
-  // 3) Cleared — non-blocking nudge if insurance is approaching expiry.
+  // 3) Cleared — non-blocking nudge if insurance is approaching expiry. Skip it
+  //    when a valid successor policy is already queued: it auto-takes-over the
+  //    day after this one lapses, so they won't lose access and don't need nudging.
   const insurance = getInsuranceStatus(row);
-  if (insurance.state === "expiring") {
+  if (insurance.state === "expiring" && !hasValidQueuedPolicy(row)) {
     return (
       <>
         <InsuranceExpiryBanner

@@ -17,6 +17,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { callerIsAdmin, getLedMinistryIds } from "@/lib/auth/check-ministry-access";
 import {
   getInsuranceStatus,
+  hasValidQueuedPolicy,
   INSURANCE_LEADER_ALERT_DAYS,
 } from "@/lib/users/profile-fields";
 
@@ -66,7 +67,7 @@ export async function getStaffInsuranceAlerts(
     .select(
       `user_id, staff_ministry_id,
        ministry:staff_ministries!staff_ministry_id(id, name),
-       user:users!user_id(id, first_name, last_name, display_name, email, health_insurance_expiry_date, status)`
+       user:users!user_id(id, first_name, last_name, display_name, email, health_insurance_expiry_date, status, next_health_insurance_provider, next_health_insurance_expiry_date)`
     )
     .eq("status", "active");
 
@@ -83,6 +84,17 @@ export async function getStaffInsuranceAlerts(
     if (r.user_id === userId) continue; // never alert someone about themselves
     // Skip deactivated/archived accounts.
     if (r.user?.status === "inactive" || r.user?.status === "archived") continue;
+
+    // Covered: a valid successor policy is queued, so it'll auto-take-over when
+    // the current one lapses — no need to flag this person to their leaders.
+    if (
+      hasValidQueuedPolicy({
+        next_health_insurance_provider: r.user?.next_health_insurance_provider,
+        next_health_insurance_expiry_date: r.user?.next_health_insurance_expiry_date,
+      })
+    ) {
+      continue;
+    }
 
     const status = getInsuranceStatus({
       health_insurance_expiry_date: r.user?.health_insurance_expiry_date,
