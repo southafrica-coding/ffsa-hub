@@ -166,7 +166,11 @@ export async function getCampaignStats(
       base().not("delivered_at", "is", null),
       base().not("opened_at", "is", null),
       base().not("first_clicked_at", "is", null),
-      base().not("bounced_at", "is", null),
+      // A message that was ultimately delivered is not a bounce. Transient
+      // bounces (e.g. Mailtrap "hourly_rate_exceeded") stamp bounced_at on the
+      // first attempt but later succeed and set delivered_at — exclude those so
+      // the count reflects genuinely undelivered recipients only.
+      base().not("bounced_at", "is", null).is("delivered_at", null),
       base().not("unsubscribed_at", "is", null),
     ]);
 

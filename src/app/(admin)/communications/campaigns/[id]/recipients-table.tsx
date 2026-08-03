@@ -31,7 +31,10 @@ export type RecipientRow = {
 function statusFor(r: RecipientRow): { label: string; cls: string; at: string | null } {
   if (r.complained_at)
     return { label: "Spam", cls: "status-red", at: r.complained_at };
-  if (r.bounced_at)
+  // Only a bounce that never delivered counts. A transient bounce (e.g.
+  // Mailtrap "hourly_rate_exceeded") stamps bounced_at but later delivers —
+  // such a recipient should show its real reached status, not "Bounced".
+  if (r.bounced_at && !r.delivered_at)
     return { label: "Bounced", cls: "status-red", at: r.bounced_at };
   if (r.unsubscribed_at)
     return { label: "Unsubscribed", cls: "status-grey", at: r.unsubscribed_at };
