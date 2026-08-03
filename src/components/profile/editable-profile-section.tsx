@@ -53,6 +53,25 @@ export function EditableProfileSection({
   // member explicitly confirm accuracy before it's saved.
   const requiresConfirm = section.id === "insurance";
 
+  // Editing insurance REPLACES the current policy immediately. If the change
+  // looks like a *future* policy — a different policy number that expires later,
+  // while the current one is still valid — replacing now would drop still-valid
+  // cover. Detect that so the confirm step can nudge them to "Add next policy"
+  // instead (which keeps the current active until it expires, then auto-switches).
+  const YMD = /^\d{4}-\d{2}-\d{2}$/;
+  const curPolicyNo = (values["health_insurance_policy_number"] ?? "").trim();
+  const draftPolicyNo = (draft["health_insurance_policy_number"] ?? "").trim();
+  const curExpiry = (values["health_insurance_expiry_date"] ?? "").slice(0, 10);
+  const draftExpiry = (draft["health_insurance_expiry_date"] ?? "").slice(0, 10);
+  const looksLikeSuccessor =
+    requiresConfirm &&
+    YMD.test(curExpiry) &&
+    !isExpiryDatePast(curExpiry) && // current cover still valid
+    !!draftPolicyNo &&
+    draftPolicyNo !== curPolicyNo && // a different policy
+    YMD.test(draftExpiry) &&
+    draftExpiry > curExpiry; // …that expires later — i.e. a successor
+
   function startEdit() {
     setDraft(values);
     setOtherActive(seedOtherActive(section.fields, values));
@@ -202,12 +221,32 @@ export function EditableProfileSection({
         <Dialog open={confirmOpen} onOpenChange={(o) => !loading && setConfirmOpen(o)}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Confirm your health insurance details</DialogTitle>
+              <DialogTitle>
+                {looksLikeSuccessor
+                  ? "Replace your current policy?"
+                  : "Confirm your health insurance details"}
+              </DialogTitle>
               <DialogDescription>
                 By continuing, you confirm that the health insurance information
                 you&apos;ve provided is correct and reflects your current coverage.
               </DialogDescription>
             </DialogHeader>
+
+            {looksLikeSuccessor && (
+              <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
+                <p className="font-medium">This looks like a future policy.</p>
+                <p className="mt-1 text-[13px] leading-snug">
+                  Your current policy{curPolicyNo ? ` (no. ${curPolicyNo})` : ""} is
+                  still valid until {curExpiry}, and this new one expires later.
+                  Saving here <strong>replaces your current policy right now</strong>.
+                  If it&apos;s meant to take over <em>later</em>, cancel and use{" "}
+                  <strong>&ldquo;Add next policy&rdquo;</strong> under Policies on
+                  record — that keeps your current cover active until it expires,
+                  then switches automatically.
+                </p>
+              </div>
+            )}
+
             <DialogFooter>
               <Button
                 type="button"
@@ -219,7 +258,11 @@ export function EditableProfileSection({
                 Cancel
               </Button>
               <Button type="button" size="sm" disabled={loading} onClick={() => void persist()}>
-                {loading ? "Saving..." : "Confirm & save"}
+                {loading
+                  ? "Saving..."
+                  : looksLikeSuccessor
+                    ? "Replace current policy"
+                    : "Confirm & save"}
               </Button>
             </DialogFooter>
           </DialogContent>
