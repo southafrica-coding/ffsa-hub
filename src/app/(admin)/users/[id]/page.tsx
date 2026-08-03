@@ -170,6 +170,33 @@ export default async function UserProfilePage({
           </div>
           <InsuranceHistory
             policies={(insurancePolicies ?? []) as InsurancePolicyRow[]}
+            pending={
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (targetUser as any).next_health_insurance_provider
+                ? {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    provider: String((targetUser as any).next_health_insurance_provider),
+                    policy_number:
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      ((targetUser as any).next_health_insurance_policy_number as
+                        | string
+                        | null) ?? null,
+                    expiry_date: String(
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      (targetUser as any).next_health_insurance_expiry_date ?? ""
+                    ).slice(0, 10),
+                  }
+                : null
+            }
+            currentExpiry={
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (targetUser as any).health_insurance_expiry_date
+                ? String(
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    (targetUser as any).health_insurance_expiry_date
+                  ).slice(0, 10)
+                : null
+            }
           />
         </section>
       )}

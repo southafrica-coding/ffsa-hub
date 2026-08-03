@@ -247,6 +247,25 @@ function hasNoValidProvider(profile: Record<string, unknown>): boolean {
   return provider === "none";
 }
 
+// True when a member has lined up a valid successor policy (migration 151):
+// a real provider and a not-yet-past expiry queued in the next_* columns. Used
+// so an expired-but-successor-queued member isn't locked out in the window
+// before the daily promotion cron switches them over.
+export function hasValidQueuedPolicy(
+  profile: Record<string, unknown>,
+  today: string = todayInSA()
+): boolean {
+  const provider = String(profile["next_health_insurance_provider"] ?? "")
+    .trim()
+    .toLowerCase();
+  if (provider === "" || provider === "none") return false;
+  const raw = profile["next_health_insurance_expiry_date"];
+  if (typeof raw !== "string") return false;
+  const expiry = raw.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(expiry)) return false; // must be a real date
+  return !isExpiryDatePast(expiry, today); // …and not already past
+}
+
 // ────────────────────────────────────────────────────────────
 // PASSPORT — required for EVERYONE
 // ────────────────────────────────────────────────────────────
@@ -339,7 +358,16 @@ export function getProfileBlock(
   ];
   if (missing.length > 0) return { reason: "incomplete", fields: missing };
 
-  if (hasNoValidProvider(profile) || getInsuranceStatus(profile).state === "expired") {
+  const noProvider = hasNoValidProvider(profile);
+  const currentExpired = getInsuranceStatus(profile).state === "expired";
+  if (noProvider || currentExpired) {
+    // A lapsed current policy doesn't block the Hub if a valid successor is
+    // already queued — the daily promotion cron switches it over the day after
+    // expiry, so this only covers the short gap before that runs. (A "none"
+    // provider still blocks: there's no valid current expiry to switch on.)
+    if (currentExpired && !noProvider && hasValidQueuedPolicy(profile)) {
+      return null;
+    }
     return { reason: "insurance_expired", fields: HEALTH_INSURANCE_FIELDS };
   }
   return null;

@@ -12,6 +12,7 @@ import {
 import { currentPolicyId } from "@/lib/users/insurance-policies";
 import { PROFILE_SECTIONS } from "@/lib/users/profile-sections";
 import { excludedProfileFields, applyListOptions } from "@/lib/users/profile-fields";
+import { INSURANCE_PROVIDERS } from "@/lib/profile/options";
 import { getAllListOptions, activeSets } from "@/services/list-options";
 import { listActiveMinistries } from "@/services/ministries";
 
@@ -45,6 +46,23 @@ export default async function ProfilePage() {
     policy_number: row.health_insurance_policy_number as string | null | undefined,
     expiry_date: row.health_insurance_expiry_date as string | null | undefined,
   });
+
+  // Queued successor policy (migration 151), if one is lined up.
+  const pendingInsurance = row.next_health_insurance_provider
+    ? {
+        provider: String(row.next_health_insurance_provider),
+        policy_number:
+          (row.next_health_insurance_policy_number as string | null) ?? null,
+        expiry_date: String(row.next_health_insurance_expiry_date ?? "").slice(0, 10),
+      }
+    : null;
+  const currentInsuranceExpiry = row.health_insurance_expiry_date
+    ? String(row.health_insurance_expiry_date).slice(0, 10)
+    : null;
+  // Provider suggestions for the "add next policy" dialog (skip the "none" sentinel).
+  const insuranceProviderOptions = (sets.insurance_provider ?? INSURANCE_PROVIDERS)
+    .filter((o) => o.value.toLowerCase() !== "none")
+    .map((o) => o.label);
 
   const fullName =
     [user.preferred_name ?? user.first_name, user.last_name]
@@ -152,6 +170,10 @@ export default async function ProfilePage() {
                     policies={insuranceRows}
                     currentPolicyId={insuranceCurrentId}
                     canDelete
+                    manageable
+                    pending={pendingInsurance}
+                    currentExpiry={currentInsuranceExpiry}
+                    providerOptions={insuranceProviderOptions}
                   />
                 ) : undefined
               }
