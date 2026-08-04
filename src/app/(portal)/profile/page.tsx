@@ -15,6 +15,14 @@ import {
   type HouseholdMember,
 } from "@/components/profile/household-members";
 import { getHouseholdMembers } from "@/services/household";
+import {
+  AgreementsCard,
+  type SignedAgreement,
+} from "@/components/profile/agreements-card";
+import {
+  getConsentRecordsForUser,
+  getConsentAgreementByVersion,
+} from "@/services/consent";
 import { PROFILE_SECTIONS } from "@/lib/users/profile-sections";
 import { excludedProfileFields, applyListOptions } from "@/lib/users/profile-fields";
 import { INSURANCE_PROVIDERS } from "@/lib/profile/options";
@@ -32,6 +40,27 @@ export default async function ProfilePage() {
 
   const { data: householdRows } = await getHouseholdMembers(supabase, user.id);
   const householdMembers = (householdRows ?? []) as HouseholdMember[];
+
+  // Policies this user has personally signed (RLS: own records only). Resolve
+  // each record's agreement title from the exact version they accepted; cache
+  // lookups so repeat versions aren't re-fetched.
+  const { data: consentRows } = await getConsentRecordsForUser(supabase, user.id);
+  const titleByVersion = new Map<string, string>();
+  const signedAgreements: SignedAgreement[] = [];
+  for (const rec of (consentRows ?? []) as Array<Record<string, unknown>>) {
+    const version = String(rec.agreement_version);
+    if (!titleByVersion.has(version)) {
+      const { data: ag } = await getConsentAgreementByVersion(supabase, version);
+      titleByVersion.set(version, ag?.title ?? "Agreement");
+    }
+    signedAgreements.push({
+      recordId: String(rec.id),
+      title: titleByVersion.get(version) ?? "Agreement",
+      version,
+      acceptedAt: String(rec.accepted_at),
+      source: String(rec.source ?? ""),
+    });
+  }
 
   // Admin-editable dropdown vocabularies (gender/insurance/relationship) plus
   // Department, which is sourced live from the Ministry tab (staff_ministries)
@@ -203,6 +232,20 @@ export default async function ProfilePage() {
         </div>
         <div className="rounded-xl border p-4">
           <HouseholdMembers initialMembers={householdMembers} />
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <div>
+          <p className="page-eyebrow">LEGAL</p>
+          <h2 className="text-xl font-semibold">Agreements you&rsquo;ve signed</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            The policies and agreements you&rsquo;ve accepted. Open any one to
+            read the full text you agreed to, or print / save it as a PDF.
+          </p>
+        </div>
+        <div className="rounded-xl border p-4">
+          <AgreementsCard agreements={signedAgreements} />
         </div>
       </section>
 
