@@ -305,6 +305,74 @@ export const VISA_LONG_TERM_FIELDS: FieldConfig[] = [
   { field: "visa_expiry_date", label: "Visa Expiry Date", type: "date" },
 ];
 
+// ────────────────────────────────────────────────────────────
+// HOUSEHOLD / FAMILY MEMBERS
+// ────────────────────────────────────────────────────────────
+// A staff member's spouse / children / dependents, stored in the
+// separate public.household_members table (one row per member). The
+// field names deliberately match that table's columns AND the per-user
+// passport / visa / insurance columns, so the same FieldConfig UI is
+// reused. Only relationship + full_name are required; everything else is
+// optional and NEVER blocks the Hub (household data doesn't feed the
+// completion gate). The visa fields are shown only when a member is
+// marked international (mirrors the account-holder is_international flow).
+export const HOUSEHOLD_RELATIONSHIP_OPTIONS: { value: string; label: string }[] = [
+  { value: "spouse", label: "Spouse" },
+  { value: "child", label: "Child" },
+  { value: "dependent", label: "Dependent" },
+];
+
+// The core (always-visible) fields for a household member.
+export const HOUSEHOLD_CORE_FIELDS: FieldConfig[] = [
+  { field: "relationship", label: "Relationship", type: "select", options: HOUSEHOLD_RELATIONSHIP_OPTIONS },
+  { field: "full_name", label: "Full Name (as on passport)", type: "text", placeholder: "Full name" },
+  { field: "date_of_birth", label: "Date of Birth", type: "date", optional: true },
+  { field: "gender", label: "Gender", type: "select", options: GENDER_OPTIONS, optional: true },
+];
+
+// Passport / visa / insurance blocks reuse the same field configs as the
+// account holder, but marked optional for family members.
+const asOptional = (fields: FieldConfig[]): FieldConfig[] =>
+  fields.map((f) => ({ ...f, optional: true }));
+
+export const HOUSEHOLD_PASSPORT_FIELDS: FieldConfig[] = asOptional(PASSPORT_FIELDS);
+export const HOUSEHOLD_VISA_BASE_FIELDS: FieldConfig[] = asOptional(VISA_BASE_FIELDS);
+export const HOUSEHOLD_VISA_LONG_TERM_FIELDS: FieldConfig[] = asOptional(VISA_LONG_TERM_FIELDS);
+export const HOUSEHOLD_INSURANCE_FIELDS: FieldConfig[] = asOptional(
+  REQUIRED_PROFILE_FIELDS.filter((f) => f.field.startsWith("health_insurance_"))
+);
+
+// Every household field the API accepts / the UI may render, in display
+// order. Consumers decide which visa fields to actually show based on the
+// member's is_international / visa_category values.
+export const HOUSEHOLD_MEMBER_FIELDS: FieldConfig[] = [
+  ...HOUSEHOLD_CORE_FIELDS,
+  ...HOUSEHOLD_PASSPORT_FIELDS,
+  ...HOUSEHOLD_VISA_BASE_FIELDS,
+  ...HOUSEHOLD_VISA_LONG_TERM_FIELDS,
+  ...HOUSEHOLD_INSURANCE_FIELDS,
+];
+
+// The scalar column names the household API is allowed to write (mirrors
+// the profile-update safelist pattern). `is_international` is a boolean
+// toggle handled alongside these.
+export const HOUSEHOLD_WRITABLE_FIELDS: string[] = [
+  "relationship",
+  "full_name",
+  "date_of_birth",
+  "gender",
+  "passport_country",
+  "passport_number",
+  "passport_expiry_date",
+  "is_international",
+  "visa_category",
+  "visa_type",
+  "visa_expiry_date",
+  "health_insurance_provider",
+  "health_insurance_policy_number",
+  "health_insurance_expiry_date",
+];
+
 const isFieldEmpty = (profile: Record<string, unknown>) => (f: FieldConfig) => {
   const v = profile[f.field];
   return v === null || v === undefined || v === "";
