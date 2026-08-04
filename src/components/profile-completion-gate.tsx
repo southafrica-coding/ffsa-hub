@@ -2,15 +2,39 @@ import { createClient } from "@/lib/supabase/server";
 import { ProfileCompletionForm } from "./profile-completion-form";
 import { ConsentAcceptanceForm } from "./consent-acceptance-form";
 import { InsuranceExpiryBanner } from "./insurance-expiry-banner";
+import { ChildrenGateForm } from "./profile/children-gate-form";
+import type { HouseholdMember } from "./profile/household-members";
 import {
   getProfileBlock,
   getInsuranceStatus,
   hasValidQueuedPolicy,
+  getChildrenBlock,
   applyListOptions,
 } from "@/lib/users/profile-fields";
 import { getAllListOptions, activeSets } from "@/services/list-options";
 import { listActiveMinistries } from "@/services/ministries";
+import { getHouseholdMembers } from "@/services/household";
 import { hasUserConsented, getCurrentConsentAgreement } from "@/services/consent";
+
+// True if the user counts as staff — either their self-signup type is
+// 'staff' or they hold the 'staff' role. Scopes the children gate to staff.
+// Fail-closed (not staff) on a role-read error so students/community are
+// never wrongly prompted.
+async function userIsStaff(
+  supabase: any, // eslint-disable-line @typescript-eslint/no-explicit-any
+  userId: string,
+  row: Record<string, unknown>
+): Promise<boolean> {
+  if (row.signup_type === "staff") return true;
+  const { data, error } = await supabase
+    .from("user_roles")
+    .select("roles!inner(name)")
+    .eq("user_id", userId)
+    .eq("roles.name", "staff")
+    .limit(1);
+  if (error) return false;
+  return (data?.length ?? 0) > 0;
+}
 
 // Full-screen blocking overlay: blurs and disables the page behind the panel.
 function BlockingOverlay({
@@ -123,6 +147,33 @@ export async function ProfileCompletionGate({
         {children}
       </BlockingOverlay>
     );
+  }
+
+  // 1b) Children gate — STAFF only. On next login every staff member must
+  //     answer "Do you have children?"; a "yes" then requires at least one
+  //     fully-complete child record before the Hub unblocks. Students /
+  //     community members are never prompted. Spouse/dependent records don't
+  //     count and never block.
+  if (await userIsStaff(supabase, user.id, row)) {
+    const hasChildren = (row.has_children ?? null) as boolean | null;
+    const { data: householdRows } = await getHouseholdMembers(supabase, user.id);
+    const members = (householdRows ?? []) as Array<Record<string, unknown>>;
+    const unanswered = hasChildren == null;
+    const childrenBlock = getChildrenBlock(hasChildren, members);
+    if (unanswered || childrenBlock) {
+      return (
+        <BlockingOverlay
+          panel={
+            <ChildrenGateForm
+              hasChildren={hasChildren}
+              members={(householdRows ?? []) as HouseholdMember[]}
+            />
+          }
+        >
+          {children}
+        </BlockingOverlay>
+      );
+    }
   }
 
   // 2) Privacy consent must be on record → blocking accept screen. Fail
