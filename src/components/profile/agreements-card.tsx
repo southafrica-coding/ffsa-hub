@@ -25,8 +25,8 @@ export function AgreementsCard({ agreements }: { agreements: SignedAgreement[] }
   if (agreements.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        You haven&rsquo;t agreed to any policies yet. Agreements you accept
-        during signup or when applying will appear here.
+        No agreements signed yet. Policies accepted during signup or when
+        applying appear here.
       </p>
     );
   }

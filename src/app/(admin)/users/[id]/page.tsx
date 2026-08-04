@@ -11,6 +11,14 @@ import { getSchoolsManageScopes } from "@/lib/auth/schools-manage-scopes";
 import { ProfileRecords } from "@/components/profile-records";
 import { SecurityActivityCard } from "@/components/security-activity-card";
 import {
+  AgreementsCard,
+  type SignedAgreement,
+} from "@/components/profile/agreements-card";
+import {
+  getConsentRecordsForUser,
+  getConsentAgreementByVersion,
+} from "@/services/consent";
+import {
   deriveUserLifecycle,
   groupMissingFields,
 } from "@/lib/users/lifecycle";
@@ -75,6 +83,29 @@ export default async function UserProfilePage({
     listActiveMinistries(supabase),
   ]);
   if (error || !targetUser) notFound();
+
+  // Policies this user has signed — shown to admins (is_admin() passes the
+  // consent_records "Admins can read all" RLS). Resolve each record's title
+  // from the exact version accepted, caching repeat versions.
+  const signedAgreements: SignedAgreement[] = [];
+  if (isAdmin) {
+    const { data: consentRows } = await getConsentRecordsForUser(supabase, id);
+    const titleByVersion = new Map<string, string>();
+    for (const rec of (consentRows ?? []) as Array<Record<string, unknown>>) {
+      const version = String(rec.agreement_version);
+      if (!titleByVersion.has(version)) {
+        const { data: ag } = await getConsentAgreementByVersion(supabase, version);
+        titleByVersion.set(version, ag?.title ?? "Agreement");
+      }
+      signedAgreements.push({
+        recordId: String(rec.id),
+        title: titleByVersion.get(version) ?? "Agreement",
+        version,
+        acceptedAt: String(rec.accepted_at),
+        source: String(rec.source ?? ""),
+      });
+    }
+  }
 
   const departmentSelectOptions = (
     (ministries ?? []) as Array<{ slug: string; name: string }>
@@ -207,6 +238,20 @@ export default async function UserProfilePage({
           lastSignInAt={authLastSignInAt}
         />
       </section>
+
+      {isAdmin && (
+        <section className="rounded-xl border p-4 space-y-3">
+          <div>
+            <p className="page-eyebrow">LEGAL</p>
+            <h2 className="text-xl font-semibold">Agreements signed</h2>
+            <p className="text-sm text-muted-foreground">
+              Policies this person has accepted. Open any to view or print the
+              exact document they signed.
+            </p>
+          </div>
+          <AgreementsCard agreements={signedAgreements} />
+        </section>
+      )}
 
       <section className="space-y-3">
         <div className="flex items-end justify-between">
