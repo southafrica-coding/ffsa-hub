@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { DateInput } from "@/components/ui/date-input";
 import { Label } from "@/components/ui/label";
 import { PhoneInput } from "@/components/ui/phone-input";
+import { HouseholdMembers } from "@/components/profile/household-members";
 import {
   COUNTRY_OPTIONS,
   SA_PROVINCES,
@@ -25,7 +26,7 @@ import Image from "next/image";
 // staff/international-traveller data). `num` is the stable identity used by
 // the per-step JSX blocks; the visible position/total are derived from the
 // active subset at render time.
-type StepKey = "password" | "personal" | "address" | "passport" | "emergency" | "consent";
+type StepKey = "password" | "personal" | "address" | "passport" | "emergency" | "family" | "consent";
 
 const STEP_DEFS: { num: number; key: StepKey; label: string }[] = [
   { num: 1, key: "password", label: "Password" },
@@ -33,7 +34,8 @@ const STEP_DEFS: { num: number; key: StepKey; label: string }[] = [
   { num: 3, key: "address", label: "Address" },
   { num: 4, key: "passport", label: "Passport" },
   { num: 5, key: "emergency", label: "Emergency" },
-  { num: 6, key: "consent", label: "Consent" },
+  { num: 6, key: "family", label: "Family" },
+  { num: 7, key: "consent", label: "Consent" },
 ];
 
 interface FormData {
@@ -493,6 +495,13 @@ export default function OnboardingPage() {
               {step === 6 && <>
                 <p className="page-eyebrow" style={{ marginBottom: "6px" }}>Step {currentPos + 1} of {totalSteps}</p>
                 <h2 style={{ fontFamily: "var(--font-bebas,'Arial Black',sans-serif)", fontSize: "2rem", letterSpacing: "0.04em", color: "#F0EBE3", lineHeight: 1 }}>
+                  Your Family
+                </h2>
+                <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>Add your spouse, children or dependents. This is optional — you can skip it and add them later from your profile.</p>
+              </>}
+              {step === 7 && <>
+                <p className="page-eyebrow" style={{ marginBottom: "6px" }}>Step {currentPos + 1} of {totalSteps}</p>
+                <h2 style={{ fontFamily: "var(--font-bebas,'Arial Black',sans-serif)", fontSize: "2rem", letterSpacing: "0.04em", color: "#F0EBE3", lineHeight: 1 }}>
                   Privacy &amp; Consent
                 </h2>
                 <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>Please review and accept our data processing agreement.</p>
@@ -816,8 +825,24 @@ export default function OnboardingPage() {
                 </>
               )}
 
-              {/* ── Step 6: Consent ── */}
+              {/* ── Step 6: Family ── */}
               {step === 6 && (
+                <>
+                  <p style={{ fontSize: "13px", color: "var(--text-secondary)", lineHeight: 1.55 }}>
+                    Do you have a spouse, children or dependents? Add them here so we
+                    have their passport, visa and health-insurance details on record.
+                    This is optional and can be updated any time from your profile.
+                  </p>
+                  <HouseholdMembers
+                    initialMembers={[]}
+                    loadOnMount
+                    refreshRouterOnChange={false}
+                  />
+                </>
+              )}
+
+              {/* ── Step 7: Consent ── */}
+              {step === 7 && (
                 <>
                   <p style={{ fontSize: "13px", color: "var(--text-secondary)", lineHeight: 1.55 }}>
                     Before you join FFSA Hub, we need your consent to collect and use your
