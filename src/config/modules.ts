@@ -17,6 +17,7 @@ import {
   Network,
   Palette,
   SlidersHorizontal,
+  Scale,
   type LucideIcon,
 } from "lucide-react";
 
@@ -162,6 +163,14 @@ export const SYSTEM_MODULES: ModuleDefinition[] = [
     icon: UserCog,
     description: "Manage login accounts",
     requiredRoles: ["super_admin", "admin"],
+  },
+  {
+    id: "legal",
+    label: "Legal",
+    href: "/consents",
+    icon: Scale,
+    description: "Who signed which policy",
+    requiredRoles: ["super_admin", "admin", "legal_admin"],
   },
   {
     id: "roles",
