@@ -12,6 +12,26 @@ import { getAllListOptions, activeSets } from "@/services/list-options";
 import { listActiveMinistries } from "@/services/ministries";
 import { hasUserConsented, getCurrentConsentAgreement } from "@/services/consent";
 
+// True if the user counts as staff — either their self-signup type is
+// 'staff' or they hold the 'staff' role. Used to scope the Child Protection
+// Policy gate to staff only. Fail-closed (not staff) on a role-read error so
+// students/community are never wrongly prompted.
+async function userIsStaff(
+  supabase: any, // eslint-disable-line @typescript-eslint/no-explicit-any
+  userId: string,
+  row: Record<string, unknown>
+): Promise<boolean> {
+  if (row.signup_type === "staff") return true;
+  const { data, error } = await supabase
+    .from("user_roles")
+    .select("roles!inner(name)")
+    .eq("user_id", userId)
+    .eq("roles.name", "staff")
+    .limit(1);
+  if (error) return false;
+  return (data?.length ?? 0) > 0;
+}
+
 // Full-screen blocking overlay: blurs and disables the page behind the panel.
 function BlockingOverlay({
   children,
@@ -143,6 +163,37 @@ export async function ProfileCompletionGate({
           {children}
         </BlockingOverlay>
       );
+    }
+  }
+
+  // 2b) Child Protection Policy — EVERY staff member must accept the current
+  //     version before using the Hub, regardless of whether they have children.
+  //     Students / community members are never prompted. Keyed to the current
+  //     version, so publishing a new policy re-prompts all staff. Fail-open if
+  //     the agreement isn't configured (hasUserConsented handles that).
+  const isStaff = await userIsStaff(supabase, user.id, row);
+  if (isStaff) {
+    const childConsented = await hasUserConsented(supabase, user.id, "child_data");
+    if (!childConsented) {
+      const { data: childAgreement } = await getCurrentConsentAgreement(
+        supabase,
+        "child_data"
+      );
+      if (childAgreement) {
+        return (
+          <BlockingOverlay
+            panel={
+              <ConsentAcceptanceForm
+                version={childAgreement.version}
+                title={childAgreement.title}
+                kind="child_data"
+              />
+            }
+          >
+            {children}
+          </BlockingOverlay>
+        );
+      }
     }
   }
 

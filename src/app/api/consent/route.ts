@@ -1,10 +1,19 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentConsentAgreement, recordConsent } from "@/services/consent";
+import {
+  getCurrentConsentAgreement,
+  recordConsent,
+  type ConsentKind,
+} from "@/services/consent";
 
-export async function GET() {
+const KINDS: ConsentKind[] = ["privacy", "child_data"];
+const asKind = (v: string | null): ConsentKind =>
+  KINDS.includes(v as ConsentKind) ? (v as ConsentKind) : "privacy";
+
+export async function GET(request: Request) {
   const supabase = await createClient();
-  const { data, error } = await getCurrentConsentAgreement(supabase);
+  const kind = asKind(new URL(request.url).searchParams.get("kind"));
+  const { data, error } = await getCurrentConsentAgreement(supabase, kind);
   if (error || !data) {
     return NextResponse.json({ error: "Agreement not found" }, { status: 404 });
   }
@@ -23,6 +32,7 @@ export async function POST(request: Request) {
 
   const body = await request.json();
   const { agreement_version, source } = body;
+  const kind = asKind(body.kind ?? null);
 
   if (!source || (source !== "onboarding" && source !== "application")) {
     return NextResponse.json(
@@ -31,8 +41,8 @@ export async function POST(request: Request) {
     );
   }
 
-  // Validate version matches the current published agreement.
-  const { data: current } = await getCurrentConsentAgreement(supabase);
+  // Validate version matches the current published agreement for this kind.
+  const { data: current } = await getCurrentConsentAgreement(supabase, kind);
   if (!current) {
     return NextResponse.json(
       { error: "Consent agreement is not configured" },
