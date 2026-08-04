@@ -28,6 +28,8 @@ export async function PUT(request: Request) {
     "health_insurance_expiry_date",
     "passport_country", "passport_number", "passport_expiry_date",
     "visa_category", "visa_type", "visa_expiry_date",
+    // Answer to "Do you have children?" (drives the staff children gate).
+    "has_children",
   ];
 
   const updateData: Record<string, unknown> = {};

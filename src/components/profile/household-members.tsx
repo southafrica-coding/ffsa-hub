@@ -11,6 +11,7 @@ import {
   HOUSEHOLD_VISA_LONG_TERM_FIELDS,
   HOUSEHOLD_INSURANCE_FIELDS,
   HOUSEHOLD_RELATIONSHIP_OPTIONS,
+  isChildComplete,
   type FieldConfig,
 } from "@/lib/users/profile-fields";
 
@@ -61,6 +62,8 @@ export function HouseholdMembers({
   className,
   loadOnMount = false,
   refreshRouterOnChange = true,
+  requireComplete = false,
+  defaultRelationship,
 }: {
   initialMembers: HouseholdMember[];
   className?: string;
@@ -70,6 +73,12 @@ export function HouseholdMembers({
   // Call router.refresh() after mutations — wanted on the profile page (to
   // re-sync server data), skipped in onboarding (no server data to refresh).
   refreshRouterOnChange?: boolean;
+  // Gate mode: require the FULL child field set (isChildComplete) before a
+  // save is allowed, so every saved record clears the children gate. The
+  // normal profile usage leaves this off (partial saves allowed).
+  requireComplete?: boolean;
+  // Pre-select the relationship for a new member (e.g. "child" in the gate).
+  defaultRelationship?: string;
 }) {
   const router = useRouter();
   const [members, setMembers] = useState<HouseholdMember[]>(initialMembers);
@@ -100,10 +109,13 @@ export function HouseholdMembers({
   const [error, setError] = useState<string | null>(null);
 
   const beginAdd = () => {
+    const start = defaultRelationship
+      ? { ...EMPTY_VALUES, relationship: defaultRelationship }
+      : EMPTY_VALUES;
     setEditing("new");
-    setValues(EMPTY_VALUES);
+    setValues(start);
     setIsInternational(false);
-    setOtherActive(seedOtherActive(HOUSEHOLD_INSURANCE_FIELDS, EMPTY_VALUES));
+    setOtherActive(seedOtherActive(HOUSEHOLD_INSURANCE_FIELDS, start));
     setError(null);
   };
 
@@ -155,6 +167,20 @@ export function HouseholdMembers({
     }
     if (!values.full_name.trim()) {
       setError("Please enter the family member's full name.");
+      return;
+    }
+
+    // Gate mode: every field is mandatory before the record counts toward
+    // clearing the children gate. Validate against the same rule the gate uses.
+    if (
+      requireComplete &&
+      !isChildComplete({ ...values, is_international: isInternational })
+    ) {
+      setError(
+        "Please fill in every field for this child" +
+          (isInternational ? " (including visa details)" : "") +
+          " before saving."
+      );
       return;
     }
     setSaving(true);
