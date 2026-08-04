@@ -373,6 +373,73 @@ export const HOUSEHOLD_WRITABLE_FIELDS: string[] = [
   "health_insurance_expiry_date",
 ];
 
+// ────────────────────────────────────────────────────────────
+// MANDATORY CHILDREN GATE (staff)
+// ────────────────────────────────────────────────────────────
+// Staff must declare whether they have children (users.has_children,
+// migration 155). If they do, EVERY child (relationship = 'child') must
+// have a complete record before the Hub unblocks — enforced by
+// getChildrenBlock below and the profile-completion gate. Spouse and
+// dependent records are unaffected (they never block).
+//
+// "Complete" = all of these non-empty, plus visa when the child is
+// international. Unlike the account holder, we do NOT additionally require
+// a child's passport/insurance to be UNEXPIRED — a lapsed child policy
+// must never lock the parent out of their own work; we only need the
+// details on file.
+export const CHILD_REQUIRED_FIELDS: string[] = [
+  "full_name",
+  "date_of_birth",
+  "gender",
+  "passport_country",
+  "passport_number",
+  "passport_expiry_date",
+  "health_insurance_provider",
+  "health_insurance_policy_number",
+  "health_insurance_expiry_date",
+];
+
+// A "member" here is a household_members row (or the in-progress form
+// values). Returns true when every required field is present and the
+// insurance provider is real (not empty / "none"), including visa fields
+// when the child is flagged international.
+export function isChildComplete(member: Record<string, unknown>): boolean {
+  const empty = (key: string) => {
+    const v = member[key];
+    return v === null || v === undefined || String(v).trim() === "";
+  };
+  if (CHILD_REQUIRED_FIELDS.some(empty)) return false;
+
+  const provider = String(member["health_insurance_provider"] ?? "")
+    .trim()
+    .toLowerCase();
+  if (provider === "" || provider === "none") return false;
+
+  if (member["is_international"]) {
+    if (empty("visa_category")) return false;
+    if (member["visa_category"] === "long_term") {
+      if (empty("visa_type") || empty("visa_expiry_date")) return false;
+    }
+  }
+  return true;
+}
+
+export type ChildrenBlock = { reason: "children_incomplete" };
+
+// The gate's children check. `hasChildren` is users.has_children.
+//   null  → unanswered; the gate asks the Yes/No question (not here).
+//   false → no children; never blocks.
+//   true  → require ≥1 complete child record, else block.
+export function getChildrenBlock(
+  hasChildren: boolean | null | undefined,
+  members: Array<Record<string, unknown>>
+): ChildrenBlock | null {
+  if (hasChildren !== true) return null;
+  const children = members.filter((m) => m.relationship === "child");
+  const hasComplete = children.some(isChildComplete);
+  return hasComplete ? null : { reason: "children_incomplete" };
+}
+
 const isFieldEmpty = (profile: Record<string, unknown>) => (f: FieldConfig) => {
   const v = profile[f.field];
   return v === null || v === undefined || v === "";
