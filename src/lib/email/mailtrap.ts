@@ -38,7 +38,19 @@ export type MailtrapSendInput = {
 export type MailtrapSendResult = {
   messageId: string | null;
   error: string | null;
+  /**
+   * True when Mailtrap rejected the send because the account's hourly sending
+   * quota is exhausted (HTTP 429 or an `hourly_rate_exceeded` body). Callers
+   * must treat this as "try again later" — NOT a permanent failure — and stop
+   * the current run without recording the recipient, so a later run retries.
+   */
+  rateLimited?: boolean;
 };
+
+/** Does a Mailtrap error response indicate the hourly quota was hit? */
+function isRateLimit(status: number, body: string): boolean {
+  return status === 429 || /hourly_rate_exceeded|rate.?limit/i.test(body);
+}
 
 /** Send a single email through Mailtrap. Never throws — returns an error string. */
 export async function sendViaMailtrap(
@@ -85,6 +97,7 @@ export async function sendViaMailtrap(
       return {
         messageId: null,
         error: `Mailtrap ${res.status}: ${body.slice(0, 200)}`,
+        rateLimited: isRateLimit(res.status, body),
       };
     }
 

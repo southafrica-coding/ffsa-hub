@@ -13,6 +13,16 @@ type Client = any;
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://www.ffsahub.com";
 
+// ── Throttle configuration ──────────────────────────────────
+// Mailtrap's live bulk stream enforces an hourly sending quota. We stay under
+// it by capping how many recipients go out per rolling hour (across ALL
+// campaigns, since the quota is account-wide) and per single run. The cron
+// runs every few minutes and drains large audiences gradually. Both values are
+// env-tunable so the rate can be raised after a Mailtrap plan upgrade without a
+// code change.
+export const HOURLY_SEND_LIMIT = Number(process.env.MAILTRAP_HOURLY_LIMIT) || 300;
+export const PER_RUN_CAP = Number(process.env.CAMPAIGN_SEND_PER_RUN) || 50;
+
 export type BatchResult = {
   ok: boolean;
   error?: string;
@@ -20,7 +30,47 @@ export type BatchResult = {
   failed: number;
   remaining: number;
   done: boolean;
+  /** Set when the batch stopped early because Mailtrap's hourly quota was hit. */
+  rateLimited?: boolean;
 };
+
+/**
+ * How many recipients may still be sent this run without breaching the hourly
+ * quota — the account-wide budget (min of the per-run cap and the remaining
+ * hourly allowance). Counts rows actually sent in the trailing 60 minutes, so
+ * it self-corrects as sends accumulate. Returns 0 when the hour is spent.
+ */
+export async function sendableThisRun(
+  supabase: Client,
+  perRunCap = PER_RUN_CAP
+): Promise<number> {
+  const since = new Date(Date.now() - 3600_000).toISOString();
+  const { count } = await supabase
+    .from("campaign_recipients")
+    .select("id", { count: "exact", head: true })
+    .not("sent_at", "is", null)
+    .gte("sent_at", since);
+  const remainingHour = HOURLY_SEND_LIMIT - (count ?? 0);
+  return Math.max(0, Math.min(perRunCap, remainingHour));
+}
+
+/**
+ * Fetch every row of a PostgREST query, paging past the default 1000-row cap.
+ * `build(from, to)` must return a query with `.range(from, to)` applied.
+ */
+async function fetchAllRows<T>(
+  build: (from: number, to: number) => Promise<{ data: T[] | null }>
+): Promise<T[]> {
+  const page = 1000;
+  const all: T[] = [];
+  for (let from = 0; ; from += page) {
+    const { data } = await build(from, from + page - 1);
+    const rows = data ?? [];
+    all.push(...rows);
+    if (rows.length < page) break;
+  }
+  return all;
+}
 
 function prefsUrlFor(contactId: string, campaignId: string): string {
   const token = signPrefsToken(contactId, campaignId);
@@ -109,22 +159,29 @@ export async function sendCampaignBatch(
   }
 
   // Audience for this campaign (DISTINCT across all its labels), minus
-  // recipients already processed in earlier batches.
-  const [{ data: audience }, { data: doneRows }] = await Promise.all([
-    supabase
-      .from("v_campaign_audience")
-      .select("contact_id, email, first_name")
-      .eq("campaign_id", campaignId),
-    supabase
-      .from("campaign_recipients")
-      .select("contact_id")
-      .eq("campaign_id", campaignId),
+  // recipients already processed in earlier batches. Both queries are paged
+  // past PostgREST's 1000-row cap — without this a 7000-contact audience was
+  // silently truncated to the first 1000, so most contacts never got emailed.
+  const [audience, doneRows] = await Promise.all([
+    fetchAllRows<{ contact_id: string; email: string; first_name: string | null }>(
+      (from, to) =>
+        supabase
+          .from("v_campaign_audience")
+          .select("contact_id, email, first_name")
+          .eq("campaign_id", campaignId)
+          .range(from, to)
+    ),
+    fetchAllRows<{ contact_id: string }>((from, to) =>
+      supabase
+        .from("campaign_recipients")
+        .select("contact_id")
+        .eq("campaign_id", campaignId)
+        .range(from, to)
+    ),
   ]);
 
-  const done = new Set((doneRows ?? []).map((r: { contact_id: string }) => r.contact_id));
-  const pending = (audience ?? []).filter(
-    (a: { contact_id: string }) => !done.has(a.contact_id)
-  );
+  const done = new Set(doneRows.map((r) => r.contact_id));
+  const pending = audience.filter((a) => !done.has(a.contact_id));
 
   if (pending.length === 0) {
     await supabase
@@ -143,6 +200,8 @@ export async function sendCampaignBatch(
 
   let sent = 0;
   let failed = 0;
+  let processed = 0;
+  let rateLimited = false;
 
   for (const recipient of batch as {
     contact_id: string;
@@ -186,7 +245,16 @@ export async function sendCampaignBatch(
       }),
     });
 
+    // Hourly quota hit: stop immediately and leave this recipient UNprocessed
+    // (no row inserted) so a later run retries them. Recording it would burn
+    // the contact — the bug that turned a throttle into 600+ fake "bounces".
+    if (result.rateLimited) {
+      rateLimited = true;
+      break;
+    }
+
     const nowIso = new Date().toISOString();
+    processed++;
     if (result.error) {
       failed++;
       await supabase.from("campaign_recipients").insert({
@@ -211,8 +279,12 @@ export async function sendCampaignBatch(
     }
   }
 
-  const remaining = pending.length - batch.length;
-  if (remaining === 0) {
+  // Recipients still awaiting a send after this run. Uses `processed` (rather
+  // than the batch length) so an early rate-limit stop is reflected correctly.
+  const remaining = pending.length - processed;
+  // Only flip to "sent" when the whole audience is drained AND we didn't stop
+  // on a rate limit — otherwise the cron resumes the remainder on a later run.
+  if (remaining === 0 && !rateLimited) {
     await supabase
       .from("campaigns")
       .update({ status: "sent", sent_at: new Date().toISOString() })
@@ -223,7 +295,8 @@ export async function sendCampaignBatch(
     ok: true,
     sent,
     failed,
+    rateLimited,
     remaining,
-    done: remaining === 0,
+    done: remaining === 0 && !rateLimited,
   };
 }

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendCampaignBatch } from "@/services/campaign-send";
+import { sendCampaignBatch, sendableThisRun } from "@/services/campaign-send";
 
 export const maxDuration = 60;
 
@@ -35,11 +35,32 @@ export async function GET(request: Request) {
     ])
   );
 
-  const results: Array<{ id: string; sent: number; failed: number; done: boolean }> =
-    [];
+  const results: Array<{
+    id: string;
+    sent: number;
+    failed: number;
+    done: boolean;
+    rateLimited?: boolean;
+    skipped?: string;
+  }> = [];
   for (const id of ids) {
-    const r = await sendCampaignBatch(admin, id, 100);
-    results.push({ id, sent: r.sent, failed: r.failed, done: r.done });
+    // Throttle: only send as many as the account-wide hourly quota allows this
+    // run. When the hour's budget is spent, stop — the next cron run resumes.
+    const budget = await sendableThisRun(admin);
+    if (budget <= 0) {
+      results.push({ id, sent: 0, failed: 0, done: false, skipped: "hourly-limit" });
+      break;
+    }
+    const r = await sendCampaignBatch(admin, id, budget);
+    results.push({
+      id,
+      sent: r.sent,
+      failed: r.failed,
+      done: r.done,
+      rateLimited: r.rateLimited,
+    });
+    // Mailtrap said the quota is spent — stop the whole run, resume next time.
+    if (r.rateLimited) break;
   }
 
   return NextResponse.json({ processed: results.length, results });

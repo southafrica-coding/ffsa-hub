@@ -695,6 +695,7 @@ export function CampaignComposer({
     setSendState("sending");
     let totalSent = 0;
     let totalFailed = 0;
+    let handedOff = false;
     for (let i = 0; i < 1000; i++) {
       const res = await fetch(`/api/campaigns/${campaign.id}/send`, {
         method: "POST",
@@ -709,13 +710,28 @@ export function CampaignComposer({
         sent: number;
         failed: number;
         done: boolean;
+        throttled?: boolean;
       };
       totalSent += r.sent;
       totalFailed += r.failed;
       setSendProgress({ sent: totalSent, failed: totalFailed });
       if (r.done) break;
+      // Hourly send budget spent — the rest drips out automatically via the
+      // cron over the coming hours. Stop looping; the send continues server-side
+      // whether or not this tab stays open.
+      if (r.throttled) {
+        handedOff = true;
+        break;
+      }
     }
     setSendState("done");
+    if (handedOff) {
+      setMsg(
+        `Sending has started — ${totalSent} sent so far. The rest will send ` +
+          `automatically over the next while (to stay within sending limits). ` +
+          `You can safely close this tab.`
+      );
+    }
     router.refresh();
   }
 
