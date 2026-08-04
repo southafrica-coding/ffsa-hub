@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Resend } from "resend";
 import { inviteEmailHtml } from "@/lib/email/templates/invite";
+import { createOnboardingInvite } from "@/lib/auth/onboarding-invite";
 
 const resend = new Resend(process.env.RESEND_API_KEY?.trim());
 
@@ -65,18 +66,18 @@ export async function POST(request: Request) {
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
-  const { data: linkData, error: linkError } =
-    await adminSupabase.auth.admin.generateLink({
-      type: "invite",
-      email: targetUser.email,
-      options: {
-        redirectTo: `${siteUrl}/auth/confirm`,
-      },
-    });
+  // Fresh 30-day, single-use setup link (migration 158). Supersedes any
+  // previously emailed link for this user.
+  const invite = await createOnboardingInvite(adminSupabase, {
+    userId: targetUser.id,
+    email: targetUser.email,
+    siteUrl,
+    createdBy: authUser.id,
+  });
 
-  if (linkError || !linkData?.properties?.action_link) {
+  if (!invite.ok) {
     return NextResponse.json(
-      { error: linkError?.message || "Failed to generate invite link" },
+      { error: `Failed to create onboarding link: ${invite.error}` },
       { status: 500 }
     );
   }
@@ -88,7 +89,7 @@ export async function POST(request: Request) {
     subject: "Reminder: You're invited to FFSA Hub",
     html: inviteEmailHtml({
       firstName: targetUser.first_name || undefined,
-      inviteUrl: linkData.properties.action_link,
+      inviteUrl: invite.url,
     }),
   });
 

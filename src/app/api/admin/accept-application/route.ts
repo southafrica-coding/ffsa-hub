@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ensureStudentRole } from "@/lib/auth/membership-roles";
+import { createOnboardingInvite } from "@/lib/auth/onboarding-invite";
 import { setupProgramBillingOnAcceptance } from "@/services/billing-generation";
 import { sendTransactional } from "@/lib/email/send-transactional";
 import { applicationAcceptedEmailHtml } from "@/lib/email/templates/application-accepted";
@@ -187,35 +188,30 @@ export async function POST(request: Request) {
         sourceId: response_id,
       });
     } else {
-      // Create new user via Supabase Auth invite
-      const { data: linkData, error: linkError } =
-        await adminSupabase.auth.admin.generateLink({
-          type: "invite",
+      // Create the auth user directly (no password yet). The applicant sets
+      // their password via the 30-day onboarding setup link emailed below —
+      // an app-controlled token (migration 158) that replaces Supabase's
+      // short-lived, one-time magic-link invite. email_confirm: true because
+      // reaching this point means an admin accepted the application and we're
+      // emailing the address; the same trust the /join signup flow relies on.
+      const { data: created, error: createError } =
+        await adminSupabase.auth.admin.createUser({
           email: applicantEmail,
-          options: {
-            redirectTo: `${siteUrl}/auth/confirm`,
+          email_confirm: true,
+          user_metadata: {
+            first_name: applicantInfo?.first_name || null,
+            last_name: applicantInfo?.last_name || null,
           },
         });
 
-      if (linkError || !linkData?.properties?.action_link) {
+      if (createError || !created?.user?.id) {
         return NextResponse.json(
-          {
-            error:
-              linkError?.message || "Failed to generate invite link",
-          },
+          { error: createError?.message || "Failed to create user account" },
           { status: 500 }
         );
       }
 
-      const inviteUrl = linkData.properties.action_link;
-      userId = linkData.user?.id;
-
-      if (!userId) {
-        return NextResponse.json(
-          { error: "Failed to get user ID" },
-          { status: 500 }
-        );
-      }
+      userId = created.user.id;
 
       // Create app-level user record with applicant info
       const { error: userError } = await adminSupabase.from("users").insert({
@@ -260,6 +256,23 @@ export async function POST(request: Request) {
           assigned_by: authUser.id,
         });
       }
+
+      // Mint the 30-day, single-use onboarding setup link (migration 158).
+      const invite = await createOnboardingInvite(adminSupabase, {
+        userId,
+        email: applicantEmail,
+        siteUrl,
+        createdBy: authUser.id,
+      });
+
+      if (!invite.ok) {
+        return NextResponse.json(
+          { error: `Failed to create onboarding link: ${invite.error}` },
+          { status: 500 }
+        );
+      }
+
+      const inviteUrl = invite.url;
 
       // Send acceptance email with invite link
       const newApplicantFirstName = applicantInfo?.first_name || "there";
