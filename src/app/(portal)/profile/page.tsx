@@ -10,6 +10,11 @@ import {
   type InsurancePolicyRow,
 } from "@/components/profile/insurance-history";
 import { currentPolicyId } from "@/lib/users/insurance-policies";
+import {
+  HouseholdMembers,
+  type HouseholdMember,
+} from "@/components/profile/household-members";
+import { getHouseholdMembers } from "@/services/household";
 import { PROFILE_SECTIONS } from "@/lib/users/profile-sections";
 import { excludedProfileFields, applyListOptions } from "@/lib/users/profile-fields";
 import { INSURANCE_PROVIDERS } from "@/lib/profile/options";
@@ -24,6 +29,9 @@ export default async function ProfilePage() {
 
   const { data: insurancePolicies } = await getInsurancePolicies(supabase, user.id);
   const insuranceRows = (insurancePolicies ?? []) as InsurancePolicyRow[];
+
+  const { data: householdRows } = await getHouseholdMembers(supabase, user.id);
+  const householdMembers = (householdRows ?? []) as HouseholdMember[];
 
   // Admin-editable dropdown vocabularies (gender/insurance/relationship) plus
   // Department, which is sourced live from the Ministry tab (staff_ministries)
@@ -180,6 +188,21 @@ export default async function ProfilePage() {
             />
             );
           })}
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <div>
+          <p className="page-eyebrow">MY HOUSEHOLD</p>
+          <h2 className="text-xl font-semibold">Family members</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Your spouse, children and dependents. Add their passport, visa and
+            health-insurance details so we have them on record. This is optional
+            and you can update it any time.
+          </p>
+        </div>
+        <div className="rounded-xl border p-4">
+          <HouseholdMembers initialMembers={householdMembers} />
         </div>
       </section>
 
