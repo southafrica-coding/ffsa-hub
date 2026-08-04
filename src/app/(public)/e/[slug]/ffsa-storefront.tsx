@@ -22,6 +22,10 @@ import {
   CheckoutQuestionFields,
   type CheckoutFieldClasses,
 } from "./checkout-questions-fields";
+import {
+  TICKET_CONSENT_URL,
+  TICKET_CONSENT_CHECKBOX_LABEL,
+} from "@/lib/ticketing/consent-terms";
 import { TicketQuestionsSection } from "./ticket-questions-section";
 
 // ============================================================
@@ -151,6 +155,7 @@ export function FfsaStorefront({
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [marketingConsent, setMarketingConsent] = useState(false);
+  const [consentAccepted, setConsentAccepted] = useState(false);
   const [customAnswers, setCustomAnswers] = useState<Record<string, unknown>>({});
   const [customErrors, setCustomErrors] = useState<Record<string, string>>({});
   const [ticketAnswers, setTicketAnswers] = useState<
@@ -321,6 +326,12 @@ export function FfsaStorefront({
       setErr("Please complete your name and a valid email.");
       return;
     }
+    if (!consentAccepted) {
+      setErr(
+        "Please accept the Ticket Purchase Terms & Consent Agreement to continue."
+      );
+      return;
+    }
     if (checkoutQuestions.length > 0) {
       const v = validateCheckoutAnswers(checkoutQuestions, customAnswers);
       if (!v.valid) {
@@ -358,6 +369,7 @@ export function FfsaStorefront({
           phone: phone.trim() || null,
         },
         marketing_consent: marketingConsent,
+        consent_accepted: consentAccepted,
         custom_answers: customAnswers,
         ticket_answers: ticketCollect.payload,
         payment_provider: provider,
@@ -822,6 +834,24 @@ export function FfsaStorefront({
                 <span>Keep me posted on FFSA events and gatherings by email.</span>
               </label>
             )}
+            <label className="ffx-consent">
+              <input
+                type="checkbox"
+                checked={consentAccepted}
+                onChange={(e) => setConsentAccepted(e.target.checked)}
+                required
+              />
+              <span>
+                {TICKET_CONSENT_CHECKBOX_LABEL}{" "}
+                <a
+                  href={TICKET_CONSENT_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Read the full terms.
+                </a>
+              </span>
+            </label>
           </section>
         )}
 
@@ -834,7 +864,7 @@ export function FfsaStorefront({
                 type="button"
                 className="ffx-cta"
                 onClick={() => submit("payfast")}
-                disabled={submitting !== null || !buyerValid}
+                disabled={submitting !== null || !buyerValid || !consentAccepted}
               >
                 <span>
                   {submitting === "payfast"
@@ -848,7 +878,7 @@ export function FfsaStorefront({
               type="button"
               className={canUsePayfast ? "ffx-cta-alt" : "ffx-cta"}
               onClick={() => submit("stripe")}
-              disabled={submitting !== null || !buyerValid}
+              disabled={submitting !== null || !buyerValid || !consentAccepted}
             >
               <span>
                 {submitting === "stripe"

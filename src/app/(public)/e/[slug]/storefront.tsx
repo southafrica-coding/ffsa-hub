@@ -10,6 +10,10 @@ import {
   CheckoutQuestionFields,
   type CheckoutFieldClasses,
 } from "./checkout-questions-fields";
+import {
+  TICKET_CONSENT_URL,
+  TICKET_CONSENT_CHECKBOX_LABEL,
+} from "@/lib/ticketing/consent-terms";
 
 // Custom checkout questions render with the storefront's native input
 // styling — globals.css covers inputs/selects/textareas, so plain
@@ -120,6 +124,7 @@ export function Storefront({
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [marketingConsent, setMarketingConsent] = useState(false);
+  const [consentAccepted, setConsentAccepted] = useState(false);
   const [customAnswers, setCustomAnswers] = useState<Record<string, unknown>>({});
   const [customErrors, setCustomErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState<"payfast" | "stripe" | null>(null);
@@ -260,6 +265,12 @@ export function Storefront({
       setErr("Please complete your name and a valid email.");
       return;
     }
+    if (!consentAccepted) {
+      setErr(
+        "Please accept the Ticket Purchase Terms & Consent Agreement to continue."
+      );
+      return;
+    }
     if (checkoutQuestions.length > 0) {
       const v = validateCheckoutAnswers(checkoutQuestions, customAnswers);
       if (!v.valid) {
@@ -290,6 +301,7 @@ export function Storefront({
           phone: phone.trim() || null,
         },
         marketing_consent: marketingConsent,
+        consent_accepted: consentAccepted,
         custom_answers: customAnswers,
         payment_provider: provider,
       }),
@@ -651,6 +663,26 @@ export function Storefront({
                 Keep me posted on FFSA events and gatherings by email.
               </span>
             </label>
+            <label className="flex items-start gap-2 cursor-pointer pt-1">
+              <input
+                type="checkbox"
+                checked={consentAccepted}
+                onChange={(e) => setConsentAccepted(e.target.checked)}
+                className="mt-0.5 accent-primary"
+                required
+              />
+              <span className="text-sm text-foreground/80 normal-case tracking-normal font-normal">
+                {TICKET_CONSENT_CHECKBOX_LABEL}{" "}
+                <a
+                  href={TICKET_CONSENT_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline"
+                >
+                  Read the full terms.
+                </a>
+              </span>
+            </label>
           </CardContent>
         </Card>
       )}
@@ -672,7 +704,7 @@ export function Storefront({
               <Button
                 type="button"
                 onClick={() => submit("payfast")}
-                disabled={submitting !== null || !buyerValid}
+                disabled={submitting !== null || !buyerValid || !consentAccepted}
                 size="lg"
                 className="w-full h-12"
               >
@@ -688,7 +720,7 @@ export function Storefront({
               <Button
                 type="button"
                 onClick={() => submit("stripe")}
-                disabled={submitting !== null || !buyerValid}
+                disabled={submitting !== null || !buyerValid || !consentAccepted}
                 variant={canUsePayfast ? "outline" : "default"}
                 size="lg"
                 className={canUsePayfast ? "w-full h-11" : "w-full h-12"}

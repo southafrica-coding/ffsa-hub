@@ -23,6 +23,7 @@ import {
   buyerFieldMap,
   BUYER_FIELD_LABELS,
 } from "@/lib/ticketing/buyer-fields";
+import { TICKET_CONSENT_VERSION } from "@/lib/ticketing/consent-terms";
 
 // POST /api/events/[id]/checkout
 //
@@ -50,6 +51,10 @@ type Body = {
     phone?: string | null;
   };
   marketing_consent?: boolean;
+  // Buyer accepted the Ticket Purchase Terms & Consent Agreement
+  // (required — enforced below). The accepted version is recorded on the
+  // order for audit; see src/lib/ticketing/consent-terms.ts.
+  consent_accepted?: boolean;
   custom_answers?: Record<string, unknown>;
   // Per-ticket answers to each tier's questions (migration 137). One
   // entry per ticket whose tier has questions; validated + snapshotted
@@ -161,6 +166,21 @@ export async function POST(
       );
     }
   }
+  // ── Consent (required) ───────────────────────────────────────
+  // Every buyer must accept the Ticket Purchase Terms & Consent
+  // Agreement (covers order, payment, media, health, POPIA, liability
+  // and the minors clause). The storefronts gate the pay button on this;
+  // this is the authoritative server-side check.
+  if (body.consent_accepted !== true) {
+    return NextResponse.json(
+      {
+        error:
+          "Please accept the Ticket Purchase Terms & Consent Agreement to continue.",
+      },
+      { status: 400 }
+    );
+  }
+
   if (
     !event.ticketing_enabled ||
     event.status !== "published" ||
@@ -475,6 +495,8 @@ export async function POST(
       buyer_email: emailRaw,
       buyer_phone: phoneRaw || null,
       marketing_consent: !!body.marketing_consent,
+      consent_version: TICKET_CONSENT_VERSION,
+      consent_accepted_at: now.toISOString(),
       status: "pending",
       contact_resolution: "pending",
       payment_provider: providerName,

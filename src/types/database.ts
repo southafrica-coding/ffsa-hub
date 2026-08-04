@@ -2652,6 +2652,8 @@ export type Database = {
           buyer_last_name: string
           buyer_phone: string | null
           cancelled_at: string | null
+          consent_accepted_at: string | null
+          consent_version: string | null
           contact_resolution: string
           created_at: string
           currency: string
@@ -2684,6 +2686,8 @@ export type Database = {
           buyer_last_name: string
           buyer_phone?: string | null
           cancelled_at?: string | null
+          consent_accepted_at?: string | null
+          consent_version?: string | null
           contact_resolution?: string
           created_at?: string
           currency?: string
@@ -2716,6 +2720,8 @@ export type Database = {
           buyer_last_name?: string
           buyer_phone?: string | null
           cancelled_at?: string | null
+          consent_accepted_at?: string | null
+          consent_version?: string | null
           contact_resolution?: string
           created_at?: string
           currency?: string

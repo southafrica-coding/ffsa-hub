@@ -16,6 +16,10 @@ import {
   CheckoutQuestionFields,
   type CheckoutFieldClasses,
 } from "./checkout-questions-fields";
+import {
+  TICKET_CONSENT_URL,
+  TICKET_CONSENT_CHECKBOX_LABEL,
+} from "@/lib/ticketing/consent-terms";
 import { TicketQuestionsSection } from "./ticket-questions-section";
 
 // Custom checkout questions, themed to FFSA Camps' scoped `.cmp-*` classes.
@@ -140,6 +144,7 @@ export function CampsStorefront({
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [marketingConsent, setMarketingConsent] = useState(false);
+  const [consentAccepted, setConsentAccepted] = useState(false);
   const [customAnswers, setCustomAnswers] = useState<Record<string, unknown>>({});
   const [customErrors, setCustomErrors] = useState<Record<string, string>>({});
   const [ticketAnswers, setTicketAnswers] = useState<
@@ -308,6 +313,12 @@ export function CampsStorefront({
       setErr("Add at least one pass first.");
       return;
     }
+    if (!consentAccepted) {
+      setErr(
+        "Please accept the Ticket Purchase Terms & Consent Agreement to continue."
+      );
+      return;
+    }
     if (!buyerValid) {
       setErr("Pop in your name and a valid email to lock it in.");
       document
@@ -358,6 +369,7 @@ export function CampsStorefront({
           phone: phone.trim() || null,
         },
         marketing_consent: marketingConsent,
+        consent_accepted: consentAccepted,
         custom_answers: customAnswers,
         ticket_answers: ticketCollect.payload,
         payment_provider: provider,
@@ -698,6 +710,24 @@ export function CampsStorefront({
               </span>
             </label>
           )}
+          <label className="cmp-consent">
+            <input
+              type="checkbox"
+              checked={consentAccepted}
+              onChange={(e) => setConsentAccepted(e.target.checked)}
+              required
+            />
+            <span>
+              {TICKET_CONSENT_CHECKBOX_LABEL}{" "}
+              <a
+                href={TICKET_CONSENT_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Read the full terms.
+              </a>
+            </span>
+          </label>
         </section>
       )}
 
@@ -738,7 +768,7 @@ export function CampsStorefront({
             <button
               type="button"
               onClick={() => submit("payfast")}
-              disabled={submitting !== null || !buyerValid}
+              disabled={submitting !== null || !buyerValid || !consentAccepted}
               className="cmp-paybtn"
             >
               {submitting === "payfast" ? "LOCKING IT IN…" : `PAY ${money(totalCents)}`}
@@ -752,7 +782,7 @@ export function CampsStorefront({
             <button
               type="button"
               onClick={() => submit("stripe")}
-              disabled={submitting !== null || !buyerValid}
+              disabled={submitting !== null || !buyerValid || !consentAccepted}
               className={canUsePayfast ? "cmp-paybtn-alt" : "cmp-paybtn"}
             >
               {submitting === "stripe"
