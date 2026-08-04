@@ -57,6 +57,19 @@ import {
   preachersEsc,
   preachersChrome,
 } from "./preachers-shell";
+import {
+  WILD_ONES_COLORS,
+  WILD_ONES_FONTS,
+  wildOnesEyebrow,
+  wildOnesHeading,
+  wildOnesButton,
+  wildOnesQuote,
+  wildOnesDivider,
+  wildOnesSpacer,
+  wildOnesImage,
+  wildOnesEsc,
+  wildOnesChrome,
+} from "./wild-ones-shell";
 import { FFSA_FONTS } from "@/lib/brand/ffsa";
 import {
   FE,
@@ -149,7 +162,12 @@ function renderBlock(b: CampaignBlock): string {
   }
 }
 
-export type WorkflowEmailBrand = "ff" | "the_send" | "ffsa_camps" | "preachers";
+export type WorkflowEmailBrand =
+  | "ff"
+  | "the_send"
+  | "ffsa_camps"
+  | "preachers"
+  | "wild_ones";
 
 export type WorkflowEmailOpts = {
   baseUrl: string; // e.g. https://www.ffsahub.com — for the logo assets
@@ -175,6 +193,9 @@ export function renderWorkflowEmail(
   }
   if (opts.brand === "preachers") {
     return renderPreachersWorkflowEmail(body, opts);
+  }
+  if (opts.brand === "wild_ones") {
+    return renderWildOnesWorkflowEmail(body, opts);
   }
   if (opts.brand === "the_send") {
     return renderTheSendWorkflowEmail(body, opts);
@@ -517,6 +538,113 @@ ${preachersButton(opts.scheduler.url, opts.scheduler.label, "filled")}
     `<p style="font-family:${PF.BODY};font-size:15px;color:${PC.OFFWHITE};">&nbsp;</p>`;
 
   return preachersChrome({
+    previewText: opts.previewText,
+    bodyHtml: bodyHtml + prefsFooter,
+    siteUrl: opts.baseUrl,
+  });
+}
+
+// ============================================================
+// WILD ONES variant — same block editor, swapped chrome + per-block
+// styling. Lives next to the F&F + SEND + Camps + PREACHERS renderers so
+// all stay in lockstep as block types are added. DARK charcoal paper,
+// bone type, condensed Oswald caps, one ember-orange accent.
+// ============================================================
+
+const WC = WILD_ONES_COLORS;
+const WF = WILD_ONES_FONTS;
+const WILD_ONES_DISPLAY = `font-family:${WF.DISPLAY};font-weight:700;`;
+
+// WILD ONES-styled rich text — same allowed tags as the sibling brands so
+// the block editor produces the same shape; only the inline styles differ
+// (bone text on charcoal, ember underline on links, body font Helvetica).
+function wildOnesRichText(html: string): string {
+  return sanitizeHtml(html, {
+    allowedTags: ["p", "br", "strong", "b", "em", "i", "a", "span", "ul", "ol", "li"],
+    allowedAttributes: { a: ["href", "target", "rel"] },
+    transformTags: {
+      a: (_t, attribs) => ({
+        tagName: "a",
+        attribs: {
+          ...attribs,
+          style: `color:${WC.EMBER};text-decoration:underline;text-decoration-color:${WC.EMBER};`,
+          target: "_blank",
+          rel: "noopener noreferrer",
+        },
+      }),
+      p: () => ({
+        tagName: "p",
+        attribs: {
+          style: `margin:0 0 4px;font-family:${WF.BODY};font-size:15px;line-height:1.65;color:${WC.BONE};`,
+        },
+      }),
+    },
+  });
+}
+
+function renderWildOnesBlock(b: CampaignBlock): string {
+  switch (b.type) {
+    case "eyebrow":
+      return wildOnesEyebrow(b.text);
+
+    case "heading":
+      return `${b.eyebrow ? wildOnesEyebrow(b.eyebrow) : ""}${wildOnesHeading(b.text)}`;
+
+    case "text":
+      return `<div style="margin:0 0 6px;font-family:${WF.BODY};font-size:15px;line-height:1.65;color:${WC.BONE};">${wildOnesRichText(b.text)}</div>`;
+
+    case "button":
+      return wildOnesButton(b.url, b.text, b.style ?? "filled");
+
+    case "image":
+      return wildOnesImage(b.url, b.alt, b.caption);
+
+    case "quote":
+      return wildOnesQuote(b.text, b.attribution);
+
+    case "divider":
+      return wildOnesDivider(b.style ?? "rule");
+
+    case "spacer":
+      return wildOnesSpacer(b.size ?? "md");
+
+    case "image-text":
+      return `${wildOnesImage(b.url, b.alt)}${
+        b.heading
+          ? `<h2 style="margin:0 0 6px;${WILD_ONES_DISPLAY}font-size:22px;line-height:1.02;text-transform:uppercase;color:${WC.OFFWHITE};">${wildOnesEsc(b.heading)}</h2>`
+          : ""
+      }<div style="margin:0 0 6px;font-family:${WF.BODY};font-size:15px;line-height:1.65;color:${WC.BONE};">${wildOnesRichText(b.text)}</div>`;
+
+    default:
+      return "";
+  }
+}
+
+export function renderWildOnesWorkflowEmail(
+  body: CampaignBody | null | undefined,
+  opts: WorkflowEmailOpts
+): string {
+  const blocks = (body?.blocks ?? []).map(renderWildOnesBlock).join("");
+
+  // Scheduler — framed ink card with an ember stamp button so it reads as
+  // an action inside the WILD ONES aesthetic.
+  const schedulerBlock = opts.scheduler
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:24px 0 6px;"><tr><td style="background:${WC.INK};border:2px solid ${WC.LINE};padding:22px;text-align:center;">
+<p style="margin:0 0 14px;font-family:${WF.BODY};font-size:11px;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;color:${WC.EMBER};">Find a time to talk</p>
+${wildOnesButton(opts.scheduler.url, opts.scheduler.label, "filled")}
+</td></tr></table>`
+    : "";
+
+  // Preferences link footer — appended INSIDE the chrome body so it sits
+  // on the charcoal paper above the ink footer. The chrome itself doesn't
+  // know about prefsUrl.
+  const prefsFooter = `<p style="margin:28px 0 0;padding-top:18px;border-top:2px dashed ${WC.LINE};font-family:${WF.BODY};font-size:10px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:${WC.BONE};opacity:0.7;text-align:center;"><a href="${wildOnesEsc(opts.prefsUrl)}" style="color:${WC.EMBER};text-decoration:underline;">Manage email preferences</a></p>`;
+
+  const bodyHtml =
+    (blocks + schedulerBlock) ||
+    `<p style="font-family:${WF.BODY};font-size:15px;color:${WC.BONE};">&nbsp;</p>`;
+
+  return wildOnesChrome({
     previewText: opts.previewText,
     bodyHtml: bodyHtml + prefsFooter,
     siteUrl: opts.baseUrl,

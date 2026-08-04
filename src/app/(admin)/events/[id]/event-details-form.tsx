@@ -9,7 +9,7 @@ import { DateInput } from "@/components/ui/date-input";
 import { Label } from "@/components/ui/label";
 import { Lock, Pencil } from "lucide-react";
 
-type EventBrand = "ff" | "the_send" | "ffsa_camps" | "preachers";
+type EventBrand = "ff" | "the_send" | "ffsa_camps" | "preachers" | "wild_ones";
 
 const BRAND_OPTIONS: Array<{ value: EventBrand; label: string; helper: string }> = [
   {
@@ -35,12 +35,19 @@ const BRAND_OPTIONS: Array<{ value: EventBrand; label: string; helper: string }>
     helper:
       "Bespoke DARK navy/bone rock-poster template — storefront, workflow steps, ticket confirmations, and follow-ups all read as one PREACHERS identity. Slogan: “GO. PREACH.”",
   },
+  {
+    value: "wild_ones",
+    label: "Wild Ones",
+    helper:
+      "Bespoke torch/ember Wild Ones Conference template — black + ember #F26B21, Oswald caps, real brush logo.",
+  },
 ];
 
 function normalizeBrand(raw: string | null | undefined): EventBrand {
   if (raw === "the_send") return "the_send";
   if (raw === "ffsa_camps") return "ffsa_camps";
   if (raw === "preachers") return "preachers";
+  if (raw === "wild_ones") return "wild_ones";
   return "ff";
 }
 

@@ -23,13 +23,14 @@ import { ticketConfirmationEmailHtml } from "@/lib/email/templates/ticket-confir
 import { theSendTicketEmailHtml } from "@/lib/email/templates/the-send-ticket-confirmation";
 import { campsTicketEmailHtml } from "@/lib/email/templates/ffsa-camps-ticket-confirmation";
 import { preachersTicketEmailHtml } from "@/lib/email/templates/preachers-ticket-confirmation";
+import { wildOnesTicketEmailHtml } from "@/lib/email/templates/wild-ones-ticket-confirmation";
 import { resolveOrderToCrm } from "./crm-resolution";
 import {
   ticketAnswerDrainer,
   type TicketAnswerGroup,
 } from "./ticket-questions";
 
-export type EventBrand = "ff" | "the_send" | "ffsa_camps" | "preachers";
+export type EventBrand = "ff" | "the_send" | "ffsa_camps" | "preachers" | "wild_ones";
 
 // Bespoke email keyed by the event's brand flag (migration 077 + the
 // ffsa_camps follow-up). An explicit brand always wins. Falls back to a
@@ -45,6 +46,7 @@ export function resolveEventBrand(event: {
   if (event.brand === "the_send") return "the_send";
   if (event.brand === "ffsa_camps") return "ffsa_camps";
   if (event.brand === "preachers") return "preachers";
+  if (event.brand === "wild_ones") return "wild_ones";
   if (event.brand) return "ff"; // explicit (incl. 'ff' / unknown) → no heuristic
   const slug = (event.public_slug ?? "").toLowerCase();
   const title = (event.title ?? "").toLowerCase();
@@ -52,6 +54,8 @@ export function resolveEventBrand(event: {
   if (slug.includes("ffsa-camps") || slug.includes("camps") || title.includes("camps"))
     return "ffsa_camps";
   if (slug.includes("preachers") || title.includes("preachers")) return "preachers";
+  if (slug.includes("wild-ones") || slug.includes("wild ones") || title.includes("wild ones"))
+    return "wild_ones";
   return "ff";
 }
 
@@ -233,7 +237,9 @@ export async function fulfillOrder(
         ? `you're in 🤞 — ${order.events.title}`
         : brand === "preachers"
           ? `You're in — ${order.events.title} ⚡`
-          : `Your tickets for ${order.events.title}`;
+          : brand === "wild_ones"
+            ? `You're in — ${order.events.title} 🔥`
+            : `Your tickets for ${order.events.title}`;
 
   // Record the send in the email ledger (migration 141) BEFORE we send,
   // so a confirmation email can never again vanish without a trace. The
@@ -265,7 +271,9 @@ export async function fulfillOrder(
           ? campsTicketEmailHtml(emailArgs)
           : brand === "preachers"
             ? preachersTicketEmailHtml(emailArgs)
-            : ticketConfirmationEmailHtml(emailArgs),
+            : brand === "wild_ones"
+              ? wildOnesTicketEmailHtml(emailArgs)
+              : ticketConfirmationEmailHtml(emailArgs),
     category: "ticket_confirmation",
   });
   if (sendResult.error) {

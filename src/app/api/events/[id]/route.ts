@@ -116,7 +116,7 @@ export async function PATCH(
   // template router used by workflow steps, ticket confirmations,
   // and (future) other event-tied sends. Migration 077.
   if ("brand" in body) {
-    const allowedBrands = ["ff", "the_send", "ffsa_camps", "preachers"];
+    const allowedBrands = ["ff", "the_send", "ffsa_camps", "preachers", "wild_ones"];
     if (!allowedBrands.includes(body.brand as string)) {
       return NextResponse.json({ error: "Invalid brand" }, { status: 400 });
     }

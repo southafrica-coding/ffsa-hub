@@ -5,13 +5,14 @@ import { FfsaStorefront } from "./ffsa-storefront";
 import { TheSendStorefront } from "./the-send-storefront";
 import { CampsStorefront } from "./camps-storefront";
 import { PreachersStorefront } from "./preachers-storefront";
+import { WildOnesStorefront } from "./wild-ones-storefront";
 import { resolveBuyerFields } from "@/lib/ticketing/buyer-fields";
 import { PublicFormNotice } from "@/components/public-form-shell";
 import { formatEventDateRange } from "@/lib/events/og";
 import type { FormField } from "@/lib/forms/schema";
 import type { Metadata } from "next";
 
-type EventBrand = "ff" | "the_send" | "ffsa_camps" | "preachers";
+type EventBrand = "ff" | "the_send" | "ffsa_camps" | "preachers" | "wild_ones";
 
 // Bespoke landing pages keyed by the event's brand flag (migration 077 +
 // the ffsa_camps follow-up). THE SEND, FFSA Camps and PREACHERS each get
@@ -29,6 +30,7 @@ function resolveEventBrand(event: {
   if (event.brand === "the_send") return "the_send";
   if (event.brand === "ffsa_camps") return "ffsa_camps";
   if (event.brand === "preachers") return "preachers";
+  if (event.brand === "wild_ones") return "wild_ones";
   if (event.brand) return "ff";
   const slug = (event.public_slug ?? "").toLowerCase();
   const title = (event.title ?? "").toLowerCase();
@@ -36,6 +38,8 @@ function resolveEventBrand(event: {
   if (slug.includes("ffsa-camps") || slug.includes("camps") || title.includes("camps"))
     return "ffsa_camps";
   if (slug.includes("preachers") || title.includes("preachers")) return "preachers";
+  if (slug.includes("wild-ones") || slug.includes("wild ones") || title.includes("wild ones"))
+    return "wild_ones";
   return "ff";
 }
 
@@ -173,6 +177,16 @@ export default async function PublicEventPage({
   if (brand === "preachers") {
     return (
       <PreachersStorefront
+        event={eventProps}
+        ticketTypes={ticketTypes ?? []}
+        checkoutQuestions={checkoutQuestions}
+        buyerFields={buyerFields}
+      />
+    );
+  }
+  if (brand === "wild_ones") {
+    return (
+      <WildOnesStorefront
         event={eventProps}
         ticketTypes={ticketTypes ?? []}
         checkoutQuestions={checkoutQuestions}
