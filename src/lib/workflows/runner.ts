@@ -181,7 +181,9 @@ async function loadWorkflowIdentity(
           ? "preachers"
           : rawBrand === "wild_ones"
             ? "wild_ones"
-            : "ff";
+            : rawBrand === "missio"
+              ? "missio"
+              : "ff";
   return {
     labelId: label?.id ?? null,
     identity,

@@ -9,7 +9,13 @@ import { DateInput } from "@/components/ui/date-input";
 import { Label } from "@/components/ui/label";
 import { Lock, Pencil } from "lucide-react";
 
-type EventBrand = "ff" | "the_send" | "ffsa_camps" | "preachers" | "wild_ones";
+type EventBrand =
+  | "ff"
+  | "the_send"
+  | "ffsa_camps"
+  | "preachers"
+  | "wild_ones"
+  | "missio";
 
 const BRAND_OPTIONS: Array<{ value: EventBrand; label: string; helper: string }> = [
   {
@@ -41,6 +47,12 @@ const BRAND_OPTIONS: Array<{ value: EventBrand; label: string; helper: string }>
     helper:
       "Bespoke torch/ember Wild Ones Conference template — black + ember #F26B21, Oswald caps, real brush logo.",
   },
+  {
+    value: "missio",
+    label: "MISSIO",
+    helper:
+      "Church plant — pine & clay, serif. Bespoke DARK pine/cream template — clay #C56A3F accent, Fraunces caps, serif wordmark. Slogan: “SENT ON MISSION”.",
+  },
 ];
 
 function normalizeBrand(raw: string | null | undefined): EventBrand {
@@ -48,6 +60,7 @@ function normalizeBrand(raw: string | null | undefined): EventBrand {
   if (raw === "ffsa_camps") return "ffsa_camps";
   if (raw === "preachers") return "preachers";
   if (raw === "wild_ones") return "wild_ones";
+  if (raw === "missio") return "missio";
   return "ff";
 }
 
