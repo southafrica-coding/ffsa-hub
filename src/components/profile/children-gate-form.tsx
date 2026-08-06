@@ -16,13 +16,21 @@ import {
   type SelfDefaults,
 } from "@/components/profile/household-members";
 
-// Blocking panel for the staff "children" gate. Two states:
-//   1. hasChildren == null  → ask "Do you have children?" (Yes / No).
-//   2. hasChildren == true & incomplete → force the full details for each
-//      child before the Hub unblocks.
-// The parent gate (profile-completion-gate) decides which case applies and
-// only renders this when the user is actually blocked, so state 2 is shown
-// whenever hasChildren is already true.
+// Blocking family gate for staff. A short two-step flow:
+//
+//   Step 1 — Spouse (optional): "Do you have a spouse?" Add them (name +
+//            email) so their account can be linked later. Never blocks.
+//   Step 2 — Children (mandatory): "Do you have children?" If yes, every
+//            child must be fully completed before the Hub unblocks; if no,
+//            the gate clears. A spouse alone is always allowed through — the
+//            complete-child requirement only applies when they actually have
+//            children.
+//
+// `hasChildren` (users.has_children) drives step 2's mandatory logic. The
+// parent gate only mounts this while the user is still blocked, so once
+// hasChildren is true we open directly on the children step.
+type Step = "spouse" | "children-ask" | "children-add";
+
 export function ChildrenGateForm({
   hasChildren,
   members,
@@ -35,6 +43,11 @@ export function ChildrenGateForm({
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // If they've already said "yes" to children (record incomplete), open on the
+  // add step; otherwise start at the spouse step.
+  const [step, setStep] = useState<Step>(
+    hasChildren === true ? "children-add" : "spouse"
+  );
 
   async function answer(value: boolean) {
     setSaving(true);
@@ -50,7 +63,8 @@ export function ChildrenGateForm({
         setError(data.error || "Could not save your answer. Please try again.");
         return;
       }
-      // Gate re-evaluates: "No" clears it; "Yes" advances to the add step.
+      // "No" clears the gate; "Yes" re-renders with hasChildren=true, which
+      // opens the add step.
       router.refresh();
     } catch {
       setError("Network error. Please try again.");
@@ -59,10 +73,35 @@ export function ChildrenGateForm({
     }
   }
 
-  // ── State 1: the yes/no question ─────────────────────────────
-  if (hasChildren == null) {
+  // ── Step 1: Spouse (optional) ────────────────────────────────
+  if (step === "spouse") {
     return (
-      <Card className="w-full max-w-md mx-4 shadow-2xl">
+      <Card className="w-full max-w-2xl shadow-2xl">
+        <CardHeader className="text-center">
+          <CardTitle className="text-xl">Do you have a spouse?</CardTitle>
+          <CardDescription>
+            If so, add them below — we just need their name and email so their
+            own account can be linked later. This step is optional.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <HouseholdMembers
+            initialMembers={members}
+            defaultRelationship="spouse"
+            refreshRouterOnChange={false}
+          />
+          <Button className="w-full" onClick={() => setStep("children-ask")}>
+            Continue
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // ── Step 2a: the children yes/no question ────────────────────
+  if (step === "children-ask") {
+    return (
+      <Card className="w-full max-w-md shadow-2xl">
         <CardHeader className="text-center">
           <CardTitle className="text-xl">Do you have children?</CardTitle>
           <CardDescription>
@@ -89,12 +128,20 @@ export function ChildrenGateForm({
             </Button>
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
+          <Button
+            variant="ghost"
+            className="w-full"
+            onClick={() => setStep("spouse")}
+            disabled={saving}
+          >
+            ← Back
+          </Button>
         </CardContent>
       </Card>
     );
   }
 
-  // ── State 2: must complete each child ────────────────────────
+  // ── Step 2b: must complete each child ────────────────────────
   return (
     <Card className="w-full max-w-2xl shadow-2xl">
       <CardHeader className="text-center">
@@ -106,13 +153,21 @@ export function ChildrenGateForm({
           completed.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
         <HouseholdMembers
           initialMembers={members}
           requireComplete
           defaultRelationship="child"
           selfDefaults={selfDefaults}
         />
+        <Button
+          variant="ghost"
+          className="w-full"
+          onClick={() => setStep("children-ask")}
+          disabled={saving}
+        >
+          ← Back
+        </Button>
       </CardContent>
     </Card>
   );
