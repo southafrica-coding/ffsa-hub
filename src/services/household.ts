@@ -13,6 +13,9 @@ type Client = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 export type HouseholdMemberInput = {
   relationship?: string;
   full_name?: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  email?: string | null;
   date_of_birth?: string | null;
   gender?: string | null;
   passport_country?: string | null;

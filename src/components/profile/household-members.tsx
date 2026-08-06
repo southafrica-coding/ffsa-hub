@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { FieldControl, seedOtherActive } from "@/components/profile/field-control";
 import {
   HOUSEHOLD_CORE_FIELDS,
+  HOUSEHOLD_SPOUSE_FIELDS,
   HOUSEHOLD_PASSPORT_FIELDS,
   HOUSEHOLD_VISA_BASE_FIELDS,
   HOUSEHOLD_VISA_LONG_TERM_FIELDS,
@@ -20,6 +21,9 @@ export type HouseholdMember = {
   id: string;
   relationship: string;
   full_name: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
   date_of_birth: string | null;
   gender: string | null;
   passport_country: string | null;
@@ -34,6 +38,34 @@ export type HouseholdMember = {
   health_insurance_expiry_date: string | null;
 };
 
+// The primary user's own visa + insurance, used by the "same as me" shortcut
+// when adding a child.
+export type SelfDefaults = {
+  is_international?: boolean | null;
+  visa_category?: string | null;
+  visa_type?: string | null;
+  visa_expiry_date?: string | null;
+  health_insurance_provider?: string | null;
+  health_insurance_policy_number?: string | null;
+  health_insurance_expiry_date?: string | null;
+};
+
+// The visa + insurance fields the "same as me" checkbox copies.
+const COPYABLE_FIELDS = [
+  "visa_category",
+  "visa_type",
+  "visa_expiry_date",
+  "health_insurance_provider",
+  "health_insurance_policy_number",
+  "health_insurance_expiry_date",
+] as const;
+
+// The child form's always-visible core fields (relationship is fixed by the
+// button pressed, so we drop that dropdown from the form).
+const HOUSEHOLD_CHILD_CORE_FIELDS = HOUSEHOLD_CORE_FIELDS.filter(
+  (f) => f.field !== "relationship"
+);
+
 const relationshipLabel = (value: string) =>
   HOUSEHOLD_RELATIONSHIP_OPTIONS.find((o) => o.value === value)?.label ?? value;
 
@@ -42,6 +74,7 @@ function memberToValues(m: Partial<HouseholdMember>): Record<string, string> {
   const out: Record<string, string> = {};
   for (const f of [
     ...HOUSEHOLD_CORE_FIELDS,
+    ...HOUSEHOLD_SPOUSE_FIELDS,
     ...HOUSEHOLD_PASSPORT_FIELDS,
     ...HOUSEHOLD_VISA_BASE_FIELDS,
     ...HOUSEHOLD_VISA_LONG_TERM_FIELDS,
@@ -64,6 +97,7 @@ export function HouseholdMembers({
   refreshRouterOnChange = true,
   requireComplete = false,
   defaultRelationship,
+  selfDefaults,
 }: {
   initialMembers: HouseholdMember[];
   className?: string;
@@ -77,8 +111,12 @@ export function HouseholdMembers({
   // save is allowed, so every saved record clears the children gate. The
   // normal profile usage leaves this off (partial saves allowed).
   requireComplete?: boolean;
-  // Pre-select the relationship for a new member (e.g. "child" in the gate).
+  // Restrict the add flow to a single relationship (e.g. "child" in the
+  // children gate). When unset, both "Add spouse" and "Add child" are offered.
   defaultRelationship?: string;
+  // The primary user's own visa + insurance, enabling the "same as me"
+  // shortcut when adding a child. Omit to hide the shortcut.
+  selfDefaults?: SelfDefaults;
 }) {
   const router = useRouter();
   const [members, setMembers] = useState<HouseholdMember[]>(initialMembers);
@@ -105,16 +143,16 @@ export function HouseholdMembers({
   const [values, setValues] = useState<Record<string, string>>(EMPTY_VALUES);
   const [isInternational, setIsInternational] = useState(false);
   const [otherActive, setOtherActive] = useState<Record<string, boolean>>({});
+  const [sameAsMe, setSameAsMe] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const beginAdd = () => {
-    const start = defaultRelationship
-      ? { ...EMPTY_VALUES, relationship: defaultRelationship }
-      : EMPTY_VALUES;
+  const beginAdd = (relationship: string) => {
+    const start = { ...EMPTY_VALUES, relationship };
     setEditing("new");
     setValues(start);
     setIsInternational(false);
+    setSameAsMe(false);
     setOtherActive(seedOtherActive(HOUSEHOLD_INSURANCE_FIELDS, start));
     setError(null);
   };
@@ -124,8 +162,33 @@ export function HouseholdMembers({
     setEditing(m.id);
     setValues(v);
     setIsInternational(Boolean(m.is_international));
+    setSameAsMe(false);
     setOtherActive(seedOtherActive(HOUSEHOLD_INSURANCE_FIELDS, v));
     setError(null);
+  };
+
+  // Copy the primary user's visa + insurance onto the member being added, or
+  // clear those fields when the shortcut is switched back off.
+  const toggleSameAsMe = (checked: boolean) => {
+    setSameAsMe(checked);
+    if (checked && selfDefaults) {
+      const copied: Record<string, string> = {};
+      for (const key of COPYABLE_FIELDS) {
+        const raw = selfDefaults[key];
+        copied[key] = raw === null || raw === undefined ? "" : String(raw);
+      }
+      setValues((prev) => ({ ...prev, ...copied }));
+      setIsInternational(Boolean(selfDefaults.is_international));
+      setOtherActive((prev) => ({
+        ...prev,
+        ...seedOtherActive(HOUSEHOLD_INSURANCE_FIELDS, copied),
+      }));
+    } else {
+      const cleared: Record<string, string> = {};
+      for (const key of COPYABLE_FIELDS) cleared[key] = "";
+      setValues((prev) => ({ ...prev, ...cleared }));
+      setIsInternational(false);
+    }
   };
 
   const cancel = () => {
@@ -135,6 +198,8 @@ export function HouseholdMembers({
 
   const setValue = (field: string, v: string) =>
     setValues((prev) => ({ ...prev, [field]: v }));
+
+  const isSpouse = values.relationship === "spouse";
 
   const visaFields: FieldConfig[] = isInternational
     ? [
@@ -165,23 +230,39 @@ export function HouseholdMembers({
       setError("Please choose a relationship.");
       return;
     }
-    if (!values.full_name.trim()) {
-      setError("Please enter the family member's full name.");
-      return;
-    }
 
-    // Gate mode: every field is mandatory before the record counts toward
-    // clearing the children gate. Validate against the same rule the gate uses.
-    if (
-      requireComplete &&
-      !isChildComplete({ ...values, is_international: isInternational })
-    ) {
-      setError(
-        "Please fill in every field for this child" +
-          (isInternational ? " (including visa details)" : "") +
-          " before saving."
-      );
-      return;
+    // A spouse is captured lightly: first name, last name, email only.
+    if (isSpouse) {
+      if (!values.first_name?.trim()) {
+        setError("Please enter your spouse's first name.");
+        return;
+      }
+      if (!values.last_name?.trim()) {
+        setError("Please enter your spouse's last name.");
+        return;
+      }
+      if (!values.email?.trim()) {
+        setError("Please enter your spouse's email.");
+        return;
+      }
+    } else {
+      if (!values.full_name.trim()) {
+        setError("Please enter the family member's full name.");
+        return;
+      }
+      // Gate mode: every field is mandatory before the record counts toward
+      // clearing the children gate. Validate against the same rule the gate uses.
+      if (
+        requireComplete &&
+        !isChildComplete({ ...values, is_international: isInternational })
+      ) {
+        setError(
+          "Please fill in every field for this child" +
+            (isInternational ? " (including visa details)" : "") +
+            " before saving."
+        );
+        return;
+      }
     }
     setSaving(true);
     setError(null);
@@ -190,9 +271,15 @@ export function HouseholdMembers({
     // them so a toggle-off doesn't leave stale visa data behind.
     const payload: Record<string, unknown> = {
       ...values,
-      is_international: isInternational,
+      is_international: isSpouse ? false : isInternational,
     };
-    if (!isInternational) {
+    if (isSpouse) {
+      // Server composes full_name from first/last; don't ship child-only fields.
+      payload.full_name = `${values.first_name?.trim() ?? ""} ${values.last_name?.trim() ?? ""}`.trim();
+      payload.visa_category = "";
+      payload.visa_type = "";
+      payload.visa_expiry_date = "";
+    } else if (!isInternational) {
       payload.visa_category = "";
       payload.visa_type = "";
       payload.visa_expiry_date = "";
@@ -244,8 +331,8 @@ export function HouseholdMembers({
     <div className={className}>
       {members.length === 0 && editing === null && (
         <p className="text-sm text-muted-foreground">
-          No family members added yet. Add your spouse, children or dependents
-          so we have their details on record.
+          No family members added yet. Add your spouse or children so we have
+          their details on record.
         </p>
       )}
 
@@ -289,48 +376,83 @@ export function HouseholdMembers({
 
       {editing !== null && (
         <div className="mt-3 space-y-4 rounded-lg border p-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            {HOUSEHOLD_CORE_FIELDS.map(renderField)}
-          </div>
+          {/* Relationship is fixed by the button pressed — shown, not editable. */}
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            {editing === "new" ? "Adding" : "Editing"}:{" "}
+            <span className="font-semibold text-foreground">
+              {relationshipLabel(values.relationship)}
+            </span>
+          </p>
 
-          <div>
-            <p className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground">
-              Passport
-            </p>
-            <div className="grid gap-4 sm:grid-cols-2">
-              {HOUSEHOLD_PASSPORT_FIELDS.map(renderField)}
-            </div>
-          </div>
-
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={isInternational}
-              onChange={(e) => setIsInternational(e.target.checked)}
-              className="h-4 w-4"
-            />
-            This family member is an international (non-South African) citizen
-          </label>
-
-          {isInternational && (
-            <div>
-              <p className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground">
-                Visa
-              </p>
+          {isSpouse ? (
+            <>
+              {/* A spouse is captured lightly — enough to link their account. */}
               <div className="grid gap-4 sm:grid-cols-2">
-                {visaFields.map(renderField)}
+                {HOUSEHOLD_SPOUSE_FIELDS.map(renderField)}
               </div>
-            </div>
-          )}
+              <p className="text-xs text-muted-foreground">
+                We only need your spouse&rsquo;s name and email for now — enough
+                to connect their own account later.
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {HOUSEHOLD_CHILD_CORE_FIELDS.map(renderField)}
+              </div>
 
-          <div>
-            <p className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground">
-              Health insurance
-            </p>
-            <div className="grid gap-4 sm:grid-cols-2">
-              {HOUSEHOLD_INSURANCE_FIELDS.map(renderField)}
-            </div>
-          </div>
+              {selfDefaults && (
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={sameAsMe}
+                    onChange={(e) => toggleSameAsMe(e.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  Visa &amp; insurance same as mine
+                </label>
+              )}
+
+              <div>
+                <p className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground">
+                  Passport
+                </p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {HOUSEHOLD_PASSPORT_FIELDS.map(renderField)}
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={isInternational}
+                  onChange={(e) => setIsInternational(e.target.checked)}
+                  className="h-4 w-4"
+                />
+                This family member is an international (non-South African) citizen
+              </label>
+
+              {isInternational && (
+                <div>
+                  <p className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground">
+                    Visa
+                  </p>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {visaFields.map(renderField)}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <p className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground">
+                  Health insurance
+                </p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {HOUSEHOLD_INSURANCE_FIELDS.map(renderField)}
+                </div>
+              </div>
+            </>
+          )}
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 
@@ -351,11 +473,39 @@ export function HouseholdMembers({
       )}
 
       {editing === null && (
-        <div className="mt-3">
-          <Button type="button" variant="outline" size="sm" onClick={beginAdd}>
-            + Add family member
-          </Button>
-          {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
+        <div className="mt-3 flex flex-wrap gap-2">
+          {defaultRelationship ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => beginAdd(defaultRelationship)}
+            >
+              + Add {relationshipLabel(defaultRelationship).toLowerCase()}
+            </Button>
+          ) : (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => beginAdd("spouse")}
+              >
+                + Add spouse
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => beginAdd("child")}
+              >
+                + Add child
+              </Button>
+            </>
+          )}
+          {error && (
+            <p className="mt-2 w-full text-sm text-destructive">{error}</p>
+          )}
         </div>
       )}
     </div>

@@ -12,6 +12,9 @@ import { HOUSEHOLD_RELATIONSHIP_OPTIONS } from "@/lib/users/profile-fields";
 const SCALAR_FIELDS = [
   "relationship",
   "full_name",
+  "first_name",
+  "last_name",
+  "email",
   "date_of_birth",
   "gender",
   "passport_country",
@@ -51,11 +54,33 @@ export function sanitizeHouseholdInput(
     return { input, error: "Please choose a valid relationship." };
   }
 
+  const isSpouse = input.relationship === "spouse";
+
+  // A spouse is captured lightly (first/last/email). Keep full_name — a
+  // NOT NULL column and what every list/display consumer reads — populated
+  // from the two name parts so the rest of the app is unaffected.
+  if (isSpouse) {
+    const first = input.first_name ? String(input.first_name).trim() : "";
+    const last = input.last_name ? String(input.last_name).trim() : "";
+    const composed = `${first} ${last}`.trim();
+    if (composed) input.full_name = composed;
+  }
+
   if (opts.requireCore) {
     if (!input.relationship) {
       return { input, error: "Relationship is required." };
     }
-    if (!input.full_name || String(input.full_name).trim() === "") {
+    if (isSpouse) {
+      if (!input.first_name || String(input.first_name).trim() === "") {
+        return { input, error: "Spouse first name is required." };
+      }
+      if (!input.last_name || String(input.last_name).trim() === "") {
+        return { input, error: "Spouse last name is required." };
+      }
+      if (!input.email || String(input.email).trim() === "") {
+        return { input, error: "Spouse email is required." };
+      }
+    } else if (!input.full_name || String(input.full_name).trim() === "") {
       return { input, error: "Full name is required." };
     }
   }

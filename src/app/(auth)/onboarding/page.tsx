@@ -476,7 +476,7 @@ export default function OnboardingPage() {
                 <h2 style={{ fontFamily: "var(--font-bebas,'Arial Black',sans-serif)", fontSize: "2rem", letterSpacing: "0.04em", color: "#F0EBE3", lineHeight: 1 }}>
                   Address
                 </h2>
-                <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>Your current address or on-base address. Fields marked * are required.</p>
+                <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>Your current residential address in South Africa (or your on-base address). Fields marked * are required.</p>
               </>}
               {step === 4 && <>
                 <p className="page-eyebrow" style={{ marginBottom: "6px" }}>Step {currentPos + 1} of {totalSteps}</p>
@@ -497,7 +497,7 @@ export default function OnboardingPage() {
                 <h2 style={{ fontFamily: "var(--font-bebas,'Arial Black',sans-serif)", fontSize: "2rem", letterSpacing: "0.04em", color: "#F0EBE3", lineHeight: 1 }}>
                   Your Family
                 </h2>
-                <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>Add your spouse, children or dependents. This is optional — you can skip it and add them later from your profile.</p>
+                <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>Do you have a spouse or children? Add them here. This is optional — you can skip it and add them later from your profile.</p>
               </>}
               {step === 7 && <>
                 <p className="page-eyebrow" style={{ marginBottom: "6px" }}>Step {currentPos + 1} of {totalSteps}</p>
@@ -602,7 +602,7 @@ export default function OnboardingPage() {
                 <>
                   <div className="space-y-2">
                     <Label htmlFor="address_line_1">Address Line 1 *</Label>
-                    <Input id="address_line_1" placeholder="Street address" value={form.address_line_1} onChange={(e) => set("address_line_1", e.target.value)} required />
+                    <Input id="address_line_1" placeholder="Current street address in South Africa" value={form.address_line_1} onChange={(e) => set("address_line_1", e.target.value)} required />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="address_line_2">Address Line 2</Label>
@@ -834,14 +834,24 @@ export default function OnboardingPage() {
               {step === 6 && (
                 <>
                   <p style={{ fontSize: "13px", color: "var(--text-secondary)", lineHeight: 1.55 }}>
-                    Do you have a spouse, children or dependents? Add them here so we
-                    have their passport, visa and health-insurance details on record.
-                    This is optional and can be updated any time from your profile.
+                    Do you have a spouse or children? Add them here. For a spouse we
+                    just need their name and email; for children we&rsquo;ll ask for
+                    their passport, visa and health-insurance details. This is
+                    optional and can be updated any time from your profile.
                   </p>
                   <HouseholdMembers
                     initialMembers={[]}
                     loadOnMount
                     refreshRouterOnChange={false}
+                    selfDefaults={{
+                      is_international: form.is_international,
+                      visa_category: form.visa_category,
+                      visa_type: form.visa_type,
+                      visa_expiry_date: form.visa_expiry_date,
+                      health_insurance_provider: form.health_insurance_provider,
+                      health_insurance_policy_number: form.health_insurance_policy_number,
+                      health_insurance_expiry_date: form.health_insurance_expiry_date,
+                    }}
                   />
                 </>
               )}
@@ -914,8 +924,13 @@ export default function OnboardingPage() {
               className="flex justify-between items-center"
               style={{ padding: "1rem 2rem", borderTop: "1px solid hsl(22 8% 12%)" }}
             >
-              <Button variant="outline" onClick={() => setStep(prevStep())} disabled={step === 1}>
-                Back
+              <Button
+                variant="outline"
+                onClick={() => { setError(null); setStep(prevStep()); }}
+                disabled={step === 1}
+                style={{ visibility: step === 1 ? "hidden" : "visible" }}
+              >
+                ← Back
               </Button>
 
               {!isLastStep ? (

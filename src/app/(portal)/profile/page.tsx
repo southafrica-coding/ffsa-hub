@@ -225,13 +225,24 @@ export default async function ProfilePage() {
           <p className="page-eyebrow">MY HOUSEHOLD</p>
           <h2 className="text-xl font-semibold">Family members</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Your spouse, children and dependents. Add their passport, visa and
-            health-insurance details so we have them on record. This is optional
-            and you can update it any time.
+            Your spouse and children. For a spouse we just need their name and
+            email; for children, their passport, visa and health-insurance
+            details. This is optional and you can update it any time.
           </p>
         </div>
         <div className="rounded-xl border p-4">
-          <HouseholdMembers initialMembers={householdMembers} />
+          <HouseholdMembers
+            initialMembers={householdMembers}
+            selfDefaults={{
+              is_international: row.is_international as boolean | null | undefined,
+              visa_category: row.visa_category as string | null | undefined,
+              visa_type: row.visa_type as string | null | undefined,
+              visa_expiry_date: row.visa_expiry_date as string | null | undefined,
+              health_insurance_provider: row.health_insurance_provider as string | null | undefined,
+              health_insurance_policy_number: row.health_insurance_policy_number as string | null | undefined,
+              health_insurance_expiry_date: row.health_insurance_expiry_date as string | null | undefined,
+            }}
+          />
         </div>
       </section>
 

@@ -3,6 +3,7 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PhoneInput } from "@/components/ui/phone-input";
+import { DateInput } from "@/components/ui/date-input";
 import { type FieldConfig } from "@/lib/users/profile-fields";
 
 // Sentinel a `select-with-other` dropdown holds while the user is typing a
@@ -117,14 +118,28 @@ export function FieldControl({
     );
   }
 
+  if (field.type === "date") {
+    // Day-first (DD/MM/YYYY) input; stores ISO yyyy-mm-dd. onChange yields the
+    // ISO string directly, not a DOM event.
+    return (
+      <div className="space-y-2">
+        <Label htmlFor={id}>{field.label}</Label>
+        <DateInput
+          id={id}
+          value={value}
+          onChange={onValueChange}
+          required={required}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-2">
       <Label htmlFor={id}>{field.label}</Label>
       <Input
         id={id}
-        type={
-          field.type === "date" ? "date" : field.type === "tel" ? "tel" : "text"
-        }
+        type={field.type === "tel" ? "tel" : "text"}
         placeholder={field.placeholder}
         value={value}
         onChange={(e) => onValueChange(e.target.value)}

@@ -13,6 +13,7 @@ import {
 import {
   HouseholdMembers,
   type HouseholdMember,
+  type SelfDefaults,
 } from "@/components/profile/household-members";
 
 // Blocking panel for the staff "children" gate. Two states:
@@ -25,9 +26,11 @@ import {
 export function ChildrenGateForm({
   hasChildren,
   members,
+  selfDefaults,
 }: {
   hasChildren: boolean | null;
   members: HouseholdMember[];
+  selfDefaults?: SelfDefaults;
 }) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
@@ -108,6 +111,7 @@ export function ChildrenGateForm({
           initialMembers={members}
           requireComplete
           defaultRelationship="child"
+          selfDefaults={selfDefaults}
         />
       </CardContent>
     </Card>

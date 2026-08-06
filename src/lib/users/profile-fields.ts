@@ -62,8 +62,9 @@ export const REQUIRED_PROFILE_FIELDS: FieldConfig[] = [
   // auto_create_student_fee enrollment trigger. Listing country names keeps
   // that mapping intact.
   { field: "nationality", label: "Nationality", type: "select", options: COUNTRY_OPTIONS },
-  { field: "phone", label: "Phone Number", type: "phone" },
   {
+    // Department sits with the personal-identity fields (not between phone and
+    // address) so the contact/address block stays contiguous in the gate form.
     // Options are sourced live from the Ministry tab (staff_ministries) via
     // applyListOptions; this list is only the fallback when that table is
     // empty/unreachable, so its labels are kept matching the ministry names.
@@ -82,11 +83,12 @@ export const REQUIRED_PROFILE_FIELDS: FieldConfig[] = [
       { value: "woven", label: "Woven" },
     ],
   },
-  // ── Address ──────────────────────────────────────────────
+  // ── Contact & Address ────────────────────────────────────
   // address_line_2 stays optional (apartment / unit number).
   // Passport / visa fields are intentionally not enforced here —
   // they only apply to international staff and the gate has no way
   // to express that conditional. The onboarding form handles it.
+  { field: "phone", label: "Phone Number", type: "phone" },
   { field: "country", label: "Country", type: "select", options: COUNTRY_OPTIONS },
   { field: "address_line_1", label: "Address Line 1", type: "text", placeholder: "Street address" },
   { field: "city", label: "City", type: "text", placeholder: "e.g. Potchefstroom" },
@@ -330,6 +332,14 @@ export const HOUSEHOLD_CORE_FIELDS: FieldConfig[] = [
   { field: "gender", label: "Gender", type: "select", options: GENDER_OPTIONS, optional: true },
 ];
 
+// A spouse is captured lightly: just enough to link their own account later.
+// (No passport / visa / insurance — unlike children.)
+export const HOUSEHOLD_SPOUSE_FIELDS: FieldConfig[] = [
+  { field: "first_name", label: "First Name", type: "text", placeholder: "First name" },
+  { field: "last_name", label: "Last Name", type: "text", placeholder: "Last name" },
+  { field: "email", label: "Email", type: "text", placeholder: "name@example.com" },
+];
+
 // Passport / visa / insurance blocks reuse the same field configs as the
 // account holder, but marked optional for family members.
 const asOptional = (fields: FieldConfig[]): FieldConfig[] =>
@@ -359,6 +369,9 @@ export const HOUSEHOLD_MEMBER_FIELDS: FieldConfig[] = [
 export const HOUSEHOLD_WRITABLE_FIELDS: string[] = [
   "relationship",
   "full_name",
+  "first_name",
+  "last_name",
+  "email",
   "date_of_birth",
   "gender",
   "passport_country",

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { CalendarClock, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Label } from "@/components/ui/label";
 import {
   Dialog,
@@ -195,13 +196,11 @@ export function NextPolicyManager({
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="next-expiry">Expiry date</Label>
-              <Input
+              <DateInput
                 id="next-expiry"
-                type="date"
                 required
                 value={expiry}
-                min={currentExpiry ?? undefined}
-                onChange={(e) => setExpiry(e.target.value)}
+                onChange={setExpiry}
               />
               <p className="text-xs text-muted-foreground">
                 Must be after your current policy&rsquo;s expiry

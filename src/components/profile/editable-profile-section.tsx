@@ -17,6 +17,7 @@ import {
   seedOtherActive,
 } from "@/components/profile/field-control";
 import { isExpiryDatePast } from "@/lib/users/profile-fields";
+import { formatDateDMY } from "@/lib/utils/date";
 import { type ProfileSectionDef } from "@/lib/users/profile-sections";
 
 // One profile card: a read-only view of its fields with an "Edit" button
@@ -284,7 +285,7 @@ function displayValue(
     const match = field.options.find((o) => o.value === value);
     if (match) return match.label;
   }
-  if (field.type === "date") return value.slice(0, 10);
+  if (field.type === "date") return formatDateDMY(value);
   return value;
 }
 

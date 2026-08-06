@@ -167,6 +167,15 @@ export async function ProfileCompletionGate({
             <ChildrenGateForm
               hasChildren={hasChildren}
               members={(householdRows ?? []) as HouseholdMember[]}
+              selfDefaults={{
+                is_international: row.is_international as boolean | null | undefined,
+                visa_category: row.visa_category as string | null | undefined,
+                visa_type: row.visa_type as string | null | undefined,
+                visa_expiry_date: row.visa_expiry_date as string | null | undefined,
+                health_insurance_provider: row.health_insurance_provider as string | null | undefined,
+                health_insurance_policy_number: row.health_insurance_policy_number as string | null | undefined,
+                health_insurance_expiry_date: row.health_insurance_expiry_date as string | null | undefined,
+              }}
             />
           }
         >
