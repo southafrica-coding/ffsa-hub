@@ -142,7 +142,7 @@ export const ADMIN_MODULES: ModuleDefinition[] = [
     href: "/brand-kit",
     icon: Palette,
     description: "The FFSA brand — palette, type, logos, voice. Drives emails and event pages",
-    requiredRoles: [], // internal reference — visible to ALL authenticated users
+    requiredRoles: ["super_admin", "admin"], // gated by the 'brand_kit.view' permission (module 'brand-kit')
   },
   {
     id: "records-library",

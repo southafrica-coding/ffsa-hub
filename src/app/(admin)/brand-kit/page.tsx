@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { requireModuleAccess } from "@/lib/require-permission";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   FFSA_BRAND,
@@ -88,6 +89,7 @@ export default async function BrandKitPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+  await requireModuleAccess(supabase, user.id, "brand-kit");
 
   const B = FFSA_BRAND;
 

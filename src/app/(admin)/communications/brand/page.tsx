@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { requireModuleAccess } from "@/lib/require-permission";
+import { canManageComms } from "@/lib/api-auth";
 import { listSendingIdentities } from "@/services/campaigns";
 import { getBrandKit, mergeBrand, type BrandKitRow } from "@/services/brand";
 import { BrandEditor } from "./brand-editor";
@@ -17,7 +17,13 @@ export default async function BrandSettingsPage({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
-  await requireModuleAccess(supabase, user.id, "communications");
+  if (
+    !(await canManageComms(supabase, user.id, [
+      "communications.manage_brand_kits",
+    ]))
+  ) {
+    redirect("/dashboard");
+  }
 
   const params = await searchParams;
   const { data: identities } = await listSendingIdentities(supabase);
