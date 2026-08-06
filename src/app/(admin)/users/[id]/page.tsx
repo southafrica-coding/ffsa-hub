@@ -138,32 +138,39 @@ export default async function UserProfilePage({
         ? "community"
         : "none";
 
-  let ministryRole: MinistryRole = null;
-  let schoolLabel: string | null = null;
-  if (membership === "staff") {
-    // Service-role read: ministry RLS may hide rows from a non-super-admin
-    // (e.g. schools-manager) viewer; the title should still resolve.
-    const adminClient = createAdminClient();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: ministryRows } = await (adminClient as any)
-      .from("staff_ministry_members")
-      .select("member_role, is_point_leader, is_category_point_leader, status")
-      .eq("user_id", id)
-      .eq("status", "active");
-    ministryRole = strongestMinistryRole(ministryRows ?? []);
-  } else if (membership === "student") {
-    const { data: enrollments } = await getEnrollmentsByUser(supabase, id);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const first = ((enrollments ?? []) as any[])[0];
-    const program = Array.isArray(first?.programs)
-      ? first.programs[0]
-      : first?.programs;
-    schoolLabel = program?.name ?? null;
-  }
+  // Resolve ministry + enrollment UNCONDITIONALLY (not gated on the assigned
+  // role): a user can be on a ministry roster or enrolled without holding the
+  // staff/student role, and the title should still reflect it. Service-role
+  // reads so ministry/programs RLS never hides rows from the viewer.
+  const adminClient = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: ministryRows } = await (adminClient as any)
+    .from("staff_ministry_members")
+    .select("member_role, is_point_leader, is_category_point_leader, status")
+    .eq("user_id", id)
+    .eq("status", "active");
+  const ministryRole: MinistryRole = strongestMinistryRole(ministryRows ?? []);
+
+  const { data: enrollments } = await getEnrollmentsByUser(adminClient, id);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const firstEnrollment = ((enrollments ?? []) as any[])[0];
+  const enrolledProgram = Array.isArray(firstEnrollment?.programs)
+    ? firstEnrollment.programs[0]
+    : firstEnrollment?.programs;
+  const schoolLabel: string | null = enrolledProgram?.name ?? null;
+
+  // Ministry (staff) outranks enrollment (student); fall back to the role-based
+  // membership so community/none still resolve. Section gating below keeps using
+  // the role-derived `membership`, not this.
+  const titleMembership: Membership = ministryRole
+    ? "staff"
+    : membership !== "staff" && schoolLabel
+      ? "student"
+      : membership;
 
   const derivedTitle = deriveJobTitle({
     jobTitle: targetUser.job_title,
-    membership,
+    membership: titleMembership,
     departmentLabel: targetUser.department
       ? departmentSelectOptions.find((o) => o.value === targetUser.department)
           ?.label ?? targetUser.department

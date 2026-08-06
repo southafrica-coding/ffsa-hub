@@ -261,9 +261,19 @@ export function UsersTable({
     return users.map((user) => {
       const membership = currentMembership(user);
       const lifecycle = deriveUserLifecycle(user);
+      // Derive the title from what the user ACTUALLY is (on a ministry roster /
+      // enrolled), not only their assigned role — the two can drift, which used
+      // to hide the ministry/course. Ministry (staff) still outranks enrollment.
+      const hasMinistry = !!ministryRoleByUser?.[user.id];
+      const hasSchool = !!schoolByUser?.[user.id];
+      const titleMembership = hasMinistry
+        ? "staff"
+        : membership !== "staff" && hasSchool
+          ? "student"
+          : membership;
       const title = deriveJobTitle({
         jobTitle: user.job_title,
-        membership,
+        membership: titleMembership,
         departmentLabel: user.department
           ? deptLabels[user.department] ?? user.department
           : null,
