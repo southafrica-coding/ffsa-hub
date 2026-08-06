@@ -73,6 +73,20 @@ export async function getMinistryRoster(supabase: Client, ministryId: string) {
     .order("created_at", { ascending: true });
 }
 
+/**
+ * All active ministry memberships across every ministry, as a flat list of
+ * (user_id, role flags). Used to derive each person's ministry-based job title
+ * on the Users list. Admin/service-role client recommended — the caller is a
+ * cross-user admin report, and the users-table RLS would otherwise hide rows
+ * for non-admin readers. Only `status = 'active'` rows are returned.
+ */
+export async function listActiveMinistryMemberships(supabase: Client) {
+  return supabase
+    .from("staff_ministry_members")
+    .select("user_id, member_role, is_point_leader, is_category_point_leader, status")
+    .eq("status", "active");
+}
+
 // ────────────────────────────────────────────────────────────
 // Sub-categories — named sub-groups within a single ministry.
 // The list is admin-managed (RLS: is_admin()); members are assigned to a

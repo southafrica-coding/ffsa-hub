@@ -14,12 +14,15 @@ import {
   Trash2,
   ShieldCheck,
   Search,
+  SlidersHorizontal,
+  X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -47,6 +50,7 @@ import {
   type UserLifecycleStage,
 } from "@/lib/users/lifecycle";
 import { UserAvatar } from "@/components/ui/user-avatar";
+import { deriveJobTitle, type MinistryRole } from "@/lib/users/derive-title";
 
 type UserRow = {
   id: string;
@@ -164,6 +168,8 @@ export function UsersTable({
   users,
   currentUserId,
   departmentLabels,
+  ministryRoleByUser,
+  schoolByUser,
   isSuperAdmin = false,
 }: {
   users: UserRow[];
@@ -171,6 +177,10 @@ export function UsersTable({
   // DB-backed department value→label map (from the editable Settings list).
   // Falls back to the built-in defaults for any value not present.
   departmentLabels?: Record<string, string>;
+  // user_id → strongest ministry role, for the derived job title.
+  ministryRoleByUser?: Record<string, MinistryRole>;
+  // user_id → current school name, for a student's derived job title.
+  schoolByUser?: Record<string, string>;
   // Super admins get the inline membership-role picker in the Role column.
   isSuperAdmin?: boolean;
 }) {
@@ -193,34 +203,126 @@ export function UsersTable({
     }
   }
   const [search, setSearch] = useState("");
-  const deptLabels = { ...DEPARTMENT_LABELS, ...(departmentLabels ?? {}) };
+  // Filter facets. Membership is multi-select (OR within); each category ANDs
+  // with the others. "all" department = no department constraint.
+  const [membershipFilter, setMembershipFilter] = useState<Set<string>>(
+    () => new Set()
+  );
+  const [departmentFilter, setDepartmentFilter] = useState<string>("all");
+  const [insuranceExpiredOnly, setInsuranceExpiredOnly] = useState(false);
+  const [profileIncompleteOnly, setProfileIncompleteOnly] = useState(false);
+
+  const deptLabels = useMemo(
+    () => ({ ...DEPARTMENT_LABELS, ...(departmentLabels ?? {}) }),
+    [departmentLabels]
+  );
+
+  // Department options for the filter — live labels first, then any built-in
+  // fallback not already present. Sorted by label.
+  const departmentOptions = useMemo(() => {
+    const bySlug = new Map<string, string>();
+    for (const [slug, label] of Object.entries(deptLabels)) {
+      bySlug.set(slug, label);
+    }
+    return [...bySlug.entries()]
+      .map(([slug, label]) => ({ slug, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [deptLabels]);
+
+  // Annotate each user once with the values every downstream step needs:
+  // membership, derived lifecycle (insurance + stage), and the derived title.
+  const annotated = useMemo(() => {
+    return users.map((user) => {
+      const membership = currentMembership(user);
+      const lifecycle = deriveUserLifecycle(user);
+      const title = deriveJobTitle({
+        jobTitle: user.job_title,
+        membership,
+        departmentLabel: user.department
+          ? deptLabels[user.department] ?? user.department
+          : null,
+        ministryRole: ministryRoleByUser?.[user.id] ?? null,
+        schoolLabel: schoolByUser?.[user.id] ?? null,
+      });
+      return { user, membership, lifecycle, title };
+    });
+  }, [users, deptLabels, ministryRoleByUser, schoolByUser]);
 
   const filteredUsers = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const matched = !q
-      ? users
-      : users.filter((user) => {
-          const departmentLabel = user.department
-            ? deptLabels[user.department] ?? user.department
-            : "";
-          return [
-            displayName(user),
-            user.email ?? "",
-            user.job_title ?? "",
-            user.department ?? "",
-            departmentLabel,
-          ]
-            .join(" ")
-            .toLowerCase()
-            .includes(q);
-        });
+    const matched = annotated.filter(({ user, membership, lifecycle, title }) => {
+      // Membership facet (OR within the selected set).
+      if (membershipFilter.size > 0 && !membershipFilter.has(membership)) {
+        return false;
+      }
+      // Department facet.
+      if (departmentFilter !== "all" && user.department !== departmentFilter) {
+        return false;
+      }
+      // Insurance-expired facet.
+      if (insuranceExpiredOnly && lifecycle.insurance.state !== "expired") {
+        return false;
+      }
+      // Profile-incomplete facet.
+      if (profileIncompleteOnly && lifecycle.stage !== "profile_incomplete") {
+        return false;
+      }
+      // Free-text search over the visible fields (incl. the derived title).
+      if (q) {
+        const departmentLabel = user.department
+          ? deptLabels[user.department] ?? user.department
+          : "";
+        const haystack = [
+          displayName(user),
+          user.email ?? "",
+          title ?? "",
+          user.job_title ?? "",
+          user.department ?? "",
+          departmentLabel,
+        ]
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      return true;
+    });
     // Alphabetical by the name shown in the table.
     return [...matched].sort((a, b) =>
-      displayName(a).localeCompare(displayName(b), undefined, {
+      displayName(a.user).localeCompare(displayName(b.user), undefined, {
         sensitivity: "base",
       })
     );
-  }, [users, search]);
+  }, [
+    annotated,
+    search,
+    membershipFilter,
+    departmentFilter,
+    insuranceExpiredOnly,
+    profileIncompleteOnly,
+    deptLabels,
+  ]);
+
+  function toggleMembership(value: string) {
+    setMembershipFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
+      return next;
+    });
+  }
+
+  const activeFilterCount =
+    membershipFilter.size +
+    (departmentFilter !== "all" ? 1 : 0) +
+    (insuranceExpiredOnly ? 1 : 0) +
+    (profileIncompleteOnly ? 1 : 0);
+
+  function clearFilters() {
+    setMembershipFilter(new Set());
+    setDepartmentFilter("all");
+    setInsuranceExpiredOnly(false);
+    setProfileIncompleteOnly(false);
+  }
 
   async function callApi(
     path: string,
@@ -291,16 +393,101 @@ export function UsersTable({
 
   return (
     <div className="rounded-lg border bg-card">
-      <div className="p-3 border-b">
-        <div className="relative max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search by name, email, job title, or department..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
+      <div className="p-3 border-b space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[220px] max-w-sm">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search by name, email, job title, or department..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+
+          {/* Membership + status facets */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-1.5">
+                <SlidersHorizontal className="h-4 w-4" />
+                Filters
+                {activeFilterCount > 0 && (
+                  <Badge
+                    variant="secondary"
+                    className="ml-1 h-5 min-w-5 justify-center px-1 text-xs"
+                  >
+                    {activeFilterCount}
+                  </Badge>
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56">
+              <DropdownMenuLabel className="text-xs text-muted-foreground">
+                Membership
+              </DropdownMenuLabel>
+              {(["staff", "student", "community"] as const).map((value) => (
+                <DropdownMenuCheckboxItem
+                  key={value}
+                  checked={membershipFilter.has(value)}
+                  onCheckedChange={() => toggleMembership(value)}
+                  onSelect={(e) => e.preventDefault()}
+                >
+                  {MEMBERSHIP_OPTIONS.find((o) => o.value === value)?.label ??
+                    value}
+                </DropdownMenuCheckboxItem>
+              ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="text-xs text-muted-foreground">
+                Status
+              </DropdownMenuLabel>
+              <DropdownMenuCheckboxItem
+                checked={insuranceExpiredOnly}
+                onCheckedChange={(v) => setInsuranceExpiredOnly(!!v)}
+                onSelect={(e) => e.preventDefault()}
+              >
+                Insurance expired
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                checked={profileIncompleteOnly}
+                onCheckedChange={(v) => setProfileIncompleteOnly(!!v)}
+                onSelect={(e) => e.preventDefault()}
+              >
+                Profile incomplete
+              </DropdownMenuCheckboxItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Department facet */}
+          <select
+            className="h-9 rounded-md border border-input bg-transparent px-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            value={departmentFilter}
+            onChange={(e) => setDepartmentFilter(e.target.value)}
+            aria-label="Filter by department"
+          >
+            <option value="all">All departments</option>
+            {departmentOptions.map((o) => (
+              <option key={o.slug} value={o.slug}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+
+          {activeFilterCount > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1 text-muted-foreground"
+              onClick={clearFilters}
+            >
+              <X className="h-4 w-4" />
+              Clear
+            </Button>
+          )}
         </div>
+
+        <p className="text-xs text-muted-foreground">
+          Showing {filteredUsers.length} of {users.length}
+        </p>
       </div>
       <Table>
         <TableHeader>
@@ -326,8 +513,7 @@ export function UsersTable({
               </TableCell>
             </TableRow>
           ) : (
-            filteredUsers.map((user) => {
-              const lifecycle = deriveUserLifecycle(user);
+            filteredUsers.map(({ user, lifecycle, title }) => {
               const stageStyle = STAGE_STYLES[lifecycle.stage];
               const isSelf = user.id === currentUserId;
               const isBusy = busy === user.id;
@@ -354,7 +540,7 @@ export function UsersTable({
                     {user.email ?? "—"}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {user.job_title ?? "—"}
+                    {title ?? "—"}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {user.department

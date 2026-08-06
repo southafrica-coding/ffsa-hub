@@ -167,6 +167,20 @@ export async function getEnrollmentsByUser(supabase: Client, userId: string) {
     .order("enrolled_at", { ascending: false });
 }
 
+/**
+ * Every current (non-removed) enrollment across all students, joined to its
+ * program name. Used to derive each student's school-scoped job title on the
+ * Users list. Returned most-recent-first so callers keep the first row per
+ * user as their current school.
+ */
+export async function listActiveEnrollmentSchools(supabase: Client) {
+  return supabase
+    .from("enrollments")
+    .select("user_id, programs(name), enrolled_at")
+    .is("removed_at", null)
+    .order("enrolled_at", { ascending: false });
+}
+
 export async function getEnrollmentById(supabase: Client, id: string) {
   return supabase
     .from("enrollments")

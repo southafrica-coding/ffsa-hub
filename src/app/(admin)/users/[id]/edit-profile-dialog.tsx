@@ -62,7 +62,6 @@ const FIELDS: {
     rows: [
       { key: "email", label: "Login email", type: "email" },
       { key: "phone", label: "Phone" },
-      { key: "job_title", label: "Job title" },
     ],
   },
   {
@@ -86,6 +85,7 @@ function initialForm(user: EditableUser): Record<string, string> {
     }
   }
   form.department = user.department ?? "";
+  form.job_title = user.job_title ?? "";
   return form;
 }
 
@@ -124,6 +124,11 @@ export function EditProfileDialog({
     }
     const dept = form.department?.trim() ?? "";
     payload.department = dept === "" ? null : dept;
+
+    // Job title is an optional override — blank means "auto-generate from
+    // department & ministry role" (the API allow-lists job_title).
+    const jobTitle = form.job_title?.trim() ?? "";
+    payload.job_title = jobTitle === "" ? null : jobTitle;
 
     const res = await fetch(`/api/users/${user.id}`, {
       method: "PATCH",
@@ -189,6 +194,21 @@ export function EditProfileDialog({
               </div>
             </div>
           ))}
+
+          <div className="space-y-1.5">
+            <Label htmlFor="edit-job_title">Job title override</Label>
+            <Input
+              id="edit-job_title"
+              type="text"
+              value={form.job_title ?? ""}
+              onChange={(e) => set("job_title", e.target.value)}
+              placeholder="Auto-generated from department & ministry role"
+            />
+            <p className="text-xs text-muted-foreground">
+              Leave blank to auto-generate from department &amp; ministry role
+              (e.g. “Media Ministry Leader”). Type a value to override it.
+            </p>
+          </div>
 
           {departmentEditable && (
           <div className="space-y-1.5">

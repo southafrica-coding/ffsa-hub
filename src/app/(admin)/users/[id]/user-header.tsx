@@ -17,6 +17,7 @@ export function UserHeader({
   user,
   eyebrow,
   authLastSignInAt,
+  derivedTitle,
 }: {
   user: UserLifecycleInput & {
     id: string;
@@ -31,6 +32,8 @@ export function UserHeader({
   eyebrow: string;
   /** Real sign-in time from Supabase Auth — the app's mirror column is unmaintained. */
   authLastSignInAt?: string | null;
+  /** Title derived from role + department/ministry (falls back to job_title). */
+  derivedTitle?: string | null;
 }) {
   const name =
     user.display_name ??
@@ -55,6 +58,8 @@ export function UserHeader({
   };
   const s = stageColors[lifecycle.stage];
 
+  const title = derivedTitle ?? user.job_title ?? null;
+
   const avatarName =
     user.first_name ?? user.email ?? "?";
 
@@ -71,10 +76,10 @@ export function UserHeader({
         <h1 className="page-title truncate">{name}</h1>
         <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mt-1 text-sm text-muted-foreground">
           <span className="truncate">{user.email ?? "—"}</span>
-          {user.job_title && (
+          {title && (
             <>
               <span className="opacity-50">·</span>
-              <span>{user.job_title}</span>
+              <span>{title}</span>
             </>
           )}
           <span className="opacity-50">·</span>

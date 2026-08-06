@@ -1,6 +1,14 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { notFound, redirect } from "next/navigation";
 import { getUserById, getInsurancePolicies } from "@/services/users";
+import { getEnrollmentsByUser } from "@/services/schools";
+import {
+  deriveJobTitle,
+  strongestMinistryRole,
+  type Membership,
+  type MinistryRole,
+} from "@/lib/users/derive-title";
 import {
   InsuranceHistory,
   type InsurancePolicyRow,
@@ -120,6 +128,50 @@ export default async function UserProfilePage({
     .filter((n): n is string => !!n);
   const departmentEditable = targetRoleNames.some((n) => !membershipOnly.has(n));
 
+  // Derive the display title (role + department/school), mirroring the Users
+  // list. A manual job_title still wins inside deriveJobTitle.
+  const membership: Membership = targetRoleNames.includes("staff")
+    ? "staff"
+    : targetRoleNames.includes("student")
+      ? "student"
+      : targetRoleNames.includes("community_member")
+        ? "community"
+        : "none";
+
+  let ministryRole: MinistryRole = null;
+  let schoolLabel: string | null = null;
+  if (membership === "staff") {
+    // Service-role read: ministry RLS may hide rows from a non-super-admin
+    // (e.g. schools-manager) viewer; the title should still resolve.
+    const adminClient = createAdminClient();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: ministryRows } = await (adminClient as any)
+      .from("staff_ministry_members")
+      .select("member_role, is_point_leader, is_category_point_leader, status")
+      .eq("user_id", id)
+      .eq("status", "active");
+    ministryRole = strongestMinistryRole(ministryRows ?? []);
+  } else if (membership === "student") {
+    const { data: enrollments } = await getEnrollmentsByUser(supabase, id);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const first = ((enrollments ?? []) as any[])[0];
+    const program = Array.isArray(first?.programs)
+      ? first.programs[0]
+      : first?.programs;
+    schoolLabel = program?.name ?? null;
+  }
+
+  const derivedTitle = deriveJobTitle({
+    jobTitle: targetUser.job_title,
+    membership,
+    departmentLabel: targetUser.department
+      ? departmentSelectOptions.find((o) => o.value === targetUser.department)
+          ?.label ?? targetUser.department
+      : null,
+    ministryRole,
+    schoolLabel,
+  });
+
   // Feed the real Supabase-Auth last-sign-in so the derived stage matches the
   // Users table (the users.last_sign_in_at column is unmaintained).
   const lifecycle = deriveUserLifecycle({
@@ -132,6 +184,7 @@ export default async function UserProfilePage({
       <UserHeader
         user={targetUser}
         authLastSignInAt={authLastSignInAt}
+        derivedTitle={derivedTitle}
         eyebrow="STAFF PROFILE"
       />
       <UserTabs
@@ -172,10 +225,7 @@ export default async function UserProfilePage({
         <InfoCard title="Contact">
           <InfoRow label="Email" value={targetUser.email ?? "—"} />
           <InfoRow label="Phone" value={targetUser.phone ?? "—"} />
-          <InfoRow
-            label="Job title"
-            value={targetUser.job_title ?? "—"}
-          />
+          <InfoRow label="Job title" value={derivedTitle ?? "—"} />
         </InfoCard>
 
         <InfoCard title="Address">

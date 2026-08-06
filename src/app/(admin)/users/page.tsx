@@ -1,7 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getUsers } from "@/services/users";
-import { listMinistries } from "@/services/ministries";
+import { listMinistries, listActiveMinistryMemberships } from "@/services/ministries";
+import { listActiveEnrollmentSchools } from "@/services/schools";
+import { strongestMinistryRole, type MinistryRole } from "@/lib/users/derive-title";
 import { getAuthSignIns } from "@/lib/users/auth-signins";
 import { UsersTable } from "./users-table";
 import { InviteUserForm } from "./invite-user-form";
@@ -32,6 +34,49 @@ export default async function UsersPage() {
   for (const m of (ministries ?? []) as Array<{ slug: string; name: string }>) {
     departmentLabels[m.slug] = m.name;
   }
+
+  // Ministry role + school lookups drive the derived job title. Read via the
+  // service-role client — this is a cross-user admin report, and the ministry /
+  // enrollment RLS would otherwise hide rows for non-super-admin readers.
+  const adminClientForTitles = createAdminClient();
+  const [{ data: ministryMemberships }, { data: enrollmentSchools }] =
+    await Promise.all([
+      listActiveMinistryMemberships(adminClientForTitles),
+      listActiveEnrollmentSchools(adminClientForTitles),
+    ]);
+
+  // user_id → strongest ministry role (point_leader > leader > member).
+  const membershipsByUser = new Map<
+    string,
+    Array<{
+      member_role?: string | null;
+      is_point_leader?: boolean | null;
+      is_category_point_leader?: boolean | null;
+      status?: string | null;
+    }>
+  >();
+  for (const m of (ministryMemberships ?? []) as Array<{ user_id: string }>) {
+    const bucket = membershipsByUser.get(m.user_id) ?? [];
+    bucket.push(m as (typeof bucket)[number]);
+    membershipsByUser.set(m.user_id, bucket);
+  }
+  const ministryRoleByUser: Record<string, MinistryRole> = {};
+  for (const [userId, rows] of membershipsByUser) {
+    ministryRoleByUser[userId] = strongestMinistryRole(rows);
+  }
+
+  // user_id → current school name (first non-removed enrollment, newest first).
+  const schoolByUser: Record<string, string> = {};
+  for (const e of (enrollmentSchools ?? []) as Array<{
+    user_id: string;
+    programs: { name?: string | null } | { name?: string | null }[] | null;
+  }>) {
+    if (schoolByUser[e.user_id]) continue;
+    const program = Array.isArray(e.programs) ? e.programs[0] : e.programs;
+    const name = program?.name?.trim();
+    if (name) schoolByUser[e.user_id] = name;
+  }
+
   const { data: users, count, error: usersError } = usersResult;
   if (usersError) {
     console.error("getUsers error:", JSON.stringify(usersError, null, 2));
@@ -137,6 +182,8 @@ export default async function UsersPage() {
         users={usersWithSignIn}
         currentUserId={authUser?.id ?? ""}
         departmentLabels={departmentLabels}
+        ministryRoleByUser={ministryRoleByUser}
+        schoolByUser={schoolByUser}
         isSuperAdmin={isSuperAdmin}
       />
     </div>
