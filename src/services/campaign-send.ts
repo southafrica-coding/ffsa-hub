@@ -56,7 +56,10 @@ export async function sendableThisRun(
 
 /**
  * Fetch every row of a PostgREST query, paging past the default 1000-row cap.
- * `build(from, to)` must return a query with `.range(from, to)` applied.
+ * `build(from, to)` must return a query with `.range(from, to)` applied AND a
+ * stable `.order(<unique column>)` — without a deterministic order the page
+ * boundaries drift between requests and rows are silently skipped or duplicated
+ * (this once skipped ~1,452 recipients of a 7,000-person send).
  */
 async function fetchAllRows<T>(
   build: (from: number, to: number) => Promise<{ data: T[] | null }>
@@ -169,6 +172,7 @@ export async function sendCampaignBatch(
           .from("v_campaign_audience")
           .select("contact_id, email, first_name")
           .eq("campaign_id", campaignId)
+          .order("contact_id", { ascending: true })
           .range(from, to)
     ),
     fetchAllRows<{ contact_id: string }>((from, to) =>
@@ -176,6 +180,7 @@ export async function sendCampaignBatch(
         .from("campaign_recipients")
         .select("contact_id")
         .eq("campaign_id", campaignId)
+        .order("contact_id", { ascending: true })
         .range(from, to)
     ),
   ]);
