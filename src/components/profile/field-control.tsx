@@ -4,7 +4,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { DateInput } from "@/components/ui/date-input";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { type FieldConfig } from "@/lib/users/profile-fields";
+
+// Long option lists (countries, nationalities) render as a type-to-search
+// dropdown; short ones stay as a plain native select.
+const SEARCHABLE_MIN_OPTIONS = 15;
 
 // Sentinel a `select-with-other` dropdown holds while the user is typing a
 // custom value into the revealed follow-up input.
@@ -49,6 +54,21 @@ export function FieldControl({
   }
 
   if (field.type === "select" && field.options) {
+    // Long lists (countries/nationalities) get a searchable dropdown.
+    if (field.options.length >= SEARCHABLE_MIN_OPTIONS) {
+      return (
+        <div className="space-y-2">
+          <Label htmlFor={id}>{field.label}</Label>
+          <SearchableSelect
+            id={id}
+            value={value}
+            onChange={onValueChange}
+            options={field.options}
+            placeholder="Select..."
+          />
+        </div>
+      );
+    }
     return (
       <div className="space-y-2">
         <Label htmlFor={id}>{field.label}</Label>

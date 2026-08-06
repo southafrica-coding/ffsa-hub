@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { DateInput } from "@/components/ui/date-input";
 import { Label } from "@/components/ui/label";
 import { PhoneInput } from "@/components/ui/phone-input";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { HouseholdMembers } from "@/components/profile/household-members";
 import {
   COUNTRY_OPTIONS,
@@ -581,13 +582,7 @@ export default function OnboardingPage() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="nationality">Nationality *</Label>
-                      <select id="nationality" value={form.nationality} onChange={(e) => set("nationality", e.target.value)}
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" required>
-                        <option value="">Select…</option>
-                        {COUNTRY_OPTIONS.map((o) => (
-                          <option key={o.value} value={o.value}>{o.label}</option>
-                        ))}
-                      </select>
+                      <SearchableSelect id="nationality" value={form.nationality} onChange={(v) => set("nationality", v)} options={COUNTRY_OPTIONS} placeholder="Select…" />
                     </div>
                   </div>
                   <div className="space-y-2">
@@ -611,13 +606,7 @@ export default function OnboardingPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="country">Country *</Label>
-                      <select id="country" value={form.country} onChange={(e) => set("country", e.target.value)}
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" required>
-                        <option value="">Select…</option>
-                        {COUNTRY_OPTIONS.map((o) => (
-                          <option key={o.value} value={o.value}>{o.label}</option>
-                        ))}
-                      </select>
+                      <SearchableSelect id="country" value={form.country} onChange={(v) => set("country", v)} options={COUNTRY_OPTIONS} placeholder="Select…" />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="city">City *</Label>
@@ -656,13 +645,7 @@ export default function OnboardingPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="passport_country">Passport Country *</Label>
-                      <select id="passport_country" value={form.passport_country} onChange={(e) => set("passport_country", e.target.value)}
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" required>
-                        <option value="">Select…</option>
-                        {COUNTRY_OPTIONS.map((o) => (
-                          <option key={o.value} value={o.value}>{o.label}</option>
-                        ))}
-                      </select>
+                      <SearchableSelect id="passport_country" value={form.passport_country} onChange={(v) => set("passport_country", v)} options={COUNTRY_OPTIONS} placeholder="Select…" />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="passport_number">Passport Number *</Label>
