@@ -90,7 +90,7 @@ export const REQUIRED_PROFILE_FIELDS: FieldConfig[] = [
   // to express that conditional. The onboarding form handles it.
   { field: "phone", label: "Phone Number", type: "phone" },
   { field: "country", label: "Country", type: "select", options: COUNTRY_OPTIONS },
-  { field: "address_line_1", label: "Address Line 1", type: "text", placeholder: "Street address" },
+  { field: "address_line_1", label: "Address Line 1 (current address in South Africa)", type: "text", placeholder: "Current street address in South Africa" },
   { field: "city", label: "City", type: "text", placeholder: "e.g. Potchefstroom" },
   { field: "province", label: "Province / State", type: "select-with-other", options: SA_PROVINCES },
   { field: "postal_code", label: "Postal Code", type: "text", placeholder: "e.g. 2520" },
