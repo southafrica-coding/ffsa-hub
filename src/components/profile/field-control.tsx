@@ -94,11 +94,15 @@ export function FieldControl({
           required={required}
         >
           <option value="">Select...</option>
-          {field.options.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
+          {field.options
+            // Drop any list-provided "other" entry so we don't render a
+            // second "Other" alongside the sentinel option below.
+            .filter((opt) => opt.value !== "other")
+            .map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
           <option value={OTHER_SENTINEL}>Other (enter manually)</option>
         </select>
         {otherActive && (

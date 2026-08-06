@@ -48,15 +48,25 @@ export function PhoneInput({
     }
   }
 
-  // Sorted by dial code for fast scanning. Dedup duplicate dial codes
-  // (US/CA share +1 — we'd otherwise show "+1" twice).
+  // Sorted by dial code for fast scanning. Group countries that share a
+  // dial code (e.g. US/CA both use +1) into a single entry that lists all
+  // their names — "+1 United States, Canada" — instead of one flag.
   const dialOptions = useMemo(() => {
-    const seen = new Set<string>();
-    const out: { dial: string; flag: string; name: string }[] = [];
+    const byDial = new Map<string, string[]>();
     for (const c of COUNTRIES) {
-      if (seen.has(c.dial)) continue;
-      seen.add(c.dial);
-      out.push({ dial: c.dial, flag: c.flag, name: c.name });
+      const names = byDial.get(c.dial);
+      if (names) names.push(c.name);
+      else byDial.set(c.dial, [c.name]);
+    }
+    const out: { dial: string; label: string }[] = [];
+    for (const [dialCode, names] of byDial) {
+      // Prefer United States first where it shares a code, then alphabetical.
+      const ordered = [...names].sort((a, b) => {
+        if (a === "United States") return -1;
+        if (b === "United States") return 1;
+        return a.localeCompare(b);
+      });
+      out.push({ dial: dialCode, label: `${dialCode} ${ordered.join(", ")}` });
     }
     return out.sort((a, b) => {
       // numeric-ish sort by digits after the +
@@ -83,13 +93,12 @@ export function PhoneInput({
           setDial(e.target.value);
           emit(e.target.value, number);
         }}
-        className="flex h-10 rounded-md border border-input bg-background px-2 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        style={{ width: 110 }}
+        className="flex h-10 max-w-[45%] rounded-md border border-input bg-background px-2 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         aria-label="Country code"
       >
         {dialOptions.map((o) => (
-          <option key={o.dial + o.name} value={o.dial}>
-            {o.flag} {o.dial}
+          <option key={o.dial} value={o.dial}>
+            {o.label}
           </option>
         ))}
       </select>
