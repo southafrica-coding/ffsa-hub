@@ -199,7 +199,7 @@ STRIPE_SECRET_KEY
 STRIPE_WEBHOOK_SECRET
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 HUBSPOT_ACCESS_TOKEN              # migration only — remove after cutover
-NEXT_PUBLIC_APP_URL               # e.g. https://hub.ffsouthafrica.com — used for unsubscribe links
+NEXT_PUBLIC_APP_URL               # e.g. https://www.ffsahub.com — used for unsubscribe links
 UNSUBSCRIBE_TOKEN_SECRET          # HMAC secret for signed unsubscribe tokens
 TURNSTILE_SECRET_KEY              # Cloudflare Turnstile for public form spam protection
 NEXT_PUBLIC_TURNSTILE_SITE_KEY
