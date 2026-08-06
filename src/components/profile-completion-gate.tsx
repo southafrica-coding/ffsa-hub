@@ -50,9 +50,14 @@ function BlockingOverlay({
       <div className="pointer-events-none blur-sm opacity-50 select-none" aria-hidden>
         {children}
       </div>
-      {/* Blocking overlay */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-        {panel}
+      {/* Blocking overlay. The inner wrapper is scrollable and uses
+          min-h-full + items-center so a short panel is centred but a panel
+          taller than the viewport top-aligns and scrolls in full — otherwise
+          its header / submit button clip off-screen. */}
+      <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm">
+        <div className="flex min-h-full items-center justify-center p-4">
+          {panel}
+        </div>
       </div>
     </div>
   );

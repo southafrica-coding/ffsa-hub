@@ -96,7 +96,7 @@ export function ChildrenGateForm({
 
   // ── State 2: must complete each child ────────────────────────
   return (
-    <Card className="w-full max-w-2xl mx-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+    <Card className="w-full max-w-2xl shadow-2xl">
       <CardHeader className="text-center">
         <CardTitle className="text-xl">Add your children</CardTitle>
         <CardDescription>

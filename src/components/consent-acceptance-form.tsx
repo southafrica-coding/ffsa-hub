@@ -56,7 +56,7 @@ export function ConsentAcceptanceForm({
   }
 
   return (
-    <Card className="w-full max-w-md mx-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+    <Card className="w-full max-w-md shadow-2xl">
       <CardHeader className="text-center">
         <CardTitle className="text-xl">
           {title || "Privacy & Data Processing Agreement"}
