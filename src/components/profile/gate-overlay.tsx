@@ -18,7 +18,13 @@ export function GateOverlay({ children }: { children: React.ReactNode }) {
   if (!mounted) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] overflow-y-auto bg-black">
+    // data-blocking-gate lets AutoRefresh pause while a gate is on screen —
+    // otherwise its 10s router.refresh() re-runs the gate and can auto-advance
+    // the user mid-flow (e.g. jumping to consent while they add a 2nd child).
+    <div
+      data-blocking-gate="true"
+      className="fixed inset-0 z-[100] overflow-y-auto bg-black"
+    >
       <div className="flex min-h-full items-center justify-center p-4 sm:p-8">
         {children}
       </div>

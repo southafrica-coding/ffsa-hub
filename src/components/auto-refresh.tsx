@@ -14,6 +14,10 @@ export function AutoRefresh() {
 
   useEffect(() => {
     const interval = setInterval(() => {
+      // Never refresh while a blocking gate (profile / family / consent) is on
+      // screen — a background refresh re-runs the gate and can auto-advance the
+      // user mid-flow (e.g. jump to consent while they're adding another child).
+      if (document.querySelector("[data-blocking-gate]")) return;
       router.refresh();
     }, REFRESH_INTERVAL_MS);
 
