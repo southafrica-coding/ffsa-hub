@@ -17,20 +17,21 @@ import {
 } from "@/components/profile/household-members";
 import { isChildComplete } from "@/lib/users/profile-fields";
 
-// Blocking family gate for staff. A short two-step flow:
+// Blocking family gate for staff. A short flow with explicit yes/no questions:
 //
-//   Step 1 — Spouse (optional): "Do you have a spouse?" Add them (name +
-//            email) so their account can be linked later. Never blocks.
-//   Step 2 — Children (mandatory): "Do you have children?" If yes, every
-//            child must be fully completed before the Hub unblocks; if no,
-//            the gate clears. A spouse alone is always allowed through — the
-//            complete-child requirement only applies when they actually have
-//            children.
+//   1. "Do you have a spouse?"  Yes -> add spouse (first/last/email).
+//   2. "Do you have children?"  Yes -> add each child with full details
+//      (multiple allowed). Mandatory: at least one complete child before the
+//      Hub unblocks. No -> clears the gate.
 //
-// `hasChildren` (users.has_children) drives step 2's mandatory logic. The
-// parent gate only mounts this while the user is still blocked, so once
-// hasChildren is true we open directly on the children step.
-type Step = "spouse" | "children-ask" | "children-add";
+// Spouse is optional and never blocks; the complete-child requirement only
+// applies when they actually have children. `users.has_children` drives the
+// mandatory children logic and is the only piece persisted server-side here.
+type Step =
+  | "spouse-ask"
+  | "spouse-add"
+  | "children-ask"
+  | "children-add";
 
 export function ChildrenGateForm({
   hasChildren,
@@ -45,12 +46,16 @@ export function ChildrenGateForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // If they've already said "yes" to children (record incomplete), open on the
-  // add step; otherwise start at the spouse step.
+  // add-children step; otherwise start at the spouse question.
   const [step, setStep] = useState<Step>(
-    hasChildren === true ? "children-add" : "spouse"
+    hasChildren === true ? "children-add" : "spouse-ask"
   );
 
-  async function answer(value: boolean) {
+  const spouseMembers = members.filter((m) => m.relationship === "spouse");
+  const childMembers = members.filter((m) => m.relationship === "child");
+
+  // Persist the children yes/no answer (users.has_children).
+  async function answerChildren(value: boolean) {
     setSaving(true);
     setError(null);
     try {
@@ -64,9 +69,8 @@ export function ChildrenGateForm({
         setError(data.error || "Could not save your answer. Please try again.");
         return;
       }
-      // Advance locally too: router.refresh() re-renders but does NOT remount
-      // this component, so the `step` state wouldn't otherwise react to the new
-      // hasChildren value. "Yes" → add step; "No" clears the gate on refresh.
+      // "Yes" -> add step (router.refresh() re-renders but doesn't remount, so
+      // advance locally). "No" -> refresh clears the gate.
       if (value) setStep("children-add");
       router.refresh();
     } catch {
@@ -76,9 +80,9 @@ export function ChildrenGateForm({
     }
   }
 
-  // Explicit advance from the children step. We only proceed once at least one
-  // child is fully complete (the gate would otherwise just re-block); checked
-  // against the saved records so the user isn't bounced with no explanation.
+  // Explicit advance from the children step — only once at least one child is
+  // fully complete (checked against the saved records so the user isn't
+  // silently bounced).
   async function continueFromChildren() {
     setSaving(true);
     setError(null);
@@ -105,32 +109,69 @@ export function ChildrenGateForm({
     }
   }
 
-  // ── Step 1: Spouse (optional) ────────────────────────────────
-  if (step === "spouse") {
+  // ── Step 1a: Do you have a spouse? ───────────────────────────
+  if (step === "spouse-ask") {
     return (
-      <Card className="w-full max-w-2xl shadow-2xl">
+      <Card className="w-full max-w-md shadow-2xl">
         <CardHeader className="text-center">
           <CardTitle className="text-xl">Do you have a spouse?</CardTitle>
           <CardDescription>
-            If so, add them below — we just need their name and email so their
-            own account can be linked later. This step is optional.
+            We keep your immediate family on record. Please let us know.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <HouseholdMembers
-            initialMembers={members}
-            defaultRelationship="spouse"
-            refreshRouterOnChange={false}
-          />
-          <Button className="w-full" onClick={() => setStep("children-ask")}>
-            Continue
-          </Button>
+          <div className="flex gap-3">
+            <Button className="flex-1" onClick={() => setStep("spouse-add")}>
+              Yes
+            </Button>
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => setStep("children-ask")}
+            >
+              No
+            </Button>
+          </div>
         </CardContent>
       </Card>
     );
   }
 
-  // ── Step 2a: the children yes/no question ────────────────────
+  // ── Step 1b: Add spouse (first / last / email) ───────────────
+  if (step === "spouse-add") {
+    return (
+      <Card className="w-full max-w-2xl shadow-2xl">
+        <CardHeader className="text-center">
+          <CardTitle className="text-xl">Add your spouse</CardTitle>
+          <CardDescription>
+            We just need their first name, last name and email so their own
+            account can be linked later.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <HouseholdMembers
+            initialMembers={spouseMembers}
+            defaultRelationship="spouse"
+            refreshRouterOnChange={false}
+          />
+          <div className="flex gap-3">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => setStep("spouse-ask")}
+            >
+              ← Back
+            </Button>
+            <Button className="flex-1" onClick={() => setStep("children-ask")}>
+              Continue
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // ── Step 2a: Do you have children? ───────────────────────────
   if (step === "children-ask") {
     return (
       <Card className="w-full max-w-md shadow-2xl">
@@ -145,7 +186,7 @@ export function ChildrenGateForm({
           <div className="flex gap-3">
             <Button
               className="flex-1"
-              onClick={() => answer(true)}
+              onClick={() => answerChildren(true)}
               disabled={saving}
             >
               Yes, I have children
@@ -153,7 +194,7 @@ export function ChildrenGateForm({
             <Button
               variant="outline"
               className="flex-1"
-              onClick={() => answer(false)}
+              onClick={() => answerChildren(false)}
               disabled={saving}
             >
               No
@@ -163,7 +204,7 @@ export function ChildrenGateForm({
           <Button
             variant="ghost"
             className="w-full"
-            onClick={() => setStep("spouse")}
+            onClick={() => setStep("spouse-ask")}
             disabled={saving}
           >
             ← Back
@@ -173,24 +214,24 @@ export function ChildrenGateForm({
     );
   }
 
-  // ── Step 2b: must complete each child ────────────────────────
+  // ── Step 2b: Add children (multiple, full details) ───────────
   return (
     <Card className="w-full max-w-2xl shadow-2xl">
       <CardHeader className="text-center">
         <CardTitle className="text-xl">Add your children</CardTitle>
         <CardDescription>
-          Please add each child with their full details — name, date of birth,
-          gender, passport, and health insurance (plus visa if they&rsquo;re
-          international). You can continue once at least one child is fully
-          completed.
+          Add each child with their full details — name, date of birth, gender,
+          passport, and health insurance (plus visa if they&rsquo;re
+          international). You can add more than one; use &ldquo;+ Add child&rdquo;
+          for each. Continue once every child is completed.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* refreshRouterOnChange={false}: adding a child must NOT auto-advance
-            the gate. The user stays here (can add more children) until they
-            explicitly click Continue. */}
+        {/* refreshRouterOnChange={false}: saving a child must NOT auto-advance
+            the gate — the user stays here to add more until they click
+            Continue. */}
         <HouseholdMembers
-          initialMembers={members}
+          initialMembers={childMembers}
           requireComplete
           defaultRelationship="child"
           selfDefaults={selfDefaults}
