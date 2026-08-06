@@ -674,36 +674,41 @@ export default function OnboardingPage() {
                     <DateInput id="passport_expiry_date" value={form.passport_expiry_date} onChange={(v) => set("passport_expiry_date", v)} />
                   </div>
 
-                  {/* International toggle — reveals the visa section below */}
-                  <label
-                    className="flex items-center gap-3 cursor-pointer rounded-xl p-4"
-                    style={{ border: "1px solid var(--surface-4)", background: "var(--surface-1)" }}
-                  >
-                    <input type="checkbox" checked={form.is_international}
-                      onChange={(e) => setForm((prev) => ({
-                        ...prev, is_international: e.target.checked,
-                        ...(!e.target.checked && { visa_category: "", visa_type: "", visa_expiry_date: "" }),
-                      }))}
-                      className="h-4 w-4"
-                    />
-                    <div>
-                      <p style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>I am an international staff member or visitor</p>
-                      <p style={{ fontSize: "11px", color: "var(--text-tertiary)" }}>Check this if you are not a South African citizen — you&rsquo;ll be asked for your visa details</p>
-                    </div>
-                  </label>
+                  {/* Are you South African? — "No" reveals the visa section below */}
+                  <div className="space-y-2">
+                    <Label htmlFor="is_south_african">Are you South African? *</Label>
+                    <select
+                      id="is_south_african"
+                      value={form.is_international ? "no" : "yes"}
+                      onChange={(e) => {
+                        const isSA = e.target.value === "yes";
+                        setForm((prev) => ({
+                          ...prev,
+                          is_international: !isSA,
+                          ...(isSA && { visa_category: "", visa_type: "", visa_expiry_date: "" }),
+                        }));
+                      }}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      required
+                    >
+                      <option value="yes">Yes</option>
+                      <option value="no">No</option>
+                    </select>
+                    <p style={{ fontSize: "11px", color: "var(--text-tertiary)" }}>If no, please provide your visa details below.</p>
+                  </div>
 
                   {form.is_international && (
                     <div className="space-y-4">
                       <div className="space-y-2">
                         <Label>Visa Status *</Label>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 gap-3">
                           {[
                             { value: "90_day", label: "90-Day Visa", sub: "Short-term visitor" },
                             { value: "long_term", label: "Long-Term Visa", sub: "Work, study, or religious" },
                           ].map((opt) => (
                             <label
                               key={opt.value}
-                              className="flex items-center gap-3 cursor-pointer rounded-xl p-3"
+                              className="flex items-center gap-3 cursor-pointer rounded-xl p-4"
                               style={{
                                 border: `1px solid ${form.visa_category === opt.value ? "var(--yellow-border)" : "var(--surface-4)"}`,
                                 background: form.visa_category === opt.value ? "var(--yellow-dim)" : "var(--surface-1)",
@@ -714,8 +719,8 @@ export default function OnboardingPage() {
                                 onChange={() => setForm((prev) => ({ ...prev, visa_category: opt.value, visa_type: "", visa_expiry_date: "" }))}
                                 className="h-4 w-4" />
                               <div>
-                                <p style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-primary)" }}>{opt.label}</p>
-                                <p style={{ fontSize: "10px", color: "var(--text-tertiary)" }}>{opt.sub}</p>
+                                <p style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>{opt.label}</p>
+                                <p style={{ fontSize: "12px", color: "var(--text-tertiary)" }}>{opt.sub}</p>
                               </div>
                             </label>
                           ))}
