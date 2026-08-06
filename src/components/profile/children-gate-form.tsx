@@ -63,8 +63,10 @@ export function ChildrenGateForm({
         setError(data.error || "Could not save your answer. Please try again.");
         return;
       }
-      // "No" clears the gate; "Yes" re-renders with hasChildren=true, which
-      // opens the add step.
+      // Advance locally too: router.refresh() re-renders but does NOT remount
+      // this component, so the `step` state wouldn't otherwise react to the new
+      // hasChildren value. "Yes" → add step; "No" clears the gate on refresh.
+      if (value) setStep("children-add");
       router.refresh();
     } catch {
       setError("Network error. Please try again.");
