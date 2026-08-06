@@ -14,7 +14,6 @@ import {
   Trash2,
   ShieldCheck,
   Search,
-  SlidersHorizontal,
   X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -22,7 +21,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -155,6 +153,33 @@ const STAGE_STYLES: Record<
   },
 };
 
+// A small toggleable filter pill — outline when off, solid when on.
+function FilterChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={
+        "rounded-full border px-3 py-1 text-xs font-medium transition-colors " +
+        (active
+          ? "border-primary bg-primary text-primary-foreground"
+          : "border-input bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground")
+      }
+    >
+      {children}
+    </button>
+  );
+}
+
 function displayName(u: UserRow): string {
   return (
     u.display_name ??
@@ -210,6 +235,7 @@ export function UsersTable({
   );
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
   const [insuranceExpiredOnly, setInsuranceExpiredOnly] = useState(false);
+  const [insuranceExpiringOnly, setInsuranceExpiringOnly] = useState(false);
   const [profileIncompleteOnly, setProfileIncompleteOnly] = useState(false);
 
   const deptLabels = useMemo(
@@ -263,6 +289,10 @@ export function UsersTable({
       if (insuranceExpiredOnly && lifecycle.insurance.state !== "expired") {
         return false;
       }
+      // Insurance-expiring-soon facet.
+      if (insuranceExpiringOnly && lifecycle.insurance.state !== "expiring") {
+        return false;
+      }
       // Profile-incomplete facet.
       if (profileIncompleteOnly && lifecycle.stage !== "profile_incomplete") {
         return false;
@@ -298,6 +328,7 @@ export function UsersTable({
     membershipFilter,
     departmentFilter,
     insuranceExpiredOnly,
+    insuranceExpiringOnly,
     profileIncompleteOnly,
     deptLabels,
   ]);
@@ -315,12 +346,14 @@ export function UsersTable({
     membershipFilter.size +
     (departmentFilter !== "all" ? 1 : 0) +
     (insuranceExpiredOnly ? 1 : 0) +
+    (insuranceExpiringOnly ? 1 : 0) +
     (profileIncompleteOnly ? 1 : 0);
 
   function clearFilters() {
     setMembershipFilter(new Set());
     setDepartmentFilter("all");
     setInsuranceExpiredOnly(false);
+    setInsuranceExpiringOnly(false);
     setProfileIncompleteOnly(false);
   }
 
@@ -405,58 +438,6 @@ export function UsersTable({
             />
           </div>
 
-          {/* Membership + status facets */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-1.5">
-                <SlidersHorizontal className="h-4 w-4" />
-                Filters
-                {activeFilterCount > 0 && (
-                  <Badge
-                    variant="secondary"
-                    className="ml-1 h-5 min-w-5 justify-center px-1 text-xs"
-                  >
-                    {activeFilterCount}
-                  </Badge>
-                )}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-56">
-              <DropdownMenuLabel className="text-xs text-muted-foreground">
-                Membership
-              </DropdownMenuLabel>
-              {(["staff", "student", "community"] as const).map((value) => (
-                <DropdownMenuCheckboxItem
-                  key={value}
-                  checked={membershipFilter.has(value)}
-                  onCheckedChange={() => toggleMembership(value)}
-                  onSelect={(e) => e.preventDefault()}
-                >
-                  {MEMBERSHIP_OPTIONS.find((o) => o.value === value)?.label ??
-                    value}
-                </DropdownMenuCheckboxItem>
-              ))}
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel className="text-xs text-muted-foreground">
-                Status
-              </DropdownMenuLabel>
-              <DropdownMenuCheckboxItem
-                checked={insuranceExpiredOnly}
-                onCheckedChange={(v) => setInsuranceExpiredOnly(!!v)}
-                onSelect={(e) => e.preventDefault()}
-              >
-                Insurance expired
-              </DropdownMenuCheckboxItem>
-              <DropdownMenuCheckboxItem
-                checked={profileIncompleteOnly}
-                onCheckedChange={(v) => setProfileIncompleteOnly(!!v)}
-                onSelect={(e) => e.preventDefault()}
-              >
-                Profile incomplete
-              </DropdownMenuCheckboxItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
           {/* Department facet */}
           <select
             className="h-9 rounded-md border border-input bg-transparent px-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
@@ -483,6 +464,38 @@ export function UsersTable({
               Clear
             </Button>
           )}
+        </div>
+
+        {/* Visible membership + status facets — click to toggle. */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {(["staff", "student", "community"] as const).map((value) => (
+            <FilterChip
+              key={value}
+              active={membershipFilter.has(value)}
+              onClick={() => toggleMembership(value)}
+            >
+              {MEMBERSHIP_OPTIONS.find((o) => o.value === value)?.label ?? value}
+            </FilterChip>
+          ))}
+          <span className="mx-1 h-4 w-px bg-border" aria-hidden />
+          <FilterChip
+            active={insuranceExpiredOnly}
+            onClick={() => setInsuranceExpiredOnly((v) => !v)}
+          >
+            Insurance expired
+          </FilterChip>
+          <FilterChip
+            active={insuranceExpiringOnly}
+            onClick={() => setInsuranceExpiringOnly((v) => !v)}
+          >
+            Insurance expiring soon
+          </FilterChip>
+          <FilterChip
+            active={profileIncompleteOnly}
+            onClick={() => setProfileIncompleteOnly((v) => !v)}
+          >
+            Profile incomplete
+          </FilterChip>
         </div>
 
         <p className="text-xs text-muted-foreground">
