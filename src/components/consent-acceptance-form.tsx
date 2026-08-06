@@ -18,14 +18,43 @@ import {
 export function ConsentAcceptanceForm({
   version,
   title,
+  canReturnToFamily = false,
 }: {
   version: string;
   title: string;
+  // Staff reach consent right after the family (spouse/children) step. When
+  // true, show a Back button that reopens that step in case they forgot to add
+  // someone. Reopening it re-asks the children question, so their answer is
+  // reset; the family records they saved are kept.
+  canReturnToFamily?: boolean;
 }) {
   const router = useRouter();
   const [accepted, setAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [goingBack, setGoingBack] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  async function goBackToFamily() {
+    setGoingBack(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/profile/update", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ has_children: null }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || "Could not go back. Please try again.");
+        return;
+      }
+      router.refresh();
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setGoingBack(false);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -103,9 +132,21 @@ export function ConsentAcceptanceForm({
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 
-          <Button type="submit" className="w-full" disabled={loading}>
+          <Button type="submit" className="w-full" disabled={loading || goingBack}>
             {loading ? "Saving..." : "Accept & Continue"}
           </Button>
+
+          {canReturnToFamily && (
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full"
+              onClick={goBackToFamily}
+              disabled={loading || goingBack}
+            >
+              {goingBack ? "Going back…" : "← Back to family details"}
+            </Button>
+          )}
         </form>
       </CardContent>
     </Card>

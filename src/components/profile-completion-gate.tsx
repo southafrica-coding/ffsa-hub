@@ -153,7 +153,8 @@ export async function ProfileCompletionGate({
   //     fully-complete child record before the Hub unblocks. Students /
   //     community members are never prompted. Spouse/dependent records don't
   //     count and never block.
-  if (await userIsStaff(supabase, user.id, row)) {
+  const isStaff = await userIsStaff(supabase, user.id, row);
+  if (isStaff) {
     const hasChildren = (row.has_children ?? null) as boolean | null;
     const { data: householdRows } = await getHouseholdMembers(supabase, user.id);
     const members = (householdRows ?? []) as Array<Record<string, unknown>>;
@@ -196,6 +197,7 @@ export async function ProfileCompletionGate({
             <ConsentAcceptanceForm
               version={agreement.version}
               title={agreement.title}
+              canReturnToFamily={isStaff}
             />
           }
         >

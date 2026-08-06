@@ -15,6 +15,7 @@ import {
   type HouseholdMember,
   type SelfDefaults,
 } from "@/components/profile/household-members";
+import { isChildComplete } from "@/lib/users/profile-fields";
 
 // Blocking family gate for staff. A short two-step flow:
 //
@@ -67,6 +68,35 @@ export function ChildrenGateForm({
       // this component, so the `step` state wouldn't otherwise react to the new
       // hasChildren value. "Yes" → add step; "No" clears the gate on refresh.
       if (value) setStep("children-add");
+      router.refresh();
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // Explicit advance from the children step. We only proceed once at least one
+  // child is fully complete (the gate would otherwise just re-block); checked
+  // against the saved records so the user isn't bounced with no explanation.
+  async function continueFromChildren() {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/profile/household");
+      const json = await res.json().catch(() => ({}));
+      const list: HouseholdMember[] = Array.isArray(json.members)
+        ? json.members
+        : [];
+      const hasCompleteChild = list.some(
+        (m) => m.relationship === "child" && isChildComplete(m)
+      );
+      if (!hasCompleteChild) {
+        setError(
+          "Please add at least one child with all their details filled in before continuing."
+        );
+        return;
+      }
       router.refresh();
     } catch {
       setError("Network error. Please try again.");
@@ -156,20 +186,34 @@ export function ChildrenGateForm({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* refreshRouterOnChange={false}: adding a child must NOT auto-advance
+            the gate. The user stays here (can add more children) until they
+            explicitly click Continue. */}
         <HouseholdMembers
           initialMembers={members}
           requireComplete
           defaultRelationship="child"
           selfDefaults={selfDefaults}
+          refreshRouterOnChange={false}
         />
-        <Button
-          variant="ghost"
-          className="w-full"
-          onClick={() => setStep("children-ask")}
-          disabled={saving}
-        >
-          ← Back
-        </Button>
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        <div className="flex gap-3">
+          <Button
+            variant="outline"
+            className="flex-1"
+            onClick={() => setStep("children-ask")}
+            disabled={saving}
+          >
+            ← Back
+          </Button>
+          <Button
+            className="flex-1"
+            onClick={continueFromChildren}
+            disabled={saving}
+          >
+            {saving ? "Checking…" : "Continue"}
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );
