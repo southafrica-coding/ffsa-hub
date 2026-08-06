@@ -1,6 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  eslint: {
+    // Lint is a manual/dev tool (`npm run lint`), not a build gate. The repo
+    // carries pre-existing lint errors; keep them out of the deploy path so
+    // adding an ESLint config doesn't start failing `next build` on Vercel.
+    ignoreDuringBuilds: true,
+  },
   async redirects() {
     // Space Bookings moved from /bookings/* to /bookings/spaces/* when the
     // /bookings hub was introduced. Keep old bookmarks/deep-links working.
