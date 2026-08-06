@@ -124,22 +124,13 @@ export function ProfileCompletionForm({
   }
 
   return (
-    // Cap the card to the viewport and lay it out as header / scrollable body /
-    // pinned footer, so a long field list never pushes the title or the
-    // Continue button off-screen (the reason it looked "cut off").
-    <Card className="w-full max-w-2xl shadow-2xl flex flex-col max-h-[calc(100dvh-2rem)]">
-      <CardHeader className="text-center shrink-0">
+    <Card className="w-full max-w-lg shadow-2xl">
+      <CardHeader className="text-center">
         <CardTitle className="text-xl">{copy.title}</CardTitle>
         <CardDescription>{copy.description}</CardDescription>
       </CardHeader>
-      <CardContent className="flex-1 overflow-y-auto">
-        {/* Two columns so the field list fills the card's width instead of a
-            tall single strip that needs scrolling. */}
-        <form
-          id="profile-completion-form"
-          onSubmit={handleSubmit}
-          className="grid grid-cols-1 gap-4 sm:grid-cols-2"
-        >
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-4">
           {fields.map((f) => (
             <FieldControl
               key={f.field}
@@ -153,30 +144,26 @@ export function ProfileCompletionForm({
               }
             />
           ))}
+
+          {error && <p className="text-sm text-destructive">{error}</p>}
+
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? "Saving..." : "Continue"}
+          </Button>
+
+          {onDismiss && (
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full"
+              disabled={loading}
+              onClick={onDismiss}
+            >
+              Maybe later
+            </Button>
+          )}
         </form>
       </CardContent>
-      <div className="shrink-0 space-y-2 border-t p-4">
-        {error && <p className="text-sm text-destructive">{error}</p>}
-        <Button
-          type="submit"
-          form="profile-completion-form"
-          className="w-full"
-          disabled={loading}
-        >
-          {loading ? "Saving..." : "Continue"}
-        </Button>
-        {onDismiss && (
-          <Button
-            type="button"
-            variant="ghost"
-            className="w-full"
-            disabled={loading}
-            onClick={onDismiss}
-          >
-            Maybe later
-          </Button>
-        )}
-      </div>
     </Card>
   );
 }

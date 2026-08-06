@@ -3,6 +3,7 @@ import { ProfileCompletionForm } from "./profile-completion-form";
 import { ConsentAcceptanceForm } from "./consent-acceptance-form";
 import { InsuranceExpiryBanner } from "./insurance-expiry-banner";
 import { ChildrenGateForm } from "./profile/children-gate-form";
+import { GateOverlay } from "./profile/gate-overlay";
 import type { HouseholdMember } from "./profile/household-members";
 import {
   getProfileBlock,
@@ -45,21 +46,14 @@ function BlockingOverlay({
   panel: React.ReactNode;
 }) {
   return (
-    <div className="relative">
-      {/* Blurred background */}
-      <div className="pointer-events-none blur-sm opacity-50 select-none" aria-hidden>
+    <>
+      {/* The page stays mounted but is fully hidden behind the opaque
+          full-screen GateOverlay (portalled to <body>). */}
+      <div className="pointer-events-none select-none" aria-hidden>
         {children}
       </div>
-      {/* Blocking overlay. The inner wrapper is scrollable and uses
-          min-h-full + items-center so a short panel is centred but a panel
-          taller than the viewport top-aligns and scrolls in full — otherwise
-          its header / submit button clip off-screen. */}
-      <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm">
-        <div className="flex min-h-full items-center justify-center p-4">
-          {panel}
-        </div>
-      </div>
-    </div>
+      <GateOverlay>{panel}</GateOverlay>
+    </>
   );
 }
 
