@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { requireAnyModuleAccess } from "@/lib/require-permission";
+import {
+  requireAnyModuleAccess,
+  hasModuleAccess,
+} from "@/lib/require-permission";
 import { Building2, Car } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
@@ -13,6 +16,7 @@ const BOOKING_TYPES = [
     href: "/bookings/spaces",
     icon: Building2,
     ready: true,
+    module: "bookings",
   },
   {
     title: "Rent a Vehicle",
@@ -21,6 +25,7 @@ const BOOKING_TYPES = [
     href: "/bookings/vehicles",
     icon: Car,
     ready: true,
+    module: "vehicles",
   },
 ];
 
@@ -32,6 +37,14 @@ export default async function BookingsHubPage() {
   if (!user) redirect("/login");
   await requireAnyModuleAccess(supabase, user.id, ["bookings", "vehicles"]);
 
+  // Only surface the booking types the user can actually open — Space Bookings
+  // is restricted to ministry leaders / booking-admin roles, so vehicle-only
+  // staff shouldn't see a card that would just redirect them out.
+  const access = await Promise.all(
+    BOOKING_TYPES.map((b) => hasModuleAccess(supabase, user.id, b.module))
+  );
+  const bookingTypes = BOOKING_TYPES.filter((_, i) => access[i]);
+
   return (
     <div className="space-y-6">
       <div>
@@ -40,7 +53,7 @@ export default async function BookingsHubPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        {BOOKING_TYPES.map((b) => {
+        {bookingTypes.map((b) => {
           const Icon = b.icon;
           const content = (
             <Card className={b.ready ? "card-hover cursor-pointer" : "opacity-50"}>
