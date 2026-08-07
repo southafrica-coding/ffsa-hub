@@ -1,29 +1,24 @@
 "use client";
 
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import { Check, ChevronsUpDown } from "lucide-react";
+import { ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
 export type SelectOption = { value: string; label: string };
 
 /**
- * A type-to-search dropdown (Radix Popover + cmdk Command) with the same
- * external shape as a plain `<select>` — pass options and a value/onChange.
- * Built for long lists (countries, nationalities) where scrolling is painful.
+ * A single-value dropdown for long lists (countries, nationalities,
+ * passport-country) with the same external shape as a plain `<select>` —
+ * pass options and a value/onChange.
+ *
+ * Implemented as a **native `<select>`** on purpose: the previous Radix
+ * Popover + cmdk combobox did not open at all in Safari (a known WebKit
+ * interaction bug), breaking the staff sign-up on the browsers our users
+ * actually use. The native control opens reliably on Safari, iOS, Chrome and
+ * Android, supports type-to-search (typeahead) and native scrolling, and
+ * matches the country-code dropdown in `phone-input.tsx`.
+ *
+ * `searchPlaceholder` / `emptyText` are accepted but unused — kept so existing
+ * call sites don't need to change.
  */
 export function SearchableSelect({
   id,
@@ -31,8 +26,6 @@ export function SearchableSelect({
   onChange,
   options,
   placeholder = "Select…",
-  searchPlaceholder = "Search…",
-  emptyText = "No match found.",
   disabled,
 }: {
   id?: string;
@@ -44,58 +37,28 @@ export function SearchableSelect({
   emptyText?: string;
   disabled?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-  const selected = options.find((o) => o.value === value);
-
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          id={id}
-          type="button"
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          disabled={disabled}
-          className="h-10 w-full justify-between font-normal"
-        >
-          <span className={cn("truncate", !selected && "text-muted-foreground")}>
-            {selected ? selected.label : placeholder}
-          </span>
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent
-        className="w-[--radix-popover-trigger-width] p-0"
-        align="start"
+    <div className="relative">
+      <select
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        className={cn(
+          "flex h-10 w-full appearance-none rounded-md border border-input bg-background px-3 py-2 pr-8 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
+          !value && "text-muted-foreground"
+        )}
       >
-        <Command>
-          <CommandInput placeholder={searchPlaceholder} />
-          <CommandList>
-            <CommandEmpty>{emptyText}</CommandEmpty>
-            <CommandGroup>
-              {options.map((o) => (
-                <CommandItem
-                  key={o.value}
-                  value={`${o.label} ${o.value}`}
-                  onSelect={() => {
-                    onChange(o.value);
-                    setOpen(false);
-                  }}
-                >
-                  <Check
-                    className={cn(
-                      "mr-2 h-4 w-4 shrink-0",
-                      value === o.value ? "opacity-100" : "opacity-0"
-                    )}
-                  />
-                  <span className="truncate">{o.label}</span>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+        <option value="" disabled>
+          {placeholder}
+        </option>
+        {options.map((o) => (
+          <option key={o.value} value={o.value} className="text-foreground">
+            {o.label}
+          </option>
+        ))}
+      </select>
+      <ChevronsUpDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 opacity-50" />
+    </div>
   );
 }
