@@ -195,12 +195,21 @@ export default async function MySchoolsPage() {
       )}
 
       {/* My Applications Section */}
-      {myResponses && myResponses.length > 0 && (
-        <div className="space-y-3">
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            <ClipboardList className="h-5 w-5" />
-            My Applications
-          </h2>
+      <div className="space-y-3">
+        <h2 className="text-lg font-semibold flex items-center gap-2">
+          <ClipboardList className="h-5 w-5" />
+          My Applications
+        </h2>
+
+        {!myResponses || myResponses.length === 0 ? (
+          <Card>
+            <CardContent className="py-6">
+              <p className="text-sm text-muted-foreground text-center">
+                You haven&apos;t submitted any applications yet.
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
           <div className="grid gap-4 md:grid-cols-2">
             {(myResponses as Array<{
               id: string;
@@ -240,8 +249,8 @@ export default async function MySchoolsPage() {
               </Card>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Enrollments Section */}
       <div className="space-y-3">
