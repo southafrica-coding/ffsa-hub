@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getEnrollmentsByUser, getResponsesByUser } from "@/services/schools";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { GraduationCap, FileText, UserCircle2 } from "lucide-react";
+import { GraduationCap, FileText, UserCircle2, ClipboardList } from "lucide-react";
 import Link from "next/link";
 
 type AssignedStaff = {
@@ -100,11 +100,28 @@ export default async function MySchoolsPage() {
 
   const appStatusColors: Record<string, "default" | "secondary" | "destructive"> = {
     submitted: "secondary",
+    waiting_for_references: "secondary",
+    references_received: "secondary",
+    interview_scheduled: "secondary",
     accepted: "default",
     rejected: "destructive",
     waitlisted: "secondary",
     cancelled: "secondary",
   };
+
+  // Friendly, human-readable labels for the raw DB application statuses.
+  const appStatusLabels: Record<string, string> = {
+    submitted: "Submitted",
+    waiting_for_references: "Awaiting references",
+    references_received: "References received",
+    interview_scheduled: "Interview scheduled",
+    accepted: "Accepted",
+    rejected: "Not accepted",
+    waitlisted: "Waitlisted",
+    cancelled: "Cancelled",
+  };
+  const appStatusLabel = (s: string) =>
+    appStatusLabels[s] ?? s.replace(/_/g, " ");
 
   return (
     <div className="space-y-6">
@@ -137,7 +154,7 @@ export default async function MySchoolsPage() {
                       <CardTitle className="text-base">{program.name}</CardTitle>
                       {applied && appStatus && (
                         <Badge variant={appStatusColors[appStatus] ?? "secondary"}>
-                          {appStatus}
+                          {appStatusLabel(appStatus)}
                         </Badge>
                       )}
                     </div>
@@ -173,6 +190,55 @@ export default async function MySchoolsPage() {
                 </Card>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* My Applications Section */}
+      {myResponses && myResponses.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <ClipboardList className="h-5 w-5" />
+            My Applications
+          </h2>
+          <div className="grid gap-4 md:grid-cols-2">
+            {(myResponses as Array<{
+              id: string;
+              status: string;
+              submitted_at: string | null;
+              assigned_staff: AssignedStaff;
+              programs: { id: string; name: string; code: string } | null;
+            }>).map((response) => (
+              <Card key={response.id}>
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <CardTitle className="text-base">
+                      {response.programs?.name ?? "Program"}
+                    </CardTitle>
+                    <Badge variant={appStatusColors[response.status] ?? "secondary"}>
+                      {appStatusLabel(response.status)}
+                    </Badge>
+                  </div>
+                  {response.programs?.code && (
+                    <p className="text-sm font-mono text-muted-foreground">
+                      {response.programs.code}
+                    </p>
+                  )}
+                </CardHeader>
+                <CardContent>
+                  {response.submitted_at && (
+                    <p className="text-sm text-muted-foreground">
+                      Submitted:{" "}
+                      {new Date(response.submitted_at).toLocaleDateString()}
+                    </p>
+                  )}
+                  <PointOfContact
+                    staff={response.assigned_staff}
+                    label="Your application contact"
+                  />
+                </CardContent>
+              </Card>
+            ))}
           </div>
         </div>
       )}
