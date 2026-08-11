@@ -718,24 +718,38 @@ export function TheSendStorefront({
               </span>
             </label>
           )}
-          <label className="tss-consent">
-            <input
-              type="checkbox"
-              checked={consentAccepted}
-              onChange={(e) => setConsentAccepted(e.target.checked)}
-              required
-            />
-            <span>
-              {TICKET_CONSENT_CHECKBOX_LABEL}{" "}
-              <a
-                href={TICKET_CONSENT_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Read the full terms.
-              </a>
-            </span>
-          </label>
+          <div className={`tss-consent-box${consentAccepted ? " is-accepted" : ""}`}>
+            <div className="tss-consent-head">
+              <span className="tss-consent-title">Required before you can pay</span>
+              <span className="tss-consent-badge">
+                {consentAccepted ? "✓ Accepted" : "Required"}
+              </span>
+            </div>
+            <label className="tss-consent">
+              <input
+                type="checkbox"
+                checked={consentAccepted}
+                onChange={(e) => setConsentAccepted(e.target.checked)}
+                required
+              />
+              <span>
+                <span className="tss-consent-star">* </span>
+                {TICKET_CONSENT_CHECKBOX_LABEL}{" "}
+                <a
+                  href={TICKET_CONSENT_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Read the full terms.
+                </a>
+              </span>
+            </label>
+            {!consentAccepted && (
+              <p className="tss-consent-warn">
+                ⚠ Please tick this box to enable the payment button below.
+              </p>
+            )}
+          </div>
         </section>
       )}
 
@@ -1399,6 +1413,15 @@ const scopedCss = `
   display:flex;gap:11px;align-items:flex-start;margin-top:20px;cursor:pointer;
   font-size:11px;line-height:1.6;letter-spacing:.06em;color:var(--navy);
 }
+.tss-consent-box{margin-top:20px;border:2px solid var(--navy);border-radius:10px;padding:16px;background:rgba(28,49,76,0.03);}
+.tss-consent-box.is-accepted{border-color:rgba(28,49,76,0.2);background:transparent;}
+.tss-consent-box .tss-consent{margin-top:0;}
+.tss-consent-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;}
+.tss-consent-title{font-weight:800;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--navy);}
+.tss-consent-badge{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;border-radius:999px;padding:3px 9px;background:var(--navy);color:var(--cream);}
+.tss-consent-box.is-accepted .tss-consent-badge{background:rgba(28,49,76,0.12);color:var(--navy);}
+.tss-consent-star{color:var(--red);font-weight:800;}
+.tss-consent-warn{margin:8px 0 0 27px;font-size:11px;font-weight:800;letter-spacing:.04em;color:var(--red);}
 
 /* ── Promo apply / applied chip ── */
 .tss-promo-row{display:flex;gap:8px;align-items:stretch;}

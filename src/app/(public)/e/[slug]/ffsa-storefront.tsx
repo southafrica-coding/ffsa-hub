@@ -834,24 +834,38 @@ export function FfsaStorefront({
                 <span>Keep me posted on FFSA events and gatherings by email.</span>
               </label>
             )}
-            <label className="ffx-consent">
-              <input
-                type="checkbox"
-                checked={consentAccepted}
-                onChange={(e) => setConsentAccepted(e.target.checked)}
-                required
-              />
-              <span>
-                {TICKET_CONSENT_CHECKBOX_LABEL}{" "}
-                <a
-                  href={TICKET_CONSENT_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Read the full terms.
-                </a>
-              </span>
-            </label>
+            <div className={`ffx-consent-box${consentAccepted ? " is-accepted" : ""}`}>
+              <div className="ffx-consent-head">
+                <span className="ffx-consent-title">Required before you can pay</span>
+                <span className="ffx-consent-badge">
+                  {consentAccepted ? "✓ Accepted" : "Required"}
+                </span>
+              </div>
+              <label className="ffx-consent">
+                <input
+                  type="checkbox"
+                  checked={consentAccepted}
+                  onChange={(e) => setConsentAccepted(e.target.checked)}
+                  required
+                />
+                <span>
+                  <span className="ffx-consent-star">* </span>
+                  {TICKET_CONSENT_CHECKBOX_LABEL}{" "}
+                  <a
+                    href={TICKET_CONSENT_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Read the full terms.
+                  </a>
+                </span>
+              </label>
+              {!consentAccepted && (
+                <p className="ffx-consent-warn">
+                  ⚠ Please tick this box to enable the payment button below.
+                </p>
+              )}
+            </div>
           </section>
         )}
 
@@ -1218,6 +1232,15 @@ const scopedCss = `
 .ffx-consent{ display:flex; align-items:flex-start; gap:11px; margin-top:20px; cursor:pointer; }
 .ffx-consent input{ margin-top:2px; width:16px; height:16px; accent-color:var(--ylw); flex-shrink:0; }
 .ffx-consent span{ font-family:var(--disp); font-size:13.5px; line-height:1.5; color:var(--bone); }
+.ffx-consent-box{ margin-top:20px; border:2px solid var(--ylw); border-radius:12px; padding:16px; background:rgba(255,184,1,0.08); }
+.ffx-consent-box.is-accepted{ border-color:rgba(255,184,1,0.4); background:rgba(255,184,1,0.04); }
+.ffx-consent-box .ffx-consent{ margin-top:0; }
+.ffx-consent-head{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:4px; }
+.ffx-consent-title{ font-family:var(--mono); font-size:11px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--bone); }
+.ffx-consent-badge{ font-family:var(--mono); font-size:10px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; border-radius:999px; padding:3px 9px; background:var(--ylw); color:#1a1a1a; }
+.ffx-consent-box.is-accepted .ffx-consent-badge{ background:rgba(255,184,1,0.2); color:var(--ylw); }
+.ffx-consent-star{ color:#ff5a5a; font-weight:900; }
+.ffx-consent-warn{ margin:8px 0 0 27px; font-family:var(--disp); font-size:12.5px; font-weight:600; color:var(--ylw); }
 
 /* ── Pay ── */
 .ffx-pay{ margin-top:34px; }

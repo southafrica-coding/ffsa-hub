@@ -710,24 +710,38 @@ export function CampsStorefront({
               </span>
             </label>
           )}
-          <label className="cmp-consent">
-            <input
-              type="checkbox"
-              checked={consentAccepted}
-              onChange={(e) => setConsentAccepted(e.target.checked)}
-              required
-            />
-            <span>
-              {TICKET_CONSENT_CHECKBOX_LABEL}{" "}
-              <a
-                href={TICKET_CONSENT_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Read the full terms.
-              </a>
-            </span>
-          </label>
+          <div className={`cmp-consent-box${consentAccepted ? " is-accepted" : ""}`}>
+            <div className="cmp-consent-head">
+              <span className="cmp-consent-title">Required before you can pay</span>
+              <span className="cmp-consent-badge">
+                {consentAccepted ? "✓ Accepted" : "Required"}
+              </span>
+            </div>
+            <label className="cmp-consent">
+              <input
+                type="checkbox"
+                checked={consentAccepted}
+                onChange={(e) => setConsentAccepted(e.target.checked)}
+                required
+              />
+              <span>
+                <span className="cmp-consent-star">* </span>
+                {TICKET_CONSENT_CHECKBOX_LABEL}{" "}
+                <a
+                  href={TICKET_CONSENT_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Read the full terms.
+                </a>
+              </span>
+            </label>
+            {!consentAccepted && (
+              <p className="cmp-consent-warn">
+                ⚠ Please tick this box to enable the payment button below.
+              </p>
+            )}
+          </div>
         </section>
       )}
 
@@ -1341,6 +1355,15 @@ const scopedCss = `
   display:flex;gap:11px;align-items:flex-start;margin-top:20px;cursor:pointer;
   font-size:11px;line-height:1.6;letter-spacing:.04em;color:var(--ink);font-weight:700;
 }
+.cmp-consent-box{margin-top:20px;border:2px solid var(--blue);border-radius:10px;padding:16px;background:rgba(0,0,0,0.02);}
+.cmp-consent-box.is-accepted{border-color:rgba(0,0,0,0.15);}
+.cmp-consent-box .cmp-consent{margin-top:0;}
+.cmp-consent-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;}
+.cmp-consent-title{font-family:var(--display);font-style:italic;font-weight:900;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink);}
+.cmp-consent-badge{font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;border-radius:999px;padding:3px 9px;background:var(--blue);color:var(--cream);}
+.cmp-consent-box.is-accepted .cmp-consent-badge{background:rgba(0,0,0,0.08);color:var(--ink);}
+.cmp-consent-star{color:#d64545;font-weight:900;}
+.cmp-consent-warn{margin:8px 0 0 27px;font-size:11px;font-weight:800;letter-spacing:.04em;color:var(--blue);}
 
 /* ── Promo apply / applied chip ── */
 .cmp-promo-row{display:flex;gap:8px;align-items:stretch;}

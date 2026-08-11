@@ -663,26 +663,54 @@ export function Storefront({
                 Keep me posted on FFSA events and gatherings by email.
               </span>
             </label>
-            <label className="flex items-start gap-2 cursor-pointer pt-1">
-              <input
-                type="checkbox"
-                checked={consentAccepted}
-                onChange={(e) => setConsentAccepted(e.target.checked)}
-                className="mt-0.5 accent-primary"
-                required
-              />
-              <span className="text-sm text-foreground/80 normal-case tracking-normal font-normal">
-                {TICKET_CONSENT_CHECKBOX_LABEL}{" "}
-                <a
-                  href={TICKET_CONSENT_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline"
+            <div
+              className={`mt-3 rounded-lg border-2 p-4 transition-colors ${
+                consentAccepted
+                  ? "border-primary/40 bg-primary/5"
+                  : "border-amber-400 bg-amber-50 dark:bg-amber-950/20"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className="text-xs font-semibold uppercase tracking-wide text-foreground">
+                  Required before you can pay
+                </span>
+                <span
+                  className={`text-[10px] font-bold uppercase tracking-wide rounded-full px-2 py-0.5 ${
+                    consentAccepted
+                      ? "bg-primary/15 text-primary"
+                      : "bg-amber-400 text-amber-950"
+                  }`}
                 >
-                  Read the full terms.
-                </a>
-              </span>
-            </label>
+                  {consentAccepted ? "✓ Accepted" : "Required"}
+                </span>
+              </div>
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={consentAccepted}
+                  onChange={(e) => setConsentAccepted(e.target.checked)}
+                  className="mt-0.5 h-5 w-5 accent-primary flex-shrink-0"
+                  required
+                />
+                <span className="text-sm text-foreground normal-case tracking-normal font-normal">
+                  <span className="text-red-600 font-bold">* </span>
+                  {TICKET_CONSENT_CHECKBOX_LABEL}{" "}
+                  <a
+                    href={TICKET_CONSENT_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline font-medium"
+                  >
+                    Read the full terms.
+                  </a>
+                </span>
+              </label>
+              {!consentAccepted && (
+                <p className="mt-2 pl-8 text-xs font-medium text-amber-700 dark:text-amber-400">
+                  ⚠ Please tick this box to enable the payment button below.
+                </p>
+              )}
+            </div>
           </CardContent>
         </Card>
       )}

@@ -742,24 +742,38 @@ export function PreachersStorefront({
               <span>KEEP ME IN THE LOOP — SEND ME PREACHERS &amp; EVENTS BY EMAIL.</span>
             </label>
           )}
-          <label className="pr-consent">
-            <input
-              type="checkbox"
-              checked={consentAccepted}
-              onChange={(e) => setConsentAccepted(e.target.checked)}
-              required
-            />
-            <span>
-              {TICKET_CONSENT_CHECKBOX_LABEL}{" "}
-              <a
-                href={TICKET_CONSENT_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Read the full terms.
-              </a>
-            </span>
-          </label>
+          <div className={`pr-consent-box${consentAccepted ? " is-accepted" : ""}`}>
+            <div className="pr-consent-head">
+              <span className="pr-consent-title">Required before you can pay</span>
+              <span className="pr-consent-badge">
+                {consentAccepted ? "✓ Accepted" : "Required"}
+              </span>
+            </div>
+            <label className="pr-consent">
+              <input
+                type="checkbox"
+                checked={consentAccepted}
+                onChange={(e) => setConsentAccepted(e.target.checked)}
+                required
+              />
+              <span>
+                <span className="pr-consent-star">* </span>
+                {TICKET_CONSENT_CHECKBOX_LABEL}{" "}
+                <a
+                  href={TICKET_CONSENT_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Read the full terms.
+                </a>
+              </span>
+            </label>
+            {!consentAccepted && (
+              <p className="pr-consent-warn">
+                ⚠ Please tick this box to enable the payment button below.
+              </p>
+            )}
+          </div>
         </section>
       )}
 
@@ -1404,6 +1418,15 @@ const scopedCss = `
   display:flex;gap:11px;align-items:flex-start;margin-top:20px;cursor:pointer;
   font-size:11px;line-height:1.6;letter-spacing:.04em;color:var(--offwhite);font-weight:700;opacity:.85;
 }
+.pr-consent-box{margin-top:20px;border:2px solid var(--bone);border-radius:10px;padding:16px;background:rgba(237,230,211,0.05);}
+.pr-consent-box.is-accepted{border-color:var(--line);background:transparent;}
+.pr-consent-box .pr-consent{margin-top:0;opacity:1;}
+.pr-consent-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;}
+.pr-consent-title{font-family:var(--display);font-weight:900;font-size:15px;letter-spacing:.05em;text-transform:uppercase;color:var(--bone);}
+.pr-consent-badge{font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;border-radius:999px;padding:3px 9px;background:var(--bone);color:var(--ink);}
+.pr-consent-box.is-accepted .pr-consent-badge{background:var(--line);color:var(--offwhite);}
+.pr-consent-star{color:#F2C14E;font-weight:900;}
+.pr-consent-warn{margin:8px 0 0 27px;font-size:11px;font-weight:800;letter-spacing:.04em;color:#F2C14E;}
 
 /* ── Promo apply / applied chip ── */
 .pr-promo-row{display:flex;gap:8px;align-items:stretch;}
