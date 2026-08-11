@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { stripeProvider } from "@/lib/payments/stripe";
-import { fulfillOrder } from "@/lib/ticketing/fulfillment";
+import { settlePaidOrder } from "@/lib/ticketing/settle";
 
 // POST /api/integrations/stripe/notify
 //
@@ -59,54 +59,30 @@ export async function POST(request: Request) {
     return new NextResponse("ok", { status: 200 });
   }
 
-  // Defense-in-depth: amount must match what we expect.
-  if (
-    result.amountCents != null &&
-    Math.abs(result.amountCents - order.total_cents) > 0
-  ) {
-    console.error(
-      "[stripe/notify] amount mismatch for order",
-      order.id,
-      "expected",
-      order.total_cents,
-      "got",
-      result.amountCents
-    );
-    return new NextResponse("ok", { status: 200 });
-  }
-
   if (result.status === "paid") {
-    // Idempotent: only flips pending → paid. Replayed webhooks land
-    // here with status already paid; maybeSingle returns null data,
-    // we treat it as already-handled and skip fulfilment.
-    const { data: updated, error: updateErr } = await supabase
-      .from("orders")
-      .update({
-        status: "paid",
-        paid_at: new Date().toISOString(),
-        provider_payment_id: result.providerPaymentId,
-      })
-      .eq("id", order.id)
-      .eq("status", "pending")
-      .select("id")
-      .maybeSingle();
-    if (updateErr) {
+    // Shared with the reconcile paths: amount check + idempotent
+    // pending → paid + fulfilment, all in one place.
+    const settle = await settlePaidOrder(supabase, {
+      orderId: order.id,
+      expectedTotalCents: order.total_cents,
+      providerPaymentId: result.providerPaymentId,
+      amountCents: result.amountCents,
+    });
+    if (settle.outcome === "amount_mismatch") {
       console.error(
-        "[stripe/notify] mark-paid failed for order",
+        "[stripe/notify] amount mismatch for order",
         order.id,
-        updateErr.message
+        "expected",
+        order.total_cents,
+        "got",
+        result.amountCents
       );
-      return new NextResponse("ok", { status: 200 });
-    }
-    if (updated) {
-      const fulfilment = await fulfillOrder(supabase, order.id);
-      if (!fulfilment.ok) {
-        console.error(
-          "[stripe/notify] fulfilment failed for order",
-          order.id,
-          fulfilment.error
-        );
-      }
+    } else if (settle.outcome === "error") {
+      console.error(
+        "[stripe/notify] settle failed for order",
+        order.id,
+        settle.error
+      );
     }
   } else if (result.status === "cancelled" || result.status === "failed") {
     const { data: pending } = await supabase

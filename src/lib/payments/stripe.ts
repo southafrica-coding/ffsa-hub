@@ -113,6 +113,36 @@ function extractOrderId(session: Stripe.Checkout.Session | null): string | null 
   return typeof meta === "string" && meta ? meta : null;
 }
 
+// Reconciliation: pull the current truth for a Checkout Session straight
+// from Stripe, bypassing the webhook. Used by the thanks page and the
+// reconcile cron to recover orders whose `checkout.session.completed`
+// webhook never arrived (endpoint mis-registered, secret mismatch, etc.).
+// `reference` is the `cs_...` session id we stored on orders.provider_reference.
+export async function retrieveStripeCheckoutStatus(reference: string): Promise<{
+  status: PaymentStatus;
+  providerPaymentId: string | null;
+  amountCents: number | null;
+}> {
+  const { client } = getClient();
+  const session = await client.checkout.sessions.retrieve(reference);
+
+  let status: PaymentStatus = "pending";
+  if (session.status === "complete" && session.payment_status === "paid") {
+    status = "paid";
+  } else if (session.status === "expired") {
+    status = "cancelled";
+  }
+
+  return {
+    status,
+    providerPaymentId:
+      typeof session.payment_intent === "string"
+        ? session.payment_intent
+        : (session.payment_intent?.id ?? session.id ?? null),
+    amountCents: session.amount_total ?? null,
+  };
+}
+
 export const stripeProvider: PaymentProvider = {
   name: "stripe",
 

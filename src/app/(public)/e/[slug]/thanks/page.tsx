@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Card, CardContent } from "@/components/ui/card";
+import { reconcileStripeOrder } from "@/lib/ticketing/reconcile-stripe";
 
 export const dynamic = "force-dynamic";
 
@@ -14,19 +15,47 @@ export default async function ThanksPage({
   let order: {
     status: string;
     buyer_email: string;
+    payment_provider: string | null;
   } | null = null;
   if (orderId) {
     const supabase = createAdminClient();
     const { data } = await supabase
       .from("orders")
-      .select("status, buyer_email")
+      .select(
+        "id, status, buyer_email, payment_provider, total_cents, provider_reference"
+      )
       .eq("id", orderId)
       .maybeSingle();
-    order = data ?? null;
+
+    // Safety net: if the buyer is back here but the order is still
+    // pending on a Stripe (international card) payment, the webhook may
+    // not have arrived. Ask Stripe directly and settle it now so the
+    // buyer sees "confirmed" and gets their tickets without waiting.
+    if (
+      data &&
+      data.status === "pending" &&
+      data.payment_provider === "stripe"
+    ) {
+      const settled = await reconcileStripeOrder(supabase, data);
+      if (settled.outcome === "settled") {
+        const { data: refetched } = await supabase
+          .from("orders")
+          .select("id, status, buyer_email, payment_provider")
+          .eq("id", orderId)
+          .maybeSingle();
+        order = refetched ?? data;
+      } else {
+        order = data;
+      }
+    } else {
+      order = data ?? null;
+    }
   }
 
   const status = order?.status ?? null;
   const buyerEmail = order?.buyer_email ?? null;
+  const providerLabel =
+    order?.payment_provider === "stripe" ? "Stripe" : "PayFast";
 
   return (
     <div className="w-full animate-fade-up">
@@ -75,8 +104,8 @@ export default async function ThanksPage({
               <p className="page-eyebrow">Processing</p>
               <h1 className="page-title">Payment is processing</h1>
               <p className="text-sm text-foreground/80 normal-case tracking-normal pt-2">
-                We're confirming with PayFast. Your tickets will arrive in your
-                inbox shortly.
+                We're confirming your payment with {providerLabel}. Your
+                tickets will arrive in your inbox shortly.
               </p>
             </>
           ) : (
