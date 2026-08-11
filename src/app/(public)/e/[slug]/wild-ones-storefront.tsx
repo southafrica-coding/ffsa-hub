@@ -13,6 +13,10 @@ import {
 } from "@/lib/ticketing/buyer-fields";
 import { formatMoney, providersForCurrency } from "@/lib/currencies";
 import {
+  TICKET_CONSENT_CHECKBOX_LABEL,
+  TICKET_CONSENT_URL,
+} from "@/lib/ticketing/consent-terms";
+import {
   CheckoutQuestionFields,
   type CheckoutFieldClasses,
 } from "./checkout-questions-fields";
@@ -176,6 +180,7 @@ export function WildOnesStorefront({
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [marketingConsent, setMarketingConsent] = useState(false);
+  const [consentAccepted, setConsentAccepted] = useState(false);
   const [customAnswers, setCustomAnswers] = useState<Record<string, unknown>>({});
   const [customErrors, setCustomErrors] = useState<Record<string, string>>({});
   const [ticketAnswers, setTicketAnswers] = useState<
@@ -373,6 +378,15 @@ export function WildOnesStorefront({
       return;
     }
     setTicketErrors({});
+    if (!consentAccepted) {
+      setErr(
+        "Please accept the Ticket Purchase Terms & Consent Agreement to continue."
+      );
+      document
+        .getElementById("wo-consent")
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
     setSubmitting(provider);
     setErr(null);
 
@@ -394,6 +408,7 @@ export function WildOnesStorefront({
           phone: phone.trim() || null,
         },
         marketing_consent: marketingConsent,
+        consent_accepted: consentAccepted,
         custom_answers: customAnswers,
         ticket_answers: ticketCollect.payload,
         payment_provider: provider,
@@ -726,6 +741,41 @@ export function WildOnesStorefront({
               <span>KEEP ME IN THE LOOP — SEND ME WILD ONES &amp; EVENTS BY EMAIL.</span>
             </label>
           )}
+          <div
+            id="wo-consent"
+            className={`wo-consent-box${consentAccepted ? " is-accepted" : ""}`}
+          >
+            <div className="wo-consent-head">
+              <span className="wo-consent-title">Required before you can pay</span>
+              <span className="wo-consent-badge">
+                {consentAccepted ? "✓ Accepted" : "Required"}
+              </span>
+            </div>
+            <label className="wo-consent">
+              <input
+                type="checkbox"
+                checked={consentAccepted}
+                onChange={(e) => setConsentAccepted(e.target.checked)}
+                required
+              />
+              <span>
+                <span className="wo-consent-star">* </span>
+                {TICKET_CONSENT_CHECKBOX_LABEL}{" "}
+                <a
+                  href={TICKET_CONSENT_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Read the full terms.
+                </a>
+              </span>
+            </label>
+            {!consentAccepted && (
+              <p className="wo-consent-warn">
+                ⚠ Please tick this box to enable the payment button below.
+              </p>
+            )}
+          </div>
         </section>
       )}
 
@@ -766,7 +816,7 @@ export function WildOnesStorefront({
             <button
               type="button"
               onClick={() => submit("payfast")}
-              disabled={submitting !== null || !buyerValid}
+              disabled={submitting !== null || !buyerValid || !consentAccepted}
               className="wo-paybtn"
             >
               {submitting === "payfast" ? "LOCKING IT IN…" : `PAY ${money(totalCents)}`}
@@ -780,7 +830,7 @@ export function WildOnesStorefront({
             <button
               type="button"
               onClick={() => submit("stripe")}
-              disabled={submitting !== null || !buyerValid}
+              disabled={submitting !== null || !buyerValid || !consentAccepted}
               className={canUsePayfast ? "wo-paybtn-alt" : "wo-paybtn"}
             >
               {submitting === "stripe"
@@ -1351,6 +1401,15 @@ const scopedCss = `
   display:flex;gap:11px;align-items:flex-start;margin-top:20px;cursor:pointer;
   font-size:11px;line-height:1.6;letter-spacing:.04em;color:var(--bone);font-weight:700;opacity:.85;
 }
+.wo-consent-box{margin-top:20px;border:2px solid var(--ember);border-radius:10px;padding:16px;background:rgba(0,0,0,0.18);}
+.wo-consent-box.is-accepted{border-color:rgba(245,241,232,0.25);background:rgba(0,0,0,0.10);}
+.wo-consent-box .wo-consent{margin-top:0;opacity:1;}
+.wo-consent-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;}
+.wo-consent-title{font-family:var(--display);font-weight:700;font-size:15px;letter-spacing:.05em;text-transform:uppercase;color:var(--bone);}
+.wo-consent-badge{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;border-radius:999px;padding:3px 9px;background:var(--ember);color:var(--offwhite);}
+.wo-consent-box.is-accepted .wo-consent-badge{background:rgba(245,241,232,0.18);color:var(--bone);}
+.wo-consent-star{color:var(--ember);font-weight:800;}
+.wo-consent-warn{margin:8px 0 0 27px;font-size:11px;font-weight:700;letter-spacing:.04em;color:var(--ember);}
 
 /* ── Promo apply / applied chip ── */
 .wo-promo-row{display:flex;gap:8px;align-items:stretch;}
