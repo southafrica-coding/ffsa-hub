@@ -7,7 +7,10 @@ import {
 
 export const maxDuration = 60;
 
-// GET /api/cron/reconcile-payments — runs on a Vercel cron schedule.
+// GET /api/cron/reconcile-payments — runs on a Vercel cron schedule
+// (daily; the Hobby plan only permits once-per-day crons — the primary,
+// instant recovery happens on the thanks page, this is just the backstop
+// for buyers who never return).
 //
 // Safety net for Stripe (international card) orders whose
 // `checkout.session.completed` webhook never arrived, leaving the buyer
