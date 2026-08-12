@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { EventDescription } from "@/components/events/event-description";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import type { FormField } from "@/lib/forms/schema";
@@ -358,9 +359,10 @@ export function Storefront({
             {event.location ? ` · ${event.location}` : ""}
           </p>
           {event.description && (
-            <p className="text-sm text-foreground/80 whitespace-pre-wrap leading-relaxed pt-2">
-              {event.description}
-            </p>
+            <EventDescription
+              html={event.description}
+              className="text-sm text-foreground/80 leading-relaxed pt-2"
+            />
           )}
         </CardContent>
       </Card>

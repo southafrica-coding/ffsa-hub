@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { EventDescription } from "@/components/events/event-description";
 import type { FormField } from "@/lib/forms/schema";
 import { validateCheckoutAnswers } from "@/lib/ticketing/checkout-questions";
 import {
@@ -538,7 +539,7 @@ export function PreachersStorefront({
           />
 
           {event.description && (
-            <p className="pr-hero-desc">{event.description}</p>
+            <EventDescription html={event.description} className="pr-hero-desc" />
           )}
 
           <div className="pr-coords">

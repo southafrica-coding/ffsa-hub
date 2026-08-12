@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { EventDescription } from "@/components/events/event-description";
 import type { CSSProperties } from "react";
 import type { FormField } from "@/lib/forms/schema";
 import { validateCheckoutAnswers } from "@/lib/ticketing/checkout-questions";
@@ -536,7 +537,7 @@ export function FfsaStorefront({
           </dl>
 
           {event.description && (
-            <p className="ffx-desc">{event.description}</p>
+            <EventDescription html={event.description} className="ffx-desc" />
           )}
         </section>
 

@@ -10,6 +10,10 @@ import { MissioStorefront } from "./missio-storefront";
 import { resolveBuyerFields } from "@/lib/ticketing/buyer-fields";
 import { PublicFormNotice } from "@/components/public-form-shell";
 import { formatEventDateRange } from "@/lib/events/og";
+import {
+  sanitizeEventDescription,
+  eventDescriptionToPlainText,
+} from "@/lib/events/rich-text";
 import type { FormField } from "@/lib/forms/schema";
 import type { Metadata } from "next";
 
@@ -77,7 +81,9 @@ export async function generateMetadata({
     .filter(Boolean)
     .join(" · ");
   const description =
-    event.description?.trim().slice(0, 200) || dateLine || event.title;
+    eventDescriptionToPlainText(event.description).slice(0, 200) ||
+    dateLine ||
+    event.title;
 
   return {
     title: event.title,
@@ -144,7 +150,9 @@ export default async function PublicEventPage({
   const eventProps = {
     id: event.id,
     title: event.title,
-    description: event.description,
+    // Sanitised once here so every storefront receives safe rich HTML,
+    // covering both the edit API and the direct-supabase create paths.
+    description: sanitizeEventDescription(event.description),
     location: event.location,
     start_date: event.start_date,
     end_date: event.end_date,
