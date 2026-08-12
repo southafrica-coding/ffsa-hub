@@ -129,8 +129,12 @@ export function applyListOptions(
 // Fields that don't apply to certain self-signup membership types, so they
 // are neither collected nor required for them:
 //   - province:   removed for staff / student / community
-//   - department: removed for student / community (staff keep it)
-// Invited/legacy users (signup_type = null) keep every field.
+//   - department: STAFF-ONLY. A department maps to a Ministry team, so only
+//                 self-signup staff are asked for it. Students, community
+//                 members, and legacy/invited accounts (signup_type = null)
+//                 never see or need it — this also keeps a pre-signup_type
+//                 student (null) from being prompted for, or nagged about, a
+//                 department they shouldn't carry.
 export function excludedProfileFields(
   signupType: string | null | undefined
 ): Set<string> {
@@ -138,7 +142,7 @@ export function excludedProfileFields(
   if (signupType === "staff" || signupType === "student" || signupType === "community") {
     excluded.add("province");
   }
-  if (signupType === "student" || signupType === "community") {
+  if (signupType !== "staff") {
     excluded.add("department");
   }
   return excluded;
