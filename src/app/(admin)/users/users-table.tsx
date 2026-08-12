@@ -738,9 +738,10 @@ function MissingFieldsPopover({ lifecycle }: { lifecycle: LifecycleInfo }) {
           type="button"
           // Stop the row's onClick from navigating to /users/[id].
           onClick={(e) => e.stopPropagation()}
-          className="text-[11px] text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground"
+          className="mt-0.5 inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 hover:bg-amber-100 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300"
         >
-          {lifecycle.completedRequired} of {lifecycle.totalRequired} fields
+          <AlertCircle className="h-3 w-3" />
+          {count} missing · {lifecycle.completedRequired}/{lifecycle.totalRequired}
         </button>
       </PopoverTrigger>
       <PopoverContent

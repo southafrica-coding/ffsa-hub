@@ -24,6 +24,8 @@ import {
   getConsentAgreementByVersion,
 } from "@/services/consent";
 import { PROFILE_SECTIONS } from "@/lib/users/profile-sections";
+import { deriveUserLifecycle } from "@/lib/users/lifecycle";
+import { ProfileIncompleteSummary } from "@/components/profile/incomplete-summary";
 import { excludedProfileFields, applyListOptions } from "@/lib/users/profile-fields";
 import { INSURANCE_PROVIDERS } from "@/lib/profile/options";
 import { getAllListOptions, activeSets } from "@/services/list-options";
@@ -77,6 +79,10 @@ export default async function ProfilePage() {
   const row = user as Record<string, unknown>;
   const roles = user.user_roles ?? [];
 
+  // Same derivation the admin Users badge uses, so "what's missing" matches
+  // exactly what the completion gate blocks on.
+  const lifecycle = deriveUserLifecycle(row);
+
   // Which history row is the current active policy — protected from deletion.
   const insuranceCurrentId = currentPolicyId(insuranceRows, {
     provider: row.health_insurance_provider as string | null | undefined,
@@ -126,6 +132,8 @@ export default async function ProfilePage() {
 
   return (
     <div className="space-y-8">
+      <ProfileIncompleteSummary lifecycle={lifecycle} />
+
       <div className="flex items-start gap-5">
         <AvatarUploader
           userId={user.id}
