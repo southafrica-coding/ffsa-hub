@@ -68,6 +68,8 @@ export async function createTicketType(
     sort_order?: number;
     // Per-tier custom questions (migration 137). Flat FormField[].
     questions?: unknown;
+    // Per-tier signable waiver config (migration 163). TierWaiver | null.
+    waiver?: unknown;
   }
 ) {
   return supabase.from("ticket_types").insert(data).select().single();
@@ -198,7 +200,7 @@ export async function listOrdersWithTicketAnswersByEvent(
   return supabase
     .from("orders")
     .select(
-      "*, tickets(id, ticket_type_id, custom_answers, ticket_types(name))"
+      "*, tickets(id, code, ticket_type_id, custom_answers, waiver_signature, ticket_types(name))"
     )
     .eq("event_id", eventId)
     .order("created_at", { ascending: false });

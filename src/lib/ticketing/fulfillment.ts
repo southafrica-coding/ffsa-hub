@@ -30,6 +30,12 @@ import {
   ticketAnswerDrainer,
   type TicketAnswerGroup,
 } from "./ticket-questions";
+import {
+  waiverSignatureDrainer,
+  type WaiverSignatureGroup,
+  type WaiverSignatureRecord,
+} from "./waivers";
+import { renderWaiverCertificate } from "./render-waiver-certificate";
 
 export type EventBrand =
   | "ff"
@@ -122,7 +128,7 @@ export async function fulfillOrder(
   const { data: order, error: orderErr } = await supabase
     .from("orders")
     .select(
-      "id, status, total_cents, currency, buyer_first_name, buyer_last_name, buyer_email, buyer_contact_id, lines, ticket_answers, event_id, events(id, title, start_date, end_date, location, public_slug, brand)"
+      "id, status, total_cents, currency, buyer_first_name, buyer_last_name, buyer_email, buyer_contact_id, lines, ticket_answers, waiver_signatures, event_id, events(id, title, start_date, end_date, location, public_slug, brand)"
     )
     .eq("id", orderId)
     .maybeSingle();
@@ -146,7 +152,7 @@ export async function fulfillOrder(
   {
     const { data: existing } = await supabase
       .from("tickets")
-      .select("id, code, ticket_type_id, ticket_types(name)")
+      .select("id, code, ticket_type_id, waiver_signature, ticket_types(name)")
       .eq("order_id", orderId)
       .order("created_at");
     tickets = existing ?? [];
@@ -163,6 +169,11 @@ export async function fulfillOrder(
     const drainAnswers = ticketAnswerDrainer(
       (order.ticket_answers as TicketAnswerGroup[] | null) ?? []
     );
+    // Drain the signed waivers captured at checkout onto each issued
+    // ticket (FIFO per tier), same shape as the answers drain.
+    const drainWaiver = waiverSignatureDrainer(
+      (order.waiver_signatures as WaiverSignatureGroup[] | null) ?? []
+    );
     const ticketRows = lines.flatMap((line) =>
       Array.from({ length: line.qty }, () => ({
         order_id: orderId,
@@ -170,12 +181,13 @@ export async function fulfillOrder(
         ticket_type_id: line.ticket_type_id,
         code: generateTicketCode(),
         custom_answers: drainAnswers(line.ticket_type_id),
+        waiver_signature: drainWaiver(line.ticket_type_id),
       }))
     );
     const { data: inserted, error: insertErr } = await supabase
       .from("tickets")
       .insert(ticketRows)
-      .select("id, code, ticket_type_id, ticket_types(name)");
+      .select("id, code, ticket_type_id, waiver_signature, ticket_types(name)");
     if (insertErr || !inserted) {
       return {
         ok: false,
@@ -183,6 +195,46 @@ export async function fulfillOrder(
       };
     }
     tickets = inserted;
+  }
+
+  // 2b. Render + store the signed waiver certificate for any ticket that
+  //     carries a signature but doesn't yet have a certificate PDF. Best
+  //     effort and idempotent (skips tickets already certified); never
+  //     fails fulfilment — the structured signature is already on the
+  //     ticket regardless, and staff can regenerate from the admin view.
+  {
+    const admin2 = createAdminClient();
+    for (const t of tickets) {
+      const sig = t.waiver_signature as WaiverSignatureRecord | null;
+      if (!sig || sig.certificate_path) continue;
+      try {
+        const pdf = await renderWaiverCertificate({
+          signature: sig,
+          eventTitle: order.events.title,
+          tierName: t.ticket_types?.name ?? "Ticket",
+          ticketCode: t.code,
+        });
+        const path = `signed/${order.event_id}/${t.id}.pdf`;
+        const up = await admin2.storage
+          .from("waiver-documents")
+          .upload(path, pdf, { contentType: "application/pdf", upsert: true });
+        if (up.error) {
+          console.error("[fulfillment] waiver cert upload failed:", up.error);
+          continue;
+        }
+        const nextSig: WaiverSignatureRecord = {
+          ...sig,
+          certificate_path: path,
+        };
+        await supabase
+          .from("tickets")
+          .update({ waiver_signature: nextSig })
+          .eq("id", t.id);
+        t.waiver_signature = nextSig;
+      } catch (e) {
+        console.error("[fulfillment] waiver cert render threw:", e);
+      }
+    }
   }
 
   // 3. Build the ticket list for the email. QR codes are loaded

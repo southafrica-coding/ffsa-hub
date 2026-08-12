@@ -8,6 +8,7 @@ import {
 import { computeDisplayPriceCents } from "@/lib/payments/ticket-pricing";
 import { getAuthedUser, canManageEvents } from "@/lib/api-auth";
 import { sanitizeCheckoutQuestions } from "@/lib/ticketing/checkout-questions";
+import { sanitizeWaiver } from "@/lib/ticketing/waivers";
 
 // PATCH /api/events/[id]/ticket-types/[ticketTypeId]
 // Partial update. If target_net_cents or pricing_mode changes, the
@@ -38,6 +39,7 @@ export async function PATCH(
     sort_order?: number;
     is_active?: boolean;
     questions?: unknown;
+    waiver?: unknown;
   };
   try {
     body = await request.json();
@@ -58,6 +60,9 @@ export async function PATCH(
   if (body.is_active !== undefined) patch.is_active = body.is_active;
   if (body.questions !== undefined) {
     patch.questions = sanitizeCheckoutQuestions(body.questions);
+  }
+  if (body.waiver !== undefined) {
+    patch.waiver = sanitizeWaiver(body.waiver);
   }
 
   // Re-price if either pricing input changed. We need the current

@@ -22,6 +22,7 @@ type TicketRow = {
   status: string;
   checked_in_at: string | null;
   custom_answers: unknown;
+  waiver_signature: unknown;
   ticket_types: { name: string } | null;
   orders: {
     id: string;
@@ -84,7 +85,7 @@ export async function GET(
     supabase
       .from("tickets")
       .select(
-        "code, status, checked_in_at, custom_answers, ticket_types(name), orders!inner(id, buyer_first_name, buyer_last_name, buyer_email, status)"
+        "code, status, checked_in_at, custom_answers, waiver_signature, ticket_types(name), orders!inner(id, buyer_first_name, buyer_last_name, buyer_email, status)"
       )
       .eq("event_id", eventId)
       .in("status", ["valid", "checked_in"])
@@ -106,6 +107,18 @@ export async function GET(
     }
   }
 
+  // Waiver columns are added only when some tier on the event has a
+  // waiver configured, so plain events keep a clean roster.
+  const hasWaiver = ((ticketTypes ?? []) as Array<{ waiver?: { enabled?: boolean } | null }>).some(
+    (t) => t.waiver?.enabled === true
+  );
+  const waiverHeaders = hasWaiver
+    ? ["Waiver Signed", "Waiver Signed By", "Waiver Signed At", "Signed Waiver PDF"]
+    : [];
+  const siteBase = (
+    process.env.NEXT_PUBLIC_SITE_URL || "https://www.ffsahub.com"
+  ).replace(/\/$/, "");
+
   const baseHeaders = [
     "Order Reference",
     "First Name",
@@ -116,7 +129,7 @@ export async function GET(
     "Status",
     "Checked In At",
   ];
-  const headers = [...baseHeaders, ...questionColumns];
+  const headers = [...baseHeaders, ...questionColumns, ...waiverHeaders];
   const lines = [headers.map(escapeCsvValue).join(",")];
 
   for (const t of ((tickets ?? []) as unknown as TicketRow[])) {
@@ -141,7 +154,27 @@ export async function GET(
     const questionCells = questionColumns.map((label) =>
       byLabel.has(label) ? formatAnswerValue(byLabel.get(label)) : ""
     );
-    lines.push([...base, ...questionCells].map(escapeCsvValue).join(","));
+    let waiverCells: string[] = [];
+    if (hasWaiver) {
+      const sig = (t.waiver_signature ?? null) as {
+        guardian_name?: string;
+        signed_at?: string;
+        certificate_path?: string | null;
+      } | null;
+      waiverCells = sig
+        ? [
+            "Yes",
+            sig.guardian_name ?? "",
+            formatDate(sig.signed_at ?? null),
+            sig.certificate_path
+              ? `${siteBase}/api/tickets/${t.code}/waiver`
+              : "",
+          ]
+        : ["", "", "", ""];
+    }
+    lines.push(
+      [...base, ...questionCells, ...waiverCells].map(escapeCsvValue).join(",")
+    );
   }
 
   const csv = lines.join("\n");

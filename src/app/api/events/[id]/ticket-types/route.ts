@@ -4,6 +4,7 @@ import { createTicketType } from "@/services/ticketing";
 import { computeDisplayPriceCents } from "@/lib/payments/ticket-pricing";
 import { getAuthedUser, canManageEvents } from "@/lib/api-auth";
 import { sanitizeCheckoutQuestions } from "@/lib/ticketing/checkout-questions";
+import { sanitizeWaiver } from "@/lib/ticketing/waivers";
 
 // POST /api/events/[id]/ticket-types
 // Body: { name, description?, pricing_mode?, target_net_cents,
@@ -35,6 +36,7 @@ export async function POST(
     sort_order?: number;
     is_active?: boolean;
     questions?: unknown;
+    waiver?: unknown;
   };
   try {
     body = await request.json();
@@ -92,6 +94,7 @@ export async function POST(
     // Sanitize server-side so a malformed builder payload can never land
     // an unrenderable question schema on the tier.
     questions: sanitizeCheckoutQuestions(body.questions),
+    waiver: sanitizeWaiver(body.waiver),
   });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

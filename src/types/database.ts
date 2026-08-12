@@ -2676,6 +2676,7 @@ export type Database = {
           status: string
           subtotal_cents: number
           ticket_answers: Json
+          waiver_signatures: Json | null
           total_cents: number
           updated_at: string
         }
@@ -2710,6 +2711,7 @@ export type Database = {
           status?: string
           subtotal_cents?: number
           ticket_answers?: Json
+          waiver_signatures?: Json | null
           total_cents?: number
           updated_at?: string
         }
@@ -2744,6 +2746,7 @@ export type Database = {
           status?: string
           subtotal_cents?: number
           ticket_answers?: Json
+          waiver_signatures?: Json | null
           total_cents?: number
           updated_at?: string
         }
@@ -4359,6 +4362,7 @@ export type Database = {
           pricing_mode: string
           quantity_sold: number
           questions: Json
+          waiver: Json | null
           sales_end_at: string | null
           sales_start_at: string | null
           sort_order: number
@@ -4378,6 +4382,7 @@ export type Database = {
           pricing_mode?: string
           quantity_sold?: number
           questions?: Json
+          waiver?: Json | null
           sales_end_at?: string | null
           sales_start_at?: string | null
           sort_order?: number
@@ -4397,6 +4402,7 @@ export type Database = {
           pricing_mode?: string
           quantity_sold?: number
           questions?: Json
+          waiver?: Json | null
           sales_end_at?: string | null
           sales_start_at?: string | null
           sort_order?: number
@@ -4420,6 +4426,7 @@ export type Database = {
           code: string
           created_at: string
           custom_answers: Json
+          waiver_signature: Json | null
           event_id: string
           id: string
           order_id: string
@@ -4432,6 +4439,7 @@ export type Database = {
           code: string
           created_at?: string
           custom_answers?: Json
+          waiver_signature?: Json | null
           event_id: string
           id?: string
           order_id: string
@@ -4444,6 +4452,7 @@ export type Database = {
           code?: string
           created_at?: string
           custom_answers?: Json
+          waiver_signature?: Json | null
           event_id?: string
           id?: string
           order_id?: string

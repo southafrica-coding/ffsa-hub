@@ -8,6 +8,12 @@ import {
   collectTicketAnswers,
 } from "@/lib/ticketing/ticket-questions";
 import {
+  computeWaiverSlots,
+  collectWaiverSignatures,
+  type TierWaiver,
+  type WaiverSlotValues,
+} from "@/lib/ticketing/waivers";
+import {
   buyerFieldMap,
   type BuyerFieldConfig,
 } from "@/lib/ticketing/buyer-fields";
@@ -21,6 +27,7 @@ import {
   TICKET_CONSENT_CHECKBOX_LABEL,
 } from "@/lib/ticketing/consent-terms";
 import { TicketQuestionsSection } from "./ticket-questions-section";
+import { WaiverSignatureSection } from "./waiver-signature-section";
 
 // Custom checkout questions, themed to FFSA Camps' scoped `.cmp-*` classes.
 const CAMPS_CHECKOUT_CLASSES: CheckoutFieldClasses = {
@@ -59,6 +66,7 @@ type TicketType = {
   sales_start_at: string | null;
   sales_end_at: string | null;
   questions?: FormField[] | null;
+  waiver?: TierWaiver | null;
 };
 
 type PublicEvent = {
@@ -173,6 +181,30 @@ export function CampsStorefront({
         questionsByTier
       ),
     [lines, ticketTypes, questionsByTier]
+  );
+  const [waiverValues, setWaiverValues] = useState<
+    Record<string, WaiverSlotValues>
+  >({});
+  const [waiverErrors, setWaiverErrors] = useState<
+    Record<string, Record<string, string>>
+  >({});
+  const waiverByTier = useMemo(() => {
+    const m: Record<string, TierWaiver | null | undefined> = {};
+    for (const t of ticketTypes) m[t.id] = t.waiver;
+    return m;
+  }, [ticketTypes]);
+  const waiverSlots = useMemo(
+    () =>
+      computeWaiverSlots(
+        Object.values(lines).map((l) => ({
+          ticketTypeId: l.ticketTypeId,
+          ticketTypeName:
+            ticketTypes.find((t) => t.id === l.ticketTypeId)?.name ?? "Ticket",
+          qty: l.qty,
+        })),
+        waiverByTier
+      ),
+    [lines, ticketTypes, waiverByTier]
   );
 
   function setQty(t: TicketType, qty: number) {
@@ -348,6 +380,13 @@ export function CampsStorefront({
       return;
     }
     setTicketErrors({});
+    const waiverCollect = collectWaiverSignatures(waiverSlots, waiverValues);
+    if (!waiverCollect.valid) {
+      setWaiverErrors(waiverCollect.errors);
+      setErr("Please read and sign the required form for each ticket below.");
+      return;
+    }
+    setWaiverErrors({});
     setSubmitting(provider);
     setErr(null);
 
@@ -372,6 +411,7 @@ export function CampsStorefront({
         consent_accepted: consentAccepted,
         custom_answers: customAnswers,
         ticket_answers: ticketCollect.payload,
+        waiver_signatures: waiverCollect.payload,
         payment_provider: provider,
       }),
     });
@@ -683,6 +723,21 @@ export function CampsStorefront({
               classes={CAMPS_CHECKOUT_CLASSES}
             />
           )}
+          {waiverSlots.length > 0 && (
+            <WaiverSignatureSection
+              eventId={event.id}
+              slots={waiverSlots}
+              valuesBySlot={waiverValues}
+              errorsBySlot={waiverErrors}
+              onChange={(slotKey, field, val) =>
+                setWaiverValues((prev) => ({
+                  ...prev,
+                  [slotKey]: { ...(prev[slotKey] ?? {}), [field]: val },
+                }))
+              }
+            />
+          )}
+
           {ticketSlots.length > 0 && (
             <TicketQuestionsSection
               slots={ticketSlots}

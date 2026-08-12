@@ -24,6 +24,12 @@ import {
   BUYER_FIELD_LABELS,
 } from "@/lib/ticketing/buyer-fields";
 import { TICKET_CONSENT_VERSION } from "@/lib/ticketing/consent-terms";
+import {
+  buildWaiverSignatureGroups,
+  type TierWaiver,
+  type WaiverSignatureGroup,
+  type WaiverSlotValues,
+} from "@/lib/ticketing/waivers";
 
 // POST /api/events/[id]/checkout
 //
@@ -63,6 +69,12 @@ type Body = {
     ticket_type_id?: string;
     answers?: Record<string, unknown>;
   }>;
+  // Signed waivers, one per ticket whose tier requires one (migration
+  // 163). Validated + snapshotted server-side against the tier's waiver.
+  waiver_signatures?: Array<{
+    ticket_type_id?: string;
+    values?: WaiverSlotValues;
+  }>;
   payment_provider?: "payfast" | "stripe";
 };
 
@@ -78,6 +90,7 @@ type TicketTypeRow = {
   sales_end_at: string | null;
   is_active: boolean;
   questions: FormField[] | null;
+  waiver: TierWaiver | null;
 };
 
 type ResolvedLine = {
@@ -252,7 +265,7 @@ export async function POST(
   const { data: typesData, error: typesErr } = await supabase
     .from("ticket_types")
     .select(
-      "id, name, pricing_mode, display_price_cents, capacity, quantity_sold, max_per_order, sales_start_at, sales_end_at, is_active, questions"
+      "id, name, pricing_mode, display_price_cents, capacity, quantity_sold, max_per_order, sales_start_at, sales_end_at, is_active, questions, waiver"
     )
     .eq("event_id", eventId)
     .in("id", ticketTypeIds);
@@ -343,6 +356,31 @@ export async function POST(
     );
   }
   const ticketAnswerGroups: TicketAnswerGroup[] = ticketAnswerBuild.groups;
+
+  // ── Per-ticket signed waivers (optional, migration 163) ──────
+  // For any tier that requires a waiver, each ticket must carry a signed
+  // parent/guardian record. Validated + snapshotted against the tier's own
+  // waiver config before any inventory is reserved (clean 400, no
+  // rollback). The signed records ride on the order until fulfilment
+  // drains them onto each issued ticket and renders the certificate PDF.
+  const fwd = request.headers.get("x-forwarded-for") ?? "";
+  const clientIp = fwd.split(",")[0]?.trim() || null;
+  const waiverBuild = buildWaiverSignatureGroups(
+    resolved.map((r) => ({
+      ticketTypeId: r.ticketType.id,
+      qty: r.qty,
+      waiver: (r.ticketType.waiver as TierWaiver | null) ?? null,
+    })),
+    Array.isArray(body.waiver_signatures) ? body.waiver_signatures : [],
+    { signedAt: now.toISOString(), ip: clientIp }
+  );
+  if (!waiverBuild.valid) {
+    return NextResponse.json(
+      { error: waiverBuild.error ?? "Please sign the required waiver." },
+      { status: 400 }
+    );
+  }
+  const waiverGroups: WaiverSignatureGroup[] = waiverBuild.groups;
 
   // ── Reserve inventory atomically ─────────────────────────────
   const reserved: Array<{ ticketTypeId: string; qty: number }> = [];
@@ -516,6 +554,8 @@ export async function POST(
       custom_answers: customAnswersSnapshot as unknown as Json,
       // Per-ticket answers, drained onto tickets at fulfilment.
       ticket_answers: ticketAnswerGroups as unknown as Json,
+      // Per-ticket signed waivers, drained onto tickets at fulfilment.
+      waiver_signatures: waiverGroups as unknown as Json,
       expires_at: expiresAt,
     })
     .select("id")

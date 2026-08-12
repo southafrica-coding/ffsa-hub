@@ -6,7 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { grossUpToCover, type FeeProfile } from "@/lib/payments/pricing";
 import { currencySymbol, formatMoney } from "@/lib/currencies";
 import type { FormField } from "@/lib/forms/schema";
+import type { TierWaiver } from "@/lib/ticketing/waivers";
 import { QuestionsBuilder } from "./questions-builder";
+import { TierWaiverEditor } from "./tier-waiver-editor";
 
 type TicketType = {
   id: string;
@@ -24,6 +26,8 @@ type TicketType = {
   sort_order: number;
   // Per-tier custom questions asked once per ticket (migration 137).
   questions?: FormField[] | null;
+  // Per-tier signable waiver config (migration 163).
+  waiver?: TierWaiver | null;
 };
 
 function previewDisplayCents(
@@ -251,6 +255,12 @@ export function TicketTypesManager({
                 </div>
                 </div>
                 <TierQuestionsEditor eventId={eventId} ticket={t} />
+                <TierWaiverEditor
+                  eventId={eventId}
+                  ticketTypeId={t.id}
+                  ticketName={t.name}
+                  initialWaiver={t.waiver ?? null}
+                />
               </li>
             ))}
           </ul>

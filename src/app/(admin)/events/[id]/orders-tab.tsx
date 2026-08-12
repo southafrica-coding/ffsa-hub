@@ -17,6 +17,7 @@ import {
   formatAnswerValue,
   type CheckoutAnswerSnapshot,
 } from "@/lib/ticketing/checkout-questions";
+import type { WaiverSignatureRecord } from "@/lib/ticketing/waivers";
 import { OrdersExportPanel } from "./orders-export-panel";
 import { RefundDialog } from "./refund-dialog";
 import { RefundAllButton } from "./refund-all-button";
@@ -47,8 +48,11 @@ type Order = {
 
 type TicketWithAnswers = {
   id: string;
+  code?: string;
   ticket_type_id: string;
   custom_answers?: unknown;
+  // Signed waiver record drained onto the ticket (migration 163).
+  waiver_signature?: WaiverSignatureRecord | null;
   ticket_types?: { name: string } | null;
 };
 
@@ -109,6 +113,31 @@ function ticketAnswersForOrder(o: Order): Array<{
         : [],
     }))
     .filter((t) => t.answers.length > 0);
+}
+
+// Issued tickets that carry a signed waiver (migration 163), each with its
+// tier name, ticket code (for the download link) and signature record.
+function signedWaiversForOrder(o: Order): Array<{
+  id: string;
+  code: string | null;
+  tierName: string;
+  signature: WaiverSignatureRecord;
+}> {
+  return (o.tickets ?? [])
+    .map((t) => ({
+      id: t.id,
+      code: t.code ?? null,
+      tierName: t.ticket_types?.name ?? "Ticket",
+      signature: (t.waiver_signature ?? null) as WaiverSignatureRecord | null,
+    }))
+    .filter(
+      (t): t is {
+        id: string;
+        code: string | null;
+        tierName: string;
+        signature: WaiverSignatureRecord;
+      } => !!t.signature
+    );
 }
 
 const STATUS_VARIANTS: Record<
@@ -295,6 +324,7 @@ export function OrdersTab({
                   {orders.map((o) => {
                     const answers = answersForOrder(o);
                     const ticketAnswers = ticketAnswersForOrder(o);
+                    const signedWaivers = signedWaiversForOrder(o);
                     const orderRefunds = refundsByOrder.get(o.id) ?? [];
                     const hasPending = orderRefunds.some(
                       (r) => r.status === "pending"
@@ -302,6 +332,7 @@ export function OrdersTab({
                     const expandable =
                       answers.length > 0 ||
                       ticketAnswers.length > 0 ||
+                      signedWaivers.length > 0 ||
                       orderRefunds.length > 0;
                     const expanded = expandedId === o.id;
                     return (
@@ -468,6 +499,81 @@ export function OrdersTab({
                                           </div>
                                         ))}
                                       </dl>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {signedWaivers.length > 0 && (
+                              <div className="space-y-2">
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                                  Signed waivers
+                                </p>
+                                <div className="space-y-3">
+                                  {signedWaivers.map((t, ti) => (
+                                    <div
+                                      key={t.id}
+                                      className="rounded border bg-background/60 p-2"
+                                    >
+                                      <p className="text-xs font-medium mb-1">
+                                        {t.tierName} · Ticket {ti + 1} —{" "}
+                                        {t.signature.title}
+                                      </p>
+                                      <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
+                                        {t.signature.minor_name && (
+                                          <div className="flex flex-col">
+                                            <dt className="text-xs text-muted-foreground">
+                                              Attendee
+                                            </dt>
+                                            <dd className="text-sm">
+                                              {t.signature.minor_name}
+                                            </dd>
+                                          </div>
+                                        )}
+                                        <div className="flex flex-col">
+                                          <dt className="text-xs text-muted-foreground">
+                                            Signed by
+                                          </dt>
+                                          <dd className="text-sm">
+                                            {t.signature.guardian_name}
+                                            {t.signature.relationship
+                                              ? ` (${t.signature.relationship})`
+                                              : ""}
+                                          </dd>
+                                        </div>
+                                        <div className="flex flex-col">
+                                          <dt className="text-xs text-muted-foreground">
+                                            Signed at
+                                          </dt>
+                                          <dd className="text-sm">
+                                            {new Date(
+                                              t.signature.signed_at
+                                            ).toLocaleString()}
+                                          </dd>
+                                        </div>
+                                      </dl>
+                                      {t.code && (
+                                        <div className="mt-2 flex flex-wrap gap-3">
+                                          {t.signature.certificate_path && (
+                                            <a
+                                              href={`/api/tickets/${t.code}/waiver`}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="text-xs text-blue-600 hover:underline"
+                                            >
+                                              ↓ Signed certificate (PDF)
+                                            </a>
+                                          )}
+                                          <a
+                                            href={`/api/tickets/${t.code}/waiver?doc=blank`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-xs text-blue-600 hover:underline"
+                                          >
+                                            ↓ Blank form (PDF)
+                                          </a>
+                                        </div>
+                                      )}
                                     </div>
                                   ))}
                                 </div>
