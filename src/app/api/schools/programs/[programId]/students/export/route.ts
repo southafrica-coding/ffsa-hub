@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { userCanManageApplications } from "@/lib/auth/check-schools-access";
+import { userCanManageProgram } from "@/lib/auth/check-schools-access";
 import { getEnrollmentsWithPiiByProgram } from "@/services/schools";
 import {
   ENROLLMENT_STATUS_LABELS,
@@ -99,7 +99,7 @@ export async function GET(
   if (!user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
-  if (!(await userCanManageApplications(supabase, user.id))) {
+  if (!(await userCanManageProgram(supabase, user.id, programId))) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 

@@ -1,11 +1,23 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+// The schools permission keys that confer management access. Kept in one place
+// so the global and program-scoped checks below can never drift apart.
+const SCHOOLS_MANAGE_KEYS = [
+  "schools.manage",
+  "schools.approve_applications",
+  "schools.manage_enrollments",
+];
+
 /**
- * Returns true if the user has access to manage school applications.
+ * Returns true if the user has GLOBAL (all-programs) access to manage schools:
+ *   admin/super_admin role, OR program_leader role, OR an *unscoped*
+ *   `schools.*` management permission.
  *
- * Mirrors the database `has_schools_access()` helper used by RLS policies:
- *   admin/super_admin role, OR program_leader role, OR `schools.manage` /
- *   `schools.approve_applications` permission.
+ * IMPORTANT: a `schools.*` grant that is scoped to a single program
+ * (scope_type = 'program') does NOT count here. Program-scoped grants must be
+ * checked against a specific program via `userCanManageProgram` — otherwise a
+ * one-school grant would leak into every school. This mirrors the scope-aware
+ * DB helper `has_permission_for(key, program_id)` (migration 040).
  */
 export async function userCanManageApplications(
   supabase: SupabaseClient,
@@ -21,16 +33,13 @@ export async function userCanManageApplications(
 
   if (roles && roles.length > 0) return true;
 
-  // Check schools-related permissions
+  // Check schools-related permissions — GLOBAL grants only (scope_type IS NULL).
   const { data: perms } = await supabase
     .from("user_permissions")
     .select("permissions!inner(key)")
     .eq("user_id", userId)
-    .in("permissions.key", [
-      "schools.manage",
-      "schools.approve_applications",
-      "schools.manage_enrollments",
-    ])
+    .is("scope_type", null)
+    .in("permissions.key", SCHOOLS_MANAGE_KEYS)
     .limit(1);
 
   return !!perms && perms.length > 0;
@@ -38,8 +47,9 @@ export async function userCanManageApplications(
 
 /**
  * Program-scoped variant: can this user manage THIS specific program?
- * True for global schools managers/admins, and for anyone named a leader
- * of the program (program_leaders, migration 145). Mirrors the DB
+ * True for global schools managers/admins (see above), for a `schools.*`
+ * grant scoped to this program, and for anyone named a leader of the program
+ * (program_leaders, migration 145). Mirrors the DB
  * has_schools_access(program_id) check for the app layer.
  */
 export async function userCanManageProgram(
@@ -48,6 +58,18 @@ export async function userCanManageProgram(
   programId: string
 ): Promise<boolean> {
   if (await userCanManageApplications(supabase, userId)) return true;
+
+  // A schools.* permission scoped specifically to this program.
+  const { data: scopedPerms } = await supabase
+    .from("user_permissions")
+    .select("permissions!inner(key)")
+    .eq("user_id", userId)
+    .eq("scope_type", "program")
+    .eq("scope_id", programId)
+    .in("permissions.key", SCHOOLS_MANAGE_KEYS)
+    .limit(1);
+
+  if (scopedPerms && scopedPerms.length > 0) return true;
 
   const { data } = await supabase
     .from("program_leaders")

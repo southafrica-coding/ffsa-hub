@@ -284,6 +284,19 @@ function ModuleSection({
         {/* Global permission checkboxes — hidden in restricted mode.
             Scoped-only permissions are excluded; they appear only in the
             per-scope sections below. */}
+        {!hideGlobal && globalPermissions.length > 0 && relevantScopes.length > 0 && (
+          <p
+            style={{
+              fontSize: "11px",
+              color: "hsl(42 60% 60%)",
+              margin: 0,
+            }}
+          >
+            Applies to <strong>all</strong> programs. To limit someone to one
+            school, leave these unticked and use <strong>Scoped Access</strong>{" "}
+            below.
+          </p>
+        )}
         {!hideGlobal && globalPermissions.length > 0 && (
           <div
             className="grid gap-x-6 gap-y-2"
