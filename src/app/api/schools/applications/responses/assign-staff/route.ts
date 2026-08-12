@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { userCanManageApplications } from "@/lib/auth/check-schools-access";
+import { userCanManageProgram } from "@/lib/auth/check-schools-access";
 import { sendStaffAssignmentEmails } from "@/lib/email/send-staff-assignment";
 
 // Assigns (or clears) the point-of-contact staff member for an application
@@ -16,11 +16,6 @@ export async function PUT(request: Request) {
 
   if (!authUser) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  }
-
-  const hasAccess = await userCanManageApplications(supabase, authUser.id);
-  if (!hasAccess) {
-    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
   const body = await request.json();
@@ -45,6 +40,13 @@ export async function PUT(request: Request) {
 
   if (fetchError || !existing) {
     return NextResponse.json({ error: "Application not found" }, { status: 404 });
+  }
+
+  // Authorize against THIS application's program: global schools managers, or a
+  // user scoped specifically to this program.
+  const responseProgramId = (existing as unknown as { program_id: string }).program_id;
+  if (!(await userCanManageProgram(supabase, authUser.id, responseProgramId))) {
+    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
   const previousStaffId = (existing as unknown as { assigned_staff_id: string | null }).assigned_staff_id;

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { applicationAcceptedEmailHtml } from "@/lib/email/templates/application-accepted";
-import { userCanManageApplications } from "@/lib/auth/check-schools-access";
+import { userCanManageProgram } from "@/lib/auth/check-schools-access";
 import { sendTransactional } from "@/lib/email/send-transactional";
 import {
   substitutePlaceholders,
@@ -18,11 +18,6 @@ export async function POST(request: Request) {
 
   if (!authUser) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  }
-
-  const hasAccess = await userCanManageApplications(supabase, authUser.id);
-  if (!hasAccess) {
-    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
   const body = await request.json();
@@ -65,6 +60,14 @@ export async function POST(request: Request) {
       acceptance_email_body: string | null;
     };
   };
+
+  // Authorize against THIS application's program: global schools managers, or
+  // a user scoped specifically to this program.
+  if (
+    !(await userCanManageProgram(supabase, authUser.id, appResponse.programs.id))
+  ) {
+    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  }
 
   const applicantInfo = appResponse.applicant_info as {
     first_name?: string;
