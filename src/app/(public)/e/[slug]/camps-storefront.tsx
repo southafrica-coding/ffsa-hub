@@ -729,6 +729,7 @@ export function CampsStorefront({
               slots={waiverSlots}
               valuesBySlot={waiverValues}
               errorsBySlot={waiverErrors}
+              variant="light"
               onChange={(slotKey, field, val) =>
                 setWaiverValues((prev) => ({
                   ...prev,
