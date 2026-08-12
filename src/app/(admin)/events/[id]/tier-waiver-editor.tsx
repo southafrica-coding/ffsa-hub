@@ -156,11 +156,11 @@ export function TierWaiverEditor({
           </p>
 
           {/* Document upload */}
-          <div className="rounded border p-3 space-y-2 bg-gray-50">
+          <div className="rounded border p-3 space-y-2 bg-muted/40">
             <p className="text-xs font-medium">Waiver document (PDF)</p>
             {w.document_path ? (
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs text-emerald-700">
+                <span className="text-xs text-emerald-600 dark:text-emerald-400">
                   ✓ {w.document_name ?? "uploaded.pdf"}
                 </span>
                 <a
@@ -185,7 +185,7 @@ export function TierWaiverEditor({
                 type="button"
                 onClick={() => fileInput.current?.click()}
                 disabled={uploading}
-                className="px-3 py-1 rounded border text-xs hover:bg-white disabled:text-gray-300"
+                className="px-3 py-1 rounded border text-xs hover:bg-muted disabled:opacity-50"
               >
                 {uploading ? "Uploading…" : "Upload PDF"}
               </button>
