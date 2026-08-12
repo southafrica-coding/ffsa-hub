@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PhoneInputNative } from "@/components/ui/phone-input-native";
+import { normalizePhoneE164 } from "@/lib/phone";
 import { Label } from "@/components/ui/label";
 import {
   Card,
@@ -154,6 +156,10 @@ export default function NewContactPage() {
         await sb.from("contact_phones").insert({
           contact_id: newId,
           phone: form.phone.trim(),
+          // The input now carries a country code, so E.164 normalization is
+          // reliable (no ZA-default guessing). Feeds search/dedup; the DB
+          // trigger mirrors it up to contacts.phone_normalized.
+          phone_normalized: normalizePhoneE164(form.phone.trim()),
           label: "primary",
           is_primary: true,
           source: "manual",
@@ -334,10 +340,12 @@ export default function NewContactPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="phone">Phone</Label>
-                <Input
+                <PhoneInputNative
                   id="phone"
                   value={form.phone}
-                  onChange={(e) => updateField("phone", e.target.value)}
+                  onChange={(v) => updateField("phone", v)}
+                  inputClassName="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+                  selectClassName="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
                 />
               </div>
             </div>

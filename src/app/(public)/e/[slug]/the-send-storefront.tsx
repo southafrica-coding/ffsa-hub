@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { PhoneInputNative } from "@/components/ui/phone-input-native";
 import type { FormField } from "@/lib/forms/schema";
 import { validateCheckoutAnswers } from "@/lib/ticketing/checkout-questions";
 import {
@@ -710,12 +711,12 @@ export function TheSendStorefront({
               <label className="tss-label" htmlFor="tss-ph">
                 [ PHONE{bf.phone.required ? " *" : " — OPTIONAL"} ]
               </label>
-              <input
+              <PhoneInputNative
                 id="tss-ph"
-                type="tel"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="tss-input tss-input-mono"
+                onChange={setPhone}
+                selectClassName="tss-input"
+                inputClassName="tss-input tss-input-mono"
               />
             </div>
           )}

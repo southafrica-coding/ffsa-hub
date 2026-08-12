@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PhoneInputNative } from "@/components/ui/phone-input-native";
 import { MoreHorizontal, Plus, Star, X } from "lucide-react";
 import {
   DropdownMenu,
@@ -315,17 +316,25 @@ function AddRow({
   return (
     <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
       <div className="flex gap-2">
-        <Input
-          autoFocus
-          type={kind === "email" ? "email" : "tel"}
-          value={value}
-          placeholder={
-            kind === "email" ? "name@example.com" : "+27821234567"
-          }
-          onChange={(e) => onChange(e.target.value)}
-          disabled={busy}
-          className="flex-1"
-        />
+        {kind === "phone" ? (
+          <PhoneInputNative
+            value={value}
+            onChange={onChange}
+            wrapperClassName="flex gap-2 flex-1"
+            inputClassName="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+            selectClassName="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
+          />
+        ) : (
+          <Input
+            autoFocus
+            type="email"
+            value={value}
+            placeholder="name@example.com"
+            onChange={(e) => onChange(e.target.value)}
+            disabled={busy}
+            className="flex-1"
+          />
+        )}
         <select
           value={label}
           onChange={(e) => onLabelChange(e.target.value)}

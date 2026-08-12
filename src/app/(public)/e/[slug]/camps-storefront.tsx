@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { PhoneInputNative } from "@/components/ui/phone-input-native";
 import type { FormField } from "@/lib/forms/schema";
 import { validateCheckoutAnswers } from "@/lib/ticketing/checkout-questions";
 import {
@@ -703,12 +704,12 @@ export function CampsStorefront({
               <label className="cmp-label" htmlFor="cmp-ph">
                 [ PHONE{bf.phone.required ? " *" : " — OPTIONAL"} ]
               </label>
-              <input
+              <PhoneInputNative
                 id="cmp-ph"
-                type="tel"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="cmp-input cmp-input-mono"
+                onChange={setPhone}
+                selectClassName="cmp-input"
+                inputClassName="cmp-input cmp-input-mono"
               />
             </div>
           )}

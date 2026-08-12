@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PhoneInputNative } from "@/components/ui/phone-input-native";
 import { Button } from "@/components/ui/button";
 import type { FormField } from "@/lib/forms/schema";
 import { validateCheckoutAnswers } from "@/lib/ticketing/checkout-questions";
@@ -630,11 +631,12 @@ export function Storefront({
             </div>
             <div>
               <label>Phone (optional)</label>
-              <input
-                type="tel"
+              <PhoneInputNative
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="w-full mt-1 px-3 py-2"
+                onChange={setPhone}
+                wrapperClassName="flex gap-2 mt-1"
+                selectClassName="px-2 py-2"
+                inputClassName="px-3 py-2"
               />
             </div>
             {checkoutQuestions.length > 0 && (

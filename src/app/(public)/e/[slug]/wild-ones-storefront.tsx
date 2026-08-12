@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { PhoneInputNative } from "@/components/ui/phone-input-native";
 import type { FormField } from "@/lib/forms/schema";
 import { validateCheckoutAnswers } from "@/lib/ticketing/checkout-questions";
 import {
@@ -736,12 +737,12 @@ export function WildOnesStorefront({
               <label className="wo-label" htmlFor="wo-ph">
                 [ PHONE{bf.phone.required ? " *" : " — OPTIONAL"} ]
               </label>
-              <input
+              <PhoneInputNative
                 id="wo-ph"
-                type="tel"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="wo-input wo-input-mono"
+                onChange={setPhone}
+                selectClassName="wo-input"
+                inputClassName="wo-input wo-input-mono"
               />
             </div>
           )}
