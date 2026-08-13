@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { PhoneInputNative } from "@/components/ui/phone-input-native";
+import { EventDescription } from "@/components/events/event-description";
 import type { FormField } from "@/lib/forms/schema";
 import { validateCheckoutAnswers } from "@/lib/ticketing/checkout-questions";
 import {
@@ -538,7 +539,7 @@ export function WildOnesStorefront({
           />
 
           {event.description && (
-            <p className="wo-hero-desc">{event.description}</p>
+            <EventDescription html={event.description} className="wo-hero-desc" />
           )}
 
           <div className="wo-coords">

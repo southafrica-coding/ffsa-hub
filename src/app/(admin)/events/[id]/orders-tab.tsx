@@ -181,6 +181,7 @@ export function OrdersTab({
   const [recentlySentId, setRecentlySentId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [refundOrder, setRefundOrder] = useState<Order | null>(null);
+  const [reconciling, setReconciling] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   const everPaid = orders.filter((o) => EVER_PAID.includes(o.status));
@@ -194,6 +195,20 @@ export function OrdersTab({
   const outstandingCents = stillPaid.reduce(
     (s, o) => s + (o.total_cents - o.refund_cents),
     0
+  );
+  // Actual tickets issued across paid orders — a multi-ticket order (e.g.
+  // a family buying 4) is one order but four tickets, so "Paid orders"
+  // alone understates attendance. Surface the ticket total alongside it.
+  const ticketsSold = stillPaid.reduce(
+    (s, o) => s + (o.tickets?.length ?? 0),
+    0
+  );
+
+  // Stripe (international-card) orders still stuck pending — their
+  // `checkout.session.completed` webhook may have been missed. The button
+  // in the Orders header asks Stripe directly and settles the paid ones.
+  const pendingStripe = orders.filter(
+    (o) => o.status === "pending" && o.payment_provider === "stripe"
   );
 
   const refundsByOrder = new Map<string, OrderRefund[]>();
@@ -240,6 +255,41 @@ export function OrdersTab({
     router.refresh();
   }
 
+  // Ask Stripe directly about every pending Stripe order for this event and
+  // settle the ones it reports as paid. Recovers orders whose
+  // `checkout.session.completed` webhook was missed and that fell outside
+  // the daily reconcile cron's short look-back window.
+  async function reconcilePending() {
+    if (
+      !confirm(
+        `Check ${pendingStripe.length} pending card ${pendingStripe.length === 1 ? "order" : "orders"} against Stripe and mark the paid ones confirmed?\n\n` +
+          `Buyers whose payment went through will have their tickets issued and emailed.`
+      )
+    )
+      return;
+    setReconciling(true);
+    setErr(null);
+    const res = await fetch(`/api/events/${eventId}/orders/reconcile`, {
+      method: "POST",
+    });
+    setReconciling(false);
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      setErr(data.error ?? "Reconcile failed");
+      return;
+    }
+    const data = (await res.json().catch(() => ({}))) as {
+      settled?: number;
+      stillPending?: number;
+    };
+    toast.success(
+      data.settled
+        ? `${data.settled} order${data.settled === 1 ? "" : "s"} confirmed and fulfilled.`
+        : "No new payments found — the pending orders weren't paid on Stripe."
+    );
+    router.refresh();
+  }
+
   async function resendEmail(order: Order) {
     if (
       !confirm(
@@ -266,7 +316,11 @@ export function OrdersTab({
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard label="Paid orders" value={stillPaid.length.toString()} />
+        <StatCard
+          label="Paid orders"
+          value={stillPaid.length.toString()}
+          sub={`${ticketsSold} ticket${ticketsSold === 1 ? "" : "s"} sold`}
+        />
         <StatCard label="Revenue" value={money(totalRevenueCents)} />
         <StatCard
           label="Net (after refunds)"
@@ -284,6 +338,19 @@ export function OrdersTab({
           <CardTitle className="text-base">Orders</CardTitle>
           {orders.length > 0 && (
             <div className="flex items-center gap-2">
+              {pendingStripe.length > 0 && (
+                <button
+                  type="button"
+                  onClick={reconcilePending}
+                  disabled={reconciling}
+                  className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-accent disabled:opacity-50"
+                  title={`${pendingStripe.length} card order${pendingStripe.length === 1 ? "" : "s"} pending — check Stripe and settle any that were paid`}
+                >
+                  {reconciling
+                    ? "Checking Stripe…"
+                    : `Reconcile ${pendingStripe.length} pending`}
+                </button>
+              )}
               {eventStatus === "cancelled" && (
                 <CancellationNoticeButton
                   eventId={eventId}

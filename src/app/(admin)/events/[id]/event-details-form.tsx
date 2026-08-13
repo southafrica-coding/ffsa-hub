@@ -8,6 +8,9 @@ import { Input } from "@/components/ui/input";
 import { DateInput } from "@/components/ui/date-input";
 import { Label } from "@/components/ui/label";
 import { Lock, Pencil } from "lucide-react";
+import { DescriptionEditor } from "@/components/events/description-editor";
+import { EventDescription } from "@/components/events/event-description";
+import { sanitizeEventDescription } from "@/lib/events/rich-text";
 
 type EventBrand =
   | "ff"
@@ -192,7 +195,19 @@ export function EventDetailsForm({
         </CardHeader>
         <CardContent className="space-y-3">
           <ReadRow label="Title" value={event.title} />
-          <ReadRow label="Description" value={event.description} pre />
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              Description
+            </p>
+            {event.description ? (
+              <EventDescription
+                html={sanitizeEventDescription(event.description)}
+                className="text-sm"
+              />
+            ) : (
+              <p className="text-sm text-muted-foreground">—</p>
+            )}
+          </div>
           <ReadRow label="Location" value={event.location} />
           <div className="grid grid-cols-2 gap-3">
             <ReadRow label="Start date" value={event.start_date} />
@@ -241,12 +256,10 @@ export function EventDetailsForm({
 
         <div className="space-y-2">
           <Label htmlFor="ev-desc">Description</Label>
-          <textarea
-            id="ev-desc"
+          <DescriptionEditor
             value={form.description}
-            onChange={(e) => set("description", e.target.value)}
-            rows={3}
-            className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            onChange={(html) => set("description", html)}
+            placeholder="Describe the event — add a schedule, headings, lists…"
           />
         </div>
 

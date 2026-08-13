@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { DateInput } from "@/components/ui/date-input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { DescriptionEditor } from "@/components/events/description-editor";
 
 export default function NewEventPage() {
   const router = useRouter();
@@ -92,12 +93,10 @@ export default function NewEventPage() {
 
             <div className="space-y-2">
               <Label htmlFor="description">Description</Label>
-              <textarea
-                id="description"
+              <DescriptionEditor
                 value={form.description}
-                onChange={(e) => updateField("description", e.target.value)}
-                rows={3}
-                className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                onChange={(html) => updateField("description", html)}
+                placeholder="Describe the event — add a schedule, headings, lists…"
               />
             </div>
 

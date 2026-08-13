@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { PhoneInputNative } from "@/components/ui/phone-input-native";
+import { EventDescription } from "@/components/events/event-description";
 import type { FormField } from "@/lib/forms/schema";
 import { validateCheckoutAnswers } from "@/lib/ticketing/checkout-questions";
 import {
@@ -503,7 +504,7 @@ export function CampsStorefront({
           <p className="cmp-slogan">PERMISSION GRANTED &#129310;</p>
 
           {event.description && (
-            <p className="cmp-hero-desc">{event.description}</p>
+            <EventDescription html={event.description} className="cmp-hero-desc" />
           )}
 
           <div className="cmp-coords">
