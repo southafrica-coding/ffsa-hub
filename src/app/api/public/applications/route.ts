@@ -396,5 +396,10 @@ export async function POST(request: Request) {
     }
   }
 
-  return NextResponse.json({ success: true, id: response.id, referenceLinks });
+  return NextResponse.json({
+    success: true,
+    id: response.id,
+    statusUrl: statusTrackerUrl,
+    referenceLinks,
+  });
 }

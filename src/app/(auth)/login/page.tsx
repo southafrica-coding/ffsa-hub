@@ -38,7 +38,16 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
-      setError(error.message);
+      // Supabase returns a generic "Invalid login credentials" for both a wrong
+      // password and an email that has no account yet. Applicants who haven't
+      // been accepted fall into the latter case and get confused, so give them
+      // a clearer, applicant-aware hint instead of the raw message.
+      const isInvalidCreds = /invalid login credentials/i.test(error.message);
+      setError(
+        isInvalidCreds
+          ? "We couldn't sign you in. If you've applied but haven't been accepted yet, you don't have an account here yet — you'll receive an email with setup instructions once your application is approved. Otherwise, check your email and password."
+          : error.message
+      );
       setLoading(false);
       const next = failCount + 1;
       setFailCount(next);

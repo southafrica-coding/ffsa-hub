@@ -42,9 +42,11 @@ type ReferenceLink = { label: string; url: string };
 function SuccessScreen({
   programName,
   referenceLinks,
+  statusUrl,
 }: {
   programName: string;
   referenceLinks: ReferenceLink[];
+  statusUrl: string | null;
 }) {
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
 
@@ -66,7 +68,20 @@ function SuccessScreen({
           confirmation to your email. Our team will review your application and
           get back to you soon.
         </p>
+        <p className="text-xs text-muted-foreground max-w-md mx-auto">
+          You don&apos;t have an account yet — you&apos;ll receive an email with
+          setup instructions once your application is accepted. Until then, use
+          the tracker below to check your status.
+        </p>
       </div>
+
+      {statusUrl && (
+        <div className="max-w-md mx-auto">
+          <Button asChild className="w-full sm:w-auto">
+            <a href={statusUrl}>Track your application</a>
+          </Button>
+        </div>
+      )}
 
       {referenceLinks.length > 0 && (
         <div className="space-y-3 max-w-md mx-auto text-left">
@@ -130,6 +145,7 @@ export function PublicApplicationForm({
   const [submitted, setSubmitted] = useState(false);
   const [applicationId, setApplicationId] = useState("");
   const [referenceLinks, setReferenceLinks] = useState<ReferenceLink[]>([]);
+  const [statusUrl, setStatusUrl] = useState<string | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
   const [refNames, setRefNames] = useState<Record<string, string>>({});
@@ -359,6 +375,7 @@ export function PublicApplicationForm({
 
       setApplicationId(result.id);
       setReferenceLinks(result.referenceLinks ?? []);
+      setStatusUrl(result.statusUrl ?? null);
       setSubmitted(true);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch {
@@ -377,6 +394,7 @@ export function PublicApplicationForm({
       <SuccessScreen
         programName={programName}
         referenceLinks={referenceLinks}
+        statusUrl={statusUrl}
       />
     );
   }
