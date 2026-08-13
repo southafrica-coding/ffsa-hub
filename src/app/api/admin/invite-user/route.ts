@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Resend } from "resend";
 import { inviteEmailHtml } from "@/lib/email/templates/invite";
+import { createOnboardingInvite } from "@/lib/auth/onboarding-invite";
 
 const resend = new Resend(process.env.RESEND_API_KEY?.trim());
 
@@ -54,24 +55,47 @@ export async function POST(request: Request) {
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
-  // Generate invite link without sending Supabase's default email
-  const { data: linkData, error: linkError } =
-    await adminSupabase.auth.admin.generateLink({
-      type: "invite",
+  // Create the auth user directly (no password yet). email_confirm: true
+  // because an admin is inviting this address and we're emailing it — the
+  // same trust the accept-application flow relies on. The user sets their
+  // password via the 30-day onboarding setup link below.
+  const { data: created, error: createError } =
+    await adminSupabase.auth.admin.createUser({
       email,
-      options: {
-        redirectTo: `${siteUrl}/auth/confirm`,
+      email_confirm: true,
+      user_metadata: {
+        first_name: first_name || null,
+        last_name: last_name || null,
       },
     });
 
-  if (linkError || !linkData?.properties?.action_link) {
+  if (createError || !created?.user?.id) {
     return NextResponse.json(
-      { error: linkError?.message || "Failed to generate invite link" },
+      { error: createError?.message || "Failed to create user account" },
       { status: 500 }
     );
   }
 
-  const inviteUrl = linkData.properties.action_link;
+  const newUserId = created.user.id;
+
+  // Mint the 30-day, single-use onboarding setup link (migration 158),
+  // replacing the old Supabase magic-link invite that expired in <=24h and
+  // was burned by email scanners.
+  const invite = await createOnboardingInvite(adminSupabase, {
+    userId: newUserId,
+    email,
+    siteUrl,
+    createdBy: authUser.id,
+  });
+
+  if (!invite.ok) {
+    return NextResponse.json(
+      { error: `Failed to create onboarding link: ${invite.error}` },
+      { status: 500 }
+    );
+  }
+
+  const inviteUrl = invite.url;
 
   // Send branded email via Resend
   const fromEmail = (process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com").trim();
@@ -93,11 +117,6 @@ export async function POST(request: Request) {
   }
 
   // Create app-level user record
-  const newUserId = linkData.user?.id;
-  if (!newUserId) {
-    return NextResponse.json({ error: "Failed to get user ID" }, { status: 500 });
-  }
-
   const { error: userError } = await adminSupabase.from("users").insert({
     id: newUserId,
     email: email,
