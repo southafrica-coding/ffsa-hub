@@ -2381,10 +2381,13 @@ function ApplicantsTab({
     setReviewLoading(true);
 
     try {
-      // Accept flow — always route through the accept-application pipeline so the
+      // Accept flow — route through the accept-application pipeline so the
       // student is automatically enrolled (and, for public applicants, a user
-      // account is created and an invite email is sent).
-      if (reviewStatus === "accepted") {
+      // account is created and an invite email is sent). Only do this when the
+      // application is *transitioning* into accepted — if it's already accepted
+      // and we're just editing the notes, fall through to the standard update
+      // below (re-running accept would fail with "already accepted").
+      if (reviewStatus === "accepted" && reviewingResponse.status !== "accepted") {
         const res = await fetch("/api/admin/accept-application", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
