@@ -145,9 +145,10 @@
     border-radius: 0 !important;
     box-shadow: none !important;
   }
-  [data-slot="card-header"] { padding: 0 !important; }
-  [data-slot="card-content"] { padding: 0 !important; }
-  [data-slot="card-footer"] { padding: 0 !important; }
+  /* The handoff zeroes card padding because recomposed screens build their own
+     header/body bands (see .section-bar). Screens still on the old composition
+     need their padding, so shadcn's own spacing is left alone — a recomposed
+     screen opts out per-instance with `p-0`. */
   /* Card header is a black bar; see .section-bar below for the canonical form. */
   [data-slot="card-title"] {
     font-family: var(--font-condensed) !important;

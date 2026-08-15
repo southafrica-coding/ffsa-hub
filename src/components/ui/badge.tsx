@@ -23,8 +23,18 @@ export interface BadgeProps
   extends React.HTMLAttributes<HTMLDivElement>,
     VariantProps<typeof badgeVariants> {}
 
+// data-slot / data-variant are the hooks the design system styles against
+// (see the shadcn override layer in globals.css) — without them a badge keeps
+// its filled cva look instead of the outlined status pill.
 function Badge({ className, variant, ...props }: BadgeProps) {
-  return <div className={cn(badgeVariants({ variant }), className)} {...props} />;
+  return (
+    <div
+      data-slot="badge"
+      data-variant={variant ?? "default"}
+      className={cn(badgeVariants({ variant }), className)}
+      {...props}
+    />
+  );
 }
 
 export { Badge, badgeVariants };
