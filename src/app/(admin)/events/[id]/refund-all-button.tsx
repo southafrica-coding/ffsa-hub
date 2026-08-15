@@ -91,7 +91,7 @@ export function RefundAllButton({
         variant="outline"
         size="sm"
         onClick={() => setOpen(true)}
-        className="text-red-600 hover:text-red-700"
+        className="text-destructive hover:text-destructive"
       >
         <RotateCcw className="h-3.5 w-3.5" />
         Refund all
@@ -112,13 +112,13 @@ export function RefundAllButton({
               </p>
               {result.failed > 0 && (
                 <div className="space-y-1">
-                  <p className="text-red-600">
+                  <p className="text-destructive">
                     {result.failed} order{result.failed === 1 ? "" : "s"}{" "}
                     couldn&apos;t be refunded automatically (e.g. paid by EFT or
                     an unconfigured provider). Refund these from the row actions
                     or in the provider:
                   </p>
-                  <ul className="space-y-1 max-h-40 overflow-auto rounded border p-2 bg-muted/30">
+                  <ul className="space-y-1 max-h-40 overflow-auto border p-2 bg-muted/30">
                     {result.failures.map((f) => (
                       <li key={f.orderId} className="text-xs">
                         <span className="font-mono">{f.orderId.slice(0, 8)}</span>{" "}
@@ -161,7 +161,7 @@ export function RefundAllButton({
                   disabled={busy}
                 />
               </div>
-              {err && <p className="text-xs text-red-600">{err}</p>}
+              {err && <p className="text-xs text-destructive">{err}</p>}
               <div className="flex justify-end gap-2">
                 <Button
                   variant="ghost"

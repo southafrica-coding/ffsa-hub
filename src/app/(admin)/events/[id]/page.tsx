@@ -7,8 +7,15 @@ import { getEventOutcomes } from "@/services/event-outcomes";
 import { getEventRoles } from "@/services/event-roles";
 import { getCachedActiveLabels } from "@/lib/cached-reads";
 import { notFound } from "next/navigation";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Masthead,
+  Chip,
+  StatusPill,
+  KpiStrip,
+  Kpi,
+  SectionBar,
+} from "@/components/ffsa";
 import {
   Table,
   TableBody,
@@ -144,108 +151,112 @@ export default async function EventDetailPage({
     })
   );
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="page-eyebrow">EVENTS &amp; GATHERINGS</p>
-          <h1 className="page-title">{event.title}</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {event.start_date}
-            {event.end_date && event.end_date !== event.start_date
-              ? ` – ${event.end_date}`
-              : ""}
-            {event.location ? ` · ${event.location}` : ""}
-          </p>
-        </div>
-        <EventStatusControl
-          eventId={id}
-          status={event.status}
-          cancellationMessage={event.cancellation_message ?? null}
-        />
-      </div>
+  // Masthead context line — the event's own when/where, in mono caps.
+  const contextLine = [
+    formatDayRange(event.start_date, event.end_date),
+    event.location,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
-      {/* Tab navigation */}
-      <div className="flex gap-1 border-b">
+  return (
+    <div className="ffsa-screen">
+      <Masthead
+        context={contextLine}
+        title={event.title}
+        actions={
+          <EventStatusControl
+            eventId={id}
+            status={event.status}
+            cancellationMessage={event.cancellation_message ?? null}
+          />
+        }
+      />
+
+      {/* Tab navigation — folder tabs on the module rule, not pills. */}
+      <div className="flex flex-wrap items-center gap-1.5 border-b border-rule bg-bone px-8 py-3">
         {TABS.map((t) => (
-          <Link
-            key={t.key}
-            href={`/events/${id}?tab=${t.key}`}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
-              tab === t.key
-                ? "border-foreground text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {t.label}
+          <Link key={t.key} href={`/events/${id}?tab=${t.key}`}>
+            <Chip active={tab === t.key}>{t.label}</Chip>
           </Link>
         ))}
       </div>
 
-      {tab === "details" && (
-        <DetailsTab
-          event={event}
-          eventId={id}
-          outcomes={outcomes ?? []}
-          roles={roles ?? []}
-          labels={labels ?? []}
-          users={users ?? []}
-          registrations={registrations ?? []}
-          attendance={attendance ?? []}
-        />
-      )}
+      <div className="space-y-6 px-8 py-7">
+        {tab === "details" && (
+          <DetailsTab
+            event={event}
+            eventId={id}
+            outcomes={outcomes ?? []}
+            roles={roles ?? []}
+            labels={labels ?? []}
+            users={users ?? []}
+            registrations={registrations ?? []}
+            attendance={attendance ?? []}
+          />
+        )}
 
-      {tab === "outcomes" && (
-        <OutcomesTab
-          eventId={id}
-          outcomes={outcomes ?? []}
-          labels={labels ?? []}
-          forms={forms ?? []}
-          identities={identities ?? []}
-          workflows={workflows ?? []}
-        />
-      )}
+        {tab === "outcomes" && (
+          <OutcomesTab
+            eventId={id}
+            outcomes={outcomes ?? []}
+            labels={labels ?? []}
+            forms={forms ?? []}
+            identities={identities ?? []}
+            workflows={workflows ?? []}
+          />
+        )}
 
-      {tab === "tickets" && (
-        <TicketsTab
-          eventId={id}
-          ticketingEnabled={event.ticketing_enabled ?? false}
-          publicSlug={event.public_slug ?? null}
-          ticketTypes={ticketTypes ?? []}
-          promoCodes={promoCodes ?? []}
-          feeProfiles={feeProfiles}
-          currency={event.currency}
-          // Once real money has moved, the currency is frozen — an
-          // order recorded in the old one would misreport.
-          currencyLocked={(orders ?? []).some(
-            (o: { status: string }) => o.status !== "pending"
-          )}
-          checkoutQuestions={
-            (event.checkout_questions as FormField[] | null) ?? []
-          }
-          buyerFields={event.buyer_fields ?? []}
-        />
-      )}
+        {tab === "tickets" && (
+          <TicketsTab
+            eventId={id}
+            ticketingEnabled={event.ticketing_enabled ?? false}
+            publicSlug={event.public_slug ?? null}
+            ticketTypes={ticketTypes ?? []}
+            promoCodes={promoCodes ?? []}
+            feeProfiles={feeProfiles}
+            currency={event.currency}
+            // Once real money has moved, the currency is frozen — an
+            // order recorded in the old one would misreport.
+            currencyLocked={(orders ?? []).some(
+              (o: { status: string }) => o.status !== "pending"
+            )}
+            checkoutQuestions={
+              (event.checkout_questions as FormField[] | null) ?? []
+            }
+            buyerFields={event.buyer_fields ?? []}
+          />
+        )}
 
-      {tab === "orders" && (
-        <OrdersTab
-          eventId={id}
-          orders={orders ?? []}
-          refunds={orderRefunds ?? []}
-          ticketEmails={ticketEmails ?? []}
-          currency={event.currency}
-          eventStatus={event.status}
-          hasCancellationMessage={!!event.cancellation_message?.trim()}
-        />
-      )}
+        {tab === "orders" && (
+          <OrdersTab
+            eventId={id}
+            orders={orders ?? []}
+            refunds={orderRefunds ?? []}
+            ticketEmails={ticketEmails ?? []}
+            currency={event.currency}
+            eventStatus={event.status}
+            hasCancellationMessage={!!event.cancellation_message?.trim()}
+          />
+        )}
 
-      {tab === "check-in" && (
-        <CheckInTab eventId={id} tickets={attendanceTickets ?? []} />
-      )}
+        {tab === "check-in" && (
+          <CheckInTab eventId={id} tickets={attendanceTickets ?? []} />
+        )}
 
-      {tab === "forms" && <FormsTab eventId={id} forms={forms ?? []} />}
+        {tab === "forms" && <FormsTab eventId={id} forms={forms ?? []} />}
+      </div>
     </div>
   );
+}
+
+// "12 – 14 SEP 2026", or a single day when there's no distinct end date.
+function formatDayRange(start: string, end: string | null) {
+  const fmt = (iso: string) =>
+    new Date(`${iso}T00:00:00`)
+      .toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+      .replace(/,/g, "");
+  return end && end !== start ? `${fmt(start)} – ${fmt(end)}` : fmt(start);
 }
 
 // ────────────────────────────────────────────────────────────
@@ -256,11 +267,11 @@ export default async function EventDetailPage({
 function DetailsTab(props: any) {
   const { event, eventId, roles, labels, users, registrations, attendance } = props;
 
-  const regStatusColors: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-    pending: "outline",
-    confirmed: "default",
-    waitlisted: "secondary",
-    cancelled: "destructive",
+  const regStatusTone: Record<string, "good" | "warn" | "quiet" | "bad"> = {
+    pending: "warn",
+    confirmed: "good",
+    waitlisted: "quiet",
+    cancelled: "bad",
   };
 
   return (
@@ -271,15 +282,22 @@ function DetailsTab(props: any) {
         event={event}
       />
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard label="Registrations" value={registrations.length} />
-        <StatCard
-          label="Attendance"
-          value={
-            attendance.filter((a: { status: string }) => a.status === "present").length
-          }
-        />
-        <StatCard label="Capacity" value={event.max_capacity ?? "Unlimited"} />
+      <div className="border-x border-t border-ink">
+        <KpiStrip>
+          {/* No `lead` cell: the masthead tick is this screen's only yellow. */}
+          <Kpi label="Registrations" value={String(registrations.length)} />
+          <Kpi
+            label="Attendance"
+            value={String(
+              attendance.filter((a: { status: string }) => a.status === "present").length
+            )}
+          />
+          <Kpi
+            label="Capacity"
+            value={event.max_capacity ? String(event.max_capacity) : "∞"}
+            foot={event.max_capacity ? undefined : "Unlimited"}
+          />
+        </KpiStrip>
       </div>
 
       <EventLogo eventId={eventId} logoUrl={event.logo_url} />
@@ -292,81 +310,65 @@ function DetailsTab(props: any) {
 
       <RolesRoster eventId={eventId} roles={roles} users={users} />
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Registrations</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
+      <div className="border border-ink">
+        <SectionBar
+          title="Registrations"
+          meta={`${registrations.length} ${registrations.length === 1 ? "person" : "people"}`}
+        />
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Email</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Registered</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {registrations.length === 0 ? (
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Registered</TableHead>
+                <TableCell colSpan={4} className="py-8 text-center">
+                  <span className="mono-label">No registrations yet</span>
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {registrations.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground py-6">
-                    No registrations yet
-                  </TableCell>
-                </TableRow>
-              ) : (
-                registrations.map(
-                  (reg: {
-                    id: string;
-                    status: string;
-                    registered_at: string;
-                    contacts: {
-                      first_name: string;
-                      last_name: string;
-                      preferred_name: string | null;
-                      email: string | null;
-                    } | null;
-                  }) => (
-                    <TableRow key={reg.id}>
-                      <TableCell className="font-medium">
-                        {reg.contacts
-                          ? `${reg.contacts.preferred_name ?? reg.contacts.first_name} ${reg.contacts.last_name}`
-                          : "—"}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {reg.contacts?.email ?? "—"}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={regStatusColors[reg.status]} className="capitalize">
-                          {reg.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {new Date(reg.registered_at).toLocaleDateString()}
-                      </TableCell>
-                    </TableRow>
-                  )
+            ) : (
+              registrations.map(
+                (reg: {
+                  id: string;
+                  status: string;
+                  registered_at: string;
+                  contacts: {
+                    first_name: string;
+                    last_name: string;
+                    preferred_name: string | null;
+                    email: string | null;
+                  } | null;
+                }) => (
+                  <TableRow key={reg.id}>
+                    <TableCell className="font-medium">
+                      {reg.contacts
+                        ? `${reg.contacts.preferred_name ?? reg.contacts.first_name} ${reg.contacts.last_name}`
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {reg.contacts?.email ?? "—"}
+                    </TableCell>
+                    <TableCell>
+                      <StatusPill tone={regStatusTone[reg.status] ?? "quiet"}>
+                        {reg.status}
+                      </StatusPill>
+                    </TableCell>
+                    <TableCell className="text-[color:var(--text-tertiary)]">
+                      {new Date(reg.registered_at).toLocaleDateString()}
+                    </TableCell>
+                  </TableRow>
                 )
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+              )
+            )}
+          </TableBody>
+        </Table>
+      </div>
     </div>
-  );
-}
-
-function StatCard({ label, value }: { label: string; value: string | number }) {
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">
-          {label}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p className="text-2xl font-bold">{value}</p>
-      </CardContent>
-    </Card>
   );
 }
 

@@ -52,7 +52,7 @@ export function OutcomeFormLink({
           defaultValue={currentFormId ?? ""}
           disabled={busy}
           onChange={(e) => setForm(e.target.value || null)}
-          className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
+          className="h-9 border border-input bg-transparent px-2 text-sm"
         >
           <option value="">— no form —</option>
           {forms.map((f) => (
@@ -79,7 +79,7 @@ export function OutcomeFormLink({
         <>
           <Link
             href={`/events/${eventId}/forms/${currentFormId}`}
-            className="text-blue-600 hover:underline"
+            className="text-ink hover:underline"
           >
             Form: {currentFormName ?? "Untitled"} →
           </Link>
@@ -93,12 +93,12 @@ export function OutcomeFormLink({
         </>
       ) : (
         <>
-          <span className="text-amber-600">No form linked</span>
+          <span className="text-amber">No form linked</span>
           {forms.length > 0 ? (
             <button
               type="button"
               onClick={() => setEditing(true)}
-              className="text-xs text-blue-600 hover:underline"
+              className="text-xs text-ink hover:underline"
             >
               link a form
             </button>

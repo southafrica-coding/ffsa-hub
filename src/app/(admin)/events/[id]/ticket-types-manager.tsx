@@ -168,7 +168,7 @@ export function TicketTypesManager({
           <button
             type="button"
             onClick={() => setAdding(true)}
-            className="text-xs text-blue-600 hover:underline"
+            className="text-xs text-ink hover:underline"
           >
             + Add tier
           </button>
@@ -187,19 +187,19 @@ export function TicketTypesManager({
             {ticketTypes.map((t) => (
               <li
                 key={t.id}
-                className="border rounded p-3"
+                className="border p-3"
               >
                 <div className="flex items-start justify-between gap-3">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-sm font-medium">{t.name}</p>
                     {!t.is_active && (
-                      <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
+                      <span className="text-xs px-1.5 py-0.5 border border-amber-border text-amber">
                         inactive
                       </span>
                     )}
                     {t.pricing_mode === "pwyw" && (
-                      <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-800">
+                      <span className="text-xs px-1.5 py-0.5 border border-rule-strong text-[color:var(--text-secondary)]">
                         pay what you want
                       </span>
                     )}
@@ -248,7 +248,7 @@ export function TicketTypesManager({
                         ? "Can't delete a tier with sales. Deactivate instead."
                         : undefined
                     }
-                    className="text-xs text-red-600 hover:underline disabled:text-gray-300 disabled:no-underline"
+                    className="text-xs text-destructive hover:underline disabled:text-[color:var(--text-quiet)] disabled:no-underline"
                   >
                     Delete
                   </button>
@@ -273,7 +273,7 @@ export function TicketTypesManager({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Tier name (e.g. General, VIP, Student, Early Bird)"
-              className="w-full border rounded px-2 py-1.5 text-sm"
+              className="w-full border px-2 py-1.5 text-sm"
               disabled={busy}
             />
             <textarea
@@ -281,7 +281,7 @@ export function TicketTypesManager({
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Description (optional)"
               rows={2}
-              className="w-full border rounded px-2 py-1.5 text-sm resize-none"
+              className="w-full border px-2 py-1.5 text-sm resize-none"
               disabled={busy}
             />
             <div className="flex gap-3 text-xs">
@@ -315,7 +315,7 @@ export function TicketTypesManager({
                 value={targetAmount}
                 onChange={(e) => setTargetAmount(e.target.value)}
                 placeholder="e.g. 250.00"
-                className="w-full border rounded px-2 py-1.5 text-sm"
+                className="w-full border px-2 py-1.5 text-sm"
                 disabled={busy}
               />
               {targetNetCents > 0 && (
@@ -337,7 +337,7 @@ export function TicketTypesManager({
                   value={capacity}
                   onChange={(e) => setCapacity(e.target.value)}
                   placeholder="Unlimited"
-                  className="w-full border rounded px-2 py-1.5 text-sm"
+                  className="w-full border px-2 py-1.5 text-sm"
                   disabled={busy}
                 />
               </div>
@@ -351,7 +351,7 @@ export function TicketTypesManager({
                   value={maxPerOrder}
                   onChange={(e) => setMaxPerOrder(e.target.value)}
                   placeholder="Unlimited"
-                  className="w-full border rounded px-2 py-1.5 text-sm"
+                  className="w-full border px-2 py-1.5 text-sm"
                   disabled={busy}
                 />
               </div>
@@ -363,7 +363,7 @@ export function TicketTypesManager({
                   type="datetime-local"
                   value={salesStart}
                   onChange={(e) => setSalesStart(e.target.value)}
-                  className="w-full border rounded px-2 py-1.5 text-sm"
+                  className="w-full border px-2 py-1.5 text-sm"
                   disabled={busy}
                 />
               </div>
@@ -375,7 +375,7 @@ export function TicketTypesManager({
                   type="datetime-local"
                   value={salesEnd}
                   onChange={(e) => setSalesEnd(e.target.value)}
-                  className="w-full border rounded px-2 py-1.5 text-sm"
+                  className="w-full border px-2 py-1.5 text-sm"
                   disabled={busy}
                 />
               </div>
@@ -395,13 +395,13 @@ export function TicketTypesManager({
                 emptyHint="No per-ticket questions — buyers just pick the quantity."
               />
             </div>
-            {err && <p className="text-xs text-red-600">{err}</p>}
+            {err && <p className="text-xs text-destructive">{err}</p>}
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={add}
                 disabled={busy}
-                className="px-3 py-1 rounded bg-blue-600 text-white text-xs hover:bg-blue-700 disabled:bg-gray-300"
+                className="px-3 py-1 bg-ink text-white text-xs hover:bg-[#262622] disabled:bg-[color:var(--surface-4)]"
               >
                 Save tier
               </button>
@@ -412,7 +412,7 @@ export function TicketTypesManager({
                   reset();
                 }}
                 disabled={busy}
-                className="px-3 py-1 rounded border text-xs hover:bg-gray-50"
+                className="px-3 py-1 border text-xs hover:bg-[color:var(--surface-2)]"
               >
                 Cancel
               </button>
@@ -484,7 +484,7 @@ function TierQuestionsEditor({
         <span className="mr-1">{open ? "▾" : "▸"}</span>
         Per-ticket questions
         {initial.length > 0 && (
-          <span className="ml-1.5 px-1.5 py-0.5 rounded bg-blue-100 text-blue-800">
+          <span className="ml-1.5 px-1.5 py-0.5 border border-rule-strong text-[color:var(--text-secondary)]">
             {initial.length}
           </span>
         )}
@@ -504,15 +504,15 @@ function TierQuestionsEditor({
             }}
             emptyHint="No per-ticket questions for this tier yet."
           />
-          {err && <p className="text-xs text-red-600">{err}</p>}
-          {msg && !dirty && <p className="text-xs text-green-600">{msg}</p>}
+          {err && <p className="text-xs text-destructive">{err}</p>}
+          {msg && !dirty && <p className="text-xs text-grass-text">{msg}</p>}
           {dirty && (
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={save}
                 disabled={busy}
-                className="px-3 py-1 rounded bg-blue-600 text-white text-xs hover:bg-blue-700 disabled:bg-gray-300"
+                className="px-3 py-1 bg-ink text-white text-xs hover:bg-[#262622] disabled:bg-[color:var(--surface-4)]"
               >
                 {busy ? "Saving…" : "Save questions"}
               </button>
@@ -524,7 +524,7 @@ function TierQuestionsEditor({
                   setMsg(null);
                 }}
                 disabled={busy}
-                className="px-3 py-1 rounded border text-xs hover:bg-gray-50"
+                className="px-3 py-1 border text-xs hover:bg-[color:var(--surface-2)]"
               >
                 Discard
               </button>

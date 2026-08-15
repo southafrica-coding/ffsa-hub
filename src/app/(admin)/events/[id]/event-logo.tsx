@@ -63,12 +63,12 @@ export function EventLogo({
         </p>
         <div className="flex items-center gap-4">
           {current ? (
-            <span className="inline-flex items-center justify-center h-16 w-32 rounded border bg-white p-2">
+            <span className="inline-flex items-center justify-center h-16 w-32 border bg-white p-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={current} alt="Event logo" className="max-h-full max-w-full object-contain" />
             </span>
           ) : (
-            <span className="inline-flex items-center justify-center h-16 w-32 rounded border border-dashed text-xs text-muted-foreground">
+            <span className="inline-flex items-center justify-center h-16 w-32 border border-dashed text-xs text-muted-foreground">
               No logo
             </span>
           )}
@@ -87,7 +87,7 @@ export function EventLogo({
               type="button"
               onClick={() => fileRef.current?.click()}
               disabled={busy}
-              className="block px-3 py-1.5 rounded border text-sm hover:bg-gray-50 disabled:opacity-50"
+              className="block px-3 py-1.5 border text-sm hover:bg-[color:var(--surface-2)] disabled:opacity-50"
             >
               {busy ? "Uploading…" : current ? "Replace logo" : "Upload logo"}
             </button>
@@ -96,14 +96,14 @@ export function EventLogo({
                 type="button"
                 onClick={remove}
                 disabled={busy}
-                className="block px-3 py-1.5 rounded border border-red-300 text-red-700 text-sm hover:bg-red-50 disabled:opacity-50"
+                className="block px-3 py-1.5 border border-destructive text-destructive text-sm hover:bg-[color:var(--surface-2)] disabled:opacity-50"
               >
                 Remove
               </button>
             )}
           </div>
         </div>
-        {err && <p className="text-xs text-red-600 mt-2">{err}</p>}
+        {err && <p className="text-xs text-destructive mt-2">{err}</p>}
       </CardContent>
     </Card>
   );

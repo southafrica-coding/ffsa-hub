@@ -73,8 +73,8 @@ export function CheckoutQuestionsManager({
           emptyHint="No custom questions yet — buyers just provide name, email, and phone."
         />
 
-        {err && <p className="text-xs text-red-600">{err}</p>}
-        {msg && !dirty && <p className="text-xs text-green-600">{msg}</p>}
+        {err && <p className="text-xs text-destructive">{err}</p>}
+        {msg && !dirty && <p className="text-xs text-grass-text">{msg}</p>}
 
         {dirty && (
           <div className="flex items-center gap-2 border-t pt-3">

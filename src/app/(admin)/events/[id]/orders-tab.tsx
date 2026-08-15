@@ -343,7 +343,7 @@ export function OrdersTab({
                   type="button"
                   onClick={reconcilePending}
                   disabled={reconciling}
-                  className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-accent disabled:opacity-50"
+                  className="inline-flex items-center border px-3 py-1.5 text-sm font-medium hover:bg-accent disabled:opacity-50"
                   title={`${pendingStripe.length} card order${pendingStripe.length === 1 ? "" : "s"} pending — check Stripe and settle any that were paid`}
                 >
                   {reconciling
@@ -374,7 +374,7 @@ export function OrdersTab({
             </p>
           ) : (
             <>
-              {err && <p className="text-xs text-red-600 mb-2">{err}</p>}
+              {err && <p className="text-xs text-destructive mb-2">{err}</p>}
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -494,7 +494,7 @@ export function OrdersTab({
                               disabled={
                                 busyId === o.id || resendingId === o.id
                               }
-                              className="text-xs text-red-600 hover:underline disabled:text-gray-300 disabled:no-underline normal-case tracking-normal"
+                              className="text-xs text-destructive hover:underline disabled:text-[color:var(--text-quiet)] disabled:no-underline normal-case tracking-normal"
                             >
                               Refund
                             </button>
@@ -504,7 +504,7 @@ export function OrdersTab({
                               type="button"
                               onClick={() => syncRefunds(o)}
                               disabled={busyId === o.id}
-                              className="text-xs text-amber-600 hover:underline disabled:opacity-50 disabled:no-underline normal-case tracking-normal"
+                              className="text-xs text-amber hover:underline disabled:opacity-50 disabled:no-underline normal-case tracking-normal"
                             >
                               {busyId === o.id
                                 ? "Checking…"
@@ -546,7 +546,7 @@ export function OrdersTab({
                                   {ticketAnswers.map((t, ti) => (
                                     <div
                                       key={t.id}
-                                      className="rounded border bg-background/60 p-2"
+                                      className="border bg-background/60 p-2"
                                     >
                                       <p className="text-xs font-medium mb-1">
                                         {t.tierName} · Ticket {ti + 1}
@@ -580,7 +580,7 @@ export function OrdersTab({
                                   {signedWaivers.map((t, ti) => (
                                     <div
                                       key={t.id}
-                                      className="rounded border bg-background/60 p-2"
+                                      className="border bg-background/60 p-2"
                                     >
                                       <p className="text-xs font-medium mb-1">
                                         {t.tierName} · Ticket {ti + 1} —{" "}
@@ -626,7 +626,7 @@ export function OrdersTab({
                                               href={`/api/tickets/${t.code}/waiver`}
                                               target="_blank"
                                               rel="noopener noreferrer"
-                                              className="text-xs text-blue-600 hover:underline"
+                                              className="text-xs text-ink hover:underline"
                                             >
                                               ↓ Signed certificate (PDF)
                                             </a>
@@ -635,7 +635,7 @@ export function OrdersTab({
                                             href={`/api/tickets/${t.code}/waiver?doc=blank`}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="text-xs text-blue-600 hover:underline"
+                                            className="text-xs text-ink hover:underline"
                                           >
                                             ↓ Blank form (PDF)
                                           </a>
@@ -690,7 +690,7 @@ export function OrdersTab({
                                         </span>
                                       )}
                                       {r.error_message && (
-                                        <span className="basis-full text-red-600">
+                                        <span className="basis-full text-destructive">
                                           {r.error_message}
                                         </span>
                                       )}

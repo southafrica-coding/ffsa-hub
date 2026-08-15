@@ -138,7 +138,7 @@ export function RefundDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="rounded-md border p-3 text-sm space-y-1">
+          <div className="border p-3 text-sm space-y-1">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Buyer</span>
               <span>
@@ -171,7 +171,7 @@ export function RefundDialog({
               aria-invalid={!amountValid}
             />
             {!amountValid ? (
-              <p className="text-xs text-red-600">
+              <p className="text-xs text-destructive">
                 Enter an amount between {money(1)} and {money(outstanding)}.
               </p>
             ) : isPartial ? (
@@ -198,7 +198,7 @@ export function RefundDialog({
             />
           </div>
 
-          <div className="flex items-start gap-2.5 rounded-md border p-3">
+          <div className="flex items-start gap-2.5 border p-3">
             <Checkbox
               id="refund-manual"
               checked={manual}
@@ -224,7 +224,7 @@ export function RefundDialog({
           {preview && (
             <div className="space-y-1.5">
               <Label>Request preview — nothing was sent</Label>
-              <pre className="max-h-52 overflow-auto rounded-md border bg-muted/40 p-2 text-[11px] leading-relaxed">
+              <pre className="max-h-52 overflow-auto border bg-muted/40 p-2 text-[11px] leading-relaxed">
                 {preview}
               </pre>
             </div>

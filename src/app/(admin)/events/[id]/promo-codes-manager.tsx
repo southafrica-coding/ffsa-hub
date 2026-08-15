@@ -164,7 +164,7 @@ export function PromoCodesManager({
           <button
             type="button"
             onClick={() => setAdding(true)}
-            className="text-xs text-blue-600 hover:underline"
+            className="text-xs text-ink hover:underline"
           >
             + Add code
           </button>
@@ -183,13 +183,13 @@ export function PromoCodesManager({
             {promoCodes.map((p) => (
               <li
                 key={p.id}
-                className="flex items-start justify-between gap-3 border rounded p-3"
+                className="flex items-start justify-between gap-3 border p-3"
               >
                 <div className="flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-sm font-mono font-medium">{p.code}</p>
                     {!p.is_active && (
-                      <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
+                      <span className="text-xs px-1.5 py-0.5 border border-amber-border text-amber">
                         inactive
                       </span>
                     )}
@@ -233,7 +233,7 @@ export function PromoCodesManager({
                         ? "Can't delete a code that's been redeemed. Deactivate instead."
                         : undefined
                     }
-                    className="text-xs text-red-600 hover:underline disabled:text-gray-300 disabled:no-underline"
+                    className="text-xs text-destructive hover:underline disabled:text-[color:var(--text-quiet)] disabled:no-underline"
                   >
                     Delete
                   </button>
@@ -250,7 +250,7 @@ export function PromoCodesManager({
               value={code}
               onChange={(e) => setCode(e.target.value)}
               placeholder="Code (e.g. EARLY2026, STAFF, SPONSOR)"
-              className="w-full border rounded px-2 py-1.5 text-sm font-mono"
+              className="w-full border px-2 py-1.5 text-sm font-mono"
               disabled={busy}
             />
             <div>
@@ -262,7 +262,7 @@ export function PromoCodesManager({
                 onChange={(e) =>
                   setKind(e.target.value as "percent" | "fixed_amount" | "comp")
                 }
-                className="w-full border rounded px-2 py-1.5 text-sm"
+                className="w-full border px-2 py-1.5 text-sm"
                 disabled={busy}
               >
                 <option value="percent">Percent off</option>
@@ -282,7 +282,7 @@ export function PromoCodesManager({
                   value={percentOff}
                   onChange={(e) => setPercentOff(e.target.value)}
                   placeholder="e.g. 10"
-                  className="w-full border rounded px-2 py-1.5 text-sm"
+                  className="w-full border px-2 py-1.5 text-sm"
                   disabled={busy}
                 />
               </div>
@@ -299,7 +299,7 @@ export function PromoCodesManager({
                   value={amountOff}
                   onChange={(e) => setAmountOff(e.target.value)}
                   placeholder="e.g. 50.00"
-                  className="w-full border rounded px-2 py-1.5 text-sm"
+                  className="w-full border px-2 py-1.5 text-sm"
                   disabled={busy}
                 />
               </div>
@@ -311,7 +311,7 @@ export function PromoCodesManager({
               <select
                 value={appliesTo}
                 onChange={(e) => setAppliesTo(e.target.value)}
-                className="w-full border rounded px-2 py-1.5 text-sm"
+                className="w-full border px-2 py-1.5 text-sm"
                 disabled={busy}
               >
                 <option value="">— any tier —</option>
@@ -333,7 +333,7 @@ export function PromoCodesManager({
                   value={maxRedemptions}
                   onChange={(e) => setMaxRedemptions(e.target.value)}
                   placeholder="Unlimited"
-                  className="w-full border rounded px-2 py-1.5 text-sm"
+                  className="w-full border px-2 py-1.5 text-sm"
                   disabled={busy}
                 />
               </div>
@@ -346,7 +346,7 @@ export function PromoCodesManager({
                   type="datetime-local"
                   value={validFrom}
                   onChange={(e) => setValidFrom(e.target.value)}
-                  className="w-full border rounded px-2 py-1.5 text-sm"
+                  className="w-full border px-2 py-1.5 text-sm"
                   disabled={busy}
                 />
               </div>
@@ -358,18 +358,18 @@ export function PromoCodesManager({
                   type="datetime-local"
                   value={validUntil}
                   onChange={(e) => setValidUntil(e.target.value)}
-                  className="w-full border rounded px-2 py-1.5 text-sm"
+                  className="w-full border px-2 py-1.5 text-sm"
                   disabled={busy}
                 />
               </div>
             </div>
-            {err && <p className="text-xs text-red-600">{err}</p>}
+            {err && <p className="text-xs text-destructive">{err}</p>}
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={add}
                 disabled={busy}
-                className="px-3 py-1 rounded bg-blue-600 text-white text-xs hover:bg-blue-700 disabled:bg-gray-300"
+                className="px-3 py-1 bg-ink text-white text-xs hover:bg-[#262622] disabled:bg-[color:var(--surface-4)]"
               >
                 Save code
               </button>
@@ -380,7 +380,7 @@ export function PromoCodesManager({
                   reset();
                 }}
                 disabled={busy}
-                className="px-3 py-1 rounded border text-xs hover:bg-gray-50"
+                className="px-3 py-1 border text-xs hover:bg-[color:var(--surface-2)]"
               >
                 Cancel
               </button>

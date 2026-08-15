@@ -117,7 +117,7 @@ export function TicketingSettings({
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
               placeholder="holy-spirit-conference-2026"
-              className="flex-1 border rounded px-2 py-1.5"
+              className="flex-1 border px-2 py-1.5"
               disabled={busy}
             />
           </div>
@@ -134,7 +134,7 @@ export function TicketingSettings({
             value={currency}
             onChange={(e) => setCurrency(e.target.value)}
             disabled={busy || currencyLocked}
-            className="border rounded px-2 py-1.5 text-sm disabled:bg-muted disabled:text-muted-foreground"
+            className="border px-2 py-1.5 text-sm disabled:bg-muted disabled:text-muted-foreground"
           >
             {EVENT_CURRENCIES.map((c) => (
               <option key={c.code} value={c.code}>
@@ -160,7 +160,7 @@ export function TicketingSettings({
 
         {/* Shareable storefront link — appears as soon as a slug is typed. */}
         {trimmedSlug && (
-          <div className="rounded-md border border-border bg-muted/40 p-3 space-y-2">
+          <div className="border border-border bg-muted/40 p-3 space-y-2">
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Shareable ticket link
             </p>
@@ -169,13 +169,13 @@ export function TicketingSettings({
                 readOnly
                 value={fullUrl || `/e/${trimmedSlug}`}
                 onFocus={(e) => e.currentTarget.select()}
-                className="flex-1 min-w-0 border rounded px-2 py-1.5 text-xs font-mono"
+                className="flex-1 min-w-0 border px-2 py-1.5 text-xs font-mono"
                 aria-label="Public ticket link"
               />
               <button
                 type="button"
                 onClick={copyLink}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded bg-blue-600 text-white text-xs hover:bg-blue-700 shrink-0"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-ink text-white text-xs hover:bg-[#262622] shrink-0"
               >
                 {copied ? (
                   <>
@@ -191,32 +191,32 @@ export function TicketingSettings({
                 href={fullUrl || `/e/${trimmedSlug}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-border text-xs hover:bg-muted shrink-0"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 border border-border text-xs hover:bg-muted shrink-0"
               >
                 <ExternalLink className="h-3.5 w-3.5" /> Open
               </a>
             </div>
             {(!enabled || dirty) && (
-              <p className="text-[11px] text-amber-500">
+              <p className="text-[11px] text-amber">
                 {!enabled
                   ? "Enable ticketing and Save to make this link live."
                   : "Save your changes to update the live link."}
               </p>
             )}
             {!dirty && enabled && liveUrl && (
-              <p className="text-[11px] text-green-600">Live now.</p>
+              <p className="text-[11px] text-grass-text">Live now.</p>
             )}
           </div>
         )}
 
-        {err && <p className="text-xs text-red-600">{err}</p>}
-        {savedHint && <p className="text-xs text-green-600">{savedHint}</p>}
+        {err && <p className="text-xs text-destructive">{err}</p>}
+        {savedHint && <p className="text-xs text-grass-text">{savedHint}</p>}
         <div>
           <button
             type="button"
             onClick={save}
             disabled={busy || !dirty}
-            className="px-3 py-1 rounded bg-blue-600 text-white text-xs hover:bg-blue-700 disabled:bg-gray-300"
+            className="px-3 py-1 bg-ink text-white text-xs hover:bg-[#262622] disabled:bg-[color:var(--surface-4)]"
           >
             {busy ? "Saving…" : "Save"}
           </button>

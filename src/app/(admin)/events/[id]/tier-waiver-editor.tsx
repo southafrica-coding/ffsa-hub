@@ -140,7 +140,7 @@ export function TierWaiverEditor({
         <span className="mr-1">{open ? "▾" : "▸"}</span>
         Signable waiver / form
         {configured && (
-          <span className="ml-1.5 px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">
+          <span className="ml-1.5 px-1.5 py-0.5 border border-grass text-grass-text">
             on
           </span>
         )}
@@ -156,25 +156,25 @@ export function TierWaiverEditor({
           </p>
 
           {/* Document upload */}
-          <div className="rounded border p-3 space-y-2 bg-muted/40">
+          <div className="border p-3 space-y-2 bg-muted/40">
             <p className="text-xs font-medium">Waiver document (PDF)</p>
             {w.document_path ? (
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs text-emerald-600 dark:text-emerald-400">
+                <span className="text-xs text-grass-text dark:text-grass-text">
                   ✓ {w.document_name ?? "uploaded.pdf"}
                 </span>
                 <a
                   href={`/api/events/${eventId}/waiver-document?tier=${ticketTypeId}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-xs text-blue-600 hover:underline"
+                  className="text-xs text-ink hover:underline"
                 >
                   View
                 </a>
                 <button
                   type="button"
                   onClick={() => fileInput.current?.click()}
-                  className="text-xs text-blue-600 hover:underline"
+                  className="text-xs text-ink hover:underline"
                   disabled={uploading}
                 >
                   Replace
@@ -185,7 +185,7 @@ export function TierWaiverEditor({
                 type="button"
                 onClick={() => fileInput.current?.click()}
                 disabled={uploading}
-                className="px-3 py-1 rounded border text-xs hover:bg-muted disabled:opacity-50"
+                className="px-3 py-1 border text-xs hover:bg-muted disabled:opacity-50"
               >
                 {uploading ? "Uploading…" : "Upload PDF"}
               </button>
@@ -220,7 +220,7 @@ export function TierWaiverEditor({
               type="text"
               value={w.title}
               onChange={(e) => set("title", e.target.value)}
-              className="w-full border rounded px-2 py-1.5 text-sm"
+              className="w-full border px-2 py-1.5 text-sm"
               placeholder="e.g. Youth Camp Indemnity & Consent Form"
             />
           </div>
@@ -233,7 +233,7 @@ export function TierWaiverEditor({
               value={w.body_markdown}
               onChange={(e) => set("body_markdown", e.target.value)}
               rows={2}
-              className="w-full border rounded px-2 py-1.5 text-sm resize-none"
+              className="w-full border px-2 py-1.5 text-sm resize-none"
               placeholder="e.g. Please read the attached form carefully before signing."
             />
           </div>
@@ -257,15 +257,15 @@ export function TierWaiverEditor({
             </label>
           </div>
 
-          {err && <p className="text-xs text-red-600">{err}</p>}
-          {msg && !dirty && <p className="text-xs text-green-600">{msg}</p>}
+          {err && <p className="text-xs text-destructive">{err}</p>}
+          {msg && !dirty && <p className="text-xs text-grass-text">{msg}</p>}
           {dirty && (
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={save}
                 disabled={busy}
-                className="px-3 py-1 rounded bg-blue-600 text-white text-xs hover:bg-blue-700 disabled:bg-gray-300"
+                className="px-3 py-1 bg-ink text-white text-xs hover:bg-[#262622] disabled:bg-[color:var(--surface-4)]"
               >
                 {busy ? "Saving…" : "Save waiver"}
               </button>
@@ -277,7 +277,7 @@ export function TierWaiverEditor({
                   setMsg(null);
                 }}
                 disabled={busy}
-                className="px-3 py-1 rounded border text-xs hover:bg-gray-50"
+                className="px-3 py-1 border text-xs hover:bg-[color:var(--surface-2)]"
               >
                 Discard
               </button>

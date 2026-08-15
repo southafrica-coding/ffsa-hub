@@ -131,13 +131,13 @@ export function BaseLabelPicker({
               }}
               placeholder="New label name"
               disabled={busy}
-              className="border rounded px-2 py-1.5 text-sm"
+              className="border px-2 py-1.5 text-sm"
             />
             <button
               type="button"
               onClick={createLabel}
               disabled={busy || !newName.trim()}
-              className="text-sm px-3 py-1.5 rounded border bg-primary text-primary-foreground disabled:opacity-50"
+              className="text-sm px-3 py-1.5 border bg-primary text-primary-foreground disabled:opacity-50"
             >
               Create
             </button>
@@ -145,12 +145,12 @@ export function BaseLabelPicker({
               type="button"
               onClick={cancelCreate}
               disabled={busy}
-              className="text-sm px-2 py-1.5 rounded border text-muted-foreground"
+              className="text-sm px-2 py-1.5 border text-muted-foreground"
             >
               Cancel
             </button>
             {busy && <span className="text-xs text-muted-foreground">Saving…</span>}
-            {err && <span className="text-xs text-red-600">{err}</span>}
+            {err && <span className="text-xs text-destructive">{err}</span>}
           </div>
         ) : (
           <div className="flex items-center gap-3">
@@ -158,7 +158,7 @@ export function BaseLabelPicker({
               value={value}
               onChange={(e) => onSelectChange(e.target.value)}
               disabled={busy}
-              className="border rounded px-2 py-1.5 text-sm"
+              className="border px-2 py-1.5 text-sm"
             >
               <option value="">— none —</option>
               {options.map((l) => (
@@ -170,7 +170,7 @@ export function BaseLabelPicker({
             </select>
             {current && (
               <span
-                className="inline-flex items-center text-xs px-2 py-0.5 rounded-full border font-medium"
+                className="inline-flex items-center text-xs px-2 py-0.5 border font-medium"
                 style={(() => {
                   const c = getLabelColors(current);
                   return { backgroundColor: c.bg, color: c.text, borderColor: c.border };
@@ -180,8 +180,8 @@ export function BaseLabelPicker({
               </span>
             )}
             {busy && <span className="text-xs text-muted-foreground">Saving…</span>}
-            {saved && !busy && <span className="text-xs text-green-600">Saved</span>}
-            {err && <span className="text-xs text-red-600">{err}</span>}
+            {saved && !busy && <span className="text-xs text-grass-text">Saved</span>}
+            {err && <span className="text-xs text-destructive">{err}</span>}
           </div>
         )}
       </CardContent>

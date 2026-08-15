@@ -3,6 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import { getEventById } from "@/services/events";
 import { canManageEvents } from "@/lib/api-auth";
 import { Scanner } from "./scanner";
+import { Masthead } from "@/components/ffsa";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,7 @@ export default async function CheckInPage({
   if (!user) redirect("/login");
   if (!(await canManageEvents(supabase, user.id, ["events.manage_attendance"]))) {
     return (
-      <div className="p-6 text-center text-sm text-red-600">
+      <div className="p-6 text-center text-sm text-destructive">
         You don't have permission to check tickets in for this event.
       </div>
     );
@@ -29,12 +30,11 @@ export default async function CheckInPage({
   if (!event) notFound();
 
   return (
-    <div className="space-y-6 max-w-2xl mx-auto p-6">
-      <div>
-        <h1 className="page-title mt-2">Check-in</h1>
-        <p className="text-sm text-muted-foreground mt-1">{event.title}</p>
+    <div className="ffsa-screen">
+      <Masthead context={event.title} title="Check-in" />
+      <div className="mx-auto max-w-2xl px-8 py-7">
+        <Scanner eventId={id} eventTitle={event.title} />
       </div>
-      <Scanner eventId={id} eventTitle={event.title} />
     </div>
   );
 }

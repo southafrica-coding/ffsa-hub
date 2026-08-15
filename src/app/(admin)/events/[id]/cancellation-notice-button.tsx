@@ -119,7 +119,7 @@ export function CancellationNoticeButton({
             </p>
           )}
 
-          {err && <p className="text-sm text-red-600">{err}</p>}
+          {err && <p className="text-sm text-destructive">{err}</p>}
 
           {done && (
             <div className="space-y-2 text-sm">
@@ -149,7 +149,7 @@ export function CancellationNoticeButton({
                 <summary className="cursor-pointer text-muted-foreground">
                   Recipients ({preview.recipients.length})
                 </summary>
-                <ul className="mt-2 max-h-28 overflow-auto rounded border p-2 bg-muted/30 space-y-0.5">
+                <ul className="mt-2 max-h-28 overflow-auto border p-2 bg-muted/30 space-y-0.5">
                   {preview.recipients.map((r) => (
                     <li key={r.email}>
                       {r.firstName ? `${r.firstName} · ` : ""}
@@ -166,7 +166,7 @@ export function CancellationNoticeButton({
                 <iframe
                   title="Cancellation email preview"
                   srcDoc={preview.previewHtml}
-                  className="w-full h-80 rounded border bg-white"
+                  className="w-full h-80 border bg-white"
                 />
               </div>
 

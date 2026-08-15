@@ -237,10 +237,10 @@ export function EventDetailsForm({
 
   // ── Editable (draft) ────────────────────────────────────────
   return (
-    <Card className="border-amber-500/40">
+    <Card className="border-amber-border">
       <CardHeader className="flex-row items-center justify-between space-y-0">
         <CardTitle className="text-base">Event details</CardTitle>
-        <span className="inline-flex items-center gap-1.5 text-[11px] text-amber-500">
+        <span className="inline-flex items-center gap-1.5 text-[11px] text-amber">
           <Pencil className="h-3 w-3" /> Editable — event is in draft
         </span>
       </CardHeader>
@@ -348,7 +348,7 @@ export function EventDetailsForm({
             id="ev-brand"
             value={form.brand}
             onChange={(e) => set("brand", e.target.value as EventBrand)}
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="flex h-10 w-full border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             {BRAND_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -361,9 +361,9 @@ export function EventDetailsForm({
           </p>
         </div>
 
-        {err && <p className="text-xs text-red-600">{err}</p>}
+        {err && <p className="text-xs text-destructive">{err}</p>}
         {saved && !dirty && (
-          <p className="text-xs text-green-600">Saved.</p>
+          <p className="text-xs text-grass-text">Saved.</p>
         )}
 
         {dirty && (

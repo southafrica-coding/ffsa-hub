@@ -74,7 +74,7 @@ type Props = {
 };
 
 const selectClass =
-  "h-9 rounded-md border border-input bg-transparent px-2 text-sm w-full";
+  "h-9 border border-input bg-transparent px-2 text-sm w-full";
 
 function emptyDraft(): Draft {
   return {
@@ -227,7 +227,7 @@ export function WorkflowsManager({
           {initialWorkflows.map((w) => (
             <div
               key={w.id}
-              className="flex items-center justify-between rounded-lg border p-3"
+              className="flex items-center justify-between border p-3"
             >
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
@@ -302,7 +302,7 @@ export function WorkflowsManager({
                   onChange={(e) =>
                     setDraft({ ...draft, is_active: e.target.checked })
                   }
-                  className="rounded"
+                  className=""
                 />
                 Active (enrolls new responders)
               </label>
@@ -455,7 +455,7 @@ function StepsEditor({
           </p>
         )}
         {steps.map((step, i) => (
-          <div key={i} className="rounded-lg border p-3 space-y-2">
+          <div key={i} className="border p-3 space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <StepIcon type={step.step_type} />
@@ -613,7 +613,7 @@ function MultiLabelPicker({
         <PopoverTrigger asChild>
           <button
             type="button"
-            className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-transparent px-2 text-sm hover:bg-accent/40"
+            className="flex h-9 w-full items-center justify-between border border-input bg-transparent px-2 text-sm hover:bg-accent/40"
           >
             <span className={selected.length ? "" : "text-muted-foreground"}>
               {selected.length === 0
@@ -635,7 +635,7 @@ function MultiLabelPicker({
                   const checked = selectedIds.includes(o.id);
                   return (
                     <li key={o.id}>
-                      <label className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-accent">
+                      <label className="flex cursor-pointer items-center gap-2 px-2 py-1.5 text-sm hover:bg-accent">
                         <Checkbox
                           checked={checked}
                           onCheckedChange={() => toggle(o.id)}
@@ -691,7 +691,7 @@ function MultiLabelPicker({
               <button
                 type="button"
                 onClick={() => remove(o.id)}
-                className="rounded-sm hover:bg-background/60"
+                className="hover:bg-background/60"
                 aria-label={`Remove ${o.name}`}
               >
                 <X className="h-3 w-3" />
@@ -716,7 +716,7 @@ function SchedulerToggle({
   const enabled = !!scheduler?.enabled;
   const base: WorkflowSchedulerConfig = scheduler ?? { enabled: true };
   return (
-    <div className="rounded-md border bg-muted/30 p-2.5 space-y-2">
+    <div className="border bg-muted/30 p-2.5 space-y-2">
       <label className="flex items-center gap-2 text-sm font-medium">
         <input
           type="checkbox"
@@ -795,8 +795,8 @@ function MiniBtn({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex h-7 w-7 items-center justify-center rounded-md border text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed ${
-        danger ? "hover:text-red-600" : ""
+      className={`inline-flex h-7 w-7 items-center justify-center border text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed ${
+        danger ? "hover:text-destructive" : ""
       }`}
     >
       {children}

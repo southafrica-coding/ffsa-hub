@@ -38,16 +38,16 @@ export function QrPanel({ url, formName }: { url: string; formName: string }) {
             <img
               src={dataUrl}
               alt="Form QR code"
-              className="w-36 h-36 border rounded bg-white"
+              className="w-36 h-36 border bg-white"
             />
           ) : (
-            <div className="w-36 h-36 border rounded bg-gray-50" />
+            <div className="w-36 h-36 border bg-[color:var(--surface-2)]" />
           )}
           <div className="space-y-2">
             <button
               type="button"
               onClick={() => setFullscreen(true)}
-              className="block px-3 py-1.5 rounded border text-sm hover:bg-gray-50"
+              className="block px-3 py-1.5 border text-sm hover:bg-[color:var(--surface-2)]"
             >
               Show full screen
             </button>
@@ -55,7 +55,7 @@ export function QrPanel({ url, formName }: { url: string; formName: string }) {
               type="button"
               onClick={download}
               disabled={!dataUrl}
-              className="block px-3 py-1.5 rounded border text-sm hover:bg-gray-50 disabled:opacity-50"
+              className="block px-3 py-1.5 border text-sm hover:bg-[color:var(--surface-2)] disabled:opacity-50"
             >
               Download PNG
             </button>
@@ -74,7 +74,7 @@ export function QrPanel({ url, formName }: { url: string; formName: string }) {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={dataUrl} alt="Form QR code" className="w-[70vmin] h-[70vmin]" />
           <p className="mt-6 text-lg font-medium">{formName}</p>
-          <p className="text-sm text-gray-500 mt-1">Tap anywhere to close</p>
+          <p className="text-sm text-[color:var(--text-tertiary)] mt-1">Tap anywhere to close</p>
         </div>
       )}
     </Card>

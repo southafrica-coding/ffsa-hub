@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DateInput } from "@/components/ui/date-input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
 import { DescriptionEditor } from "@/components/events/description-editor";
+import { Masthead } from "@/components/ffsa";
 
 export default function NewEventPage() {
   const router = useRouter();
@@ -72,14 +72,11 @@ export default function NewEventPage() {
   }
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <div>
-        <p className="page-eyebrow">EVENTS &amp; GATHERINGS</p>
-        <h1 className="page-title">Create Event</h1>
-      </div>
+    <div className="ffsa-screen">
+      <Masthead context="Operations · New event" title="Create Event" />
 
-      <Card>
-        <CardContent className="pt-6">
+      <div className="px-8 py-7">
+        <div className="max-w-2xl border border-ink p-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="title">Title *</Label>
@@ -167,7 +164,7 @@ export default function NewEventPage() {
                   type="checkbox"
                   checked={form.is_public}
                   onChange={(e) => updateField("is_public", e.target.checked)}
-                  className="rounded border-input"
+                  className="border-input"
                 />
                 Public event
               </label>
@@ -178,7 +175,7 @@ export default function NewEventPage() {
                   onChange={(e) =>
                     updateField("registration_required", e.target.checked)
                   }
-                  className="rounded border-input"
+                  className="border-input"
                 />
                 Registration required
               </label>
@@ -199,8 +196,8 @@ export default function NewEventPage() {
               </Button>
             </div>
           </form>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

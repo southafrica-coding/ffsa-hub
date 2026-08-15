@@ -137,7 +137,7 @@ export function QuestionsBuilder({
       <button
         type="button"
         onClick={addQuestion}
-        className="text-xs text-blue-600 hover:underline"
+        className="text-xs text-ink hover:underline"
       >
         {addLabel}
       </button>
@@ -176,7 +176,7 @@ function OptionsEditor({
         onChange(next.split("\n").map((o) => o.trim()).filter(Boolean));
       }}
       rows={3}
-      className="w-full border rounded px-2 py-1 text-xs mt-1 resize-none"
+      className="w-full border px-2 py-1 text-xs mt-1 resize-none"
     />
   );
 }
@@ -197,8 +197,8 @@ function IconBtn({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`w-6 h-6 text-xs rounded border disabled:opacity-30 ${
-        danger ? "text-red-600 hover:bg-destructive/10" : "hover:bg-accent"
+      className={`w-6 h-6 text-xs border disabled:opacity-30 ${
+        danger ? "text-destructive hover:bg-destructive/10" : "hover:bg-accent"
       }`}
     >
       {label}
@@ -236,7 +236,7 @@ function QuestionEditor({
 
   return (
     <div
-      className="border rounded p-3 space-y-2 bg-muted/40"
+      className="border p-3 space-y-2 bg-muted/40"
       style={depth > 0 ? { marginLeft: depth * 16 } : undefined}
     >
       {depth > 0 && (
@@ -255,7 +255,7 @@ function QuestionEditor({
             if (type === "yes_no") patch.options = ["Yes", "No"];
             onChange(patch);
           }}
-          className="border rounded px-2 py-1 text-xs"
+          className="border px-2 py-1 text-xs"
         >
           {FIELD_TYPES.map((t) => (
             <option key={t.value} value={t.value}>
@@ -267,7 +267,7 @@ function QuestionEditor({
           value={field.label}
           onChange={(e) => onChange({ label: e.target.value })}
           placeholder="Question label"
-          className="flex-1 border rounded px-2 py-1 text-sm"
+          className="flex-1 border px-2 py-1 text-sm"
         />
         <IconBtn onClick={onMoveUp} disabled={!canMoveUp} label="↑" />
         <IconBtn onClick={onMoveDown} disabled={!canMoveDown} label="↓" />
@@ -313,7 +313,7 @@ function QuestionEditor({
                 showWhenValue: nextId ? choices[0] ?? null : null,
               });
             }}
-            className="border rounded px-1.5 py-0.5 text-xs max-w-[14rem]"
+            className="border px-1.5 py-0.5 text-xs max-w-[14rem]"
           >
             <option value="">— always show —</option>
             {eligibleParents.map((p) => (
@@ -328,7 +328,7 @@ function QuestionEditor({
               <select
                 value={field.showWhenValue ?? ""}
                 onChange={(e) => onChange({ showWhenValue: e.target.value || null })}
-                className="border rounded px-1.5 py-0.5 text-xs"
+                className="border px-1.5 py-0.5 text-xs"
               >
                 {isBooleanParentType(parent.type) ? (
                   <option value="true">Checked</option>
@@ -344,7 +344,7 @@ function QuestionEditor({
           )}
         </div>
         {orphanedParentRef && (
-          <p className="text-amber-600 mt-1">
+          <p className="text-amber mt-1">
             The parent question for this rule no longer exists — pick another or
             clear the rule.
           </p>

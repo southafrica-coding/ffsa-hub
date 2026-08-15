@@ -109,7 +109,7 @@ export function RolesRoster({
           <button
             type="button"
             onClick={() => setAdding(true)}
-            className="text-xs text-blue-600 hover:underline"
+            className="text-xs text-ink hover:underline"
           >
             + Add role
           </button>
@@ -123,7 +123,7 @@ export function RolesRoster({
             {roles.map((r) => (
               <li
                 key={r.id}
-                className="flex items-start justify-between gap-3 border rounded p-3"
+                className="flex items-start justify-between gap-3 border p-3"
               >
                 <div>
                   <p className="text-sm">
@@ -141,7 +141,7 @@ export function RolesRoster({
                   type="button"
                   onClick={() => removeRole(r.id)}
                   disabled={busy}
-                  className="text-xs text-red-600 hover:underline shrink-0"
+                  className="text-xs text-destructive hover:underline shrink-0"
                 >
                   Remove
                 </button>
@@ -157,7 +157,7 @@ export function RolesRoster({
               value={roleName}
               onChange={(e) => setRoleName(e.target.value)}
               placeholder="Role (e.g. MC, Registration desk, Follow-up team)"
-              className="w-full border rounded px-2 py-1.5 text-sm"
+              className="w-full border px-2 py-1.5 text-sm"
               disabled={busy}
             />
             <div className="flex gap-3 text-xs">
@@ -182,7 +182,7 @@ export function RolesRoster({
               <select
                 value={userId}
                 onChange={(e) => setUserId(e.target.value)}
-                className="w-full border rounded px-2 py-1.5 text-sm"
+                className="w-full border px-2 py-1.5 text-sm"
                 disabled={busy}
               >
                 <option value="">— pick a user —</option>
@@ -198,7 +198,7 @@ export function RolesRoster({
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 placeholder="Volunteer name"
-                className="w-full border rounded px-2 py-1.5 text-sm"
+                className="w-full border px-2 py-1.5 text-sm"
                 disabled={busy}
               />
             )}
@@ -207,16 +207,16 @@ export function RolesRoster({
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Notes (optional)"
-              className="w-full border rounded px-2 py-1.5 text-sm"
+              className="w-full border px-2 py-1.5 text-sm"
               disabled={busy}
             />
-            {err && <p className="text-xs text-red-600">{err}</p>}
+            {err && <p className="text-xs text-destructive">{err}</p>}
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={addRole}
                 disabled={busy}
-                className="px-3 py-1 rounded bg-blue-600 text-white text-xs hover:bg-blue-700 disabled:bg-gray-300"
+                className="px-3 py-1 bg-ink text-white text-xs hover:bg-[#262622] disabled:bg-[color:var(--surface-4)]"
               >
                 Save role
               </button>
@@ -227,7 +227,7 @@ export function RolesRoster({
                   setErr(null);
                 }}
                 disabled={busy}
-                className="px-3 py-1 rounded border text-xs hover:bg-gray-50"
+                className="px-3 py-1 border text-xs hover:bg-[color:var(--surface-2)]"
               >
                 Cancel
               </button>

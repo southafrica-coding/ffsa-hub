@@ -56,7 +56,7 @@ export function FormsTab({
           <button
             type="button"
             onClick={() => setCreating(true)}
-            className="text-xs text-blue-600 hover:underline"
+            className="text-xs text-ink hover:underline"
           >
             + New form
           </button>
@@ -75,7 +75,7 @@ export function FormsTab({
             {forms.map((f) => (
               <li
                 key={f.id}
-                className="flex items-center justify-between gap-3 border rounded p-3"
+                className="flex items-center justify-between gap-3 border p-3"
               >
                 <div>
                   <p className="text-sm font-medium">{f.name}</p>
@@ -86,17 +86,17 @@ export function FormsTab({
                 </div>
                 <div className="flex items-center gap-2">
                   <span
-                    className={`text-xs px-2 py-0.5 rounded-full ${
+                    className={`text-xs px-2 py-0.5 ${
                       f.is_active
-                        ? "bg-green-100 text-green-800"
-                        : "bg-gray-100 text-gray-700"
+                        ? "border border-grass text-grass-text"
+                        : "bg-[color:var(--surface-3)] text-[color:var(--text-secondary)]"
                     }`}
                   >
                     {f.is_active ? "Published" : "Draft"}
                   </span>
                   <Link
                     href={`/events/${eventId}/forms/${f.id}`}
-                    className="text-xs text-blue-600 hover:underline"
+                    className="text-xs text-ink hover:underline"
                   >
                     Edit
                   </Link>
@@ -113,16 +113,16 @@ export function FormsTab({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Form name (e.g. Send Night 2026 — Take Action)"
-              className="w-full border rounded px-2 py-1.5 text-sm"
+              className="w-full border px-2 py-1.5 text-sm"
               disabled={busy}
             />
-            {err && <p className="text-xs text-red-600">{err}</p>}
+            {err && <p className="text-xs text-destructive">{err}</p>}
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={createForm}
                 disabled={busy}
-                className="px-3 py-1 rounded bg-blue-600 text-white text-xs hover:bg-blue-700 disabled:bg-gray-300"
+                className="px-3 py-1 bg-ink text-white text-xs hover:bg-[#262622] disabled:bg-[color:var(--surface-4)]"
               >
                 Create &amp; open builder
               </button>
@@ -133,7 +133,7 @@ export function FormsTab({
                   setErr(null);
                 }}
                 disabled={busy}
-                className="px-3 py-1 rounded border text-xs hover:bg-gray-50"
+                className="px-3 py-1 border text-xs hover:bg-[color:var(--surface-2)]"
               >
                 Cancel
               </button>

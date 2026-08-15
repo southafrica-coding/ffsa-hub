@@ -147,7 +147,7 @@ export function OutcomesManager({
           <button
             type="button"
             onClick={() => setAdding(true)}
-            className="text-xs text-blue-600 hover:underline"
+            className="text-xs text-ink hover:underline"
           >
             + Add outcome
           </button>
@@ -164,13 +164,13 @@ export function OutcomesManager({
           <ul className="space-y-2">
             {outcomes.map((o) =>
               editingId === o.id ? (
-                <li key={o.id} className="border rounded p-3 space-y-2">
+                <li key={o.id} className="border p-3 space-y-2">
                   <input
                     type="text"
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
                     placeholder="Outcome name"
-                    className="w-full border rounded px-2 py-1.5 text-sm"
+                    className="w-full border px-2 py-1.5 text-sm"
                     disabled={busy}
                   />
                   <textarea
@@ -178,7 +178,7 @@ export function OutcomesManager({
                     onChange={(e) => setEditDescription(e.target.value)}
                     placeholder="Description (optional)"
                     rows={2}
-                    className="w-full border rounded px-2 py-1.5 text-sm resize-none"
+                    className="w-full border px-2 py-1.5 text-sm resize-none"
                     disabled={busy}
                   />
                   <div className="flex gap-3 text-xs">
@@ -203,7 +203,7 @@ export function OutcomesManager({
                     <select
                       value={editLabelId}
                       onChange={(e) => setEditLabelId(e.target.value)}
-                      className="w-full border rounded px-2 py-1.5 text-sm"
+                      className="w-full border px-2 py-1.5 text-sm"
                       disabled={busy}
                     >
                       <option value="">— no label —</option>
@@ -219,17 +219,17 @@ export function OutcomesManager({
                       value={editNewLabelName}
                       onChange={(e) => setEditNewLabelName(e.target.value)}
                       placeholder="New label name"
-                      className="w-full border rounded px-2 py-1.5 text-sm"
+                      className="w-full border px-2 py-1.5 text-sm"
                       disabled={busy}
                     />
                   )}
-                  {err && <p className="text-xs text-red-600">{err}</p>}
+                  {err && <p className="text-xs text-destructive">{err}</p>}
                   <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={() => saveEdit(o.id)}
                       disabled={busy}
-                      className="px-3 py-1 rounded bg-blue-600 text-white text-xs hover:bg-blue-700 disabled:bg-gray-300"
+                      className="px-3 py-1 bg-ink text-white text-xs hover:bg-[#262622] disabled:bg-[color:var(--surface-4)]"
                     >
                       Save
                     </button>
@@ -237,7 +237,7 @@ export function OutcomesManager({
                       type="button"
                       onClick={cancelEdit}
                       disabled={busy}
-                      className="px-3 py-1 rounded border text-xs hover:bg-gray-50"
+                      className="px-3 py-1 border text-xs hover:bg-[color:var(--surface-2)]"
                     >
                       Cancel
                     </button>
@@ -246,7 +246,7 @@ export function OutcomesManager({
               ) : (
                 <li
                   key={o.id}
-                  className="flex items-start justify-between gap-3 border rounded p-3"
+                  className="flex items-start justify-between gap-3 border p-3"
                 >
                   <div>
                     <p className="text-sm font-medium">{o.name}</p>
@@ -256,7 +256,7 @@ export function OutcomesManager({
                     <div className="mt-1">
                       {o.labels ? (
                         <span
-                          className="inline-flex items-center text-xs px-2 py-0.5 rounded-full border font-medium"
+                          className="inline-flex items-center text-xs px-2 py-0.5 border font-medium"
                           style={(() => {
                             const c = getLabelColors(o.labels);
                             return {
@@ -269,7 +269,7 @@ export function OutcomesManager({
                           {o.labels.name}
                         </span>
                       ) : (
-                        <span className="text-xs text-amber-600">No label assigned</span>
+                        <span className="text-xs text-amber">No label assigned</span>
                       )}
                     </div>
                   </div>
@@ -278,7 +278,7 @@ export function OutcomesManager({
                       type="button"
                       onClick={() => startEdit(o)}
                       disabled={busy}
-                      className="text-xs text-blue-600 hover:underline"
+                      className="text-xs text-ink hover:underline"
                     >
                       Edit
                     </button>
@@ -286,7 +286,7 @@ export function OutcomesManager({
                       type="button"
                       onClick={() => removeOutcome(o.id)}
                       disabled={busy}
-                      className="text-xs text-red-600 hover:underline"
+                      className="text-xs text-destructive hover:underline"
                     >
                       Delete
                     </button>
@@ -304,7 +304,7 @@ export function OutcomesManager({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Outcome name (e.g. Act Now for the Unreached)"
-              className="w-full border rounded px-2 py-1.5 text-sm"
+              className="w-full border px-2 py-1.5 text-sm"
               disabled={busy}
             />
             <textarea
@@ -312,7 +312,7 @@ export function OutcomesManager({
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Description (optional)"
               rows={2}
-              className="w-full border rounded px-2 py-1.5 text-sm resize-none"
+              className="w-full border px-2 py-1.5 text-sm resize-none"
               disabled={busy}
             />
             <div className="flex gap-3 text-xs">
@@ -337,7 +337,7 @@ export function OutcomesManager({
               <select
                 value={labelId}
                 onChange={(e) => setLabelId(e.target.value)}
-                className="w-full border rounded px-2 py-1.5 text-sm"
+                className="w-full border px-2 py-1.5 text-sm"
                 disabled={busy}
               >
                 <option value="">— pick a label —</option>
@@ -353,17 +353,17 @@ export function OutcomesManager({
                 value={newLabelName}
                 onChange={(e) => setNewLabelName(e.target.value)}
                 placeholder="New label name"
-                className="w-full border rounded px-2 py-1.5 text-sm"
+                className="w-full border px-2 py-1.5 text-sm"
                 disabled={busy}
               />
             )}
-            {err && <p className="text-xs text-red-600">{err}</p>}
+            {err && <p className="text-xs text-destructive">{err}</p>}
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={addOutcome}
                 disabled={busy}
-                className="px-3 py-1 rounded bg-blue-600 text-white text-xs hover:bg-blue-700 disabled:bg-gray-300"
+                className="px-3 py-1 bg-ink text-white text-xs hover:bg-[#262622] disabled:bg-[color:var(--surface-4)]"
               >
                 Save outcome
               </button>
@@ -374,7 +374,7 @@ export function OutcomesManager({
                   setErr(null);
                 }}
                 disabled={busy}
-                className="px-3 py-1 rounded border text-xs hover:bg-gray-50"
+                className="px-3 py-1 border text-xs hover:bg-[color:var(--surface-2)]"
               >
                 Cancel
               </button>

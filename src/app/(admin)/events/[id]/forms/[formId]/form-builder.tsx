@@ -238,9 +238,9 @@ export function FormBuilder({
         </div>
         <div className="flex items-center gap-2">
           <span
-            className={`text-xs px-2 py-0.5 rounded-full ${
+            className={`text-xs px-2 py-0.5 ${
               isActive
-                ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+                ? "border border-grass text-grass-text"
                 : "bg-secondary text-secondary-foreground border border-border"
             }`}
           >
@@ -250,7 +250,7 @@ export function FormBuilder({
             type="button"
             onClick={() => save()}
             disabled={busy}
-            className="px-3 py-1.5 rounded border text-sm hover:bg-accent disabled:opacity-50"
+            className="px-3 py-1.5 border text-sm hover:bg-accent disabled:opacity-50"
           >
             Save
           </button>
@@ -259,7 +259,7 @@ export function FormBuilder({
               type="button"
               onClick={() => save(false)}
               disabled={busy}
-              className="px-3 py-1.5 rounded border text-sm hover:bg-accent disabled:opacity-50"
+              className="px-3 py-1.5 border text-sm hover:bg-accent disabled:opacity-50"
             >
               Unpublish
             </button>
@@ -268,15 +268,15 @@ export function FormBuilder({
               type="button"
               onClick={() => save(true)}
               disabled={busy}
-              className="px-3 py-1.5 rounded bg-blue-600 text-white text-sm hover:bg-blue-700 disabled:opacity-50"
+              className="px-3 py-1.5 bg-ink text-white text-sm hover:bg-[#262622] disabled:opacity-50"
             >
               Save &amp; Publish
             </button>
           )}
         </div>
       </div>
-      {err && <p className="text-sm text-red-600">{err}</p>}
-      {msg && <p className="text-sm text-green-600">{msg}</p>}
+      {err && <p className="text-sm text-destructive">{err}</p>}
+      {msg && <p className="text-sm text-grass-text">{msg}</p>}
 
       {/* Settings */}
       <Card>
@@ -289,7 +289,7 @@ export function FormBuilder({
             <select
               value={labelId}
               onChange={(e) => setLabelId(e.target.value)}
-              className="w-full border rounded px-2 py-1.5 text-sm"
+              className="w-full border px-2 py-1.5 text-sm"
             >
               <option value="">— none —</option>
               {labels.map((l) => (
@@ -315,7 +315,7 @@ export function FormBuilder({
               onChange={(e) =>
                 update({ branding: { ...schema.branding, accentColor: e.target.value } })
               }
-              className="h-9 w-16 border rounded"
+              className="h-9 w-16 border"
             />
           </label>
         </CardContent>
@@ -387,7 +387,7 @@ export function FormBuilder({
             <button
               type="button"
               onClick={() => addField(step.id)}
-              className="text-xs text-blue-600 hover:underline"
+              className="text-xs text-ink hover:underline"
             >
               + Add field
             </button>
@@ -399,7 +399,7 @@ export function FormBuilder({
       <button
         type="button"
         onClick={addStep}
-        className="w-full border-2 border-dashed rounded-lg py-3 text-sm text-muted-foreground hover:bg-accent"
+        className="w-full border-2 border-dashed py-3 text-sm text-muted-foreground hover:bg-accent"
       >
         + Add step
       </button>
@@ -448,7 +448,7 @@ function OptionsEditor({
         onChange(next.split("\n").map((o) => o.trim()).filter(Boolean));
       }}
       rows={3}
-      className="w-full border rounded px-2 py-1 text-xs mt-1 resize-none"
+      className="w-full border px-2 py-1 text-xs mt-1 resize-none"
     />
   );
 }
@@ -469,8 +469,8 @@ function IconBtn({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`w-6 h-6 text-xs rounded border disabled:opacity-30 ${
-        danger ? "text-red-600 hover:bg-destructive/10" : "hover:bg-accent"
+      className={`w-6 h-6 text-xs border disabled:opacity-30 ${
+        danger ? "text-destructive hover:bg-destructive/10" : "hover:bg-accent"
       }`}
     >
       {label}
@@ -517,7 +517,7 @@ function FieldEditor({
 
   return (
     <div
-      className="border rounded p-3 space-y-2 bg-muted/40"
+      className="border p-3 space-y-2 bg-muted/40"
       style={depth > 0 ? { marginLeft: depth * 16 } : undefined}
     >
       {depth > 0 && (
@@ -535,7 +535,7 @@ function FieldEditor({
             if (type === "yes_no") patch.options = ["Yes", "No"];
             onChange(patch);
           }}
-          className="border rounded px-2 py-1 text-xs"
+          className="border px-2 py-1 text-xs"
         >
           {FIELD_TYPES.map((t) => (
             <option key={t.value} value={t.value}>
@@ -547,7 +547,7 @@ function FieldEditor({
           value={field.label}
           onChange={(e) => onChange({ label: e.target.value })}
           placeholder="Field label"
-          className="flex-1 border rounded px-2 py-1 text-sm"
+          className="flex-1 border px-2 py-1 text-sm"
         />
         <IconBtn onClick={onMoveUp} disabled={!canMoveUp} label="↑" />
         <IconBtn onClick={onMoveDown} disabled={!canMoveDown} label="↓" />
@@ -561,7 +561,7 @@ function FieldEditor({
             <select
               value={field.key}
               onChange={(e) => onChange({ key: e.target.value })}
-              className="border rounded px-1.5 py-0.5 text-xs"
+              className="border px-1.5 py-0.5 text-xs"
             >
               <option value="">Custom (raw data only)</option>
               {CONTACT_FIELD_KEYS.map((k) => (
@@ -585,7 +585,7 @@ function FieldEditor({
       {isOutcome && (
         <div className="text-xs">
           {outcomes.length === 0 ? (
-            <p className="text-amber-600">
+            <p className="text-amber">
               No outcomes on this event yet — add one on the Details tab first.
             </p>
           ) : (
@@ -594,7 +594,7 @@ function FieldEditor({
               <select
                 value={field.outcomeId ?? ""}
                 onChange={(e) => onChange({ outcomeId: e.target.value || null })}
-                className="border rounded px-1.5 py-0.5 text-xs"
+                className="border px-1.5 py-0.5 text-xs"
               >
                 <option value="">— pick an outcome —</option>
                 {outcomes.map((o) => (
@@ -638,7 +638,7 @@ function FieldEditor({
                 showWhenValue: nextId ? choices[0] ?? null : null,
               });
             }}
-            className="border rounded px-1.5 py-0.5 text-xs max-w-[14rem]"
+            className="border px-1.5 py-0.5 text-xs max-w-[14rem]"
           >
             <option value="">— always show —</option>
             {eligibleParents.map((p) => (
@@ -655,7 +655,7 @@ function FieldEditor({
                 onChange={(e) =>
                   onChange({ showWhenValue: e.target.value || null })
                 }
-                className="border rounded px-1.5 py-0.5 text-xs"
+                className="border px-1.5 py-0.5 text-xs"
               >
                 {isBooleanParentType(parent.type) ? (
                   <option value="true">Checked</option>
@@ -675,7 +675,7 @@ function FieldEditor({
           response, or consent fields placed above this one.
         </p>
         {orphanedParentRef && (
-          <p className="text-amber-600 mt-1">
+          <p className="text-amber mt-1">
             The parent question for this rule no longer exists — pick another
             or clear the rule.
           </p>

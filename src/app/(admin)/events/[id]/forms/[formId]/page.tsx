@@ -38,7 +38,7 @@ export default async function FormBuilderPage({
       <div className="flex items-center justify-between gap-3">
         <Link
           href={`/events/${eventId}/forms/${formId}/responses`}
-          className="text-sm px-3 py-1.5 rounded-full border hover:bg-muted transition-colors"
+          className="border border-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] transition-colors hover:bg-[color:var(--surface-2)]"
         >
           View responses →
         </Link>

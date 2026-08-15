@@ -27,6 +27,10 @@ const config: Config = {
         popover: { DEFAULT: "hsl(var(--popover))", foreground: "hsl(var(--popover-foreground))" },
         card: { DEFAULT: "hsl(var(--card))", foreground: "hsl(var(--card-foreground))" },
 
+        // The surface ramp as utilities, so `bg-surface-1` resolves instead of
+        // silently emitting nothing. Values track the --surface-* CSS vars.
+        surface: { 1: "#FFFFFF", 2: "#F4F2EA", 3: "#F1EFE7", 4: "#E7E4D9" },
+
         // Brand — use these directly: bg-ink, text-yellow, border-rule
         ink: "#0A0A0A",
         bone: { DEFAULT: "#F4F2EA", 2: "#F1EFE7", 3: "#E7E4D9" },

@@ -159,7 +159,7 @@ export function EventStatusControl({
         )}
         {status === "published" && (
           <>
-            <Eye className="h-3 w-3 text-green-600" /> Live — visible to the
+            <Eye className="h-3 w-3 text-grass-text" /> Live — visible to the
             public.
           </>
         )}
@@ -193,7 +193,7 @@ export function EventStatusControl({
         </button>
       )}
       {err && !closeOpen && !noteOpen && (
-        <p className="text-[11px] text-red-600">{err}</p>
+        <p className="text-[11px] text-destructive">{err}</p>
       )}
 
       {/* Close-out dialog */}
@@ -267,7 +267,7 @@ export function EventStatusControl({
                       resetCloseDialog(false)
                     )
                   }
-                  className="w-full text-left rounded-md border p-3 hover:bg-accent disabled:opacity-50 transition-colors"
+                  className="w-full text-left border p-3 hover:bg-accent disabled:opacity-50 transition-colors"
                 >
                   <span className="flex items-center gap-2 text-sm font-medium">
                     <CheckCircle2 className="h-4 w-4" /> Mark as completed
@@ -284,7 +284,7 @@ export function EventStatusControl({
                     setErr(null);
                     setCancelForm(true);
                   }}
-                  className="w-full text-left rounded-md border p-3 hover:bg-accent disabled:opacity-50 transition-colors"
+                  className="w-full text-left border p-3 hover:bg-accent disabled:opacity-50 transition-colors"
                 >
                   <span className="flex items-center gap-2 text-sm font-medium">
                     <XCircle className="h-4 w-4" /> Mark as cancelled
@@ -303,7 +303,7 @@ export function EventStatusControl({
               <Loader2 className="h-3 w-3 animate-spin" /> Saving…
             </p>
           )}
-          {err && <p className="text-[11px] text-red-600">{err}</p>}
+          {err && <p className="text-[11px] text-destructive">{err}</p>}
         </DialogContent>
       </Dialog>
 
@@ -348,7 +348,7 @@ export function EventStatusControl({
               {busy ? "Saving…" : "Save note"}
             </Button>
           </div>
-          {err && <p className="text-[11px] text-red-600">{err}</p>}
+          {err && <p className="text-[11px] text-destructive">{err}</p>}
         </DialogContent>
       </Dialog>
     </div>

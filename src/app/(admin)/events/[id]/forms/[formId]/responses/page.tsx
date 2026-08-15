@@ -3,8 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import { getFormById, listFormSubmissions } from "@/services/forms";
 import { fieldKey, type FormSchema, type FormField } from "@/lib/forms/schema";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Masthead, StatusPill } from "@/components/ffsa";
 
 // Per-form responses: every submission with the resolved contact + all answers.
 export default async function FormResponsesPage({
@@ -36,34 +35,25 @@ export default async function FormResponsesPage({
   const rows = (submissions ?? []) as any[];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between gap-3">
-        <Link
-          href={`/events/${eventId}/forms/${formId}`}
-          className="text-xs text-muted-foreground hover:text-foreground uppercase"
-          style={{ letterSpacing: "0.15em" }}
-        >
-          ← Edit form
-        </Link>
-        <Link
-          href={`/events/${eventId}?tab=forms`}
-          className="text-xs text-muted-foreground hover:text-foreground uppercase"
-          style={{ letterSpacing: "0.15em" }}
-        >
-          Event →
-        </Link>
-      </div>
+    <div className="ffsa-screen">
+      <Masthead
+        context={`Form responses · ${rows.length} submission${rows.length === 1 ? "" : "s"}`}
+        title={form.name}
+        actions={
+          <>
+            <Link href={`/events/${eventId}/forms/${formId}`} className="mono-label">
+              ← Edit form
+            </Link>
+            <Link href={`/events/${eventId}?tab=forms`} className="mono-label">
+              Event →
+            </Link>
+          </>
+        }
+      />
 
-      <div>
-        <p className="page-eyebrow">FORM RESPONSES</p>
-        <h1 className="page-title">{form.name}</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          {rows.length} submission{rows.length === 1 ? "" : "s"}
-        </p>
-      </div>
-
+      <div className="space-y-3 px-8 py-7">
       {rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground italic">
+        <p className="mono-label">
           No submissions yet. Responses appear here as people fill in the form.
         </p>
       ) : (
@@ -76,64 +66,62 @@ export default async function FormResponsesPage({
               : "(unresolved contact)";
             const raw = (sub.raw_data ?? {}) as Record<string, unknown>;
             return (
-              <Card key={sub.id}>
-                <CardHeader className="pb-2">
+              // A plain bordered record, not a Card — the shadcn card slots are
+              // zero-padded by the design layer, so the padding lives here.
+              <div key={sub.id} className="border border-ink">
+                <div className="border-b border-rule px-5 py-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <CardTitle className="text-base">
+                      <h2 className="text-[16px]">
                         {c?.id ? (
                           <Link
                             href={`/contacts/${c.id}`}
-                            className="text-blue-600 hover:underline"
+                            className="hover:text-electric"
                           >
                             {name}
                           </Link>
                         ) : (
                           name
                         )}
-                      </CardTitle>
-                      <p className="text-xs text-muted-foreground mt-0.5">
+                      </h2>
+                      <p className="mt-1 text-[11px] text-[color:var(--text-tertiary)]">
                         {[c?.email, c?.phone].filter(Boolean).join(" · ") || "—"}
                       </p>
                     </div>
                     <div className="text-right shrink-0">
-                      <Badge
-                        variant={
-                          sub.dedup_action === "queued_for_review"
-                            ? "outline"
-                            : "secondary"
+                      <StatusPill
+                        tone={
+                          sub.dedup_action === "queued_for_review" ? "warn" : "quiet"
                         }
-                        className="capitalize"
                       >
                         {sub.dedup_action === "queued_for_review"
                           ? "Needs review"
                           : sub.dedup_action === "new"
                             ? "New contact"
                             : "Matched"}
-                      </Badge>
-                      <p className="text-xs text-muted-foreground mt-1">
+                      </StatusPill>
+                      <p className="mono-label mt-1.5">
                         {new Date(sub.submitted_at).toLocaleString()}
                       </p>
                     </div>
                   </div>
-                </CardHeader>
-                <CardContent>
+                </div>
+                <div className="px-5 py-4">
                   <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
                     {fields.map((f) => (
                       <div key={f.id} className="text-sm">
-                        <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                          {f.label}
-                        </dt>
+                        <dt className="mono-label">{f.label}</dt>
                         <dd className="mt-0.5">{formatAnswer(f, raw)}</dd>
                       </div>
                     ))}
                   </dl>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             );
           })}
         </div>
       )}
+      </div>
     </div>
   );
 }

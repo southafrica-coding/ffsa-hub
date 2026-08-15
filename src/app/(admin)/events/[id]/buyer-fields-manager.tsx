@@ -88,7 +88,7 @@ export function BuyerFieldsManager({
           tier&apos;s own questions below.
         </p>
 
-        <div className="divide-y border rounded">
+        <div className="divide-y border ">
           {fields.map((f) => {
             const locked = LOCKED_FIELDS.includes(f.key);
             const showRequired = requiredApplies(f.key);
@@ -102,7 +102,7 @@ export function BuyerFieldsManager({
                     {BUYER_FIELD_LABELS[f.key]}
                   </span>
                   {locked && (
-                    <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                    <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 bg-muted text-muted-foreground">
                       always on
                     </span>
                   )}
@@ -140,8 +140,8 @@ export function BuyerFieldsManager({
           })}
         </div>
 
-        {err && <p className="text-xs text-red-600">{err}</p>}
-        {msg && !dirty && <p className="text-xs text-green-600">{msg}</p>}
+        {err && <p className="text-xs text-destructive">{err}</p>}
+        {msg && !dirty && <p className="text-xs text-grass-text">{msg}</p>}
 
         {dirty && (
           <div className="flex items-center gap-2 border-t pt-3">

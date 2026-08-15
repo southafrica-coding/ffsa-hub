@@ -87,7 +87,7 @@ export function CheckInTab({
             <div className="flex gap-2">
               <Link
                 href={`/events/${eventId}/check-in`}
-                className="inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 text-sm font-medium"
+                className="inline-flex items-center justify-center bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 text-sm font-medium"
               >
                 Open scanner
               </Link>
@@ -95,7 +95,7 @@ export function CheckInTab({
                 href={`/events/${eventId}/check-in`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center justify-center rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground px-4 py-2 text-sm font-medium"
+                className="inline-flex items-center justify-center border border-input bg-background hover:bg-accent hover:text-accent-foreground px-4 py-2 text-sm font-medium"
               >
                 New window
               </Link>
@@ -120,7 +120,7 @@ export function CheckInTab({
               <CardTitle className="text-base">Attendance roster</CardTitle>
               <a
                 href={`/api/events/${eventId}/attendees/export`}
-                className="text-xs text-blue-600 hover:underline"
+                className="text-xs text-ink hover:underline"
               >
                 Export attendees (CSV)
               </a>
