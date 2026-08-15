@@ -24,9 +24,18 @@ export default async function AdminLayout({
         initials={initials}
       />
       <main className="flex-1 overflow-y-auto bg-background pt-14 md:pt-0">
-        <div className="mx-auto max-w-6xl px-4 md:px-6 py-6 md:py-8 animate-fade-up">
-          <AutoRefresh />
-          <BackButton />
+        {/*
+          Redesign transition: migrated screens render edge-to-edge (their own
+          Masthead spans the full workspace). Screens not yet recomposed keep
+          the old centred, padded page box — `.admin-content` in globals.css
+          applies it to any root child that isn't marked `.ffsa-screen`.
+          When every screen is migrated, drop the rule and this comment.
+        */}
+        <div className="admin-content animate-fade-up">
+          <div className="mx-auto max-w-6xl px-4 md:px-6 pt-6 md:pt-8">
+            <AutoRefresh />
+            <BackButton />
+          </div>
           <ProfileCompletionGate>{children}</ProfileCompletionGate>
         </div>
       </main>

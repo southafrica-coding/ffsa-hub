@@ -27,8 +27,8 @@ export function SchoolsPipelineCard() {
           className="grid grid-cols-2"
           style={{
             padding: "1rem 1.5rem",
-            borderBottom: "1px solid hsl(22 8% 13%)",
-            background: "hsl(42 95% 55% / 0.04)",
+            borderBottom: "1px solid var(--rule)",
+            background: "var(--surface-2)",
             gap: "1rem",
           }}
         >
@@ -50,10 +50,10 @@ export function SchoolsPipelineCard() {
           <Link
             key={p.id}
             href={`/schools/${p.id}`}
-            className="block transition-colors duration-150 hover:bg-[hsl(22_8%_11%)]"
+            className="block transition-colors duration-150 hover:bg-[color:var(--surface-2)]"
             style={{
               padding: "0.9rem 1.5rem",
-              borderBottom: "1px solid hsl(22 8% 11%)",
+              borderBottom: "1px solid var(--surface-2)",
             }}
           >
             <div className="flex items-baseline justify-between" style={{ gap: "1rem" }}>
@@ -61,7 +61,7 @@ export function SchoolsPipelineCard() {
                 style={{
                   fontSize: "13px",
                   fontWeight: 500,
-                  color: "#F0EBE3",
+                  color: "var(--text-primary)",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
                   whiteSpace: "nowrap",
@@ -72,7 +72,7 @@ export function SchoolsPipelineCard() {
               <p
                 style={{
                   fontSize: "10px",
-                  color: "hsl(30 8% 45%)",
+                  color: "var(--text-tertiary)",
                   whiteSpace: "nowrap",
                   letterSpacing: "0.05em",
                 }}
@@ -93,8 +93,8 @@ export function SchoolsPipelineCard() {
 
 function Funnel({ program: p }: { program: ProgramAnalytics }) {
   const stages = [
-    { label: "Applied", value: p.applications, color: "hsl(30 8% 40%)" },
-    { label: "Accepted", value: p.accepted, color: "hsl(42 95% 55%)" },
+    { label: "Applied", value: p.applications, color: "var(--text-tertiary)" },
+    { label: "Accepted", value: p.accepted, color: "var(--ink)" },
     { label: "Enrolled", value: p.enrolled, color: "hsl(160 50% 42%)" },
     { label: "Arrived", value: p.arrived, color: "hsl(160 60% 55%)" },
   ];
@@ -113,7 +113,7 @@ function Funnel({ program: p }: { program: ProgramAnalytics }) {
               fontSize: "8px",
               letterSpacing: "0.14em",
               fontWeight: 700,
-              color: "hsl(30 8% 38%)",
+              color: "var(--text-tertiary)",
               textTransform: "uppercase",
               width: "52px",
               flexShrink: 0,
@@ -125,7 +125,7 @@ function Funnel({ program: p }: { program: ProgramAnalytics }) {
             style={{
               flex: 1,
               height: "6px",
-              background: "hsl(22 8% 13%)",
+              background: "var(--rule)",
               borderRadius: "3px",
               overflow: "hidden",
             }}
@@ -142,7 +142,7 @@ function Funnel({ program: p }: { program: ProgramAnalytics }) {
           <span
             style={{
               fontSize: "11px",
-              color: "#F0EBE3",
+              color: "var(--text-primary)",
               width: "34px",
               textAlign: "right",
               flexShrink: 0,
@@ -172,7 +172,7 @@ function RateCell({
           fontSize: "9px",
           letterSpacing: "0.18em",
           fontWeight: 700,
-          color: "hsl(30 8% 45%)",
+          color: "var(--text-tertiary)",
           textTransform: "uppercase",
           marginBottom: "3px",
         }}
@@ -184,13 +184,13 @@ function RateCell({
           fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase",
           fontSize: "1.9rem",
           lineHeight: 1,
-          color: "hsl(42 95% 58%)",
+          color: "var(--ink)",
         }}
       >
         {value === null ? "—" : `${value}`}
         {value !== null && <span style={{ fontSize: "1rem" }}>%</span>}
       </p>
-      <p style={{ fontSize: "9px", color: "hsl(30 8% 35%)", marginTop: "3px" }}>
+      <p style={{ fontSize: "9px", color: "var(--text-tertiary)", marginTop: "3px" }}>
         {hint}
       </p>
     </div>

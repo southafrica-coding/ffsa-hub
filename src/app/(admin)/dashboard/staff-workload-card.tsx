@@ -58,26 +58,26 @@ export function StaffWorkloadCard() {
   return (
     <div
       style={{
-        background: "hsl(22 10% 8%)",
-        border: "1px solid hsl(22 8% 14%)",
-        borderRadius: "14px",
+        background: "var(--surface-1)",
+        border: "1px solid var(--rule)",
+        borderRadius: 0,
         overflow: "hidden",
       }}
     >
       <div
-        style={{ padding: "1.25rem 1.5rem", borderBottom: "1px solid hsl(22 8% 13%)" }}
+        style={{ padding: "1.25rem 1.5rem", borderBottom: "1px solid var(--rule)" }}
       >
         <p
           style={{
             fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase",
             fontSize: "1.15rem",
             letterSpacing: "0.07em",
-            color: "#F0EBE3",
+            color: "var(--text-primary)",
           }}
         >
           Staff Workload
         </p>
-        <p style={{ fontSize: "11px", color: "hsl(30 8% 42%)", marginTop: "2px" }}>
+        <p style={{ fontSize: "11px", color: "var(--text-tertiary)", marginTop: "2px" }}>
           Active applications + enrolled students per staff member
         </p>
       </div>
@@ -88,22 +88,22 @@ export function StaffWorkloadCard() {
           return (
             <div
               key={r.user.id}
-              style={{ padding: "0.75rem 1.5rem", borderBottom: "1px solid hsl(22 8% 11%)" }}
+              style={{ padding: "0.75rem 1.5rem", borderBottom: "1px solid var(--surface-2)" }}
             >
               <div className="flex items-center justify-between" style={{ marginBottom: "6px" }}>
-                <p style={{ fontSize: "13px", fontWeight: 500, color: "#F0EBE3" }}>
+                <p style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-primary)" }}>
                   {staffLabel(r.user)}
                 </p>
-                <p style={{ fontSize: "11px", color: "hsl(30 8% 55%)" }}>
-                  <span style={{ color: "hsl(42 95% 55%)" }}>{r.applications}</span> apps ·{" "}
-                  <span style={{ color: "#F0EBE3" }}>{r.enrollments}</span> students
+                <p style={{ fontSize: "11px", color: "var(--text-secondary)" }}>
+                  <span style={{ color: "var(--ink)" }}>{r.applications}</span> apps ·{" "}
+                  <span style={{ color: "var(--text-primary)" }}>{r.enrollments}</span> students
                 </p>
               </div>
               <div
                 style={{
                   height: "4px",
-                  borderRadius: "999px",
-                  background: "hsl(22 8% 13%)",
+                  borderRadius: 0,
+                  background: "var(--rule)",
                   overflow: "hidden",
                 }}
               >
@@ -112,7 +112,7 @@ export function StaffWorkloadCard() {
                     height: "100%",
                     width: `${width}%`,
                     background:
-                      "linear-gradient(90deg, hsl(42 95% 55%), hsl(42 95% 65%))",
+                      "linear-gradient(90deg, var(--ink), var(--ink))",
                   }}
                 />
               </div>

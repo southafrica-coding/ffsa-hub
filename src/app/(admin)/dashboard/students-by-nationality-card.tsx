@@ -38,7 +38,7 @@ export function StudentsByNationalityCard() {
         className="flex items-center justify-between flex-wrap"
         style={{
           padding: "0.75rem 1.5rem",
-          borderBottom: "1px solid hsl(22 8% 13%)",
+          borderBottom: "1px solid var(--rule)",
           gap: "0.5rem",
         }}
       >
@@ -74,7 +74,7 @@ export function StudentsByNationalityCard() {
                 <span
                   style={{
                     fontSize: "12px",
-                    color: row.country === "Unknown" ? "hsl(30 8% 42%)" : "#F0EBE3",
+                    color: row.country === "Unknown" ? "var(--text-tertiary)" : "var(--text-primary)",
                     width: "40%",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
@@ -88,7 +88,7 @@ export function StudentsByNationalityCard() {
                   style={{
                     flex: 1,
                     height: "6px",
-                    background: "hsl(22 8% 13%)",
+                    background: "var(--rule)",
                     borderRadius: "3px",
                     overflow: "hidden",
                   }}
@@ -99,8 +99,8 @@ export function StudentsByNationalityCard() {
                       height: "100%",
                       background:
                         row.country === "Unknown"
-                          ? "hsl(22 8% 28%)"
-                          : "hsl(42 95% 55%)",
+                          ? "var(--rule-strong)"
+                          : "var(--ink)",
                       borderRadius: "3px",
                     }}
                   />
@@ -108,7 +108,7 @@ export function StudentsByNationalityCard() {
                 <span
                   style={{
                     fontSize: "11px",
-                    color: "hsl(30 8% 55%)",
+                    color: "var(--text-secondary)",
                     width: "72px",
                     textAlign: "right",
                     flexShrink: 0,
@@ -127,12 +127,12 @@ export function StudentsByNationalityCard() {
               style={{
                 width: "100%",
                 padding: "0.6rem",
-                borderTop: "1px solid hsl(22 8% 11%)",
+                borderTop: "1px solid var(--surface-2)",
                 fontSize: "9px",
                 letterSpacing: "0.18em",
                 fontWeight: 700,
                 textTransform: "uppercase",
-                color: "hsl(42 95% 55%)",
+                color: "var(--ink)",
               }}
             >
               Show {remainder} more {remainder === 1 ? "country" : "countries"}
@@ -145,12 +145,12 @@ export function StudentsByNationalityCard() {
               style={{
                 width: "100%",
                 padding: "0.6rem",
-                borderTop: "1px solid hsl(22 8% 11%)",
+                borderTop: "1px solid var(--surface-2)",
                 fontSize: "9px",
                 letterSpacing: "0.18em",
                 fontWeight: 700,
                 textTransform: "uppercase",
-                color: "hsl(30 8% 45%)",
+                color: "var(--text-tertiary)",
               }}
             >
               Show less

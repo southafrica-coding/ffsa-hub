@@ -39,11 +39,11 @@ function EventRow({ ev }: { ev: CalendarEvent }) {
       href={CALENDAR_URL}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex items-center gap-4 transition-colors duration-150 hover:bg-[hsl(22_8%_11%)]"
+      className="flex items-center gap-4 transition-colors duration-150 hover:bg-[color:var(--surface-2)]"
       style={{
         padding: "0.8rem 1.5rem",
         textDecoration: "none",
-        borderBottom: "1px solid hsl(22 8% 11%)",
+        borderBottom: "1px solid var(--surface-2)",
       }}
     >
       <div
@@ -52,8 +52,8 @@ function EventRow({ ev }: { ev: CalendarEvent }) {
           height: 44,
           flexShrink: 0,
           borderRadius: 10,
-          background: "hsl(42 95% 55% / 0.12)",
-          color: "hsl(42 95% 58%)",
+          background: "var(--surface-3)",
+          color: "var(--ink)",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
@@ -70,14 +70,14 @@ function EventRow({ ev }: { ev: CalendarEvent }) {
       </div>
 
       <div className="min-w-0 flex-1">
-        <p className="truncate" style={{ fontSize: 14, fontWeight: 600, color: "#F0EBE3" }}>
+        <p className="truncate" style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>
           {ev.title}
         </p>
-        <p style={{ fontSize: 11.5, color: "hsl(30 8% 50%)", marginTop: 3 }}>{formatWhen(ev)}</p>
+        <p style={{ fontSize: 11.5, color: "var(--text-secondary)", marginTop: 3 }}>{formatWhen(ev)}</p>
         {ev.location && (
           <p
             className="flex items-center gap-1 truncate"
-            style={{ fontSize: 11, color: "hsl(30 8% 42%)", marginTop: 2 }}
+            style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 2 }}
           >
             <MapPin className="h-3 w-3 shrink-0" />
             <span className="truncate">{ev.location}</span>
@@ -150,7 +150,7 @@ export function UpcomingEventsWidget() {
     return (
       <div style={shell}>
         <div style={{ padding: "1.1rem 1.5rem" }}>
-          <p style={{ fontSize: "12px", color: "hsl(30 8% 42%)" }}>Loading upcoming events…</p>
+          <p style={{ fontSize: "12px", color: "var(--text-tertiary)" }}>Loading upcoming events…</p>
         </div>
       </div>
     );
@@ -165,16 +165,16 @@ export function UpcomingEventsWidget() {
 
       <div
         className="flex items-center justify-between"
-        style={{ padding: "0.85rem 1.5rem", borderBottom: "1px solid hsl(22 8% 13%)" }}
+        style={{ padding: "0.85rem 1.5rem", borderBottom: "1px solid var(--rule)" }}
       >
         <div className="flex items-center gap-2.5">
-          <CalendarDays className="h-4 w-4" style={{ color: "hsl(42 95% 58%)" }} />
+          <CalendarDays className="h-4 w-4" style={{ color: "var(--ink)" }} />
           <span
             style={{
               fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase",
               fontSize: "1.1rem",
               letterSpacing: "0.06em",
-              color: "#F0EBE3",
+              color: "var(--text-primary)",
             }}
           >
             Upcoming Events
@@ -186,7 +186,7 @@ export function UpcomingEventsWidget() {
             letterSpacing: "0.18em",
             fontWeight: 700,
             textTransform: "uppercase",
-            color: "hsl(30 8% 42%)",
+            color: "var(--text-tertiary)",
           }}
         >
           Base Calendar
@@ -228,8 +228,8 @@ export function UpcomingEventsWidget() {
 }
 
 const shell: React.CSSProperties = {
-  background: "hsl(22 10% 8%)",
-  border: "1px solid hsl(22 8% 14%)",
+  background: "var(--surface-1)",
+  border: "1px solid var(--rule)",
   borderRadius: 14,
   overflow: "hidden",
 };

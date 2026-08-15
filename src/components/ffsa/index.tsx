@@ -91,7 +91,9 @@ export function Numeral({ children, size = 54, sub }: { children: React.ReactNod
 
 /* ── KPI strip ────────────────────────────────────── */
 export function KpiStrip({ children }: { children: React.ReactNode }) {
-  return <div className="grid border-b border-ink" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>{children}</div>;
+  // Two-up on phones, four-up from md — the cells stay legible rather than
+  // crushing four 54px numerals into a 375px screen.
+  return <div className="grid grid-cols-2 border-b border-ink md:grid-cols-4">{children}</div>;
 }
 export function Kpi({ label, value, foot, lead }: { label: string; value: string; foot?: string; lead?: boolean }) {
   return (

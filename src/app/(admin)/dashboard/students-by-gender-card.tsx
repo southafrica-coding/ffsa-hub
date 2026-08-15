@@ -39,7 +39,7 @@ export function StudentsByGenderCard() {
         className="flex items-center justify-between"
         style={{
           padding: "0.75rem 1.5rem",
-          borderBottom: "1px solid hsl(22 8% 13%)",
+          borderBottom: "1px solid var(--rule)",
           gap: "1rem",
         }}
       >
@@ -65,7 +65,7 @@ export function StudentsByGenderCard() {
                 key={p.id}
                 style={{
                   padding: "0.8rem 1.5rem",
-                  borderBottom: "1px solid hsl(22 8% 11%)",
+                  borderBottom: "1px solid var(--surface-2)",
                 }}
               >
                 <div
@@ -76,7 +76,7 @@ export function StudentsByGenderCard() {
                     style={{
                       fontSize: "13px",
                       fontWeight: 500,
-                      color: "#F0EBE3",
+                      color: "var(--text-primary)",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
                       whiteSpace: "nowrap",
@@ -87,12 +87,12 @@ export function StudentsByGenderCard() {
                   <p
                     style={{
                       fontSize: "10px",
-                      color: "hsl(30 8% 45%)",
+                      color: "var(--text-tertiary)",
                       whiteSpace: "nowrap",
                     }}
                   >
                     {male} m · {female} f
-                    <span style={{ color: "hsl(30 8% 35%)" }}> · {p.total} total</span>
+                    <span style={{ color: "var(--text-tertiary)" }}> · {p.total} total</span>
                   </p>
                 </div>
                 <StackedBar

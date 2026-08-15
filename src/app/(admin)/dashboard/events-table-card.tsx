@@ -23,14 +23,14 @@ export function EventsTableCard({ events }: { events: EventRow[] }) {
             <Link
               key={event.id}
               href={`/events/${event.id}`}
-              className="flex items-center justify-between transition-colors duration-150 hover:bg-[hsl(22_8%_11%)]"
+              className="flex items-center justify-between transition-colors duration-150 hover:bg-[color:var(--surface-2)]"
               style={{ padding: "0.75rem 1.5rem" }}
             >
               <div>
-                <p style={{ fontSize: "13px", fontWeight: 500, color: "#F0EBE3" }}>
+                <p style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-primary)" }}>
                   {event.title}
                 </p>
-                <p style={{ fontSize: "11px", color: "hsl(30 8% 42%)", marginTop: "2px" }}>
+                <p style={{ fontSize: "11px", color: "var(--text-tertiary)", marginTop: "2px" }}>
                   {event.location ?? "—"}
                 </p>
               </div>
@@ -38,7 +38,7 @@ export function EventsTableCard({ events }: { events: EventRow[] }) {
                 style={{
                   fontSize: "10px",
                   letterSpacing: "0.05em",
-                  color: "hsl(42 95% 55%)",
+                  color: "var(--ink)",
                   fontWeight: 600,
                   whiteSpace: "nowrap",
                   marginLeft: "1rem",

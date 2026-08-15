@@ -15,9 +15,9 @@ export function StackedBar({
       className="flex"
       style={{
         height: "8px",
-        borderRadius: "4px",
+        borderRadius: 0,
         overflow: "hidden",
-        background: "hsl(22 8% 13%)",
+        background: "var(--rule)",
       }}
     >
       {segments
@@ -54,10 +54,10 @@ export function Legend({
               flexShrink: 0,
             }}
           />
-          <span style={{ fontSize: "10px", color: "hsl(30 8% 50%)" }}>
+          <span style={{ fontSize: "10px", color: "var(--text-secondary)" }}>
             {i.label}
           </span>
-          <span style={{ fontSize: "10px", color: "#F0EBE3", fontWeight: 600 }}>
+          <span style={{ fontSize: "10px", color: "var(--text-primary)", fontWeight: 600 }}>
             {i.value}
           </span>
         </div>
@@ -67,17 +67,17 @@ export function Legend({
 }
 
 export const TIER_COLORS = {
-  A: "hsl(42 95% 55%)",
+  A: "var(--ink)",
   B: "hsl(200 60% 52%)",
   C: "hsl(160 50% 45%)",
-  unknown: "hsl(22 8% 28%)",
+  unknown: "var(--rule-strong)",
 };
 
 export const GENDER_COLORS: Record<string, string> = {
   male: "hsl(200 60% 52%)",
   female: "hsl(330 65% 60%)",
-  prefer_not_to_say: "hsl(42 95% 55%)",
-  unknown: "hsl(22 8% 28%)",
+  prefer_not_to_say: "var(--ink)",
+  unknown: "var(--rule-strong)",
 };
 
 export function genderLabel(key: string): string {

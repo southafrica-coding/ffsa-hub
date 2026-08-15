@@ -79,7 +79,7 @@ export function PrayerWeekCard() {
     <div style={shell}>
       <div
         className="flex items-center justify-between"
-        style={{ padding: "0.85rem 1.5rem", borderBottom: "1px solid hsl(22 8% 13%)" }}
+        style={{ padding: "0.85rem 1.5rem", borderBottom: "1px solid var(--rule)" }}
       >
         <div className="flex items-center gap-2.5">
           <HeartHandshake className="h-4 w-4" style={{ color: "hsl(265 60% 70%)" }} />
@@ -88,7 +88,7 @@ export function PrayerWeekCard() {
               fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase",
               fontSize: "1.1rem",
               letterSpacing: "0.06em",
-              color: "#F0EBE3",
+              color: "var(--text-primary)",
             }}
           >
             Prayer Room · This Week
@@ -97,7 +97,7 @@ export function PrayerWeekCard() {
         <Link
           href="/prayer-room"
           className="flex items-center gap-1 transition-opacity hover:opacity-80"
-          style={{ fontSize: 9, letterSpacing: "0.18em", fontWeight: 700, textTransform: "uppercase", color: "hsl(30 8% 45%)" }}
+          style={{ fontSize: 9, letterSpacing: "0.18em", fontWeight: 700, textTransform: "uppercase", color: "var(--text-tertiary)" }}
         >
           Open
           <ArrowUpRight className="h-3 w-3" />
@@ -106,23 +106,23 @@ export function PrayerWeekCard() {
 
       {sets === null ? (
         <div style={{ padding: "1.1rem 1.5rem" }}>
-          <p style={{ fontSize: 12, color: "hsl(30 8% 42%)" }}>Loading this week’s schedule…</p>
+          <p style={{ fontSize: 12, color: "var(--text-tertiary)" }}>Loading this week’s schedule…</p>
         </div>
       ) : !hasAny ? (
         <div className="flex flex-col items-center justify-center gap-1.5 text-center" style={{ padding: "2rem 1.5rem" }}>
-          <p style={{ fontSize: 13, fontWeight: 500, color: "#F0EBE3" }}>No prayer sets scheduled this week</p>
+          <p style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>No prayer sets scheduled this week</p>
           <Link href="/prayer-room" style={{ fontSize: 12, color: "hsl(265 60% 72%)" }}>
             Open the Prayer Room →
           </Link>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7" style={{ gap: 1, background: "hsl(22 8% 12%)" }}>
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7" style={{ gap: 1, background: "var(--surface-2)" }}>
           {week.map((d) => {
             const key = ymd(d);
             const isToday = key === todayKey;
             const daySets = byDay[key] ?? [];
             return (
-              <div key={key} style={{ background: "hsl(22 10% 8%)", minHeight: 132, padding: "0.7rem 0.8rem" }}>
+              <div key={key} style={{ background: "var(--surface-1)", minHeight: 132, padding: "0.7rem 0.8rem" }}>
                 <div className="flex items-baseline gap-1.5" style={{ marginBottom: 8 }}>
                   <span
                     style={{
@@ -130,18 +130,18 @@ export function PrayerWeekCard() {
                       fontWeight: 700,
                       letterSpacing: "0.1em",
                       textTransform: "uppercase",
-                      color: isToday ? "hsl(42 95% 60%)" : "hsl(30 8% 45%)",
+                      color: isToday ? "var(--ink)" : "var(--text-tertiary)",
                     }}
                   >
                     {DAY_NAMES[d.getDay()]}
                   </span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: isToday ? "#F0EBE3" : "hsl(30 8% 55%)" }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: isToday ? "var(--text-primary)" : "var(--text-secondary)" }}>
                     {d.getDate()}
                   </span>
                 </div>
 
                 {daySets.length === 0 ? (
-                  <p style={{ fontSize: 11, color: "hsl(30 8% 28%)" }}>—</p>
+                  <p style={{ fontSize: 11, color: "var(--text-tertiary)" }}>—</p>
                 ) : (
                   <div className="flex flex-col gap-1.5">
                     {daySets.map((s) => {
@@ -149,29 +149,29 @@ export function PrayerWeekCard() {
                       const filled = (s.slots ?? []).filter((x) => x.status === "filled").length;
                       const tone =
                         total === 0
-                          ? "hsl(30 8% 40%)"
+                          ? "var(--text-tertiary)"
                           : filled >= total
                             ? "hsl(142 52% 62%)"
                             : filled > 0
-                              ? "hsl(42 95% 60%)"
+                              ? "var(--ink)"
                               : "hsl(0 65% 66%)";
                       return (
                         <Link
                           key={s.id}
                           href="/prayer-room"
-                          className="block transition-colors hover:bg-[hsl(22_8%_12%)]"
+                          className="block transition-colors hover:bg-[color:var(--surface-2)]"
                           style={{
                             textDecoration: "none",
                             borderRadius: 8,
-                            border: "1px solid hsl(22 8% 14%)",
+                            border: "1px solid var(--rule)",
                             padding: "5px 7px",
                           }}
                         >
-                          <p style={{ fontSize: 11, fontWeight: 600, color: "#F0EBE3", lineHeight: 1.2 }}>
+                          <p style={{ fontSize: 11, fontWeight: 600, color: "var(--text-primary)", lineHeight: 1.2 }}>
                             {hhmm(s.start_time)}
                           </p>
                           {s.title && (
-                            <p className="truncate" style={{ fontSize: 10.5, color: "hsl(30 8% 52%)", marginTop: 1 }}>
+                            <p className="truncate" style={{ fontSize: 10.5, color: "var(--text-secondary)", marginTop: 1 }}>
                               {s.title}
                             </p>
                           )}
@@ -193,8 +193,8 @@ export function PrayerWeekCard() {
 }
 
 const shell: React.CSSProperties = {
-  background: "hsl(22 10% 8%)",
-  border: "1px solid hsl(22 8% 14%)",
+  background: "var(--surface-1)",
+  border: "1px solid var(--rule)",
   borderRadius: 14,
   overflow: "hidden",
 };

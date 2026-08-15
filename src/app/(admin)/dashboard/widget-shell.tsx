@@ -17,45 +17,11 @@ export function WidgetShell({
   children: React.ReactNode;
 }) {
   return (
-    <div
-      style={{
-        background: "hsl(22 10% 8%)",
-        border: "1px solid hsl(22 8% 14%)",
-        borderRadius: "14px",
-        overflow: "hidden",
-      }}
-    >
-      <div
-        className="flex items-center justify-between"
-        style={{
-          padding: "1.25rem 1.5rem",
-          borderBottom: "1px solid hsl(22 8% 13%)",
-        }}
-      >
-        <p
-          style={{
-            fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase",
-            fontSize: "1.15rem",
-            letterSpacing: "0.07em",
-            color: "#F0EBE3",
-          }}
-        >
-          {title}
-        </p>
+    <div className="border border-ink bg-surface-1">
+      <div className="section-bar">
+        <span className="section-bar-title">{title}</span>
         {href && (
-          <Link
-            href={href}
-            style={{
-              fontSize: "9px",
-              letterSpacing: "0.2em",
-              color: "hsl(42 95% 55%)",
-              textTransform: "uppercase",
-              fontWeight: 700,
-              display: "flex",
-              alignItems: "center",
-              gap: "4px",
-            }}
-          >
+          <Link href={href} className="section-bar-meta flex items-center gap-1 !text-[var(--text-tertiary)] hover:!text-white">
             {hrefLabel} <ArrowUpRight className="h-3 w-3" />
           </Link>
         )}
@@ -79,31 +45,13 @@ export function Metric({
 }) {
   return (
     <div>
-      <p
-        style={{
-          fontSize: "9px",
-          letterSpacing: "0.18em",
-          fontWeight: 700,
-          color: "hsl(30 8% 42%)",
-          textTransform: "uppercase",
-          marginBottom: "4px",
-        }}
-      >
-        {label}
-      </p>
-      <p
-        style={{
-          fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase",
-          fontSize: "1.75rem",
-          lineHeight: 1,
-          letterSpacing: "0.02em",
-          color: accent ? "hsl(42 95% 58%)" : "#F0EBE3",
-        }}
-      >
+      <p className="mono-label mb-1">{label}</p>
+      <p className="numeral text-[28px]">
         {value === null ? "—" : value}
         {value !== null && suffix ? (
-          <span style={{ fontSize: "0.9rem", opacity: 0.65 }}>{suffix}</span>
+          <span className="text-[0.9rem] text-[color:var(--text-tertiary)]">{suffix}</span>
         ) : null}
+        {accent && <span className="ml-2 inline-block h-[3px] w-4 align-middle bg-yellow" />}
       </p>
     </div>
   );
@@ -111,15 +59,7 @@ export function Metric({
 
 export function WidgetEmpty({ children }: { children: React.ReactNode }) {
   return (
-    <p
-      style={{
-        padding: "2rem 1.5rem",
-        textAlign: "center",
-        fontSize: "12px",
-        color: "hsl(30 8% 35%)",
-        letterSpacing: "0.05em",
-      }}
-    >
+    <p className="px-6 py-8 text-center text-xs tracking-[0.05em] text-[color:var(--text-tertiary)]">
       {children}
     </p>
   );

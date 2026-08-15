@@ -67,21 +67,21 @@ export function VehiclesCard() {
               key={r.id}
               href="/bookings/vehicles"
               className="flex items-center justify-between transition-colors duration-150"
-              style={{ padding: "0.75rem 1.5rem", borderBottom: "1px solid hsl(22 8% 11%)" }}
+              style={{ padding: "0.75rem 1.5rem", borderBottom: "1px solid var(--surface-2)" }}
             >
               <div className="flex items-center gap-3" style={{ minWidth: 0 }}>
-                <Car className="h-4 w-4" style={{ color: "hsl(42 95% 55%)", flexShrink: 0 }} />
+                <Car className="h-4 w-4" style={{ color: "var(--ink)", flexShrink: 0 }} />
                 <div style={{ minWidth: 0 }}>
-                  <p style={{ fontSize: "13px", fontWeight: 500, color: "#F0EBE3" }} className="truncate">
+                  <p style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-primary)" }} className="truncate">
                     {r.requesterName ?? "Vehicle request"}
                   </p>
-                  <p style={{ fontSize: "11px", color: "hsl(30 8% 42%)", marginTop: "2px" }} className="truncate">
+                  <p style={{ fontSize: "11px", color: "var(--text-tertiary)", marginTop: "2px" }} className="truncate">
                     {purpose}
                     {span ? ` · ${span}` : ""}
                   </p>
                 </div>
               </div>
-              <ArrowUpRight className="h-3 w-3" style={{ color: "hsl(42 95% 55%)", flexShrink: 0 }} />
+              <ArrowUpRight className="h-3 w-3" style={{ color: "var(--ink)", flexShrink: 0 }} />
             </Link>
           );
         })}

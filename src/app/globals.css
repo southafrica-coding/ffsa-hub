@@ -468,6 +468,19 @@
     text-transform: uppercase; color: var(--text-primary);
   }
 
+  /* Redesign transition scaffold — see src/app/(admin)/layout.tsx.
+     Screens recomposed onto the primitives mark their root `.ffsa-screen`
+     and run edge-to-edge; everything else keeps the old centred page box.
+     Delete this rule once every admin screen is migrated. */
+  .admin-content > *:not(.ffsa-screen) {
+    max-width: 72rem;
+    margin-inline: auto;
+    padding: 0 1rem 1.5rem;
+  }
+  @media (min-width: 768px) {
+    .admin-content > *:not(.ffsa-screen) { padding: 0 1.5rem 2rem; }
+  }
+
   /* Surfaces */
   .surface-1 { background: var(--surface-1); }
   .surface-2 { background: var(--surface-2); border: 1px solid var(--rule); }

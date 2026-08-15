@@ -1,5 +1,8 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getNotifications } from "@/services/notifications";
+import { getPendingApprovalCount } from "@/services/users";
+import { Masthead, NeedsYou } from "@/components/ffsa";
 import {
   resolveLayout,
   getWidget,
@@ -54,6 +57,7 @@ export default async function DashboardPage() {
     recentRegistrations,
     upcomingEvents,
     notifications,
+    pendingApprovals,
   ] = await Promise.all([
     on("stat-cards")
       ? supabase.from("contacts").select("*", { count: "exact", head: true }).eq("status", "active")
@@ -85,6 +89,9 @@ export default async function DashboardPage() {
     authUser && on("notification-feed")
       ? getNotifications(supabase, authUser.id)
       : null,
+    // Drives the page's single yellow band. Best-effort: a failure here must
+    // never take the dashboard down, it just means no band.
+    getPendingApprovalCount(supabase).catch(() => 0),
   ]);
 
   // Every widget the layout may reference. Client widgets that fetch their own
@@ -128,37 +135,43 @@ export default async function DashboardPage() {
   }));
 
   return (
-    <div className="space-y-8 animate-fade-up">
-      {/* Page header */}
-      <div>
-        <p
-          style={{
-            fontSize: "9px",
-            letterSpacing: "0.3em",
-            fontWeight: 700,
-            color: "hsl(42 95% 55%)",
-            textTransform: "uppercase",
-            marginBottom: "4px",
-          }}
-        >
-          Operations Overview
-        </p>
-        <h1
-          style={{
-            fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase",
-            fontSize: "clamp(2.5rem, 5vw, 3.75rem)",
-            letterSpacing: "0.04em",
-            lineHeight: 1,
-            color: "#F0EBE3",
-          }}
-        >
-          Dashboard
-        </h1>
-      </div>
+    <div className="ffsa-screen">
+      <Masthead context={weekContext()} title="Dashboard" />
 
-      {slots.length === 0 ? <EmptyDashboard /> : <DashboardGrid slots={slots} nodes={nodes} />}
+      {/* The page's ONE yellow band. Never add a second. */}
+      {pendingApprovals > 0 && (
+        <NeedsYou
+          action={
+            <Link
+              href="/users?status=pending_approval"
+              className="border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-yellow"
+            >
+              Review
+            </Link>
+          }
+        >
+          {pendingApprovals === 1
+            ? "1 staff member is waiting on approval"
+            : `${pendingApprovals} staff members are waiting on approval`}
+        </NeedsYou>
+      )}
+
+      <div className="px-8 py-7">
+        {slots.length === 0 ? <EmptyDashboard /> : <DashboardGrid slots={slots} nodes={nodes} />}
+      </div>
     </div>
   );
+}
+
+/** Masthead context line — "WEEK 32 · MON 03 AUG 2026". */
+function weekContext() {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), 0, 1);
+  const week = Math.ceil(((now.getTime() - start.getTime()) / 86400000 + start.getDay() + 1) / 7);
+  const stamp = now
+    .toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric" })
+    .replace(/,/g, "");
+  return `Week ${week} · ${stamp}`;
 }
 
 // Reachable when someone switches every widget off — without this the page
@@ -169,23 +182,13 @@ function EmptyDashboard() {
       slots={[{ key: "empty", fullWidth: true }]}
       nodes={{
         empty: (
-          <div
-            style={{
-              background: "hsl(22 10% 8%)",
-              border: "1px dashed hsl(22 8% 18%)",
-              borderRadius: "14px",
-              padding: "3rem 1.5rem",
-              textAlign: "center",
-            }}
-          >
-            <p style={{ fontSize: "13px", color: "hsl(30 8% 50%)" }}>
+          <div className="border border-dashed border-rule-strong bg-surface-1 px-6 py-12 text-center">
+            <p className="text-[13px] text-[color:var(--text-secondary)]">
               {WIDGET_REGISTRY.length > 0
                 ? "Your dashboard is empty."
                 : "No widgets are available for your account."}
             </p>
-            <p style={{ fontSize: "11px", color: "hsl(30 8% 38%)", marginTop: "6px" }}>
-              Use Customise above to choose what appears here.
-            </p>
+            <p className="mono-label mt-2">Use Customise above to choose what appears here.</p>
           </div>
         ),
       }}

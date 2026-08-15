@@ -139,14 +139,14 @@ export function DashboardCustomizePanel({ onClose }: { onClose: () => void }) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ background: "hsl(22 10% 4% / 0.75)", padding: "1rem" }}
+      style={{ background: "rgba(10,10,10,0.22)", padding: "1rem" }}
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: "hsl(22 10% 8%)",
-          border: "1px solid hsl(22 8% 16%)",
+          background: "var(--surface-1)",
+          border: "1px solid var(--rule)",
           borderRadius: "16px",
           width: "100%",
           maxWidth: "560px",
@@ -160,7 +160,7 @@ export function DashboardCustomizePanel({ onClose }: { onClose: () => void }) {
           className="flex items-start justify-between"
           style={{
             padding: "1.25rem 1.5rem",
-            borderBottom: "1px solid hsl(22 8% 14%)",
+            borderBottom: "1px solid var(--rule)",
           }}
         >
           <div>
@@ -169,19 +169,19 @@ export function DashboardCustomizePanel({ onClose }: { onClose: () => void }) {
                 fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase",
                 fontSize: "1.3rem",
                 letterSpacing: "0.07em",
-                color: "#F0EBE3",
+                color: "var(--text-primary)",
               }}
             >
               Customise Dashboard
             </p>
-            <p style={{ fontSize: "11px", color: "hsl(30 8% 45%)", marginTop: "2px" }}>
+            <p style={{ fontSize: "11px", color: "var(--text-tertiary)", marginTop: "2px" }}>
               Drag to reorder. Toggle to show or hide.
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            style={{ color: "hsl(30 8% 45%)", padding: "4px" }}
+            style={{ color: "var(--text-tertiary)", padding: "4px" }}
             aria-label="Close"
           >
             <X className="h-4 w-4" />
@@ -195,7 +195,7 @@ export function DashboardCustomizePanel({ onClose }: { onClose: () => void }) {
                 padding: "2rem",
                 textAlign: "center",
                 fontSize: "12px",
-                color: "hsl(30 8% 40%)",
+                color: "var(--text-tertiary)",
               }}
             >
               Loading…
@@ -206,7 +206,7 @@ export function DashboardCustomizePanel({ onClose }: { onClose: () => void }) {
                 padding: "2rem",
                 textAlign: "center",
                 fontSize: "12px",
-                color: "hsl(30 8% 40%)",
+                color: "var(--text-tertiary)",
               }}
             >
               No widgets available for your account.
@@ -251,7 +251,7 @@ export function DashboardCustomizePanel({ onClose }: { onClose: () => void }) {
           className="flex items-center justify-between"
           style={{
             padding: "1rem 1.5rem",
-            borderTop: "1px solid hsl(22 8% 14%)",
+            borderTop: "1px solid var(--rule)",
             gap: "0.75rem",
           }}
         >
@@ -264,7 +264,7 @@ export function DashboardCustomizePanel({ onClose }: { onClose: () => void }) {
               letterSpacing: "0.18em",
               fontWeight: 700,
               textTransform: "uppercase",
-              color: "hsl(30 8% 45%)",
+              color: "var(--text-tertiary)",
             }}
           >
             Reset to default
@@ -276,13 +276,13 @@ export function DashboardCustomizePanel({ onClose }: { onClose: () => void }) {
               disabled={saving}
               style={{
                 padding: "8px 14px",
-                borderRadius: "8px",
-                border: "1px solid hsl(22 8% 18%)",
+                borderRadius: 0,
+                border: "1px solid var(--rule)",
                 fontSize: "9px",
                 letterSpacing: "0.18em",
                 fontWeight: 700,
                 textTransform: "uppercase",
-                color: "hsl(30 8% 55%)",
+                color: "var(--text-secondary)",
               }}
             >
               Cancel
@@ -295,13 +295,13 @@ export function DashboardCustomizePanel({ onClose }: { onClose: () => void }) {
               style={{
                 gap: "6px",
                 padding: "8px 16px",
-                borderRadius: "8px",
-                background: "hsl(42 95% 55%)",
+                borderRadius: 0,
+                background: "var(--ink)",
                 fontSize: "9px",
                 letterSpacing: "0.18em",
                 fontWeight: 700,
                 textTransform: "uppercase",
-                color: "hsl(22 30% 10%)",
+                color: "#FFFFFF",
                 opacity: saving ? 0.6 : 1,
               }}
             >
@@ -336,9 +336,9 @@ function SortableWidgetRow({
         alignItems: "flex-start",
         gap: "0.6rem",
         padding: "0.7rem 0.75rem",
-        borderRadius: "10px",
-        border: "1px solid hsl(22 8% 14%)",
-        background: row.enabled ? "hsl(22 10% 10%)" : "hsl(22 10% 8%)",
+        borderRadius: 0,
+        border: "1px solid var(--rule)",
+        background: row.enabled ? "var(--surface-1)" : "var(--surface-1)",
       }}
     >
       <button
@@ -347,14 +347,14 @@ function SortableWidgetRow({
         {...listeners}
         aria-label={`Reorder ${row.title}`}
         className="cursor-grab active:cursor-grabbing"
-        style={{ color: "hsl(30 8% 35%)", paddingTop: "2px" }}
+        style={{ color: "var(--text-tertiary)", paddingTop: "2px" }}
       >
         <GripVertical className="h-4 w-4" />
       </button>
 
       <div style={{ flex: 1, minWidth: 0, opacity: row.enabled ? 1 : 0.5 }}>
         <div className="flex items-center" style={{ gap: "0.5rem" }}>
-          <p style={{ fontSize: "13px", fontWeight: 500, color: "#F0EBE3" }}>
+          <p style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-primary)" }}>
             {row.title}
           </p>
           <span
@@ -363,10 +363,10 @@ function SortableWidgetRow({
               letterSpacing: "0.14em",
               fontWeight: 700,
               textTransform: "uppercase",
-              color: "hsl(42 95% 55%)",
-              background: "hsl(42 95% 55% / 0.1)",
+              color: "var(--ink)",
+              background: "var(--surface-3)",
               padding: "2px 6px",
-              borderRadius: "4px",
+              borderRadius: 0,
             }}
           >
             {row.category}
@@ -375,7 +375,7 @@ function SortableWidgetRow({
         <p
           style={{
             fontSize: "11px",
-            color: "hsl(30 8% 45%)",
+            color: "var(--text-tertiary)",
             marginTop: "3px",
             lineHeight: 1.4,
           }}
@@ -394,8 +394,8 @@ function SortableWidgetRow({
         style={{
           width: "36px",
           height: "20px",
-          borderRadius: "10px",
-          background: row.enabled ? "hsl(42 95% 55%)" : "hsl(22 8% 18%)",
+          borderRadius: 0,
+          background: row.enabled ? "var(--ink)" : "var(--rule)",
           position: "relative",
           flexShrink: 0,
           transition: "background 150ms",
@@ -409,8 +409,8 @@ function SortableWidgetRow({
             left: row.enabled ? "18px" : "2px",
             width: "16px",
             height: "16px",
-            borderRadius: "50%",
-            background: row.enabled ? "hsl(22 30% 10%)" : "hsl(30 8% 45%)",
+            borderRadius: 0,
+            background: row.enabled ? "var(--surface-2)" : "var(--text-tertiary)",
             transition: "left 150ms",
           }}
         />

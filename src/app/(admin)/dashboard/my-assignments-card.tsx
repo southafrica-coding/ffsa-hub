@@ -100,13 +100,13 @@ export function MyAssignmentsCard() {
     return (
       <div
         style={{
-          background: "hsl(22 10% 8%)",
-          border: "1px solid hsl(22 8% 14%)",
-          borderRadius: "14px",
+          background: "var(--surface-1)",
+          border: "1px solid var(--rule)",
+          borderRadius: 0,
           padding: "1.25rem 1.5rem",
         }}
       >
-        <p style={{ fontSize: "12px", color: "hsl(30 8% 42%)" }}>Loading your assignments…</p>
+        <p style={{ fontSize: "12px", color: "var(--text-tertiary)" }}>Loading your assignments…</p>
       </div>
     );
   }
@@ -120,22 +120,22 @@ export function MyAssignmentsCard() {
   return (
     <div
       style={{
-        background: "hsl(22 10% 8%)",
-        border: "1px solid hsl(22 8% 14%)",
-        borderRadius: "14px",
+        background: "var(--surface-1)",
+        border: "1px solid var(--rule)",
+        borderRadius: 0,
         overflow: "hidden",
       }}
     >
       <div
         className="flex items-center justify-between"
-        style={{ padding: "1.25rem 1.5rem", borderBottom: "1px solid hsl(22 8% 13%)" }}
+        style={{ padding: "1.25rem 1.5rem", borderBottom: "1px solid var(--rule)" }}
       >
         <p
           style={{
             fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase",
             fontSize: "1.15rem",
             letterSpacing: "0.07em",
-            color: "#F0EBE3",
+            color: "var(--text-primary)",
           }}
         >
           My Assignments
@@ -210,8 +210,8 @@ function AssignmentTile({
       className="flex items-center justify-between text-left transition-colors duration-150"
       style={{
         padding: "1.25rem 1.5rem",
-        background: isOpen ? "hsl(22 8% 11%)" : "transparent",
-        borderRight: "1px solid hsl(22 8% 13%)",
+        background: isOpen ? "var(--surface-2)" : "transparent",
+        borderRight: "1px solid var(--rule)",
       }}
     >
       <div className="flex items-center gap-3">
@@ -219,19 +219,19 @@ function AssignmentTile({
           style={{
             width: "36px",
             height: "36px",
-            borderRadius: "8px",
-            background: unread > 0 ? "hsl(42 95% 55% / 0.15)" : "hsl(22 8% 13%)",
+            borderRadius: 0,
+            background: unread > 0 ? "var(--surface-3)" : "var(--rule)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            color: unread > 0 ? "hsl(42 95% 55%)" : "hsl(30 8% 45%)",
+            color: unread > 0 ? "var(--ink)" : "var(--text-tertiary)",
           }}
         >
           <Icon className="h-4 w-4" />
         </div>
         <div>
-          <p style={{ fontSize: "13px", fontWeight: 500, color: "#F0EBE3" }}>{label}</p>
-          <p style={{ fontSize: "11px", color: "hsl(30 8% 42%)", marginTop: "2px" }}>
+          <p style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-primary)" }}>{label}</p>
+          <p style={{ fontSize: "11px", color: "var(--text-tertiary)", marginTop: "2px" }}>
             {total} total {unread > 0 ? `· ${unread} new` : ""}
           </p>
         </div>
@@ -244,9 +244,9 @@ function AssignmentTile({
             fontWeight: 700,
             textTransform: "uppercase",
             padding: "3px 8px",
-            borderRadius: "999px",
-            background: "hsl(42 95% 55%)",
-            color: "#0D0B09",
+            borderRadius: 0,
+            background: "var(--ink)",
+            color: "#FFFFFF",
           }}
         >
           {unread} new
@@ -263,39 +263,39 @@ function AssignmentList({
 }) {
   if (items.length === 0) {
     return (
-      <p style={{ padding: "1.5rem", textAlign: "center", fontSize: "12px", color: "hsl(30 8% 35%)" }}>
+      <p style={{ padding: "1.5rem", textAlign: "center", fontSize: "12px", color: "var(--text-tertiary)" }}>
         Nothing here yet.
       </p>
     );
   }
   return (
-    <div style={{ borderTop: "1px solid hsl(22 8% 13%)" }}>
+    <div style={{ borderTop: "1px solid var(--rule)" }}>
       {items.map((it) => (
         <Link
           key={it.id}
           href={it.href}
           className="flex items-center justify-between transition-colors duration-150"
-          style={{ padding: "0.75rem 1.5rem", borderBottom: "1px solid hsl(22 8% 11%)" }}
+          style={{ padding: "0.75rem 1.5rem", borderBottom: "1px solid var(--surface-2)" }}
         >
           <div className="flex items-center gap-2">
             {it.wasUnread && (
               <span
                 aria-hidden
-                style={{ width: 6, height: 6, borderRadius: 999, background: "hsl(42 95% 55%)", display: "inline-block" }}
+                style={{ width: 6, height: 6, borderRadius: 999, background: "var(--ink)", display: "inline-block" }}
               />
             )}
             <div>
-              <p style={{ fontSize: "13px", fontWeight: 500, color: "#F0EBE3" }}>{it.name}</p>
-              <p style={{ fontSize: "11px", color: "hsl(30 8% 42%)", marginTop: "2px" }}>{it.subtitle}</p>
+              <p style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-primary)" }}>{it.name}</p>
+              <p style={{ fontSize: "11px", color: "var(--text-tertiary)", marginTop: "2px" }}>{it.subtitle}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             {it.assignedAt && (
-              <span style={{ fontSize: "10px", color: "hsl(30 8% 42%)" }}>
+              <span style={{ fontSize: "10px", color: "var(--text-tertiary)" }}>
                 {new Date(it.assignedAt).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })}
               </span>
             )}
-            <ArrowUpRight className="h-3 w-3" style={{ color: "hsl(42 95% 55%)" }} />
+            <ArrowUpRight className="h-3 w-3" style={{ color: "var(--ink)" }} />
           </div>
         </Link>
       ))}

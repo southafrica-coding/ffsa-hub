@@ -22,8 +22,8 @@ export function SchoolsCountsCard() {
           className="grid grid-cols-3"
           style={{
             padding: "1rem 1.5rem",
-            borderBottom: "1px solid hsl(22 8% 13%)",
-            background: "hsl(42 95% 55% / 0.04)",
+            borderBottom: "1px solid var(--rule)",
+            background: "var(--surface-2)",
           }}
         >
           <TotalCell label="Applications" value={totals.applications} />
@@ -37,12 +37,12 @@ export function SchoolsCountsCard() {
           <Link
             key={p.id}
             href={`/schools/${p.id}`}
-            className="grid items-center transition-colors duration-150 hover:bg-[hsl(22_8%_11%)]"
+            className="grid items-center transition-colors duration-150 hover:bg-[color:var(--surface-2)]"
             style={{
               gridTemplateColumns: "1fr auto auto auto",
               gap: "1rem",
               padding: "0.85rem 1.5rem",
-              borderBottom: "1px solid hsl(22 8% 11%)",
+              borderBottom: "1px solid var(--surface-2)",
             }}
           >
             <div style={{ minWidth: 0 }}>
@@ -50,7 +50,7 @@ export function SchoolsCountsCard() {
                 style={{
                   fontSize: "13px",
                   fontWeight: 500,
-                  color: "#F0EBE3",
+                  color: "var(--text-primary)",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
                   whiteSpace: "nowrap",
@@ -61,14 +61,14 @@ export function SchoolsCountsCard() {
               <p
                 style={{
                   fontSize: "10px",
-                  color: "hsl(30 8% 42%)",
+                  color: "var(--text-tertiary)",
                   marginTop: "2px",
                   letterSpacing: "0.08em",
                 }}
               >
                 {p.code}
                 {p.inFlight > 0 && (
-                  <span style={{ color: "hsl(42 95% 55%)" }}>
+                  <span style={{ color: "var(--ink)" }}>
                     {" · "}
                     {p.inFlight} awaiting decision
                   </span>
@@ -103,7 +103,7 @@ function Count({
           fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase",
           fontSize: "1.35rem",
           lineHeight: 1,
-          color: accent ? "hsl(42 95% 58%)" : "#F0EBE3",
+          color: accent ? "var(--ink)" : "var(--text-primary)",
         }}
       >
         {value}
@@ -113,7 +113,7 @@ function Count({
           fontSize: "8px",
           letterSpacing: "0.16em",
           fontWeight: 700,
-          color: "hsl(30 8% 38%)",
+          color: "var(--text-tertiary)",
           textTransform: "uppercase",
           marginTop: "3px",
         }}
@@ -140,7 +140,7 @@ function TotalCell({
           fontSize: "9px",
           letterSpacing: "0.18em",
           fontWeight: 700,
-          color: "hsl(30 8% 45%)",
+          color: "var(--text-tertiary)",
           textTransform: "uppercase",
           marginBottom: "3px",
         }}
@@ -152,7 +152,7 @@ function TotalCell({
           fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase",
           fontSize: "1.9rem",
           lineHeight: 1,
-          color: accent ? "hsl(42 95% 58%)" : "#F0EBE3",
+          color: accent ? "var(--ink)" : "var(--text-primary)",
         }}
       >
         {value}

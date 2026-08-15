@@ -23,30 +23,18 @@ export function DashboardGrid({
 
   return (
     <>
-      <div className="flex justify-end">
+      <div className="mb-4 flex justify-end">
         <button
           type="button"
           onClick={() => setCustomizing(true)}
-          className="flex items-center transition-colors duration-150 hover:bg-[hsl(22_8%_13%)]"
-          style={{
-            gap: "6px",
-            padding: "7px 12px",
-            borderRadius: "8px",
-            border: "1px solid hsl(22 8% 16%)",
-            background: "hsl(22 10% 9%)",
-            fontSize: "9px",
-            letterSpacing: "0.2em",
-            fontWeight: 700,
-            textTransform: "uppercase",
-            color: "hsl(30 8% 55%)",
-          }}
+          className="chip transition-colors duration-150 hover:bg-bone"
         >
           <SlidersHorizontal className="h-3 w-3" />
           Customise
         </button>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
+      <div className="grid gap-5 lg:grid-cols-2 lg:items-start">
         {slots.map((slot) => {
           const node = nodes[slot.key];
           if (!node) return null;

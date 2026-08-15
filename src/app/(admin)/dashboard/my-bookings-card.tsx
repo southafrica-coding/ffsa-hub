@@ -46,10 +46,11 @@ function collapseRecurring(bookings: Booking[]): Array<Booking & { recurring: bo
   return out;
 }
 
-const STATUS_STYLE: Record<string, { bg: string; fg: string; label: string }> = {
-  approved: { bg: "hsl(142 50% 22% / 0.5)", fg: "hsl(142 52% 65%)", label: "Approved" },
-  pending: { bg: "hsl(42 95% 55% / 0.16)", fg: "hsl(42 95% 62%)", label: "Pending" },
-  denied: { bg: "hsl(0 60% 30% / 0.4)", fg: "hsl(0 70% 70%)", label: "Denied" },
+// Outlined status pills — the system never fills a pill with colour.
+const STATUS_STYLE: Record<string, { border: string; fg: string; label: string }> = {
+  approved: { border: "var(--green)", fg: "var(--green-text)", label: "Approved" },
+  pending: { border: "var(--amber-border)", fg: "var(--amber)", label: "Pending" },
+  denied: { border: "hsl(var(--destructive))", fg: "hsl(var(--destructive))", label: "Denied" },
 };
 
 function one(r: Ref | Ref[] | null): Ref | null {
@@ -89,16 +90,16 @@ export function MyBookingsCard() {
     <div style={shell}>
       <div
         className="flex items-center justify-between"
-        style={{ padding: "0.85rem 1.5rem", borderBottom: "1px solid hsl(22 8% 13%)" }}
+        style={{ padding: "0.85rem 1.5rem", borderBottom: "1px solid var(--rule)" }}
       >
         <div className="flex items-center gap-2.5">
-          <CalendarClock className="h-4 w-4" style={{ color: "hsl(42 95% 58%)" }} />
+          <CalendarClock className="h-4 w-4" style={{ color: "var(--ink)" }} />
           <span
             style={{
               fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase",
               fontSize: "1.1rem",
               letterSpacing: "0.06em",
-              color: "#F0EBE3",
+              color: "var(--text-primary)",
             }}
           >
             My Space Bookings
@@ -107,7 +108,7 @@ export function MyBookingsCard() {
         <Link
           href="/bookings"
           className="flex items-center gap-1 transition-opacity hover:opacity-80"
-          style={{ fontSize: 9, letterSpacing: "0.18em", fontWeight: 700, textTransform: "uppercase", color: "hsl(30 8% 45%)" }}
+          style={{ fontSize: 9, letterSpacing: "0.18em", fontWeight: 700, textTransform: "uppercase", color: "var(--text-tertiary)" }}
         >
           View all
           <ArrowUpRight className="h-3 w-3" />
@@ -116,18 +117,18 @@ export function MyBookingsCard() {
 
       {bookings === null ? (
         <div style={{ padding: "1.1rem 1.5rem" }}>
-          <p style={{ fontSize: 12, color: "hsl(30 8% 42%)" }}>Loading your bookings…</p>
+          <p style={{ fontSize: 12, color: "var(--text-tertiary)" }}>Loading your bookings…</p>
         </div>
       ) : bookings.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-1.5 text-center" style={{ padding: "2rem 1.5rem" }}>
-          <p style={{ fontSize: 13, fontWeight: 500, color: "#F0EBE3" }}>No upcoming bookings</p>
-          <Link href="/bookings" style={{ fontSize: 12, color: "hsl(42 95% 60%)" }}>
+          <p style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>No upcoming bookings</p>
+          <Link href="/bookings" style={{ fontSize: 12, color: "var(--ink)" }}>
             Request a space →
           </Link>
         </div>
       ) : (
         <div style={{ maxHeight: 3 * 76, overflowY: "auto" }} className="ffsa-bk-list">
-          <style>{".ffsa-bk-list{scrollbar-width:thin;scrollbar-color:hsl(22 8% 22%) transparent}"}</style>
+          <style>{".ffsa-bk-list{scrollbar-width:thin;scrollbar-color:var(--rule-strong) transparent}"}</style>
           {collapseRecurring(bookings).map((b) => {
             const venue = one(b.venue);
             const start = new Date(b.booking_date + "T00:00:00");
@@ -137,8 +138,8 @@ export function MyBookingsCard() {
               <Link
                 key={b.id}
                 href="/bookings"
-                className="flex items-center gap-4 transition-colors duration-150 hover:bg-[hsl(22_8%_11%)]"
-                style={{ padding: "0.8rem 1.5rem", textDecoration: "none", borderBottom: "1px solid hsl(22 8% 11%)" }}
+                className="flex items-center gap-4 transition-colors duration-150 hover:bg-[color:var(--surface-2)]"
+                style={{ padding: "0.8rem 1.5rem", textDecoration: "none", borderBottom: "1px solid var(--surface-2)" }}
               >
                 <div
                   style={{
@@ -146,8 +147,8 @@ export function MyBookingsCard() {
                     height: 44,
                     flexShrink: 0,
                     borderRadius: 10,
-                    background: venue?.color ? `${venue.color}22` : "hsl(42 95% 55% / 0.12)",
-                    color: venue?.color || "hsl(42 95% 58%)",
+                    background: venue?.color ? `${venue.color}22` : "var(--surface-3)",
+                    color: venue?.color || "var(--ink)",
                     display: "flex",
                     flexDirection: "column",
                     alignItems: "center",
@@ -164,12 +165,12 @@ export function MyBookingsCard() {
                 </div>
 
                 <div className="min-w-0 flex-1">
-                  <p className="truncate" style={{ fontSize: 14, fontWeight: 600, color: "#F0EBE3" }}>
+                  <p className="truncate" style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>
                     {b.title}
                   </p>
                   <p
                     className="flex items-center gap-1 truncate"
-                    style={{ fontSize: 11.5, color: "hsl(30 8% 50%)", marginTop: 3 }}
+                    style={{ fontSize: 11.5, color: "var(--text-secondary)", marginTop: 3 }}
                   >
                     <MapPin className="h-3 w-3 shrink-0" />
                     <span className="truncate">
@@ -179,7 +180,7 @@ export function MyBookingsCard() {
                   {b.recurring && (
                     <p
                       className="flex items-center gap-1"
-                      style={{ fontSize: 10.5, fontWeight: 600, color: "hsl(42 95% 60%)", marginTop: 2 }}
+                      style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink)", marginTop: 2 }}
                     >
                       <Repeat className="h-3 w-3 shrink-0" />
                       Weekly · {weekday} · next {start.toLocaleDateString("en-ZA", { day: "numeric", month: "short", timeZone: TZ })}
@@ -195,9 +196,10 @@ export function MyBookingsCard() {
                     fontWeight: 700,
                     textTransform: "uppercase",
                     padding: "3px 8px",
-                    borderRadius: 999,
-                    background: st.bg,
+                    borderRadius: 0,
+                    border: `1px solid ${st.border}`,
                     color: st.fg,
+                    fontFamily: "var(--font-mono-brand)",
                   }}
                 >
                   {st.label}
@@ -212,8 +214,8 @@ export function MyBookingsCard() {
 }
 
 const shell: React.CSSProperties = {
-  background: "hsl(22 10% 8%)",
-  border: "1px solid hsl(22 8% 14%)",
+  background: "var(--surface-1)",
+  border: "1px solid var(--rule)",
   borderRadius: 14,
   overflow: "hidden",
 };
