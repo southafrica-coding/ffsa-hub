@@ -1,13 +1,25 @@
 "use client";
 
+/**
+ * FFSA Hub — application shell
+ * REPLACES src/components/admin-sidebar.tsx
+ *
+ * Structure (from the redesign, frame 2a):
+ *   74px black icon rail   — switches AREA (Operations / Mine / System)
+ *   212px bone panel       — the modules inside the active area
+ *   white content          — the page
+ *
+ * The rail/panel split is what makes 13 modules + 6 personal tabs readable.
+ * Module data still comes from src/config/modules.ts — unchanged.
+ */
+
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils/cn";
-import { LogOut, Menu, KeyRound, RefreshCw } from "lucide-react";
-import Image from "next/image";
-import { Button } from "@/components/ui/button";
+import { LogOut, Menu, KeyRound, RefreshCw, Briefcase, User, Settings } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import {
   ADMIN_MODULES,
@@ -16,237 +28,153 @@ import {
   getAccessibleModules,
 } from "@/config/modules";
 
+type AreaId = "operations" | "personal" | "system";
+
+const AREAS: { id: AreaId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { id: "operations", label: "Operations", icon: Briefcase },
+  { id: "personal", label: "Mine", icon: User },
+  { id: "system", label: "System", icon: Settings },
+];
+
 interface AdminSidebarProps {
   userRoles: string[];
   permittedModules?: Set<string>;
-  /** Set when the user is signed in but their menu couldn't be loaded — shows a
-   *  refresh prompt instead of a misleading empty menu. */
   menuLoadFailed?: boolean;
+  /** Signed-in user's initials, shown on the rail avatar. */
+  initials?: string;
 }
 
-function NavLink({
-  href,
-  isActive,
-  icon: Icon,
-  label,
-  onClick,
+/* ── 74px black rail ── */
+function Rail({
+  area,
+  setArea,
+  initials,
+  onSignOut,
 }: {
-  href: string;
-  isActive: boolean;
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  onClick?: () => void;
+  area: AreaId;
+  setArea: (a: AreaId) => void;
+  initials: string;
+  onSignOut: () => void;
 }) {
   return (
-    <Link
-      href={href}
-      onClick={onClick}
-      className={cn(
-        "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150",
-        isActive
-          ? ""
-          : "text-muted-foreground hover:text-foreground hover:bg-white/5"
-      )}
-      style={
-        isActive
-          ? {
-              background: "hsl(42 95% 55% / 0.12)",
-              color: "hsl(42 95% 60%)",
-              borderLeft: "2px solid hsl(42 95% 55%)",
-              paddingLeft: "calc(0.75rem - 2px)",
-            }
-          : undefined
-      }
-    >
-      <Icon className="h-4 w-4 shrink-0" />
-      <span style={{ letterSpacing: "0.01em" }}>{label}</span>
-    </Link>
-  );
-}
+    <div className="hidden md:flex w-[74px] shrink-0 flex-col items-center bg-ink py-[18px] gap-1.5">
+      <Link href="/dashboard" className="mb-3.5 block">
+        <Image src="/brand/ff-mark-white.png" alt="Fire & Fragrance" width={34} height={34}
+               style={{ objectFit: "contain" }} priority />
+      </Link>
 
-function SidebarLogo({ compact = false }: { compact?: boolean }) {
-  const width = compact ? 120 : 150;
-  return (
-    <Link href="/dashboard" className="block group">
-      <Image
-        src="/brand/ff-wordmark-white.png"
-        alt="Fire & Fragrance"
-        width={width}
-        height={Math.round(width * 0.1185)}
-        style={{ objectFit: "contain", objectPosition: "left", display: "block" }}
-        priority
-      />
-      <div className="flex items-center gap-1.5 mt-2">
-        <div style={{ height: "1px", width: "12px", background: "hsl(42 95% 55%)" }} />
-        <span
-          style={{
-            fontSize: "8px",
-            letterSpacing: "0.32em",
-            fontWeight: 700,
-            color: "hsl(42 95% 55%)",
-            textTransform: "uppercase",
-          }}
-        >
-          South Africa · Hub
-        </span>
-      </div>
-    </Link>
-  );
-}
+      {AREAS.map((a) => {
+        const active = a.id === area;
+        return (
+          <button
+            key={a.id}
+            onClick={() => setArea(a.id)}
+            title={a.label}
+            className={cn(
+              "flex h-[42px] w-[42px] items-center justify-center transition-colors",
+              active ? "bg-yellow" : "hover:bg-[#1C1C1A]"
+            )}
+          >
+            <a.icon className={cn("h-[19px] w-[19px]", active ? "text-ink" : "text-[#8E8A7C]")} />
+          </button>
+        );
+      })}
 
-function SectionLabel({ label }: { label: string }) {
-  return (
-    <p
-      className="px-3 pb-1"
-      style={{
-        fontSize: "9px",
-        letterSpacing: "0.2em",
-        fontWeight: 600,
-        color: "hsl(30 8% 38%)",
-        textTransform: "uppercase",
-      }}
-    >
-      {label}
-    </p>
-  );
-}
+      <div className="flex-1" />
 
-function Divider() {
-  return <div style={{ height: "1px", background: "hsl(22 8% 12%)" }} />;
-}
-
-function MenuLoadNotice({ onRefresh }: { onRefresh: () => void }) {
-  return (
-    <div
-      className="mx-1 mb-2 rounded-lg px-3 py-2.5"
-      style={{
-        background: "hsl(42 95% 55% / 0.08)",
-        border: "1px solid hsl(42 95% 55% / 0.22)",
-      }}
-    >
-      <p className="text-xs leading-snug text-muted-foreground">
-        We couldn&apos;t load your menu just now — usually a momentary hiccup, not
-        a change to your access.
-      </p>
-      <button
-        onClick={onRefresh}
-        className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold"
-        style={{ color: "hsl(42 95% 60%)" }}
-      >
-        <RefreshCw className="h-3.5 w-3.5" />
-        Refresh menu
+      <Link href="/profile"
+            className="flex h-[34px] w-[34px] items-center justify-center bg-bone-2 font-display text-[13px] font-black text-ink">
+        {initials}
+      </Link>
+      <button onClick={onSignOut} title="Sign out"
+              className="mt-2 flex h-[34px] w-[34px] items-center justify-center hover:bg-[#1C1C1A]">
+        <LogOut className="h-[17px] w-[17px] text-[#8E8A7C]" />
       </button>
     </div>
   );
 }
 
-function NavContent({
-  visibleModules,
-  visibleSystem,
+/* ── 212px bone module panel ── */
+function ModulePanel({
+  area,
+  modules,
   pathname,
   onNavClick,
-  onSignOut,
   menuLoadFailed,
   onRefresh,
 }: {
-  visibleModules: typeof ADMIN_MODULES;
-  visibleSystem: typeof SYSTEM_MODULES;
+  area: AreaId;
+  modules: { id: string; label: string; href: string; icon: React.ComponentType<{ className?: string }> }[];
   pathname: string;
   onNavClick?: () => void;
-  onSignOut: () => void;
   menuLoadFailed?: boolean;
   onRefresh?: () => void;
 }) {
+  const title = AREAS.find((a) => a.id === area)?.label ?? "";
+
   return (
-    <>
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
-        {menuLoadFailed && onRefresh && <MenuLoadNotice onRefresh={onRefresh} />}
-        {visibleModules.map((mod) => {
-          const isActive = pathname === mod.href || pathname.startsWith(mod.href + "/");
+    <aside className="flex w-[212px] shrink-0 flex-col border-r border-ink bg-bone">
+      <div className="border-b border-ink px-[18px] pb-4 pt-5">
+        <div className="font-display text-[22px] font-black uppercase leading-none text-ink">{title}</div>
+        <div className="mono-label mt-1">FFSA Hub · Potch</div>
+      </div>
+
+      {menuLoadFailed && onRefresh && (
+        <div className="mx-2.5 mt-2.5 border border-amber-border bg-yellow-dim px-3 py-2.5">
+          <p className="text-xs leading-snug text-[#45423B]">
+            We couldn&apos;t load your menu just now — usually a momentary hiccup, not a change to your access.
+          </p>
+          <button onClick={onRefresh} className="mono-label mt-2 inline-flex items-center gap-1.5 !text-ink">
+            <RefreshCw className="h-3 w-3" /> Refresh
+          </button>
+        </div>
+      )}
+
+      <nav className="flex flex-1 flex-col gap-px overflow-y-auto p-2.5">
+        {modules.map((mod) => {
+          const active = pathname === mod.href || pathname.startsWith(mod.href + "/");
           return (
-            <NavLink
+            <Link
               key={mod.id}
               href={mod.href}
-              isActive={isActive}
-              icon={mod.icon}
-              label={mod.label}
               onClick={onNavClick}
-            />
+              className={cn(
+                "flex items-center gap-2.5 px-2.5 py-2 text-[13px] font-semibold transition-colors",
+                active ? "bg-ink text-white" : "text-[#2A2822] hover:bg-bone-3"
+              )}
+            >
+              <mod.icon className="h-[15px] w-[15px] shrink-0" />
+              <span>{mod.label}</span>
+            </Link>
           );
         })}
-
-        {visibleSystem.length > 0 && (
-          <>
-            <div style={{ height: "1px", background: "hsl(22 8% 12%)", margin: "10px 0" }} />
-            <SectionLabel label="System" />
-            {visibleSystem.map((mod) => {
-              const isActive = pathname === mod.href || pathname.startsWith(mod.href + "/");
-              return (
-                <NavLink
-                  key={mod.id}
-                  href={mod.href}
-                  isActive={isActive}
-                  icon={mod.icon}
-                  label={mod.label}
-                  onClick={onNavClick}
-                />
-              );
-            })}
-          </>
-        )}
       </nav>
 
-      <Divider />
-      <div className="px-3 py-3">
-        <SectionLabel label="Personal" />
-        <div className="space-y-0.5">
-          {PORTAL_TABS.map((tab) => {
-            const isActive = pathname === tab.href || pathname.startsWith(tab.href + "/");
-            return (
-              <NavLink
-                key={tab.id}
-                href={tab.href}
-                isActive={isActive}
-                icon={tab.icon}
-                label={tab.label}
-                onClick={onNavClick}
-              />
-            );
-          })}
-          <NavLink
-            href="/account/security"
-            isActive={pathname.startsWith("/account/security")}
-            icon={KeyRound}
-            label="Change password"
-            onClick={onNavClick}
-          />
-        </div>
-      </div>
-
-      <Divider />
-      <div className="px-3 py-3">
-        <Button
-          variant="ghost"
-          className="w-full justify-start gap-3 px-3 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent"
-          onClick={onSignOut}
-        >
-          <LogOut className="h-4 w-4" />
-          Sign out
-        </Button>
-      </div>
-    </>
+      {area === "personal" && (
+        <Link href="/account/security" onClick={onNavClick}
+              className="flex items-center gap-2.5 border-t border-ink px-[18px] py-3 text-[13px] font-semibold text-[#2A2822] hover:bg-bone-3">
+          <KeyRound className="h-[15px] w-[15px]" /> Change password
+        </Link>
+      )}
+    </aside>
   );
 }
 
-export function AdminSidebar({
-  userRoles,
-  permittedModules,
-  menuLoadFailed,
-}: AdminSidebarProps) {
+export function AdminSidebar({ userRoles, permittedModules, menuLoadFailed, initials }: AdminSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  const visibleModules = getAccessibleModules(ADMIN_MODULES, userRoles, permittedModules);
+  const visibleSystem = getAccessibleModules(SYSTEM_MODULES, userRoles, permittedModules);
+
+  // Area follows the URL so a deep link lands on the right panel.
+  const initialArea: AreaId =
+    visibleSystem.some((m) => pathname.startsWith(m.href)) ? "system"
+    : PORTAL_TABS.some((t) => pathname.startsWith(t.href)) || pathname.startsWith("/account") ? "personal"
+    : "operations";
+  const [area, setArea] = useState<AreaId>(initialArea);
 
   async function handleSignOut() {
     await supabase.auth.signOut();
@@ -254,75 +182,50 @@ export function AdminSidebar({
     router.refresh();
   }
 
-  const handleRefresh = () => router.refresh();
-
-  const visibleModules = getAccessibleModules(ADMIN_MODULES, userRoles, permittedModules);
-  const visibleSystem = getAccessibleModules(SYSTEM_MODULES, userRoles, permittedModules);
-
-  const sidebarStyle = {
-    background: "#0D0B09",
-    borderRight: "1px solid hsl(22 8% 12%)",
-  };
+  const modules =
+    area === "operations" ? visibleModules
+    : area === "system" ? visibleSystem
+    : PORTAL_TABS.map((t) => ({ ...t, icon: t.icon }));
 
   return (
     <>
-      {/* ── Desktop sidebar ── */}
-      <aside className="hidden md:flex h-screen w-60 flex-col shrink-0" style={sidebarStyle}>
-        <div className="px-5 pt-6 pb-5">
-          <SidebarLogo />
-        </div>
-        <Divider />
-        <NavContent
-          visibleModules={visibleModules}
-          visibleSystem={visibleSystem}
+      <Rail area={area} setArea={setArea} initials={initials || "·"} onSignOut={handleSignOut} />
+      <div className="hidden md:flex">
+        <ModulePanel
+          area={area}
+          modules={modules}
           pathname={pathname}
-          onSignOut={handleSignOut}
           menuLoadFailed={menuLoadFailed}
-          onRefresh={handleRefresh}
+          onRefresh={() => router.refresh()}
         />
-      </aside>
-
-      {/* ── Mobile top bar ── */}
-      <div
-        className="md:hidden fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 h-14"
-        style={{
-          background: "hsl(20 14% 5%)",
-          borderBottom: "1px solid hsl(22 8% 13%)",
-        }}
-      >
-        <SidebarLogo compact />
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-muted-foreground hover:text-foreground hover:bg-accent p-2"
-          onClick={() => setMobileOpen(true)}
-        >
-          <Menu className="h-5 w-5" />
-        </Button>
       </div>
 
-      {/* ── Mobile drawer ── */}
+      {/* ── Mobile: black top bar + drawer ── */}
+      <div className="fixed left-0 right-0 top-0 z-50 flex h-14 items-center justify-between bg-ink px-4 md:hidden">
+        <Image src="/brand/ff-wordmark-white.png" alt="Fire & Fragrance" width={120} height={14}
+               style={{ objectFit: "contain" }} priority />
+        <button onClick={() => setMobileOpen(true)} className="p-2 text-white">
+          <Menu className="h-5 w-5" />
+        </button>
+      </div>
+
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent
-          side="left"
-          className="p-0 w-72 border-r-0"
-          style={sidebarStyle}
-        >
+        <SheetContent side="left" className="w-[280px] border-r border-ink bg-bone p-0">
           <SheetTitle className="sr-only">Navigation</SheetTitle>
-          <div className="px-5 pt-6 pb-5">
-            <SidebarLogo />
-          </div>
-          <Divider />
-          <div className="flex flex-col h-[calc(100%-80px)]">
-            <NavContent
-              visibleModules={visibleModules}
-              visibleSystem={visibleSystem}
-              pathname={pathname}
-              onNavClick={() => setMobileOpen(false)}
-              onSignOut={handleSignOut}
-              menuLoadFailed={menuLoadFailed}
-              onRefresh={handleRefresh}
-            />
+          <div className="flex h-full flex-col">
+            <div className="flex gap-1 bg-ink p-2">
+              {AREAS.map((a) => (
+                <button key={a.id} onClick={() => setArea(a.id)}
+                  className={cn(
+                    "flex-1 py-2.5 font-mono text-[9px] font-bold uppercase tracking-[0.14em]",
+                    a.id === area ? "bg-yellow text-ink" : "text-[#8E8A7C]"
+                  )}>
+                  {a.label}
+                </button>
+              ))}
+            </div>
+            <ModulePanel area={area} modules={modules} pathname={pathname}
+                         onNavClick={() => setMobileOpen(false)} />
           </div>
         </SheetContent>
       </Sheet>

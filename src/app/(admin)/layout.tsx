@@ -4,6 +4,7 @@ import { ProfileCompletionGate } from "@/components/profile-completion-gate";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { BackButton } from "@/components/back-button";
 import { getSidebarAccess } from "@/lib/sidebar-access";
+import { getUserInitials } from "@/lib/user-initials";
 
 export default async function AdminLayout({
   children,
@@ -11,8 +12,8 @@ export default async function AdminLayout({
   children: React.ReactNode;
 }) {
   const supabase = await createClient();
-  const { userRoles, permittedModules, menuLoadFailed } =
-    await getSidebarAccess(supabase);
+  const [{ userRoles, permittedModules, menuLoadFailed }, initials] =
+    await Promise.all([getSidebarAccess(supabase), getUserInitials(supabase)]);
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -20,6 +21,7 @@ export default async function AdminLayout({
         userRoles={userRoles}
         permittedModules={permittedModules}
         menuLoadFailed={menuLoadFailed}
+        initials={initials}
       />
       <main className="flex-1 overflow-y-auto bg-background pt-14 md:pt-0">
         <div className="mx-auto max-w-6xl px-4 md:px-6 py-6 md:py-8 animate-fade-up">

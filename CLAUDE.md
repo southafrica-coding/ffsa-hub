@@ -248,3 +248,114 @@ Supabase runs in the cloud (no local Postgres). Migrations are applied via the S
   - **Migrations**: `supabase/migrations/001_phase1_schema.sql`, `002_rls_policies.sql`
 - Prefer additive changes (new files, new tables) over edits to existing modules.
 - If a task is ambiguous, ask before assuming. Especially around RLS policy shape, role gates, and migration ordering.
+
+---
+
+# FFSA Hub — redesign context
+
+Redesign of the FFSA Hub (Next.js admin platform in the attached `ffsa-platform` folder)
+for Fire & Fragrance South Africa. All work lives in `FFSA Hub Redesign.dc.html`,
+newest turn at the top of the canvas.
+
+## The committed direction — "MOVEMENT, QUIET" (option 2a)
+
+Light, editorial, hard-edged. Official and premium, with brand energy carried by
+type and structure rather than colour volume.
+
+- **Frame**: 74px black icon rail · 212px bone module panel (#F4F2EA) · white content
+- **Type**: Roboto Condensed Black (900, uppercase) for mastheads and numerals ·
+  Roboto for body · Roboto Mono for labels, all-caps, wide tracking (0.1–0.2em)
+- **Colour**: black #0A0A0A · bone #F4F2EA / #F1EFE7 · white · yellow #FFB801 ·
+  green #3E7F2B (positive) · amber #8A6400 (attention). Blue #000DE5 is brand but
+  mostly unused in-app.
+- **No rounded corners. No cards with shadows.** Hairline rules (#E7E4D9 / #DEDACE),
+  black bars for section headers, borders not elevation.
+- **Numerals** are Roboto Condensed 900 with `font-variant-numeric: tabular-nums`.
+- **One yellow "NEEDS YOU" band per screen**, never two — it stops working if repeated.
+- Masthead pattern: yellow tick + mono context line + huge condensed uppercase H1.
+
+Rejected: 1a PRESS (light editorial, too quiet), 1b MIDNIGHT (refined dark),
+1c MOVEMENT (the loud original — right bones, too much colour).
+
+## Brand rules
+
+- **The FFX logo is ONLY for FFX schools** (Fire and Fragrance Experience). Everywhere
+  else use the FF wordmark or mark (`brand/ff-wordmark-white.png`, `ff-mark-white.png`,
+  black variants alongside).
+- Photography is dropped in by the user via `<image-slot>` components — never invent
+  or reuse the FFX collage as texture. Existing slot ids: photo-login, photo-event-hero,
+  photo-event-hero-mobile, photo-prayer-room-*, photo-outreach-*, photo-dash-1b,
+  photo-email-nepal.
+- Voice: plain and direct, "friend talking to a friend" but not hip. "4 staff members
+  are waiting on approval" — not "4 people are waiting on your yes."
+
+## Screens built
+
+Dashboard (2a) · Events (3a) · Training (3b) · Bookings (3c) · Login (4b) ·
+Public event page + form (4c) · Mobile portal (4d) · Finance (5a) ·
+Communications (5b) · Prayer Room (8a, 9a, 9b, 10a, 10b).
+
+## Prayer Room — the most-iterated area, current state
+
+**8a is the wall.** Monday–Friday only (weekends removed). Coverage measured against
+120 hours.
+
+- Continuous **time axis**, not an hour grid: blocks are drawn to their real duration,
+  so 30-minute and 90-minute sets need no special row. Axis runs 05:00–24:00 with a
+  collapsed overnight strip per day.
+- **MORNING (08:00–09:30) / NOON (12:00–14:00) / NIGHT (17:00–19:00)** are the anchor.
+  Named in black in the gutter, tinted band across all days with 2px black rules,
+  sets inside them are **solid yellow with heavy black borders**. These will eventually
+  be curated centrally and not bookable.
+- Ordinary booked sets are **bone cards** (#F1EFE7) with time, duration, title, type
+  and lead.
+- **Unbooked time renders as nothing — white is the only "nobody has this" signal.**
+- Card layout is chosen by duration: ≥135min full (4 rows, title clamped to 2 lines),
+  ≥85min mid (title nowrap+ellipsis), <85min tight (time + title only). Column width
+  is ~127px, so titles wrap easily — always constrain them, and budget rows against
+  ~0.72px/min.
+- Blocks are inset 1.5px top/bottom so no two ever touch.
+
+**9a** — clicking a set slides a 470px drawer over the wall; the source block inverts
+to black with a yellow border. Drawer content is driven from the same block data
+(never hardcoded strings). **9b** — the curated-band state and the empty-slot claim flow.
+
+**11a/11b** — person profile with per-seat qualification; mobile prayer room (day as a
+vertical run, set lineup, "Mine"). Phone lists scroll; rows are two lines, 46px+ targets.
+
+**12a/12b** — **evaluators are a role, not a capability.** The permission is granted on the
+hub profile (Users & Roles) and can be scoped (all seats / worship / intercession / sound).
+Evaluators get a fourth tab in the prayer room holding the evaluation queue, booked
+sessions, and the evaluator list — and they are also the people who curate the Morning /
+Noon / Night bands (time, lead, weekly focus). **Evaluation notes are visible ONLY to
+evaluators and to the person they are about** — a set lead filling a seat sees the state
+(signed off / in training / not evaluated) and nothing more.
+
+**13a/13b** — every set carries a **PRAYER LEAD** and a **WORSHIP LEAD** seat. Neither is
+mandatory alone, but a set with neither is **not live**: it holds its slot on the wall as a
+dashed white block reading "NEEDS A LEAD", and its other seats are locked until someone
+leads. The two lead seats sit above the rest of the lineup, separated by a 2px black rule.
+**The two are separately evaluated qualifications** — holding worship lead says nothing
+about prayer lead.
+
+Evaluators write **two notes** per evaluation: feedback for the person (yellow left rule,
+labelled "she reads this") and an evaluators-only note (black panel, labelled "she can't
+see this"). The two look completely different on purpose. The person sees only the
+feedback, with no hint the second note exists.
+
+Wall vocabulary, complete: bone = set running · yellow = curated band · dashed white =
+set waiting on a lead · plain white = nothing there.
+
+**10a/10b** — a set is a **lineup of named seats** (set lead, co-lead, keys, acoustic,
+vocals, sound, scribe). People are evaluated and signed off per seat; the seat-filling
+picker only offers qualified people, sorted by lowest load, with clash detection.
+Members can request a specific open seat; leads get a requests inbox. A People tab
+sits beside Week and Day.
+
+## Working notes
+
+- Icons are local Lucide SVGs in `icons/`, applied as CSS masks. No CDN.
+- Density: real tables for list views, spacious mastheads. Never a card grid where a
+  table would do.
+- Mobile matters (students and volunteers) — 44px+ targets, bottom tab bar, one big
+  number per screen.
