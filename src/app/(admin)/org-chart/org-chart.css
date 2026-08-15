@@ -4,9 +4,9 @@
    ════════════════════════════════════════════════════════════ */
 
 .orgx{
-  --serif:var(--font-fraunces),Georgia,serif;
-  --sans:var(--font-hanken),system-ui,sans-serif;
-  --mono:var(--font-space-mono),monospace;
+  --serif:var(--font-roboto-condensed),'Arial Narrow',sans-serif;
+  --sans:var(--font-roboto),system-ui,sans-serif;
+  --mono:var(--font-roboto-mono),monospace;
 }
 .orgx.paper{
   --canvas:#E9E2D1; --canvas2:#E3DAC6; --dots:#CFC4A8;

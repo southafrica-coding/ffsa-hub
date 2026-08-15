@@ -194,7 +194,7 @@ export function buildGraph({ nodes, edges, expanded, query, theme = "dark" }: Bu
       id: "m-alongside", source: leadership.id, target: missio.id, type: "smoothstep",
       animated: true, label: "alongside",
       style: { stroke: accentColor("sand", theme), strokeWidth: 1.2, strokeDasharray: "5 4", opacity: 0.7 },
-      labelStyle: { fill: theme === "paper" ? "#6E674F" : "#9A9079", fontSize: 9, fontFamily: "var(--font-space-mono)", textTransform: "uppercase", letterSpacing: "0.12em" },
+      labelStyle: { fill: theme === "paper" ? "#6E674F" : "#9A9079", fontSize: 9, fontFamily: "var(--font-roboto-mono)", textTransform: "uppercase", letterSpacing: "0.12em" },
       labelBgStyle: { fill: theme === "paper" ? "#E9E2D1" : "#13110C", fillOpacity: 0.9 },
       labelBgPadding: [4, 2],
     });
@@ -215,7 +215,7 @@ export function buildGraph({ nodes, edges, expanded, query, theme = "dark" }: Bu
       id: `x-${e.id}`, source: e.source_id, target: e.target_id, type: "smoothstep",
       label: e.label ?? undefined,
       style: { stroke: color, strokeWidth: 1.25, strokeDasharray: "5 4", opacity: 0.7 },
-      labelStyle: { fill: theme === "paper" ? "#6E674F" : "#9A9079", fontSize: 9, fontFamily: "var(--font-space-mono)", textTransform: "uppercase", letterSpacing: "0.1em" },
+      labelStyle: { fill: theme === "paper" ? "#6E674F" : "#9A9079", fontSize: 9, fontFamily: "var(--font-roboto-mono)", textTransform: "uppercase", letterSpacing: "0.1em" },
       labelBgStyle: { fill: theme === "paper" ? "#E9E2D1" : "#13110C", fillOpacity: 0.85 },
       labelBgPadding: [4, 2],
     });

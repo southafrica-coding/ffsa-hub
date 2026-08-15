@@ -171,7 +171,7 @@ export function UpcomingEventsWidget() {
           <CalendarDays className="h-4 w-4" style={{ color: "hsl(42 95% 58%)" }} />
           <span
             style={{
-              fontFamily: "var(--font-bebas, 'Arial Black', sans-serif)",
+              fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase",
               fontSize: "1.1rem",
               letterSpacing: "0.06em",
               color: "#F0EBE3",

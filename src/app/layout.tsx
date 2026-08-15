@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Roboto, Roboto_Condensed, Roboto_Mono, Bebas_Neue, Anton, Space_Mono, Fraunces, Hanken_Grotesk } from "next/font/google";
+import { Roboto, Roboto_Condensed, Roboto_Mono, Bebas_Neue, Anton, Space_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
@@ -42,20 +42,6 @@ const spaceMono = Space_Mono({
   variable: "--font-space-mono",
   display: "swap",
 });
-// Editorial type system for the Org Chart module ("Rooted & Sent" look).
-const fraunces = Fraunces({
-  weight: ["400", "500", "600"],
-  style: ["normal", "italic"],
-  subsets: ["latin"],
-  variable: "--font-fraunces",
-  display: "swap",
-});
-const hanken = Hanken_Grotesk({
-  weight: ["400", "500", "600"],
-  subsets: ["latin"],
-  variable: "--font-hanken",
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   metadataBase: new URL(
@@ -83,7 +69,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${roboto.variable} ${robotoCondensed.variable} ${robotoMono.variable} ${bebasNeue.variable} ${anton.variable} ${spaceMono.variable} ${fraunces.variable} ${hanken.variable}`}>
+    <html lang="en" className={`${roboto.variable} ${robotoCondensed.variable} ${robotoMono.variable} ${bebasNeue.variable} ${anton.variable} ${spaceMono.variable}`}>
       <body className={roboto.className}>
         {children}
         <Toaster />

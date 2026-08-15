@@ -100,7 +100,7 @@ function Count({
     <div style={{ textAlign: "right", minWidth: "62px" }}>
       <p
         style={{
-          fontFamily: "var(--font-bebas, 'Arial Black', sans-serif)",
+          fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase",
           fontSize: "1.35rem",
           lineHeight: 1,
           color: accent ? "hsl(42 95% 58%)" : "#F0EBE3",
@@ -149,7 +149,7 @@ function TotalCell({
       </p>
       <p
         style={{
-          fontFamily: "var(--font-bebas, 'Arial Black', sans-serif)",
+          fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase",
           fontSize: "1.9rem",
           lineHeight: 1,
           color: accent ? "hsl(42 95% 58%)" : "#F0EBE3",

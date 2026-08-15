@@ -112,7 +112,7 @@ function SetupShell({
       >
         <h1
           style={{
-            fontFamily: "var(--font-bebas, 'Arial Black', sans-serif)",
+            fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase",
             fontSize: "2rem",
             letterSpacing: "0.04em",
             color: "#F0EBE3",

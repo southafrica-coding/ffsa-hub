@@ -145,7 +145,7 @@ export default async function DashboardPage() {
         </p>
         <h1
           style={{
-            fontFamily: "var(--font-bebas, 'Arial Black', sans-serif)",
+            fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase",
             fontSize: "clamp(2.5rem, 5vw, 3.75rem)",
             letterSpacing: "0.04em",
             lineHeight: 1,

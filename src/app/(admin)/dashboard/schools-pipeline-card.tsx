@@ -181,7 +181,7 @@ function RateCell({
       </p>
       <p
         style={{
-          fontFamily: "var(--font-bebas, 'Arial Black', sans-serif)",
+          fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase",
           fontSize: "1.9rem",
           lineHeight: 1,
           color: "hsl(42 95% 58%)",

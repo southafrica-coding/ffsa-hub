@@ -152,7 +152,7 @@ export default async function EnrollmentDetailPage({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p style={{ fontFamily: "var(--font-bebas,'Arial Black',sans-serif)", fontSize: "2.5rem", letterSpacing: "0.02em", color: "var(--yellow)", lineHeight: 1 }}>
+            <p style={{ fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase", fontSize: "2.5rem", letterSpacing: "0.02em", color: "var(--yellow)", lineHeight: 1 }}>
               {gpa !== null ? gpa.toFixed(2) : "N/A"}
             </p>
           </CardContent>
@@ -164,7 +164,7 @@ export default async function EnrollmentDetailPage({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p style={{ fontFamily: "var(--font-bebas,'Arial Black',sans-serif)", fontSize: "2.5rem", letterSpacing: "0.02em", color: "var(--yellow)", lineHeight: 1 }}>
+            <p style={{ fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase", fontSize: "2.5rem", letterSpacing: "0.02em", color: "var(--yellow)", lineHeight: 1 }}>
               {totalCreditsEarned}{" "}
               <span className="text-base font-normal text-muted-foreground">
                 / {program.credit_hours || totalCreditsAttempted}
@@ -179,7 +179,7 @@ export default async function EnrollmentDetailPage({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p style={{ fontFamily: "var(--font-bebas,'Arial Black',sans-serif)", fontSize: "2.5rem", letterSpacing: "0.02em", color: "var(--yellow)", lineHeight: 1 }}>{totalCreditsAttempted}</p>
+            <p style={{ fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase", fontSize: "2.5rem", letterSpacing: "0.02em", color: "var(--yellow)", lineHeight: 1 }}>{totalCreditsAttempted}</p>
           </CardContent>
         </Card>
       </div>

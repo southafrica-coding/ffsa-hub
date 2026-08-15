@@ -150,16 +150,17 @@ export function PublicFormShell({
           "0 1px 2px rgba(0,0,0,0.4), 0 24px 40px -24px rgba(0,0,0,0.6)",
       };
 
-  // Heading font: F&F uses Bebas (web-loaded); SEND uses Arial Black; FFSA
-  // Camps uses the heavy italic Aileron stack (falls back to Helvetica/
-  // Arial), so each lines up with its email + storefront masthead.
+  // Heading font: SEND uses Arial Black; FFSA Camps uses the heavy italic
+  // Aileron stack (falls back to Helvetica/Arial); PREACHERS uses Big
+  // Shoulders — each lines up with its email + storefront masthead. The
+  // default (F&F / hub) look is the editorial-light Roboto Condensed Black.
   const headingFontFamily = isTheSend
     ? "'Arial Black','Helvetica Neue',Arial,sans-serif"
     : isCamps
       ? "'Aileron','Helvetica Neue',Arial,sans-serif"
       : isPreachers
         ? "'Big Shoulders Display','Anton','Impact','Haettenschweiler','Arial Narrow Bold',sans-serif"
-        : "var(--font-bebas, 'Arial Black', sans-serif)";
+        : "var(--font-condensed, 'Arial Narrow', sans-serif)";
 
   return (
     <div
@@ -267,9 +268,9 @@ export function PublicFormShell({
                         : isCamps
                           ? "0.01em"
                           : "0.03em",
-                      textTransform: isTheSend || isCamps ? "uppercase" : undefined,
+                      textTransform: isPreachers ? undefined : "uppercase",
                       fontStyle: isCamps ? "italic" : undefined,
-                      fontWeight: isCamps ? 900 : undefined,
+                      fontWeight: isTheSend || isPreachers ? undefined : 900,
                       color: tk.text,
                       margin: eyebrow ? "8px 0 0" : 0,
                     }}

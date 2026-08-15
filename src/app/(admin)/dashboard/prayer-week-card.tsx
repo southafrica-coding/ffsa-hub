@@ -85,7 +85,7 @@ export function PrayerWeekCard() {
           <HeartHandshake className="h-4 w-4" style={{ color: "hsl(265 60% 70%)" }} />
           <span
             style={{
-              fontFamily: "var(--font-bebas, 'Arial Black', sans-serif)",
+              fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase",
               fontSize: "1.1rem",
               letterSpacing: "0.06em",
               color: "#F0EBE3",

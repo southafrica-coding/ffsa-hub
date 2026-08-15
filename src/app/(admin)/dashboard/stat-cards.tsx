@@ -68,7 +68,7 @@ function StatCard({
 
       <p
         style={{
-          fontFamily: "var(--font-bebas, 'Arial Black', sans-serif)",
+          fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase",
           fontSize: "3.75rem",
           lineHeight: 1,
           letterSpacing: "0.02em",

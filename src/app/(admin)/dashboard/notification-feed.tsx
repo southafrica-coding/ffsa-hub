@@ -104,7 +104,7 @@ export function NotificationFeed({ initial }: { initial: AppNotification[] }) {
           <Bell className="h-4 w-4 text-[hsl(42_95%_58%)]" />
           <span
             className="text-lg tracking-wide text-[#F0EBE3]"
-            style={{ fontFamily: "var(--font-bebas, 'Arial Black', sans-serif)", letterSpacing: "0.06em" }}
+            style={{ fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.06em" }}
           >
             Notifications
           </span>

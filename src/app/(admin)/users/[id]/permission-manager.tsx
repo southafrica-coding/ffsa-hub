@@ -237,7 +237,7 @@ function ModuleSection({
       >
         <p
           style={{
-            fontFamily: "var(--font-bebas, 'Arial Black', sans-serif)",
+            fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase",
             fontSize: "1rem",
             letterSpacing: "0.07em",
             color: "#F0EBE3",
