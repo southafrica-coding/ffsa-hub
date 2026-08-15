@@ -385,16 +385,22 @@
   /* ─── Design-system utilities ─── */
 
   /* Masthead: yellow tick + mono context line + condensed H1 */
-  .masthead { padding: 24px 32px 20px; border-bottom: 1px solid var(--ink); background: var(--surface-1); }
+  .masthead { padding: 20px 20px 16px; border-bottom: 1px solid var(--ink); background: var(--surface-1); }
+  @media (min-width: 768px) { .masthead { padding: 24px 32px 20px; } }
   .masthead-context {
     display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
     font-family: var(--font-mono-brand); font-size: 10px; font-weight: 700;
     letter-spacing: 0.2em; text-transform: uppercase; color: var(--text-secondary);
   }
   .masthead-context::before { content: ''; width: 16px; height: 3px; background: var(--yellow); flex-shrink: 0; }
+  /* 58px is the design size; it scales down on phones because screens pass
+     dynamic titles here (event and campaign names), which would otherwise
+     wrap to four lines before the content starts. */
   .masthead-title {
-    font-family: var(--font-condensed); font-weight: 900; font-size: 58px;
+    font-family: var(--font-condensed); font-weight: 900;
+    font-size: clamp(34px, 7.5vw, 58px);
     line-height: 0.9; letter-spacing: -0.01em; text-transform: uppercase; color: var(--text-primary);
+    overflow-wrap: anywhere;
   }
 
   /* Black section bar — the header for any panel or table group */
@@ -414,9 +420,11 @@
   /* The one yellow band per screen. NEVER render two. */
   .needs-you {
     display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    flex-wrap: wrap;
     background: var(--yellow); border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink);
-    padding: 13px 32px;
+    padding: 13px 20px;
   }
+  @media (min-width: 768px) { .needs-you { padding: 13px 32px; flex-wrap: nowrap; } }
   .needs-you-tag {
     font-family: var(--font-mono-brand); font-size: 9px; font-weight: 700; letter-spacing: 0.2em;
     background: var(--ink); color: var(--yellow); padding: 4px 8px; flex-shrink: 0;

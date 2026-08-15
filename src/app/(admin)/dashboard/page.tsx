@@ -146,7 +146,7 @@ export default async function DashboardPage() {
         </NeedsYou>
       )}
 
-      <div className="px-8 py-7">
+      <div className="px-5 py-6 md:px-8 md:py-7">
         {slots.length === 0 ? <EmptyDashboard /> : <DashboardGrid slots={slots} nodes={nodes} />}
       </div>
     </div>

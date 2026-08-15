@@ -16,13 +16,13 @@ export default async function OutreachFinancePage() {
     getAggregateFinancials(supabase),
   ]);
 
+  // Rendered without a wrapper: the client component's root carries
+  // `.ffsa-screen`, and that class only works on a direct child of .admin-content.
   return (
-    <div className="space-y-6">
-      <OutreachDashboardClient
-        teams={(teams ?? []) as Parameters<typeof OutreachDashboardClient>[0]["teams"]}
-        programs={(programs ?? []) as Parameters<typeof OutreachDashboardClient>[0]["programs"]}
-        aggregates={aggregates}
-      />
-    </div>
+    <OutreachDashboardClient
+      teams={(teams ?? []) as Parameters<typeof OutreachDashboardClient>[0]["teams"]}
+      programs={(programs ?? []) as Parameters<typeof OutreachDashboardClient>[0]["programs"]}
+      aggregates={aggregates}
+    />
   );
 }

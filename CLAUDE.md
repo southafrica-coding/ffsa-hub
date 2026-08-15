@@ -359,3 +359,20 @@ sits beside Week and Day.
   table would do.
 - Mobile matters (students and volunteers) — 44px+ targets, bottom tab bar, one big
   number per screen.
+
+## Redesign — rulings made while migrating screens
+
+- **What "one yellow per screen" means.** It governs *bands*: there is at most one
+  `<NeedsYou>` per page, and it is the only large yellow area. The hairline yellow
+  ticks (the masthead's rule, a lead KPI's 3px mark) are structural accents, not
+  bands, and may coexist with one. On a screen where the tick would compete with a
+  band, pass `tick={false}` to `Kpi` — finance does this.
+- **Never invent a signal to fill a band.** A `NeedsYou` must be driven by data the
+  page already fetches (or a count that already exists). Several screens correctly
+  have no band at all. Same rule for progress bars: no ratio, no bar.
+- **`.ffsa-screen`** on a page root opts it into the full-bleed workspace. Anything
+  without it keeps the old centred page box — see the transition rule in globals.css
+  and delete it once every screen is migrated.
+- **Event brand kits are out of scope.** Storefronts, email templates/chrome, brand
+  editors and per-brand fonts keep their own identity; only the admin chrome around
+  them was restyled.

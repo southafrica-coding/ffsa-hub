@@ -104,7 +104,7 @@ export function CourseBillingClient({
 
   if (configuredTiers.length === 0) {
     return (
-      <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800">
+      <div className="border border-amber-border bg-bone p-4 text-sm text-amber">
         No charge items are configured for this course yet. Add them on the
         course&apos;s billing page first, then come back to build student
         schedules.
@@ -123,7 +123,7 @@ export function CourseBillingClient({
   return (
     <Card>
       <CardContent className="pt-4">
-        <div className="rounded-lg border overflow-x-auto">
+        <div className="overflow-x-auto border border-ink">
           <Table>
             <TableHeader>
               <TableRow>
@@ -321,10 +321,10 @@ function StudentRow({
 
       {expanded && (
         <TableRow>
-          <TableCell colSpan={6} className="bg-muted/30">
+          <TableCell colSpan={6} className="bg-bone">
             <div className="p-3 space-y-3">
               {!hasArrivalDate && (
-                <p className="text-xs text-yellow-700 flex items-center gap-1">
+                <p className="text-xs text-amber flex items-center gap-1">
                   <AlertTriangle className="h-3 w-3" />
                   No arrival date set for this course — quarter payments
                   (relative-to-arrival) can&apos;t be scheduled until you set one.
@@ -334,7 +334,7 @@ function StudentRow({
               {preview?.warnings?.map((w, i) => (
                 <p
                   key={i}
-                  className="text-xs text-yellow-700 flex items-center gap-1"
+                  className="text-xs text-amber flex items-center gap-1"
                 >
                   <AlertTriangle className="h-3 w-3" /> {w}
                 </p>
@@ -394,7 +394,7 @@ function ScheduleTable({
   });
 
   return (
-    <div className="rounded-md border bg-card overflow-x-auto">
+    <div className="overflow-x-auto border border-ink">
       <Table>
         <TableHeader>
           <TableRow>

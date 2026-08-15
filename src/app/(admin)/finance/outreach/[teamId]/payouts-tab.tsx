@@ -349,7 +349,7 @@ function FundReleasesSection({
           No fund releases recorded yet.
         </p>
       ) : (
-        <div className="rounded-lg border bg-card overflow-x-auto">
+        <div className="overflow-x-auto border border-ink">
           <Table>
             <TableHeader>
               <TableRow>
@@ -702,7 +702,7 @@ function CashBatchesSection({
           No cash batches recorded yet.
         </p>
       ) : (
-        <div className="rounded-lg border bg-card overflow-x-auto">
+        <div className="overflow-x-auto border border-ink">
           <Table>
             <TableHeader>
               <TableRow>

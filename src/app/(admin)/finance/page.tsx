@@ -4,7 +4,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireModuleAccess } from "@/lib/require-permission";
 import { Globe, Wallet, CreditCard, Home } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Masthead, SectionBar, StatusPill } from "@/components/ffsa";
 import { XeroConnection } from "./xero-connection";
 
 const FINANCE_MODULES = [
@@ -44,54 +45,74 @@ export default async function FinancePage() {
   if (!user) redirect("/login");
   await requireModuleAccess(supabase, user.id, "finance");
 
+  const liveCount = FINANCE_MODULES.filter((m) => m.ready).length;
+
   return (
-    <div className="space-y-6">
-      <div>
-        <p className="page-eyebrow">FINANCIAL MANAGEMENT</p>
-        <h1 className="page-title">Finance</h1>
-      </div>
+    <div className="ffsa-screen">
+      <Masthead context="Financial management" title="Finance" />
 
-      {/* Integrations */}
-      <Suspense>
-        <XeroConnection />
-      </Suspense>
+      <div className="space-y-7 px-8 py-7">
+        <div className="border border-ink">
+          <SectionBar title="Modules" meta={`${liveCount} of ${FINANCE_MODULES.length} live`} />
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Module</TableHead>
+                <TableHead>What it covers</TableHead>
+                <TableHead className="w-[120px]">State</TableHead>
+                <TableHead className="w-[90px] text-right">Open</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {FINANCE_MODULES.map((mod) => {
+                const Icon = mod.icon;
+                return (
+                  <TableRow key={mod.title} className={mod.ready ? undefined : "opacity-55"}>
+                    <TableCell className="align-top">
+                      <div className="flex items-center gap-2.5">
+                        <Icon className="h-4 w-4 shrink-0 text-[color:var(--text-tertiary)]" />
+                        {mod.ready ? (
+                          <Link href={mod.href} className="font-display text-[19px] font-black uppercase leading-none hover:text-electric">
+                            {mod.title}
+                          </Link>
+                        ) : (
+                          <span className="font-display text-[19px] font-black uppercase leading-none">
+                            {mod.title}
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="align-top text-[13px] text-[color:var(--text-secondary)]">
+                      {mod.description}
+                    </TableCell>
+                    <TableCell className="align-top">
+                      <StatusPill tone={mod.ready ? "good" : "quiet"}>
+                        {mod.ready ? "Live" : "Soon"}
+                      </StatusPill>
+                    </TableCell>
+                    <TableCell className="align-top text-right">
+                      {mod.ready ? (
+                        <Link
+                          href={mod.href}
+                          className="inline-block border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-white"
+                        >
+                          Open
+                        </Link>
+                      ) : (
+                        <span className="mono-label">—</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {FINANCE_MODULES.map((mod) => {
-          const Icon = mod.icon;
-          const content = (
-            <Card
-              key={mod.title}
-              className={
-                mod.ready
-                  ? "card-hover cursor-pointer"
-                  : "opacity-50"
-              }
-            >
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Icon className="h-5 w-5" style={{ color: "var(--yellow)" }} />
-                  {mod.title}
-                  {!mod.ready && (
-                    <span className="ml-auto text-xs font-normal uppercase tracking-widest text-muted-foreground">
-                      Soon
-                    </span>
-                  )}
-                </CardTitle>
-                <CardDescription>{mod.description}</CardDescription>
-              </CardHeader>
-            </Card>
-          );
-
-          if (mod.ready) {
-            return (
-              <Link key={mod.title} href={mod.href}>
-                {content}
-              </Link>
-            );
-          }
-          return <div key={mod.title}>{content}</div>;
-        })}
+        {/* Integrations */}
+        <Suspense>
+          <XeroConnection />
+        </Suspense>
       </div>
     </div>
   );

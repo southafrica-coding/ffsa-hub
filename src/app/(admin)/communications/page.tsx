@@ -53,7 +53,7 @@ export default async function CommunicationsPage() {
         </NeedsYou>
       )}
 
-      <div className="px-8 py-7">
+      <div className="px-5 py-6 md:px-8 md:py-7">
         <CampaignsList
           campaigns={rows}
           labels={labels ?? []}

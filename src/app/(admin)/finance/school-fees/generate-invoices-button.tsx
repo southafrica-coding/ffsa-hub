@@ -98,7 +98,7 @@ export function GenerateInvoicesButton() {
             {invoices.map((inv, i) => (
               <div
                 key={i}
-                className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
+                className="flex items-center justify-between border border-rule-strong px-3 py-2 text-sm"
               >
                 <div>
                   <p className="font-medium">{inv.student}</p>

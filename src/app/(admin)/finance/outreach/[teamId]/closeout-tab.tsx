@@ -200,7 +200,7 @@ export function CloseoutTab({
                 className={`text-lg font-bold font-mono ${
                   Math.abs(liveVariancePct) > 2
                     ? "text-destructive"
-                    : "text-green-600"
+                    : "text-[color:var(--green-text)]"
                 }`}
               >
                 {formatCurrency(liveVariance)}
@@ -214,7 +214,7 @@ export function CloseoutTab({
             <CardContent className="pt-4">
               <p className="text-xs text-muted-foreground">Status</p>
               {willAutoClose ? (
-                <Badge className="mt-1 bg-green-100 text-green-800 hover:bg-green-100">
+                <Badge variant="default" className="mt-1">
                   Will auto-close
                 </Badge>
               ) : (
@@ -295,7 +295,7 @@ export function CloseoutTab({
           </p>
         </div>
         {isClosed && (
-          <Badge className="bg-green-100 text-green-800 hover:bg-green-100 gap-1">
+          <Badge variant="default" className="gap-1">
             <CheckCircle2 className="h-3 w-3" />
             {closeout.status === "auto_closed"
               ? "Auto-Closed"
@@ -357,7 +357,7 @@ export function CloseoutTab({
               className={`text-lg font-bold font-mono ${
                 Math.abs(Number(closeout.variance_pct)) > 2
                   ? "text-destructive"
-                  : "text-green-600"
+                  : "text-[color:var(--green-text)]"
               }`}
             >
               {formatCurrency(Number(closeout.variance))}
@@ -390,7 +390,7 @@ export function CloseoutTab({
 
       {/* Admin notes display */}
       {closeout.admin_notes && (
-        <div className="rounded-lg border p-4 bg-muted/50">
+        <div className="border border-rule-strong bg-bone p-4">
           <p className="text-xs text-muted-foreground font-medium mb-1">
             Admin Notes
           </p>
@@ -400,7 +400,7 @@ export function CloseoutTab({
 
       {/* Pending: Admin actions */}
       {isPending && (
-        <div className="rounded-lg border p-4 space-y-4">
+        <div className="border border-rule-strong p-4 space-y-4">
           <h4 className="font-medium">Admin Decision</h4>
           <p className="text-sm text-muted-foreground">
             Variance is {Number(closeout.variance_pct).toFixed(2)}% (above 2%
@@ -451,8 +451,8 @@ export function CloseoutTab({
 
       {/* Closed: Lock notice */}
       {isClosed && (
-        <div className="rounded-lg border border-green-200 bg-green-50 p-4">
-          <p className="text-sm text-green-800">
+        <div className="border border-grass bg-bone p-4">
+          <p className="text-sm text-[color:var(--green-text)]">
             This team&apos;s finances are closed. Expenses and payouts are
             locked and cannot be edited.
           </p>

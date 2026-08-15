@@ -34,7 +34,7 @@ export default async function LabelsPage() {
     <div className="ffsa-screen">
       <Masthead context="Communications" title="Labels" />
 
-      <div className="px-8 py-7">
+      <div className="px-5 py-6 md:px-8 md:py-7">
         <p className="mb-5 max-w-2xl text-[13px] text-[color:var(--text-secondary)]">
           Labels are your contact lists — a contact with label X receives
           campaigns sent to label X. Rename or recolour them, hide the ones you

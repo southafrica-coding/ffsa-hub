@@ -11,6 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ArrowRight, Download, FileArchive, Users } from "lucide-react";
+import { Bar } from "@/components/ffsa";
 
 // ────────────────────────────────────────────────────────────
 // TYPES
@@ -158,7 +159,7 @@ export function DashboardTab({
             <p className="text-xs text-muted-foreground">Remaining</p>
             <p
               className={`text-xl font-bold font-mono ${
-                remaining < 0 ? "text-destructive" : "text-green-600"
+                remaining < 0 ? "text-destructive" : "text-[color:var(--green-text)]"
               }`}
             >
               {formatCurrency(remaining)}
@@ -219,7 +220,7 @@ export function DashboardTab({
       {sortedBudgets.length > 0 && (
         <div className="space-y-2">
           <h3 className="font-medium">Budget vs Actual</h3>
-          <div className="rounded-lg border bg-card overflow-x-auto">
+          <div className="overflow-x-auto border border-ink">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -237,12 +238,14 @@ export function DashboardTab({
                   const spent = spentByCategory[b.category_id] || 0;
                   const rem = budgeted - spent;
                   const pct = budgeted > 0 ? (spent / budgeted) * 100 : 0;
-                  const barColor =
+                  // Black is the ordinary case; amber flags a category worth
+                  // watching and red one that has gone over.
+                  const barTone =
                     pct > 100
-                      ? "bg-red-500"
+                      ? "hsl(var(--destructive))"
                       : pct >= 80
-                        ? "bg-yellow-500"
-                        : "bg-green-500";
+                        ? "var(--amber-border)"
+                        : undefined;
 
                   return (
                     <TableRow key={b.id}>
@@ -266,14 +269,7 @@ export function DashboardTab({
                         {pct.toFixed(0)}%
                       </TableCell>
                       <TableCell>
-                        <div className="h-2 bg-muted rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full ${barColor}`}
-                            style={{
-                              width: `${Math.min(pct, 100)}%`,
-                            }}
-                          />
-                        </div>
+                        <Bar pct={pct} tone={barTone} />
                       </TableCell>
                     </TableRow>
                   );
@@ -324,7 +320,7 @@ export function DashboardTab({
       {dailyEntries.length > 0 && (
         <div className="space-y-2">
           <h3 className="font-medium">Daily Spending</h3>
-          <div className="rounded-lg border bg-card overflow-x-auto">
+          <div className="overflow-x-auto border border-ink">
             <Table>
               <TableHeader>
                 <TableRow>

@@ -162,8 +162,8 @@ export function ReceiptGallery({
       >
         {receiptCount > 0 ? (
           <div className="flex items-center gap-0.5">
-            <FileText className="h-4 w-4 text-green-600" />
-            <span className="text-xs text-green-600 font-medium">
+            <FileText className="h-4 w-4 text-[color:var(--green-text)]" />
+            <span className="text-xs text-[color:var(--green-text)] font-medium">
               {receiptCount}
             </span>
           </div>
@@ -188,7 +188,7 @@ export function ReceiptGallery({
               }}
               onDragLeave={() => setDragOver(false)}
               onDrop={handleDrop}
-              className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+              className={`border-2 border-dashed border-rule-strong p-6 text-center transition-colors ${
                 dragOver
                   ? "border-primary bg-primary/5"
                   : "border-muted-foreground/25"
@@ -242,7 +242,7 @@ export function ReceiptGallery({
               {receipts.map((receipt) => (
                 <div
                   key={receipt.id}
-                  className="relative group border rounded-lg overflow-hidden bg-muted/50"
+                  className="relative group overflow-hidden border border-rule-strong bg-bone"
                 >
                   {/* Preview area */}
                   {isImage(receipt.mime_type) && receipt.signed_url ? (
@@ -262,7 +262,7 @@ export function ReceiptGallery({
                       href={receipt.signed_url ?? "#"}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex flex-col items-center justify-center aspect-square hover:bg-muted transition-colors"
+                      className="flex flex-col items-center justify-center aspect-square hover:bg-bone transition-colors"
                     >
                       <FileText className="h-8 w-8 text-muted-foreground mb-1" />
                       <span className="text-xs text-muted-foreground">PDF</span>
@@ -300,7 +300,7 @@ export function ReceiptGallery({
                   {!readOnly && (
                     <button
                       onClick={() => handleDelete(receipt)}
-                      className="absolute top-1 right-1 h-6 w-6 rounded-full bg-background/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive hover:text-destructive-foreground"
+                      className="absolute top-1 right-1 h-6 w-6 bg-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive hover:text-destructive-foreground"
                     >
                       <Trash2 className="h-3 w-3" />
                     </button>
@@ -320,7 +320,7 @@ export function ReceiptGallery({
         >
           <button
             onClick={() => setPreviewUrl(null)}
-            className="absolute top-4 right-4 text-white hover:text-gray-300"
+            className="absolute top-4 right-4 text-white hover:text-[color:var(--rule-strong)]"
           >
             <X className="h-6 w-6" />
           </button>
@@ -328,7 +328,7 @@ export function ReceiptGallery({
           <img
             src={previewUrl}
             alt="Receipt preview"
-            className="max-w-full max-h-full object-contain rounded-lg"
+            className="max-w-full max-h-full object-contain"
             onClick={(e) => e.stopPropagation()}
           />
         </div>

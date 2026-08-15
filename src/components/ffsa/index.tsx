@@ -26,12 +26,14 @@ export function Masthead({
   actions?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-end justify-between gap-8 border-b border-ink bg-white px-8 pb-5 pt-6">
-      <div>
+    // Stacks on phones: actions sitting beside a 58px condensed title squeeze
+    // it to a couple of characters per line on a narrow screen.
+    <div className="flex flex-col gap-4 border-b border-ink bg-white px-5 pb-4 pt-5 md:flex-row md:items-end md:justify-between md:gap-8 md:px-8 md:pb-5 md:pt-6">
+      <div className="min-w-0">
         <div className="masthead-context">{context}</div>
         <h1 className="masthead-title">{title}</h1>
       </div>
-      {actions && <div className="flex shrink-0 items-center gap-2.5 pb-1">{actions}</div>}
+      {actions && <div className="flex shrink-0 flex-wrap items-center gap-2.5 md:pb-1">{actions}</div>}
     </div>
   );
 }
@@ -40,7 +42,7 @@ export function Masthead({
 export function NeedsYou({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
   return (
     <div className="needs-you">
-      <div className="flex items-center gap-3.5">
+      <div className="flex min-w-0 items-center gap-3.5">
         <span className="needs-you-tag">NEEDS YOU</span>
         <span className="needs-you-text">{children}</span>
       </div>
@@ -121,14 +123,45 @@ export function KpiStrip({ children }: { children: React.ReactNode }) {
   // crushing four 54px numerals into a 375px screen.
   return <div className="grid grid-cols-2 border-b border-ink md:grid-cols-4">{children}</div>;
 }
-export function Kpi({ label, value, foot, lead }: { label: string; value: string; foot?: string; lead?: boolean }) {
+export function Kpi({
+  label,
+  value,
+  foot,
+  lead,
+  tick,
+  size = 54,
+  valueColor,
+  bar,
+}: {
+  label: string;
+  value: string;
+  foot?: string;
+  /** Bone background, marking the strip's headline figure. */
+  lead?: boolean;
+  /** The yellow hairline beside a lead figure. Defaults on with `lead`; turn
+   *  it off on a screen where the accent would compete with something. */
+  tick?: boolean;
+  /** Drop to ~26 for cells holding formatted money, which won't fit at 54px. */
+  size?: number;
+  valueColor?: string;
+  /** A ratio to draw under the figure. Pass only when one really exists. */
+  bar?: { pct: number; tone?: string };
+}) {
+  const showTick = tick ?? lead;
   return (
     <div className={cn("kpi", lead && "bg-bone")}>
       <div className="mono-label mb-2.5">{label}</div>
       <div className="flex items-end gap-2.5">
-        <span className="numeral text-[54px]">{value}</span>
-        {lead && <span className="mb-2 h-[3px] w-5 bg-yellow" />}
+        <span className="numeral leading-none" style={{ fontSize: size, color: valueColor }}>
+          {value}
+        </span>
+        {showTick && <span className="mb-2 h-[3px] w-5 bg-yellow" />}
       </div>
+      {bar && (
+        <div className="mt-3.5">
+          <Bar pct={bar.pct} tone={bar.tone} />
+        </div>
+      )}
       {foot && <div className="mt-2.5 font-mono text-[10px] tracking-[0.08em] text-[#55524A]">{foot}</div>}
     </div>
   );

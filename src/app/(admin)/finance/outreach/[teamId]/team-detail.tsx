@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,8 +29,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Card, CardContent } from "@/components/ui/card";
-import { Plus, Trash2, Edit2, Users, Wallet, Receipt, Banknote, BarChart3, CheckCircle2, TrendingDown, ArrowUpRight } from "lucide-react";
+import { Plus, Trash2, Edit2, Users, Wallet, Receipt, Banknote, BarChart3, CheckCircle2 } from "lucide-react";
+import { Masthead, KpiStrip, NeedsYou, StatusPill } from "@/components/ffsa";
+import { MoneyKpi, barTone } from "../../money-kpi";
 import { ExpensesTab } from "./expenses-tab";
 import { PayoutsTab } from "./payouts-tab";
 import { DashboardTab } from "./dashboard-tab";
@@ -179,11 +179,11 @@ const TEAM_ROLES = [
   { value: "team_member", label: "Team Member" },
 ];
 
-const statusColors: Record<string, "default" | "secondary" | "destructive"> = {
-  planning: "secondary",
-  active: "default",
-  review: "secondary",
-  closed: "destructive",
+const statusTones: Record<string, "good" | "warn" | "quiet" | "bad"> = {
+  planning: "quiet",
+  active: "good",
+  review: "warn",
+  closed: "bad",
 };
 
 // ────────────────────────────────────────────────────────────
@@ -232,76 +232,83 @@ export function TeamDetail({
       (spentByCategory[exp.category_id] || 0) + Number(exp.zar_amount);
   }
 
+  const budget = Number(team.total_budget_zar);
+  const releasedPct = budget > 0 ? (totalReleased / budget) * 100 : 0;
+  const spentPct = budget > 0 ? (totalSpent / budget) * 100 : 0;
+  const budgetedPct = budget > 0 ? (totalBudgeted / budget) * 100 : 0;
+  // `remainingFunds` is measured against the CATEGORY budgets, not against cash
+  // released — the bar has to sit on the same base or it lies.
+  const heldPct = totalBudgeted > 0 ? (remainingFunds / totalBudgeted) * 100 : 0;
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="page-eyebrow">OUTREACH FINANCE</p>
-          <h1 className="page-title">{team.team_name}</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {team.programs?.name} ({team.programs?.code})
-            {team.location && ` · ${team.location}`}
-            {team.country && `, ${team.country}`}
-          </p>
-          <p className="text-sm text-muted-foreground">
-            {team.start_date && new Date(team.start_date).toLocaleDateString()}
-            {team.end_date && ` – ${new Date(team.end_date).toLocaleDateString()}`}
-            {` · ${team.people_count} people · Budget: ${formatCurrency(team.total_budget_zar)}`}
-          </p>
+    <div className="ffsa-screen">
+      <Masthead
+        context={["Outreach finance", team.programs?.code, team.location, team.country]
+          .filter(Boolean)
+          .join(" · ")}
+        title={team.team_name}
+        actions={
+          <StatusPill tone={statusTones[team.status] ?? "quiet"}>
+            {team.status}
+          </StatusPill>
+        }
+      />
+
+      {/* The page's ONE yellow band. A closeout only sits at "pending" when its
+          variance broke 2% and an admin has to approve or reject it. */}
+      {closeout?.status === "pending" && (
+        <NeedsYou>This team&apos;s closeout is waiting on your review</NeedsYou>
+      )}
+
+      <div className="space-y-6 px-8 py-7">
+        <p className="mono-label">
+          {team.programs?.name}
+          {team.start_date && ` · ${new Date(team.start_date).toLocaleDateString()}`}
+          {team.end_date && ` – ${new Date(team.end_date).toLocaleDateString()}`}
+          {` · ${team.people_count} people`}
+        </p>
+
+        {/* Summary strip */}
+        <div className="border-x border-t border-ink">
+          <KpiStrip>
+            <MoneyKpi
+              lead
+              label="Total budget"
+              value={formatCurrency(budget)}
+              pct={budgetedPct}
+              tone={barTone(budgetedPct)}
+              foot={`${formatCurrency(totalBudgeted)} allocated to categories`}
+            />
+            <MoneyKpi
+              label="Total released"
+              value={formatCurrency(totalReleased)}
+              pct={releasedPct}
+              foot={`${releasedPct.toFixed(0)}% of budget`}
+            />
+            <MoneyKpi
+              label="Total spent"
+              value={formatCurrency(totalSpent)}
+              pct={spentPct}
+              tone={barTone(spentPct)}
+              foot={`${spentPct.toFixed(0)}% of budget`}
+            />
+            <MoneyKpi
+              label="Remaining funds"
+              value={formatCurrency(remainingFunds)}
+              negative={remainingFunds < 0}
+              positive={remainingFunds >= 0}
+              pct={Math.max(0, heldPct)}
+              foot={
+                remainingFunds < 0
+                  ? "Overspent against the category budget"
+                  : `${Math.max(0, heldPct).toFixed(0)}% of the category budget unspent`
+              }
+            />
+          </KpiStrip>
         </div>
-        <Badge variant={statusColors[team.status] ?? "secondary"} className="text-sm">
-          {team.status}
-        </Badge>
-      </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <Card>
-          <CardContent className="pt-4">
-            <p className="text-xs text-muted-foreground">Total Budget</p>
-            <p className="text-lg font-bold font-mono">{formatCurrency(team.total_budget_zar)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <p className="text-xs text-muted-foreground">Budgeted by Category</p>
-            <p className="text-lg font-bold font-mono">{formatCurrency(totalBudgeted)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <p className="text-xs text-muted-foreground flex items-center gap-1">
-              <ArrowUpRight className="h-3 w-3" /> Total Released
-            </p>
-            <p className="text-lg font-bold font-mono">{formatCurrency(totalReleased)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <p className="text-xs text-muted-foreground flex items-center gap-1">
-              <TrendingDown className="h-3 w-3" /> Total Spent
-            </p>
-            <p className="text-lg font-bold font-mono">{formatCurrency(totalSpent)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <p className="text-xs text-muted-foreground">Remaining Funds</p>
-            <p className={`text-lg font-bold font-mono ${remainingFunds < 0 ? "text-destructive" : ""}`}>
-              {formatCurrency(remainingFunds)}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <p className="text-xs text-muted-foreground">People</p>
-            <p className="text-lg font-bold">{team.people_count}</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Tabs */}
-      <Tabs defaultValue="budget">
+        {/* Tabs */}
+        <Tabs defaultValue="budget">
         <TabsList className="w-full overflow-x-auto justify-start">
           <TabsTrigger value="budget" className="gap-1">
             <Wallet className="h-3 w-3" /> Budget ({budgets.length})
@@ -380,7 +387,8 @@ export function TeamDetail({
             closeout={closeout}
           />
         </TabsContent>
-      </Tabs>
+        </Tabs>
+      </div>
     </div>
   );
 }
@@ -503,7 +511,7 @@ function BudgetTab({
       </div>
 
       {showAdd && (
-        <div className="rounded-lg border p-4">
+        <div className="border border-rule-strong p-4">
           <form onSubmit={handleAddBudget} className="grid grid-cols-4 gap-3 items-end">
             <div>
               <Label>Category</Label>
@@ -559,7 +567,7 @@ function BudgetTab({
         </div>
       )}
 
-      <div className="rounded-lg border bg-card overflow-x-auto">
+      <div className="overflow-x-auto border border-ink">
         <Table>
           <TableHeader>
             <TableRow>
@@ -844,7 +852,7 @@ function MembersTab({
           No team members yet. Add members to get started.
         </p>
       ) : (
-        <div className="rounded-lg border bg-card overflow-x-auto">
+        <div className="overflow-x-auto border border-ink">
           <Table>
             <TableHeader>
               <TableRow>

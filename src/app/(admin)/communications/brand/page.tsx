@@ -52,7 +52,7 @@ export default async function BrandSettingsPage({
 
       {/* Admin chrome only. The editor below owns the per-identity email
           brand — its own fonts and colours are deliberately not restyled. */}
-      <div className="px-8 py-7">
+      <div className="px-5 py-6 md:px-8 md:py-7">
         <p className="mb-5 max-w-2xl text-[13px] text-[color:var(--text-secondary)]">
           Each sending identity has its own brand kit. Anything left blank
           falls back to a clean editorial default.

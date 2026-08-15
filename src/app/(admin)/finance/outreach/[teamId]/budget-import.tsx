@@ -348,7 +348,7 @@ export function BudgetImport({
               type="file"
               accept=".csv,.xlsx,.xls"
               onChange={handleFileChange}
-              className="mt-1 block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer"
+              className="mt-1 block w-full text-sm file:mr-4 file:py-2 file:px-4 file:border-0 file:text-sm file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer"
             />
             <p className="text-xs text-muted-foreground mt-1">
               Supports two formats: columns as category names (wide), or
@@ -359,19 +359,19 @@ export function BudgetImport({
           {rows.length > 0 && (
             <>
               <div className="flex items-center gap-4 text-sm">
-                <span className="flex items-center gap-1 text-green-600">
+                <span className="flex items-center gap-1 text-[color:var(--green-text)]">
                   <CheckCircle2 className="h-4 w-4" />
                   {matchedCount} matched
                 </span>
                 {unmatchedCount > 0 && (
-                  <span className="flex items-center gap-1 text-yellow-600">
+                  <span className="flex items-center gap-1 text-amber">
                     <AlertTriangle className="h-4 w-4" />
                     {unmatchedCount} unmatched
                   </span>
                 )}
               </div>
 
-              <div className="rounded-lg border bg-card">
+              <div className="border border-ink bg-white">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -393,7 +393,7 @@ export function BudgetImport({
                             !isMatched
                               ? {
                                   background: "hsl(42 80% 18%)",
-                                  borderLeft: "2px solid hsl(42 95% 55%)",
+                                  borderLeft: "2px solid var(--amber-border)",
                                 }
                               : undefined
                           }
@@ -403,7 +403,7 @@ export function BudgetImport({
                           </TableCell>
                           <TableCell>
                             {row.matchedCategory ? (
-                              <span className="text-green-600">
+                              <span className="text-[color:var(--green-text)]">
                                 {row.matchedCategory.name}
                               </span>
                             ) : (

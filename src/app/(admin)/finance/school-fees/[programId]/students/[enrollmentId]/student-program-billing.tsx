@@ -204,23 +204,23 @@ export function StudentProgramBilling({
             <p className="text-xs font-medium uppercase text-muted-foreground mb-1.5">
               Enrollment type
             </p>
-            <div className="inline-flex rounded-md border p-0.5">
+            <div className="inline-flex border border-ink p-0.5">
               <button
-                className={`px-3 py-1.5 text-sm rounded ${mode === "whole_program" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+                className={`px-3 py-1.5 text-sm ${mode === "whole_program" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
                 onClick={() => { setMode("whole_program"); setPreview(null); }}
                 disabled={!hasWholeProgram}
               >
                 Whole program
               </button>
               <button
-                className={`px-3 py-1.5 text-sm rounded ${mode === "individual" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+                className={`px-3 py-1.5 text-sm ${mode === "individual" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
                 onClick={() => { setMode("individual"); setPreview(null); }}
               >
                 Individual course(s)
               </button>
             </div>
             {!hasWholeProgram && (
-              <p className="text-[11px] text-yellow-700 mt-1 flex items-center gap-1">
+              <p className="text-[11px] text-amber mt-1 flex items-center gap-1">
                 <AlertTriangle className="h-3 w-3" /> No whole-program pricing set up yet (Finance → this program).
               </p>
             )}
@@ -254,7 +254,7 @@ export function StudentProgramBilling({
 
           {/* Whole-program: uses program-level pricing; Individual: pick courses */}
           {mode === "whole_program" ? (
-            <div className="rounded-md border bg-muted/20 p-3 text-sm flex items-center gap-2">
+            <div className="border border-rule bg-bone p-3 text-sm flex items-center gap-2">
               <Badge variant="default" className="text-[10px]">whole program</Badge>
               <span className="text-muted-foreground">
                 Billed from the program&apos;s whole-program pricing.
@@ -271,7 +271,7 @@ export function StudentProgramBilling({
                 segments.map((c) => {
                   const noCharges = (c.fee_charge_items?.length ?? 0) === 0;
                   return (
-                    <label key={c.id} className="flex items-center gap-3 rounded-md border bg-card px-3 py-2 cursor-pointer">
+                    <label key={c.id} className="flex items-center gap-3 border border-rule-strong bg-white px-3 py-2 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={selectedSegments.has(c.id)}
@@ -282,7 +282,7 @@ export function StudentProgramBilling({
                       <span className="font-medium text-sm">{c.name}</span>
                       <Badge variant="secondary" className="text-[10px]">{c.code}</Badge>
                       {noCharges && (
-                        <span className="text-[10px] text-yellow-700 flex items-center gap-1">
+                        <span className="text-[10px] text-amber flex items-center gap-1">
                           <AlertTriangle className="h-3 w-3" /> no charges configured
                         </span>
                       )}
@@ -310,7 +310,7 @@ export function StudentProgramBilling({
         <Card>
           <CardContent className="pt-4 space-y-3">
             {preview.warnings.map((w, i) => (
-              <p key={i} className="text-xs text-yellow-700 flex items-center gap-1">
+              <p key={i} className="text-xs text-amber flex items-center gap-1">
                 <AlertTriangle className="h-3 w-3" /> {w}
               </p>
             ))}
@@ -324,7 +324,7 @@ export function StudentProgramBilling({
             {preview.rows.length === 0 ? (
               <p className="text-sm text-muted-foreground py-2">No charges for this configuration.</p>
             ) : (
-              <div className="rounded-md border overflow-x-auto">
+              <div className="overflow-x-auto border border-ink">
                 <Table>
                   <TableHeader>
                     <TableRow>

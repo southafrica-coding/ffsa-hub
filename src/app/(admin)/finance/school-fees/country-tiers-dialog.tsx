@@ -187,7 +187,7 @@ export function CountryTiersDialog({
             filtered.map((country) => (
               <div
                 key={country.id}
-                className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-muted/50"
+                className="flex items-center justify-between px-2 py-1.5 hover:bg-bone"
               >
                 <span className="text-sm">{country.country_name}</span>
                 <div className="flex items-center gap-2">

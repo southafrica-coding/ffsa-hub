@@ -40,7 +40,7 @@ export default async function AutomationsPage() {
     <div className="ffsa-screen">
       <Masthead context="Announcements & Outreach" title="Automations" />
 
-      <div className="px-8 py-7">
+      <div className="px-5 py-6 md:px-8 md:py-7">
         <p className="mb-5 max-w-2xl text-[13px] text-[color:var(--text-secondary)]">
           Every outcome workflow across all events. Edit one on its event&apos;s
           Outcomes tab.

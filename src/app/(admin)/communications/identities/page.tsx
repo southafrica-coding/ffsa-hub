@@ -25,7 +25,7 @@ export default async function IdentitiesPage() {
     <div className="ffsa-screen">
       <Masthead context="Communications" title="Sending identities" />
 
-      <div className="px-8 py-7">
+      <div className="px-5 py-6 md:px-8 md:py-7">
         <p className="mb-5 max-w-2xl text-[13px] text-[color:var(--text-secondary)]">
           The &ldquo;From&rdquo; addresses your campaigns can send through.
           Add one per work stream (events, giving, training, etc.) so each

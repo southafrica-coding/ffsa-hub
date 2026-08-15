@@ -568,13 +568,13 @@ export function ExpensesTab({
               {/* Receipt Upload */}
               <div className="space-y-2">
                 <Label>Receipt Image(s) *</Label>
-                <div className="border-2 border-dashed rounded-lg p-4 text-center">
+                <div className="border-2 border-dashed border-rule-strong p-4 text-center">
                   {receiptFiles.length > 0 ? (
                     <div className="space-y-2">
                       {receiptFiles.map((file, idx) => (
                         <div
                           key={idx}
-                          className="flex items-center justify-between text-sm bg-muted/50 rounded px-3 py-1.5"
+                          className="flex items-center justify-between text-sm bg-bone px-3 py-1.5"
                         >
                           <span className="truncate mr-2">{file.name}</span>
                           <button
@@ -688,7 +688,7 @@ export function ExpensesTab({
           tracking.
         </p>
       ) : (
-        <div className="rounded-lg border bg-card overflow-x-auto">
+        <div className="overflow-x-auto border border-ink">
           <Table>
             <TableHeader>
               <TableRow>

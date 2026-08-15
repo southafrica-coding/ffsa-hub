@@ -75,7 +75,7 @@ export default function NewEventPage() {
     <div className="ffsa-screen">
       <Masthead context="Operations · New event" title="Create Event" />
 
-      <div className="px-8 py-7">
+      <div className="px-5 py-6 md:px-8 md:py-7">
         <div className="max-w-2xl border border-ink p-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">

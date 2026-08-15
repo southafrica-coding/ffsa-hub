@@ -321,7 +321,7 @@ function CourseCard({
           <div className="flex items-center gap-2 shrink-0">
             <Link
               href={`/finance/school-fees/${programId}/billing/${course.id}`}
-              className="inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-medium hover:bg-muted"
+              className="inline-flex items-center gap-1 border border-ink px-2.5 py-1.5 text-xs font-medium hover:bg-bone"
             >
               Student schedules <ArrowRight className="h-3 w-3" />
             </Link>
@@ -581,7 +581,7 @@ function ChargeItemsEditor({
   for (const it of items) byTier[it.tier]?.push(it);
 
   return (
-    <div className="rounded-lg border bg-muted/20 p-3">
+    <div className="border border-rule bg-bone p-3">
       <Tabs defaultValue="A">
         <TabsList>
           {TIERS.map((t) => (
@@ -681,7 +681,7 @@ function ChargeItemRow({
   }
 
   return (
-    <div className="flex items-center justify-between rounded-md border bg-card px-3 py-2">
+    <div className="flex items-center justify-between border border-rule-strong bg-white px-3 py-2">
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           <span className="font-medium text-sm">{item.label}</span>
@@ -932,7 +932,7 @@ function ChargeItemDialog({
             )}
           </div>
 
-          <div className="rounded-md border p-3 space-y-3">
+          <div className="border border-rule-strong p-3 space-y-3">
             <p className="text-xs font-medium uppercase text-muted-foreground">
               When is it due?
             </p>
@@ -1012,7 +1012,7 @@ function ChargeItemDialog({
             )}
           </div>
 
-          <div className="rounded-md border p-3 space-y-3">
+          <div className="border border-rule-strong p-3 space-y-3">
             <p className="text-xs font-medium uppercase text-muted-foreground">
               When is the invoice generated?
             </p>

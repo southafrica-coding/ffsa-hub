@@ -204,7 +204,7 @@ export default async function SchoolsPage({
         </NeedsYou>
       )}
 
-      <div className="flex flex-wrap items-center gap-1.5 border-b border-rule bg-bone px-8 py-3">
+      <div className="flex flex-wrap items-center gap-1.5 border-b border-rule bg-bone px-5 py-3 md:px-8">
         {VIEWS.map(([key, label]) => (
           <Link key={key} href={`/schools${key === "active" ? "" : `?status=${key}`}`}>
             <Chip active={statusFilter === key}>{label}</Chip>
@@ -212,7 +212,7 @@ export default async function SchoolsPage({
         ))}
       </div>
 
-      <div className="px-8 py-7">
+      <div className="px-5 py-6 md:px-8 md:py-7">
         <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_380px]">
           <ProgramsTable
             programs={rows}

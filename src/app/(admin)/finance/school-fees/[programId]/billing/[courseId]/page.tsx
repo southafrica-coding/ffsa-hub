@@ -5,6 +5,7 @@ import {
   getEnrolledStudentsForProgram,
   getBillingPlansForCourse,
 } from "@/services/school-billing";
+import { Masthead, SectionBar } from "@/components/ffsa";
 import { CourseDetailPanel } from "./course-detail-panel";
 import { CourseBillingClient } from "./course-billing-client";
 
@@ -81,36 +82,34 @@ export default async function CourseDetailPage({
   }));
 
   return (
-    <div className="space-y-6">
-      <div>
-        <p className="page-eyebrow">FINANCIAL MANAGEMENT</p>
-        <h1 className="page-title">{course.name}</h1>
-        <p className="text-sm text-muted-foreground">
-          {program.name} · course detail, roster, and per-student schedules.
-        </p>
-      </div>
+    <div className="ffsa-screen">
+      <Masthead context={`School fees · ${program.name}`} title={course.name} />
 
-      <CourseDetailPanel
-        course={course as Parameters<typeof CourseDetailPanel>[0]["course"]}
-        staff={(staff ?? []) as Parameters<typeof CourseDetailPanel>[0]["staff"]}
-        roster={roster}
-      />
-
-      <div>
-        <h2 className="text-lg font-semibold mb-1">Per-student schedules</h2>
-        <p className="text-sm text-muted-foreground mb-3">
-          Build this single course&apos;s schedule per student. For whole-program
-          students, use Student Billing instead.
-        </p>
-        <CourseBillingClient
-          courseId={courseId}
-          hasArrivalDate={!!course.arrival_date}
-          configuredTiers={configuredTiers as string[]}
-          students={
-            (students ?? []) as Parameters<typeof CourseBillingClient>[0]["students"]
-          }
-          plans={(plans ?? []) as Parameters<typeof CourseBillingClient>[0]["plans"]}
+      <div className="space-y-6 px-8 py-7">
+        <CourseDetailPanel
+          course={course as Parameters<typeof CourseDetailPanel>[0]["course"]}
+          staff={(staff ?? []) as Parameters<typeof CourseDetailPanel>[0]["staff"]}
+          roster={roster}
         />
+
+        <div className="border border-ink">
+          <SectionBar title="Per-student schedules" />
+          <div className="p-6">
+            <p className="mb-4 max-w-3xl text-[13px] text-[color:var(--text-secondary)]">
+              Build this single course&apos;s schedule per student. For
+              whole-program students, use Student Billing instead.
+            </p>
+            <CourseBillingClient
+              courseId={courseId}
+              hasArrivalDate={!!course.arrival_date}
+              configuredTiers={configuredTiers as string[]}
+              students={
+                (students ?? []) as Parameters<typeof CourseBillingClient>[0]["students"]
+              }
+              plans={(plans ?? []) as Parameters<typeof CourseBillingClient>[0]["plans"]}
+            />
+          </div>
+        </div>
       </div>
     </div>
   );

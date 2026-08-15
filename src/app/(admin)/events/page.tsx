@@ -103,7 +103,7 @@ export default async function EventsPage({
         </NeedsYou>
       )}
 
-      <div className="flex flex-wrap items-center gap-1.5 border-b border-rule bg-bone px-8 py-3">
+      <div className="flex flex-wrap items-center gap-1.5 border-b border-rule bg-bone px-5 py-3 md:px-8">
         {VIEWS.map(([key, label]) => (
           <Link key={key} href={`/events${key === "active" ? "" : `?status=${key}`}`}>
             <Chip active={view === key}>{label}</Chip>
@@ -111,7 +111,7 @@ export default async function EventsPage({
         ))}
       </div>
 
-      <div className="px-8 py-7">
+      <div className="px-5 py-6 md:px-8 md:py-7">
         <div className="border border-ink">
           <Table>
             <TableHeader>

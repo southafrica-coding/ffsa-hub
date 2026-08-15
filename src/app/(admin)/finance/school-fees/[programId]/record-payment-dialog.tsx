@@ -309,7 +309,7 @@ export function RecordPaymentDialog({
               Balance after payment:{" "}
               <span
                 className={`font-mono font-medium ${
-                  amountAfter > 0 ? "text-destructive" : "text-green-600"
+                  amountAfter > 0 ? "text-destructive" : "text-[color:var(--green-text)]"
                 }`}
               >
                 {formatCurrency(amountAfter)}

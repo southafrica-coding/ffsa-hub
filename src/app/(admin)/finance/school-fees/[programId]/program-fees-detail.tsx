@@ -3,8 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,16 +29,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import Link from "next/link";
 import {
-  Users,
-  DollarSign,
-  TrendingUp,
-  AlertCircle,
   Edit2,
   ChevronDown,
   ChevronRight,
   Loader2,
 } from "lucide-react";
+import { Masthead, KpiStrip, NeedsYou, StatusPill } from "@/components/ffsa";
+import { MoneyKpi, barTone } from "../../money-kpi";
 import { RecordPaymentDialog } from "./record-payment-dialog";
 
 // ─────────────────────────────────��──────────────────────────
@@ -149,12 +146,13 @@ const formatCurrency = (amount: number) =>
     currency: "ZAR",
   }).format(amount);
 
-const STATUS_COLORS: Record<string, string> = {
-  pending: "bg-gray-100 text-gray-800",
-  partially_paid: "bg-yellow-100 text-yellow-800",
-  paid: "bg-green-100 text-green-800",
-  overdue: "bg-red-100 text-red-800",
-  waived: "bg-blue-100 text-blue-800",
+// Fee status maps onto the four StatusPill tones — no filled colour chips.
+const STATUS_TONES: Record<string, "good" | "warn" | "quiet" | "bad"> = {
+  pending: "quiet",
+  partially_paid: "warn",
+  paid: "good",
+  overdue: "bad",
+  waived: "quiet",
 };
 
 const TIER_LABELS: Record<string, string> = {
@@ -248,70 +246,75 @@ export function ProgramFeesDetail({
   const withFees = studentFees.length;
   const withoutFees = totalEnrolled - withFees;
 
+  const collectedPct =
+    summary.totalDue > 0 ? (summary.totalPaid / summary.totalDue) * 100 : 0;
+  const owedPct = Math.max(0, 100 - collectedPct);
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="page-title">
-          {program.name}{" "}
-          <Badge variant="secondary">{program.code}</Badge>
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Fee structures and student payments
+    <div className="ffsa-screen">
+      <Masthead
+        context={`School fees · ${program.code}`}
+        title={program.name}
+        actions={
+          <Link
+            href={`/finance/school-fees/${program.id}/billing`}
+            className="inline-block shrink-0 border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-white"
+          >
+            Billing schedules &rarr;
+          </Link>
+        }
+      />
+
+      {/* The page's ONE yellow band. Never add a second. */}
+      {withoutFees > 0 && (
+        <NeedsYou>
+          {withoutFees === 1
+            ? "1 enrolled student has no fees assigned yet"
+            : `${withoutFees} enrolled students have no fees assigned yet`}
+        </NeedsYou>
+      )}
+
+      <div className="space-y-6 px-8 py-7">
+        <p className="text-[13px] text-[color:var(--text-secondary)]">
+          Fee structures and student payments.
         </p>
-      </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Card>
-          <CardContent className="pt-4">
-            <p className="text-xs text-muted-foreground flex items-center gap-1">
-              <Users className="h-3 w-3" /> Students
-            </p>
-            <p className="text-xl font-bold">
-              {summary.totalStudents}
-              {withoutFees > 0 && (
-                <span className="text-sm font-normal text-muted-foreground ml-1">
-                  / {totalEnrolled} enrolled
-                </span>
-              )}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <p className="text-xs text-muted-foreground flex items-center gap-1">
-              <DollarSign className="h-3 w-3" /> Total Due
-            </p>
-            <p className="text-xl font-bold font-mono">
-              {formatCurrency(summary.totalDue)}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <p className="text-xs text-muted-foreground flex items-center gap-1">
-              <TrendingUp className="h-3 w-3" /> Collected
-            </p>
-            <p className="text-xl font-bold font-mono text-green-600">
-              {formatCurrency(summary.totalPaid)}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <p className="text-xs text-muted-foreground flex items-center gap-1">
-              <AlertCircle className="h-3 w-3" /> Outstanding
-            </p>
-            <p className={`text-xl font-bold font-mono ${summary.totalOutstanding > 0 ? "text-destructive" : ""}`}>
-              {formatCurrency(summary.totalOutstanding)}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+        {/* Summary strip */}
+        <div className="border-x border-t border-ink">
+          <KpiStrip>
+            <MoneyKpi
+              lead
+              label="Students"
+              value={String(summary.totalStudents)}
+              pct={totalEnrolled > 0 ? (summary.totalStudents / totalEnrolled) * 100 : 0}
+              foot={
+                withoutFees > 0
+                  ? `of ${totalEnrolled} enrolled — ${withoutFees} without fees`
+                  : `of ${totalEnrolled} enrolled`
+              }
+            />
+            <MoneyKpi label="Total due" value={formatCurrency(summary.totalDue)} />
+            <MoneyKpi
+              positive
+              label="Collected"
+              value={formatCurrency(summary.totalPaid)}
+              pct={collectedPct}
+              tone="var(--green)"
+              foot={`${collectedPct.toFixed(0)}% of total due`}
+            />
+            <MoneyKpi
+              label="Outstanding"
+              value={formatCurrency(summary.totalOutstanding)}
+              negative={summary.totalOutstanding > 0}
+              pct={owedPct}
+              tone={barTone(owedPct)}
+              foot={`${owedPct.toFixed(0)}% still owed`}
+            />
+          </KpiStrip>
+        </div>
 
-      {/* Tabs */}
-      <Tabs defaultValue="structures">
+        {/* Tabs */}
+        <Tabs defaultValue="structures">
         <TabsList className="w-full overflow-x-auto justify-start">
           <TabsTrigger value="structures">Fee Structures</TabsTrigger>
           <TabsTrigger value="students">
@@ -341,20 +344,20 @@ export function ProgramFeesDetail({
 
         {/* Students Tab — unified list of ALL enrolled students */}
         <TabsContent value="students" className="mt-4 space-y-4">
+          {/* The count itself is the page's NeedsYou band, above; this is only
+              the instruction that goes with it. */}
           {withoutFees > 0 && (
-            <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800">
-              <strong>{withoutFees} enrolled student{withoutFees !== 1 ? "s" : ""}</strong>{" "}
-              {withoutFees !== 1 ? "don't" : "doesn't"} have fees assigned yet.
+            <p className="border border-rule-strong bg-bone p-3 text-[13px] text-[color:var(--text-secondary)]">
               Select a tier from the dropdown to assign fees.
-            </div>
+            </p>
           )}
 
           {allStudents.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-6">
+            <p className="py-6 text-center text-[13px] text-[color:var(--text-tertiary)]">
               No students enrolled in this program yet.
             </p>
           ) : (
-            <div className="rounded-lg border bg-card overflow-x-auto">
+            <div className="overflow-x-auto border border-ink">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -410,7 +413,7 @@ export function ProgramFeesDetail({
                       <TableCell className="text-right font-mono">
                         {formatCurrency(summary.totalDue)}
                       </TableCell>
-                      <TableCell className="text-right font-mono text-green-600">
+                      <TableCell className="text-right tabular font-mono text-[color:var(--green-text)]">
                         {formatCurrency(summary.totalPaid)}
                       </TableCell>
                       <TableCell className="text-right font-mono text-destructive">
@@ -428,11 +431,11 @@ export function ProgramFeesDetail({
         {/* Payments Tab */}
         <TabsContent value="payments" className="mt-4">
           {payments.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-6">
+            <p className="py-6 text-center text-[13px] text-[color:var(--text-tertiary)]">
               No payments recorded yet.
             </p>
           ) : (
-            <div className="rounded-lg border bg-card overflow-x-auto">
+            <div className="overflow-x-auto border border-ink">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -458,13 +461,13 @@ export function ProgramFeesDetail({
                         <TableCell className="font-medium text-sm">
                           {pStudentName}
                         </TableCell>
-                        <TableCell className="text-right font-mono text-sm text-green-600">
+                        <TableCell className="text-right tabular font-mono text-sm text-[color:var(--green-text)]">
                           {formatCurrency(Number(p.amount_zar))}
                         </TableCell>
                         <TableCell>
-                          <Badge variant="secondary" className="text-xs">
+                          <StatusPill>
                             {p.payment_method.toUpperCase()}
-                          </Badge>
+                          </StatusPill>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {p.reference ?? "—"}
@@ -484,7 +487,7 @@ export function ProgramFeesDetail({
                   <TableRow className="font-bold border-t-2">
                     <TableCell>Total</TableCell>
                     <TableCell>{payments.length} payments</TableCell>
-                    <TableCell className="text-right font-mono text-green-600">
+                    <TableCell className="text-right tabular font-mono text-[color:var(--green-text)]">
                       {formatCurrency(
                         payments.reduce(
                           (sum, p) => sum + Number(p.amount_zar),
@@ -499,7 +502,8 @@ export function ProgramFeesDetail({
             </div>
           )}
         </TabsContent>
-      </Tabs>
+        </Tabs>
+      </div>
     </div>
   );
 }
@@ -606,7 +610,7 @@ function StudentFeeRow({
         <TableCell className="text-right font-mono text-sm">
           {formatCurrency(Number(fee.final_amount_zar))}
         </TableCell>
-        <TableCell className="text-right font-mono text-sm text-green-600">
+        <TableCell className="text-right tabular font-mono text-sm text-[color:var(--green-text)]">
           {formatCurrency(Number(fee.amount_paid_zar))}
         </TableCell>
         <TableCell
@@ -617,13 +621,9 @@ function StudentFeeRow({
           {formatCurrency(balance)}
         </TableCell>
         <TableCell>
-          <span
-            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-              STATUS_COLORS[fee.status] ?? ""
-            }`}
-          >
+          <StatusPill tone={STATUS_TONES[fee.status] ?? "quiet"}>
             {fee.status.replace(/_/g, " ")}
-          </span>
+          </StatusPill>
         </TableCell>
         <TableCell onClick={(e) => e.stopPropagation()}>
           <RecordPaymentDialog
@@ -635,30 +635,30 @@ function StudentFeeRow({
       </TableRow>
       {isExpanded && (
         <TableRow>
-          <TableCell colSpan={8} className="bg-muted/30">
+          <TableCell colSpan={8} className="bg-bone">
             <div className="p-3 space-y-2">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
                 <div>
                   <span className="text-muted-foreground">Tuition:</span>{" "}
-                  <span className="font-mono">
+                  <span className="tabular font-mono">
                     {formatCurrency(Number(fee.tuition_zar))}
                   </span>
                 </div>
                 <div>
                   <span className="text-muted-foreground">Accommodation:</span>{" "}
-                  <span className="font-mono">
+                  <span className="tabular font-mono">
                     {formatCurrency(Number(fee.accommodation_zar))}
                   </span>
                 </div>
                 <div>
                   <span className="text-muted-foreground">Meals:</span>{" "}
-                  <span className="font-mono">
+                  <span className="tabular font-mono">
                     {formatCurrency(Number(fee.meals_zar))}
                   </span>
                 </div>
                 <div>
                   <span className="text-muted-foreground">Materials:</span>{" "}
-                  <span className="font-mono">
+                  <span className="tabular font-mono">
                     {formatCurrency(Number(fee.materials_zar))}
                   </span>
                 </div>
@@ -667,12 +667,12 @@ function StudentFeeRow({
                 Number(fee.scholarship_zar) > 0) && (
                 <div className="flex gap-4 text-sm">
                   {Number(fee.discount_zar) > 0 && (
-                    <span className="text-green-600">
+                    <span className="text-[color:var(--green-text)]">
                       Discount: -{formatCurrency(Number(fee.discount_zar))}
                     </span>
                   )}
                   {Number(fee.scholarship_zar) > 0 && (
-                    <span className="text-green-600">
+                    <span className="text-[color:var(--green-text)]">
                       Scholarship: -
                       {formatCurrency(Number(fee.scholarship_zar))}
                     </span>
@@ -696,9 +696,9 @@ function StudentFeeRow({
                           <span>
                             {new Date(p.payment_date).toLocaleDateString()}
                           </span>
-                          <Badge variant="secondary" className="text-[10px]">
+                          <StatusPill>
                             {p.payment_method.toUpperCase()}
-                          </Badge>
+                          </StatusPill>
                           {p.reference && (
                             <span className="text-muted-foreground">
                               {p.reference}
@@ -712,7 +712,7 @@ function StudentFeeRow({
                               </span>
                             )}
                         </div>
-                        <span className="font-mono text-green-600">
+                        <span className="tabular font-mono text-[color:var(--green-text)]">
                           {formatCurrency(Number(p.amount_zar))}
                         </span>
                       </div>
@@ -795,7 +795,7 @@ function UnassignedStudentRow({
   }
 
   return (
-    <TableRow className="bg-yellow-50/50">
+    <TableRow className="bg-bone">
       <TableCell />
       <TableCell className="font-medium">
         {name}
@@ -820,9 +820,7 @@ function UnassignedStudentRow({
       <TableCell className="text-right text-sm text-muted-foreground">—</TableCell>
       <TableCell className="text-right text-sm text-muted-foreground">—</TableCell>
       <TableCell>
-        <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800">
-          no fee
-        </span>
+        <StatusPill tone="warn">No fee</StatusPill>
       </TableCell>
       <TableCell />
     </TableRow>
@@ -890,10 +888,12 @@ function TierCard({
   }
 
   return (
-    <Card>
-      <CardContent className="pt-4 space-y-3">
+    <div className="border border-ink bg-white">
+      <div className="space-y-3 p-5">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold">{TIER_LABELS[tier]}</h3>
+          <h3 className="font-display text-[17px] font-black uppercase leading-none">
+            {TIER_LABELS[tier]}
+          </h3>
           <Dialog open={editOpen} onOpenChange={setEditOpen}>
             <DialogTrigger asChild>
               <Button variant="ghost" size="icon" className="h-7 w-7">
@@ -955,41 +955,41 @@ function TierCard({
           <div className="space-y-1 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Tuition</span>
-              <span className="font-mono">
+              <span className="tabular font-mono">
                 {formatCurrency(Number(structure.tuition_zar))}
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Accommodation</span>
-              <span className="font-mono">
+              <span className="tabular font-mono">
                 {formatCurrency(Number(structure.accommodation_zar))}
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Meals</span>
-              <span className="font-mono">
+              <span className="tabular font-mono">
                 {formatCurrency(Number(structure.meals_zar))}
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Materials</span>
-              <span className="font-mono">
+              <span className="tabular font-mono">
                 {formatCurrency(Number(structure.materials_zar))}
               </span>
             </div>
             <div className="flex justify-between pt-2 border-t font-medium">
               <span>Total</span>
-              <span className="font-mono">
+              <span className="tabular font-mono">
                 {formatCurrency(Number(structure.total_zar))}
               </span>
             </div>
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground text-center py-4">
+          <p className="py-4 text-center text-[13px] text-[color:var(--text-tertiary)]">
             Not configured. Click edit to set pricing.
           </p>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

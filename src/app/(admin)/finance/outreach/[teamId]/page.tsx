@@ -75,20 +75,20 @@ export default async function OutreachTeamDetailPage({
       (receiptCounts[row.expense_id] || 0) + 1;
   }
 
+  // No wrapper: TeamDetail's root carries `.ffsa-screen`, which only works on a
+  // direct child of .admin-content.
   return (
-    <div className="space-y-6">
-      <TeamDetail
-        team={team}
-        members={members ?? []}
-        budgets={budgets ?? []}
-        categories={categories ?? []}
-        allUsers={allUsers ?? []}
-        expenses={expenses ?? []}
-        fundReleases={fundReleases ?? []}
-        cashBatches={cashBatches ?? []}
-        closeout={closeout ?? null}
-        receiptCounts={receiptCounts}
-      />
-    </div>
+    <TeamDetail
+      team={team}
+      members={members ?? []}
+      budgets={budgets ?? []}
+      categories={categories ?? []}
+      allUsers={allUsers ?? []}
+      expenses={expenses ?? []}
+      fundReleases={fundReleases ?? []}
+      cashBatches={cashBatches ?? []}
+      closeout={closeout ?? null}
+      receiptCounts={receiptCounts}
+    />
   );
 }

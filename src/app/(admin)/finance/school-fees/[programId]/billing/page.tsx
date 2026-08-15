@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getProgramById } from "@/services/schools";
 import { getBillingCoursesByProgram } from "@/services/school-billing";
+import { Masthead } from "@/components/ffsa";
 import { ProgramBillingClient } from "./program-billing-client";
 
 export default async function ProgramBillingPage({
@@ -48,40 +49,43 @@ export default async function ProgramBillingPage({
     .order("sort_order", { ascending: true });
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="page-eyebrow">FINANCIAL MANAGEMENT</p>
-          <h1 className="page-title">{program.name} — Courses</h1>
-          <p className="text-sm text-muted-foreground">
-            The phases (courses) within this program, each with its own
-            timeframe and per-tier charges. The phases together make up the
-            full program; students are billed the whole program and auto-trimmed
-            to the phases they&apos;re doing.
-          </p>
-        </div>
-        <Link
-          href={`/finance/school-fees/${programId}/students`}
-          className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-muted transition-colors shrink-0"
-        >
-          Student billing &rarr;
-        </Link>
-      </div>
-
-      <ProgramBillingClient
-        programId={programId}
-        courses={
-          (courses ?? []) as Parameters<typeof ProgramBillingClient>[0]["courses"]
-        }
-        itemsByCourse={
-          itemsByCourse as Parameters<typeof ProgramBillingClient>[0]["itemsByCourse"]
-        }
-        programItems={
-          (programItems ?? []) as Parameters<
-            typeof ProgramBillingClient
-          >[0]["programItems"]
+    <div className="ffsa-screen">
+      <Masthead
+        context={`School fees · ${program.name}`}
+        title="Courses"
+        actions={
+          <Link
+            href={`/finance/school-fees/${programId}/students`}
+            className="inline-block shrink-0 border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-white"
+          >
+            Student billing &rarr;
+          </Link>
         }
       />
+
+      <div className="space-y-6 px-8 py-7">
+        <p className="max-w-3xl text-[13px] text-[color:var(--text-secondary)]">
+          The phases (courses) within this program, each with its own timeframe
+          and per-tier charges. The phases together make up the full program;
+          students are billed the whole program and auto-trimmed to the phases
+          they&apos;re doing.
+        </p>
+
+        <ProgramBillingClient
+          programId={programId}
+          courses={
+            (courses ?? []) as Parameters<typeof ProgramBillingClient>[0]["courses"]
+          }
+          itemsByCourse={
+            itemsByCourse as Parameters<typeof ProgramBillingClient>[0]["itemsByCourse"]
+          }
+          programItems={
+            (programItems ?? []) as Parameters<
+              typeof ProgramBillingClient
+            >[0]["programItems"]
+          }
+        />
+      </div>
     </div>
   );
 }

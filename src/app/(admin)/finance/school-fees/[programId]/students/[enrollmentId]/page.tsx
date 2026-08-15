@@ -4,6 +4,7 @@ import {
   getBillingCoursesByProgram,
   getBillingPlansForEnrollment,
 } from "@/services/school-billing";
+import { Masthead } from "@/components/ffsa";
 import { StudentProgramBilling } from "./student-program-billing";
 
 const studentName = (u: {
@@ -55,27 +56,30 @@ export default async function StudentBillingPage({
   const hasWholeProgram = (wholeProgramCharges ?? 0) > 0;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <p className="page-eyebrow">FINANCIAL MANAGEMENT</p>
-        <h1 className="page-title">{studentName(enrollment.users)}</h1>
-        <p className="text-sm text-muted-foreground">
-          {program.name} · choose phases — billing auto-trims to match. Preview
-          before saving; nothing goes to Xero yet.
-        </p>
-      </div>
-
-      <StudentProgramBilling
-        enrollmentId={enrollmentId}
-        nationality={enrollment.users?.nationality ?? null}
-        hasWholeProgram={hasWholeProgram}
-        courses={
-          (courses ?? []) as Parameters<
-            typeof StudentProgramBilling
-          >[0]["courses"]
-        }
-        plans={(plans ?? []) as Parameters<typeof StudentProgramBilling>[0]["plans"]}
+    <div className="ffsa-screen">
+      <Masthead
+        context={`School fees · ${program.name}`}
+        title={studentName(enrollment.users)}
       />
+
+      <div className="space-y-6 px-8 py-7">
+        <p className="max-w-3xl text-[13px] text-[color:var(--text-secondary)]">
+          Choose phases — billing auto-trims to match. Preview before saving;
+          nothing goes to Xero yet.
+        </p>
+
+        <StudentProgramBilling
+          enrollmentId={enrollmentId}
+          nationality={enrollment.users?.nationality ?? null}
+          hasWholeProgram={hasWholeProgram}
+          courses={
+            (courses ?? []) as Parameters<
+              typeof StudentProgramBilling
+            >[0]["courses"]
+          }
+          plans={(plans ?? []) as Parameters<typeof StudentProgramBilling>[0]["plans"]}
+        />
+      </div>
     </div>
   );
 }

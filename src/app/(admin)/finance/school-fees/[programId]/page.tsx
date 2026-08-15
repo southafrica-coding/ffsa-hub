@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getProgramById } from "@/services/schools";
 import {
@@ -60,26 +59,18 @@ export default async function ProgramFeesPage({
     (e: { id: string }) => !feeEnrollmentIds.has(e.id)
   );
 
+  // No wrapper: ProgramFeesDetail's root carries `.ffsa-screen`, which only
+  // works on a direct child of .admin-content. The "Billing schedules" link
+  // moved into that component's masthead.
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <Link
-          href={`/finance/school-fees/${programId}/billing`}
-          className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-muted transition-colors"
-        >
-          Billing Schedules &rarr;
-        </Link>
-      </div>
-
-      <ProgramFeesDetail
-        program={program}
-        feeStructures={feeStructures ?? []}
-        studentFees={studentFees ?? []}
-        countryTiers={[]}
-        payments={payments ?? []}
-        studentsWithoutFees={studentsWithoutFees as unknown as Parameters<typeof ProgramFeesDetail>[0]["studentsWithoutFees"]}
-        summary={summary}
-      />
-    </div>
+    <ProgramFeesDetail
+      program={program}
+      feeStructures={feeStructures ?? []}
+      studentFees={studentFees ?? []}
+      countryTiers={[]}
+      payments={payments ?? []}
+      studentsWithoutFees={studentsWithoutFees as unknown as Parameters<typeof ProgramFeesDetail>[0]["studentsWithoutFees"]}
+      summary={summary}
+    />
   );
 }
