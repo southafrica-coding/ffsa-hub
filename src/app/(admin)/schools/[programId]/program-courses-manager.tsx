@@ -155,7 +155,7 @@ export function ProgramCoursesManager({
             return (
               <div
                 key={c.id}
-                className="flex items-center justify-between rounded-md border bg-card px-3 py-2.5"
+                className="flex items-center justify-between border bg-card px-3 py-2.5"
               >
                 <div className="min-w-0">
                   <p className="font-medium flex items-center gap-2 flex-wrap">

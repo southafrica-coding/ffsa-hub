@@ -1,8 +1,7 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getNotifications } from "@/services/notifications";
 import { getPendingApprovalCount } from "@/services/users";
-import { Masthead, NeedsYou } from "@/components/ffsa";
+import { Masthead, NeedsYou, NeedsYouAction } from "@/components/ffsa";
 import {
   resolveLayout,
   getWidget,
@@ -140,16 +139,7 @@ export default async function DashboardPage() {
 
       {/* The page's ONE yellow band. Never add a second. */}
       {pendingApprovals > 0 && (
-        <NeedsYou
-          action={
-            <Link
-              href="/users?status=pending_approval"
-              className="border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-yellow"
-            >
-              Review
-            </Link>
-          }
-        >
+        <NeedsYou action={<NeedsYouAction href="/users?status=pending_approval">Review</NeedsYouAction>}>
           {pendingApprovals === 1
             ? "1 staff member is waiting on approval"
             : `${pendingApprovals} staff members are waiting on approval`}

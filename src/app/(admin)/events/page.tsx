@@ -17,7 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Masthead, NeedsYou, Chip, StatusPill, DateBlock } from "@/components/ffsa";
+import { Masthead, MastheadAction, NeedsYou, Chip, StatusPill, DateBlock, type Tone } from "@/components/ffsa";
 
 const VIEWS = [
   ["active", "Active"],
@@ -38,7 +38,7 @@ const BRAND_LABELS: Record<string, string> = {
   missio: "Missio",
 };
 
-const STATUS_TONE: Record<string, "good" | "warn" | "quiet" | "bad"> = {
+const STATUS_TONE: Record<string, Tone> = {
   published: "good",
   draft: "warn",
   completed: "quiet",
@@ -91,14 +91,7 @@ export default async function EventsPage({
       <Masthead
         context={`Operations · ${count ?? 0} ${view === "active" ? "active " : ""}${count === 1 ? "event" : "events"}`}
         title="Events"
-        actions={
-          <Link
-            href="/events/new"
-            className="border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-white hover:bg-[#262622] hover:text-white"
-          >
-            + Create event
-          </Link>
-        }
+        actions={<MastheadAction href="/events/new">+ Create event</MastheadAction>}
       />
 
       {/* The page's ONE yellow band. Never add a second. */}

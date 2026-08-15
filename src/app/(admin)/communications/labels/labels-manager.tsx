@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -26,6 +25,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { SectionBar, StatusPill } from "@/components/ffsa";
 import { LABEL_PALETTE, getLabelColors } from "@/lib/label-color";
 
 export type LabelRow = {
@@ -152,17 +152,19 @@ export function LabelsManager({
 
   return (
     <div className="space-y-4">
-      {err && <p className="text-sm text-red-400">{err}</p>}
-      {msg && <p className="text-sm text-emerald-400">{msg}</p>}
+      {err && <p className="text-sm text-destructive">{err}</p>}
+      {msg && <p className="text-sm text-[color:var(--green-text)]">{msg}</p>}
 
-      <p className="text-xs text-muted-foreground">
-        {activeCount} active {activeCount === 1 ? "label" : "labels"}
-        {labels.length > activeCount &&
-          ` · ${labels.length - activeCount} hidden`}
-      </p>
-
-      <Card>
-        <CardContent className="p-0">
+      <div className="border border-ink bg-white">
+        <SectionBar
+          title="Labels"
+          meta={`${activeCount} active${
+            labels.length > activeCount
+              ? ` · ${labels.length - activeCount} hidden`
+              : ""
+          }`}
+        />
+        <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -192,7 +194,7 @@ export function LabelsManager({
                               type="button"
                               aria-label="Change colour"
                               disabled={busy}
-                              className="h-5 w-5 flex-shrink-0 rounded-full border"
+                              className="h-5 w-5 flex-shrink-0 border"
                               style={{
                                 backgroundColor: colors.bg,
                                 borderColor: colors.border,
@@ -207,7 +209,7 @@ export function LabelsManager({
                                   type="button"
                                   aria-label={`Colour ${p.bg}`}
                                   onClick={() => recolor(l.id, p.bg)}
-                                  className="h-5 w-5 rounded-full border"
+                                  className="h-5 w-5 border"
                                   style={{
                                     backgroundColor: p.bg,
                                     borderColor: p.border,
@@ -233,26 +235,20 @@ export function LabelsManager({
                           <span className="text-sm font-medium">{l.name}</span>
                         )}
                         {l.is_preset && !isEditing && (
-                          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                            preset
-                          </span>
+                          <span className="mono-label">preset</span>
                         )}
                       </div>
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
+                    <TableCell className="text-sm text-[color:var(--text-secondary)]">
                       {l.category || "—"}
                     </TableCell>
-                    <TableCell className="text-right text-sm tabular-nums">
+                    <TableCell className="tabular text-right text-sm">
                       {count}
                     </TableCell>
                     <TableCell>
-                      <span
-                        className={`text-xs px-2 py-0.5 rounded-full ${
-                          l.is_active ? "status-green" : "status-grey"
-                        }`}
-                      >
+                      <StatusPill tone={l.is_active ? "good" : "quiet"}>
                         {l.is_active ? "Active" : "Hidden"}
-                      </span>
+                      </StatusPill>
                     </TableCell>
                     <TableCell className="text-right whitespace-nowrap">
                       {isEditing ? (
@@ -292,7 +288,9 @@ export function LabelsManager({
                             onClick={() => toggleActive(l)}
                             disabled={busy}
                             className={`h-7 px-2 text-xs ${
-                              l.is_active ? "text-amber-400" : "text-emerald-400"
+                              l.is_active
+                                ? "text-[color:var(--amber)]"
+                                : "text-[color:var(--green-text)]"
                             }`}
                           >
                             {l.is_active ? "Hide" : "Unhide"}
@@ -306,7 +304,7 @@ export function LabelsManager({
                                 setDeleteErr(null);
                               }}
                               disabled={busy}
-                              className="h-7 px-2 text-xs text-red-400"
+                              className="h-7 px-2 text-xs text-destructive"
                             >
                               Delete
                             </Button>
@@ -321,7 +319,7 @@ export function LabelsManager({
                 <TableRow>
                   <TableCell
                     colSpan={5}
-                    className="text-center text-sm text-muted-foreground py-8"
+                    className="py-10 text-center text-xs tracking-[0.05em] text-[color:var(--text-tertiary)]"
                   >
                     No labels yet.
                   </TableCell>
@@ -329,8 +327,8 @@ export function LabelsManager({
               )}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       <Dialog
         open={!!deleteTarget}
@@ -359,7 +357,7 @@ export function LabelsManager({
               . This can&apos;t be undone. To keep the history, hide it instead.
             </DialogDescription>
           </DialogHeader>
-          {deleteErr && <p className="text-sm text-red-400">{deleteErr}</p>}
+          {deleteErr && <p className="text-sm text-destructive">{deleteErr}</p>}
           <DialogFooter>
             <Button
               variant="ghost"
@@ -371,11 +369,7 @@ export function LabelsManager({
             >
               Cancel
             </Button>
-            <Button
-              onClick={doDelete}
-              disabled={deleting}
-              className="bg-red-600 text-white hover:bg-red-700"
-            >
+            <Button variant="destructive" onClick={doDelete} disabled={deleting}>
               {deleting ? "Deleting…" : "Delete permanently"}
             </Button>
           </DialogFooter>

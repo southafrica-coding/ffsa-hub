@@ -32,7 +32,7 @@ export function EmailsTab({
 
   return (
     <div className="space-y-5">
-      <div className="rounded-md border bg-muted/30 px-4 py-3">
+      <div className="border bg-muted/30 px-4 py-3">
         <p className="text-sm text-muted-foreground">
           Control the emails sent to applicants during this school&apos;s
           process. Each field below shows the <strong>wording that&apos;s
@@ -180,7 +180,7 @@ function EmailTypeEditor({
             {type.mergeFields.map((f) => (
               <code
                 key={f}
-                className="mx-0.5 rounded bg-muted px-1 py-0.5 text-[11px]"
+                className="mx-0.5 bg-muted px-1 py-0.5 text-[11px]"
               >
                 {f}
               </code>
@@ -188,7 +188,7 @@ function EmailTypeEditor({
           </p>
         </div>
         {type.autoReminder && (
-          <div className="rounded-md border bg-muted/30 px-3 py-2.5 space-y-1.5">
+          <div className="border bg-muted/30 px-3 py-2.5 space-y-1.5">
             <label className="text-xs font-medium">Automatic reminder</label>
             <div className="flex items-center gap-2 text-sm">
               <span className="text-muted-foreground">Auto-send after</span>
@@ -227,7 +227,7 @@ function EmailTypeEditor({
               "Save"
             )}
           </Button>
-          {error && <span className="text-xs text-red-600">{error}</span>}
+          {error && <span className="text-xs text-destructive">{error}</span>}
         </div>
       </CardContent>
     </Card>

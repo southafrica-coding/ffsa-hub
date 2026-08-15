@@ -6,6 +6,7 @@ import { listProgramLeaders } from "@/services/program-leaders";
 import { listProgramEmailTemplates } from "@/services/program-email-templates";
 import { getArrivalInsuranceInfo } from "@/lib/schools/arrival-insurance";
 import { ProgramDetail } from "./program-detail";
+import { Masthead } from "@/components/ffsa";
 
 type UserIdentity = {
   id: string;
@@ -83,8 +84,9 @@ export default async function ProgramDetailPage({
 
   if (programError || !program) {
     return (
-      <div className="space-y-4">
-        <p className="text-destructive">Program not found.</p>
+      <div className="ffsa-screen">
+        <Masthead context="Training" title="Not found" />
+        <p className="px-8 py-7 text-[13px] text-destructive">Program not found.</p>
       </div>
     );
   }
@@ -165,8 +167,11 @@ export default async function ProgramDetailPage({
     programId
   );
 
+  // ProgramDetail carries its own `.ffsa-screen` root + Masthead, so this
+  // route adds no wrapper of its own — an extra div here would put the
+  // edge-to-edge screen back inside the old centred page box.
   return (
-    <div className="space-y-6">
+    <>
       <ProgramDetail
         program={program}
         initialTab={tab}
@@ -186,6 +191,6 @@ export default async function ProgramDetailPage({
         referenceQuestions={referenceQuestions ?? []}
         refRequestSummaries={refRequests ?? []}
       />
-    </div>
+    </>
   );
 }

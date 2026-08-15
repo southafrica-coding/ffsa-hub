@@ -1,4 +1,4 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SectionBar } from "@/components/ffsa";
 import type { CampaignStats } from "@/services/campaigns";
 
 function pct(n: number, d: number): string {
@@ -37,26 +37,26 @@ export function CampaignAnalytics({ stats }: { stats: CampaignStats }) {
   ];
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Email performance</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          {metrics.map((m) => (
-            <div key={m.label} className="rounded-lg border p-3">
-              <p className="text-xs text-muted-foreground">{m.label}</p>
-              <p className="text-xl font-bold mt-0.5">{m.value}</p>
-              {m.sub && (
-                <p className="text-xs text-muted-foreground mt-0.5">{m.sub}</p>
-              )}
-            </div>
-          ))}
-        </div>
-        <p className="text-xs text-muted-foreground mt-3">
-          Open and click rates update as Mailtrap delivers webhook events.
-        </p>
-      </CardContent>
-    </Card>
+    <div className="border border-ink bg-white">
+      <SectionBar title="Email performance" meta="Live from webhook events" />
+      {/* Six cells, so the strip steps 2 → 3 → 6 rather than using KpiStrip's
+          four-up grid — the numerals stay legible on a phone. */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+        {metrics.map((m) => (
+          <div key={m.label} className="kpi border-b border-rule">
+            <div className="mono-label mb-2.5">{m.label}</div>
+            <span className="numeral text-[38px]">{m.value}</span>
+            {m.sub && (
+              <div className="tabular mt-2 font-mono text-[10px] tracking-[0.08em] text-[color:var(--text-secondary)]">
+                {m.sub}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      <p className="px-5 py-3 text-[11px] text-[color:var(--text-tertiary)]">
+        Open and click rates update as Mailtrap delivers webhook events.
+      </p>
+    </div>
   );
 }

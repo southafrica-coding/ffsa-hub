@@ -11,6 +11,7 @@ import { StudentsExportPanel } from "./students-export-panel";
 import { ENROLLMENT_STATUS_LABELS } from "@/lib/schools/student-export-columns";
 import type { ArrivalInsuranceInfo } from "@/lib/schools/arrival-insurance";
 import { Badge } from "@/components/ui/badge";
+import { Masthead, StatusPill } from "@/components/ffsa";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -248,7 +249,7 @@ function StorageImage({ storagePath }: { storagePath: string }) {
   // If the image failed to render (e.g. HEIC not supported), show download link
   if (imgError) {
     return (
-      <div className="space-y-2 rounded-lg border border-dashed border-muted-foreground/30 p-4">
+      <div className="space-y-2 border border-dashed border-muted-foreground/30 p-4">
         <p className="text-sm text-muted-foreground">
           This photo is in HEIC format and cannot be previewed in the browser.
         </p>
@@ -256,7 +257,7 @@ function StorageImage({ storagePath }: { storagePath: string }) {
           href={url}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+          className="inline-flex items-center gap-1.5 bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-[#262622]"
         >
           <Download className="h-3.5 w-3.5" /> Download Photo
         </a>
@@ -270,14 +271,14 @@ function StorageImage({ storagePath }: { storagePath: string }) {
       <img
         src={url}
         alt="Applicant photo"
-        className="max-w-[200px] max-h-[250px] rounded-lg border object-cover"
+        className="max-w-[200px] max-h-[250px] border object-cover"
         onError={() => setImgError(true)}
       />
       <a
         href={url}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex items-center gap-1 text-xs text-blue-400 hover:underline"
+        className="inline-flex items-center gap-1 text-xs text-electric hover:underline"
       >
         <Download className="h-3 w-3" /> View full size
       </a>
@@ -389,35 +390,40 @@ export function ProgramDetail({
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
+    <div className="ffsa-screen">
+      <Masthead
+        context={`Training · ${program.code} · ${program.credit_hours} credit hours`}
+        title={program.name}
+        actions={
+          <>
+            <StatusPill tone={program.status === "active" ? "good" : "quiet"}>
+              {program.status}
+            </StatusPill>
+            <Button variant="outline" size="sm" onClick={() => setEditingProgram(true)}>
+              <Edit2 className="mr-1 h-3 w-3" /> Edit
+            </Button>
+            <ProgramActions program={program} variant="button" redirectAfterDelete />
+          </>
+        }
+      />
+
+      {/* A state, not a task — so it stays bone. The yellow band is reserved
+          for something actually waiting on you. */}
       {program.status === "archived" && (
-        <div className="flex items-center gap-3 rounded-lg border border-yellow-600/30 bg-yellow-950/20 px-4 py-3">
-          <Archive className="h-4 w-4 text-yellow-500 shrink-0" />
-          <p className="text-sm text-yellow-200">
+        <div className="flex items-center gap-3 border-b border-ink bg-bone px-8 py-3">
+          <Archive className="h-4 w-4 shrink-0 text-[color:var(--text-secondary)]" />
+          <p className="text-[13px] text-[color:var(--text-secondary)]">
             This program is archived. It is hidden from non-admin users and no new enrollments can be made.
           </p>
         </div>
       )}
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="page-eyebrow">TRAINING &amp; EDUCATION</p>
-          <h1 className="page-title">{program.name}</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {program.code} &middot; {program.credit_hours} credit hours
-            {program.description && ` — ${program.description}`}
+
+      <div className="space-y-6 px-8 py-7">
+        {program.description && (
+          <p className="max-w-3xl text-[13px] text-[color:var(--text-secondary)]">
+            {program.description}
           </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge variant={program.status === "active" ? "default" : "secondary"}>
-            {program.status}
-          </Badge>
-          <Button variant="outline" size="sm" onClick={() => setEditingProgram(true)}>
-            <Edit2 className="mr-1 h-3 w-3" /> Edit
-          </Button>
-          <ProgramActions program={program} variant="button" redirectAfterDelete />
-        </div>
-      </div>
+        )}
 
       {/* Edit Program Dialog */}
       <Dialog open={editingProgram} onOpenChange={setEditingProgram}>
@@ -558,6 +564,7 @@ export function ProgramDetail({
           <EmailsTab programId={program.id} templates={emailTemplates} />
         </TabsContent>
       </Tabs>
+      </div>
     </div>
   );
 }
@@ -693,7 +700,7 @@ function CoursesTab({
       </div>
 
       {showAdd && (
-        <div className="rounded-lg border p-4">
+        <div className="border p-4">
           <form onSubmit={handleAddCourse} className="space-y-3">
             <div className="grid grid-cols-3 gap-3">
               <div>
@@ -743,7 +750,7 @@ function CoursesTab({
         </div>
       )}
 
-      <div className="rounded-lg border bg-card">
+      <div className="border bg-card">
         <Table>
           <TableHeader>
             <TableRow>
@@ -931,7 +938,7 @@ function ProfileBadge({ info }: { info: ArrivalInsuranceInfo | undefined }) {
     return (
       <Badge
         variant="outline"
-        className="border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+        className="status-yellow"
         title={
           info.missingSections.length
             ? `Missing: ${info.missingSections.join(", ")}`
@@ -945,7 +952,7 @@ function ProfileBadge({ info }: { info: ArrivalInsuranceInfo | undefined }) {
   return (
     <Badge
       variant="outline"
-      className="border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+      className="status-green"
     >
       Complete
     </Badge>
@@ -959,7 +966,7 @@ function InsuranceBadge({ info }: { info: ArrivalInsuranceInfo | undefined }) {
     return (
       <Badge
         variant="outline"
-        className="border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+        className="status-green"
       >
         Valid
       </Badge>
@@ -969,7 +976,7 @@ function InsuranceBadge({ info }: { info: ArrivalInsuranceInfo | undefined }) {
     return (
       <Badge
         variant="outline"
-        className="border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+        className="status-yellow"
       >
         Expires in {daysLeft ?? "?"} day{daysLeft === 1 ? "" : "s"}
       </Badge>
@@ -1070,15 +1077,15 @@ function ArrivalTab({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1">
+          <span className="flex items-center gap-1.5 border border-border px-2.5 py-1">
             No profile yet
-            <span className="rounded-full bg-background/60 px-1.5 py-0.5 text-[10px] font-bold">
+            <span className="bg-bone px-1.5 py-0.5 text-[10px] font-bold">
               {noProfileCount}
             </span>
           </span>
-          <span className="flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1">
+          <span className="flex items-center gap-1.5 border border-border px-2.5 py-1">
             Insurance missing / expired
-            <span className="rounded-full bg-background/60 px-1.5 py-0.5 text-[10px] font-bold">
+            <span className="bg-bone px-1.5 py-0.5 text-[10px] font-bold">
               {insuranceProblemCount}
             </span>
           </span>
@@ -1086,9 +1093,9 @@ function ArrivalTab({
         <button
           type="button"
           onClick={() => setAttentionOnly((v) => !v)}
-          className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+          className={`flex items-center gap-1.5 border px-2.5 py-1 text-xs font-medium transition-colors ${
             attentionOnly
-              ? "border-primary bg-primary/15 text-primary"
+              ? "border-ink bg-ink text-white"
               : "border-border text-muted-foreground hover:text-foreground"
           }`}
         >
@@ -1096,7 +1103,7 @@ function ArrivalTab({
         </button>
       </div>
 
-      <div className="rounded-lg border bg-card">
+      <div className="border bg-card">
         <Table>
           <TableHeader>
             <TableRow>
@@ -1186,7 +1193,7 @@ function ArrivalTab({
                           aria-label="Insurance checked on arrival"
                         />
                         {verified && (
-                          <ShieldCheck className="ml-2 h-4 w-4 text-emerald-500" />
+                          <ShieldCheck className="ml-2 h-4 w-4 text-[color:var(--green-text)]" />
                         )}
                       </div>
                     </TableCell>
@@ -1413,14 +1420,14 @@ function EnrollmentsTab({
               setUnassignedOnly((v) => !v);
               setShowRemoved(false);
             }}
-            className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+            className={`flex items-center gap-1.5 border px-2.5 py-1 text-xs font-medium transition-colors ${
               unassignedOnly && !showRemoved
-                ? "border-primary bg-primary/15 text-primary"
+                ? "border-ink bg-ink text-white"
                 : "border-border text-muted-foreground hover:text-foreground"
             }`}
           >
             Unassigned
-            <span className="rounded-full bg-background/60 px-1.5 py-0.5 text-[10px] font-bold">
+            <span className="bg-bone px-1.5 py-0.5 text-[10px] font-bold">
               {unassignedCount}
             </span>
           </button>
@@ -1431,14 +1438,14 @@ function EnrollmentsTab({
                 setShowRemoved((v) => !v);
                 setUnassignedOnly(false);
               }}
-              className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+              className={`flex items-center gap-1.5 border px-2.5 py-1 text-xs font-medium transition-colors ${
                 showRemoved
                   ? "border-destructive bg-destructive/15 text-destructive"
                   : "border-border text-muted-foreground hover:text-foreground"
               }`}
             >
               Removed
-              <span className="rounded-full bg-background/60 px-1.5 py-0.5 text-[10px] font-bold">
+              <span className="bg-bone px-1.5 py-0.5 text-[10px] font-bold">
                 {removedCount}
               </span>
             </button>
@@ -1501,7 +1508,7 @@ function EnrollmentsTab({
         </div>
       </div>
 
-      <div className="rounded-lg border bg-card">
+      <div className="border bg-card">
         <Table>
           <TableHeader>
             <TableRow>
@@ -1772,7 +1779,7 @@ function GradesTab({
         </p>
         <div className="flex items-center gap-3">
           {success && (
-            <span className="text-sm text-green-600">Grades saved!</span>
+            <span className="text-sm text-[color:var(--green-text)]">Grades saved!</span>
           )}
           {error && <span className="text-sm text-destructive">{error}</span>}
           <Button onClick={handleSave} disabled={saving} size="sm">
@@ -1781,7 +1788,7 @@ function GradesTab({
         </div>
       </div>
 
-      <div className="rounded-lg border bg-card overflow-x-auto">
+      <div className="border bg-card overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
@@ -2490,15 +2497,15 @@ function ApplicantsTab({
               <button
                 key={key}
                 onClick={() => setStatusFilter(key)}
-                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
                   isActive
                     ? "bg-primary text-primary-foreground"
                     : "bg-muted text-muted-foreground hover:bg-muted/80"
                 }`}
               >
                 {label}
-                <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
-                  isActive ? "bg-primary-foreground/20 text-primary-foreground" : "bg-background/50"
+                <span className={`px-1.5 py-0.5 text-[10px] font-bold ${
+                  isActive ? "text-white" : "bg-bone"
                 }`}>
                   {count}
                 </span>
@@ -2507,7 +2514,7 @@ function ApplicantsTab({
           })}
           <button
             onClick={() => setUnassignedOnly((v) => !v)}
-            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
               unassignedOnly
                 ? "bg-primary text-primary-foreground"
                 : "bg-muted text-muted-foreground hover:bg-muted/80"
@@ -2515,8 +2522,8 @@ function ApplicantsTab({
             title="Show only applicants with no staff assigned"
           >
             Unassigned
-            <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
-              unassignedOnly ? "bg-primary-foreground/20 text-primary-foreground" : "bg-background/50"
+            <span className={`px-1.5 py-0.5 text-[10px] font-bold ${
+              unassignedOnly ? "text-white" : "bg-bone"
             }`}>
               {unassignedCount}
             </span>
@@ -2524,7 +2531,7 @@ function ApplicantsTab({
           {removedResponses.length > 0 && (
             <button
               onClick={() => setStatusFilter(isRemovedView ? "all" : "removed")}
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
                 isRemovedView
                   ? "bg-destructive text-destructive-foreground"
                   : "bg-muted text-muted-foreground hover:bg-muted/80"
@@ -2533,8 +2540,8 @@ function ApplicantsTab({
             >
               <Archive className="h-3 w-3" />
               Removed
-              <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
-                isRemovedView ? "bg-destructive-foreground/20 text-destructive-foreground" : "bg-background/50"
+              <span className={`px-1.5 py-0.5 text-[10px] font-bold ${
+                isRemovedView ? "text-white" : "bg-bone"
               }`}>
                 {removedResponses.length}
               </span>
@@ -2556,7 +2563,7 @@ function ApplicantsTab({
 
       {/* Analytics Dashboard */}
       {showAnalytics && (
-        <div className="rounded-lg border bg-card p-4 space-y-4">
+        <div className="border bg-card p-4 space-y-4">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-medium flex items-center gap-2">
               <BarChart3 className="h-4 w-4" />
@@ -2574,23 +2581,23 @@ function ApplicantsTab({
             <div className="space-y-4">
               {/* Stat Cards */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div className="rounded-lg border p-3 text-center">
+                <div className="border p-3 text-center">
                   <p className="text-2xl font-bold">{analytics.total}</p>
                   <p className="text-xs text-muted-foreground">Total Applications</p>
                 </div>
-                <div className="rounded-lg border p-3 text-center">
+                <div className="border p-3 text-center">
                   <p className="text-2xl font-bold">
                     {analytics.avgDaysToDecision !== null ? `${analytics.avgDaysToDecision}d` : "—"}
                   </p>
                   <p className="text-xs text-muted-foreground">Avg. Time to Decision</p>
                 </div>
-                <div className="rounded-lg border p-3 text-center">
+                <div className="border p-3 text-center">
                   <p className="text-2xl font-bold">
                     {analytics.refCompletionRate !== null ? `${analytics.refCompletionRate}%` : "—"}
                   </p>
                   <p className="text-xs text-muted-foreground">Reference Completion</p>
                 </div>
-                <div className="rounded-lg border p-3 text-center">
+                <div className="border p-3 text-center">
                   <p className="text-2xl font-bold">
                     {analytics.statusCounts.accepted ?? 0}
                   </p>
@@ -2622,7 +2629,7 @@ function ApplicantsTab({
                       <div key={i} className="flex-1 flex flex-col items-center gap-1">
                         <span className="text-[10px] text-muted-foreground">{w.count || ""}</span>
                         <div
-                          className="w-full rounded-t bg-primary/60 min-h-[2px]"
+                          className="w-full bg-ink min-h-[2px]"
                           style={{ height: `${Math.max(height, 3)}%` }}
                         />
                         <span className="text-[9px] text-muted-foreground truncate w-full text-center">{w.week}</span>
@@ -2638,7 +2645,7 @@ function ApplicantsTab({
 
       {/* Removed-view explainer */}
       {isRemovedView && (
-        <div className="rounded-lg border bg-muted/40 p-3 text-sm text-muted-foreground flex items-start gap-2">
+        <div className="border bg-muted/40 p-3 text-sm text-muted-foreground flex items-start gap-2">
           <Archive className="h-4 w-4 mt-0.5 shrink-0" />
           <span>
             These applications have been removed from the pipeline. <strong>Restore</strong> returns one to its
@@ -2650,7 +2657,7 @@ function ApplicantsTab({
 
       {/* Bulk Actions Bar */}
       {!isRemovedView && selectedIds.size > 0 && (
-        <div className="rounded-lg border bg-primary/5 border-primary/30 p-3 flex items-center gap-3">
+        <div className="border border-ink bg-bone p-3 flex items-center gap-3">
           <span className="text-sm font-medium">
             {selectedIds.size} selected
           </span>
@@ -2690,7 +2697,7 @@ function ApplicantsTab({
               : "No applicants match your filters."}
         </p>
       ) : (
-        <div className="rounded-lg border bg-card">
+        <div className="border bg-card">
           <Table>
             <TableHeader>
               <TableRow>
@@ -2698,7 +2705,6 @@ function ApplicantsTab({
                   {!isRemovedView && (
                     <input
                       type="checkbox"
-                      className="rounded"
                       checked={selectedIds.size === filteredResponses.length && filteredResponses.length > 0}
                       onChange={toggleSelectAll}
                     />
@@ -2715,12 +2721,11 @@ function ApplicantsTab({
             </TableHeader>
             <TableBody>
               {filteredResponses.map((resp) => (
-                <TableRow key={resp.id} className={selectedIds.has(resp.id) ? "bg-primary/5" : ""}>
+                <TableRow key={resp.id} className={selectedIds.has(resp.id) ? "bg-bone" : ""}>
                   <TableCell>
                     {!isRemovedView && (
                       <input
                         type="checkbox"
-                        className="rounded"
                         checked={selectedIds.has(resp.id)}
                         onChange={() => toggleSelect(resp.id)}
                       />
@@ -2782,7 +2787,7 @@ function ApplicantsTab({
 
                         return (
                           <div className="flex flex-col gap-0.5">
-                            <span className={`text-xs font-medium ${allIn ? "text-green-500" : "text-yellow-500"}`}>
+                            <span className={`text-xs font-medium ${allIn ? "text-[color:var(--green-text)]" : "text-[color:var(--amber)]"}`}>
                               {allIn ? "✓" : "⚠"} {submittedRefs}/{totalRefs}
                             </span>
                             {completedAt && (
@@ -2933,7 +2938,7 @@ function ApplicantsTab({
                   {new Date(reviewingResponse.submitted_at).toLocaleDateString()}
                 </p>
                 {!reviewingResponse.user_id && reviewingResponse.applicant_info && (
-                  <div className="mt-3 rounded-md bg-muted p-3 space-y-1">
+                  <div className="mt-3 bg-muted p-3 space-y-1">
                     <p className="text-xs font-medium text-foreground uppercase tracking-wider mb-2">Applicant Details</p>
                     {reviewingResponse.applicant_info.phone && (
                       <p>Phone: {reviewingResponse.applicant_info.phone}</p>
@@ -2967,7 +2972,7 @@ function ApplicantsTab({
                     No emails recorded for this applicant yet.
                   </p>
                 ) : (
-                  <ul className="divide-y rounded-md border">
+                  <ul className="divide-y border">
                     {applicantEmails.map((em) => (
                       <li
                         key={em.id}
@@ -2986,7 +2991,7 @@ function ApplicantsTab({
                             ["bounced", "complained", "failed", "dropped"].includes(
                               em.status
                             ) && (
-                              <p className="text-xs text-red-600">{em.error}</p>
+                              <p className="text-xs text-destructive">{em.error}</p>
                             )}
                         </div>
                         <ApplicantEmailStatusBadge status={em.status} />
@@ -3005,7 +3010,7 @@ function ApplicantsTab({
                       <Label className="text-sm font-medium">
                         {a.question_label}
                       </Label>
-                      <div className="rounded-md bg-muted p-3 text-sm whitespace-pre-wrap">
+                      <div className="bg-muted p-3 text-sm whitespace-pre-wrap">
                         {!a.answer ? (
                           <span className="text-muted-foreground italic">No answer provided</span>
                         ) : isPhoto ? (
@@ -3029,8 +3034,8 @@ function ApplicantsTab({
                         slot.is_required &&
                         !reviewReferences.some((ref) => ref.slot_id === slot.id)
                     ) && (
-                      <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-3">
-                        <p className="flex items-center gap-1.5 text-sm font-medium text-amber-700 dark:text-amber-400">
+                      <div className="border border-amber-border bg-white p-3">
+                        <p className="flex items-center gap-1.5 text-sm font-medium text-[color:var(--amber)]">
                           <AlertTriangle className="h-4 w-4" />
                           Missing required references
                         </p>
@@ -3050,7 +3055,7 @@ function ApplicantsTab({
                           <Button
                             variant="outline"
                             size="sm"
-                            className="h-8 gap-1.5 border-amber-500/50 text-amber-700 hover:bg-amber-500/10 dark:text-amber-400"
+                            className="h-8 gap-1.5"
                             disabled={requestingReferences}
                             onClick={handleRequestReferences}
                           >
@@ -3079,7 +3084,7 @@ function ApplicantsTab({
                   ) : (
                     <div className="space-y-3">
                       {reviewReferences.map((ref) => (
-                        <div key={ref.id} className="rounded-lg border bg-muted/50 p-3 space-y-2">
+                        <div key={ref.id} className="border bg-muted/50 p-3 space-y-2">
                           <div className="flex items-center justify-between">
                             <div>
                               <p className="text-sm font-medium">
@@ -3127,7 +3132,7 @@ function ApplicantsTab({
 
                           {/* Inline edit: swap a pending referee's name/email */}
                           {editingRefId === ref.id && (
-                            <div className="rounded-md border bg-background p-3 space-y-3">
+                            <div className="border bg-background p-3 space-y-3">
                               <div className="space-y-1">
                                 <Label htmlFor={`ref-name-${ref.id}`} className="text-xs">
                                   Reference name
@@ -3187,10 +3192,10 @@ function ApplicantsTab({
                                   if (!trimmed) return null;
                                   // Highlight standalone rating answers (Excellent/Good/Fair/Poor) since they're common.
                                   const ratingColor =
-                                    trimmed === "Excellent" ? "text-green-500" :
-                                    trimmed === "Good" ? "text-blue-400" :
-                                    trimmed === "Fair" ? "text-yellow-500" :
-                                    trimmed === "Poor" ? "text-red-400" : null;
+                                    trimmed === "Excellent" ? "text-[color:var(--green-text)]" :
+                                    trimmed === "Good" ? "text-electric" :
+                                    trimmed === "Fair" ? "text-[color:var(--amber)]" :
+                                    trimmed === "Poor" ? "text-destructive" : null;
                                   return (
                                     <div key={a.question_id}>
                                       <p className="text-xs font-medium text-muted-foreground">{a.question_label}</p>
@@ -3238,10 +3243,10 @@ function ApplicantsTab({
                                       <div key={trait} className="flex justify-between">
                                         <span className="text-muted-foreground">{trait}</span>
                                         <span className={
-                                          rating === "Excellent" ? "text-green-500" :
-                                          rating === "Good" ? "text-blue-400" :
-                                          rating === "Fair" ? "text-yellow-500" :
-                                          "text-red-400"
+                                          rating === "Excellent" ? "text-[color:var(--green-text)]" :
+                                          rating === "Good" ? "text-electric" :
+                                          rating === "Fair" ? "text-[color:var(--amber)]" :
+                                          "text-destructive"
                                         }>{rating as string}</span>
                                       </div>
                                     ))}
@@ -3844,7 +3849,7 @@ function ApplicationTab({
   return (
     <div className="space-y-6">
       {/* Application Open Toggle */}
-      <div className="rounded-lg border p-4 space-y-4">
+      <div className="border p-4 space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <h3 className="font-medium">Application Status</h3>
@@ -3870,7 +3875,7 @@ function ApplicationTab({
 
         {isOpen && (
           <div className="space-y-3">
-            <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-3">
+            <div className="border border-ink bg-bone p-4 space-y-3">
               <div className="flex items-center gap-2 text-sm font-medium text-primary">
                 <LinkIcon className="h-4 w-4" />
                 Public Application Link
@@ -3879,7 +3884,7 @@ function ApplicationTab({
                 Share this link with prospective students. They can apply without needing an account.
               </p>
               <div className="flex items-center gap-2">
-                <div className="flex-1 rounded-md border bg-background px-3 py-2 text-sm font-mono select-all truncate">
+                <div className="flex-1 border bg-background px-3 py-2 text-sm font-mono select-all truncate">
                   {`${window.location.origin}/apply/${programId}`}
                 </div>
                 <Button
@@ -3890,7 +3895,7 @@ function ApplicationTab({
                 >
                   {copied ? (
                     <>
-                      <Check className="h-4 w-4 text-green-500" />
+                      <Check className="h-4 w-4 text-[color:var(--green-text)]" />
                       Copied!
                     </>
                   ) : (
@@ -3904,7 +3909,7 @@ function ApplicationTab({
             </div>
 
             {/* Application Deadline */}
-            <div className="rounded-lg border p-4 space-y-3">
+            <div className="border p-4 space-y-3">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <Calendar className="h-4 w-4" />
                 Application Deadline
@@ -3988,7 +3993,7 @@ function ApplicationTab({
 
         {/* Save as Template Dialog */}
         {showSaveTemplate && (
-          <div className="rounded-lg border bg-card p-4 space-y-3">
+          <div className="border bg-card p-4 space-y-3">
             <h4 className="text-sm font-medium">Save Questions as Template</h4>
             <p className="text-xs text-muted-foreground">
               Save the current {questions.length} question{questions.length !== 1 ? "s" : ""} as a reusable template.
@@ -4026,7 +4031,7 @@ function ApplicationTab({
 
         {/* Import from Template Dialog */}
         {showImportTemplate && (
-          <div className="rounded-lg border bg-card p-4 space-y-3">
+          <div className="border bg-card p-4 space-y-3">
             <h4 className="text-sm font-medium">Import from Template</h4>
             <p className="text-xs text-muted-foreground">
               Select a template to add its questions to this application. Existing questions will be kept.
@@ -4043,7 +4048,7 @@ function ApplicationTab({
             ) : (
               <div className="space-y-2">
                 {templates.map((t) => (
-                  <div key={t.id} className="flex items-center gap-3 rounded-md border p-3">
+                  <div key={t.id} className="flex items-center gap-3 border p-3">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium">{t.name}</p>
                       <p className="text-xs text-muted-foreground">
@@ -4082,7 +4087,7 @@ function ApplicationTab({
 
         {/* Add/Edit Question Form */}
         {showAddQuestion && (
-          <div className="rounded-lg border p-4">
+          <div className="border p-4">
             <form onSubmit={handleSaveQuestion} className="space-y-3">
               <div>
                 <Label>{qType === "section_header" ? "Header Title *" : "Question Label *"}</Label>
@@ -4131,7 +4136,6 @@ function ApplicationTab({
                       id="q-required"
                       checked={qRequired}
                       onChange={(e) => setQRequired(e.target.checked)}
-                      className="rounded"
                     />
                     <Label htmlFor="q-required" className="mb-0">Required</Label>
                   </div>
@@ -4150,7 +4154,7 @@ function ApplicationTab({
                 </div>
               )}
               {qType !== "section_header" && (
-                <div className="rounded-md border bg-muted/30 p-3 space-y-3">
+                <div className="border bg-muted/30 p-3 space-y-3">
                   <div>
                     <Label>Show this question only as a follow-up to…</Label>
                     <Select
@@ -4259,7 +4263,7 @@ function ApplicationTab({
         </div>
 
         {(showAddSlot || editingSlot) && (
-          <form onSubmit={handleSaveSlot} className="space-y-3 rounded-lg border bg-card p-4">
+          <form onSubmit={handleSaveSlot} className="space-y-3 border bg-card p-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="slot-label">Label *</Label>
@@ -4287,7 +4291,6 @@ function ApplicationTab({
                 id="slot-required"
                 checked={slotRequired}
                 onChange={(e) => setSlotRequired(e.target.checked)}
-                className="rounded"
               />
               <Label htmlFor="slot-required" className="mb-0">Required</Label>
             </div>
@@ -4312,7 +4315,7 @@ function ApplicationTab({
             {referenceSlots.map((slot, idx) => (
               <div
                 key={slot.id}
-                className="flex items-center justify-between rounded-lg border bg-card px-4 py-3"
+                className="flex items-center justify-between border bg-card px-4 py-3"
               >
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">
@@ -4391,7 +4394,7 @@ function ApplicationTab({
           </p>
         </div>
 
-        <div className="space-y-3 rounded-lg border bg-card p-4">
+        <div className="space-y-3 border bg-card p-4">
           <div className="space-y-1.5">
             <Label htmlFor="acceptance-subject">Subject Line</Label>
             <Input

@@ -206,7 +206,7 @@ export function ReferenceQuestionsBuilder({
       </div>
 
       {showForm && (
-        <div className="rounded-lg border p-4">
+        <div className="border p-4">
           <form onSubmit={handleSave} className="space-y-3">
             <div>
               <Label>
@@ -266,7 +266,6 @@ export function ReferenceQuestionsBuilder({
                     id="ref-q-required"
                     checked={qRequired}
                     onChange={(e) => setQRequired(e.target.checked)}
-                    className="rounded"
                   />
                   <Label htmlFor="ref-q-required" className="mb-0">
                     Required
@@ -289,7 +288,7 @@ export function ReferenceQuestionsBuilder({
               </div>
             )}
             {qType !== "section_header" && (
-              <div className="rounded-md border bg-muted/30 p-3 space-y-3">
+              <div className="border bg-muted/30 p-3 space-y-3">
                 <div>
                   <Label>Show this question only as a follow-up to…</Label>
                   <Select

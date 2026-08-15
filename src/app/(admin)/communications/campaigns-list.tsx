@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Plus, X, Trash2 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -15,6 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { SectionBar, StatusPill, type Tone } from "@/components/ffsa";
 import { getLabelColors } from "@/lib/label-color";
 
 type Label = { id: string; slug: string; name: string; color: string | null };
@@ -32,13 +32,14 @@ type Campaign = {
   }[] | null;
 };
 
-const STATUS_CLASS: Record<string, string> = {
-  draft: "status-grey",
-  scheduled: "status-yellow",
-  sending: "status-yellow",
-  sent: "status-green",
-  failed: "status-red",
-  cancelled: "status-grey",
+
+const STATUS_TONE: Record<string, Tone> = {
+  draft: "quiet",
+  scheduled: "warn",
+  sending: "warn",
+  sent: "good",
+  failed: "bad",
+  cancelled: "quiet",
 };
 
 export function CampaignsList({
@@ -119,24 +120,30 @@ export function CampaignsList({
     router.push(`/communications/campaigns/${campaign.id}`);
   }
 
+  const draftCount = campaigns.filter((c) => c.status === "draft").length;
+
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0">
-        <CardTitle className="text-base">Emails</CardTitle>
+    <div className="border border-ink bg-white">
+      <SectionBar
+        title="Emails"
+        meta={`${campaigns.length} total · ${draftCount} draft`}
+      />
+
+      <div className="flex items-center justify-between gap-3 border-b border-rule bg-bone px-5 py-3">
+        <span className="mono-label">Sent to your contact labels</span>
         {!creating && (
           <Button size="sm" className="gap-1" onClick={() => setCreating(true)}>
             <Plus className="h-4 w-4" />
             New email
           </Button>
         )}
-      </CardHeader>
-      <CardContent className="space-y-4">
+      </div>
+
+      <div>
         {creating && (
-          <div className="rounded-lg border bg-muted/30 p-4 space-y-4">
+          <div className="space-y-4 border-b border-rule bg-bone px-5 py-4">
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
-                Start from
-              </p>
+              <p className="mono-label mb-2">Start from</p>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5">
                 <TemplateChip
                   active={templateId === ""}
@@ -154,7 +161,7 @@ export function CampaignsList({
             />
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block">
-                <span className="block text-muted-foreground mb-1 text-xs">
+                <span className="mono-label mb-1 block">
                   Audience labels (OR — anyone with ANY)
                 </span>
                 <div className="space-y-2">
@@ -163,13 +170,13 @@ export function CampaignsList({
                       {selectedLabels.map((l) => (
                         <span
                           key={l.id}
-                          className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border bg-card"
+                          className="inline-flex items-center gap-1 border border-rule-strong bg-white px-2 py-0.5 text-xs"
                         >
                           {l.name}
                           <button
                             type="button"
                             onClick={() => removeLabel(l.id)}
-                            className="hover:text-red-400"
+                            className="hover:text-destructive"
                             aria-label={`Remove ${l.name}`}
                             disabled={busy}
                           >
@@ -200,9 +207,7 @@ export function CampaignsList({
                 </div>
               </label>
               <label className="block">
-                <span className="block text-muted-foreground mb-1 text-xs">
-                  Send from
-                </span>
+                <span className="mono-label mb-1 block">Send from</span>
                 <select
                   value={identityId}
                   onChange={(e) => setIdentityId(e.target.value)}
@@ -218,7 +223,7 @@ export function CampaignsList({
                 </select>
               </label>
             </div>
-            {err && <p className="text-xs text-red-400">{err}</p>}
+            {err && <p className="text-xs text-destructive">{err}</p>}
             <div className="flex gap-2">
               <Button size="sm" onClick={create} disabled={busy}>
                 Create &amp; open composer
@@ -239,9 +244,11 @@ export function CampaignsList({
         )}
 
         {campaigns.length === 0 ? (
-          <p className="text-sm text-muted-foreground italic">No emails yet.</p>
+          <p className="px-5 py-10 text-center text-xs tracking-[0.05em] text-[color:var(--text-tertiary)]">
+            No emails yet.
+          </p>
         ) : (
-          <div className="rounded-lg border bg-card overflow-x-auto">
+          <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -265,27 +272,29 @@ export function CampaignsList({
                       <TableCell>
                         <Link
                           href={`/communications/campaigns/${c.id}`}
-                          className="font-medium text-foreground hover:underline"
+                          className="font-medium text-[color:var(--text-primary)] hover:underline"
                         >
                           {c.name}
                         </Link>
                         {c.subject && (
-                          <div className="text-xs text-muted-foreground">
+                          <div className="text-xs text-[color:var(--text-tertiary)]">
                             {c.subject}
                           </div>
                         )}
                       </TableCell>
                       <TableCell>
                         {cLabels.length === 0 ? (
-                          <span className="text-muted-foreground">—</span>
+                          <span className="text-[color:var(--text-tertiary)]">—</span>
                         ) : (
                           <div className="flex flex-wrap gap-1">
                             {cLabels.map((l) => {
+                              // Label colours are data the user picks in
+                              // Labels — kept, but square and hairline.
                               const col = getLabelColors(l);
                               return (
                                 <span
                                   key={l.id}
-                                  className="inline-flex items-center text-xs px-2 py-0.5 rounded-full border font-medium"
+                                  className="inline-flex items-center border px-2 py-0.5 text-xs font-medium"
                                   style={{
                                     backgroundColor: col.bg,
                                     color: col.text,
@@ -300,15 +309,11 @@ export function CampaignsList({
                         )}
                       </TableCell>
                       <TableCell>
-                        <span
-                          className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium capitalize ${
-                            STATUS_CLASS[c.status] ?? "status-grey"
-                          }`}
-                        >
+                        <StatusPill tone={STATUS_TONE[c.status] ?? "quiet"}>
                           {c.status}
-                        </span>
+                        </StatusPill>
                       </TableCell>
-                      <TableCell className="text-muted-foreground text-xs">
+                      <TableCell className="tabular text-xs text-[color:var(--text-tertiary)]">
                         {c.sent_at
                           ? `Sent ${new Date(c.sent_at).toLocaleString()}`
                           : c.scheduled_at
@@ -323,7 +328,7 @@ export function CampaignsList({
                             disabled={deletingId === c.id}
                             title="Delete draft"
                             aria-label={`Delete draft ${c.name}`}
-                            className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-red-500/10 hover:text-red-500 disabled:opacity-40"
+                            className="inline-flex h-7 w-7 items-center justify-center text-[color:var(--text-tertiary)] hover:text-destructive disabled:opacity-40"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
@@ -336,8 +341,8 @@ export function CampaignsList({
             </Table>
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -356,14 +361,12 @@ function TemplateChip({
     <button
       type="button"
       onClick={onClick}
-      className={`text-left rounded-lg border p-2.5 transition-colors ${
-        active
-          ? "border-foreground bg-foreground/5"
-          : "border-border hover:bg-muted/50"
+      className={`border p-2.5 text-left transition-colors ${
+        active ? "border-ink bg-white" : "border-rule bg-white hover:border-ink"
       }`}
     >
-      <div className="font-semibold text-xs">{name}</div>
-      <div className="text-[10px] text-muted-foreground leading-snug mt-0.5 line-clamp-2">
+      <div className="mono-label !text-[color:var(--text-primary)]">{name}</div>
+      <div className="mt-1 line-clamp-2 text-[11px] normal-case leading-snug tracking-normal text-[color:var(--text-tertiary)]">
         {tagline}
       </div>
     </button>

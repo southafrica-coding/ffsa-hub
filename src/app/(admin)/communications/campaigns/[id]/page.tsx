@@ -11,6 +11,7 @@ import {
 import { getCachedActiveLabels } from "@/lib/cached-reads";
 import { emptyCampaignBody, type CampaignBody } from "@/lib/campaigns/blocks";
 import { getEffectiveBrand } from "@/services/brand";
+import { Masthead } from "@/components/ffsa";
 import { CampaignComposer } from "./campaign-composer";
 import { CampaignAnalytics } from "./campaign-analytics";
 import {
@@ -60,27 +61,31 @@ export default async function CampaignComposerPage({
   const recipients = (recipientsRes?.data ?? []) as RecipientRow[];
 
   return (
-    <div className="space-y-4">
-      {stats && <CampaignAnalytics stats={stats} />}
-      {showStats && <CampaignRecipientsTable recipients={recipients} />}
-      <CampaignComposer
-        campaign={{
-          id: campaign.id,
-          name: campaign.name,
-          subject: campaign.subject ?? "",
-          preview_text: campaign.preview_text ?? "",
-          label_ids: labelIds,
-          sending_identity_id: campaign.sending_identity_id,
-          status: campaign.status,
-          scheduled_at: campaign.scheduled_at,
-        }}
-        initialBody={body}
-        labels={labels ?? []}
-        identities={identities ?? []}
-        audienceCount={audienceCount}
-        brand={brand}
-        currentUserEmail={user.email ?? null}
-      />
+    <div className="ffsa-screen">
+      <Masthead context="Communications · Email" title={campaign.name} />
+
+      <div className="space-y-4 px-8 py-7">
+        {stats && <CampaignAnalytics stats={stats} />}
+        {showStats && <CampaignRecipientsTable recipients={recipients} />}
+        <CampaignComposer
+          campaign={{
+            id: campaign.id,
+            name: campaign.name,
+            subject: campaign.subject ?? "",
+            preview_text: campaign.preview_text ?? "",
+            label_ids: labelIds,
+            sending_identity_id: campaign.sending_identity_id,
+            status: campaign.status,
+            scheduled_at: campaign.scheduled_at,
+          }}
+          initialBody={body}
+          labels={labels ?? []}
+          identities={identities ?? []}
+          audienceCount={audienceCount}
+          brand={brand}
+          currentUserEmail={user.email ?? null}
+        />
+      </div>
     </div>
   );
 }

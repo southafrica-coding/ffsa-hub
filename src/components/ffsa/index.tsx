@@ -12,6 +12,7 @@
  *   · nothing is rounded, nothing is elevated
  */
 
+import Link from "next/link";
 import { cn } from "@/lib/utils/cn";
 
 /* ── Masthead ─────────────────────────────────────── */
@@ -48,6 +49,30 @@ export function NeedsYou({ children, action }: { children: React.ReactNode; acti
   );
 }
 
+/** A masthead's primary action. Black, never yellow — see the handoff rules. */
+export function MastheadAction({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="shrink-0 border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-white hover:bg-[#262622] hover:text-white"
+    >
+      {children}
+    </Link>
+  );
+}
+
+/** The band's black-on-yellow action. Lives here so it can't drift per screen. */
+export function NeedsYouAction({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="shrink-0 border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-yellow hover:bg-[#262622]"
+    >
+      {children}
+    </Link>
+  );
+}
+
 /* ── Black section bar ────────────────────────────── */
 export function SectionBar({ title, meta }: { title: string; meta?: React.ReactNode }) {
   return (
@@ -59,7 +84,8 @@ export function SectionBar({ title, meta }: { title: string; meta?: React.ReactN
 }
 
 /* ── Status pill ──────────────────────────────────── */
-type Tone = "good" | "warn" | "quiet" | "bad";
+// Exported: screens map their own domain statuses onto these tones.
+export type Tone = "good" | "warn" | "quiet" | "bad";
 const TONE: Record<Tone, string> = {
   good: "border-grass text-grass-text",
   warn: "border-amber-border text-amber",

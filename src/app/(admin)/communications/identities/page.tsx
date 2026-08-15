@@ -5,6 +5,7 @@ import {
   listAllSendingIdentities,
   type SendingIdentity,
 } from "@/services/sending-identities";
+import { Masthead } from "@/components/ffsa";
 import { IdentitiesAdmin } from "./identities-admin";
 
 export const dynamic = "force-dynamic";
@@ -21,18 +22,18 @@ export default async function IdentitiesPage() {
   const identities = (data ?? []) as SendingIdentity[];
 
   return (
-    <div className="space-y-6">
-      <div>
-        <p className="page-eyebrow">COMMUNICATIONS</p>
-        <h1 className="page-title">Sending identities</h1>
-        <p className="text-sm text-muted-foreground mt-1">
+    <div className="ffsa-screen">
+      <Masthead context="Communications" title="Sending identities" />
+
+      <div className="px-8 py-7">
+        <p className="mb-5 max-w-2xl text-[13px] text-[color:var(--text-secondary)]">
           The &ldquo;From&rdquo; addresses your campaigns can send through.
           Add one per work stream (events, giving, training, etc.) so each
           email feels like it&rsquo;s coming from the right voice.
         </p>
-      </div>
 
-      <IdentitiesAdmin initialIdentities={identities} />
+        <IdentitiesAdmin initialIdentities={identities} />
+      </div>
     </div>
   );
 }

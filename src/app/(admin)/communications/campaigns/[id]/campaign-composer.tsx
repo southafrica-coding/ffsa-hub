@@ -23,6 +23,9 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+// Only the campaign's own status chip uses the design system here — the rest
+// of this file is the email canvas and preview, which keep the brand's look.
+import { StatusPill } from "@/components/ffsa";
 import {
   type CampaignBlock,
   type CampaignBlockType,
@@ -127,13 +130,13 @@ const SECTION_PRESETS: { layout: SectionLayout; label: string }[] = [
   { layout: "2-1", label: "2 : 1" },
 ];
 
-const STATUS_CLASS: Record<string, string> = {
-  draft: "status-grey",
-  scheduled: "status-yellow",
-  sending: "status-yellow",
-  sent: "status-green",
-  failed: "status-red",
-  cancelled: "status-grey",
+const STATUS_TONE: Record<string, "good" | "warn" | "quiet" | "bad"> = {
+  draft: "quiet",
+  scheduled: "warn",
+  sending: "warn",
+  sent: "good",
+  failed: "bad",
+  cancelled: "quiet",
 };
 
 // Regenerate all block ids (including nested section columns + their children)
@@ -835,13 +838,9 @@ export function CampaignComposer({
               Save as template
             </Button>
           )}
-          <span
-            className={`text-xs px-2 py-0.5 rounded-full capitalize ${
-              STATUS_CLASS[campaign.status] ?? "status-grey"
-            }`}
-          >
+          <StatusPill tone={STATUS_TONE[campaign.status] ?? "quiet"}>
             {campaign.status}
-          </span>
+          </StatusPill>
           {!sent && (
             <Button
               variant="outline"

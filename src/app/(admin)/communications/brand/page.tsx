@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { canManageComms } from "@/lib/api-auth";
 import { listSendingIdentities } from "@/services/campaigns";
 import { getBrandKit, mergeBrand, type BrandKitRow } from "@/services/brand";
+import { Masthead } from "@/components/ffsa";
 import { BrandEditor } from "./brand-editor";
 
 export const dynamic = "force-dynamic";
@@ -46,29 +47,31 @@ export default async function BrandSettingsPage({
   const effective = mergeBrand(brandRow);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <p className="page-eyebrow">COMMUNICATIONS</p>
-        <h1 className="page-title">Brand kits</h1>
-        <p className="text-sm text-muted-foreground mt-1">
+    <div className="ffsa-screen">
+      <Masthead context="Communications" title="Brand kits" />
+
+      {/* Admin chrome only. The editor below owns the per-identity email
+          brand — its own fonts and colours are deliberately not restyled. */}
+      <div className="px-8 py-7">
+        <p className="mb-5 max-w-2xl text-[13px] text-[color:var(--text-secondary)]">
           Each sending identity has its own brand kit. Anything left blank
           falls back to a clean editorial default.
         </p>
-      </div>
 
-      {list.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No sending identities configured. Add one first under
-          Communications settings.
-        </p>
-      ) : (
-        <BrandEditor
-          identities={list}
-          selectedIdentityId={selectedId!}
-          initialBrand={brandRow}
-          initialEffective={effective}
-        />
-      )}
+        {list.length === 0 ? (
+          <p className="text-[13px] text-[color:var(--text-secondary)]">
+            No sending identities configured. Add one first under
+            Communications settings.
+          </p>
+        ) : (
+          <BrandEditor
+            identities={list}
+            selectedIdentityId={selectedId!}
+            initialBrand={brandRow}
+            initialEffective={effective}
+          />
+        )}
+      </div>
     </div>
   );
 }

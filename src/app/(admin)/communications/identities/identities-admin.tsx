@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Plus, Palette, AlertTriangle } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -15,6 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { SectionBar, StatusPill } from "@/components/ffsa";
 import {
   isLikelyVerifiedDomain,
   type SendingIdentity,
@@ -163,29 +163,33 @@ export function IdentitiesAdmin({
 
   return (
     <div className="space-y-4">
-      {err && <p className="text-sm text-red-400">{err}</p>}
-      {msg && <p className="text-sm text-emerald-400">{msg}</p>}
+      {err && <p className="text-sm text-destructive">{err}</p>}
+      {msg && <p className="text-sm text-[color:var(--green-text)]">{msg}</p>}
 
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-xs text-muted-foreground">
-          {activeCount} active {activeCount === 1 ? "identity" : "identities"}
-          {identities.length > activeCount &&
-            ` · ${identities.length - activeCount} deactivated`}
-        </p>
-        {!creating && (
-          <Button onClick={() => setCreating(true)} size="sm" className="gap-1.5">
-            <Plus className="h-3.5 w-3.5" />
-            Add identity
-          </Button>
-        )}
-      </div>
+      <div className="border border-ink bg-white">
+        <SectionBar
+          title="Identities"
+          meta={`${activeCount} active${
+            identities.length > activeCount
+              ? ` · ${identities.length - activeCount} deactivated`
+              : ""
+          }`}
+        />
 
-      {creating && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">New identity</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
+        <div className="flex items-center justify-between gap-3 border-b border-rule bg-bone px-5 py-3">
+          <span className="mono-label">
+            {creating ? "New identity" : "One per work stream"}
+          </span>
+          {!creating && (
+            <Button onClick={() => setCreating(true)} size="sm" className="gap-1.5">
+              <Plus className="h-3.5 w-3.5" />
+              Add identity
+            </Button>
+          )}
+        </div>
+
+        {creating && (
+          <div className="space-y-3 border-b border-rule bg-bone px-5 py-4">
             <div className="grid gap-3 md:grid-cols-2">
               <Field label="Display name (shown in this app)">
                 <Input
@@ -243,12 +247,10 @@ export function IdentitiesAdmin({
                 {busy ? "Creating…" : "Create identity"}
               </Button>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        )}
 
-      <Card>
-        <CardContent className="p-0">
+        <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -324,7 +326,9 @@ export function IdentitiesAdmin({
                           />
                         </TableCell>
                         <TableCell>
-                          <StatusPill active={i.is_active} />
+                          <StatusPill tone={i.is_active ? "good" : "quiet"}>
+                            {i.is_active ? "Active" : "Inactive"}
+                          </StatusPill>
                         </TableCell>
                         <TableCell className="text-right whitespace-nowrap">
                           <Button
@@ -352,7 +356,7 @@ export function IdentitiesAdmin({
                           <div className="font-medium text-sm">
                             {i.display_name}
                           </div>
-                          <div className="text-xs text-muted-foreground">
+                          <div className="text-xs text-[color:var(--text-tertiary)]">
                             {i.from_name}
                           </div>
                         </TableCell>
@@ -360,16 +364,18 @@ export function IdentitiesAdmin({
                           {i.from_email}
                           <DomainWarning email={i.from_email} />
                         </TableCell>
-                        <TableCell className="font-mono text-xs text-muted-foreground">
+                        <TableCell className="font-mono text-xs text-[color:var(--text-tertiary)]">
                           {i.reply_to || "—"}
                         </TableCell>
                         <TableCell>
-                          <StatusPill active={i.is_active} />
+                          <StatusPill tone={i.is_active ? "good" : "quiet"}>
+                            {i.is_active ? "Active" : "Inactive"}
+                          </StatusPill>
                         </TableCell>
                         <TableCell className="text-right whitespace-nowrap">
                           <Link
                             href={`/communications/brand?identity=${i.id}`}
-                            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground px-2"
+                            className="inline-flex items-center gap-1 px-2 text-xs text-[color:var(--text-tertiary)] hover:text-[color:var(--text-primary)]"
                             title="Open brand kit"
                           >
                             <Palette className="h-3.5 w-3.5" />
@@ -390,7 +396,9 @@ export function IdentitiesAdmin({
                             onClick={() => toggleActive(i)}
                             disabled={busy}
                             className={`h-7 px-2 text-xs ${
-                              i.is_active ? "text-red-400" : "text-emerald-400"
+                              i.is_active
+                                ? "text-destructive"
+                                : "text-[color:var(--green-text)]"
                             }`}
                           >
                             {i.is_active ? "Deactivate" : "Reactivate"}
@@ -403,10 +411,10 @@ export function IdentitiesAdmin({
               })}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
-      <p className="text-xs text-muted-foreground">
+      <p className="text-xs text-[color:var(--text-tertiary)]">
         Tip: each identity has its own brand kit. Click <strong>Brand</strong>{" "}
         on a row to set logo, colors, fonts, and footer for that identity.
       </p>
@@ -423,21 +431,9 @@ function Field({
 }) {
   return (
     <label className="block text-sm">
-      <span className="block text-muted-foreground mb-1 text-xs">{label}</span>
+      <span className="mono-label mb-1 block">{label}</span>
       {children}
     </label>
-  );
-}
-
-function StatusPill({ active }: { active: boolean }) {
-  return (
-    <span
-      className={`text-xs px-2 py-0.5 rounded-full ${
-        active ? "status-green" : "status-grey"
-      }`}
-    >
-      {active ? "Active" : "Inactive"}
-    </span>
   );
 }
 
@@ -445,7 +441,7 @@ function DomainWarning({ email }: { email: string }) {
   if (!email || !email.includes("@")) return null;
   if (isLikelyVerifiedDomain(email)) return null;
   return (
-    <p className="flex items-center gap-1 text-[11px] text-amber-400 mt-1">
+    <p className="mt-1 flex items-center gap-1 text-[11px] text-[color:var(--amber)]">
       <AlertTriangle className="h-3 w-3 flex-shrink-0" />
       Domain not auto-verified — confirm DNS in Mailtrap before sending.
     </p>

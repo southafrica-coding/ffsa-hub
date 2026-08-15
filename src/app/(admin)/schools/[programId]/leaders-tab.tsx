@@ -105,14 +105,14 @@ export function LeadersTab({
         </p>
       </CardHeader>
       <CardContent className="space-y-5">
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
 
         {leaders.length === 0 ? (
           <p className="text-sm text-muted-foreground italic">
             No leaders yet. Add the people who run this school below.
           </p>
         ) : (
-          <ul className="divide-y rounded-md border">
+          <ul className="divide-y border">
             {leaders.map((l) => (
               <li
                 key={l.id}
@@ -132,7 +132,7 @@ export function LeadersTab({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="text-red-600 hover:text-red-700 shrink-0"
+                  className="text-destructive hover:text-destructive shrink-0"
                   disabled={busyId === l.user_id}
                   onClick={() => mutate("DELETE", l.user_id)}
                 >
@@ -158,7 +158,7 @@ export function LeadersTab({
             />
           </div>
           {matches.length > 0 && (
-            <ul className="rounded-md border divide-y">
+            <ul className="border divide-y">
               {matches.map((u) => (
                 <li
                   key={u.id}
