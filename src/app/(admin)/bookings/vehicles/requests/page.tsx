@@ -6,6 +6,7 @@ import {
   getPendingVehicleBookings,
   type VehicleBookingWithRefs,
 } from "@/services/vehicles";
+import { Masthead } from "@/components/ffsa";
 import { RequestsQueue } from "./requests-queue";
 
 export default async function VehicleRequestsPage() {
@@ -25,15 +26,13 @@ export default async function VehicleRequestsPage() {
   const pending = (data ?? []) as VehicleBookingWithRefs[];
 
   return (
-    <div className="space-y-5">
-      <div>
-        <p className="page-eyebrow">RESERVATIONS</p>
-        <h1 className="page-title">Pending requests</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {pending.length} request{pending.length === 1 ? "" : "s"} awaiting review
-        </p>
+    // No NeedsYou band here: the whole page IS the review queue, so a yellow
+    // strip pointing at it would be pointing at itself.
+    <div className="ffsa-screen">
+      <Masthead context="Reservations" title="Pending requests" />
+      <div className="px-5 py-6 md:px-8 md:py-7">
+        <RequestsQueue requests={pending} />
       </div>
-      <RequestsQueue requests={pending} />
     </div>
   );
 }

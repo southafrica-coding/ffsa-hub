@@ -14,7 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { StatusPill, ColorDot } from "../ui";
-import { statusColor } from "@/lib/bookings/status";
+import { Masthead, SectionBar } from "@/components/ffsa";
 import { dateRangeLabel, timeRangeLabel } from "@/lib/bookings/dates";
 
 export default async function MyRequestsPage() {
@@ -30,32 +30,30 @@ export default async function MyRequestsPage() {
   const mine = (data ?? []) as BookingWithRefs[];
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <p className="page-eyebrow">VENUE SCHEDULING</p>
-          <h1 className="page-title">My requests</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {mine.length} booking{mine.length === 1 ? "" : "s"} you&apos;ve submitted
-          </p>
-        </div>
-        <Link href="/bookings/spaces/new">
-          <Button size="sm" className="gap-1.5">
-            <Plus className="h-4 w-4" />
-            New booking
-          </Button>
-        </Link>
-      </div>
+    <div className="ffsa-screen">
+      <Masthead
+        context="Venue scheduling"
+        title="My requests"
+        actions={
+          <Link href="/bookings/spaces/new">
+            <Button size="sm" className="gap-1.5">
+              <Plus className="h-4 w-4" />
+              New booking
+            </Button>
+          </Link>
+        }
+      />
 
+      <div className="px-5 py-6 md:px-8 md:py-7">
       {mine.length === 0 ? (
-        <div className="rounded-xl border bg-card">
+        <div className="border border-ink bg-white">
           <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[hsl(22_8%_12%)]">
-              <Inbox className="h-5 w-5 text-[hsl(30_6%_42%)]" />
+            <div className="flex h-12 w-12 items-center justify-center border border-rule-strong bg-bone">
+              <Inbox className="h-5 w-5 text-[color:var(--text-tertiary)]" />
             </div>
             <div>
-              <p className="text-sm font-medium text-foreground">No requests yet</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
+              <p className="text-sm font-medium">No requests yet</p>
+              <p className="mt-0.5 text-xs text-[color:var(--text-secondary)]">
                 Bookings you submit will show here with their status.
               </p>
             </div>
@@ -68,7 +66,12 @@ export default async function MyRequestsPage() {
           </div>
         </div>
       ) : (
-        <div className="rounded-xl border bg-card overflow-x-auto shadow-[0_2px_16px_rgba(0,0,0,0.35)]">
+        <div className="border border-ink bg-white">
+          <SectionBar
+            title="Submitted by me"
+            meta={`${mine.length} booking${mine.length === 1 ? "" : "s"}`}
+          />
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -83,32 +86,25 @@ export default async function MyRequestsPage() {
             <TableBody>
               {mine.map((b) => (
                 <TableRow key={b.id}>
-                  <TableCell style={{ boxShadow: `inset 3px 0 0 ${statusColor(b.status)}` }}>
+                  <TableCell>
                     <StatusPill status={b.status} />
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
-                    <span className="inline-flex items-center gap-1.5 text-foreground">
+                    <span className="inline-flex items-center gap-1.5">
                       <ColorDot color={b.venue?.color ?? "#64748b"} />
                       {b.venue?.name ?? "—"}
                     </span>
                   </TableCell>
                   <TableCell>
-                    <Link
-                      href={`/bookings/spaces/${b.id}`}
-                      className="font-medium text-foreground hover:text-[hsl(42_95%_62%)]"
-                    >
+                    <Link href={`/bookings/spaces/${b.id}`} className="font-medium hover:underline">
                       {b.title}
                     </Link>
-                    {b.series_id && (
-                      <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wider text-[hsl(42_90%_58%)]">
-                        weekly
-                      </span>
-                    )}
+                    {b.series_id && <span className="mono-label ml-1.5">weekly</span>}
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
                     {dateRangeLabel(b.booking_date, b.end_date)}
                   </TableCell>
-                  <TableCell className="whitespace-nowrap tabular-nums text-muted-foreground">
+                  <TableCell className="whitespace-nowrap tabular-nums text-[color:var(--text-secondary)]">
                     {timeRangeLabel(b.start_time, b.end_time)}
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
@@ -118,15 +114,17 @@ export default async function MyRequestsPage() {
                         {b.ministry.name}
                       </span>
                     ) : (
-                      <span className="text-muted-foreground">—</span>
+                      <span className="text-[color:var(--text-tertiary)]">—</span>
                     )}
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
+          </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

@@ -26,9 +26,8 @@ import {
 } from "@/services/vehicles";
 import { Button } from "@/components/ui/button";
 import { PaymentBlock } from "../payment-block";
-import { Card, CardContent } from "@/components/ui/card";
 import { StatusPill, AssignedVehicles } from "../ui";
-import { statusColor } from "@/lib/vehicles/status";
+import { Masthead, SectionBar } from "@/components/ffsa";
 import { dateRangeLabel } from "@/lib/bookings/dates";
 import { countries } from "@/lib/countries";
 import { VehicleBookingActions } from "./booking-actions";
@@ -42,10 +41,8 @@ function countryLabel(iso2: string | null): string {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[hsl(30_6%_46%)]">
-        {label}
-      </p>
-      <div className="mt-0.5 text-sm text-foreground">{children}</div>
+      <p className="mono-label">{label}</p>
+      <div className="mt-1 text-sm">{children}</div>
     </div>
   );
 }
@@ -69,11 +66,11 @@ function InspectionRow({
   canInspect: boolean;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-3 last:border-b-0 last:pb-0">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-rule pb-3 last:border-b-0 last:pb-0">
       <div>
-        <p className="text-sm font-medium text-foreground">{inspectionKindLabel(kind)}</p>
+        <p className="text-sm font-medium">{inspectionKindLabel(kind)}</p>
         {insp ? (
-          <p className="mt-0.5 text-xs text-muted-foreground">
+          <p className="mt-0.5 text-xs text-[color:var(--text-secondary)]">
             {insp.mileage != null ? `${insp.mileage.toLocaleString()} km · ` : ""}
             recorded {insp.performed_at.slice(0, 10)}
             {kind === "collection" && insp.damage_panels.length > 0
@@ -81,7 +78,7 @@ function InspectionRow({
               : ""}
           </p>
         ) : (
-          <p className="mt-0.5 text-xs text-muted-foreground">Not recorded yet.</p>
+          <p className="mt-0.5 text-xs text-[color:var(--text-secondary)]">Not recorded yet.</p>
         )}
       </div>
       {canInspect && (
@@ -110,19 +107,17 @@ function FileLinks({
   if (files.length === 0) return null;
   return (
     <div>
-      <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-[hsl(30_6%_46%)]">
-        {title}
-      </p>
+      <p className="mono-label mb-1.5">{title}</p>
       <ul className="space-y-1">
         {files.map((f) => (
           <li key={f.id} className="flex items-center gap-2 text-sm">
-            <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <Icon className="h-4 w-4 shrink-0 text-[color:var(--text-tertiary)]" />
             {f.signed_url ? (
               <a
                 href={f.signed_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-foreground hover:text-[hsl(42_95%_62%)]"
+                className="hover:underline"
               >
                 {f.file_name ?? "file"}
               </a>
@@ -199,32 +194,33 @@ export default async function VehicleBookingDetail({
   const days = dayCount(b.checkout_date, b.return_date);
 
   return (
-    <div className="space-y-5 max-w-3xl">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <p className="page-eyebrow">RESERVATIONS</p>
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="page-title">{b.booking_name}</h1>
+    <div className="ffsa-screen">
+      <Masthead
+        context="Reservations"
+        title={b.booking_name}
+        actions={
+          <>
             {b.source === "public" && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-[hsl(150_45%_40%/0.5)] bg-[hsl(150_45%_30%/0.25)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-[hsl(150_55%_70%)]">
+              <span className="inline-block border border-grass px-2 py-1 font-mono text-[9px] font-bold uppercase tracking-[0.12em] text-grass-text">
                 External · public link
               </span>
             )}
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {dateRangeLabel(b.checkout_date, b.return_date)} · {days} day
-            {days === 1 ? "" : "s"} · {purposeLabel(b.purpose)}
-            {b.purpose === "other" && b.purpose_note ? ` (${b.purpose_note})` : ""}
-          </p>
-        </div>
-        <span style={{ boxShadow: `inset 0 -2px 0 ${statusColor(b.status)}` }}>
-          <StatusPill status={b.status} />
-        </span>
-      </div>
+            <StatusPill status={b.status} />
+          </>
+        }
+      />
+
+      <div className="max-w-3xl space-y-5 px-8 py-7">
+      <p className="text-[13px] text-[color:var(--text-secondary)]">
+        {dateRangeLabel(b.checkout_date, b.return_date)} · {days} day
+        {days === 1 ? "" : "s"} · {purposeLabel(b.purpose)}
+        {b.purpose === "other" && b.purpose_note ? ` (${b.purpose_note})` : ""}
+      </p>
 
       {/* Details */}
-      <Card>
-        <CardContent className="grid grid-cols-1 gap-4 pt-6 sm:grid-cols-2">
+      <div className="border border-ink bg-white">
+        <SectionBar title="Request" />
+        <div className="grid grid-cols-1 gap-5 p-6 sm:grid-cols-2">
           <Field label="Requested by">{b.requester_name ?? "—"}</Field>
           <Field label="Point person">{b.point_person ?? "—"}</Field>
           <Field label="Email">{b.requester_email ?? "—"}</Field>
@@ -232,7 +228,7 @@ export default async function VehicleBookingDetail({
           <Field label="People">{b.num_people ?? "—"}</Field>
           <Field label="Home country / Xero">
             {countryLabel(b.home_country)}
-            <span className="ml-1 text-xs text-muted-foreground">
+            <span className="ml-1 text-xs text-[color:var(--text-tertiary)]">
               ({(b.home_country ?? "").toUpperCase() === "US" ? "US" : "SA"} Xero)
             </span>
           </Field>
@@ -249,42 +245,40 @@ export default async function VehicleBookingDetail({
               <Field label="Decision note">{b.decision_note}</Field>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Drivers */}
       {drivers.length > 0 && (
-        <Card>
-          <CardContent className="pt-6">
-            <h2 className="mb-3 text-sm font-semibold">Drivers</h2>
+        <div className="border border-ink bg-white">
+          <SectionBar title="Drivers" meta={`${drivers.length}`} />
+          <div className="p-6">
             <div className="space-y-2">
               {drivers.map((d) => (
                 <div
                   key={d.id}
-                  className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b pb-2 text-sm last:border-b-0 last:pb-0"
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-rule pb-2 text-sm last:border-b-0 last:pb-0"
                 >
-                  <span className="font-medium text-foreground">{d.name}</span>
-                  {d.phone && <span className="text-muted-foreground">{d.phone}</span>}
-                  <span
-                    className="text-xs"
-                    style={{ color: d.has_sa_license ? "hsl(142 52% 60%)" : "hsl(0 70% 66%)" }}
-                  >
+                  <span className="font-medium">{d.name}</span>
+                  {d.phone && <span className="text-[color:var(--text-secondary)]">{d.phone}</span>}
+                  <span className={d.has_sa_license ? "text-xs text-grass-text" : "text-xs text-destructive"}>
                     {d.has_sa_license ? "SA licence ✓" : "No licence on file"}
                   </span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-xs text-[color:var(--text-tertiary)]">
                     {TEST_LABEL[d.driving_test_status] ?? d.driving_test_status}
                   </span>
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {/* Payment summary (read-only mirror; managed below) */}
       {b.payment_required && (
-        <Card>
-          <CardContent className="grid grid-cols-2 gap-4 pt-6 sm:grid-cols-3">
+        <div className="border border-ink bg-white">
+          <SectionBar title="Payment" />
+          <div className="grid grid-cols-2 gap-5 p-6 sm:grid-cols-3">
             <Field label="Price / day">
               {b.pricing_per_day != null ? `${b.currency} ${b.pricing_per_day}` : "—"}
             </Field>
@@ -292,12 +286,12 @@ export default async function VehicleBookingDetail({
               {b.total_amount != null ? `${b.currency} ${b.total_amount}` : "—"}
             </Field>
             <Field label="Payment">
-              <span style={{ color: b.payment_received ? "hsl(142 52% 60%)" : "hsl(42 90% 62%)" }}>
+              <span className={b.payment_received ? "text-grass-text" : "text-amber"}>
                 {b.payment_received ? "Received ✓" : "Outstanding"}
               </span>
             </Field>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {/* Card payment + Xero */}
@@ -314,36 +308,30 @@ export default async function VehicleBookingDetail({
       )}
 
       {/* Inspections */}
-      <Card>
-        <CardContent className="space-y-4 pt-6">
-          <h2 className="flex items-center gap-2 text-sm font-semibold">
-            <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
-            Inspections
-          </h2>
+      <div className="border border-ink bg-white">
+        <SectionBar title="Inspections" />
+        <div className="space-y-4 p-6">
           <InspectionRow kind="collection" insp={collection} bookingId={b.id} canInspect={canInspect} />
           <InspectionRow kind="return" insp={returnInsp} bookingId={b.id} canInspect={canInspect} />
           <FileLinks title="Damage / condition photos" icon={Camera} files={photos} />
           <FileLinks title="Driver licences" icon={FileText} files={licenses} />
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Policy agreement */}
-      <Card>
-        <CardContent className="space-y-3 pt-6">
-          <h2 className="flex items-center gap-2 text-sm font-semibold">
-            <PenLine className="h-4 w-4 text-muted-foreground" />
-            Policy agreement
-          </h2>
+      <div className="border border-ink bg-white">
+        <SectionBar title="Policy agreement" />
+        <div className="space-y-3 p-6">
           {latestAgreement ? (
             <p className="flex flex-wrap items-center gap-2 text-sm">
-              <CheckCircle2 className="h-4 w-4" style={{ color: "hsl(142 52% 60%)" }} />
-              <span className="font-medium text-foreground">{latestAgreement.signer_name}</span>
-              <span className="text-muted-foreground">
+              <CheckCircle2 className="h-4 w-4 text-grass-text" />
+              <span className="font-medium">{latestAgreement.signer_name}</span>
+              <span className="text-[color:var(--text-secondary)]">
                 signed {latestAgreement.signed_at.slice(0, 10)} · policy {latestAgreement.policy_version}
               </span>
             </p>
           ) : (
-            <p className="text-sm text-muted-foreground">Not signed yet.</p>
+            <p className="text-sm text-[color:var(--text-secondary)]">Not signed yet.</p>
           )}
           {canInspect && (
             <Link href={`/bookings/vehicles/${b.id}/agreement`}>
@@ -353,8 +341,8 @@ export default async function VehicleBookingDetail({
               </Button>
             </Link>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Management */}
       <VehicleBookingActions
@@ -377,6 +365,7 @@ export default async function VehicleBookingDetail({
         isManager={isManager}
         isOwner={isOwner}
       />
+      </div>
     </div>
   );
 }

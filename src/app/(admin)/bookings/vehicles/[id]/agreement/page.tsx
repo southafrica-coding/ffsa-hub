@@ -9,13 +9,13 @@ import {
   type VehicleBookingWithRefs,
   type VehicleAgreement,
 } from "@/services/vehicles";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   VEHICLE_POLICY_TITLE,
   VEHICLE_POLICY_VERSION,
   VEHICLE_POLICY_INTRO,
   VEHICLE_POLICY_SECTIONS,
 } from "@/lib/vehicles/policy";
+import { Masthead, SectionBar } from "@/components/ffsa";
 import { AgreementForm } from "../../agreement-form";
 
 export default async function AgreementPage({
@@ -46,55 +46,55 @@ export default async function AgreementPage({
   const agreements = (agreementRows ?? []) as VehicleAgreement[];
 
   return (
-    <div className="space-y-5 max-w-3xl">
-      <div>
-        <p className="page-eyebrow">RESERVATIONS</p>
-        <h1 className="page-title">{VEHICLE_POLICY_TITLE}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+    <div className="ffsa-screen">
+      <Masthead context="Reservations" title={VEHICLE_POLICY_TITLE} />
+      <div className="max-w-3xl space-y-5 px-8 py-7">
+        <p className="text-[13px] text-[color:var(--text-secondary)]">
           {b.booking_name} · Policy version {VEHICLE_POLICY_VERSION}
         </p>
-      </div>
 
-      {/* Existing signatures */}
-      {agreements.length > 0 && (
-        <Card>
-          <CardContent className="space-y-2 pt-6">
-            <h2 className="text-sm font-semibold">Signed</h2>
-            {agreements.map((a) => (
-              <p key={a.id} className="flex flex-wrap items-center gap-2 text-sm">
-                <CheckCircle2 className="h-4 w-4" style={{ color: "hsl(142 52% 60%)" }} />
-                <span className="font-medium text-foreground">{a.signer_name}</span>
-                <span className="text-muted-foreground">
-                  signed {a.signed_at.slice(0, 10)} · policy {a.policy_version}
-                </span>
-              </p>
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* The policy */}
-      <Card>
-        <CardContent className="space-y-4 pt-6">
-          <p className="text-sm text-muted-foreground">{VEHICLE_POLICY_INTRO}</p>
-          {VEHICLE_POLICY_SECTIONS.map((s) => (
-            <div key={s.heading} className="space-y-1.5">
-              <h3 className="text-sm font-semibold text-foreground">{s.heading}</h3>
-              <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-                {s.points.map((p, i) => (
-                  <li key={i}>{p}</li>
-                ))}
-              </ul>
+        {/* Existing signatures */}
+        {agreements.length > 0 && (
+          <div className="border border-ink bg-white">
+            <SectionBar title="Signed" meta={`${agreements.length}`} />
+            <div className="space-y-2 p-6">
+              {agreements.map((a) => (
+                <p key={a.id} className="flex flex-wrap items-center gap-2 text-sm">
+                  <CheckCircle2 className="h-4 w-4 text-grass-text" />
+                  <span className="font-medium">{a.signer_name}</span>
+                  <span className="text-[color:var(--text-secondary)]">
+                    signed {a.signed_at.slice(0, 10)} · policy {a.policy_version}
+                  </span>
+                </p>
+              ))}
             </div>
-          ))}
-        </CardContent>
-      </Card>
+          </div>
+        )}
 
-      <AgreementForm
-        bookingId={id}
-        defaultSignerName={b.requester_name ?? ""}
-        defaultSignerEmail={b.requester_email ?? ""}
-      />
+        {/* The policy */}
+        <div className="border border-ink bg-white">
+          <SectionBar title="The policy" />
+          <div className="space-y-4 p-6">
+            <p className="text-sm text-[color:var(--text-secondary)]">{VEHICLE_POLICY_INTRO}</p>
+            {VEHICLE_POLICY_SECTIONS.map((s) => (
+              <div key={s.heading} className="space-y-1.5">
+                <h3 className="text-[15px]">{s.heading}</h3>
+                <ul className="list-disc space-y-1 pl-5 text-sm text-[color:var(--text-secondary)]">
+                  {s.points.map((p, i) => (
+                    <li key={i}>{p}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <AgreementForm
+          bookingId={id}
+          defaultSignerName={b.requester_name ?? ""}
+          defaultSignerEmail={b.requester_email ?? ""}
+        />
+      </div>
     </div>
   );
 }

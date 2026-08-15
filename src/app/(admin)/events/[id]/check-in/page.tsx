@@ -21,7 +21,7 @@ export default async function CheckInPage({
   if (!(await canManageEvents(supabase, user.id, ["events.manage_attendance"]))) {
     return (
       <div className="p-6 text-center text-sm text-destructive">
-        You don't have permission to check tickets in for this event.
+        You don&apos;t have permission to check tickets in for this event.
       </div>
     );
   }

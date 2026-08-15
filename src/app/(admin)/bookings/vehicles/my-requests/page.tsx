@@ -18,7 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { StatusPill, AssignedVehicles } from "../ui";
-import { statusColor } from "@/lib/vehicles/status";
+import { Masthead, SectionBar } from "@/components/ffsa";
 import { dateRangeLabel } from "@/lib/bookings/dates";
 
 export default async function MyVehicleRequestsPage() {
@@ -33,39 +33,42 @@ export default async function MyVehicleRequestsPage() {
   const mine = (data ?? []) as VehicleBookingWithRefs[];
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <p className="page-eyebrow">RESERVATIONS</p>
-          <h1 className="page-title">My requests</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {mine.length} request{mine.length === 1 ? "" : "s"} you&apos;ve submitted
-          </p>
-        </div>
-        <Link href="/bookings/vehicles/new">
-          <Button size="sm" className="gap-1.5">
-            <Plus className="h-4 w-4" />
-            New request
-          </Button>
-        </Link>
-      </div>
+    <div className="ffsa-screen">
+      <Masthead
+        context="Reservations"
+        title="My requests"
+        actions={
+          <Link href="/bookings/vehicles/new">
+            <Button size="sm" className="gap-1.5">
+              <Plus className="h-4 w-4" />
+              New request
+            </Button>
+          </Link>
+        }
+      />
 
+      <div className="px-5 py-6 md:px-8 md:py-7">
       {mine.length === 0 ? (
-        <div className="rounded-xl border bg-card">
+        <div className="border border-ink bg-white">
           <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[hsl(22_8%_12%)]">
-              <Inbox className="h-5 w-5 text-[hsl(30_6%_42%)]" />
+            <div className="flex h-12 w-12 items-center justify-center border border-rule-strong bg-bone">
+              <Inbox className="h-5 w-5 text-[color:var(--text-tertiary)]" />
             </div>
             <div>
-              <p className="text-sm font-medium text-foreground">No requests yet</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
+              <p className="text-sm font-medium">No requests yet</p>
+              <p className="mt-0.5 text-xs text-[color:var(--text-secondary)]">
                 Vehicle requests you submit will show here with their status.
               </p>
             </div>
           </div>
         </div>
       ) : (
-        <div className="rounded-xl border bg-card overflow-x-auto shadow-[0_2px_16px_rgba(0,0,0,0.35)]">
+        <div className="border border-ink bg-white">
+          <SectionBar
+            title="Submitted by me"
+            meta={`${mine.length} request${mine.length === 1 ? "" : "s"}`}
+          />
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -79,14 +82,11 @@ export default async function MyVehicleRequestsPage() {
             <TableBody>
               {mine.map((b) => (
                 <TableRow key={b.id}>
-                  <TableCell style={{ boxShadow: `inset 3px 0 0 ${statusColor(b.status)}` }}>
+                  <TableCell>
                     <StatusPill status={b.status} />
                   </TableCell>
                   <TableCell>
-                    <Link
-                      href={`/bookings/vehicles/${b.id}`}
-                      className="font-medium text-foreground hover:text-[hsl(42_95%_62%)]"
-                    >
+                    <Link href={`/bookings/vehicles/${b.id}`} className="font-medium hover:underline">
                       {b.booking_name}
                     </Link>
                   </TableCell>
@@ -96,15 +96,17 @@ export default async function MyVehicleRequestsPage() {
                   <TableCell>
                     <AssignedVehicles assignments={b.assignments} />
                   </TableCell>
-                  <TableCell className="whitespace-nowrap text-muted-foreground">
+                  <TableCell className="whitespace-nowrap text-[color:var(--text-secondary)]">
                     {purposeLabel(b.purpose)}
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
+          </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

@@ -7,12 +7,12 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
 import { Plus } from "lucide-react";
 import { createVehicle, updateVehicle, type Vehicle } from "@/services/vehicles";
+import { SectionBar } from "@/components/ffsa";
 
 const SELECT_CLASS =
-  "h-9 rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  "h-9";
 
 function VehicleRow({ vehicle }: { vehicle: Vehicle }) {
   const supabase = createClient();
@@ -155,9 +155,9 @@ export function FleetAdmin({ vehicles }: { vehicles: Vehicle[] }) {
   }
 
   return (
-    <Card>
-      <CardContent className="pt-6">
-        <h2 className="text-sm font-semibold mb-2">Vehicles</h2>
+    <div className="border border-ink bg-white">
+      <SectionBar title="Vehicles" />
+      <div className="p-6">
         <div>
           {vehicles.map((v) => (
             <VehicleRow key={v.id} vehicle={v} />
@@ -224,7 +224,7 @@ export function FleetAdmin({ vehicles }: { vehicles: Vehicle[] }) {
             {adding ? "Adding…" : "Add"}
           </Button>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

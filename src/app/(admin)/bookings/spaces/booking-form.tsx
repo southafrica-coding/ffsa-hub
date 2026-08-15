@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DateInput } from "@/components/ui/date-input";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -19,6 +18,7 @@ import { AlertTriangle, Ban, CheckCircle2, Clock } from "lucide-react";
 import { WEEKDAY_OPTIONS } from "@/lib/bookings/recurrence";
 import { humanDate } from "@/lib/bookings/dates";
 import type { Venue, Ministry } from "@/services/bookings";
+import { SectionBar } from "@/components/ffsa";
 
 type Conflict = {
   date: string;
@@ -198,8 +198,9 @@ export function BookingForm({
   const hasConflicts = conflicts.length > 0;
 
   return (
-    <Card>
-      <CardContent className="pt-6">
+    <div className="border border-ink bg-white">
+      <SectionBar title="Booking details" />
+      <div className="p-6">
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -225,12 +226,12 @@ export function BookingForm({
               </Select>
               {selectedVenue &&
                 (willAutoConfirm ? (
-                  <p className="flex items-center gap-1.5 text-xs text-[hsl(142_52%_55%)]">
+                  <p className="flex items-center gap-1.5 text-xs text-grass-text">
                     <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
                     Instant confirmation — this space doesn&apos;t need approval.
                   </p>
                 ) : (
-                  <p className="flex items-center gap-1.5 text-xs text-[hsl(42_95%_60%)]">
+                  <p className="flex items-center gap-1.5 text-xs text-amber">
                     <Clock className="h-3.5 w-3.5 shrink-0" />
                     Goes to the booking manager for approval.
                   </p>
@@ -272,7 +273,7 @@ export function BookingForm({
               value={form.description}
               onChange={(e) => update("description", e.target.value)}
               rows={2}
-              className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="flex w-full"
             />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -296,19 +297,18 @@ export function BookingForm({
           </div>
 
           {/* When */}
-          <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
-            <div className="flex items-center rounded-md border bg-card p-0.5 w-fit">
+          <div className="space-y-3 border border-rule bg-bone p-4">
+            <div className="flex w-fit items-center">
               {(["none", "weekly"] as const).map((r) => (
-                <Button
+                <button
                   key={r}
                   type="button"
-                  variant={form.recurrence === r ? "secondary" : "ghost"}
-                  size="sm"
-                  className="h-7 px-3"
+                  className="chip -ml-px bg-white"
+                  data-active={form.recurrence === r ? "true" : undefined}
                   onClick={() => update("recurrence", r)}
                 >
                   {r === "none" ? "One-off" : "Weekly"}
-                </Button>
+                </button>
               ))}
             </div>
 
@@ -369,10 +369,10 @@ export function BookingForm({
 
           {/* Times */}
           <div className="flex items-center gap-3 pt-1">
-            <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[hsl(30_6%_46%)]">
+            <span className="mono-label">
               Times &amp; set-up
             </span>
-            <span className="h-px flex-1 bg-[hsl(22_8%_14%)]" />
+            <span className="h-px flex-1 bg-rule" />
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="space-y-2">
@@ -418,15 +418,15 @@ export function BookingForm({
             <div
               className={
                 blocked
-                  ? "rounded-lg border border-destructive/45 bg-destructive/10 p-3 text-sm"
-                  : "rounded-lg border border-primary/35 bg-primary/10 p-3 text-sm"
+                  ? "border border-destructive p-3 text-sm"
+                  : "border border-ink bg-bone p-3 text-sm"
               }
             >
               <p
                 className={
                   blocked
                     ? "flex items-center gap-2 font-semibold text-destructive"
-                    : "flex items-center gap-2 font-semibold text-primary"
+                    : "flex items-center gap-2 font-semibold"
                 }
               >
                 {blocked ? <Ban className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
@@ -473,7 +473,7 @@ export function BookingForm({
             </Button>
           </div>
         </form>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { requireModuleAccess } from "@/lib/require-permission";
 import { getVehicles, getVehicleAccess, type Vehicle } from "@/services/vehicles";
+import { Masthead } from "@/components/ffsa";
 import { FleetAdmin } from "./fleet-admin";
 import { RequestLinkCard } from "./request-link-card";
 
@@ -22,17 +23,16 @@ export default async function FleetPage() {
   const vehicles = (vehiclesRes.data ?? []) as Vehicle[];
 
   return (
-    <div className="space-y-5 max-w-3xl">
-      <div>
-        <p className="page-eyebrow">RESERVATIONS</p>
-        <h1 className="page-title">Manage fleet</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+    <div className="ffsa-screen">
+      <Masthead context="Reservations" title="Manage fleet" />
+      <div className="max-w-3xl space-y-5 px-8 py-7">
+        <p className="text-[13px] text-[color:var(--text-secondary)]">
           The base vehicles available to book. Set a vehicle to “maintenance” to
           take it out of availability without deleting its history.
         </p>
+        <FleetAdmin vehicles={vehicles} />
+        <RequestLinkCard />
       </div>
-      <FleetAdmin vehicles={vehicles} />
-      <RequestLinkCard />
     </div>
   );
 }

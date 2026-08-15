@@ -23,7 +23,7 @@ export function CountryPicker({
       onChange={(e) => onChange(e.target.value)}
       className={
         className ??
-        "h-10 w-full rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        "h-10 w-full"
       }
     >
       <option value="">Select country…</option>

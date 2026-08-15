@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DateInput } from "@/components/ui/date-input";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -16,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { Booking, Venue, Ministry } from "@/services/bookings";
+import { SectionBar } from "@/components/ffsa";
 
 function timeVal(t: string | null): string {
   if (!t) return "";
@@ -105,11 +105,12 @@ export function EditBookingForm({
   }
 
   return (
-    <Card>
-      <CardContent className="pt-6">
+    <div className="border border-ink bg-white">
+      <SectionBar title="Booking details" />
+      <div className="p-6">
         <form onSubmit={submit} className="space-y-5">
           {booking.series_id && (
-            <p className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+            <p className="border border-rule bg-bone px-3 py-2 text-xs text-[color:var(--text-secondary)]">
               This is one date in a weekly series — your edits apply to this date only.
             </p>
           )}
@@ -164,7 +165,7 @@ export function EditBookingForm({
               value={form.description}
               onChange={(e) => update("description", e.target.value)}
               rows={2}
-              className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="flex w-full"
             />
           </div>
           <div className="space-y-2">
@@ -188,10 +189,10 @@ export function EditBookingForm({
           </div>
 
           <div className="flex items-center gap-3 pt-1">
-            <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[hsl(30_6%_46%)]">
+            <span className="mono-label">
               Times &amp; set-up
             </span>
-            <span className="h-px flex-1 bg-[hsl(22_8%_14%)]" />
+            <span className="h-px flex-1 bg-rule" />
           </div>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <div className="space-y-2">
@@ -227,7 +228,7 @@ export function EditBookingForm({
             </Button>
           </div>
         </form>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { requireModuleAccess } from "@/lib/require-permission";
 import { getVehicles, getVehicleAccess, type Vehicle } from "@/services/vehicles";
+import { Masthead } from "@/components/ffsa";
 import { VehicleBookingForm } from "../vehicle-booking-form";
 
 export default async function NewVehicleBookingPage() {
@@ -27,20 +28,19 @@ export default async function NewVehicleBookingPage() {
   const defaultName = p ? [p.first_name, p.last_name].filter(Boolean).join(" ") : "";
 
   return (
-    <div className="space-y-5 max-w-3xl">
-      <div>
-        <p className="page-eyebrow">RESERVATIONS</p>
-        <h1 className="page-title">New vehicle request</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+    <div className="ffsa-screen">
+      <Masthead context="Reservations" title="New vehicle request" />
+      <div className="max-w-3xl space-y-5 px-8 py-7">
+        <p className="text-[13px] text-[color:var(--text-secondary)]">
           Submitting a request does not guarantee a vehicle — it goes to the Vehicle
           Coordinator for approval.
         </p>
+        <VehicleBookingForm
+          vehicles={vehicles}
+          defaultRequesterName={defaultName}
+          defaultRequesterEmail={user.email ?? ""}
+        />
       </div>
-      <VehicleBookingForm
-        vehicles={vehicles}
-        defaultRequesterName={defaultName}
-        defaultRequesterEmail={user.email ?? ""}
-      />
     </div>
   );
 }

@@ -5,8 +5,8 @@ import {
   requireAnyModuleAccess,
   hasModuleAccess,
 } from "@/lib/require-permission";
-import { Building2, Car } from "lucide-react";
-import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Building2, Car, ArrowUpRight } from "lucide-react";
+import { Masthead } from "@/components/ffsa";
 
 const BOOKING_TYPES = [
   {
@@ -46,41 +46,50 @@ export default async function BookingsHubPage() {
   const bookingTypes = BOOKING_TYPES.filter((_, i) => access[i]);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <p className="page-eyebrow">RESERVATIONS</p>
-        <h1 className="page-title">Bookings</h1>
-      </div>
+    <div className="ffsa-screen">
+      <Masthead context="Reservations" title="Bookings" />
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {bookingTypes.map((b) => {
-          const Icon = b.icon;
-          const content = (
-            <Card className={b.ready ? "card-hover cursor-pointer" : "opacity-50"}>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Icon className="h-5 w-5" style={{ color: "var(--yellow)" }} />
-                  {b.title}
-                  {!b.ready && (
-                    <span className="ml-auto text-xs font-normal uppercase tracking-widest text-muted-foreground">
-                      Soon
-                    </span>
-                  )}
-                </CardTitle>
-                <CardDescription>{b.description}</CardDescription>
-              </CardHeader>
-            </Card>
-          );
-
-          if (b.ready) {
-            return (
-              <Link key={b.title} href={b.href}>
-                {content}
-              </Link>
+      <div className="px-5 py-6 md:px-8 md:py-7">
+        <div className="border border-ink">
+          {bookingTypes.map((b) => {
+            const Icon = b.icon;
+            const body = (
+              <div className="flex items-start gap-4 border-b border-rule px-6 py-6 last:border-b-0">
+                <Icon className="mt-1 h-5 w-5 shrink-0 text-[color:var(--text-tertiary)]" />
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-[22px]">{b.title}</h2>
+                  <p className="mt-1.5 max-w-2xl text-[13px] text-[color:var(--text-secondary)]">
+                    {b.description}
+                  </p>
+                </div>
+                {b.ready ? (
+                  <span className="mono-label flex shrink-0 items-center gap-1 pt-1">
+                    Open <ArrowUpRight className="h-3 w-3" />
+                  </span>
+                ) : (
+                  <span className="mono-label shrink-0 pt-1">Soon</span>
+                )}
+              </div>
             );
-          }
-          return <div key={b.title}>{content}</div>;
-        })}
+
+            if (b.ready) {
+              return (
+                <Link
+                  key={b.title}
+                  href={b.href}
+                  className="block transition-colors hover:bg-bone"
+                >
+                  {body}
+                </Link>
+              );
+            }
+            return (
+              <div key={b.title} className="opacity-50">
+                {body}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

@@ -3,10 +3,10 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Link2, Copy, RefreshCw, Check } from "lucide-react";
+import { Copy, RefreshCw, Check } from "lucide-react";
+import { SectionBar } from "@/components/ffsa";
 
 type LinkSettings = {
   slug: string;
@@ -112,15 +112,12 @@ export function RequestLinkCard() {
   }
 
   return (
-    <Card>
-      <CardContent className="space-y-4 pt-6">
+    <div className="border border-ink bg-white">
+      <SectionBar title="Public request link" />
+      <div className="space-y-4 p-6">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="flex items-center gap-2 text-sm font-semibold">
-              <Link2 className="h-4 w-4 text-muted-foreground" />
-              Public request link
-            </h2>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="text-xs text-[color:var(--text-secondary)]">
               Share this with people who aren&apos;t in the Hub (visiting teams, partners,
               parents). Their request lands in the approvals queue flagged as external.
             </p>
@@ -170,7 +167,7 @@ export function RequestLinkCard() {
             </div>
 
             {!settings.enabled && (
-              <p className="text-xs text-[hsl(42_90%_62%)]">
+              <p className="text-xs text-amber">
                 The link is currently off — visitors see a “link unavailable” notice until
                 you turn it on.
               </p>
@@ -186,7 +183,7 @@ export function RequestLinkCard() {
                 onChange={(e) => setNote(e.target.value)}
                 rows={2}
                 placeholder="Shown at the top of the public form — e.g. who to contact with questions."
-                className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className="flex w-full"
               />
               <Button
                 size="sm"
@@ -199,7 +196,7 @@ export function RequestLinkCard() {
             </div>
           </>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

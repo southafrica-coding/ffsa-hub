@@ -7,7 +7,6 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
 import { Plus } from "lucide-react";
 import {
   createVenue,
@@ -18,6 +17,7 @@ import {
   type Venue,
   type Ministry,
 } from "@/services/bookings";
+import { SectionBar } from "@/components/ffsa";
 
 function CheckToggle({
   checked,
@@ -218,9 +218,9 @@ export function VenueAdmin({
   return (
     <div className="space-y-6">
       {/* Venues */}
-      <Card>
-        <CardContent className="pt-6">
-          <h2 className="text-sm font-semibold mb-2">Venues</h2>
+      <div className="border border-ink bg-white">
+        <SectionBar title="Venues" />
+        <div className="p-6">
           <div>
             {venues.map((v) => (
               <VenueRow key={v.id} venue={v} />
@@ -254,13 +254,13 @@ export function VenueAdmin({
               {addingV ? "Adding…" : "Add"}
             </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Ministries */}
-      <Card>
-        <CardContent className="pt-6">
-          <h2 className="text-sm font-semibold mb-2">Ministries</h2>
+      <div className="border border-ink bg-white">
+        <SectionBar title="Ministries" />
+        <div className="p-6">
           <div>
             {ministries.map((m) => (
               <MinistryRow key={m.id} ministry={m} />
@@ -288,8 +288,8 @@ export function VenueAdmin({
               {addingM ? "Adding…" : "Add"}
             </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

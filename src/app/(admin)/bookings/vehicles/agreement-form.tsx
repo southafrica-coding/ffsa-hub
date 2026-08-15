@@ -6,8 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
-import { PenLine } from "lucide-react";
+import { SectionBar } from "@/components/ffsa";
 
 export function AgreementForm({
   bookingId,
@@ -55,12 +54,9 @@ export function AgreementForm({
   }
 
   return (
-    <Card>
-      <CardContent className="space-y-4 pt-6">
-        <h2 className="flex items-center gap-2 text-sm font-semibold">
-          <PenLine className="h-4 w-4 text-muted-foreground" />
-          Sign the agreement
-        </h2>
+    <div className="border border-ink bg-white">
+      <SectionBar title="Sign the agreement" />
+      <div className="space-y-4 p-6">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="signer_name">Your name *</Label>
@@ -113,7 +109,7 @@ export function AgreementForm({
             Cancel
           </Button>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

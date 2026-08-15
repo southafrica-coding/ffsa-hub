@@ -9,6 +9,7 @@ import {
 } from "@/services/bookings";
 import { findConflicts, type BookingWindow } from "@/lib/bookings/conflicts";
 import { timeRangeLabel } from "@/lib/bookings/dates";
+import { Masthead } from "@/components/ffsa";
 import { RequestsQueue } from "./requests-queue";
 
 export default async function RequestsPage() {
@@ -53,15 +54,16 @@ export default async function RequestsPage() {
   }
 
   return (
-    <div className="space-y-5">
-      <div>
-        <p className="page-eyebrow">VENUE SCHEDULING</p>
-        <h1 className="page-title">Booking requests</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+    // No NeedsYou band here: the whole page IS the review queue, so a yellow
+    // strip pointing at it would be pointing at itself.
+    <div className="ffsa-screen">
+      <Masthead context="Venue scheduling" title="Booking requests" />
+      <div className="px-5 py-6 md:px-8 md:py-7">
+        <p className="mb-5 text-[13px] text-[color:var(--text-secondary)]">
           {pending.length} request{pending.length === 1 ? "" : "s"} awaiting review — approved ones go onto the calendar.
         </p>
+        <RequestsQueue initial={pending} clashInfo={clashInfo} />
       </div>
-      <RequestsQueue initial={pending} clashInfo={clashInfo} />
     </div>
   );
 }

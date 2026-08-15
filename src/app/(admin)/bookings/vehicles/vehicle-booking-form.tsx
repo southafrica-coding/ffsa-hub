@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DateInput } from "@/components/ui/date-input";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -18,6 +17,7 @@ import {
 import { Plus, Trash2 } from "lucide-react";
 import { PURPOSE_OPTIONS, dayCount, type Vehicle } from "@/services/vehicles";
 import { CountryPicker } from "./country-picker";
+import { SectionBar } from "@/components/ffsa";
 
 type DriverRow = {
   name: string;
@@ -173,8 +173,9 @@ export function VehicleBookingForm({
   }
 
   return (
-    <Card>
-      <CardContent className="pt-6">
+    <div className="border border-ink bg-white">
+      <SectionBar title="Request details" />
+      <div className="p-6">
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -293,7 +294,7 @@ export function VehicleBookingForm({
           )}
 
           {/* Vehicles */}
-          <div className="space-y-2 rounded-lg border bg-muted/20 p-4">
+          <div className="space-y-2 border border-rule bg-bone p-4">
             <Label>Vehicle(s) requested</Label>
             <p className="text-xs text-muted-foreground">
               Pick the vehicles you&apos;d like — the coordinator confirms the final
@@ -307,8 +308,8 @@ export function VehicleBookingForm({
                   <label
                     key={v.id}
                     className={
-                      "flex items-center gap-2 rounded-md border px-3 py-2 text-sm " +
-                      (unavailable ? "opacity-50" : "cursor-pointer hover:bg-white/5")
+                      "flex items-center gap-2 border px-3 py-2 text-sm " +
+                      (unavailable ? "border-rule opacity-50" : "cursor-pointer border-rule-strong hover:bg-bone")
                     }
                   >
                     <input
@@ -319,13 +320,13 @@ export function VehicleBookingForm({
                       className="rounded border-input"
                     />
                     <span
-                      className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                      className="inline-block h-2.5 w-2.5 shrink-0"
                       style={{ backgroundColor: v.color }}
                     />
                     <span className="text-foreground">{v.name}</span>
                     <span className="text-xs capitalize text-muted-foreground">{v.vehicle_type}</span>
                     {unavailable && (
-                      <span className="ml-auto text-[10px] font-bold uppercase tracking-wider text-[hsl(0_70%_66%)]">
+                      <span className="ml-auto text-[10px] font-bold uppercase tracking-wider text-destructive">
                         Booked
                       </span>
                     )}
@@ -336,7 +337,7 @@ export function VehicleBookingForm({
           </div>
 
           {/* Drivers */}
-          <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
+          <div className="space-y-3 border border-rule bg-bone p-4">
             <div className="flex items-center justify-between">
               <Label>Drivers</Label>
               <Button
@@ -409,7 +410,7 @@ export function VehicleBookingForm({
               onChange={(e) => update("notes", e.target.value)}
               rows={2}
               placeholder="Anything the coordinator should know"
-              className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="flex w-full"
             />
           </div>
 
@@ -424,7 +425,7 @@ export function VehicleBookingForm({
             </Button>
           </div>
         </form>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

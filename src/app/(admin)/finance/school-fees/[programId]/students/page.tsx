@@ -68,7 +68,7 @@ export default async function ProgramStudentsPage({
     <div className="ffsa-screen">
       <Masthead context={`School fees · ${program.name}`} title="Student Billing" />
 
-      <div className="px-8 py-7">
+      <div className="px-5 py-6 md:px-8 md:py-7">
         <div className="border border-ink">
           <SectionBar
             title="Students"

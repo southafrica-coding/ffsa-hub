@@ -14,8 +14,8 @@ import type { BookingWithRefs } from "@/services/bookings";
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-start justify-between gap-3">
-      <span className="shrink-0 text-[11px] text-muted-foreground">{label}</span>
-      <span className="text-right text-xs text-foreground">{children}</span>
+      <span className="mono-label shrink-0">{label}</span>
+      <span className="text-right text-xs">{children}</span>
     </div>
   );
 }
@@ -34,16 +34,14 @@ export function BookingPopover({
       <PopoverTrigger asChild>{children}</PopoverTrigger>
       <PopoverContent align="start" className="w-72 overflow-hidden p-0">
         <div
-          className="border-b border-[hsl(22_8%_14%)] p-3"
+          className="border-b border-rule bg-bone p-3"
           style={{ borderLeft: `3px solid ${booking.venue?.color ?? "#64748b"}` }}
         >
           <div className="flex items-start justify-between gap-2">
-            <p className="text-sm font-semibold leading-tight text-foreground">
-              {booking.title}
-            </p>
+            <p className="text-sm font-semibold leading-tight">{booking.title}</p>
             <StatusPill status={booking.status} />
           </div>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">
+          <p className="mt-0.5 text-[11px] text-[color:var(--text-secondary)]">
             {booking.venue?.name ?? "Venue"}
             {booking.venue?.building ? ` · ${booking.venue.building}` : ""}
           </p>
@@ -52,11 +50,7 @@ export function BookingPopover({
         <div className="space-y-1.5 p-3">
           <Row label="Date">
             {dateRangeLabel(booking.booking_date, booking.end_date)}
-            {booking.series_id && (
-              <span className="ml-1 text-[9px] font-bold uppercase tracking-wider text-[hsl(42_90%_58%)]">
-                weekly
-              </span>
-            )}
+            {booking.series_id && <span className="mono-label ml-1">weekly</span>}
           </Row>
           <Row label="Event time">
             {timeRangeLabel(booking.start_time, booking.end_time)}
@@ -77,16 +71,16 @@ export function BookingPopover({
           <Row label="Requested by">{booking.requester_name || "—"}</Row>
           {booking.point_person && <Row label="Point person">{booking.point_person}</Row>}
           {booking.description && (
-            <p className="mt-1.5 border-t border-[hsl(22_8%_14%)] pt-1.5 text-[11px] leading-snug text-muted-foreground">
+            <p className="mt-1.5 border-t border-rule pt-1.5 text-[11px] leading-snug text-[color:var(--text-secondary)]">
               {booking.description}
             </p>
           )}
         </div>
 
-        <div className="border-t border-[hsl(22_8%_14%)] p-1.5">
+        <div className="border-t border-ink">
           <Link
             href={`/bookings/spaces/${booking.id}`}
-            className="flex items-center justify-center gap-1 rounded-md px-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-[hsl(42_95%_62%)] transition-colors hover:bg-[hsl(22_8%_14%)]"
+            className="flex items-center justify-center gap-1 bg-ink px-2 py-2.5 font-mono text-[9px] font-bold uppercase tracking-[0.14em] !text-white"
           >
             Open full details
             <ArrowUpRight className="h-3.5 w-3.5" />

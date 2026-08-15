@@ -9,6 +9,7 @@ import {
   type VehicleBookingWithRefs,
   type VehicleInspectionFile,
 } from "@/services/vehicles";
+import { Masthead } from "@/components/ffsa";
 import { InspectionForm } from "../../inspection-form";
 
 export default async function ReturnInspectionPage({
@@ -58,19 +59,18 @@ export default async function ReturnInspectionPage({
   );
 
   return (
-    <div className="space-y-5 max-w-3xl">
-      <div>
-        <p className="page-eyebrow">RESERVATIONS</p>
-        <h1 className="page-title">Return inspection</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{b.booking_name} · Sign In</p>
+    <div className="ffsa-screen">
+      <Masthead context="Reservations" title="Return inspection" />
+      <div className="max-w-3xl space-y-5 px-8 py-7">
+        <p className="text-[13px] text-[color:var(--text-secondary)]">{b.booking_name} · Sign In</p>
+        <InspectionForm
+          bookingId={id}
+          kind="return"
+          vehicles={vehicles}
+          defaultDriverNames={driverNames}
+          initialFiles={initialFiles}
+        />
       </div>
-      <InspectionForm
-        bookingId={id}
-        kind="return"
-        vehicles={vehicles}
-        defaultDriverNames={driverNames}
-        initialFiles={initialFiles}
-      />
     </div>
   );
 }

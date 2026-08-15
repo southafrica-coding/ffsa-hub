@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
 import { Upload, Trash2, FileText, Image as ImageIcon } from "lucide-react";
 import {
   DAMAGE_PANELS,
@@ -14,6 +13,7 @@ import {
   inspectionKindLabel,
   type InspectionKind,
 } from "@/services/vehicles";
+import { SectionBar } from "@/components/ffsa";
 
 type UploadedFile = {
   id: string;
@@ -142,8 +142,9 @@ export function InspectionForm({
   const licenses = files.filter((f) => f.kind === "license");
 
   return (
-    <Card>
-      <CardContent className="space-y-5 pt-6">
+    <div className="border border-ink bg-white">
+      <SectionBar title={kind === "collection" ? "Collection inspection" : "Return inspection"} />
+      <div className="space-y-5 p-6">
         {/* Vehicle + driver + mileage */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div className="space-y-2">
@@ -151,7 +152,7 @@ export function InspectionForm({
             <select
               value={vehicleId}
               onChange={(e) => setVehicleId(e.target.value)}
-              className="h-10 w-full rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="h-10 w-full"
             >
               <option value="">— select —</option>
               {vehicles.map((v) => (
@@ -184,7 +185,7 @@ export function InspectionForm({
         {isCollection ? (
           <>
             {/* Walk-around damage map */}
-            <div className="space-y-2 rounded-lg border bg-muted/20 p-4">
+            <div className="space-y-2 border border-rule bg-bone p-4">
               <Label>Walk-around — tick any panel that HAS damage</Label>
               <p className="text-xs text-muted-foreground">
                 Anything you don&apos;t mark is treated as undamaged at collection.
@@ -193,7 +194,7 @@ export function InspectionForm({
                 {DAMAGE_PANELS.map((p) => (
                   <label
                     key={p.key}
-                    className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-white/5"
+                    className="flex cursor-pointer items-center gap-2 px-2 py-1 text-sm hover:bg-bone"
                   >
                     <input
                       type="checkbox"
@@ -208,7 +209,7 @@ export function InspectionForm({
             </div>
 
             {/* Inventory */}
-            <div className="space-y-2 rounded-lg border bg-muted/20 p-4">
+            <div className="space-y-2 border border-rule bg-bone p-4">
               <Label>Inventory — tick what&apos;s present in the vehicle</Label>
               <div className="flex flex-wrap gap-x-5 gap-y-1.5 pt-1">
                 {INVENTORY_ITEMS.map((i) => (
@@ -238,7 +239,7 @@ export function InspectionForm({
             />
           </>
         ) : (
-          <div className="space-y-2 rounded-lg border bg-muted/20 p-4">
+          <div className="space-y-2 border border-rule bg-bone p-4">
             <Label>Return condition</Label>
             <div className="flex flex-col gap-2 pt-1">
               <label className="flex items-center gap-2 text-sm">
@@ -275,7 +276,7 @@ export function InspectionForm({
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
-            className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="flex w-full"
           />
         </div>
 
@@ -301,8 +302,8 @@ export function InspectionForm({
             Cancel
           </Button>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -322,10 +323,10 @@ function FileSection({
   onRemove: (f: UploadedFile) => void;
 }) {
   return (
-    <div className="space-y-2 rounded-lg border bg-muted/20 p-4">
+    <div className="space-y-2 border border-rule bg-bone p-4">
       <div className="flex items-center justify-between">
         <Label>{label}</Label>
-        <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-white/5">
+        <label className="inline-flex cursor-pointer items-center gap-1.5 border border-ink px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em] hover:bg-bone">
           <Upload className="h-3.5 w-3.5" />
           {uploading ? "Uploading…" : "Add files"}
           <input
@@ -356,7 +357,7 @@ function FileSection({
                   href={f.signed_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="truncate text-foreground hover:text-[hsl(42_95%_62%)]"
+                  className="truncate text-foreground hover:text-ink"
                 >
                   {f.file_name ?? "file"}
                 </a>

@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
 import { CreditCard, CheckCircle2, RefreshCw } from "lucide-react";
+import { SectionBar } from "@/components/ffsa";
 
 export function PaymentBlock({
   bookingId,
@@ -87,41 +87,38 @@ export function PaymentBlock({
   }
 
   return (
-    <Card>
-      <CardContent className="space-y-3 pt-6">
-        <h2 className="flex items-center gap-2 text-sm font-semibold">
-          <CreditCard className="h-4 w-4 text-muted-foreground" />
-          Payment
-        </h2>
+    <div className="border border-ink bg-white">
+      <SectionBar title="Payment" />
+      <div className="space-y-3 p-6">
 
         {paymentReceived ? (
-          <p className="flex flex-wrap items-center gap-2 text-sm" style={{ color: "hsl(142 52% 60%)" }}>
+          <p className="flex flex-wrap items-center gap-2 text-sm text-grass-text">
             <CheckCircle2 className="h-4 w-4" />
             Payment received
             {xeroInvoiceNumber && (
-              <span className="text-muted-foreground">· Xero invoice {xeroInvoiceNumber}</span>
+              <span className="text-[color:var(--text-secondary)]">· Xero invoice {xeroInvoiceNumber}</span>
             )}
           </p>
         ) : canPay ? (
           <div className="space-y-3">
             {/* Live USD → ZAR conversion when the rate is quoted in USD */}
             {isUsd && total != null && (
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border bg-muted/20 px-3 py-2 text-sm">
-                <span className="font-semibold text-foreground tabular-nums">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border border-rule bg-bone px-3 py-2 text-sm">
+                <span className="font-semibold tabular-nums">
                   ${total.toFixed(2)} USD
                 </span>
-                <span className="text-muted-foreground">→</span>
+                <span className="text-[color:var(--text-tertiary)]">→</span>
                 {rate ? (
                   <>
-                    <span className="font-semibold tabular-nums" style={{ color: "hsl(42 95% 64%)" }}>
+                    <span className="numeral text-[17px]">
                       R{(total * rate).toFixed(2)}
                     </span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-xs text-[color:var(--text-tertiary)]">
                       live rate R{rate.toFixed(2)}/$ {rateDate ? `· ${rateDate}` : ""}
                     </span>
                   </>
                 ) : (
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-xs text-[color:var(--text-tertiary)]">
                     {rateLoading ? "fetching live rate…" : "rate unavailable — enter ZAR manually"}
                   </span>
                 )}
@@ -129,7 +126,7 @@ export function PaymentBlock({
                   type="button"
                   onClick={loadRate}
                   disabled={rateLoading}
-                  className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
+                  className="mono-label ml-auto inline-flex items-center gap-1 hover:!text-ink disabled:opacity-50"
                 >
                   <RefreshCw className={"h-3 w-3 " + (rateLoading ? "animate-spin" : "")} />
                   Refresh
@@ -139,7 +136,7 @@ export function PaymentBlock({
 
             <div className="flex flex-wrap items-end gap-2">
               <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Charge amount (ZAR)</label>
+                <label>Charge amount (ZAR)</label>
                 <Input
                   type="number"
                   value={zar}
@@ -153,25 +150,25 @@ export function PaymentBlock({
                 {paying ? "Starting…" : "Pay now (card)"}
               </Button>
               {latestStatus === "pending" && (
-                <span className="text-xs text-muted-foreground">A payment is in progress…</span>
+                <span className="text-xs text-[color:var(--text-tertiary)]">A payment is in progress…</span>
               )}
               {latestStatus === "failed" && (
-                <span className="text-xs" style={{ color: "hsl(0 70% 66%)" }}>
+                <span className="text-xs text-destructive">
                   Last attempt failed — try again.
                 </span>
               )}
             </div>
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">Awaiting payment.</p>
+          <p className="text-sm text-[color:var(--text-secondary)]">Awaiting payment.</p>
         )}
 
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-[11px] text-[color:var(--text-tertiary)]">
           PayFast charges in ZAR. On success the booking is marked paid and an invoice
           posts to Xero (US renters → US Xero, others → SA Xero) under item code
           VehicleRent.
         </p>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

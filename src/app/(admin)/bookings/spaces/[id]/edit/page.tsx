@@ -9,6 +9,7 @@ import {
   type Venue,
   type Ministry,
 } from "@/services/bookings";
+import { Masthead } from "@/components/ffsa";
 import { EditBookingForm } from "../../edit-booking-form";
 
 export default async function EditBookingPage({
@@ -44,16 +45,15 @@ export default async function EditBookingPage({
   ]);
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <div>
-        <p className="page-eyebrow">VENUE SCHEDULING</p>
-        <h1 className="page-title">Edit booking</h1>
+    <div className="ffsa-screen">
+      <Masthead context="Venue scheduling" title="Edit booking" />
+      <div className="max-w-2xl px-8 py-7">
+        <EditBookingForm
+          booking={booking}
+          venues={(venuesRes.data ?? []) as Venue[]}
+          ministries={(ministriesRes.data ?? []) as Ministry[]}
+        />
       </div>
-      <EditBookingForm
-        booking={booking}
-        venues={(venuesRes.data ?? []) as Venue[]}
-        ministries={(ministriesRes.data ?? []) as Ministry[]}
-      />
     </div>
   );
 }

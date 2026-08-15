@@ -22,7 +22,7 @@ import {
   ClipboardList,
   Inbox,
 } from "lucide-react";
-import { cn } from "@/lib/utils/cn";
+import { Masthead, NeedsYou } from "@/components/ffsa";
 import {
   monthParam,
   monthLabel,
@@ -125,78 +125,72 @@ export function BookingsView({
   );
 
   return (
-    <div className="space-y-5">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <p className="page-eyebrow">VENUE SCHEDULING</p>
-          <h1 className="page-title">Space Bookings</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {bookings.length} confirmed booking{bookings.length === 1 ? "" : "s"} in view
-            {clashIds.size > 0 && (
-              <span className="text-[hsl(0_70%_64%)]">
-                {" "}· {clashIds.size} clash{clashIds.size === 1 ? "" : "es"}
-              </span>
+    <div className="ffsa-screen">
+      <Masthead
+        context="Venue scheduling"
+        title="Space Bookings"
+        actions={
+          <>
+            <Link href="/bookings/spaces/my-requests">
+              <Button variant="ghost" size="sm" className="gap-1.5">
+                <Inbox className="h-4 w-4" />
+                My requests
+              </Button>
+            </Link>
+            {access.canApprove && (
+              <Link href="/bookings/spaces/requests">
+                <Button variant="outline" size="sm" className="gap-1.5">
+                  <ClipboardList className="h-4 w-4" />
+                  Requests
+                  {pendingCount > 0 && (
+                    <span className="ml-0.5 border border-ink px-1.5 py-px text-[10px] font-bold">
+                      {pendingCount}
+                    </span>
+                  )}
+                </Button>
+              </Link>
             )}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <Link href="/bookings/spaces/my-requests">
-            <Button variant="ghost" size="sm" className="gap-1.5">
-              <Inbox className="h-4 w-4" />
-              My requests
-            </Button>
-          </Link>
-          {access.canApprove && (
-            <Link href="/bookings/spaces/requests">
-              <Button variant="outline" size="sm" className="gap-1.5">
-                <ClipboardList className="h-4 w-4" />
-                Requests
-                {pendingCount > 0 && (
-                  <span className="ml-0.5 rounded-full bg-primary px-1.5 py-px text-[10px] font-bold text-primary-foreground">
-                    {pendingCount}
-                  </span>
-                )}
-              </Button>
-            </Link>
-          )}
-          {access.canManage && (
-            <Link href="/bookings/spaces/venues">
-              <Button variant="outline" size="sm" className="gap-1.5">
-                <Settings2 className="h-4 w-4" />
-                Manage venues
-              </Button>
-            </Link>
-          )}
-          {(access.canRequest || access.canApprove || access.canManage) && (
-            <Link href="/bookings/spaces/new">
-              <Button size="sm" className="gap-1.5">
-                <Plus className="h-4 w-4" />
-                New booking
-              </Button>
-            </Link>
-          )}
-        </div>
-      </div>
+            {access.canManage && (
+              <Link href="/bookings/spaces/venues">
+                <Button variant="outline" size="sm" className="gap-1.5">
+                  <Settings2 className="h-4 w-4" />
+                  Manage venues
+                </Button>
+              </Link>
+            )}
+            {(access.canRequest || access.canApprove || access.canManage) && (
+              <Link href="/bookings/spaces/new">
+                <Button size="sm" className="gap-1.5">
+                  <Plus className="h-4 w-4" />
+                  New booking
+                </Button>
+              </Link>
+            )}
+          </>
+        }
+      />
 
-      {/* Manager nudge */}
+      {/* The page's ONE yellow band — driven by the pending count the page
+          already fetches. Never add a second. */}
       {access.canApprove && pendingCount > 0 && (
-        <Link
-          href="/bookings/spaces/requests"
-          className="flex items-center justify-between gap-3 rounded-xl border border-primary/35 bg-primary/[0.07] px-4 py-3 transition-colors hover:bg-primary/10"
+        <NeedsYou
+          action={
+            <Link
+              href="/bookings/spaces/requests"
+              className="border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-yellow"
+            >
+              Review
+            </Link>
+          }
         >
-          <span className="flex items-center gap-2 text-sm font-medium text-primary">
-            <ClipboardList className="h-4 w-4" />
-            {pendingCount} request{pendingCount === 1 ? "" : "s"} awaiting your review
-          </span>
-          <span className="text-xs font-semibold uppercase tracking-wider text-primary">
-            Review →
-          </span>
-        </Link>
+          {pendingCount === 1
+            ? "1 booking request is waiting on your review"
+            : `${pendingCount} booking requests are waiting on your review`}
+        </NeedsYou>
       )}
 
       {/* Controls */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-rule bg-bone px-8 py-3">
         <div className="flex items-center gap-1">
           <Button
             variant="outline"
@@ -207,7 +201,7 @@ export function BookingsView({
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <div className="min-w-[11rem] text-center text-base font-semibold tracking-wide">
+          <div className="min-w-[11rem] text-center font-display text-[17px] font-black uppercase tracking-[0.04em]">
             {headerLabel}
           </div>
           <Button
@@ -222,6 +216,14 @@ export function BookingsView({
           <Button variant="ghost" size="sm" className="ml-1" onClick={() => go({ date: today })}>
             Today
           </Button>
+          <span className="mono-label ml-3">
+            {bookings.length} confirmed
+            {clashIds.size > 0 && (
+              <span className="text-destructive">
+                {" "}· {clashIds.size} clash{clashIds.size === 1 ? "" : "es"}
+              </span>
+            )}
+          </span>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
@@ -253,26 +255,27 @@ export function BookingsView({
             </SelectContent>
           </Select>
 
-          <div className="flex items-center rounded-lg border bg-card p-0.5">
+          <div className="flex items-center">
             {VIEW_OPTIONS.map((opt) => {
               const Icon = opt.icon;
               return (
-                <Button
+                <button
                   key={opt.key}
-                  variant={view === opt.key ? "secondary" : "ghost"}
-                  size="sm"
-                  className="h-7 gap-1 px-2"
+                  type="button"
                   onClick={() => go({ view: opt.key })}
+                  className="chip -ml-px bg-white"
+                  data-active={view === opt.key ? "true" : undefined}
                 >
-                  <Icon className="h-4 w-4" />
+                  <Icon className="h-3.5 w-3.5" />
                   <span className="hidden md:inline">{opt.label}</span>
-                </Button>
+                </button>
               );
             })}
           </div>
         </div>
       </div>
 
+      <div className="px-5 py-6 md:px-8 md:py-7">
       {view === "list" ? (
         <BookingList
           bookings={bookings}
@@ -292,6 +295,7 @@ export function BookingsView({
           month={month}
         />
       )}
+      </div>
     </div>
   );
 }

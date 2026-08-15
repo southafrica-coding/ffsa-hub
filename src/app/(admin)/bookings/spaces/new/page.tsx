@@ -8,6 +8,7 @@ import {
   type Venue,
   type Ministry,
 } from "@/services/bookings";
+import { Masthead } from "@/components/ffsa";
 import { BookingForm } from "../booking-form";
 
 export default async function NewBookingPage({
@@ -47,18 +48,17 @@ export default async function NewBookingPage({
     : "";
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <div>
-        <p className="page-eyebrow">VENUE SCHEDULING</p>
-        <h1 className="page-title">New booking request</h1>
+    <div className="ffsa-screen">
+      <Masthead context="Venue scheduling" title="New booking request" />
+      <div className="max-w-2xl px-8 py-7">
+        <BookingForm
+          venues={venues}
+          ministries={ministries}
+          defaultRequesterName={defaultRequesterName}
+          defaultDate={defaultDate}
+          canApprove={access.canApprove}
+        />
       </div>
-      <BookingForm
-        venues={venues}
-        ministries={ministries}
-        defaultRequesterName={defaultRequesterName}
-        defaultDate={defaultDate}
-        canApprove={access.canApprove}
-      />
     </div>
   );
 }

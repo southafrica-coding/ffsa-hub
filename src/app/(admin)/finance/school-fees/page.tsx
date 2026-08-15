@@ -51,7 +51,7 @@ export default async function SchoolFeesPage() {
         }
       />
 
-      <div className="px-8 py-7">
+      <div className="px-5 py-6 md:px-8 md:py-7">
         <div className="border border-ink">
           <SectionBar
             title="Programs"

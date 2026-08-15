@@ -8,6 +8,7 @@ import {
   type Venue,
   type Ministry,
 } from "@/services/bookings";
+import { Masthead } from "@/components/ffsa";
 import { VenueAdmin } from "./venue-admin";
 
 export default async function VenuesAdminPage() {
@@ -30,15 +31,14 @@ export default async function VenuesAdminPage() {
   ]);
 
   return (
-    <div className="max-w-3xl space-y-6">
-      <div>
-        <p className="page-eyebrow">VENUE SCHEDULING</p>
-        <h1 className="page-title">Manage venues &amp; ministries</h1>
+    <div className="ffsa-screen">
+      <Masthead context="Venue scheduling" title="Venues & ministries" />
+      <div className="max-w-3xl px-8 py-7">
+        <VenueAdmin
+          venues={(venuesRes.data ?? []) as Venue[]}
+          ministries={(ministriesRes.data ?? []) as Ministry[]}
+        />
       </div>
-      <VenueAdmin
-        venues={(venuesRes.data ?? []) as Venue[]}
-        ministries={(ministriesRes.data ?? []) as Ministry[]}
-      />
     </div>
   );
 }

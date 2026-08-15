@@ -6,8 +6,8 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
 import { Check, X, Ban, CheckCheck, Wand2 } from "lucide-react";
+import { SectionBar } from "@/components/ffsa";
 import type { Vehicle } from "@/services/vehicles";
 import { standardDailyUsd, standardQuoteUsd } from "@/lib/vehicles/pricing";
 import { CountryPicker } from "../country-picker";
@@ -162,8 +162,9 @@ export function VehicleBookingActions({
   }
 
   return (
-    <Card>
-      <CardContent className="space-y-5 pt-6">
+    <div className="border border-ink bg-white">
+      <SectionBar title="Manage booking" />
+      <div className="space-y-5 p-6">
         {isManager && (
           <>
             {/* Assign vehicles */}
@@ -177,8 +178,8 @@ export function VehicleBookingActions({
                     <label
                       key={v.id}
                       className={
-                        "flex items-center gap-2 rounded-md border px-3 py-2 text-sm " +
-                        (blocked ? "opacity-50" : "cursor-pointer hover:bg-white/5")
+                        "flex items-center gap-2 border px-3 py-2 text-sm " +
+                        (blocked ? "border-rule opacity-50" : "cursor-pointer border-rule-strong hover:bg-bone")
                       }
                     >
                       <input
@@ -186,18 +187,18 @@ export function VehicleBookingActions({
                         checked={checked}
                         disabled={blocked}
                         onChange={() => toggle(v.id)}
-                        className="rounded border-input"
+
                       />
                       <span
-                        className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                        className="inline-block h-2.5 w-2.5 shrink-0"
                         style={{ backgroundColor: v.color }}
                       />
-                      <span className="text-foreground">{v.name}</span>
-                      <span className="text-xs capitalize text-muted-foreground">
+                      <span>{v.name}</span>
+                      <span className="text-xs capitalize text-[color:var(--text-tertiary)]">
                         {v.vehicle_type}
                       </span>
                       {blocked && (
-                        <span className="ml-auto text-[10px] font-bold uppercase tracking-wider text-[hsl(0_70%_66%)]">
+                        <span className="mono-label ml-auto !text-destructive">
                           Booked
                         </span>
                       )}
@@ -213,9 +214,9 @@ export function VehicleBookingActions({
               <CountryPicker
                 value={homeCountry}
                 onChange={setHomeCountry}
-                className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="h-9 w-full"
               />
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-[11px] text-[color:var(--text-secondary)]">
                 {(homeCountry || "").toUpperCase() === "US"
                   ? "Invoices to FFSA US Xero (1040 / Tax-Exempt)."
                   : "Invoices to FFSA SA Xero (1050 / No-VAT)."}
@@ -223,13 +224,13 @@ export function VehicleBookingActions({
             </div>
 
             {/* Pricing & payment */}
-            <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
-              <label className="flex items-center gap-2 text-sm">
+            <div className="space-y-3 border border-rule bg-bone p-4">
+              <label className="flex items-center gap-2 !text-sm !normal-case !tracking-normal">
                 <input
                   type="checkbox"
                   checked={pay.payment_required}
                   onChange={(e) => setPay({ ...pay, payment_required: e.target.checked })}
-                  className="rounded border-input"
+
                 />
                 This booking is chargeable (payment required before keys)
               </label>
@@ -266,7 +267,6 @@ export function VehicleBookingActions({
                       type="button"
                       size="sm"
                       variant="ghost"
-                      className="text-muted-foreground"
                       onClick={() =>
                         setPay((p) => ({
                           ...p,
@@ -282,19 +282,19 @@ export function VehicleBookingActions({
                       type="button"
                       size="sm"
                       variant="ghost"
-                      className="gap-1 text-muted-foreground"
+                      className="gap-1"
                       onClick={applyStandardRate}
                     >
                       <Wand2 className="h-3.5 w-3.5" />
                       Standard ($25 car / $68 van/day)
                     </Button>
                   </div>
-                  <label className="flex items-center gap-2 text-sm">
+                  <label className="flex items-center gap-2 !text-sm !normal-case !tracking-normal">
                     <input
                       type="checkbox"
                       checked={pay.payment_received}
                       onChange={(e) => setPay({ ...pay, payment_received: e.target.checked })}
-                      className="rounded border-input"
+    
                     />
                     Payment received
                   </label>
@@ -308,7 +308,7 @@ export function VehicleBookingActions({
 
             {/* Decision */}
             {isActive && (
-              <div className="space-y-3 border-t pt-4">
+              <div className="space-y-3 border-t border-rule pt-4">
                 <div className="space-y-2">
                   <Label htmlFor="decision-note">Decision note (optional)</Label>
                   <textarea
@@ -317,7 +317,7 @@ export function VehicleBookingActions({
                     onChange={(e) => setNote(e.target.value)}
                     rows={2}
                     placeholder="e.g. Approved — collect keys at the Legal Offices."
-                    className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    className="flex w-full"
                   />
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -327,8 +327,7 @@ export function VehicleBookingActions({
                         type="button"
                         onClick={() => decide("approved")}
                         disabled={!!busy}
-                        className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-[11px] tracking-[0.1em] transition-all hover:brightness-110 disabled:opacity-50"
-                        style={{ background: "hsl(142 48% 32%)", color: "hsl(142 60% 90%)" }}
+                        className="inline-flex items-center gap-1.5 border border-ink bg-ink px-4 py-2.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-white disabled:opacity-50"
                       >
                         <Check className="h-4 w-4" />
                         {busy === "approved" ? "Approving…" : "Approve"}
@@ -337,12 +336,7 @@ export function VehicleBookingActions({
                         type="button"
                         onClick={() => decide("denied")}
                         disabled={!!busy}
-                        className="inline-flex items-center gap-1.5 rounded-lg border px-4 py-2 text-[11px] tracking-[0.1em] transition-all hover:brightness-110 disabled:opacity-50"
-                        style={{
-                          background: "hsl(0 65% 30% / 0.30)",
-                          color: "hsl(0 75% 78%)",
-                          borderColor: "hsl(0 70% 52% / 0.4)",
-                        }}
+                        className="inline-flex items-center gap-1.5 border border-destructive px-4 py-2.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-destructive disabled:opacity-50"
                       >
                         <X className="h-4 w-4" />
                         {busy === "denied" ? "Denying…" : "Deny"}
@@ -354,8 +348,7 @@ export function VehicleBookingActions({
                       type="button"
                       onClick={() => decide("completed")}
                       disabled={!!busy}
-                      className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-[11px] tracking-[0.1em] transition-all hover:brightness-110 disabled:opacity-50"
-                      style={{ background: "hsl(199 70% 32% / 0.5)", color: "hsl(199 75% 84%)" }}
+                      className="inline-flex items-center gap-1.5 border border-ink px-4 py-2.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-ink disabled:opacity-50"
                     >
                       <CheckCheck className="h-4 w-4" />
                       {busy === "completed" ? "Completing…" : "Mark completed"}
@@ -369,20 +362,20 @@ export function VehicleBookingActions({
 
         {/* Cancel — managers or the requester, while still active */}
         {isActive && (isManager || isOwner) && (
-          <div className={isManager ? "" : ""}>
+          <div>
             <Button
               onClick={cancel}
               disabled={!!busy}
               variant="ghost"
               size="sm"
-              className="gap-1 text-muted-foreground"
+              className="gap-1"
             >
               <Ban className="h-4 w-4" />
               {busy === "cancel" ? "Cancelling…" : "Cancel booking"}
             </Button>
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

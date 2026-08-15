@@ -182,7 +182,7 @@ export function Scanner({
                 />
                 {!scanning && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white text-sm">
-                    Tap "Start scanning" to open the camera.
+                    Tap &quot;Start scanning&quot; to open the camera.
                   </div>
                 )}
               </div>
@@ -211,7 +211,7 @@ export function Scanner({
             </>
           ) : (
             <p className="text-xs text-muted-foreground">
-              Camera scanning isn't supported in this browser. Use manual entry
+              Camera scanning isn&apos;t supported in this browser. Use manual entry
               below — works everywhere.
             </p>
           )}

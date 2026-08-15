@@ -4,10 +4,10 @@ import Link from "next/link";
 import { cn } from "@/lib/utils/cn";
 import { AlertTriangle } from "lucide-react";
 import { packLanes } from "@/lib/bookings/timegrid";
-import { statusChipStyle } from "@/lib/bookings/status";
 import { timeRangeLabel } from "@/lib/bookings/dates";
 import type { BookingWithRefs } from "@/services/bookings";
 import { BookingPopover } from "./booking-popover";
+import { bookingBlockStyle } from "./ui";
 
 const HOUR_H = 46; // px per hour
 const MIN_BLOCK = 16;
@@ -45,21 +45,23 @@ export function TimeGrid({
   const minOf = startHour * 60;
 
   return (
-    <div className="rounded-xl border bg-card overflow-hidden shadow-[0_2px_16px_rgba(0,0,0,0.35)]">
+    <div className="border border-ink bg-white">
       {/* Column header */}
-      <div className="flex border-b border-[hsl(22_8%_14%)] bg-[hsl(22_8%_10%)]">
+      <div className="flex bg-ink">
         <div className="w-14 shrink-0" />
         {columns.map((col) => {
           const head = (
             <>
-              <div className="truncate text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+              <div className="truncate font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-[#C5C2AE]">
                 {col.label}
               </div>
               {col.sublabel && (
                 <div
                   className={cn(
-                    "text-sm font-semibold tabular-nums",
-                    col.isToday ? "text-[hsl(42_95%_62%)]" : "text-foreground"
+                    // No yellow here — the screen's one yellow band is the
+                    // pending-requests strip. Today reads white, the rest grey.
+                    "font-display text-[17px] font-black tabular-nums leading-none",
+                    col.isToday ? "text-white" : "text-[#8C8A80]"
                   )}
                 >
                   {col.sublabel}
@@ -70,13 +72,10 @@ export function TimeGrid({
           return (
             <div
               key={col.key}
-              className={cn(
-                "min-w-0 flex-1 border-l border-[hsl(22_8%_14%)] px-2 py-2 text-center",
-                col.isToday && "bg-[hsl(42_95%_55%/0.06)]"
-              )}
+              className="min-w-0 flex-1 border-l border-[#2A2A26] px-2 py-2 text-center"
             >
               {col.href ? (
-                <Link href={col.href} className="block transition-colors hover:text-[hsl(42_95%_62%)]">
+                <Link href={col.href} className="block">
                   {head}
                 </Link>
               ) : (
@@ -94,7 +93,7 @@ export function TimeGrid({
           {hours.map((h, i) => (
             <div
               key={h}
-              className="absolute right-1.5 -translate-y-1/2 text-[10px] tabular-nums text-[hsl(30_6%_40%)]"
+              className="absolute right-1.5 -translate-y-1/2 font-mono text-[9px] font-bold tabular-nums text-[color:var(--text-tertiary)]"
               style={{ top: i * HOUR_H }}
             >
               {String(h).padStart(2, "0")}:00
@@ -118,8 +117,8 @@ export function TimeGrid({
             <div
               key={col.key}
               className={cn(
-                "relative min-w-0 flex-1 border-l border-[hsl(22_8%_12%)]",
-                col.isToday && "bg-[hsl(42_95%_55%/0.03)]"
+                "relative min-w-0 flex-1 border-l border-rule",
+                col.isToday && "bg-bone"
               )}
               style={{ height: gridHeight }}
             >
@@ -128,7 +127,7 @@ export function TimeGrid({
                 i === 0 ? null : (
                   <div
                     key={h}
-                    className="absolute inset-x-0 border-t border-[hsl(22_8%_11%)]"
+                    className="absolute inset-x-0 border-t border-rule"
                     style={{ top: i * HOUR_H }}
                   />
                 )
@@ -140,10 +139,10 @@ export function TimeGrid({
                 nowMin >= minOf &&
                 nowMin <= endHour * 60 && (
                   <div
-                    className="absolute inset-x-0 z-30 border-t border-[hsl(0_80%_60%)]"
+                    className="absolute inset-x-0 z-30 border-t border-destructive"
                     style={{ top: ((nowMin - minOf) / 60) * HOUR_H }}
                   >
-                    <span className="absolute -left-0.5 -top-[3px] h-1.5 w-1.5 rounded-full bg-[hsl(0_80%_60%)]" />
+                    <span className="absolute -left-0.5 -top-[3px] h-1.5 w-1.5 bg-destructive" />
                   </div>
                 )}
 
@@ -155,8 +154,8 @@ export function TimeGrid({
                       <button
                         type="button"
                         title={`${b.title} · all day`}
-                        style={statusChipStyle(b.status)}
-                        className="block w-full truncate rounded border-l-2 px-1.5 py-0.5 text-left text-[10px] normal-case font-medium tracking-normal"
+                        style={bookingBlockStyle(b.status)}
+                        className="block w-full truncate px-1.5 py-0.5 text-left text-[10px] font-medium normal-case tracking-normal"
                       >
                         {b.title}
                       </button>
@@ -178,23 +177,23 @@ export function TimeGrid({
                       type="button"
                       title={`${p.item.title} · ${timeRangeLabel(p.item.start_time, p.item.end_time)}`}
                       style={{
-                        ...statusChipStyle(p.item.status),
+                        ...bookingBlockStyle(p.item.status),
                         top,
                         height,
                         left: `calc(${leftPct}% + 2px)`,
                         width: `calc(${widthPct}% - 4px)`,
-                        borderLeft: `2px solid ${colorOf(p.item)}`,
+                        borderLeft: `3px solid ${colorOf(p.item)}`,
                       }}
-                      className="absolute z-10 overflow-hidden rounded-md px-1.5 py-0.5 text-left text-[10px] normal-case leading-tight tracking-normal transition-all hover:z-40 hover:brightness-110"
+                      className="absolute z-10 overflow-hidden px-1.5 py-0.5 text-left text-[10px] normal-case leading-tight tracking-normal hover:z-40"
                     >
                       <div className="flex items-center gap-0.5 font-semibold">
                         {clash && (
-                          <AlertTriangle className="h-2.5 w-2.5 shrink-0 text-[hsl(0_70%_66%)]" />
+                          <AlertTriangle className="h-2.5 w-2.5 shrink-0 text-destructive" />
                         )}
                         <span className="truncate">{p.item.title}</span>
                       </div>
                       {height > 26 && (
-                        <div className="truncate tabular-nums opacity-75">
+                        <div className="truncate font-mono text-[9px] tabular-nums text-[color:var(--text-tertiary)]">
                           {timeRangeLabel(p.item.start_time, p.item.end_time)}
                         </div>
                       )}

@@ -13,6 +13,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Check, X, AlertTriangle, ClipboardCheck } from "lucide-react";
+import { SectionBar } from "@/components/ffsa";
+import { cn } from "@/lib/utils/cn";
 import { ColorDot } from "../ui";
 import { dateRangeLabel, timeRangeLabel, timeLabel } from "@/lib/bookings/dates";
 import type { BookingWithRefs } from "@/services/bookings";
@@ -50,14 +52,14 @@ export function RequestsQueue({
 
   if (rows.length === 0) {
     return (
-      <div className="rounded-xl border bg-card">
+      <div className="border border-ink bg-white">
         <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[hsl(142_50%_22%/0.3)]">
-            <ClipboardCheck className="h-5 w-5 text-[hsl(142_52%_62%)]" />
+          <div className="flex h-12 w-12 items-center justify-center border border-grass">
+            <ClipboardCheck className="h-5 w-5 text-grass-text" />
           </div>
           <div>
-            <p className="text-sm font-medium text-foreground">All caught up</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
+            <p className="text-sm font-medium">All caught up</p>
+            <p className="mt-0.5 text-xs text-[color:var(--text-secondary)]">
               No requests are waiting for review.
             </p>
           </div>
@@ -67,7 +69,9 @@ export function RequestsQueue({
   }
 
   return (
-    <div className="rounded-xl border bg-card overflow-x-auto shadow-[0_2px_16px_rgba(0,0,0,0.35)]">
+    <div className="border border-ink bg-white">
+      <SectionBar title="Awaiting review" meta={`${rows.length} pending`} />
+      <div className="overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow>
@@ -87,12 +91,15 @@ export function RequestsQueue({
             return (
               <TableRow key={b.id}>
                 <TableCell
-                  className="whitespace-nowrap"
-                  style={clash ? { boxShadow: "inset 3px 0 0 hsl(0 72% 55%)" } : undefined}
+                  // A clashing request is marked by a red edge on the row, not a fill.
+                  className={cn(
+                    "whitespace-nowrap border-l-[3px] border-l-transparent",
+                    clash && "border-l-destructive"
+                  )}
                 >
                   <Link
                     href={`/bookings/spaces?view=day&date=${b.booking_date}`}
-                    className="hover:text-[hsl(42_95%_62%)]"
+                    className="hover:underline"
                     title="See the schedule for this day"
                   >
                     {dateRangeLabel(b.booking_date, b.end_date)}
@@ -105,19 +112,12 @@ export function RequestsQueue({
                   </span>
                 </TableCell>
                 <TableCell>
-                  <Link
-                    href={`/bookings/spaces/${b.id}`}
-                    className="font-medium text-foreground hover:text-[hsl(42_95%_62%)]"
-                  >
+                  <Link href={`/bookings/spaces/${b.id}`} className="font-medium hover:underline">
                     {b.title}
                   </Link>
-                  {b.series_id && (
-                    <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wider text-[hsl(42_90%_58%)]">
-                      weekly
-                    </span>
-                  )}
+                  {b.series_id && <span className="mono-label ml-1.5">weekly</span>}
                   {clash && (
-                    <div className="mt-1 inline-flex items-center gap-1 rounded border border-destructive/40 bg-destructive/15 px-1.5 py-0.5 text-[10px] font-semibold text-[hsl(0_72%_72%)]">
+                    <div className="mt-1 inline-flex items-center gap-1 border border-destructive px-1.5 py-0.5 text-[10px] font-semibold text-destructive">
                       <AlertTriangle className="h-3 w-3 shrink-0" />
                       Overlaps approved: {clash.title} · {clash.time}
                     </div>
@@ -130,7 +130,7 @@ export function RequestsQueue({
                       {b.ministry.name}
                     </span>
                   ) : (
-                    <span className="text-muted-foreground">—</span>
+                    <span className="text-[color:var(--text-tertiary)]">—</span>
                   )}
                 </TableCell>
                 <TableCell className="whitespace-nowrap tabular-nums">
@@ -140,16 +140,17 @@ export function RequestsQueue({
                   {timeLabel(b.setup_time)}
                 </TableCell>
                 <TableCell className="whitespace-nowrap">
-                  {b.requester_name || <span className="text-muted-foreground">—</span>}
+                  {b.requester_name || <span className="text-[color:var(--text-tertiary)]">—</span>}
                 </TableCell>
                 <TableCell>
+                  {/* The decision pair: approve is the black primary, deny is the
+                      outlined escape. Neither is ever yellow. */}
                   <div className="flex items-center justify-end gap-1.5">
                     <button
                       type="button"
                       onClick={() => decide(b.id, "approved")}
                       disabled={!!busy}
-                      className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[10px] tracking-[0.08em] transition-all hover:brightness-110 disabled:opacity-50"
-                      style={{ background: "hsl(142 48% 32%)", color: "hsl(142 60% 90%)" }}
+                      className="inline-flex items-center gap-1 border border-ink bg-ink px-2.5 py-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-white disabled:opacity-50"
                     >
                       <Check className="h-3.5 w-3.5" />
                       Approve
@@ -158,12 +159,7 @@ export function RequestsQueue({
                       type="button"
                       onClick={() => decide(b.id, "denied")}
                       disabled={!!busy}
-                      className="inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-[10px] tracking-[0.08em] transition-all hover:brightness-110 disabled:opacity-50"
-                      style={{
-                        background: "hsl(0 65% 30% / 0.30)",
-                        color: "hsl(0 75% 78%)",
-                        borderColor: "hsl(0 70% 52% / 0.4)",
-                      }}
+                      className="inline-flex items-center gap-1 border border-destructive px-2.5 py-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-destructive disabled:opacity-50"
                     >
                       <X className="h-3.5 w-3.5" />
                       Deny
@@ -175,6 +171,7 @@ export function RequestsQueue({
           })}
         </TableBody>
       </Table>
+      </div>
     </div>
   );
 }
