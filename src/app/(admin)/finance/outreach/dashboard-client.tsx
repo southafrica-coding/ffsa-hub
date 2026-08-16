@@ -29,6 +29,11 @@ import {
 } from "@/components/ffsa";
 import { MoneyKpi, barTone } from "../money-kpi";
 import { CreateTeamForm } from "./create-team-form";
+import { MovementsPanel } from "./movements-panel";
+import type {
+  MoneyMovement,
+  UnmatchedPayment,
+} from "@/services/outreach-finance";
 
 // ────────────────────────────────────────────────────────────
 // TYPES
@@ -106,10 +111,17 @@ export function OutreachDashboardClient({
   teams,
   programs,
   aggregates,
+  movements,
+  unmatched,
 }: {
   teams: Team[];
   programs: Program[];
   aggregates: Aggregates;
+  // Read-only ledger feeds. They are NOT filtered by the school/status filters
+  // above: they are org-wide movements, and silently hiding a payment because a
+  // team filter is set would misread as "this money did not happen".
+  movements: MoneyMovement[];
+  unmatched: { count: number; rows: UnmatchedPayment[] };
 }) {
   const router = useRouter();
   const [schoolFilter, setSchoolFilter] = useState("all");
@@ -197,6 +209,10 @@ export function OutreachDashboardClient({
     }
     return Array.from(seen.values());
   }, [teams]);
+
+  // The ledger column is drawn only when at least one source came back with
+  // rows — an unreadable source (RLS) or a quiet week leaves the table alone.
+  const hasLedger = movements.length > 0 || unmatched.count > 0;
 
   const agg = filteredAggregates;
   const sentPct = agg.totalBudget > 0 ? (agg.totalReleased / agg.totalBudget) * 100 : 0;
@@ -293,7 +309,16 @@ export function OutreachDashboardClient({
           </KpiStrip>
         </div>
 
-        {/* Teams */}
+        {/* Teams, with the movements ledger alongside on wide screens. The
+            right column only exists when there is something real in it, so the
+            table keeps the full width when a viewer cannot read the sources. */}
+        <div
+          className={
+            hasLedger
+              ? "grid gap-7 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-stretch"
+              : undefined
+          }
+        >
         <div className="border border-ink">
           <SectionBar
             title="Outreach teams"
@@ -506,6 +531,13 @@ export function OutreachDashboardClient({
               </Table>
             </div>
           )}
+        </div>
+
+        <MovementsPanel
+          movements={movements}
+          unmatched={unmatched}
+          formatCurrency={formatCurrency}
+        />
         </div>
       </div>
     </div>

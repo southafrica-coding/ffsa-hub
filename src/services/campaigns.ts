@@ -185,6 +185,65 @@ export async function getCampaignStats(
   };
 }
 
+/**
+ * Same counters as getCampaignStats, but for many campaigns in ONE query
+ * against v_campaign_stats (migration 164). getCampaignStats costs seven
+ * head-counts per campaign, which a 25-row list cannot afford.
+ *
+ * Degrades to an empty map — never throws, never surfaces an error — when
+ * the view is missing. This code ships before migration 164 is applied by
+ * hand in the Supabase dashboard, and a list that quietly omits its rates
+ * is far better than a Communications page that 500s.
+ */
+export async function getCampaignStatsBulk(
+  supabase: Client,
+  campaignIds: string[]
+): Promise<Map<string, CampaignStats>> {
+  const out = new Map<string, CampaignStats>();
+
+  const ids = Array.from(new Set(campaignIds.filter(Boolean)));
+  if (ids.length === 0) return out; // no round trip for an empty list
+
+  try {
+    const { data, error } = await supabase
+      .from("v_campaign_stats")
+      .select(
+        "campaign_id, total, sent, delivered, opened, clicked, bounced, unsubscribed"
+      )
+      .in("campaign_id", ids);
+
+    // View not created yet (PostgREST 42P01 / PGRST205) or any other read
+    // failure: fall through to the empty map, callers render "—".
+    if (error || !data) return out;
+
+    for (const row of data as Record<string, unknown>[]) {
+      const id = row.campaign_id;
+      if (typeof id !== "string") continue;
+      out.set(id, {
+        // Counts arrive as ints from the view; coerce defensively so a
+        // bigint-as-string can never reach the rate arithmetic as NaN.
+        total: num(row.total),
+        sent: num(row.sent),
+        delivered: num(row.delivered),
+        opened: num(row.opened),
+        clicked: num(row.clicked),
+        bounced: num(row.bounced),
+        unsubscribed: num(row.unsubscribed),
+      });
+    }
+  } catch {
+    return out;
+  }
+
+  return out;
+}
+
+/** Empty-safe counter coercion — anything unparseable counts as zero. */
+function num(v: unknown): number {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
 // ────────────────────────────────────────────────────────────
 // Sending identities
 // ────────────────────────────────────────────────────────────

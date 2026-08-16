@@ -2,10 +2,12 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { requireModuleAccess } from "@/lib/require-permission";
 import {
+  getEventAttendanceCounts,
   getEvents,
   isClosedEventStatus,
   OPEN_EVENT_STATUSES,
 } from "@/services/events";
+import { capacityPct, groupDigits } from "./format";
 import type { Tables } from "@/types/database";
 type Event = Tables<"events">;
 import Link from "next/link";
@@ -17,7 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Masthead, MastheadAction, NeedsYou, Chip, StatusPill, DateBlock, type Tone } from "@/components/ffsa";
+import { Masthead, MastheadAction, NeedsYou, Chip, StatusPill, DateBlock, Bar, type Tone } from "@/components/ffsa";
 
 const VIEWS = [
   ["active", "Active"],
@@ -74,6 +76,16 @@ export default async function EventsPage({
   ]);
   const { data: events, count } = eventsResult;
   const rows = (events ?? []) as Event[];
+
+  // Headcounts for the Capacity column. This can't join the Promise.all
+  // above — it's keyed on the ids that query returns — but it is one
+  // batched read for the whole page, not one per row. Empty map (no ids,
+  // or a read the caller's RLS blocks) = every cell renders as it did
+  // before the number existed.
+  const attendance = await getEventAttendanceCounts(
+    supabase,
+    rows.map((e) => e.id)
+  );
 
   // Events whose last day has passed but that nobody has closed out yet.
   // Derived from the rows already on screen — no extra query. Only shown on
@@ -140,6 +152,11 @@ export default async function EventsPage({
                   const start = parseDay(event.start_date);
                   const multiDay =
                     !!event.end_date && event.end_date !== event.start_date;
+                  // null = we have no headcount for this event (blocked
+                  // read), which is different from a headcount of 0.
+                  const coming = attendance.get(event.id)?.count ?? null;
+                  const pct =
+                    coming === null ? null : capacityPct(coming, event.max_capacity);
                   return (
                     <TableRow
                       key={event.id}
@@ -168,11 +185,31 @@ export default async function EventsPage({
                       </TableCell>
                       <TableCell>
                         {event.max_capacity ? (
-                          <span className="numeral text-[19px]">
-                            {groupDigits(event.max_capacity)}
-                          </span>
+                          <>
+                            <span className="numeral text-[19px]">
+                              {coming === null
+                                ? groupDigits(event.max_capacity)
+                                : `${groupDigits(coming)} / ${groupDigits(event.max_capacity)}`}
+                            </span>
+                            {pct !== null && (
+                              <div className="mt-2 w-24">
+                                <Bar pct={pct} />
+                              </div>
+                            )}
+                          </>
                         ) : (
-                          <span className="mono-label">Unlimited</span>
+                          <>
+                            {/* No capacity, no ratio — so no bar, just the
+                                headcount over the existing "Unlimited". */}
+                            {coming !== null && (
+                              <span className="numeral text-[19px]">
+                                {groupDigits(coming)}
+                              </span>
+                            )}
+                            <div className={coming === null ? "mono-label" : "mono-label mt-1"}>
+                              Unlimited
+                            </div>
+                          </>
                         )}
                       </TableCell>
                       <TableCell>
@@ -211,9 +248,4 @@ function parseDay(iso: string) {
 function formatDay(iso: string) {
   const { day, mon } = parseDay(iso);
   return `${day} ${mon}`;
-}
-
-/** 2000 → "2 000". Thin grouping, per the design's numeral treatment. */
-function groupDigits(n: number) {
-  return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 }

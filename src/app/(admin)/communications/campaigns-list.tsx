@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/table";
 import { SectionBar, StatusPill, type Tone } from "@/components/ffsa";
 import { getLabelColors } from "@/lib/label-color";
+import type { CampaignStats } from "@/services/campaigns";
 
 type Label = { id: string; slug: string; name: string; color: string | null };
 type Identity = { id: string; display_name: string; from_email: string };
@@ -33,6 +34,18 @@ type Campaign = {
 };
 
 
+/**
+ * Rate as a whole percent of a base, matching CampaignAnalytics on the detail
+ * page exactly. An em dash whenever the base is zero — an email that hasn't
+ * been delivered to anyone has no rate, and "0%" would read as a failure.
+ * This is also what every row shows until migration 164 creates
+ * v_campaign_stats and the stats map starts coming back populated.
+ */
+function pct(n: number, d: number): string {
+  if (!d || d <= 0) return "—";
+  return `${Math.round((n / d) * 100)}%`;
+}
+
 const STATUS_TONE: Record<string, Tone> = {
   draft: "quiet",
   scheduled: "warn",
@@ -46,10 +59,13 @@ export function CampaignsList({
   campaigns,
   labels,
   identities,
+  stats,
 }: {
   campaigns: Campaign[];
   labels: Label[];
   identities: Identity[];
+  /** Delivery counters keyed by campaign id. Absent/empty = no rates yet. */
+  stats?: Record<string, CampaignStats>;
 }) {
   const router = useRouter();
   const [creating, setCreating] = useState(false);
@@ -255,6 +271,9 @@ export function CampaignsList({
                   <TableHead>Email</TableHead>
                   <TableHead>Audience</TableHead>
                   <TableHead>Status</TableHead>
+                  {/* Percentages of DELIVERED, same base as the detail page. */}
+                  <TableHead className="text-right">Opened</TableHead>
+                  <TableHead className="text-right">Clicked</TableHead>
                   <TableHead>When</TableHead>
                   <TableHead className="w-10 text-right"></TableHead>
                 </TableRow>
@@ -267,6 +286,8 @@ export function CampaignsList({
                       (l): l is { id: string; slug: string; name: string; color: string | null } =>
                         !!l
                     );
+                  const s = stats?.[c.id];
+                  const delivered = s?.delivered ?? 0;
                   return (
                     <TableRow key={c.id}>
                       <TableCell>
@@ -312,6 +333,24 @@ export function CampaignsList({
                         <StatusPill tone={STATUS_TONE[c.status] ?? "quiet"}>
                           {c.status}
                         </StatusPill>
+                      </TableCell>
+                      <TableCell
+                        className={`tabular text-right text-sm ${
+                          delivered > 0
+                            ? ""
+                            : "text-[color:var(--text-tertiary)]"
+                        }`}
+                      >
+                        {pct(s?.opened ?? 0, delivered)}
+                      </TableCell>
+                      <TableCell
+                        className={`tabular text-right text-sm ${
+                          delivered > 0
+                            ? ""
+                            : "text-[color:var(--text-tertiary)]"
+                        }`}
+                      >
+                        {pct(s?.clicked ?? 0, delivered)}
                       </TableCell>
                       <TableCell className="tabular text-xs text-[color:var(--text-tertiary)]">
                         {c.sent_at

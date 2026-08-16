@@ -233,6 +233,65 @@ export async function deletePayment(supabase: Client, id: string) {
 }
 
 // ────────────────────────────────────────────────────────────
+// LEDGER FEEDS — read-only rows for the finance movements ledger.
+// Nothing here sums, nets or derives a figure; these are the stored
+// payment rows, ordered and cut in SQL.
+// ────────────────────────────────────────────────────────────
+
+/**
+ * The most recent fee payments received, newest first.
+ *
+ * Ordered AND limited in SQL: this table grows for the life of every school,
+ * and the ledger only ever shows a handful of rows. `payment_date` is a date
+ * (no time), so `created_at` breaks the ties in recording order.
+ *
+ * The student name is embedded but never required — `users` is readable only by
+ * is_admin() (migration 002) while `student_payments` also admits
+ * has_role('finance_admin') (009). A finance_admin therefore sees the payment
+ * with a null user, and the caller falls back to a generic label instead of
+ * losing the row.
+ */
+export async function getRecentStudentPayments(supabase: Client, limit: number) {
+  return supabase
+    .from("student_payments")
+    .select(
+      "id, payment_date, amount_zar, payment_method, student_fees(program_id, users(first_name, last_name, preferred_name))"
+    )
+    .order("payment_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(limit);
+}
+
+/**
+ * Fee payments that arrived through a bank or card but carry no reference.
+ *
+ * Only 'eft' and 'card' are counted: a cash payment has no bank line to match,
+ * so a missing reference there is bookkeeping shorthand, not a reconciliation
+ * gap. `reference` is tested for NULL alone because every write path stores an
+ * empty box as null (the record-payment dialog sends `form.reference || null`,
+ * and the API route passes it straight through).
+ *
+ * `count: "exact"` reports the whole filtered set — the limit only trims the
+ * rows shown, never the count.
+ */
+export async function getUnreferencedBankPayments(
+  supabase: Client,
+  limit: number
+) {
+  return supabase
+    .from("student_payments")
+    .select(
+      "id, payment_date, amount_zar, payment_method, student_fees(program_id, users(first_name, last_name, preferred_name))",
+      { count: "exact" }
+    )
+    .in("payment_method", ["eft", "card"])
+    .is("reference", null)
+    .order("payment_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(limit);
+}
+
+// ────────────────────────────────────────────────────────────
 // AGGREGATION
 // ────────────────────────────────────────────────────────────
 

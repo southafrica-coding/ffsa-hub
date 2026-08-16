@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { getEventById } from "@/services/events";
+import { getEventById, getEventAttendanceCounts } from "@/services/events";
+import { capacityPct, groupDigits } from "../format";
 import { getRegistrationsForEvent } from "@/services/registrations";
 import { getAttendanceForEvent } from "@/services/attendance";
 import { getEventOutcomes } from "@/services/event-outcomes";
@@ -87,6 +88,7 @@ export default async function EventDetailPage({
     { data: orders },
     { data: attendanceTickets },
     { data: identities },
+    attendanceCounts,
   ] = await Promise.all([
     getRegistrationsForEvent(supabase, id),
     getAttendanceForEvent(supabase, id),
@@ -113,7 +115,14 @@ export default async function EventDetailPage({
       .select("id, display_name")
       .eq("is_active", true)
       .order("display_name"),
+    // Headcount for the Capacity KPI. The id is already known here, so
+    // it rides along with everything else rather than costing a wave.
+    getEventAttendanceCounts(supabase, [id]),
   ]);
+
+  // null when the read was blocked — the KPI then falls back to the
+  // bare capacity figure it showed before.
+  const coming = attendanceCounts.get(id)?.count ?? null;
 
   // Refund history for the Orders tab (migration 128). Needs the order
   // ids, so it can't join the Promise.all above. Returns empty if the
@@ -193,6 +202,7 @@ export default async function EventDetailPage({
             users={users ?? []}
             registrations={registrations ?? []}
             attendance={attendance ?? []}
+            coming={coming}
           />
         )}
 
@@ -265,7 +275,22 @@ function formatDayRange(start: string, end: string | null) {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function DetailsTab(props: any) {
-  const { event, eventId, roles, labels, users, registrations, attendance } = props;
+  const { event, eventId, roles, labels, users, registrations, attendance, coming } = props;
+
+  // "1 140 / 2 000" won't fit at the strip's 54px, so a ratio drops to
+  // the smaller numeral the way the money cells do. The bar only draws
+  // when there's a capacity to be a fraction of.
+  const cap: number | null = event.max_capacity ?? null;
+  const comingCount: number | null = coming ?? null;
+  const pct = comingCount === null ? null : capacityPct(comingCount, cap);
+  const capacityValue =
+    comingCount === null
+      ? cap
+        ? groupDigits(cap)
+        : "∞"
+      : cap
+        ? `${groupDigits(comingCount)} / ${groupDigits(cap)}`
+        : groupDigits(comingCount);
 
   const regStatusTone: Record<string, "good" | "warn" | "quiet" | "bad"> = {
     pending: "warn",
@@ -294,8 +319,10 @@ function DetailsTab(props: any) {
           />
           <Kpi
             label="Capacity"
-            value={event.max_capacity ? String(event.max_capacity) : "∞"}
-            foot={event.max_capacity ? undefined : "Unlimited"}
+            value={capacityValue}
+            size={cap && comingCount !== null ? 26 : 54}
+            foot={cap ? undefined : "Unlimited"}
+            bar={pct === null ? undefined : { pct }}
           />
         </KpiStrip>
       </div>

@@ -1,3 +1,8 @@
+import {
+  getRecentStudentPayments,
+  getUnreferencedBankPayments,
+} from "./school-fees";
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
 
@@ -475,6 +480,213 @@ export async function getAggregateFinancials(supabase: Client) {
     ),
     budgetDetailsByTeam,
     expenseDetailsByTeam,
+  };
+}
+
+// ────────────────────────────────────────────────────────────
+// RECENT MOVEMENTS LEDGER
+// ────────────────────────────────────────────────────────────
+// A read-only view over rows that already exist in three tables. Nothing here
+// adds, nets or derives a figure — each movement carries the amount as stored.
+
+/** One stored money movement, normalised across its three source tables. */
+export type MoneyMovement = {
+  id: string;
+  /** The source table's own date column — a date, no time. */
+  date: string;
+  label: string;
+  amount: number;
+  direction: "in" | "out";
+  /** Which table the row came from, so the ledger can caption itself. */
+  source: "fee_payment" | "fund_release" | "team_expense";
+  href?: string;
+};
+
+/** A fee payment with no bank reference against it. */
+export type UnmatchedPayment = {
+  id: string;
+  date: string;
+  label: string;
+  amount: number;
+  method: string;
+  href?: string;
+};
+
+type EmbeddedUser = {
+  first_name: string | null;
+  last_name: string | null;
+  preferred_name: string | null;
+} | null;
+
+type EmbeddedFee = {
+  program_id: string | null;
+  users: EmbeddedUser;
+} | null;
+
+type PaymentRow = {
+  id: string;
+  payment_date: string;
+  amount_zar: number | string;
+  payment_method: string;
+  student_fees: EmbeddedFee;
+};
+
+/**
+ * Settle one source read on its own.
+ *
+ * The three tables do NOT share an access rule: migration 017 widened the
+ * outreach tables to has_permission('finance.view'), while student_payments
+ * (009) still stops at is_admin()/has_role('finance_admin'). A finance viewer
+ * can legitimately hold one and not the other, and a blocked read must shorten
+ * the ledger, never take the dashboard down — so a failure returns no rows
+ * rather than throwing.
+ */
+async function safeRead<T>(
+  read: () => PromiseLike<{ data: T[] | null; error: unknown; count?: number | null }>
+): Promise<{ rows: T[]; count: number }> {
+  try {
+    const { data, error, count } = await read();
+    if (error) return { rows: [], count: 0 };
+    const rows = data ?? [];
+    return { rows, count: count ?? rows.length };
+  } catch {
+    return { rows: [], count: 0 };
+  }
+}
+
+function personName(user: EmbeddedUser): string | null {
+  if (!user) return null;
+  const first = user.preferred_name || user.first_name || "";
+  const name = `${first} ${user.last_name ?? ""}`.trim();
+  return name || null;
+}
+
+/**
+ * The most recent money movements across fee income, fund releases and team
+ * spend, newest first.
+ *
+ * Each source is ordered and LIMITed in SQL — the three small result sets are
+ * merged here and cut to `limit`, so the page never pulls a whole table down to
+ * sort it in memory. Taking `limit` from every source is what makes the merge
+ * correct: the newest `limit` overall cannot contain more than `limit` rows
+ * from any one of them.
+ */
+export async function getRecentMoneyMovements(
+  supabase: Client,
+  limit = 12
+): Promise<MoneyMovement[]> {
+  const [payments, releases, expenses] = await Promise.all([
+    safeRead<PaymentRow>(() => getRecentStudentPayments(supabase, limit)),
+    safeRead<{
+      id: string;
+      team_id: string;
+      release_date: string;
+      amount_zar: number | string;
+      label: string;
+      recipient: string | null;
+      outreach_teams: { team_name: string } | null;
+    }>(() =>
+      supabase
+        .from("outreach_fund_releases")
+        .select(
+          "id, team_id, release_date, amount_zar, label, recipient, outreach_teams(team_name)"
+        )
+        .order("release_date", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(limit)
+    ),
+    safeRead<{
+      id: string;
+      team_id: string;
+      expense_date: string;
+      zar_amount: number | string;
+      description: string;
+      vendor: string | null;
+      outreach_teams: { team_name: string } | null;
+    }>(() =>
+      supabase
+        .from("outreach_expenses")
+        .select(
+          "id, team_id, expense_date, zar_amount, description, vendor, outreach_teams(team_name)"
+        )
+        .order("expense_date", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(limit)
+    ),
+  ]);
+
+  const movements: MoneyMovement[] = [
+    // Fees received — student_payments.amount_zar, already ZAR.
+    ...payments.rows.map((p) => ({
+      id: `payment-${p.id}`,
+      date: p.payment_date,
+      label: personName(p.student_fees?.users ?? null) ?? "School fee payment",
+      amount: Number(p.amount_zar),
+      direction: "in" as const,
+      source: "fee_payment" as const,
+      href: p.student_fees?.program_id
+        ? `/finance/school-fees/${p.student_fees.program_id}`
+        : undefined,
+    })),
+    // Money released to a team — outreach_fund_releases.amount_zar.
+    ...releases.rows.map((r) => ({
+      id: `release-${r.id}`,
+      date: r.release_date,
+      label: [r.label, r.recipient ?? r.outreach_teams?.team_name]
+        .filter(Boolean)
+        .join(" · "),
+      amount: Number(r.amount_zar),
+      direction: "out" as const,
+      source: "fund_release" as const,
+      href: `/finance/outreach/${r.team_id}`,
+    })),
+    // Team spend — outreach_expenses.zar_amount is the ZAR-normalised column
+    // (local_amount is in the team's local currency and is never mixed in here).
+    ...expenses.rows.map((e) => ({
+      id: `expense-${e.id}`,
+      date: e.expense_date,
+      label: [e.description, e.vendor ?? e.outreach_teams?.team_name]
+        .filter(Boolean)
+        .join(" · "),
+      amount: Number(e.zar_amount),
+      direction: "out" as const,
+      source: "team_expense" as const,
+      href: `/finance/outreach/${e.team_id}`,
+    })),
+  ];
+
+  // Date columns are plain dates, so a string compare sorts them correctly.
+  movements.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  return movements.slice(0, limit);
+}
+
+/**
+ * Fee payments received by EFT or card with no bank reference recorded —
+ * money in that nobody has matched to a bank line yet.
+ *
+ * Degrades like the ledger sources: a viewer without read access to
+ * student_payments gets a zero count, and the caller renders nothing.
+ */
+export async function getUnmatchedFeePayments(
+  supabase: Client,
+  limit = 4
+): Promise<{ count: number; rows: UnmatchedPayment[] }> {
+  const { rows, count } = await safeRead<PaymentRow>(() =>
+    getUnreferencedBankPayments(supabase, limit)
+  );
+
+  return {
+    count,
+    rows: rows.map((p) => ({
+      id: p.id,
+      date: p.payment_date,
+      label: personName(p.student_fees?.users ?? null) ?? "School fee payment",
+      amount: Number(p.amount_zar),
+      method: p.payment_method,
+      href: p.student_fees?.program_id
+        ? `/finance/school-fees/${p.student_fees.program_id}`
+        : undefined,
+    })),
   };
 }
 
