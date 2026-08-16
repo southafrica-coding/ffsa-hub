@@ -62,13 +62,37 @@ Training depth (08 §1–4) is independent of all of this and can run in paralle
 
 ---
 
-## Decisions needed before the relevant step
+## Decisions taken (2026-08-17)
 
-- **§7 refunds** — is the deposit ever refundable, and in what window? Is tuition
-  pro-rated weekly, monthly, or by charge already fallen due? Are committed third-party
-  costs deducted at actual cost? The design ships placeholder terms *shaped* like a
-  policy; they must not become the policy by default.
-- **§3 organisation** — 16 US tier B/C item codes do not exist. Any run touching a US
-  tier B/C student fails until they do.
-- **09 going-live** — which of the two running schools is "nearly finished" (→ `external`)
-  and which has months left (→ `hub_scheduled` with a `schedule_start_date`)?
+**Refunds (§7).** The deposit **is** refundable today, **and that is expected to
+change**. Flights, visas and other third-party costs are **not** deducted — they are not
+treated as part of the cost. So:
+
+- refundability is **configuration, not a constant**. No `DEPOSIT_REFUNDABLE = true`
+  anywhere; it is a stored setting with a history, so changing it later does not
+  retroactively rewrite what an old refund was calculated against.
+- the third-party deduction line comes **out** of the model entirely.
+- the refund arithmetic reduces to `paid − non-refundable − consumed`.
+- **still open:** what "consumed" means — pro-rated weekly, monthly, or by charges
+  already fallen due. Make it configurable the same way rather than guessing.
+
+**US organisation (§3).** **US students are always tier A.** The handoff's "16 missing
+US tier B/C item codes" is therefore **not a data gap** — those codes are not needed and
+should not be created. The US org needs tier A only. Screen 23c's missing-codes export
+should not list them, and any US enrolment resolving to tier B or C is a **bug to
+surface**, not a case to bill.
+
+**Going live (09).** Neither school has started — but **both are well into their payment
+process**, collected outside the Hub.
+
+⚠️ **This is a bigger deal than the original "one nearly finished, one with months left"
+framing, and it changes what adoption means.** `schedule_start_date` alone is not enough:
+it filters by *date*, and the problem here is *money already taken*. If a school is
+switched to `hub_scheduled` and its schedule is built, the Hub will happily schedule
+charges that students have already paid, then invoice them again.
+
+Adoption for these two therefore needs, before any generation:
+1. what each student has already paid, recorded as an opening credit; and
+2. the charges that money covers marked as settled, not merely dated in the past.
+
+Until that exists, both schools stay `external` (migration 172 already put them there).
