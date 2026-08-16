@@ -55,7 +55,13 @@ export async function PUT(request: Request) {
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
 
   const fields: Record<string, unknown> = {};
-  for (const k of ["day_of_week", "start_time", "end_time", "title", "role_needs", "is_active"]) {
+  for (const k of [
+    "day_of_week", "start_time", "end_time", "title", "role_needs", "is_active",
+    // Curated-band attributes (migration 171). Writing these is restricted to
+    // evaluators by RLS, not here — the whitelist only decides what MAY be
+    // written, never who may write it.
+    "band_name", "weekly_focus", "lead_user_id", "is_curated",
+  ]) {
     if (k in body) fields[k] = body[k];
   }
   const { data, error } = await updateTemplateBlock(supabase, id, fields);

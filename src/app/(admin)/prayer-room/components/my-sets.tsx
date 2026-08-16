@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Check } from "lucide-react";
 import { toast } from "sonner";
 import SetDetail from "./set-detail";
+import MySeats from "./my-seats";
 import { roleLabel, fullName, formatDateLabel, formatTimeRange, type Person } from "./helpers";
 
 interface InviteRow {
@@ -89,6 +90,9 @@ export default function MySets({ userId, isStaff }: { userId: string; isStaff: b
 
   return (
     <div className="space-y-8">
+      {/* Where you stand per seat, and the feedback written for you. */}
+      <MySeats />
+
       {/* Invitations */}
       <section>
         <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">

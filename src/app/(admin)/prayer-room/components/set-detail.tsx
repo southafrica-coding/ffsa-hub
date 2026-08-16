@@ -10,7 +10,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, X, Check, Repeat } from "lucide-react";
 import { toast } from "sonner";
-import MemberPicker from "./member-picker";
+import SeatPicker from "./seat-picker";
+import SeatRequests from "./seat-requests";
 import {
   ROLES,
   roleLabel,
@@ -25,6 +26,8 @@ import {
 interface Slot {
   id: string;
   role: string;
+  /** Canonical seat since migration 167; `role` is the legacy mirror. */
+  seat_type_id?: string | null;
   status: "open" | "invited" | "filled" | "declined";
   required_label_id: string | null;
   filled_user_id: string | null;
@@ -107,6 +110,31 @@ export default function SetDetail({ setId, open, onClose, userId, isStaff, onCha
       await refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Action failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /** Ask the lead for an open seat (migration 170). Does not fill anything. */
+  async function askForSeat(slot: Slot) {
+    if (!set) return;
+    setBusy(slot.id);
+    try {
+      const res = await fetch("/api/prayer-room/requests?kind=seat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          set_id: set.id,
+          seat_type_id: slot.seat_type_id ?? slot.role,
+        }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(d.error || "Could not send the request");
+        return;
+      }
+      toast.success("Asked — the set's lead will see it");
+      await load();
     } finally {
       setBusy(null);
     }
@@ -342,7 +370,12 @@ export default function SetDetail({ setId, open, onClose, userId, isStaff, onCha
                           )}
                           {canManage && slot.status === "open" && (
                             <Button size="sm" variant="outline" className="h-7" disabled={busy === slot.id} onClick={() => setInviteSlot(slot)}>
-                              Invite
+                              Fill
+                            </Button>
+                          )}
+                          {!canManage && slot.status === "open" && (
+                            <Button size="sm" variant="outline" className="h-7" disabled={busy === slot.id} onClick={() => askForSeat(slot)}>
+                              Ask for this seat
                             </Button>
                           )}
                           {canManage && slot.status === "invited" && slot.invitee_id !== userId && (
@@ -365,6 +398,8 @@ export default function SetDetail({ setId, open, onClose, userId, isStaff, onCha
                     ))}
                 </div>
               ))}
+
+              <SeatRequests setId={set.id} canDecide={canManage} onDecided={load} />
 
               {canManage && set.status === "scheduled" && (
                 <div className="flex items-center gap-2 pt-1">
@@ -415,11 +450,12 @@ export default function SetDetail({ setId, open, onClose, userId, isStaff, onCha
           </>
         )}
 
-        <MemberPicker
+        <SeatPicker
           open={!!inviteSlot}
           onClose={() => setInviteSlot(null)}
-          requiredLabelId={inviteSlot?.required_label_id ?? undefined}
-          title={inviteSlot ? `Invite a ${roleLabel(inviteSlot.role)}` : undefined}
+          seatTypeId={inviteSlot?.seat_type_id ?? inviteSlot?.role ?? null}
+          seatLabel={inviteSlot ? roleLabel(inviteSlot.role) : undefined}
+          setId={set?.id ?? null}
           busyId={busy}
           onPick={(uid) => invite(uid)}
         />

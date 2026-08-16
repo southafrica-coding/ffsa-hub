@@ -7,6 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { fullName, APPLICATION_STATUS_LABELS, type Person } from "./helpers";
+import SeatEvaluations from "./seat-evaluations";
+import BandCuration from "./band-curation";
 
 interface Evaluation {
   id: string;
@@ -48,8 +50,15 @@ export default function Evaluations({ userId }: { userId: string }) {
 
   return (
     <div className="space-y-6">
+      {/* Seat evaluations first — they are the recurring work. The list below
+          is the one-off "should this person join at all" pipeline. */}
+      <SeatEvaluations />
+
+      {/* Evaluators curate the anchor bands too — same people, same tab. */}
+      <BandCuration />
+
       <section>
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">To evaluate</h2>
+        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Applicants to evaluate</h2>
         {open.length === 0 ? (
           <p className="text-sm text-muted-foreground">No applicants assigned to you right now.</p>
         ) : (
