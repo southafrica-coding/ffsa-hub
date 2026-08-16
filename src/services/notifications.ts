@@ -251,9 +251,18 @@ function personName(u: any): string {
   );
 }
 
+// Beyond this, the stored date is a typo rather than a lapse — a mistyped year
+// ("0028" for "2028") is the common one. Ten years is far past any real lapse.
+const IMPLAUSIBLE_DAYS = 3650;
+
 function expiryPhrase(daysLeft: number, date: string): string {
   if (daysLeft < 0) {
     const ago = Math.abs(daysLeft);
+    // "expired 729821 days ago" is nonsense that buries the real alerts next
+    // to it. Say what's actually wrong so someone fixes the record.
+    if (ago > IMPLAUSIBLE_DAYS) {
+      return `insurance expiry date looks wrong (${date}) — please correct it`;
+    }
     return `insurance expired ${ago === 1 ? "yesterday" : `${ago} days ago`} (${date})`;
   }
   if (daysLeft === 0) return `insurance expires today (${date})`;

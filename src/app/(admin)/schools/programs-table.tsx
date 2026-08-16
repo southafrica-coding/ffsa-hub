@@ -34,7 +34,9 @@ export function ProgramsTable({
   stats?: Record<string, ProgramStats>;
 }) {
   return (
-    <div className="border border-ink">
+    // min-w-0 so this column can shrink below its content's intrinsic width
+    // instead of stretching the grid on narrow screens.
+    <div className="min-w-0 border border-ink">
       <SectionBar
         title="Schools"
         meta={`${programs.length} ${statusFilter === "archived" ? "archived" : "active"}`}

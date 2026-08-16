@@ -199,16 +199,24 @@ export default async function EventsPage({
                           </>
                         ) : (
                           <>
-                            {/* No capacity, no ratio — so no bar, just the
-                                headcount over the existing "Unlimited". */}
-                            {coming !== null && (
-                              <span className="numeral text-[19px]">
-                                {groupDigits(coming)}
-                              </span>
+                            {/* No capacity set, so no ratio and no bar. The
+                                headcount still needs saying what it counts —
+                                a bare "141" above "Unlimited" reads as one
+                                value. */}
+                            {coming !== null ? (
+                              <>
+                                <span className="numeral text-[19px]">
+                                  {groupDigits(coming)}
+                                </span>
+                                <div className="mono-label mt-1">
+                                  {attendance.get(event.id)?.source === "tickets"
+                                    ? "Ticketed · no cap"
+                                    : "Registered · no cap"}
+                                </div>
+                              </>
+                            ) : (
+                              <div className="mono-label">Unlimited</div>
                             )}
-                            <div className={coming === null ? "mono-label" : "mono-label mt-1"}>
-                              Unlimited
-                            </div>
                           </>
                         )}
                       </TableCell>

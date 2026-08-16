@@ -41,7 +41,10 @@ export function ApplicantPipeline({
   nextIntake: NextIntake;
 }) {
   return (
-    <aside className="flex flex-col border border-ink">
+    // min-w-0: the rows below truncate, and truncation implies nowrap. As a
+    // grid/flex child this element's default min-width:auto would take that
+    // nowrap text as its minimum and blow the whole column out on a phone.
+    <aside className="flex min-w-0 flex-col border border-ink">
       <SectionBar title="Applicant pipeline" meta={`${total} awaiting`} />
 
       <div className="flex-1">
