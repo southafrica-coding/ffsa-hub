@@ -14,7 +14,7 @@ const SET_SELECT = `
   *,
   owner:owner_id(${NAME_FIELDS}),
   slots:prayer_room_set_slots(
-    id, role, status, position, required_label_id, filled_user_id, invitee_id,
+    id, role, seat_type_id, status, position, required_label_id, filled_user_id, invitee_id,
     invited_at, responded_at,
     filled:filled_user_id(${NAME_FIELDS}),
     invitee:invitee_id(${NAME_FIELDS}),

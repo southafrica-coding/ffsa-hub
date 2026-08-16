@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import SetDetail from "./set-detail";
 import MemberPicker from "./member-picker";
 import { ScheduleCalendar, type CalendarSet, type CalendarBlockout } from "./calendar";
+import Wall, { type WallSet, type SeatType, type Band } from "./wall";
 import { WEEKDAY_OPTIONS } from "@/lib/bookings/recurrence";
 import {
   todayISO,
@@ -25,11 +26,14 @@ import {
 } from "@/lib/bookings/dates";
 import { ROLES, roleLabel, fullName, toISODate, addDays } from "./helpers";
 
-type ViewKind = "month" | "week" | "day" | "list";
+type ViewKind = "wall" | "month" | "day" | "list";
 
+// The wall (frame 8a) replaces the old week and day grids: one continuous
+// time axis, Mon-Fri, blocks drawn to their real duration. Month and list stay
+// — they answer questions the wall deliberately does not.
 const VIEW_OPTIONS: { key: ViewKind; label: string; icon: typeof CalendarDays }[] = [
+  { key: "wall", label: "Wall", icon: CalendarRange },
   { key: "month", label: "Month", icon: CalendarDays },
-  { key: "week", label: "Week", icon: CalendarRange },
   { key: "day", label: "Day", icon: Clock },
   { key: "list", label: "List", icon: ListIcon },
 ];
@@ -47,7 +51,7 @@ function ymOf(iso: string) {
 /** Date range to fetch for the current view + anchor. */
 function rangeFor(view: ViewKind, anchor: string): { from: string; to: string } {
   if (view === "day") return { from: anchor, to: anchor };
-  if (view === "week") {
+  if (view === "wall") {
     const d = weekDays(anchor);
     return { from: d[0], to: d[6] };
   }
@@ -57,13 +61,17 @@ function rangeFor(view: ViewKind, anchor: string): { from: string; to: string } 
 }
 
 export default function ScheduleView({ userId, isStaff, isMember }: Props) {
-  const [view, setView] = useState<ViewKind>("week");
+  const [view, setView] = useState<ViewKind>("wall");
   const [anchor, setAnchor] = useState<string>(() => todayISO());
   const [sets, setSets] = useState<CalendarSet[]>([]);
   const [blockouts, setBlockouts] = useState<CalendarBlockout[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  // Seat vocabulary + curated bands. Loaded once — they change rarely, and the
+  // wall renders fine with empty arrays if the migrations aren't applied yet.
+  const [seatTypes, setSeatTypes] = useState<SeatType[]>([]);
+  const [bands, setBands] = useState<Band[]>([]);
 
   const { from, to } = rangeFor(view, anchor);
 
@@ -85,9 +93,24 @@ export default function ScheduleView({ userId, isStaff, isMember }: Props) {
     load();
   }, [load]);
 
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/prayer-room/wall-meta")
+      .then((r) => (r.ok ? r.json() : { seatTypes: [], bands: [] }))
+      .then((d) => {
+        if (cancelled) return;
+        setSeatTypes(d.seatTypes ?? []);
+        setBands(d.bands ?? []);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   function step(dir: -1 | 1) {
     if (view === "day") setAnchor(shiftDays(anchor, dir));
-    else if (view === "week") setAnchor(shiftDays(anchor, dir * 7));
+    else if (view === "wall") setAnchor(shiftDays(anchor, dir * 7));
     else {
       const { year, month } = ymOf(anchor);
       const m = shiftMonth(year, month, dir);
@@ -97,7 +120,7 @@ export default function ScheduleView({ userId, isStaff, isMember }: Props) {
 
   const { year, month } = ymOf(anchor);
   const headerLabel =
-    view === "week" ? weekRangeLabel(anchor) : view === "day" ? dayHeadingLabel(anchor) : monthLabel(year, month);
+    view === "wall" ? weekRangeLabel(anchor) : view === "day" ? dayHeadingLabel(anchor) : monthLabel(year, month);
 
   return (
     <div>
@@ -144,6 +167,15 @@ export default function ScheduleView({ userId, isStaff, isMember }: Props) {
       {loading ? (
         <p className="py-20 text-center text-muted-foreground">Loading schedule…</p>
       ) : (
+        view === "wall" ? (
+        <Wall
+          anchorISO={anchor}
+          sets={sets as WallSet[]}
+          seatTypes={seatTypes}
+          bands={bands}
+          onOpenSet={setSelectedId}
+        />
+        ) : (
         <ScheduleCalendar
           view={view}
           anchor={anchor}
@@ -155,6 +187,7 @@ export default function ScheduleView({ userId, isStaff, isMember }: Props) {
             setView("day");
           }}
         />
+        )
       )}
 
       <SetDetail
