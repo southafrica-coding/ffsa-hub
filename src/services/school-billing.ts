@@ -57,11 +57,67 @@ export interface ChargeItemInput {
 // PROGRAMS (umbrella — the existing `programs` table)
 // ────────────────────────────────────────────────────────────
 
+/**
+ * Schools for the finance surfaces.
+ *
+ * `billing_mode` comes back with every row so no screen can forget it. A school
+ * on `external` is billed outside the Hub entirely — it must never appear in an
+ * invoice run, the debtors report or a reminder queue, and its fee surfaces say
+ * so plainly rather than showing zeros, which read as "nothing owed".
+ *
+ * Selected defensively: migration 172 may not be applied yet, in which case the
+ * columns are absent and every school reads as external — the safe direction.
+ */
 export async function getProgramsForBilling(supabase: Client) {
+  const withMode = await supabase
+    .from("programs")
+    .select(
+      "id, name, code, status, billing_mode, schedule_start_date, billing_emails_enabled, billing_courses(id)"
+    )
+    .order("name", { ascending: true });
+
+  if (!withMode.error) return withMode;
+
   return supabase
     .from("programs")
     .select("id, name, code, status, billing_courses(id)")
     .order("name", { ascending: true });
+}
+
+/** Schools the Hub actually bills. Everything that generates money uses this. */
+export async function getHubBilledPrograms(supabase: Client) {
+  return supabase
+    .from("programs")
+    .select("id, name, code, status, schedule_start_date, billing_emails_enabled")
+    .eq("billing_mode", "hub_scheduled")
+    .order("name", { ascending: true });
+}
+
+/**
+ * Guard for anything that schedules or generates. Returns a reason string when
+ * the school is not billable, null when it is.
+ *
+ * The database refuses these writes too (trigger in 172); this exists so a
+ * screen can explain why rather than surfacing a raw constraint error.
+ */
+export async function billingBlockedReason(
+  supabase: Client,
+  programId: string
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("programs")
+    .select("name, billing_mode")
+    .eq("id", programId)
+    .maybeSingle();
+
+  // Columns absent (172 unapplied) — treat as not billable rather than
+  // assuming permission we cannot verify.
+  if (error) return "Hub billing is not switched on for this school yet.";
+  if (!data) return "That school could not be found.";
+  if ((data as { billing_mode?: string }).billing_mode !== "hub_scheduled") {
+    return `${(data as { name?: string }).name ?? "This school"} is billed outside the Hub. Switch it to Hub scheduling before adding charges.`;
+  }
+  return null;
 }
 
 // ────────────────────────────────────────────────────────────

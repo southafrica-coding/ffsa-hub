@@ -8,6 +8,7 @@ import {
 } from "@/services/school-billing";
 import { getXeroRegionForStudent } from "@/services/xero";
 import { canManageFinance } from "@/lib/api-auth";
+import { billingBlockedReason } from "@/services/school-billing";
 import {
   buildSchedule,
   scheduleTotal,
@@ -59,6 +60,14 @@ export async function POST(request: Request) {
 
   if (enrErr || !enrollment) {
     return NextResponse.json({ error: "Enrollment not found" }, { status: 404 });
+  }
+
+  // A school billed outside the Hub must never have charges scheduled against
+  // it (docs/redesign/09-going-live.md). The database refuses this too; this
+  // answers with a sentence a person can act on rather than a constraint error.
+  const blocked = await billingBlockedReason(supabase, enrollment.program_id);
+  if (blocked) {
+    return NextResponse.json({ error: blocked }, { status: 409 });
   }
 
   const { data: course, error: courseErr } = await db

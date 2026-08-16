@@ -19,6 +19,11 @@ type ProgramRow = {
   name: string;
   code: string;
   status: string;
+  // Optional: absent until migration 172 is applied, in which case every school
+  // reads as billed outside the Hub — the safe direction.
+  billing_mode?: "external" | "hub_scheduled" | null;
+  billing_emails_enabled?: boolean | null;
+  schedule_start_date?: string | null;
   billing_courses: { id: string }[] | null;
 };
 
@@ -68,6 +73,7 @@ export default async function SchoolFeesPage() {
                   <TableHead className="w-[110px]">Code</TableHead>
                   <TableHead>Program</TableHead>
                   <TableHead className="w-[130px] text-right">Courses</TableHead>
+                  <TableHead className="w-[150px]">Billing</TableHead>
                   <TableHead className="w-[130px]">Status</TableHead>
                   <TableHead className="w-[90px] text-right">Open</TableHead>
                 </TableRow>
@@ -93,6 +99,23 @@ export default async function SchoolFeesPage() {
                         <span className="mono-label ml-2">
                           course{courseCount !== 1 ? "s" : ""}
                         </span>
+                      </TableCell>
+                      <TableCell>
+                        {/* A school billed outside the Hub says so. Showing it
+                            with zeros would read as "nothing owed". */}
+                        {program.billing_mode === "hub_scheduled" ? (
+                          <div>
+                            <StatusPill tone="good">Hub scheduled</StatusPill>
+                            {!program.billing_emails_enabled && (
+                              <div className="mono-label mt-1">Sending held</div>
+                            )}
+                          </div>
+                        ) : (
+                          <div>
+                            <StatusPill tone="quiet">Outside the Hub</StatusPill>
+                            <div className="mono-label mt-1">Billed in Xero</div>
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>
                         <StatusPill tone={program.status === "active" ? "good" : "quiet"}>
