@@ -101,9 +101,35 @@ export function XeroConnection() {
     (r) => r?.connected === true && r.live === true
   ).length;
 
+  // Both regions bound to the same Xero organisation means every student is
+  // invoiced into one company's books, whatever the region says. Worth shouting
+  // about: it is invisible otherwise, and it was the default behaviour until
+  // the callback stopped taking tenants[0].
+  const za = status?.za;
+  const us = status?.us;
+  const sameOrg =
+    za?.connected === true &&
+    us?.connected === true &&
+    !!za.tenantName &&
+    za.tenantName === us.tenantName;
+
   return (
     <div className="border border-ink bg-white">
       <SectionBar title="Xero integration" meta={`${liveCount} of 2 working`} />
+
+      {sameOrg && (
+        <div className="border-b border-ink bg-[color:var(--yellow-dim)] px-5 py-3">
+          <p className="text-[13px] font-semibold text-ink">
+            Both regions are connected to the same Xero organisation
+            {za?.connected ? ` (${za.tenantName})` : ""}.
+          </p>
+          <p className="mt-1 text-[12px] text-[color:var(--text-secondary)]">
+            SA and US students would both be invoiced into that one set of books.
+            Reconnect each region and choose the right organisation, or pin them
+            with XERO_TENANT_ID_ZA and XERO_TENANT_ID_US.
+          </p>
+        </div>
+      )}
       <div className="p-6">
         <p className="mb-5 max-w-2xl text-[13px] text-[color:var(--text-secondary)]">
           Connect your Xero accounts to automatically create and email invoices.

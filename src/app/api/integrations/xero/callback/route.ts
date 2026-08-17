@@ -97,7 +97,61 @@ export async function GET(request: Request) {
       );
     }
 
-    const tenant = tenants[0];
+    // Which organisation did they actually authorise for THIS region?
+    //
+    // This used to be `tenants[0]` — the first organisation Xero happens to
+    // list, regardless of which one was chosen on the consent screen or which
+    // region button was clicked. With two organisations authorised, connecting
+    // "South Africa" and "United States" both bound to the same tenant, so
+    // every student would have been invoiced into one company's books.
+    //
+    // Xero returns every organisation the user authorised, so the choice has to
+    // be made here. Prefer an explicit pin (XERO_TENANT_ID_ZA / _US), then a
+    // name match, and refuse to guess when two organisations are available and
+    // neither matches — a wrong binding posts real invoices to the wrong books.
+    type XeroTenant = { tenantId: string; tenantName?: string };
+    const list = tenants as XeroTenant[];
+
+    const pinned = (
+      region === "us"
+        ? process.env.XERO_TENANT_ID_US
+        : process.env.XERO_TENANT_ID_ZA
+    )?.trim();
+
+    const nameLooksUS = (n: string) => /\bus\b|u\.s\.|usa|united states|inc\b/i.test(n);
+
+    let tenant: XeroTenant | undefined;
+
+    if (pinned) {
+      tenant = list.find((t) => t.tenantId === pinned);
+      if (!tenant) {
+        return NextResponse.redirect(
+          `${process.env.NEXT_PUBLIC_SITE_URL}/finance?xero=error&message=` +
+            encodeURIComponent(
+              `The pinned ${region.toUpperCase()} organisation was not among the ones you authorised. Check XERO_TENANT_ID_${region.toUpperCase()}.`
+            )
+        );
+      }
+    } else if (list.length === 1) {
+      tenant = list[0];
+    } else {
+      const matches = list.filter((t) =>
+        region === "us" ? nameLooksUS(t.tenantName ?? "") : !nameLooksUS(t.tenantName ?? "")
+      );
+      if (matches.length === 1) {
+        tenant = matches[0];
+      } else {
+        // Ambiguous. Better to stop than to bind the wrong books.
+        return NextResponse.redirect(
+          `${process.env.NEXT_PUBLIC_SITE_URL}/finance?xero=error&message=` +
+            encodeURIComponent(
+              `Could not tell which Xero organisation is the ${region.toUpperCase()} one (${list
+                .map((t) => t.tenantName)
+                .join(", ")}). Set XERO_TENANT_ID_${region.toUpperCase()} to the right tenant id and reconnect.`
+            )
+        );
+      }
+    }
 
     // 3. Store the tokens with region
     const expiresAt = new Date(
