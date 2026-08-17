@@ -10,6 +10,53 @@ twice), and report by frame id with screenshots.
 
 ---
 
+## Running these in parallel
+
+Parallel worked well for the step-6 screens (six agents, disjoint directories).
+It breaks on four specific things, all avoidable.
+
+**1. Migration numbers collide.** This has already happened twice (116, then 164
+and 167 simultaneously). Two sessions both take "the next number" and the folder
+ends up with duplicates that nobody can order afterwards. So **pre-assign a
+number per session before starting**, and tell each session its number:
+
+| Session | Migration |
+|---|---|
+| 2 Communications | 176 |
+| 5 Billing | 177 |
+| 6 Outreach | 178 |
+| 1, 3, 4, 7 | none expected — ask before taking one |
+
+**2. Shared files conflict.** `src/components/ffsa/index.tsx`, `src/app/globals.css`
+and `tailwind.config.ts` are wanted by everything. Any session that needs a change
+there should **report it rather than make it**, and one person applies it centrally
+between merges. That convention already worked once.
+
+**3. One worktree per session.** Two chats pointed at the same folder overwrite
+each other. `git worktree add -b <branch> ../ffsa-<name> origin/main`, and give
+each its own dev-server port — a second server on 3210 silently attaches to the
+wrong code, which cost this project three separate confusions in one day.
+
+**4. You are the review bottleneck.** Unreviewed parallel output is exactly how
+28 routes shipped unseen. Keep **two or three in flight at most**, and merge one
+at a time, merging `main` back into the others after each.
+
+### Dependency order
+
+Only one hard dependency: **session 2 must land before session 3** and before
+session 5's email moments, because doc 11 owns the messages model that both sit
+on. Everything else is independent.
+
+Suggested shape:
+
+1. **Session 1 alone** — visible win, no migration, nothing depends on it.
+2. **Session 2 alone** — the backbone; do its reconciliation properly.
+3. **Sessions 3 + 4 + 7 in parallel** — disjoint directories, no migrations.
+4. **Sessions 5 + 6 in parallel** — both finance but different areas (school fees
+   vs outreach), with 177 and 178 pre-assigned.
+
+---
+
 ## 1 — Prayer room UI
 
 ```
