@@ -17,6 +17,10 @@ import {
   type FileValue,
 } from "@/lib/form-types";
 import { CheckCircle2, Loader2, Copy, Check } from "lucide-react";
+import {
+  referenceHeadsUpNote,
+  referenceSubmittedNote,
+} from "@/lib/references/reference-status-copy";
 
 type DbQuestion = {
   id: string;
@@ -49,6 +53,7 @@ function SuccessScreen({
   statusUrl: string | null;
 }) {
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+  const hasReferences = referenceLinks.length > 0;
 
   function copyToClipboard(url: string, idx: number) {
     navigator.clipboard.writeText(url);
@@ -63,16 +68,35 @@ function SuccessScreen({
         <h2 className="text-xl font-bold text-foreground">
           Application Received
         </h2>
-        <p className="text-sm text-muted-foreground max-w-md mx-auto">
-          Thank you for applying to {programName}. We&apos;ve sent a
-          confirmation to your email. Our team will review your application and
-          get back to you soon.
-        </p>
-        <p className="text-xs text-muted-foreground max-w-md mx-auto">
-          You don&apos;t have an account yet — you&apos;ll receive an email with
-          setup instructions once your application is accepted. Until then, use
-          the tracker below to check your status.
-        </p>
+        {hasReferences ? (
+          <>
+            <p className="text-sm text-muted-foreground max-w-md mx-auto">
+              Thank you for applying to {programName}. We&apos;ve sent a
+              confirmation to your email.
+            </p>
+            <p className="text-sm text-muted-foreground max-w-md mx-auto">
+              {referenceSubmittedNote(referenceLinks.length)}
+            </p>
+            <p className="text-xs text-muted-foreground max-w-md mx-auto">
+              You don&apos;t have an account yet — you&apos;ll receive an email
+              with setup instructions once your application is accepted. Until
+              then, use the tracker below to check when each reference comes in.
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-muted-foreground max-w-md mx-auto">
+              Thank you for applying to {programName}. We&apos;ve sent a
+              confirmation to your email. Our team will review your application
+              and get back to you soon.
+            </p>
+            <p className="text-xs text-muted-foreground max-w-md mx-auto">
+              You don&apos;t have an account yet — you&apos;ll receive an email
+              with setup instructions once your application is accepted. Until
+              then, use the tracker below to check your status.
+            </p>
+          </>
+        )}
       </div>
 
       {statusUrl && (
@@ -156,6 +180,10 @@ export function PublicApplicationForm({
   const [homeCountryError, setHomeCountryError] = useState<string | null>(null);
   const [nationality, setNationality] = useState("");
   const [nationalityError, setNationalityError] = useState<string | null>(null);
+
+  const requiredReferenceCount = referenceSlots.filter(
+    (slot) => slot.is_required
+  ).length;
 
   // Reorder so follow-ups render directly under their parent (and indent
   // them via depthById) instead of falling to the bottom by sort_order.
@@ -488,6 +516,11 @@ export function PublicApplicationForm({
             Please provide contact details for the following references. They
             will receive an email with a link to submit their reference.
           </p>
+          {requiredReferenceCount > 0 && (
+            <p className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-muted-foreground">
+              {referenceHeadsUpNote(requiredReferenceCount)}
+            </p>
+          )}
 
           {referenceSlots.map((slot) => (
             <div key={slot.id} className="space-y-3 rounded-md border p-4">

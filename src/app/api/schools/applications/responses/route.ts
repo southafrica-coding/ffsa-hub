@@ -251,7 +251,14 @@ export async function POST(request: Request) {
     }
   }
 
-  return NextResponse.json({ success: true, response: data });
+  // Hand back the tracker link (mirrors the public apply route) so the portal's
+  // success screen can point the applicant at where their references show up.
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://ffsahub.com";
+  const statusUrl = data.status_token
+    ? `${siteUrl}/apply/status/${data.status_token}`
+    : null;
+
+  return NextResponse.json({ success: true, response: data, statusUrl });
 }
 
 // Helper: get applicant email and name from a response
