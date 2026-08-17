@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
  * Both request flows (migration 170), which are the same shape from the UI's
@@ -47,15 +48,11 @@ export async function GET(request: Request) {
             .from(t.table)
             .select(
               `id, set_id, seat_type_id, user_id, state, message, created_at,
-               user:user_id(${NAME}),
                set:set_id(id, set_date, start_time, end_time, title)`
             )
         : db
             .from(t.table)
-            .select(
-              `id, seat_type_id, user_id, state, note, scheduled_at, created_at,
-               user:user_id(${NAME})`
-            );
+            .select(`id, seat_type_id, user_id, state, note, scheduled_at, created_at`);
 
     const setId = url.searchParams.get("setId");
     if (setId && t.kind === "seat") q = q.eq("set_id", setId);
@@ -65,7 +62,19 @@ export async function GET(request: Request) {
 
     const { data, error } = await q.order("created_at", { ascending: true });
     if (error) return NextResponse.json([], { status: 200 });
-    return NextResponse.json(data ?? []);
+
+    // Names are resolved separately, with the ADMIN client. `users` is
+    // own-row-or-admin under RLS, so embedding the join here returned a null
+    // person for everyone except the caller — every request in a lead's inbox
+    // rendered as "Unknown". The caller has already passed the request table's
+    // own policies to be holding these rows at all.
+    const rows = (data ?? []) as { user_id: string }[];
+    const ids = [...new Set(rows.map((r) => r.user_id))];
+    if (ids.length === 0) return NextResponse.json(rows);
+
+    const { data: people } = await createAdminClient().from("users").select(NAME).in("id", ids);
+    const byId = new Map(((people ?? []) as { id: string }[]).map((p) => [p.id, p]));
+    return NextResponse.json(rows.map((r) => ({ ...r, user: byId.get(r.user_id) ?? null })));
   } catch {
     // Table absent (migration 170 not applied) — an empty inbox, not an error.
     return NextResponse.json([], { status: 200 });

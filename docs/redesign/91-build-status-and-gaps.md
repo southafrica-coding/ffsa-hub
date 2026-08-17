@@ -69,6 +69,7 @@ Everything below is on `main` and deployed (PR #212, commit `aa53496`).
 | Bookings (3c) — page chrome | ✅ 15 routes |
 | Event capacity, campaign open/click, finance ledger, bookings day strip | ✅ built (migrations 174, 165) |
 | Prayer room data model + wall (8a) | ✅ migrations 175, 168–171 applied |
+| Prayer room UI — masthead, 9a, 10a, 10b, 11a, 12a, 12b | 🔵 built on `redesign/prayer-room-ui`, not yet merged |
 | Billing: `billing_mode` (172), generation guard + held-charge queue (173) | ✅ with tests |
 | Xero: read side, honest status, per-region org pinning | ✅ |
 
@@ -76,22 +77,84 @@ Everything below is on `main` and deployed (PR #212, commit `aa53496`).
 
 ## Not built — the real backlog
 
-### Prayer room — 1 of 5 UI stages
-`06-screen-recipes.md` lists five stages. Only the wall exists. **Zero masthead
-references across all 19 files in that module** — the page header, tabs and four
-of five tabs are the pre-redesign screens.
+### Prayer room — UI
+
+Session of **2026-08-18** (branch `redesign/prayer-room-ui`, off `origin/main`
+at `1525867`). No migration: the data layer for all of this was already applied
+(168–171, 175), so this was UI against a working backend.
 
 | Frame | State |
 |---|---|
-| 8a wall | ✅ |
-| 9a set detail drawer (470px, source block inverts to black), 9b claim flow | ❌ still the old dialog |
-| 10a/10b seats + **People tab** | ❌ no People tab exists |
-| 11a person profile, 11b mobile | ❌ "My Seats" is a plain panel, not the designed profile |
-| 12a/12b evaluators portal as its own tab | ⚠️ queue + band curation bolted into the existing Evaluations tab |
-| 13a/13b two-note evaluation | ✅ roughly per design |
+| 8a wall | ✅ (plus: the open block now stays outlined behind the drawer) |
+| 9a set detail drawer | ✅ rebuilt as a 470px right drawer with ↑PREV / NEXT↓ |
+| 9b claim flow (curated-band + empty-space states) | ❌ not attempted |
+| 10a People tab | ✅ built — replaces the old Directory |
+| 10b lineup / fill a seat / requests to join | ✅ all three panels |
+| 11a person profile | ✅ built, its own screen with a breadcrumb |
+| 11b mobile person profile | ⚠️ responsive, not the designed phone layout |
+| 12a evaluators portal as its own tab | ✅ own tab, gated on `prayer_room.evaluate` |
+| 12b band curation + note privacy | ✅ both panels |
+| 13a/13b two-note evaluation | ✅ unchanged, now opened from the 12a queue |
 
-The backend is complete and verified end to end, so this is UI work against a
-working data layer.
+**Module masthead: was zero references across 19 files, now every tab renders
+one.** `<Masthead>` + a mono `<ModuleTabs>` strip live in
+`prayer-room/components/chrome.tsx`; each tab renders it (only one tab is
+mounted at a time, so the one-masthead-per-screen rule holds) because the
+context line, actions and filters all belong to the tab.
+
+New in `src/components/ffsa/`: `Drawer`, `ModuleTabs`, `MastheadButton`.
+The drawer is portalled to `<body>` — the admin shell's content column carries
+`animate-fade-up`, and a transform on an ancestor makes it the containing block
+for `position: fixed`, which sized the drawer to the whole scrolled page and
+pushed its footer below the fold.
+
+New reads: `services/prayer-room-people.ts`, `/api/prayer-room/people`,
+`/api/prayer-room/people/[userId]`, `/api/prayer-room/evaluators`.
+`/api/prayer-room/requests` now resolves names with the admin client — `users`
+is own-row-or-admin under RLS, so the embedded join returned a null person for
+everyone except the caller and every row in a lead's inbox read "Unknown".
+
+**Deleted:** `directory.tsx` (superseded by People), `seat-evaluations.tsx`
+(superseded by the 12a queue).
+
+#### Deliberately not built, and why
+
+- **"I'm coming" (9a footer)** — there is no attendance model, only seats. The
+  footer is ADD TO CALENDAR (a real `.ics`) + SHARE instead. Needs a table.
+- **"Hand over" (9a footer)** — no endpoint transfers ownership of a set.
+- **"Turned up 21/22" (11a KPI)** — same missing attendance model. That cell is
+  SEATS SIGNED OFF instead, which is real.
+- **"+ Book a session" as a masthead action (12a)** — booking is per request
+  (`prayer_room_evaluation_requests.scheduled_at`); a standalone one has nothing
+  to attach to. Per-row "Book a session" is built and does write `scheduled_at`.
+- 12a's queue states are **derived**, not stored: `booked` → READY, no seats ever
+  held → TOO EARLY, otherwise NEEDS A SESSION.
+- 10a's seat-category chips sit in the bone filter strip under the tab rule
+  rather than on the rule itself — the strip is the system's existing filter row
+  (Events uses it) and it survives 375px.
+
+#### Still on the old design inside this module
+
+Frames 9a/10a/10b/11a/12a/12b are clean. These files were not in scope and are
+untouched pre-redesign structures: `calendar.tsx` (the month and list views —
+also the module's only real `shadow-[…]`), `admin-panel.tsx` (Manage tab),
+`my-sets.tsx`, `my-seats.tsx`, `apply-form.tsx` (still uses `page-eyebrow`),
+`evaluations.tsx` (the join-the-room pipeline), `member-picker.tsx`, and the
+`CreateSetDialog` inside `schedule-view.tsx`.
+
+#### Acceptance sweep — say what was scanned
+
+Scanned: **48 files** = `src/app/(admin)/prayer-room/**` (22),
+`src/components/ffsa/**` (1), `src/app/api/prayer-room/**` (17),
+`src/services/prayer-room*.ts` (4). In the six frames' own files: 0 `rounded-*`,
+0 `shadow-*`, 0 `page-title`, 0 dark-theme hex. Across all 48: 21 `rounded-*`
+and 2 `shadow-[…]` remain, all in the out-of-scope files listed above; 1
+`page-eyebrow` in `apply-form.tsx`. `tsc --noEmit` and `next lint` clean.
+
+Verified signed in at 1440px and 375px against production data, which is thin —
+no qualifications rows exist yet, so every roster row reads NOT EVALUATED and
+the sign-off records are empty. The structure renders; the numbers are real and
+mostly zero.
 
 ### `08-training-and-messages.md` — nothing built
 The whole document. Note the handoff's own warning: Messages is the thing every

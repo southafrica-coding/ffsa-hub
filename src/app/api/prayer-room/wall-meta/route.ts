@@ -37,7 +37,9 @@ export async function GET() {
     safe(() =>
       db
         .from("prayer_room_seat_types")
-        .select("id, label, is_lead")
+        // category and sort_order are what the set drawer's lineup (10b) and
+        // the People tab's seat filters (10a) group and order by.
+        .select("id, label, is_lead, category, sort_order")
         .eq("is_active", true)
         .order("sort_order")
     ),

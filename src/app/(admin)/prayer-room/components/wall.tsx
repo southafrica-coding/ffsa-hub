@@ -93,12 +93,15 @@ export default function Wall({
   seatTypes,
   bands = [],
   onOpenSet,
+  selectedId,
 }: {
   anchorISO: string;
   sets: WallSet[];
   seatTypes: SeatType[];
   bands?: Band[];
   onOpenSet?: (id: string) => void;
+  /** The block the drawer is open on — 9a keeps it highlighted behind the panel. */
+  selectedId?: string | null;
 }) {
   const leadSeatIds = useMemo(
     () =>
@@ -264,7 +267,10 @@ export default function Wall({
                         ? "border-2 border-ink bg-yellow"
                         : live
                           ? "border border-rule-strong bg-[color:var(--surface-3)]"
-                          : "border border-dashed border-ink bg-white"
+                          : "border border-dashed border-ink bg-white",
+                      // Outline rather than a border swap, so the block does not
+                      // change size when the drawer opens on it.
+                      s.id === selectedId && "z-10 [outline:3px_solid_#0A0A0A]"
                     )}
                     style={{
                       top: (start - DAY_START) * PX_PER_MIN + 1.5,

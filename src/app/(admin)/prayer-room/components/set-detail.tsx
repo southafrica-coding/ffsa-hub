@@ -1,16 +1,33 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+/**
+ * The set drawer — design frames 9a and 10b (left panel).
+ *
+ * 9a is emphatic that this is a PANEL and not a page: the week stays visible
+ * behind it, the clicked block stays highlighted, and ↑/↓ move to the next set
+ * without closing. That is why this is the ffsa `Drawer` rather than the
+ * shadcn Dialog it used to be — a centred modal cannot do any of those things.
+ *
+ * The roster inside it is 10b's LINEUP, which explicitly replaces 9a's flat
+ * "on the watch" list: lead seats first at full size, then the rest, each row
+ * either a filled seat or a dashed empty one carrying its own way in.
+ *
+ * NOT built, because neither has a data layer to sit on:
+ *   · "I'm coming" — there is no attendance model, only seats.
+ *   · "Hand over" — no endpoint transfers ownership of a set.
+ * Both are recorded in docs/redesign/91-build-status-and-gaps.md rather than
+ * rendered as buttons that do nothing.
+ */
+
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, X, Check, Repeat } from "lucide-react";
 import { toast } from "sonner";
-import SeatPicker from "./seat-picker";
+import { Drawer, Initials } from "@/components/ffsa";
+import { cn } from "@/lib/utils/cn";
+import SeatFill from "./seat-picker";
 import SeatRequests from "./seat-requests";
 import {
   ROLES,
@@ -22,6 +39,8 @@ import {
   formatTimeRange,
   type Person,
 } from "./helpers";
+
+export type SeatType = { id: string; label: string; is_lead: boolean; category?: string; sort_order?: number };
 
 interface Slot {
   id: string;
@@ -62,14 +81,44 @@ interface Props {
   userId: string;
   isStaff: boolean;
   onChanged: () => void;
+  /** Seat vocabulary, so the lineup can order and name seats. */
+  seatTypes?: SeatType[];
+  /** ↑/↓ between blocks without leaving the drawer — 9a's PREV / NEXT. */
+  onPrev?: () => void;
+  onNext?: () => void;
+  /** Curated band this set falls inside, if any — the yellow chip in 9a. */
+  bandName?: string | null;
 }
 
-export default function SetDetail({ setId, open, onClose, userId, isStaff, onChanged }: Props) {
+/** Minutes between two "HH:MM[:SS]" strings, for the duration beside the range. */
+function durationLabel(start: string, end: string): string {
+  const m = (t: string) => {
+    const p = (t || "").match(/^(\d{1,2}):(\d{2})/);
+    return p ? parseInt(p[1], 10) * 60 + parseInt(p[2], 10) : 0;
+  };
+  const mins = Math.max(0, m(end) - m(start));
+  const h = Math.floor(mins / 60);
+  const r = mins % 60;
+  return h === 0 ? `${r}MIN` : r === 0 ? `${h}H` : `${h}H ${r}MIN`;
+}
+
+export default function SetDetail({
+  setId,
+  open,
+  onClose,
+  userId,
+  isStaff,
+  onChanged,
+  seatTypes = [],
+  onPrev,
+  onNext,
+  bandName,
+}: Props) {
   const [set, setSet] = useState<SetRow | null>(null);
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
-  const [inviteSlot, setInviteSlot] = useState<Slot | null>(null);
+  const [fillSlot, setFillSlot] = useState<Slot | null>(null);
   const [addRole, setAddRole] = useState<string>("vocals");
   const [repeating, setRepeating] = useState(false);
 
@@ -98,6 +147,33 @@ export default function SetDetail({ setId, open, onClose, userId, isStaff, onCha
 
   const canManage = !!set && (isStaff || set.owner_id === userId);
 
+  const seatMeta = useMemo(() => new Map(seatTypes.map((s) => [s.id, s])), [seatTypes]);
+
+  function seatLabelOf(slot: Slot): string {
+    const id = slot.seat_type_id ?? slot.role;
+    return seatMeta.get(id)?.label ?? roleLabel(slot.role);
+  }
+
+  function isLeadSeat(slot: Slot): boolean {
+    const id = slot.seat_type_id ?? slot.role;
+    const meta = seatMeta.get(id);
+    if (meta) return meta.is_lead;
+    return id === "prayer_leader" || id === "worship_leader";
+  }
+
+  /** Lead seats first, then the seat vocabulary's own order — 10b's two blocks. */
+  const { leadSlots, otherSlots, openCount } = useMemo(() => {
+    const rows = set?.slots ?? [];
+    const order = (s: Slot) => seatMeta.get(s.seat_type_id ?? s.role)?.sort_order ?? 99;
+    const sorted = [...rows].sort((a, b) => order(a) - order(b));
+    return {
+      leadSlots: sorted.filter(isLeadSeat),
+      otherSlots: sorted.filter((s) => !isLeadSeat(s)),
+      openCount: rows.filter((s) => s.status === "open" || s.status === "declined").length,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [set?.slots, seatMeta]);
+
   async function slotAction(slotId: string, body: Record<string, unknown>) {
     setBusy(slotId);
     try {
@@ -123,10 +199,7 @@ export default function SetDetail({ setId, open, onClose, userId, isStaff, onCha
       const res = await fetch("/api/prayer-room/requests?kind=seat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          set_id: set.id,
-          seat_type_id: slot.seat_type_id ?? slot.role,
-        }),
+        body: JSON.stringify({ set_id: set.id, seat_type_id: slot.seat_type_id ?? slot.role }),
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -141,17 +214,17 @@ export default function SetDetail({ setId, open, onClose, userId, isStaff, onCha
   }
 
   async function invite(userIdToInvite: string) {
-    if (!inviteSlot) return;
+    if (!fillSlot) return;
     setBusy(userIdToInvite);
     try {
-      const res = await fetch(`/api/prayer-room/slots/${inviteSlot.id}`, {
+      const res = await fetch(`/api/prayer-room/slots/${fillSlot.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "invite", invitee_id: userIdToInvite }),
       });
       if (!res.ok) throw new Error((await res.json()).error || "Failed to invite");
       toast.success("Invitation sent");
-      setInviteSlot(null);
+      setFillSlot(null);
       await refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to invite");
@@ -260,207 +333,325 @@ export default function SetDetail({ setId, open, onClose, userId, isStaff, onCha
     }
   }
 
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
-        {loading || !set ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">Loading…</p>
-        ) : (
-          <>
-            <DialogHeader>
-              <DialogTitle>{set.title || "Devo set"}</DialogTitle>
-            </DialogHeader>
+  /** A real .ics rather than a button that only looks like one. */
+  function addToCalendar() {
+    if (!set) return;
+    const stamp = (date: string, time: string) =>
+      `${date.replace(/-/g, "")}T${formatTime(time).replace(":", "")}00`;
+    const ics = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//FFSA Hub//Prayer Room//EN",
+      "BEGIN:VEVENT",
+      `UID:prayer-set-${set.id}`,
+      `DTSTART:${stamp(set.set_date, set.start_time)}`,
+      `DTEND:${stamp(set.set_date, set.end_time)}`,
+      `SUMMARY:${(set.title || "Devo set").replace(/\n/g, " ")}`,
+      set.prayer_focus ? `DESCRIPTION:${set.prayer_focus.replace(/\n/g, "\\n")}` : "",
+      "END:VEVENT",
+      "END:VCALENDAR",
+    ]
+      .filter(Boolean)
+      .join("\r\n");
+    const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `prayer-set-${set.set_date}.ics`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
-            <p className="text-sm text-muted-foreground">
-              {formatDateLabel(set.set_date)} · {formatTimeRange(set.start_time, set.end_time)}
-              {set.owner && <> · led by {fullName(set.owner)}</>}
+  async function share() {
+    if (!set) return;
+    const link = `${window.location.origin}/prayer-room?set=${set.id}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      toast.success("Link copied");
+    } catch {
+      toast.error("Could not copy the link");
+    }
+  }
+
+  const title = set?.title || set?.theme || "Devo set";
+
+  return (
+    <Drawer open={open} onClose={onClose} label="Set detail" onPrev={onPrev} onNext={onNext}>
+      {loading || !set ? (
+        <p className="mono-label py-16 text-center">{loading ? "Loading…" : "Set not found"}</p>
+      ) : editing ? (
+        <form action={saveDetails} className="flex flex-1 flex-col">
+          <div className="flex-1 space-y-3 px-6 py-5">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="col-span-2 space-y-1">
+                <Label className="text-xs">Date</Label>
+                <Input type="date" name="set_date" defaultValue={set.set_date} required />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Start</Label>
+                <Input type="time" name="start_time" defaultValue={formatTime(set.start_time)} required />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">End</Label>
+                <Input type="time" name="end_time" defaultValue={formatTime(set.end_time)} required />
+              </div>
+            </div>
+            <Field name="title" label="Title" defaultValue={set.title} />
+            <Field name="theme" label="Theme / focus" defaultValue={set.theme} />
+            <Field name="scripture" label="Scripture" defaultValue={set.scripture} />
+            <div className="space-y-1">
+              <Label className="text-xs">What we&apos;re praying</Label>
+              <Textarea name="prayer_focus" defaultValue={set.prayer_focus ?? ""} rows={4} />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">If you walk in — setlist, notes &amp; links</Label>
+              <Textarea name="setlist" defaultValue={set.setlist ?? ""} rows={4} />
+            </div>
+          </div>
+          <div className="flex gap-2 border-t border-surface-4 px-6 py-4">
+            <button type="submit" disabled={busy === "save"} className="flex-1 bg-ink px-4 py-3.5 font-mono text-[10.5px] font-bold tracking-[0.14em] text-white">
+              SAVE
+            </button>
+            <button type="button" onClick={() => setEditing(false)} className="border border-ink px-4 py-3.5 font-mono text-[10.5px] font-bold tracking-[0.12em] text-ink">
+              CANCEL
+            </button>
+          </div>
+        </form>
+      ) : (
+        <>
+          {/* ── identity ─────────────────────────────── */}
+          <div className="border-b border-surface-4 px-6 pb-5 pt-6">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              {bandName && (
+                <span className="bg-ink px-2.5 py-1 font-display text-[15px] font-black uppercase tracking-[0.02em] text-yellow">
+                  {bandName}
+                </span>
+              )}
               {set.status !== "scheduled" && (
-                <Badge variant="secondary" className="ml-2 capitalize">
+                <span className="border border-rule-strong px-1.5 py-1 font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-[color:var(--text-secondary)]">
                   {set.status}
-                </Badge>
+                </span>
               )}
               {set.series_id && (
-                <Badge variant="outline" className="ml-2 gap-1">
-                  <Repeat className="h-3 w-3" /> Weekly
-                </Badge>
+                <span className="border border-rule-strong px-1.5 py-1 font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-[color:var(--text-secondary)]">
+                  Repeats weekly
+                </span>
               )}
-            </p>
-
-            {set.relocation_note && (
-              <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
-                <span className="font-medium">Relocated</span> → {set.relocation_note}
+            </div>
+            <h2 className="font-display text-[34px] font-black uppercase leading-[0.94] tracking-[-0.01em] text-ink sm:text-[40px]">
+              {title}
+            </h2>
+            <div className="mt-3.5 flex flex-wrap items-baseline gap-3.5">
+              <span className="numeral text-[26px] leading-none">
+                {formatTimeRange(set.start_time, set.end_time)}
+              </span>
+              <span className="font-mono text-[10px] font-bold tracking-[0.12em] text-[color:var(--text-tertiary)]">
+                {formatDateLabel(set.set_date).toUpperCase()} · {durationLabel(set.start_time, set.end_time)}
+              </span>
+            </div>
+            {set.owner && (
+              <div className="mt-2 font-mono text-[9.5px] tracking-[0.1em] text-[color:var(--text-tertiary)]">
+                LED BY {fullName(set.owner).toUpperCase()}
               </div>
             )}
+          </div>
 
-            {/* Content */}
-            {editing ? (
-              <form action={saveDetails} className="space-y-3">
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  <div className="col-span-2 space-y-1">
-                    <Label className="text-xs">Date</Label>
-                    <Input type="date" name="set_date" defaultValue={set.set_date} required />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Start</Label>
-                    <Input type="time" name="start_time" defaultValue={formatTime(set.start_time)} required />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">End</Label>
-                    <Input type="time" name="end_time" defaultValue={formatTime(set.end_time)} required />
-                  </div>
-                </div>
-                <Field name="title" label="Title" defaultValue={set.title} />
-                <Field name="theme" label="Theme / focus" defaultValue={set.theme} />
-                <Field name="scripture" label="Scripture" defaultValue={set.scripture} />
-                <Field name="prayer_focus" label="Prayer focus" defaultValue={set.prayer_focus} />
-                <div className="space-y-1">
-                  <Label className="text-xs">Setlist / notes &amp; links</Label>
-                  <Textarea name="setlist" defaultValue={set.setlist ?? ""} rows={4} />
-                </div>
-                <div className="flex gap-2">
-                  <Button type="submit" size="sm" disabled={busy === "save"}>
-                    Save
-                  </Button>
-                  <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(false)}>
-                    Cancel
-                  </Button>
-                </div>
-              </form>
-            ) : (
-              <div className="space-y-1.5 text-sm">
-                <ContentLine label="Theme" value={set.theme} />
-                <ContentLine label="Scripture" value={set.scripture} />
-                <ContentLine label="Prayer focus" value={set.prayer_focus} />
-                {set.setlist && (
-                  <div>
-                    <span className="text-xs uppercase tracking-wide text-muted-foreground">Setlist</span>
-                    <p className="whitespace-pre-wrap">{set.setlist}</p>
-                  </div>
-                )}
-                {!set.theme && !set.scripture && !set.prayer_focus && !set.setlist && (
-                  <p className="text-muted-foreground">No content added yet.</p>
-                )}
-              </div>
-            )}
+          {set.relocation_note && (
+            <div className="border-b border-surface-4 bg-yellow-dim px-6 py-3 text-[13px] text-ink">
+              <span className="font-semibold">Relocated</span> → {set.relocation_note}
+            </div>
+          )}
 
-            {/* Roster */}
-            <div className="space-y-3 border-t border-border pt-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Roster</p>
-              {set.slots.length === 0 && <p className="text-sm text-muted-foreground">No slots yet.</p>}
-
-              {ROLES.filter((r) => set.slots.some((s) => s.role === r)).map((role) => (
-                <div key={role} className="space-y-1">
-                  <p className="text-xs font-medium text-foreground/70">{roleLabel(role)}</p>
-                  {set.slots
-                    .filter((s) => s.role === role)
-                    .map((slot) => (
-                      <div key={slot.id} className="flex items-center justify-between rounded border border-border px-2.5 py-1.5 text-sm">
-                        <SlotLabel slot={slot} />
-                        <div className="flex items-center gap-1.5">
-                          {/* invitee responds to their own invite */}
-                          {slot.status === "invited" && slot.invitee_id === userId && (
-                            <>
-                              <Button size="sm" className="h-7 gap-1" disabled={busy === slot.id} onClick={() => slotAction(slot.id, { action: "accept" })}>
-                                <Check className="h-3.5 w-3.5" /> Accept
-                              </Button>
-                              <Button size="sm" variant="outline" className="h-7" disabled={busy === slot.id} onClick={() => slotAction(slot.id, { action: "decline" })}>
-                                Decline
-                              </Button>
-                            </>
-                          )}
-                          {canManage && slot.status === "open" && (
-                            <Button size="sm" variant="outline" className="h-7" disabled={busy === slot.id} onClick={() => setInviteSlot(slot)}>
-                              Fill
-                            </Button>
-                          )}
-                          {!canManage && slot.status === "open" && (
-                            <Button size="sm" variant="outline" className="h-7" disabled={busy === slot.id} onClick={() => askForSeat(slot)}>
-                              Ask for this seat
-                            </Button>
-                          )}
-                          {canManage && slot.status === "invited" && slot.invitee_id !== userId && (
-                            <Button size="sm" variant="ghost" className="h-7" disabled={busy === slot.id} onClick={() => slotAction(slot.id, { action: "vacate" })}>
-                              Cancel
-                            </Button>
-                          )}
-                          {canManage && slot.status === "filled" && (
-                            <Button size="sm" variant="ghost" className="h-7" disabled={busy === slot.id} onClick={() => slotAction(slot.id, { action: "vacate" })}>
-                              Remove
-                            </Button>
-                          )}
-                          {canManage && (
-                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground" disabled={busy === slot.id} onClick={() => removeSlot(slot.id)} title="Delete slot">
-                              <X className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              ))}
-
-              <SeatRequests setId={set.id} canDecide={canManage} onDecided={load} />
-
-              {canManage && set.status === "scheduled" && (
-                <div className="flex items-center gap-2 pt-1">
-                  <Select value={addRole} onValueChange={setAddRole}>
-                    <SelectTrigger className="h-8 w-44">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ROLES.map((r) => (
-                        <SelectItem key={r} value={r}>
-                          {roleLabel(r)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button size="sm" variant="outline" className="h-8 gap-1" disabled={busy === "add"} onClick={addSlot}>
-                    <Plus className="h-3.5 w-3.5" /> Add slot
-                  </Button>
+          {/* ── what we're praying ───────────────────── */}
+          {(set.prayer_focus || set.theme || set.scripture) && (
+            <div className="border-b border-surface-4 px-6 py-5">
+              <div className="mono-label mb-2.5">What we&apos;re praying</div>
+              {set.prayer_focus ? (
+                <p className="whitespace-pre-wrap text-[14.5px] leading-[1.55] text-ink">{set.prayer_focus}</p>
+              ) : (
+                <p className="text-[14.5px] leading-[1.55] text-[color:var(--text-secondary)]">
+                  Nothing written for this set yet.
+                </p>
+              )}
+              {(set.theme || set.scripture) && (
+                <div className="mt-3.5 flex flex-wrap gap-2">
+                  {[set.theme, set.scripture].filter(Boolean).map((t) => (
+                    <span
+                      key={t}
+                      className="border border-rule bg-surface-3 px-2 py-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.12em] text-[color:var(--text-secondary)]"
+                    >
+                      {t}
+                    </span>
+                  ))}
                 </div>
               )}
             </div>
+          )}
 
-            {/* Owner / staff actions */}
-            {canManage && (
-              <div className="flex flex-wrap gap-2 border-t border-border pt-4">
-                {!editing && set.status === "scheduled" && (
-                  <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
-                    Edit details
-                  </Button>
-                )}
-                {!editing && set.status === "scheduled" && !set.series_id && (
-                  <Button size="sm" variant="outline" className="gap-1" onClick={() => setRepeating(true)}>
-                    <Repeat className="h-3.5 w-3.5" /> Repeat weekly
-                  </Button>
-                )}
-                {set.status === "scheduled" && (
-                  <>
-                    <Button size="sm" variant="outline" disabled={busy === "complete"} onClick={() => setStatus("complete")}>
-                      Mark complete
-                    </Button>
-                    <Button size="sm" variant="ghost" className="text-destructive" disabled={busy === "cancel"} onClick={() => setStatus("cancel")}>
-                      Cancel set
-                    </Button>
-                  </>
-                )}
+          {/* ── the lineup (10b) ─────────────────────── */}
+          <div className="border-b border-surface-4">
+            <div className="flex items-baseline justify-between px-6 pb-2.5 pt-4">
+              <span className="mono-label">The lineup</span>
+              <span className="font-mono text-[9px] font-bold uppercase tracking-[0.1em] text-amber">
+                {openCount === 0 ? "Full" : `${openCount} ${openCount === 1 ? "seat" : "seats"} open`}
+              </span>
+            </div>
+
+            {set.slots.length === 0 && (
+              <p className="px-6 pb-4 text-[13px] text-[color:var(--text-tertiary)]">
+                No seats on this set yet.
+              </p>
+            )}
+
+            {leadSlots.map((slot) => (
+              <SeatRow
+                key={slot.id}
+                slot={slot}
+                label={seatLabelOf(slot)}
+                lead
+                userId={userId}
+                canManage={canManage}
+                busy={busy}
+                onFill={() => setFillSlot(slot)}
+                onAsk={() => askForSeat(slot)}
+                onAction={slotAction}
+                onRemove={removeSlot}
+              />
+            ))}
+
+            {leadSlots.length > 0 && otherSlots.length > 0 && <div className="mx-6 my-2.5 h-0.5 bg-ink" />}
+
+            {otherSlots.map((slot) => (
+              <SeatRow
+                key={slot.id}
+                slot={slot}
+                label={seatLabelOf(slot)}
+                userId={userId}
+                canManage={canManage}
+                busy={busy}
+                onFill={() => setFillSlot(slot)}
+                onAsk={() => askForSeat(slot)}
+                onAction={slotAction}
+                onRemove={removeSlot}
+              />
+            ))}
+
+            {canManage && set.status === "scheduled" && (
+              <div className="flex items-center gap-2 px-6 pb-4 pt-2">
+                <Select value={addRole} onValueChange={setAddRole}>
+                  <SelectTrigger className="h-8 w-44">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(seatTypes.length ? seatTypes.map((s) => [s.id, s.label] as const) : ROLES.map((r) => [r, roleLabel(r)] as const)).map(
+                      ([id, label]) => (
+                        <SelectItem key={id} value={id}>
+                          {label}
+                        </SelectItem>
+                      )
+                    )}
+                  </SelectContent>
+                </Select>
+                <button
+                  type="button"
+                  disabled={busy === "add"}
+                  onClick={addSlot}
+                  className="border border-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.12em] text-ink"
+                >
+                  + Add seat
+                </button>
               </div>
             )}
-          </>
-        )}
+          </div>
 
-        <SeatPicker
-          open={!!inviteSlot}
-          onClose={() => setInviteSlot(null)}
-          seatTypeId={inviteSlot?.seat_type_id ?? inviteSlot?.role ?? null}
-          seatLabel={inviteSlot ? roleLabel(inviteSlot.role) : undefined}
-          setId={set?.id ?? null}
-          busyId={busy}
-          onPick={(uid) => invite(uid)}
-        />
+          {/* the lead's inbox for this set */}
+          <div className="px-6 py-4 empty:hidden">
+            <SeatRequests setId={set.id} canDecide={canManage} onDecided={load} />
+          </div>
 
-        {set && (
+          {/* ── if you walk in ───────────────────────── */}
+          {set.setlist && (
+            <div className="border-b border-t border-surface-4 bg-bone px-6 py-5">
+              <div className="mono-label mb-2">If you walk in</div>
+              <p className="whitespace-pre-wrap text-[13.5px] leading-[1.55] text-ink">{set.setlist}</p>
+            </div>
+          )}
+
+          {set.owner && (
+            <div className="bg-bone px-6 py-4 text-[13px] leading-[1.5] text-[color:var(--text-secondary)]">
+              {displayName(set.owner)} leads this set. Ask for a seat and they get a notification.
+            </div>
+          )}
+
+          <div className="flex-1" />
+
+          {/* ── footer ───────────────────────────────── */}
+          <div className="border-t border-surface-4 px-6 py-4">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={addToCalendar}
+                className="flex-1 bg-ink px-4 py-3.5 text-center font-mono text-[10.5px] font-bold tracking-[0.14em] text-white"
+              >
+                ADD TO CALENDAR
+              </button>
+              <button
+                type="button"
+                onClick={share}
+                className="border border-ink px-4 py-3.5 font-mono text-[10.5px] font-bold tracking-[0.12em] text-ink"
+              >
+                SHARE
+              </button>
+            </div>
+
+            {canManage && (
+              <div className="mt-3.5 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap gap-4 font-mono text-[9.5px] font-bold uppercase tracking-[0.12em] text-[color:var(--text-secondary)]">
+                  {set.status === "scheduled" && (
+                    <button type="button" onClick={() => setEditing(true)} className="border-b border-rule-strong">
+                      Edit set
+                    </button>
+                  )}
+                  {set.status === "scheduled" && !set.series_id && (
+                    <button type="button" onClick={() => setRepeating(true)} className="border-b border-rule-strong">
+                      Repeat weekly
+                    </button>
+                  )}
+                  {set.status === "scheduled" && (
+                    <>
+                      <button
+                        type="button"
+                        disabled={busy === "complete"}
+                        onClick={() => setStatus("complete")}
+                        className="border-b border-rule-strong"
+                      >
+                        Mark complete
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy === "cancel"}
+                        onClick={() => setStatus("cancel")}
+                        className="border-b border-rule-strong text-[color:var(--destructive)]"
+                      >
+                        Cancel set
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <SeatFill
+            open={!!fillSlot}
+            onClose={() => setFillSlot(null)}
+            seatTypeId={fillSlot?.seat_type_id ?? fillSlot?.role ?? null}
+            seatLabel={fillSlot ? seatLabelOf(fillSlot) : undefined}
+            setContext={`${(set.title || "Devo set").toUpperCase()} · ${formatDateLabel(set.set_date).toUpperCase()} ${formatTimeRange(set.start_time, set.end_time)}`}
+            setId={set.id}
+            busyId={busy}
+            onPick={(uid) => invite(uid)}
+          />
+
           <RepeatWeeklyDialog
             open={repeating}
             onClose={() => setRepeating(false)}
@@ -468,9 +659,140 @@ export default function SetDetail({ setId, open, onClose, userId, isStaff, onCha
             setDate={set.set_date}
             onDone={refresh}
           />
+        </>
+      )}
+    </Drawer>
+  );
+}
+
+/* ── one seat in the lineup ─────────────────────────── */
+function SeatRow({
+  slot,
+  label,
+  lead,
+  userId,
+  canManage,
+  busy,
+  onFill,
+  onAsk,
+  onAction,
+  onRemove,
+}: {
+  slot: Slot;
+  label: string;
+  lead?: boolean;
+  userId: string;
+  canManage: boolean;
+  busy: string | null;
+  onFill: () => void;
+  onAsk: () => void;
+  onAction: (slotId: string, body: Record<string, unknown>) => void;
+  onRemove: (slotId: string) => void;
+}) {
+  const empty = slot.status === "open" || slot.status === "declined";
+  const mine = slot.invitee_id === userId;
+
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-3 px-6",
+        lead ? "py-2" : "border-b border-surface-3 py-2.5"
+      )}
+    >
+      <span
+        className={cn(
+          "shrink-0",
+          lead
+            ? "w-[88px] font-display text-[15px] font-black uppercase leading-tight text-ink"
+            : "w-[74px] font-mono text-[8.5px] font-bold uppercase tracking-[0.12em] text-[color:var(--text-tertiary)]"
         )}
-      </DialogContent>
-    </Dialog>
+      >
+        {label}
+      </span>
+
+      {empty ? (
+        <div className="flex min-w-0 flex-1 items-center justify-between gap-2.5 border border-dashed border-rule-strong px-2.5 py-2">
+          <span className="truncate text-[13px] font-semibold text-[color:var(--text-tertiary)]">
+            Nobody in this seat yet
+            {slot.required_label ? ` · ${slot.required_label.name}` : ""}
+          </span>
+          <button
+            type="button"
+            disabled={busy === slot.id}
+            onClick={canManage ? onFill : onAsk}
+            className={cn(
+              "shrink-0 border border-ink px-1.5 py-1 font-mono text-[8.5px] font-bold uppercase tracking-[0.1em] text-ink",
+              canManage ? "bg-white hover:bg-bone" : "bg-yellow"
+            )}
+          >
+            {canManage ? "Fill seat" : "Ask to join"}
+          </button>
+        </div>
+      ) : (
+        <div
+          className={cn(
+            "flex min-w-0 flex-1 items-center gap-2.5",
+            lead && "border border-ink bg-surface-3 px-2.5 py-1.5"
+          )}
+        >
+          <Initials name={fullName(slot.status === "filled" ? slot.filled : slot.invitee)} size={lead ? 26 : 28} />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[13.5px] font-bold text-ink">
+              {displayName(slot.status === "filled" ? slot.filled : slot.invitee)}
+            </div>
+            {slot.status === "invited" && (
+              <div className="font-mono text-[8.5px] uppercase tracking-[0.08em] text-[color:var(--text-quiet)]">
+                Invited — not confirmed
+              </div>
+            )}
+          </div>
+
+          {slot.status === "invited" && mine && (
+            <div className="flex shrink-0 gap-1.5">
+              <button
+                type="button"
+                disabled={busy === slot.id}
+                onClick={() => onAction(slot.id, { action: "accept" })}
+                className="bg-ink px-2 py-1 font-mono text-[8.5px] font-bold uppercase tracking-[0.1em] text-white"
+              >
+                Accept
+              </button>
+              <button
+                type="button"
+                disabled={busy === slot.id}
+                onClick={() => onAction(slot.id, { action: "decline" })}
+                className="border border-rule-strong px-2 py-1 font-mono text-[8.5px] font-bold uppercase tracking-[0.1em] text-[color:var(--text-secondary)]"
+              >
+                Decline
+              </button>
+            </div>
+          )}
+
+          {canManage && !mine && (
+            <button
+              type="button"
+              disabled={busy === slot.id}
+              onClick={() => onAction(slot.id, { action: "vacate" })}
+              className="shrink-0 font-mono text-[8.5px] font-bold uppercase tracking-[0.1em] text-[color:var(--text-tertiary)] hover:text-ink"
+            >
+              Remove
+            </button>
+          )}
+        </div>
+      )}
+
+      {canManage && (
+        <button
+          type="button"
+          title="Delete this seat"
+          disabled={busy === slot.id}
+          onClick={() => onRemove(slot.id)}
+          className="shrink-0 px-1 font-mono text-[11px] text-[color:var(--text-quiet)] hover:text-ink"
+        >
+          ✕
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -528,70 +850,50 @@ function RepeatWeeklyDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Repeat weekly</DialogTitle>
-        </DialogHeader>
-        <p className="text-sm text-muted-foreground">
-          This set repeats every week on the same day and time until the date you choose. The set you’re looking at
-          stays as the first week.
+    <Drawer open={open} onClose={onClose} label="Repeat weekly">
+      <div className="flex-1 space-y-4 px-6 py-5">
+        <p className="text-[13.5px] leading-[1.55] text-[color:var(--text-secondary)]">
+          This set repeats every week on the same day and time until the date you choose. The set
+          you&apos;re looking at stays as the first week.
         </p>
         <div className="space-y-1">
           <Label className="text-xs">Runs until</Label>
           <Input type="date" value={seriesEnd} onChange={(e) => setSeriesEnd(e.target.value)} />
         </div>
-        <div className="space-y-1.5 rounded-md border bg-muted/20 p-3">
-          <div className="flex w-fit items-center rounded-md border bg-card p-0.5">
+        <div className="border border-rule bg-bone p-3">
+          <div className="flex gap-1.5">
             {([true, false] as const).map((v) => (
-              <Button
+              <button
                 key={String(v)}
                 type="button"
-                variant={keepTeam === v ? "secondary" : "ghost"}
-                size="sm"
-                className="h-7 px-3"
                 onClick={() => setKeepTeam(v)}
+                className={cn(
+                  "flex-1 px-2 py-2.5 font-mono text-[9.5px] font-bold uppercase tracking-[0.08em]",
+                  keepTeam === v ? "bg-ink text-white" : "border border-rule-strong text-[color:var(--text-secondary)]"
+                )}
               >
-                {v ? "Keep this team" : "Open slots each week"}
-              </Button>
+                {v ? "Keep this team" : "Open seats each week"}
+              </button>
             ))}
           </div>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="mt-2 text-[12px] text-[color:var(--text-tertiary)]">
             {keepTeam
-              ? "Each new week invites the same people in the same roles."
-              : "Each new week repeats the same roles as open slots."}
+              ? "Each new week invites the same people into the same seats."
+              : "Each new week repeats the same seats, all open."}
           </p>
         </div>
-        <Button type="button" disabled={busy} className="w-full" onClick={submit}>
-          {busy ? "Creating…" : "Create weekly series"}
-        </Button>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function SlotLabel({ slot }: { slot: Slot }) {
-  if (slot.status === "filled") return <span className="font-medium">{displayName(slot.filled)}</span>;
-  if (slot.status === "invited")
-    return (
-      <span className="text-muted-foreground">
-        Invited: <span className="text-foreground">{displayName(slot.invitee)}</span>
-      </span>
-    );
-  return (
-    <span className="text-amber-400">
-      Open{slot.required_label ? ` · ${slot.required_label.name}` : ""}
-    </span>
-  );
-}
-
-function ContentLine({ label, value }: { label: string; value: string | null }) {
-  if (!value) return null;
-  return (
-    <div>
-      <span className="text-xs uppercase tracking-wide text-muted-foreground">{label}: </span>
-      <span>{value}</span>
-    </div>
+      </div>
+      <div className="border-t border-surface-4 px-6 py-4">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={submit}
+          className="w-full bg-ink px-4 py-3.5 font-mono text-[10.5px] font-bold tracking-[0.14em] text-white"
+        >
+          {busy ? "CREATING…" : "CREATE WEEKLY SERIES"}
+        </button>
+      </div>
+    </Drawer>
   );
 }
 

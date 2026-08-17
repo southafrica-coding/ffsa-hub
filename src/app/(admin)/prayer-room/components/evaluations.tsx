@@ -7,8 +7,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { fullName, APPLICATION_STATUS_LABELS, type Person } from "./helpers";
-import SeatEvaluations from "./seat-evaluations";
-import BandCuration from "./band-curation";
 
 interface Evaluation {
   id: string;
@@ -49,14 +47,10 @@ export default function Evaluations({ userId }: { userId: string }) {
   const done = apps.filter((a) => a.status === "approved" || a.status === "denied");
 
   return (
+    // The seat queue and band curation moved to `evaluators.tsx` when frame 12a
+    // made the portal its own tab. What is left here is the one-off "should
+    // this person join the room at all" pipeline, which is a different question.
     <div className="space-y-6">
-      {/* Seat evaluations first — they are the recurring work. The list below
-          is the one-off "should this person join at all" pipeline. */}
-      <SeatEvaluations />
-
-      {/* Evaluators curate the anchor bands too — same people, same tab. */}
-      <BandCuration />
-
       <section>
         <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Applicants to evaluate</h2>
         {open.length === 0 ? (

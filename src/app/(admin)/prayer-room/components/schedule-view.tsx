@@ -6,8 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChevronLeft, ChevronRight, Plus, X, UserPlus, CalendarDays, CalendarRange, Clock, List as ListIcon } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, UserPlus, CalendarDays, CalendarRange, List as ListIcon } from "lucide-react";
 import { toast } from "sonner";
+import { MastheadButton } from "@/components/ffsa";
+import { cn } from "@/lib/utils/cn";
+import PrayerRoomChrome, { type TabDef, type TabKey } from "./chrome";
 import SetDetail from "./set-detail";
 import MemberPicker from "./member-picker";
 import { ScheduleCalendar, type CalendarSet, type CalendarBlockout } from "./calendar";
@@ -30,11 +33,12 @@ type ViewKind = "wall" | "month" | "day" | "list";
 
 // The wall (frame 8a) replaces the old week and day grids: one continuous
 // time axis, Mon-Fri, blocks drawn to their real duration. Month and list stay
-// — they answer questions the wall deliberately does not.
-const VIEW_OPTIONS: { key: ViewKind; label: string; icon: typeof CalendarDays }[] = [
+// — they answer questions the wall deliberately does not. WEEK and DAY are
+// module tabs now (10a/12a draw them beside PEOPLE), so only the two
+// alternates to the wall are offered here.
+const WEEK_VIEWS: { key: Exclude<ViewKind, "day">; label: string; icon: typeof CalendarDays }[] = [
   { key: "wall", label: "Wall", icon: CalendarRange },
   { key: "month", label: "Month", icon: CalendarDays },
-  { key: "day", label: "Day", icon: Clock },
   { key: "list", label: "List", icon: ListIcon },
 ];
 
@@ -42,6 +46,10 @@ interface Props {
   userId: string;
   isStaff: boolean;
   isMember: boolean;
+  /** The module tab strip, rendered as part of this screen (frames 10a/12a). */
+  tabs: TabDef[];
+  active: TabKey;
+  onTabChange: (key: TabKey) => void;
 }
 
 function ymOf(iso: string) {
@@ -60,8 +68,9 @@ function rangeFor(view: ViewKind, anchor: string): { from: string; to: string } 
   return { from: days[0], to: days[days.length - 1] };
 }
 
-export default function ScheduleView({ userId, isStaff, isMember }: Props) {
-  const [view, setView] = useState<ViewKind>("wall");
+export default function ScheduleView({ userId, isStaff, isMember, tabs, active, onTabChange }: Props) {
+  const [weekView, setWeekView] = useState<Exclude<ViewKind, "day">>("wall");
+  const view: ViewKind = active === "day" ? "day" : weekView;
   const [anchor, setAnchor] = useState<string>(() => todayISO());
   const [sets, setSets] = useState<CalendarSet[]>([]);
   const [blockouts, setBlockouts] = useState<CalendarBlockout[]>([]);
@@ -122,14 +131,64 @@ export default function ScheduleView({ userId, isStaff, isMember }: Props) {
   const headerLabel =
     view === "wall" ? weekRangeLabel(anchor) : view === "day" ? dayHeadingLabel(anchor) : monthLabel(year, month);
 
+  // The masthead's context line: what this week actually looks like, rather
+  // than a label that would say the same thing on every week of the year.
+  const live = sets.filter((s) => s.status !== "cancelled");
+  const openSeats = live.reduce(
+    (n, s) => n + (s.slots ?? []).filter((sl) => sl.status === "open").length,
+    0
+  );
+  const context = [
+    headerLabel,
+    `${live.length} ${live.length === 1 ? "set" : "sets"}`,
+    openSeats === 0 ? "every seat filled" : `${openSeats} ${openSeats === 1 ? "seat" : "seats"} open`,
+  ]
+    .join(" · ")
+    .toUpperCase();
+
+  // ↑/↓ in the drawer walk the week in the order the wall draws it.
+  const ordered = [...live].sort(
+    (a, b) => a.set_date.localeCompare(b.set_date) || a.start_time.localeCompare(b.start_time)
+  );
+  const atIndex = ordered.findIndex((s) => s.id === selectedId);
+  const stepSet = (dir: -1 | 1) => {
+    if (atIndex < 0) return;
+    const next = ordered[atIndex + dir];
+    if (next) setSelectedId(next.id);
+  };
+
+  // Which curated band, if any, the open set sits inside — 9a's yellow chip.
+  const selected = ordered.find((s) => s.id === selectedId) ?? null;
+  const bandName =
+    selected
+      ? bands.find(
+          (b) =>
+            b.band_name &&
+            b.start_time.slice(0, 5) < selected.end_time.slice(0, 5) &&
+            b.end_time.slice(0, 5) > selected.start_time.slice(0, 5)
+        )?.band_name ?? null
+      : null;
+
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+      <PrayerRoomChrome
+        context={context}
+        tabs={tabs}
+        active={active}
+        onChange={onTabChange}
+        actions={
+          (isMember || isStaff) && <MastheadButton onClick={() => setCreating(true)}>+ New set</MastheadButton>
+        }
+      />
+
+      <div className="flex flex-wrap items-center gap-2 border-b border-rule bg-bone px-5 py-3 md:px-8">
         <div className="flex items-center gap-1">
           <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => step(-1)} aria-label="Previous">
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <div className="min-w-[10rem] px-1 text-center text-sm font-semibold tracking-wide">{headerLabel}</div>
+          <div className="min-w-[10rem] px-1 text-center font-mono text-[10px] font-bold uppercase tracking-[0.12em]">
+            {headerLabel}
+          </div>
           <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => step(1)} aria-label="Next">
             <ChevronRight className="h-4 w-4" />
           </Button>
@@ -138,57 +197,53 @@ export default function ScheduleView({ userId, isStaff, isMember }: Props) {
           </Button>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="flex items-center rounded-lg border bg-card p-0.5">
-            {VIEW_OPTIONS.map((opt) => {
-              const Icon = opt.icon;
-              return (
-                <Button
-                  key={opt.key}
-                  variant={view === opt.key ? "secondary" : "ghost"}
-                  size="sm"
-                  className="h-7 gap-1 px-2"
-                  onClick={() => setView(opt.key)}
-                >
-                  <Icon className="h-4 w-4" />
-                  <span className="hidden md:inline">{opt.label}</span>
-                </Button>
-              );
-            })}
+        {active === "week" && (
+          <div className="ml-auto flex flex-wrap gap-1.5">
+            {WEEK_VIEWS.map((opt) => (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => setWeekView(opt.key)}
+                className={cn(
+                  "px-2.5 py-1.5 font-mono text-[9.5px] font-bold uppercase tracking-[0.1em]",
+                  weekView === opt.key
+                    ? "bg-ink text-white"
+                    : "border border-rule-strong text-[color:var(--text-secondary)]"
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
           </div>
-          {(isMember || isStaff) && (
-            <Button size="sm" className="gap-1" onClick={() => setCreating(true)}>
-              <Plus className="h-4 w-4" /> New set
-            </Button>
-          )}
-        </div>
+        )}
       </div>
 
-      {loading ? (
-        <p className="py-20 text-center text-muted-foreground">Loading schedule…</p>
-      ) : (
-        view === "wall" ? (
-        <Wall
-          anchorISO={anchor}
-          sets={sets as WallSet[]}
-          seatTypes={seatTypes}
-          bands={bands}
-          onOpenSet={setSelectedId}
-        />
+      <div className="px-5 py-6 md:px-8 md:py-7">
+        {loading ? (
+          <p className="mono-label py-20 text-center">Loading schedule…</p>
+        ) : view === "wall" ? (
+          <Wall
+            anchorISO={anchor}
+            sets={sets as WallSet[]}
+            seatTypes={seatTypes}
+            bands={bands}
+            onOpenSet={setSelectedId}
+            selectedId={selectedId}
+          />
         ) : (
-        <ScheduleCalendar
-          view={view}
-          anchor={anchor}
-          sets={sets}
-          blockouts={blockouts}
-          onSelect={setSelectedId}
-          onPickDay={(iso) => {
-            setAnchor(iso);
-            setView("day");
-          }}
-        />
-        )
-      )}
+          <ScheduleCalendar
+            view={view}
+            anchor={anchor}
+            sets={sets}
+            blockouts={blockouts}
+            onSelect={setSelectedId}
+            onPickDay={(iso) => {
+              setAnchor(iso);
+              onTabChange("day");
+            }}
+          />
+        )}
+      </div>
 
       <SetDetail
         setId={selectedId}
@@ -197,6 +252,10 @@ export default function ScheduleView({ userId, isStaff, isMember }: Props) {
         userId={userId}
         isStaff={isStaff}
         onChanged={load}
+        seatTypes={seatTypes}
+        bandName={bandName}
+        onPrev={atIndex > 0 ? () => stepSet(-1) : undefined}
+        onNext={atIndex >= 0 && atIndex < ordered.length - 1 ? () => stepSet(1) : undefined}
       />
 
       <CreateSetDialog
@@ -325,7 +384,7 @@ function CreateSetDialog({
 
         <div className="space-y-4">
           {/* One-off vs weekly */}
-          <div className="flex w-fit items-center rounded-md border bg-card p-0.5">
+          <div className="flex w-fit items-center border border-rule bg-white p-0.5">
             {(["none", "weekly"] as const).map((r) => (
               <Button
                 key={r}
@@ -400,8 +459,8 @@ function CreateSetDialog({
 
           {/* Keep-team choice (weekly only) */}
           {recurrence === "weekly" && (
-            <div className="space-y-1.5 rounded-md border bg-muted/20 p-3">
-              <div className="flex w-fit items-center rounded-md border bg-card p-0.5">
+            <div className="space-y-1.5 border border-rule bg-bone p-3">
+              <div className="flex w-fit items-center border border-rule bg-white p-0.5">
                 {([true, false] as const).map((v) => (
                   <Button
                     key={String(v)}

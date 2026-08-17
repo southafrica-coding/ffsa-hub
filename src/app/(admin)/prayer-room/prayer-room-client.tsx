@@ -1,17 +1,30 @@
 "use client";
 
+/**
+ * The prayer room module shell.
+ *
+ * Frames 10a and 12a put the module's navigation in one mono tab strip under a
+ * single masthead — WEEK, DAY, PEOPLE, then EVALUATORS when your hub profile
+ * carries the permission. What was here before was `page-title` plus shadcn
+ * tabs, and the module had no masthead at all.
+ *
+ * Each tab renders the chrome itself (see `chrome.tsx`) because the context
+ * line, the actions and the filters all belong to the tab, not to the shell.
+ * Only one is mounted at a time, so the one-masthead rule still holds.
+ */
+
 import { useState } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CalendarDays, User, BookOpen, Settings, ClipboardCheck, DoorOpen } from "lucide-react";
 import ScheduleView from "./components/schedule-view";
 import MySets from "./components/my-sets";
 import ApplyForm from "./components/apply-form";
-import Directory from "./components/directory";
-import Evaluations from "./components/evaluations";
+import People from "./components/people";
+import EvaluatorsPortal from "./components/evaluators";
 import AdminPanel from "./components/admin-panel";
+import PrayerRoomChrome, { type TabDef, type TabKey } from "./components/chrome";
 
 interface Props {
   userId: string;
+  userName: string;
   isStaff: boolean;
   isMember: boolean;
   isEvaluator: boolean;
@@ -19,96 +32,80 @@ interface Props {
   pendingCount: number;
 }
 
-export default function PrayerRoomClient({ userId, isStaff, isMember, isEvaluator, canViewDirectory, pendingCount }: Props) {
-  const [activeTab, setActiveTab] = useState("schedule");
-  const showEvaluations = isEvaluator || isStaff;
-  const showDirectory = isMember || isStaff || canViewDirectory;
+export default function PrayerRoomClient({
+  userId,
+  userName,
+  isStaff,
+  isMember,
+  isEvaluator,
+  canViewDirectory,
+  pendingCount,
+}: Props) {
+  const [tab, setTab] = useState<TabKey>("week");
+
+  const showPeople = isMember || isStaff || canViewDirectory;
+  const showEvaluators = isEvaluator || isStaff;
+
+  const tabs: TabDef[] = [
+    { key: "week", label: "Week" },
+    { key: "day", label: "Day" },
+    ...(showPeople ? [{ key: "people" as const, label: "People" }] : []),
+    // The yellow mark is 12a's tell that this tab is not everyone's.
+    ...(showEvaluators ? [{ key: "evaluators" as const, label: "Evaluators", mark: true }] : []),
+    isMember ? { key: "mine" as const, label: "My sets" } : { key: "join" as const, label: "Join the room" },
+    ...(isStaff ? [{ key: "manage" as const, label: "Manage" }] : []),
+  ];
+
+  const shared = { tabs, active: tab, onChange: setTab };
 
   return (
-    <div>
-      <div className="mb-6">
-        <p className="page-eyebrow">DEVOTIONAL SETS</p>
-        <h1 className="page-title">Prayer Room</h1>
-      </div>
+    <div className="ffsa-screen">
+      {(tab === "week" || tab === "day") && (
+        <ScheduleView
+          userId={userId}
+          isStaff={isStaff}
+          isMember={isMember}
+          tabs={tabs}
+          active={tab}
+          onTabChange={setTab}
+        />
+      )}
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="flex-wrap h-auto">
-          <TabsTrigger value="schedule" className="gap-1.5">
-            <CalendarDays className="h-4 w-4" />
-            Schedule
-          </TabsTrigger>
+      {tab === "people" && showPeople && (
+        <People {...shared} isEvaluator={isEvaluator} isStaff={isStaff} myName={userName} />
+      )}
 
-          {isMember ? (
-            <TabsTrigger value="my-sets" className="gap-1.5">
-              <User className="h-4 w-4" />
-              My Sets
-            </TabsTrigger>
-          ) : (
-            <TabsTrigger value="apply" className="gap-1.5">
-              <DoorOpen className="h-4 w-4" />
-              Join the Room
-            </TabsTrigger>
-          )}
+      {tab === "evaluators" && showEvaluators && <EvaluatorsPortal {...shared} userId={userId} />}
 
-          {showDirectory && (
-            <TabsTrigger value="directory" className="gap-1.5">
-              <BookOpen className="h-4 w-4" />
-              Directory
-            </TabsTrigger>
-          )}
-
-          {showEvaluations && (
-            <TabsTrigger value="evaluations" className="gap-1.5">
-              <ClipboardCheck className="h-4 w-4" />
-              Evaluations
-            </TabsTrigger>
-          )}
-
-          {isStaff && (
-            <TabsTrigger value="manage" className="gap-1.5">
-              <Settings className="h-4 w-4" />
-              Manage
-              {pendingCount > 0 && (
-                <span className="ml-1 rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
-                  {pendingCount}
-                </span>
-              )}
-            </TabsTrigger>
-          )}
-        </TabsList>
-
-        <TabsContent value="schedule" className="mt-4">
-          <ScheduleView userId={userId} isStaff={isStaff} isMember={isMember} />
-        </TabsContent>
-
-        {isMember ? (
-          <TabsContent value="my-sets" className="mt-4">
+      {tab === "mine" && isMember && (
+        <>
+          <PrayerRoomChrome context="Your seats and the sets you lead" {...shared} />
+          <div className="px-5 py-6 md:px-8 md:py-7">
             <MySets userId={userId} isStaff={isStaff} />
-          </TabsContent>
-        ) : (
-          <TabsContent value="apply" className="mt-4">
+          </div>
+        </>
+      )}
+
+      {tab === "join" && !isMember && (
+        <>
+          <PrayerRoomChrome context="Ask to join the prayer room team" {...shared} />
+          <div className="px-5 py-6 md:px-8 md:py-7">
             <ApplyForm />
-          </TabsContent>
-        )}
+          </div>
+        </>
+      )}
 
-        {showDirectory && (
-          <TabsContent value="directory" className="mt-4">
-            <Directory />
-          </TabsContent>
-        )}
-
-        {showEvaluations && (
-          <TabsContent value="evaluations" className="mt-4">
-            <Evaluations userId={userId} />
-          </TabsContent>
-        )}
-
-        {isStaff && (
-          <TabsContent value="manage" className="mt-4">
+      {tab === "manage" && isStaff && (
+        <>
+          <PrayerRoomChrome
+            context={`Applications, members and the weekly template · ${pendingCount} waiting`}
+            {...shared}
+          />
+          <div className="px-5 py-6 md:px-8 md:py-7">
             <AdminPanel />
-          </TabsContent>
-        )}
-      </Tabs>
+          </div>
+        </>
+      )}
     </div>
   );
 }

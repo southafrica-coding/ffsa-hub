@@ -12,6 +12,8 @@
  *   · nothing is rounded, nothing is elevated
  */
 
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { cn } from "@/lib/utils/cn";
 
@@ -63,6 +65,33 @@ export function MastheadAction({ href, children }: { href: string; children: Rea
   );
 }
 
+/** The same shape as MastheadAction, for screens whose action is not a link. */
+export function MastheadButton({
+  onClick,
+  tone = "solid",
+  children,
+}: {
+  onClick?: () => void;
+  /** `solid` is the primary; `outline` is the bone-filled secondary beside it. */
+  tone?: "solid" | "outline";
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "shrink-0 border px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em]",
+        tone === "solid"
+          ? "border-ink bg-ink text-white hover:bg-[#262622]"
+          : "border-ink bg-bone text-ink hover:bg-bone-2"
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
 /** The band's black-on-yellow action. Lives here so it can't drift per screen. */
 export function NeedsYouAction({ href, children }: { href: string; children: React.ReactNode }) {
   return (
@@ -72,6 +101,133 @@ export function NeedsYouAction({ href, children }: { href: string; children: Rea
     >
       {children}
     </Link>
+  );
+}
+
+/* ── Right-hand drawer ────────────────────────────── */
+/**
+ * Frame 9a's panel: 470px, slides over the screen rather than replacing it, so
+ * the wall stays visible behind and you can click straight through to the next
+ * block. Full width below sm, where 470px is the whole screen anyway.
+ *
+ * Deliberately not the shadcn Dialog: that one centres, traps the page and
+ * re-mounts its content, none of which the design's "stays open while you move
+ * between sets" behaviour wants.
+ */
+export function Drawer({
+  open,
+  onClose,
+  label,
+  onPrev,
+  onNext,
+  children,
+}: {
+  open: boolean;
+  onClose: () => void;
+  label: string;
+  onPrev?: () => void;
+  onNext?: () => void;
+  children: React.ReactNode;
+}) {
+  // Portalled to <body>. The admin shell's content column carries
+  // `animate-fade-up`, and a transform on an ancestor makes it the containing
+  // block for position:fixed — which sized the drawer to the whole scrolled
+  // page and pushed its footer below the fold.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      if (e.key === "ArrowUp" && onPrev) onPrev();
+      if (e.key === "ArrowDown" && onNext) onNext();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose, onPrev, onNext]);
+
+  if (!open || !mounted) return null;
+
+  return createPortal(
+    <>
+      {/* The scrim dims the screen without hiding it — 9a keeps the week readable. */}
+      <div
+        className="fixed inset-0 z-40 bg-[rgba(10,10,10,0.22)]"
+        onClick={onClose}
+        aria-hidden
+      />
+      <aside
+        role="dialog"
+        aria-label={label}
+        className="fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-ink bg-white sm:w-[470px]"
+      >
+        <div className="flex shrink-0 items-center justify-between bg-ink px-6 py-3.5">
+          <span className="font-mono text-[9.5px] font-bold uppercase tracking-[0.2em] text-yellow">
+            {label}
+          </span>
+          <div className="flex items-center gap-4 font-mono text-[10px] font-bold tracking-[0.12em] text-[#8E8A7C]">
+            {onPrev && (
+              <button type="button" onClick={onPrev} className="hover:text-white">
+                ↑ PREV
+              </button>
+            )}
+            {onNext && (
+              <button type="button" onClick={onNext} className="hover:text-white">
+                NEXT ↓
+              </button>
+            )}
+            <button type="button" onClick={onClose} aria-label="Close" className="text-[14px] text-white">
+              ✕
+            </button>
+          </div>
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">{children}</div>
+      </aside>
+    </>,
+    document.body
+  );
+}
+
+/* ── Module tab strip ─────────────────────────────── */
+/** Frames 10a / 12a: squared mono tabs sitting on the black page rule. */
+export function ModuleTabs({
+  tabs,
+  active,
+  onChange,
+  trailing,
+}: {
+  tabs: { key: string; label: string; mark?: boolean }[];
+  active: string;
+  onChange: (key: string) => void;
+  /** Filter chips, which 10a hangs off the right of the same rule. */
+  trailing?: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-wrap items-end gap-y-2 border-b border-ink px-5 pt-4 md:px-8">
+      <div className="flex flex-wrap items-end">
+        {tabs.map((t) => {
+          const on = t.key === active;
+          return (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => onChange(t.key)}
+              className={cn(
+                "flex items-center gap-1.5 px-4 py-2.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em]",
+                on
+                  ? "bg-ink text-white"
+                  : "border border-b-0 border-rule text-[#7C786C] hover:text-ink"
+              )}
+            >
+              {t.mark && <span className={cn("h-2.5 w-2.5", on ? "bg-yellow" : "bg-rule-strong")} />}
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+      {trailing && <div className="ml-auto flex flex-wrap items-center gap-1.5 pb-2">{trailing}</div>}
+    </div>
   );
 }
 
