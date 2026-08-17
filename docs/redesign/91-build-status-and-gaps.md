@@ -17,6 +17,44 @@ Ground rules learned the hard way:
 
 ---
 
+## How to run a session (the working agreement)
+
+The failure mode this document exists to prevent: a session takes a whole step,
+does the plumbing well, restyles the surfaces partially, and reports the step
+"done". Breadth over depth, then a completion claim. To stop that:
+
+**1. One module or one frame group per session. Never a whole step.**
+"Rebuild the prayer room" is a session. "Finish the redesign" is not.
+
+**2. Open the design file first.** `design/FFSA Hub Redesign.dc.html`, scroll to
+the frame by id. If a session has not looked at the frame, it is guessing.
+
+**3. Definition of done, per frame** — all five, or it is not done:
+   - the frame's *structure* is built, not just its palette
+   - one `<Masthead>`; content composed from `src/components/ffsa`
+   - no `rounded-*`, no `shadow-*`, no dark-theme hex, no `page-title`
+   - it renders correctly at 1440px **and** 375px
+   - a screenshot of the built screen is put beside the frame
+
+**4. Rebuild, do not restyle.** An earlier pass told subagents to restyle rather
+than rewrite dense components, to protect live modules. That was right once and
+wrong thereafter: it is why bookings' calendar and every prayer-room tab are old
+structures in new colours. If a frame implies a different structure, build the
+different structure.
+
+**5. Report by frame id, with evidence.** "8a done" means nothing on its own.
+Say which paths were scanned by any acceptance grep — a sweep is only as wide as
+its arguments, and quoting "0 dark hexes across 154 files" while 28 routes went
+unscanned is how this went wrong before.
+
+**6. Update this file at the end of every session.** Move rows from *not built*
+to *built*. If it is not recorded here, the next session cannot trust it.
+
+**7. Never report a step complete.** Report frames complete, and name what in
+that step is still outstanding.
+
+---
+
 ## Merged and live
 
 Everything below is on `main` and deployed (PR #212, commit `aa53496`).
