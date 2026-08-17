@@ -860,3 +860,103 @@ export async function listXeroInvoices(
     return { data: null, error: msg };
   }
 }
+
+// ────────────────────────────────────────────────────────────
+// WHICH ORGANISATION IS WHICH
+// ────────────────────────────────────────────────────────────
+// Xero's consent screen will not let a person assign one organisation per
+// region: once both are connected it greys them out and offers only "Continue
+// with N organisations". The stored token is therefore authorised for ALL of
+// them, and which region uses which tenant is the Hub's decision.
+
+export type XeroOrganisation = {
+  tenantId: string;
+  tenantName: string | null;
+  /** Regions currently pointing at this organisation. */
+  boundTo: XeroRegion[];
+};
+
+/** Every organisation the stored authorisation covers. */
+export async function listXeroOrganisations(
+  supabase: Client
+): Promise<{ data: { organisations: XeroOrganisation[] } | null; error: string | null }> {
+  // Either region's token works — both are authorised for the same set.
+  const auth =
+    (await getValidAccessToken(supabase, "za")) ??
+    (await getValidAccessToken(supabase, "us"));
+  if (!auth) {
+    return { data: null, error: "Xero is not connected. Connect it first." };
+  }
+
+  const [za, us] = await Promise.all([
+    getStoredTokens(supabase, "za"),
+    getStoredTokens(supabase, "us"),
+  ]);
+
+  try {
+    const res = await fetch("https://api.xero.com/connections", {
+      headers: {
+        Authorization: `Bearer ${auth.accessToken}`,
+        "Content-Type": "application/json",
+      },
+    });
+    if (!res.ok) {
+      return { data: null, error: `Xero refused the request (${res.status}).` };
+    }
+
+    const list = (await res.json()) as { tenantId: string; tenantName?: string }[];
+
+    return {
+      data: {
+        organisations: list.map((t) => {
+          const boundTo: XeroRegion[] = [];
+          if (za?.tenant_id === t.tenantId) boundTo.push("za");
+          if (us?.tenant_id === t.tenantId) boundTo.push("us");
+          return { tenantId: t.tenantId, tenantName: t.tenantName ?? null, boundTo };
+        }),
+      },
+      error: null,
+    };
+  } catch (err) {
+    return { data: null, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/**
+ * Point a region at a specific organisation.
+ *
+ * Deliberately does NOT touch the access or refresh token: the existing
+ * authorisation already covers every organisation in the list, so this is a
+ * one-field correction rather than a reconnection. Refuses a tenant the
+ * authorisation does not cover, so a typo cannot orphan a region.
+ */
+export async function repointRegion(
+  supabase: Client,
+  region: XeroRegion,
+  tenantId: string
+): Promise<{ error: string | null; tenantName?: string | null }> {
+  const { data, error } = await listXeroOrganisations(supabase);
+  if (error || !data) return { error: error ?? "Could not read Xero organisations." };
+
+  const target = data.organisations.find((o) => o.tenantId === tenantId);
+  if (!target) {
+    return {
+      error: `That organisation is not one this app is authorised for (${data.organisations
+        .map((o) => o.tenantName)
+        .join(", ")}).`,
+    };
+  }
+
+  const existing = await getStoredTokens(supabase, region);
+  if (!existing) {
+    return { error: `No stored Xero connection for ${region.toUpperCase()}. Connect it first.` };
+  }
+
+  const { error: updErr } = await (supabase as Client)
+    .from("xero_tokens")
+    .update({ tenant_id: target.tenantId, tenant_name: target.tenantName })
+    .eq("id", existing.id);
+
+  if (updErr) return { error: updErr.message };
+  return { error: null, tenantName: target.tenantName };
+}
