@@ -48,7 +48,7 @@ export const PROGRAM_EMAIL_TYPES: ProgramEmailType[] = [
     key: "application_received",
     label: "Application received",
     description:
-      "Sent to the applicant the moment they submit — confirms you've got it, with a link to track their status.",
+      "Sent to the applicant the moment they submit — confirms you've got it, with a link to track their status. When they've listed references, a note that the application isn't complete until those are in is added automatically, below whatever you write here.",
     audience: "applicant",
     mergeFields: APPLICANT_FIELDS,
     defaultSubject: "Application Received — {{program_name}}",

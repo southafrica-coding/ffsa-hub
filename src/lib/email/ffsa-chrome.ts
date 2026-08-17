@@ -117,6 +117,16 @@ export function feList(items: string[]): string {
   return `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:4px 0 14px;">${rows}</table>`;
 }
 
+// Inset panel for something the reader must not skim past — a mono yellow
+// label over body copy, on the surface tint. Table + bgcolor so Outlook keeps
+// the panel; `html` is expected pre-sanitised.
+export function feNotice(label: string, html: string): string {
+  return `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:4px 0 18px;"><tr><td bgcolor="#0B0B0B" style="padding:16px 18px;border:1px solid ${FE.LINE};border-left:3px solid ${FE.YELLOW};border-radius:10px;background:${FE.SURFACE};">
+<p style="margin:0 0 8px;font-family:${MONO};font-size:10px;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:${FE.YELLOW};">${feEsc(label)}</p>
+<p style="margin:0;font-family:${BODY};font-size:14px;line-height:1.65;color:${FE.BONE};">${html}</p>
+</td></tr></table>`;
+}
+
 // Deck-style coordinate block: mono yellow label + white value, e.g.
 // WHEN / WHERE (mirrors the storefront's information design).
 export function feCoords(items: Array<{ label: string; value: string }>): string {

@@ -5,8 +5,10 @@
 // (the polished bespoke template). If a school's leaders have customized
 // that email type, their subject/body wins — rendered through the FFSA
 // shell using that email's catalog eyebrow/heading, with every merge
-// token filled in and the required action button re-appended, so a leader
-// controls the words without breaking the email or dropping a link.
+// token filled in and the required action button (and notice panel, when
+// the caller passes one) re-appended, so a leader controls the words
+// without breaking the email, dropping a link, or losing a fact the
+// email has to state.
 //
 // Tolerant by design: if the templates table isn't there yet, or the
 // lookup fails, the built-in default is used — so this ships safely ahead
@@ -25,6 +27,12 @@ export type ProgramEmailContext = {
   values: Record<string, string>;
   /** Guaranteed action button re-appended below a custom body. */
   cta?: { label: string; url: string };
+  /**
+   * Guaranteed inset panel re-appended below a custom body — for facts the
+   * email must state whatever a leader writes (e.g. that the application
+   * isn't complete until its references are in).
+   */
+  notice?: { label: string; html: string } | null;
   siteUrl?: string | null;
 };
 
@@ -85,6 +93,7 @@ export async function resolveProgramEmail(
     eyebrow: catalog?.defaultEyebrow ?? ctx.values.program_name ?? "FFSA",
     heading: heading || ctx.values.program_name || "",
     bodyHtml: plainTextToEmailHtml(substituteTokens(bodyTemplate, ctx.values)),
+    notice: ctx.notice,
     cta: ctx.cta,
     siteUrl: ctx.siteUrl ?? undefined,
   });

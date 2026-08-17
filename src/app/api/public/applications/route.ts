@@ -17,7 +17,10 @@ import { syncApplicantToContact } from "@/lib/applications/sync-contact";
 import { normaliseGender } from "@/lib/schools/demographics";
 import { sendTransactional } from "@/lib/email/send-transactional";
 import { resolveProgramEmail } from "@/lib/email/render-program-email";
-import { applicationConfirmationEmailHtml } from "@/lib/email/templates/application-confirmation";
+import {
+  applicationConfirmationEmailHtml,
+  applicationReferenceNotice,
+} from "@/lib/email/templates/application-confirmation";
 import { referenceRequestEmailHtml } from "@/lib/email/templates/reference-request";
 
 
@@ -290,6 +293,13 @@ export async function POST(request: Request) {
     ? `${siteUrl}/apply/status/${response.status_token}`
     : null;
 
+  // References the applicant actually supplied — the creation loop below skips
+  // partials the same way, so this matches the referee emails we're about to
+  // send. Drives the confirmation email's references panel.
+  const suppliedReferenceCount = submittedReferences.filter(
+    (ref) => ref.slot_id && ref.referee_name?.trim() && ref.referee_email?.trim()
+  ).length;
+
   if (email) {
     const receivedDefaults = {
       subject: `Application Received — ${program.name}`,
@@ -297,6 +307,7 @@ export async function POST(request: Request) {
         firstName: firstName || "Applicant",
         programName: program.name,
         statusUrl: statusTrackerUrl,
+        referenceCount: suppliedReferenceCount,
       }),
     };
     const resolved = await resolveProgramEmail(
@@ -312,6 +323,14 @@ export async function POST(request: Request) {
         cta: statusTrackerUrl
           ? { label: "Track your application", url: statusTrackerUrl }
           : undefined,
+        // Re-appended even if a school rewrote this email's copy: an applicant
+        // must not be told to sit tight without being told what's outstanding.
+        notice:
+          suppliedReferenceCount > 0
+            ? applicationReferenceNotice(suppliedReferenceCount, {
+                hasTracker: !!statusTrackerUrl,
+              })
+            : null,
         siteUrl,
       }
     );

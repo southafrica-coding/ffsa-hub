@@ -7,6 +7,7 @@ import {
   feParagraph,
   feStrong,
   feButton,
+  feNotice,
   ffsaEmailDocument,
 } from "./ffsa-chrome";
 
@@ -57,6 +58,12 @@ export interface EmailShellOptions {
   heading: string;
   /** Raw inner HTML for the body — sanitise upstream. */
   bodyHtml: string;
+  /**
+   * Optional inset panel rendered below the body and above the CTA. Like the
+   * CTA, it survives a leader rewriting the body copy (see
+   * resolveProgramEmail) — use it for something the email must always say.
+   */
+  notice?: { label: string; html: string } | null;
   /** Optional primary call-to-action button. */
   cta?: EmailCta;
   /** Footer tagline. Ignored now — the chrome renders the deck slogan +
@@ -73,7 +80,9 @@ export interface EmailShellOptions {
 export function renderEmailShell(opts: EmailShellOptions): string {
   const body = `${feEyebrow(opts.eyebrow)}${feHeading(opts.heading, {
     raw: true,
-  })}${opts.bodyHtml}${opts.cta ? feButton(opts.cta.url, opts.cta.label) : ""}`;
+  })}${opts.bodyHtml}${
+    opts.notice ? feNotice(opts.notice.label, opts.notice.html) : ""
+  }${opts.cta ? feButton(opts.cta.url, opts.cta.label) : ""}`;
 
   return ffsaEmailDocument({
     title: opts.title ?? opts.eyebrow,
