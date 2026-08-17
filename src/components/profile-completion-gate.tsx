@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { ProfileCompletionForm } from "./profile-completion-form";
-import { ConsentAcceptanceForm } from "./consent-acceptance-form";
+import { RequiredAgreementsForm } from "./required-agreements-form";
 import { InsuranceExpiryBanner } from "./insurance-expiry-banner";
 import { ChildrenGateForm } from "./profile/children-gate-form";
 import { GateOverlay } from "./profile/gate-overlay";
@@ -15,7 +15,7 @@ import {
 import { getAllListOptions, activeSets } from "@/services/list-options";
 import { listActiveMinistries } from "@/services/ministries";
 import { getHouseholdMembers } from "@/services/household";
-import { hasUserConsented, getCurrentConsentAgreement } from "@/services/consent";
+import { getOutstandingConsents } from "@/services/consent";
 
 // True if the user counts as staff — either their self-signup type is
 // 'staff' or they hold the 'staff' role. Scopes the children gate to staff.
@@ -185,26 +185,27 @@ export async function ProfileCompletionGate({
     }
   }
 
-  // 2) Privacy consent must be on record → blocking accept screen. Fail
-  //    open if no agreement is published so we never lock everyone out.
-  const consented = await hasUserConsented(supabase, user.id);
-  if (!consented) {
-    const { data: agreement } = await getCurrentConsentAgreement(supabase);
-    if (agreement) {
-      return (
-        <BlockingOverlay
-          panel={
-            <ConsentAcceptanceForm
-              version={agreement.version}
-              title={agreement.title}
-              canReturnToFamily={isStaff}
-            />
-          }
-        >
-          {children}
-        </BlockingOverlay>
-      );
-    }
+  // 2) Required policy agreements must all be on record → blocking screen.
+  //    Everyone signs Privacy + Child Protection; staff also sign the NDA.
+  //    Each is version-keyed, so a NEW policy (or a new version) re-prompts
+  //    the right people automatically. Fail-open if nothing is outstanding.
+  const outstanding = await getOutstandingConsents(supabase, user.id, isStaff);
+  if (outstanding.length > 0) {
+    return (
+      <BlockingOverlay
+        panel={
+          <RequiredAgreementsForm
+            agreements={outstanding.map((o) => ({
+              kind: o.kind,
+              version: o.agreement.version,
+              title: o.agreement.title,
+            }))}
+          />
+        }
+      >
+        {children}
+      </BlockingOverlay>
+    );
   }
 
   // 3) Cleared — non-blocking nudge if insurance is approaching expiry. Skip it

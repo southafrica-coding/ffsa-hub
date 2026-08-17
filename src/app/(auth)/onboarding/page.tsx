@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { HouseholdMembers } from "@/components/profile/household-members";
+import { REQUIRED_CONSENTS } from "@/services/consent";
 import {
   COUNTRY_OPTIONS,
   SA_PROVINCES,
@@ -95,8 +96,12 @@ export default function OnboardingPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordSet, setPasswordSet] = useState(false);
-  const [consentAccepted, setConsentAccepted] = useState(false);
-  const [agreementVersion, setAgreementVersion] = useState<string | null>(null);
+  // Required policy agreements for this signup type (privacy + child protection
+  // for everyone; + NDA for staff). Each must be ticked to finish.
+  const [requiredAgreements, setRequiredAgreements] = useState<
+    { kind: string; version: string; title: string }[]
+  >([]);
+  const [consentChecked, setConsentChecked] = useState<Record<string, boolean>>({});
   const [programName, setProgramName] = useState<string | null>(null);
   const [signupType, setSignupType] = useState<string | null>(null);
 
@@ -182,16 +187,29 @@ export default function OnboardingPage() {
       });
       setSignupType(appUser.signup_type ?? null);
 
-      // Fetch the current consent agreement version so we know what the user
-      // is accepting at the moment they tick the box.
+      // Fetch every policy this signup type must accept (privacy + child
+      // protection for all; + NDA for staff). We record each at finish.
       try {
-        const agreementRes = await fetch("/api/consent");
-        if (agreementRes.ok) {
-          const { agreement } = await agreementRes.json();
-          setAgreementVersion(agreement?.version ?? null);
+        const isStaffSignup = appUser.signup_type === "staff";
+        const kinds = REQUIRED_CONSENTS.filter(
+          (r) => r.audience === "all" || (r.audience === "staff" && isStaffSignup)
+        ).map((r) => r.kind);
+        const fetched: { kind: string; version: string; title: string }[] = [];
+        for (const kind of kinds) {
+          const res = await fetch(`/api/consent?kind=${kind}`);
+          if (!res.ok) continue;
+          const { agreement } = await res.json();
+          if (agreement?.version) {
+            fetched.push({
+              kind,
+              version: agreement.version,
+              title: agreement.title,
+            });
+          }
         }
+        setRequiredAgreements(fetched);
       } catch {
-        // Non-fatal; the consent step will display an error if no version is available.
+        // Non-fatal; the consent step will display an error if none loaded.
       }
 
       // If they arrived via an accepted application, an enrollment was created
@@ -278,27 +296,30 @@ export default function OnboardingPage() {
 
   async function handleFinish() {
     if (!userId) return;
-    if (!consentAccepted) {
-      setError("You must accept the Privacy & Data Processing Agreement to complete onboarding.");
+    if (requiredAgreements.length === 0) {
+      setError("Unable to load the required agreements. Please refresh and try again.");
       return;
     }
-    if (!agreementVersion) {
-      setError("Unable to load the privacy agreement. Please refresh and try again.");
+    if (!requiredAgreements.every((a) => consentChecked[a.kind])) {
+      setError("You must read and agree to every policy to complete onboarding.");
       return;
     }
     setSaving(true); setError(null);
     try {
-      const consentRes = await fetch("/api/consent", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          agreement_version: agreementVersion,
-          source: "onboarding",
-        }),
-      });
-      if (!consentRes.ok) {
-        const result = await consentRes.json().catch(() => ({}));
-        throw new Error(result.error ?? "Failed to record consent");
+      for (const agreement of requiredAgreements) {
+        const consentRes = await fetch("/api/consent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            kind: agreement.kind,
+            agreement_version: agreement.version,
+            source: "onboarding",
+          }),
+        });
+        if (!consentRes.ok) {
+          const result = await consentRes.json().catch(() => ({}));
+          throw new Error(result.error ?? `Failed to record consent for ${agreement.title}`);
+        }
       }
 
       const { error: profileError } = await updateUserProfile(supabase, userId, {
@@ -843,55 +864,61 @@ export default function OnboardingPage() {
               {step === 7 && (
                 <>
                   <p style={{ fontSize: "13px", color: "var(--text-secondary)", lineHeight: 1.55 }}>
-                    Before you join FFSA Hub, we need your consent to collect and use your
-                    personal information for program administration, communications, and
-                    legal compliance.
+                    Before you join FFSA Hub, please read and agree to the following
+                    {requiredAgreements.length === 1 ? " policy" : " policies"}. Open
+                    each to read the full text, then tick the box to confirm.
                   </p>
-                  <p style={{ fontSize: "13px", color: "var(--text-secondary)", lineHeight: 1.55 }}>
-                    Please open and read the agreement, then tick the box below to confirm.
-                  </p>
-                  <a
-                    href="/legal/consent"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      display: "inline-block",
-                      fontSize: "12px",
-                      letterSpacing: "0.12em",
-                      textTransform: "uppercase",
-                      fontWeight: 700,
-                      color: "var(--yellow)",
-                      textDecoration: "underline",
-                    }}
-                  >
-                    Open Privacy &amp; Data Processing Agreement →
-                  </a>
-                  <label
-                    className="flex items-start gap-3 cursor-pointer rounded-xl p-4"
-                    style={{
-                      border: `1px solid ${consentAccepted ? "var(--yellow-border)" : "var(--surface-4)"}`,
-                      background: consentAccepted ? "var(--yellow-dim)" : "var(--surface-1)",
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={consentAccepted}
-                      onChange={(e) => setConsentAccepted(e.target.checked)}
-                      className="mt-1 h-4 w-4"
-                    />
-                    <span style={{ fontSize: "13px", color: "var(--text-primary)", lineHeight: 1.5 }}>
-                      I have read and agree to the FFSA Privacy &amp; Data Processing
-                      Agreement. I consent to FFSA collecting, storing, and using my
-                      personal information for the purposes described in the agreement,
-                      and to receiving communications from FFSA related to my account
-                      and programs.
-                    </span>
-                  </label>
-                  {agreementVersion && (
-                    <p style={{ fontSize: "11px", color: "var(--text-tertiary)" }}>
-                      Agreement version: <span style={{ fontFamily: "monospace" }}>{agreementVersion}</span>
-                    </p>
-                  )}
+                  {requiredAgreements.map((a) => {
+                    const on = consentChecked[a.kind] ?? false;
+                    return (
+                      <div
+                        key={a.kind}
+                        className="rounded-xl p-4 space-y-2"
+                        style={{
+                          border: `1px solid ${on ? "var(--yellow-border)" : "var(--surface-4)"}`,
+                          background: on ? "var(--yellow-dim)" : "var(--surface-1)",
+                        }}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>
+                            {a.title}
+                          </span>
+                          <a
+                            href={`/legal/consent?kind=${a.kind}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              flexShrink: 0,
+                              fontSize: "11px",
+                              letterSpacing: "0.1em",
+                              textTransform: "uppercase",
+                              fontWeight: 700,
+                              color: "var(--yellow)",
+                              textDecoration: "underline",
+                            }}
+                          >
+                            Open to read →
+                          </a>
+                        </div>
+                        <label className="flex items-start gap-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={on}
+                            onChange={(e) =>
+                              setConsentChecked((prev) => ({ ...prev, [a.kind]: e.target.checked }))
+                            }
+                            className="mt-1 h-4 w-4"
+                          />
+                          <span style={{ fontSize: "13px", color: "var(--text-primary)", lineHeight: 1.5 }}>
+                            I have read and agree to the {a.title}.
+                          </span>
+                        </label>
+                        <p style={{ fontSize: "11px", color: "var(--text-tertiary)" }}>
+                          Version <span style={{ fontFamily: "monospace" }}>{a.version}</span>
+                        </p>
+                      </div>
+                    );
+                  })}
                 </>
               )}
 
