@@ -691,3 +691,122 @@ export async function getXeroConnectionStatus(
       : { connected: false as const },
   };
 }
+
+// ────────────────────────────────────────────────────────────
+// READ SIDE — what Xero already knows
+// ────────────────────────────────────────────────────────────
+// The integration was write-only: it could create and void invoices but never
+// look. Reconciliation (handoff §9) needs the opposite direction — Xero is the
+// source of truth for PAYMENTS, the Hub for schedules — and so does anyone
+// asking the plain question "what has actually been invoiced and paid".
+//
+// Read-only by construction: GETs only, no mutation, nothing written back.
+
+export type XeroInvoiceSummary = {
+  invoiceNumber: string | null;
+  reference: string | null;
+  contactName: string | null;
+  status: string | null;      // DRAFT | SUBMITTED | AUTHORISED | PAID | VOIDED
+  date: string | null;
+  dueDate: string | null;
+  total: number;
+  amountPaid: number;
+  amountDue: number;
+  currency: string | null;
+  sentToContact: boolean | null;
+};
+
+export type XeroInvoiceReport = {
+  region: XeroRegion;
+  tenantName: string | null;
+  invoices: XeroInvoiceSummary[];
+  totals: { count: number; billed: number; paid: number; outstanding: number };
+};
+
+/**
+ * Invoices from one Xero org, newest first.
+ *
+ * Returns `{ error }` rather than throwing: the usual failure here is an
+ * expired refresh token (Xero's last 60 days), which is a "reconnect Xero"
+ * message for a person, not a stack trace.
+ */
+export async function listXeroInvoices(
+  supabase: Client,
+  region: XeroRegion = "za",
+  opts: { since?: string; contains?: string } = {}
+): Promise<{ data: XeroInvoiceReport | null; error: string | null }> {
+  const auth = await getValidAccessToken(supabase, region);
+  if (!auth) {
+    return {
+      data: null,
+      error:
+        "Xero is not connected for this organisation, or its authorisation has lapsed. Reconnect it in Finance → Xero.",
+    };
+  }
+
+  const tokens = await getStoredTokens(supabase, region);
+
+  // ACCPAY = bills we owe; we only care about ACCREC (what students owe us).
+  const params = new URLSearchParams({ where: 'Type=="ACCREC"', order: "Date DESC" });
+  if (opts.since) params.set("If-Modified-Since", opts.since);
+
+  try {
+    const json = (await xeroGet(
+      auth.accessToken,
+      auth.tenantId,
+      `Invoices?${params.toString()}`
+    )) as { Invoices?: Record<string, unknown>[] };
+
+    const raw = json.Invoices ?? [];
+    const invoices: XeroInvoiceSummary[] = raw
+      .map((i) => ({
+        invoiceNumber: (i.InvoiceNumber as string) ?? null,
+        reference: (i.Reference as string) ?? null,
+        contactName:
+          ((i.Contact as { Name?: string } | undefined)?.Name as string) ?? null,
+        status: (i.Status as string) ?? null,
+        date: (i.DateString as string)?.slice(0, 10) ?? null,
+        dueDate: (i.DueDateString as string)?.slice(0, 10) ?? null,
+        total: Number(i.Total ?? 0),
+        amountPaid: Number(i.AmountPaid ?? 0),
+        amountDue: Number(i.AmountDue ?? 0),
+        currency: (i.CurrencyCode as string) ?? null,
+        sentToContact: (i.SentToContact as boolean) ?? null,
+      }))
+      // Voided invoices are noise in a "what is owed" answer.
+      .filter((i) => i.status !== "VOIDED" && i.status !== "DELETED")
+      .filter((i) =>
+        opts.contains
+          ? `${i.contactName ?? ""} ${i.reference ?? ""} ${i.invoiceNumber ?? ""}`
+              .toLowerCase()
+              .includes(opts.contains.toLowerCase())
+          : true
+      );
+
+    return {
+      data: {
+        region,
+        tenantName: tokens?.tenant_name ?? null,
+        invoices,
+        totals: {
+          count: invoices.length,
+          billed: invoices.reduce((s, i) => s + i.total, 0),
+          paid: invoices.reduce((s, i) => s + i.amountPaid, 0),
+          outstanding: invoices.reduce((s, i) => s + i.amountDue, 0),
+        },
+      },
+      error: null,
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // 401 here almost always means the refresh token itself is dead.
+    if (msg.includes("401") || msg.includes("403")) {
+      return {
+        data: null,
+        error:
+          "Xero refused the request — the saved authorisation has expired. Reconnect Xero in Finance → Xero.",
+      };
+    }
+    return { data: null, error: msg };
+  }
+}
