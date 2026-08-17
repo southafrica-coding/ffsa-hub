@@ -156,7 +156,10 @@ export async function POST(request: Request) {
     scheduled_generation_date: r.scheduled_generation_date,
     due_date: r.due_date,
     combined_group_key: r.combined_group_key,
-    status: "scheduled",
+    // The builder decides this, not the caller. Hardcoding 'scheduled' here
+    // discarded the generation guard's verdict and would have let a late
+    // acceptance generate an invoice dated in the past.
+    status: r.status,
   }));
 
   const { error: rowsErr } = await replaceScheduledRows(supabase, plan.id, payload);

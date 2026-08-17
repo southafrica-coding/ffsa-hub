@@ -147,7 +147,8 @@ export async function POST(request: Request) {
         scheduled_generation_date: r.scheduled_generation_date,
         due_date: r.due_date,
         combined_group_key: r.combined_group_key,
-        status: "scheduled",
+        // The builder owns this — hardcoding it discarded the generation guard.
+        status: r.status,
       }))
     );
     // Trim any individual-course plans (student is now whole-program).
@@ -259,7 +260,8 @@ export async function POST(request: Request) {
           scheduled_generation_date: r.scheduled_generation_date,
           due_date: r.due_date,
           combined_group_key: r.combined_group_key,
-          status: "scheduled",
+          // The builder owns this — hardcoding it discarded the generation guard.
+          status: r.status,
         }))
       );
       if (rowsErr) {

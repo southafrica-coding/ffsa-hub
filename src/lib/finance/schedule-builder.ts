@@ -95,6 +95,35 @@ export type NeedsDecisionOutcome =
   | "issue_separately"
   | "start_from_now";
 
+/**
+ * What resolving a held charge changes on the row.
+ *
+ * Pure, and separate from the API route, so the rule that matters can be
+ * tested: **no outcome may ever set a generation date in the past.** Due dates
+ * are never touched — the guard holds charges, it does not re-date what she
+ * owes.
+ */
+export function resolveHeldCharge(
+  outcome: NeedsDecisionOutcome,
+  today: string,
+  groupKey: string
+): {
+  status: "scheduled" | "cancelled";
+  scheduled_generation_date?: string;
+  combined_group_key?: string | null;
+} {
+  if (outcome === "start_from_now") {
+    // Dropped, not deleted — the history should show a person chose this.
+    return { status: "cancelled" };
+  }
+  return {
+    status: "scheduled",
+    scheduled_generation_date: today,
+    // One shared key = one invoice for the lot. Null = one invoice each.
+    combined_group_key: outcome === "catch_up_single" ? groupKey : null,
+  };
+}
+
 // ── Calendar helpers (string-based) ─────────────────────────
 
 const pad = (n: number) => String(n).padStart(2, "0");

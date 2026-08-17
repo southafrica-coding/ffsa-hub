@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { buildSchedule, type BuilderChargeItem, type BuilderContext } from "./schedule-builder";
+import {
+  buildSchedule,
+  resolveHeldCharge,
+  type BuilderChargeItem,
+  type BuilderContext,
+} from "./schedule-builder";
 
 /**
  * The generation guard (docs/redesign/07-finance-billing.md §4).
@@ -133,5 +138,30 @@ describe("generation guard", () => {
 
     expect(needsDecisionCount).toBe(0);
     expect(rows.every((r) => r.status === "scheduled")).toBe(true);
+  });
+});
+
+describe("resolving a held charge", () => {
+  const TODAY = "2027-05-01";
+
+  it("never sets a generation date in the past", () => {
+    for (const outcome of ["catch_up_single", "issue_separately"] as const) {
+      const patch = resolveHeldCharge(outcome, TODAY, "k");
+      expect(patch.scheduled_generation_date).toBe(TODAY);
+      expect(patch.scheduled_generation_date! < TODAY).toBe(false);
+      expect(patch.status).toBe("scheduled");
+    }
+  });
+
+  it("groups a catch-up into one invoice and issues the rest separately", () => {
+    expect(resolveHeldCharge("catch_up_single", TODAY, "k").combined_group_key).toBe("k");
+    expect(resolveHeldCharge("issue_separately", TODAY, "k").combined_group_key).toBeNull();
+  });
+
+  it("drops rather than deletes when starting from now", () => {
+    const patch = resolveHeldCharge("start_from_now", TODAY, "k");
+    expect(patch.status).toBe("cancelled");
+    // No generation date at all — nothing will ever be created for it.
+    expect(patch.scheduled_generation_date).toBeUndefined();
   });
 });

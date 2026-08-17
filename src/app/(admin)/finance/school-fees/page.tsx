@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getProgramsForBilling } from "@/services/school-billing";
+import NeedsDecisionQueue from "./needs-decision-queue";
 import { getCountryTiers } from "@/services/school-fees";
 import {
   Table,
@@ -57,6 +58,8 @@ export default async function SchoolFeesPage() {
       />
 
       <div className="px-5 py-6 md:px-8 md:py-7">
+        <NeedsDecisionQueue />
+
         <div className="border border-ink">
           <SectionBar
             title="Programs"
