@@ -17,6 +17,8 @@ Standing rules: `CLAUDE.md`.
 | `07-finance-billing.md` | Student billing: charges, Xero, refunds, approvals | schema + finance module |
 | `08-training-and-messages.md` | School detail, grades, applicants, form builder, email moments | training module |
 | `09-going-live.md` | Adopting billing with schools already running | read before any finance work |
+| `10-outreach-budget.md` | Outreach budgets, spreadsheet import, receipts | finance module |
+| `11-communications.md` | Messages, campaigns, consent/POPIA, sequences, replies | comms module — build early |
 
 ---
 
@@ -165,6 +167,20 @@ approval matrix, then adjustments and refunds on top of it. Nobody approves thei
 **Step 9e** — "Section 11. The student fees tab inside Training (frame 27a) and the
 portal fee view (24a). Read-mostly; only a school leader's actions."
 
+**Step 10** — "Read `handoff/10-outreach-budget.md`. Outreach budgets: polymorphic owner,
+team size, lines with amount × frequency × people, sections. Then the importer per §5 with
+header-row detection and the preview. Receipts (§6b) last. Tests per §9."
+
+**Step 11** — "Read `handoff/11-communications.md` and follow its §10 build order, steps 1–3
+only: the `messages` table with `reason`, the person log, from-identities and sending
+domains, then consent. Nothing may send to a contact with no consent record."
+
+**Step 11b** — "Same file, §10 steps 4–6: audiences, the composer and campaign send with
+the last-check screen, the campaign report, deliverability and the bounce queue."
+
+**Step 11c** — "Same file, §10 steps 7–9: sequences, then inbound replies (decide the
+inbound-parse provider first), then privacy requests."
+
 After each session, ask for the diff summary and check it against the frame in the
 design file before moving on.
 
@@ -191,3 +207,8 @@ design file before moving on.
 11. **Creating an invoice and sending it are two decisions.** Keep the buttons apart.
 12. **Email is the only guaranteed channel.** Amount, reference and full bank details go
     in the email body — never behind a login.
+13. **Every message records why it was sent**, in plain words, on the row.
+14. **No consent record, no mail.** Staff-entered and imported contacts are not mailable
+    until they confirm. `consent_events` is append-only.
+15. **Transactional and urgent event mail bypass opt-outs; nothing else does.** Urgent
+    sends are typed-to-confirm, attributed and counted.

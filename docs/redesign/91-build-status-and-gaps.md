@@ -123,9 +123,42 @@ here were **applied as 164/167 but are named 174/175**; their headers say so.
 
 ---
 
-## Missing artefact
+## The design file IS here now (added 2026-08-17)
 
-`FFSA Hub Redesign.dc.html` — the design file itself — **is not in this repo.**
-Every frame id cited across these docs refers to it. Without it, work proceeds
-from written recipes only, which is how the gaps above went unnoticed. Drop it
-into `docs/redesign/` and cite frames from it directly.
+`docs/redesign/design/FFSA Hub Redesign.dc.html` — open it in a browser and work
+from the frames. Its `brand/`, `icons/`, `support.js` and `image-slot.js` sit
+beside it, so it renders standalone. (The 40MB `uploads/` folder from the
+original bundle — brand deck PDF, screenshots — is deliberately NOT in the repo;
+it is source material the file never references.)
+
+**It contains 91 frames, 0a → 31e.** Cite these ids in every report.
+
+## Two more design turns arrived with it, previously undocumented
+
+The bundle's `handoff/` folder held two docs no earlier session had, now in this
+folder. They cover frames 28a–31e — roughly twenty frames that were invisible to
+every earlier plan:
+
+- **`10-outreach-budget.md`** (28a–28f) — one outreach budget, importing the real
+  spreadsheet, who owns it and who may touch it, planned vs spent, every receipt
+  in one place.
+- **`11-communications.md`** (29a–31e) — and its own header says: *"This module is
+  the backbone every other module sends through, so build it before adding more
+  modules on top of it."* One `messages` table for everything the Hub sends, with
+  a `reason` column written at send time ("She is in DTS 26-2 students") — the
+  difference between apologising blindly and knowing what fired. Then newsletters,
+  saved audiences, per-person email history, bounce handling, replies, POPIA
+  subject requests (what we hold / correct / delete), and self-running sequences.
+
+The README in this folder is the newest version and adds **Step 10** and
+**Step 11** accordingly.
+
+### What that does to the ordering
+
+`11-communications.md` supersedes the "Messages" half of `08-training-and-messages.md`
+(its `school_message_moments` / `message_sends` sketch is the narrower, earlier
+version). Build the `messages` model from doc 11 first — billing's email moments
+(07 §10), school moments (08 §5) and campaigns all sit on top of it.
+
+Numbering note: design docs own 05–11. Analysis written by earlier sessions moved
+to **90–92** so it cannot be mistaken for a design brief.
