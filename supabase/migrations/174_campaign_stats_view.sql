@@ -1,4 +1,11 @@
 -- ============================================================
+-- RENUMBERED 164 -> 174
+-- Written and APPLIED as 164, before main gained its own 164
+-- (parallel branches). Renamed on merge so the folder has one file per
+-- number; the database already has this applied under the old number, so
+-- do NOT re-run it expecting a fresh install.
+-- ============================================================
+-- ============================================================
 -- FFSA Hub — Migration 164: Per-campaign delivery stats view
 -- ============================================================
 -- The Communications list wants an open rate and a click rate on

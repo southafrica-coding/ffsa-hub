@@ -1,4 +1,11 @@
 -- ============================================================
+-- RENUMBERED 167 -> 175
+-- Written and APPLIED as 167, before main gained its own 167
+-- (parallel branches). Renamed on merge so the folder has one file per
+-- number; the database already has this applied under the old number, so
+-- do NOT re-run it expecting a fresh install.
+-- ============================================================
+-- ============================================================
 -- FFSA Hub — Migration 167: prayer room seat vocabulary
 -- Prayer room rebuild, PHASE A. See docs/redesign/07-prayer-room-reconciliation.md
 -- ============================================================
