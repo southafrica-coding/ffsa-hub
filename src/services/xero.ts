@@ -11,6 +11,25 @@ export type XeroRegion = "za" | "us";
 const XERO_API = "https://api.xero.com/api.xro/2.0";
 const XERO_IDENTITY = "https://identity.xero.com/connect/token";
 
+/**
+ * The OAuth redirect, which must match a URI registered in the Xero Developer
+ * Portal EXACTLY — and must be identical in the consent request and the token
+ * exchange, or Xero rejects the exchange.
+ *
+ * Was hardcoded to localhost:3000, which meant Xero could only ever be
+ * (re)connected from a local dev server on that port — never from production.
+ * Now env-driven, defaulting to the old value so existing setups keep working:
+ * set XERO_REDIRECT_URI and register the same string with Xero to connect from
+ * anywhere else.
+ */
+export function xeroRedirectUri(): string {
+  return (
+    process.env.XERO_REDIRECT_URI ??
+    "http://localhost:3000/api/integrations/xero/callback"
+  );
+}
+
+
 // Which currency to use per region
 const REGION_CURRENCY: Record<XeroRegion, string> = {
   za: "ZAR",
