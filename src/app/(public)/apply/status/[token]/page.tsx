@@ -12,6 +12,15 @@ const T = PUBLIC_SHELL_TOKENS;
 // Once a decision has been made — or an interview is booked — the file has
 // clearly moved past its references, so the completeness banner would only
 // confuse. The terminal statusMessages box speaks for these instead.
+/**
+ * hsl() colours can't take the `#RRGGBBAA` alpha suffix — appending "1a" to one
+ * yields invalid CSS, which is why the decision boxes below were rendering with
+ * no background or border. Inject the alpha into the colour instead.
+ */
+function withAlpha(color: string, alpha: number): string {
+  return color.replace(/\)$/, ` / ${alpha})`);
+}
+
 const SUPPRESS_REFERENCE_BANNER = new Set([
   "interview_scheduled",
   "accepted",
@@ -319,8 +328,8 @@ export default async function ApplicationStatusPage({
         <div
           className="rounded-lg p-4 text-center"
           style={{
-            background: `${toneColor[msg.tone]}1a`,
-            border: `1px solid ${toneColor[msg.tone]}40`,
+            background: withAlpha(toneColor[msg.tone], 0.1),
+            border: `1px solid ${withAlpha(toneColor[msg.tone], 0.28)}`,
           }}
         >
           <p
