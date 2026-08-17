@@ -31,6 +31,9 @@ function detail(a: Alert): string {
     : "";
   if (a.state === "expired") {
     const ago = a.daysLeft != null ? Math.abs(a.daysLeft) : null;
+    // A mistyped year ("0028" for "2028") reads as ~2000 years overdue and
+    // buries the genuine alerts beside it. Same guard as the notification feed.
+    if (ago != null && ago > 3650) return `Expiry date looks wrong · ${date}`;
     return ago != null ? `Expired ${ago === 1 ? "yesterday" : `${ago} days ago`} · ${date}` : `Expired · ${date}`;
   }
   const left = a.daysLeft ?? 0;

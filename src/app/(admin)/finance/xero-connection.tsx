@@ -8,8 +8,17 @@ import { Loader2 } from "lucide-react";
 import { SectionBar, StatusPill } from "@/components/ffsa";
 
 type RegionStatus =
-  | { connected: false }
-  | { connected: true; tenantName: string | null; expiresAt: string };
+  | { connected: false; live?: false }
+  // connected = a token exists. live = it was just verified against Xero.
+  // The two come apart when authorisation lapses, which is the case that
+  // previously showed a green pill and hid the fix.
+  | {
+      connected: true;
+      live: boolean;
+      tenantName: string | null;
+      expiresAt: string;
+      problem?: string;
+    };
 
 type XeroStatusResponse = {
   za: RegionStatus;
@@ -86,11 +95,15 @@ export function XeroConnection() {
     );
   }
 
-  const connectedCount = [status?.za.connected, status?.us.connected].filter(Boolean).length;
+  // Counts WORKING connections. Counting token rows is what let a dead
+  // connection report "2 of 2 connected".
+  const liveCount = [status?.za, status?.us].filter(
+    (r) => r?.connected === true && r.live === true
+  ).length;
 
   return (
     <div className="border border-ink bg-white">
-      <SectionBar title="Xero integration" meta={`${connectedCount} of 2 connected`} />
+      <SectionBar title="Xero integration" meta={`${liveCount} of 2 working`} />
       <div className="p-6">
         <p className="mb-5 max-w-2xl text-[13px] text-[color:var(--text-secondary)]">
           Connect your Xero accounts to automatically create and email invoices.
@@ -103,6 +116,8 @@ export function XeroConnection() {
             const cfg = REGION_CONFIG[region];
             const regionStatus = status?.[region];
             const isConnected = regionStatus?.connected === true;
+            // Verified against Xero just now — not merely "a token row exists".
+            const isLive = isConnected && regionStatus?.live === true;
 
             // Connected reads as a solid hairline on bone; not-connected keeps the
             // dashed rule so an unfinished integration is legible at a glance.
@@ -110,19 +125,25 @@ export function XeroConnection() {
               <div
                 key={region}
                 className={`border p-5 ${
-                  isConnected ? "border-rule-strong bg-bone" : "border-dashed border-rule-strong"
+                  isLive ? "border-rule-strong bg-bone" : "border-dashed border-rule-strong"
                 }`}
               >
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <span className="font-display text-[18px] font-black uppercase leading-none">
                     {cfg.flag} {cfg.label}
                   </span>
-                  <StatusPill tone={isConnected ? "good" : "quiet"}>
-                    {isConnected ? "Connected" : "Not connected"}
+                  <StatusPill
+                    tone={isLive ? "good" : isConnected ? "bad" : "quiet"}
+                  >
+                    {isLive
+                      ? "Connected"
+                      : isConnected
+                        ? "Authorisation expired"
+                        : "Not connected"}
                   </StatusPill>
                 </div>
 
-                {isConnected && regionStatus.connected ? (
+                {isLive && regionStatus.connected ? (
                   <div className="space-y-3">
                     <p className="text-[12px] text-[color:var(--text-secondary)]">
                       {regionStatus.tenantName ?? "Xero Organization"} •{" "}
@@ -142,12 +163,20 @@ export function XeroConnection() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    <p className="text-[12px] text-[color:var(--text-secondary)]">
-                      Invoices in <span className="tabular">{cfg.currency}</span>
-                    </p>
+                    {isConnected && regionStatus.connected && regionStatus.problem ? (
+                      // Say what is wrong and offer the fix in one step — no
+                      // disconnect-then-reconnect dance.
+                      <p className="text-[12px] text-[color:var(--destructive)]">
+                        {regionStatus.problem}
+                      </p>
+                    ) : (
+                      <p className="text-[12px] text-[color:var(--text-secondary)]">
+                        Invoices in <span className="tabular">{cfg.currency}</span>
+                      </p>
+                    )}
                     <Button asChild size="sm" className="w-full">
                       <a href={`/api/integrations/xero/connect?region=${region}`}>
-                        Connect {cfg.label} Account
+                        {isConnected ? "Reconnect" : "Connect"} {cfg.label} Account
                       </a>
                     </Button>
                   </div>

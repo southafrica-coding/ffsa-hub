@@ -677,38 +677,69 @@ export async function voidInvoice(
 // CONNECTION STATUS
 // ────────────────────────────────────────────────────────────
 
+/**
+ * Is a region's connection actually usable?
+ *
+ * A token ROW existing is not a connection. Xero refresh tokens die after 60
+ * days unused, and the old status check reported `connected: true` on the
+ * strength of a row alone — so a connection that had been dead for four months
+ * showed a green pill and hid the only button that could fix it.
+ *
+ * This verifies: obtain a valid access token (refreshing if needed), then make
+ * one cheap real call. Anything less is a guess.
+ */
+async function probeRegion(supabase: Client, region: XeroRegion) {
+  const tokens = await getStoredTokens(supabase, region);
+  if (!tokens) {
+    return { connected: false as const, live: false as const, region };
+  }
+
+  const base = {
+    tenantName: tokens.tenant_name,
+    expiresAt: tokens.expires_at,
+    region,
+  };
+
+  const auth = await getValidAccessToken(supabase, region);
+  if (!auth) {
+    return {
+      ...base,
+      connected: true as const,
+      live: false as const,
+      problem:
+        "Authorisation expired — Xero would not renew it. Reconnect this organisation.",
+    };
+  }
+
+  try {
+    // Smallest call that proves the token is accepted for this tenant.
+    await xeroGet(auth.accessToken, auth.tenantId, "Organisation");
+    return { ...base, connected: true as const, live: true as const };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      ...base,
+      connected: true as const,
+      live: false as const,
+      problem:
+        msg.includes("401") || msg.includes("403")
+          ? "Xero refused the saved authorisation. Reconnect this organisation."
+          : `Xero could not be reached: ${msg}`,
+    };
+  }
+}
+
 export async function getXeroConnectionStatus(
   supabase: Client,
   region?: XeroRegion
 ) {
-  // If region specified, return status for that region
-  if (region) {
-    const tokens = await getStoredTokens(supabase, region);
-    if (!tokens) {
-      return { connected: false as const, region };
-    }
-    return {
-      connected: true as const,
-      tenantName: tokens.tenant_name,
-      expiresAt: tokens.expires_at,
-      region,
-    };
-  }
+  if (region) return probeRegion(supabase, region);
 
-  // No region — return status for all regions
-  const [zaTokens, usTokens] = await Promise.all([
-    getStoredTokens(supabase, "za"),
-    getStoredTokens(supabase, "us"),
+  const [za, us] = await Promise.all([
+    probeRegion(supabase, "za"),
+    probeRegion(supabase, "us"),
   ]);
-
-  return {
-    za: zaTokens
-      ? { connected: true as const, tenantName: zaTokens.tenant_name, expiresAt: zaTokens.expires_at }
-      : { connected: false as const },
-    us: usTokens
-      ? { connected: true as const, tenantName: usTokens.tenant_name, expiresAt: usTokens.expires_at }
-      : { connected: false as const },
-  };
+  return { za, us };
 }
 
 // ────────────────────────────────────────────────────────────
