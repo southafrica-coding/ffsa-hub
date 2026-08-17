@@ -375,8 +375,8 @@ export function ReferenceEditor({
       {pendingSlots.length > 0 && (
         <div style={{ marginTop: rows.length > 0 ? 16 : 0 }}>
           <p style={{ ...labelStyle, marginBottom: 6 }}>Add your references</p>
+          {/* The banner above already says the application needs these. */}
           <p style={{ fontSize: 12, color: C.dim, marginBottom: 10 }}>
-            Your application still needs the reference{pendingSlots.length > 1 ? "s" : ""} below.
             Enter each reference&apos;s name and email — we&apos;ll send them a short form to complete.
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>

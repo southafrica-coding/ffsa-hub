@@ -1,16 +1,27 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentConsentAgreement, recordConsent } from "@/services/consent";
+import {
+  getCurrentConsentAgreement,
+  recordConsent,
+  asConsentKind,
+} from "@/services/consent";
 
-export async function GET() {
+// GET /api/consent?kind=privacy|child_protection|nda — the current agreement
+// for a policy kind (defaults to privacy). Backs the onboarding fetch and any
+// "current version" lookup.
+export async function GET(request: Request) {
   const supabase = await createClient();
-  const { data, error } = await getCurrentConsentAgreement(supabase);
+  const { searchParams } = new URL(request.url);
+  const kind = asConsentKind(searchParams.get("kind"));
+  const { data, error } = await getCurrentConsentAgreement(supabase, kind);
   if (error || !data) {
     return NextResponse.json({ error: "Agreement not found" }, { status: 404 });
   }
   return NextResponse.json({ agreement: data });
 }
 
+// POST /api/consent — record an acceptance. Body: { kind?, agreement_version,
+// source }. Validates the version against the current agreement for that kind.
 export async function POST(request: Request) {
   const supabase = await createClient();
   const {
@@ -23,16 +34,14 @@ export async function POST(request: Request) {
 
   const body = await request.json();
   const { agreement_version, source } = body;
+  const kind = asConsentKind(body.kind);
 
   if (!source || (source !== "onboarding" && source !== "application")) {
-    return NextResponse.json(
-      { error: "Invalid source" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Invalid source" }, { status: 400 });
   }
 
-  // Validate version matches the current published agreement.
-  const { data: current } = await getCurrentConsentAgreement(supabase);
+  // Validate version matches the current published agreement FOR THIS KIND.
+  const { data: current } = await getCurrentConsentAgreement(supabase, kind);
   if (!current) {
     return NextResponse.json(
       { error: "Consent agreement is not configured" },

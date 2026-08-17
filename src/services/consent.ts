@@ -6,20 +6,50 @@
 
 type Client = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
+// The policies a person may need to accept to use the Hub. Each has its own
+// current version (consent_agreements.kind, migration 164).
+export type ConsentKind = "privacy" | "child_protection" | "nda";
+
+// Single source of truth for WHICH policies each audience must sign.
+//   audience "all"   → staff, students, community.
+//   audience "staff" → staff only (signup_type 'staff' or the staff role).
+// Add a future policy by seeding a consent_agreements row + a line here.
+export const REQUIRED_CONSENTS: { kind: ConsentKind; audience: "all" | "staff" }[] = [
+  { kind: "privacy", audience: "all" },
+  { kind: "child_protection", audience: "all" },
+  { kind: "nda", audience: "staff" },
+];
+
+const CONSENT_KINDS: ConsentKind[] = ["privacy", "child_protection", "nda"];
+
+// Coerce an untrusted string to a valid ConsentKind (defaults to privacy).
+export function asConsentKind(value: unknown): ConsentKind {
+  return CONSENT_KINDS.includes(value as ConsentKind)
+    ? (value as ConsentKind)
+    : "privacy";
+}
+
 export type ConsentAgreement = {
   id: string;
   version: string;
+  kind: ConsentKind;
   title: string;
   body_markdown: string;
   effective_at: string;
   is_current: boolean;
 };
 
-export async function getCurrentConsentAgreement(supabase: Client) {
+// The current published agreement for a given kind (defaults to privacy so
+// existing callers keep working).
+export async function getCurrentConsentAgreement(
+  supabase: Client,
+  kind: ConsentKind = "privacy"
+) {
   return supabase
     .from("consent_agreements")
-    .select("id, version, title, body_markdown, effective_at, is_current")
+    .select("id, version, kind, title, body_markdown, effective_at, is_current")
     .eq("is_current", true)
+    .eq("kind", kind)
     .single();
 }
 
@@ -29,7 +59,7 @@ export async function getConsentAgreementByVersion(
 ) {
   return supabase
     .from("consent_agreements")
-    .select("id, version, title, body_markdown, effective_at, is_current")
+    .select("id, version, kind, title, body_markdown, effective_at, is_current")
     .eq("version", version)
     .single();
 }
@@ -106,4 +136,55 @@ export async function hasUserConsented(
     .limit(1);
   if (error) return true;
   return (data?.length ?? 0) > 0;
+}
+
+// ────────────────────────────────────────────────────────────
+// REQUIRED-AGREEMENTS GATE (per-kind, version-keyed)
+// ────────────────────────────────────────────────────────────
+
+// True iff the user has accepted the CURRENT version of a given policy kind.
+// Fail-open (returns true) on any error so a DB blip never locks people out.
+// If the kind has no published agreement, treat it as satisfied (nothing to
+// sign yet).
+export async function hasAcceptedCurrent(
+  supabase: Client,
+  userId: string,
+  kind: ConsentKind
+): Promise<boolean> {
+  const { data: agreement, error: agErr } = await getCurrentConsentAgreement(
+    supabase,
+    kind
+  );
+  if (agErr || !agreement) return true; // nothing published for this kind
+  const { data, error } = await supabase
+    .from("consent_records")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("agreement_version", agreement.version)
+    .limit(1);
+  if (error) return true;
+  return (data?.length ?? 0) > 0;
+}
+
+export type OutstandingConsent = { kind: ConsentKind; agreement: ConsentAgreement };
+
+// The agreements this user must still accept — the REQUIRED_CONSENTS for their
+// audience whose current version they haven't accepted. Skips kinds with no
+// published row (never lock out). `isStaff` gates the staff-only policies.
+export async function getOutstandingConsents(
+  supabase: Client,
+  userId: string,
+  isStaff: boolean
+): Promise<OutstandingConsent[]> {
+  const applicable = REQUIRED_CONSENTS.filter(
+    (r) => r.audience === "all" || (r.audience === "staff" && isStaff)
+  );
+  const outstanding: OutstandingConsent[] = [];
+  for (const { kind } of applicable) {
+    const { data: agreement } = await getCurrentConsentAgreement(supabase, kind);
+    if (!agreement) continue; // nothing published for this kind yet
+    const accepted = await hasAcceptedCurrent(supabase, userId, kind);
+    if (!accepted) outstanding.push({ kind, agreement });
+  }
+  return outstanding;
 }

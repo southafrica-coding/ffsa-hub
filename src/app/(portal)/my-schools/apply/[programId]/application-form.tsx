@@ -9,6 +9,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle } from "lucide-react";
 import { orderQuestionsForRender } from "@/lib/form-types";
+import {
+  referenceHeadsUpNote,
+  referenceSubmittedNote,
+} from "@/lib/references/reference-status-copy";
 
 type Question = {
   id: string;
@@ -65,6 +69,8 @@ export function ApplicationForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [statusUrl, setStatusUrl] = useState<string | null>(null);
+  const [submittedReferenceCount, setSubmittedReferenceCount] = useState(0);
   const [refNames, setRefNames] = useState<Record<string, string>>({});
   const [refEmails, setRefEmails] = useState<Record<string, string>>({});
   // Nationality (prefilled from profile) drives the fee tier; home country is
@@ -77,6 +83,9 @@ export function ApplicationForm({
       : ""
   );
   const [homeCountry, setHomeCountry] = useState("");
+  const requiredReferenceCount = referenceSlots.filter(
+    (slot) => slot.is_required
+  ).length;
 
   const isSystemCountry = (q: Question) =>
     q.system_key === "nationality" || q.system_key === "home_country";
@@ -157,6 +166,14 @@ export function ApplicationForm({
         answer: answers[q.id]?.trim() ?? "",
       }));
 
+    const references = referenceSlots
+      .filter((slot) => refNames[slot.id]?.trim() && refEmails[slot.id]?.trim())
+      .map((slot) => ({
+        slot_id: slot.id,
+        referee_name: refNames[slot.id].trim(),
+        referee_email: refEmails[slot.id].trim(),
+      }));
+
     try {
       const res = await fetch("/api/schools/applications/responses", {
         method: "POST",
@@ -166,13 +183,7 @@ export function ApplicationForm({
           answers: formattedAnswers,
           nationality: nationality.trim(),
           home_country: homeCountry.trim(),
-          references: referenceSlots
-            .filter((slot) => refNames[slot.id]?.trim() && refEmails[slot.id]?.trim())
-            .map((slot) => ({
-              slot_id: slot.id,
-              referee_name: refNames[slot.id].trim(),
-              referee_email: refEmails[slot.id].trim(),
-            })),
+          references,
         }),
       });
 
@@ -183,6 +194,8 @@ export function ApplicationForm({
         return;
       }
 
+      setStatusUrl(data.statusUrl ?? null);
+      setSubmittedReferenceCount(references.length);
       setSubmitted(true);
     } catch {
       setError("Network error. Please try again.");
@@ -197,13 +210,29 @@ export function ApplicationForm({
         <CardContent className="py-8 text-center space-y-4">
           <CheckCircle className="h-12 w-12 text-green-600 mx-auto" />
           <h2 className="text-lg font-semibold">Application Submitted!</h2>
-          <p className="text-sm text-muted-foreground">
-            Your application has been received and is under review. You will be
-            notified when a decision has been made.
-          </p>
-          <Button variant="outline" onClick={() => router.push("/my-schools")}>
-            Back to My Training
-          </Button>
+          {submittedReferenceCount > 0 ? (
+            <p className="text-sm text-muted-foreground max-w-md mx-auto">
+              Your application has been received.{" "}
+              {referenceSubmittedNote(submittedReferenceCount)} Your{" "}
+              {submittedReferenceCount === 1 ? "referee has" : "referees have"}{" "}
+              been emailed a link, so there&apos;s nothing more you need to do.
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Your application has been received and is under review. You will be
+              notified when a decision has been made.
+            </p>
+          )}
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            {statusUrl && (
+              <Button asChild>
+                <a href={statusUrl}>Track your application</a>
+              </Button>
+            )}
+            <Button variant="outline" onClick={() => router.push("/my-schools")}>
+              Back to My Training
+            </Button>
+          </div>
         </CardContent>
       </Card>
     );
@@ -324,6 +353,11 @@ export function ApplicationForm({
               Your referees will receive an email with a link to submit their reference.
             </p>
           </div>
+          {requiredReferenceCount > 0 && (
+            <p className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-muted-foreground">
+              {referenceHeadsUpNote(requiredReferenceCount)}
+            </p>
+          )}
           {referenceSlots.map((slot) => (
             <div key={slot.id} className="space-y-3 rounded-md border p-4">
               <p className="text-sm font-medium">

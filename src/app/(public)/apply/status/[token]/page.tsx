@@ -5,8 +5,29 @@ import {
   PUBLIC_SHELL_TOKENS,
 } from "@/components/public-form-shell";
 import { ReferenceEditor, type EditableReference } from "./reference-editor";
+import { ReferenceStatusBanner } from "./reference-status-banner";
 
 const T = PUBLIC_SHELL_TOKENS;
+
+// Once a decision has been made — or an interview is booked — the file has
+// clearly moved past its references, so the completeness banner would only
+// confuse. The terminal statusMessages box speaks for these instead.
+/**
+ * hsl() colours can't take the `#RRGGBBAA` alpha suffix — appending "1a" to one
+ * yields invalid CSS, which is why the decision boxes below were rendering with
+ * no background or border. Inject the alpha into the colour instead.
+ */
+function withAlpha(color: string, alpha: number): string {
+  return color.replace(/\)$/, ` / ${alpha})`);
+}
+
+const SUPPRESS_REFERENCE_BANNER = new Set([
+  "interview_scheduled",
+  "accepted",
+  "rejected",
+  "waitlisted",
+  "cancelled",
+]);
 
 const STATUS_STEPS = [
   { key: "submitted", label: "Submitted" },
@@ -121,7 +142,13 @@ export default async function ApplicationStatusPage({
     })
   );
 
-  const currentStep = STATUS_ORDER[response.status] ?? 0;
+  // Nothing advances `status` when references arrive (staff set it by hand), so
+  // light up the References step as soon as they're actually all in.
+  const allReferencesIn = totalRefs > 0 && submittedRefs === totalRefs;
+  const currentStep = Math.max(
+    STATUS_ORDER[response.status] ?? 0,
+    allReferencesIn ? 1 : 0
+  );
   const programName =
     (response.programs as { name: string } | null)?.name ?? "Program";
   const firstName =
@@ -174,6 +201,14 @@ export default async function ApplicationStatusPage({
       <div className="flex justify-center mb-6">
         <StatusBadge status={response.status} />
       </div>
+
+      {!SUPPRESS_REFERENCE_BANNER.has(response.status) && (
+        <ReferenceStatusBanner
+          total={totalRefs}
+          submitted={submittedRefs}
+          missingLabels={missingRequiredSlots.map((s) => s.label)}
+        />
+      )}
 
       {/* Progress steps */}
       <div className="mb-6">
@@ -293,8 +328,8 @@ export default async function ApplicationStatusPage({
         <div
           className="rounded-lg p-4 text-center"
           style={{
-            background: `${toneColor[msg.tone]}1a`,
-            border: `1px solid ${toneColor[msg.tone]}40`,
+            background: withAlpha(toneColor[msg.tone], 0.1),
+            border: `1px solid ${withAlpha(toneColor[msg.tone], 0.28)}`,
           }}
         >
           <p
