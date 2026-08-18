@@ -1,11 +1,10 @@
-import Link from "next/link";
-import { Printer } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import { requireModuleAccess } from "@/lib/require-permission";
 import { getPerson, getRecordsForPerson } from "@/services/records-library";
 import { CsvSheet } from "@/components/csv-sheet";
 import { bestPersonName } from "@/lib/person-name";
+import { Masthead, MastheadAction } from "@/components/ffsa";
 
 export default async function PersonDetailPage({
   params,
@@ -34,31 +33,27 @@ export default async function PersonDetailPage({
     : null;
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-8">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold mb-1">{fullName}</h1>
-          <p className="text-sm text-muted-foreground">
-            {person.email ?? "no email"}
-            {person.date_of_birth ? ` · DOB ${person.date_of_birth}` : ""}
-            {person.phone ? ` · ${person.phone}` : ""}
-          </p>
-        </div>
-        <Link
-          href={`/print/records-library/persons/${id}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 px-3 py-2 text-sm border rounded-md hover:bg-muted shrink-0"
-        >
-          <Printer className="h-4 w-4" />
-          Print / Save as PDF
-        </Link>
-      </div>
+    <div className="ffsa-screen">
+      <Masthead
+        context="Records library person"
+        title={fullName}
+        actions={
+          <MastheadAction href={`/print/records-library/persons/${id}`}>
+            Print / PDF
+          </MastheadAction>
+        }
+      />
 
-      <div className="border rounded-md p-4">
-        <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
-          Linked user
-        </div>
+      <div className="space-y-8 px-5 py-6 md:px-8 md:py-7">
+        {/* Print moved to the masthead, where every screen's actions live. */}
+        <p className="text-sm text-[color:var(--text-secondary)]">
+          {person.email ?? "no email"}
+          {person.date_of_birth ? ` · DOB ${person.date_of_birth}` : ""}
+          {person.phone ? ` · ${person.phone}` : ""}
+        </p>
+
+      <div className="border border-ink p-4">
+        <div className="mono-label mb-1.5">Linked user</div>
         {linkedUserName ? (
           <div className="text-sm">
             <span className="font-medium">{linkedUserName}</span>
@@ -162,7 +157,7 @@ export default async function PersonDetailPage({
                       href={r.file_url}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-blue-400 hover:underline"
+                      className="text-electric hover:underline"
                     >
                       Open
                     </a>
@@ -196,6 +191,7 @@ export default async function PersonDetailPage({
           />
         </Section>
       )}
+      </div>
     </div>
   );
 }

@@ -142,14 +142,15 @@ export default async function UserPermissionsPage({
     .map((s) => ({ id: s.id, label: s.label }));
 
   return (
-    <div className="space-y-6">
+    <div className="ffsa-screen">
       <UserHeader
         user={targetUser}
         authLastSignInAt={authLastSignInAt}
-        eyebrow="ACCESS MANAGEMENT"
+        eyebrow="Access management"
       />
       <UserTabs userId={id} active="permissions" showPermissions={true} />
 
+      <div className="space-y-6 px-5 py-6 md:px-8 md:py-7">
       <RoleAssignment
         userId={id}
         assigned={assigned}
@@ -173,6 +174,7 @@ export default async function UserPermissionsPage({
           isSelf={isSelf}
         />
       </AdvancedAccess>
+      </div>
     </div>
   );
 }

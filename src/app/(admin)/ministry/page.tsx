@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { listMinistries } from "@/services/ministries";
 import { callerIsAdmin, getLedMinistryIds } from "@/lib/auth/check-ministry-access";
 import { NewMinistryButton } from "./new-ministry-button";
+import { Masthead, StatusPill } from "@/components/ffsa";
 import { Badge } from "@/components/ui/badge";
 
 export default async function MinistryPage() {
@@ -26,47 +27,46 @@ export default async function MinistryPage() {
   );
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <p className="page-eyebrow">PEOPLE</p>
-          <h1 className="page-title">Ministries</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {visible.length} ministr{visible.length === 1 ? "y" : "ies"}
-            {!isAdmin && " you lead"}
-          </p>
-        </div>
-        {isAdmin && <NewMinistryButton />}
-      </div>
+    <div className="ffsa-screen">
+      <Masthead
+        context={`People · ${visible.length} ministr${visible.length === 1 ? "y" : "ies"}${!isAdmin ? " you lead" : ""}`}
+        title="Ministries"
+        actions={isAdmin ? <NewMinistryButton /> : undefined}
+      />
 
       {visible.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No ministries yet.</p>
+        <div className="px-5 py-12 text-center md:px-8">
+          <p className="mono-label">No ministries yet</p>
+        </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        // Two-line rows rather than a rounded card grid: a ministry is a
+        // name, a blurb and a headcount, which is a row.
+        <ul>
           {visible.map((m) => {
             const count = m.staff_ministry_members?.[0]?.count ?? 0;
             return (
-              <Link
-                key={m.id}
-                href={`/ministry/${m.id}`}
-                className="rounded-xl border border-border bg-card p-5 transition-colors hover:border-primary/40"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <h2 className="font-semibold text-foreground">{m.name}</h2>
-                  {!m.is_active && <Badge variant="outline">Retired</Badge>}
-                </div>
-                {m.description && (
-                  <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
-                    {m.description}
-                  </p>
-                )}
-                <p className="mt-3 text-xs text-muted-foreground">
-                  {count} {count === 1 ? "person" : "people"}
-                </p>
-              </Link>
+              <li key={m.id} className="border-b border-rule">
+                <Link
+                  href={`/ministry/${m.id}`}
+                  className="flex min-h-[48px] items-center justify-between gap-4 px-5 py-3.5 hover:bg-[#F7F5EE] md:px-8"
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2.5">
+                      <span className="truncate font-display text-[17px] font-black uppercase leading-none text-ink">
+                        {m.name}
+                      </span>
+                      {!m.is_active && <StatusPill tone="quiet">Retired</StatusPill>}
+                    </div>
+                    <div className="mono-label mt-1.5 truncate">
+                      {count} {count === 1 ? "person" : "people"}
+                      {m.description ? ` · ${m.description}` : ""}
+                    </div>
+                  </div>
+                </Link>
+              </li>
             );
           })}
-        </div>
+        </ul>
       )}
     </div>
   );

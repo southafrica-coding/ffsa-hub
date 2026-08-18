@@ -4,6 +4,14 @@ import { redirect } from "next/navigation";
 import { requireModuleAccess } from "@/lib/require-permission";
 import { listImports, listPersons } from "@/services/records-library";
 import { bestPersonName } from "@/lib/person-name";
+import {
+  Masthead,
+  MastheadAction,
+  NeedsYou,
+  NeedsYouAction,
+  StatusPill,
+  type Tone,
+} from "@/components/ffsa";
 
 export default async function RecordsLibraryPage() {
   const supabase = await createClient();
@@ -31,42 +39,46 @@ export default async function RecordsLibraryPage() {
   const pendingQueueCount = queueResult.count;
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-8">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold mb-1">Records Library</h1>
-          <p className="text-sm text-muted-foreground max-w-2xl">
+    <div className="ffsa-screen">
+      <Masthead
+        context="Records library"
+        title="Records library"
+        actions={
+          <>
+            <MastheadAction href="/records-library/persons">
+              All persons
+            </MastheadAction>
+            <MastheadAction href="/records-library/match-queue">
+              Match queue{pendingQueueCount ? ` (${pendingQueueCount})` : ""}
+            </MastheadAction>
+            <MastheadAction href="/records-library/import">
+              Upload CSV
+            </MastheadAction>
+          </>
+        }
+      />
+
+      {/* The page's ONE yellow band — partial matches waiting on a human. */}
+      {(pendingQueueCount ?? 0) > 0 && (
+        <NeedsYou
+          action={
+            <NeedsYouAction href="/records-library/match-queue">
+              Review
+            </NeedsYouAction>
+          }
+        >
+          {pendingQueueCount === 1
+            ? "1 record partially matched a user and needs a decision"
+            : `${pendingQueueCount} records partially matched a user and need a decision`}
+        </NeedsYou>
+      )}
+
+      <div className="space-y-8 px-5 py-6 md:px-8 md:py-7">
+        <p className="max-w-3xl text-[14px] leading-relaxed text-[color:var(--text-secondary)]">
             Upload CSVs of historical staff/student data — applications,
             payments, schools attended, documents. When a user is invited or
             signs up, matching records auto-attach to their profile.
-          </p>
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          <Link
-            href="/records-library/persons"
-            className="px-3 py-2 text-sm border rounded-md hover:bg-muted"
-          >
-            Browse all persons
-          </Link>
-          <Link
-            href="/records-library/match-queue"
-            className="px-3 py-2 text-sm border rounded-md hover:bg-muted relative"
-          >
-            Match queue
-            {pendingQueueCount && pendingQueueCount > 0 ? (
-              <span className="ml-2 inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs bg-yellow-500/20 text-yellow-200 border border-yellow-500/30">
-                {pendingQueueCount}
-              </span>
-            ) : null}
-          </Link>
-          <Link
-            href="/records-library/import"
-            className="px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
-          >
-            Upload CSV
-          </Link>
-        </div>
-      </div>
+        </p>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <StatCard label="Library persons" value={totalPersons} />
@@ -177,6 +189,7 @@ export default async function RecordsLibraryPage() {
           </div>
         )}
       </section>
+      </div>
     </div>
   );
 }
@@ -191,27 +204,25 @@ function StatCard({
   highlight?: boolean;
 }) {
   return (
-    <div
-      className={`border rounded-md p-4 ${
-        highlight ? "border-yellow-500/40 bg-yellow-500/10" : ""
-      }`}
-    >
-      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="text-2xl font-semibold mt-1">{value}</div>
+    <div className={`border border-ink p-4 ${highlight ? "bg-bone" : "bg-white"}`}>
+      <div className="mono-label">{label}</div>
+      <div className="numeral mt-2 text-[38px] leading-none">{value}</div>
     </div>
   );
 }
 
+// Outlined and square on the system's tones. The tints replaced here were
+// dark-theme values (emerald-300 on translucent green) from before the light
+// redesign — near-invisible on a white page.
+const RL_TONE: Record<string, Tone> = {
+  completed: "good",
+  processing: "warn",
+  pending: "warn",
+  failed: "bad",
+};
+
 function StatusBadge({ status }: { status: string }) {
-  const cls =
-    status === "completed"
-      ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-      : status === "processing" || status === "pending"
-      ? "bg-yellow-500/20 text-yellow-200 border border-yellow-500/30"
-      : status === "failed"
-      ? "bg-red-500/20 text-red-300 border border-red-500/30"
-      : "bg-muted text-muted-foreground border";
-  return <span className={`inline-block px-2 py-0.5 rounded text-xs ${cls}`}>{status}</span>;
+  return <StatusPill tone={RL_TONE[status] ?? "quiet"}>{status}</StatusPill>;
 }
 
 type ImportRow = {

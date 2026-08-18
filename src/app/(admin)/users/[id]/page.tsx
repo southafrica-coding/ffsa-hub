@@ -180,12 +180,12 @@ export default async function UserProfilePage({
   });
 
   return (
-    <div className="space-y-6">
+    <div className="ffsa-screen">
       <UserHeader
         user={targetUser}
         authLastSignInAt={authLastSignInAt}
         derivedTitle={derivedTitle}
-        eyebrow="STAFF PROFILE"
+        eyebrow="Staff profile"
       />
       <UserTabs
         userId={id}
@@ -193,6 +193,7 @@ export default async function UserProfilePage({
         showPermissions={canManagePermissions}
       />
 
+      <div className="space-y-6 px-5 py-6 md:px-8 md:py-7">
       <ProfileCompletenessCard lifecycle={lifecycle} />
 
       {isAdmin && (
@@ -315,6 +316,7 @@ export default async function UserProfilePage({
         </div>
         <ProfileRecords userId={id} canOpenLibrary={true} />
       </section>
+      </div>
     </div>
   );
 }
@@ -434,10 +436,8 @@ function InfoCard({
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
-        {label}
-      </div>
-      <div className="text-sm mt-0.5">{value}</div>
+      <div className="mono-label">{label}</div>
+      <div className="mt-1 text-sm text-ink">{value}</div>
     </div>
   );
 }

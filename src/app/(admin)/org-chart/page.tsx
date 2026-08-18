@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { requireModuleAccess } from "@/lib/require-permission";
 import { getOrgChart } from "@/services/org-chart";
+import { Masthead } from "@/components/ffsa";
 import { OrgChartFlow } from "./org-chart-flow";
 
 export const metadata = { title: "Org Chart · FFSA Hub" };
@@ -20,34 +21,30 @@ export default async function OrgChartPage() {
   const data = await getOrgChart(supabase);
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <div className="page-eyebrow">Organisation · 2026</div>
-          <h1 className="page-title">Org Chart</h1>
-          <p className="mt-1 max-w-2xl text-[13px] text-[color:var(--text-secondary)]">
-            {data?.chart.description ??
-              "Rooted & Sent — the living structure of Fire & Fragrance South Africa. Click any team to expand its people; dotted lines show cross-team service."}
-          </p>
-        </div>
-      </div>
+    <div className="ffsa-screen">
+      <Masthead context="Organisation · 2026" title="Org chart" />
 
-      {data && data.nodes.length > 0 ? (
-        <OrgChartFlow data={data} />
-      ) : (
-        <div
-          className="flex h-[420px] flex-col items-center justify-center gap-2 rounded-xl text-center"
-          style={{ border: "1px dashed #2C2823", background: "#100D0A" }}
-        >
-          <p className="text-sm font-semibold text-[color:var(--text-primary)]">
-            No chart data yet
-          </p>
-          <p className="max-w-md text-[13px] text-[color:var(--text-secondary)]">
-            Apply migration <code className="text-[color:var(--yellow)]">099_org_chart.sql</code>{" "}
-            in the Supabase SQL editor to seed the FFSA 2026 structure.
-          </p>
-        </div>
-      )}
+      <p className="max-w-3xl border-b border-rule px-5 py-4 text-[14px] leading-relaxed text-[color:var(--text-secondary)] md:px-8">
+        {data?.chart.description ??
+          "Rooted & Sent — the living structure of Fire & Fragrance South Africa. Click any team to expand its people; dotted lines show cross-team service."}
+      </p>
+
+      <div className="px-5 py-6 md:px-8 md:py-7">
+        {data && data.nodes.length > 0 ? (
+          <OrgChartFlow data={data} />
+        ) : (
+          // The empty state was still painted in dark-theme hexes
+          // (#100D0A on #2C2823) — invisible copy on the light page.
+          <div className="flex h-[420px] flex-col items-center justify-center gap-2 border border-dashed border-rule-strong bg-bone text-center">
+            <p className="mono-label">No chart data yet</p>
+            <p className="max-w-md px-6 text-[13px] text-[color:var(--text-secondary)]">
+              Apply migration{" "}
+              <code className="font-mono text-ink">099_org_chart.sql</code> in
+              the Supabase SQL editor to seed the FFSA 2026 structure.
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

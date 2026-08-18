@@ -94,7 +94,15 @@ export default async function BrandKitPage() {
   const B = FFSA_BRAND;
 
   return (
-    <div className="space-y-5">
+    // Marked .ffsa-screen so it runs edge-to-edge like every other admin
+    // route (and so the transition scaffold can be deleted), but the CONTENT
+    // is deliberately left in the brand deck's own treatment. This page is a
+    // specimen of the FFSA brand — its rounded cover, its own fonts and its
+    // own colours are the thing being documented, not a screen that drifted
+    // from the redesign. Same standing decision that keeps the five event
+    // brand kits out of scope.
+    <div className="ffsa-screen">
+      <div className="space-y-5 px-5 py-6 md:px-8 md:py-7">
       {/* ── Masthead — the deck's cover, in the brand's own treatment ── */}
       <div
         className="rounded-xl overflow-hidden relative"
@@ -395,6 +403,7 @@ export default async function BrandKitPage() {
           <Field label="Address" value={B.contact.address} />
         </div>
       </Section>
+      </div>
     </div>
   );
 }

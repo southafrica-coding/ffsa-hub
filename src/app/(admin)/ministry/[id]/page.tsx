@@ -56,7 +56,7 @@ export default async function MinistryDetailPage({
     }));
 
   return (
-    <div className="space-y-6">
+    <div className="ffsa-screen">
       <MinistryDetail
         ministry={ministry}
         roster={roster ?? []}

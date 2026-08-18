@@ -13,6 +13,7 @@ import {
   ChevronDown,
   ChevronRight,
 } from "lucide-react";
+import { Masthead } from "@/components/ffsa";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -164,15 +165,21 @@ export function RolesManager({
   if (editing !== null) {
     const isNew = editing === "new";
     return (
-      <div className="space-y-6 max-w-3xl">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => setEditing(null)}>
-            <ArrowLeft className="h-4 w-4 mr-1" /> Back
-          </Button>
-          <h1 className="page-title">
-            {isNew ? "New role" : `Edit ${(editing as Role).display_name}`}
-          </h1>
-        </div>
+      <div className="ffsa-screen">
+        <Masthead
+          context="System settings · roles"
+          title={isNew ? "New role" : `Edit ${(editing as Role).display_name}`}
+          actions={
+            <button
+              type="button"
+              onClick={() => setEditing(null)}
+              className="shrink-0 border border-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-ink hover:bg-bone"
+            >
+              ← Back
+            </button>
+          }
+        />
+        <div className="max-w-3xl space-y-6 px-5 py-6 md:px-8 md:py-7">
 
         <div className="space-y-4 rounded-lg border bg-card p-5">
           <div className="space-y-1.5">
@@ -253,6 +260,7 @@ export function RolesManager({
             </span>
           )}
         </div>
+        </div>
       </div>
     );
   }
@@ -313,21 +321,27 @@ export function RolesManager({
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="page-eyebrow">SYSTEM SETTINGS</p>
-          <h1 className="page-title">Roles</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Job titles that grant access. Edit one and everyone who holds it updates instantly.
-          </p>
-        </div>
-        <Button onClick={openNew}>
-          <Plus className="h-4 w-4 mr-1" /> New role
-        </Button>
-      </div>
+    <div className="ffsa-screen">
+      <Masthead
+        context={`System settings · ${roles.length} role${roles.length === 1 ? "" : "s"}`}
+        title="Roles"
+        actions={
+          <button
+            type="button"
+            onClick={openNew}
+            className="shrink-0 border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-white hover:bg-[#262622]"
+          >
+            + New role
+          </button>
+        }
+      />
 
-      <div className="space-y-3">
+      <p className="max-w-3xl border-b border-rule px-5 py-4 text-[14px] leading-relaxed text-[color:var(--text-secondary)] md:px-8">
+        Job titles that grant access. Edit one and everyone who holds it updates
+        instantly.
+      </p>
+
+      <div className="space-y-3 px-5 py-6 md:px-8 md:py-7">
         {jobTitles.length === 0 ? (
           <p className="rounded-lg border border-dashed bg-card/40 p-6 text-center text-sm text-muted-foreground">
             No job titles yet. Create one with &ldquo;New role&rdquo;.

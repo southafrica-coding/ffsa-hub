@@ -9,6 +9,7 @@ import {
 } from "@/services/records-library";
 import { bestPersonName } from "@/lib/person-name";
 import { PersonsBrowser } from "./persons-browser";
+import { Masthead, MastheadAction } from "@/components/ffsa";
 
 const PAGE_SIZE = 50;
 
@@ -58,19 +59,19 @@ export default async function LibraryPersonsPage({
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      <div className="flex items-baseline justify-between">
-        <div>
-          <h1 className="text-2xl font-bold mb-1">All library persons</h1>
-          <p className="text-sm text-muted-foreground">
-            Every person record across every CSV import. Use the filters and
-            search below to find what you need.
-          </p>
-        </div>
-        <p className="text-xs text-muted-foreground tabular-nums">
-          {total.toLocaleString()} person{total === 1 ? "" : "s"} match
-        </p>
-      </div>
+    <div className="ffsa-screen">
+      <Masthead
+        context={`Records library · ${total.toLocaleString("en-ZA")} person${total === 1 ? "" : "s"} match`}
+        title="Library persons"
+        actions={<MastheadAction href="/records-library">Library</MastheadAction>}
+      />
+
+      <p className="max-w-3xl border-b border-rule px-5 py-4 text-[14px] leading-relaxed text-[color:var(--text-secondary)] md:px-8">
+        Every person record across every CSV import. Use the filters and search
+        below to find what you need.
+      </p>
+
+      <div className="space-y-6 px-5 py-6 md:px-8 md:py-7">
 
       <PersonsBrowser
         initialQuery={sp.q ?? ""}
@@ -143,7 +144,7 @@ export default async function LibraryPersonsPage({
                       {linkedName ? (
                         <Link
                           href={`/users/${p.users!.id}`}
-                          className="text-emerald-300 hover:underline"
+                          className="text-electric hover:underline"
                         >
                           {linkedName}
                         </Link>
@@ -168,6 +169,7 @@ export default async function LibraryPersonsPage({
         total={total}
         baseSearch={sp}
       />
+      </div>
     </div>
   );
 }

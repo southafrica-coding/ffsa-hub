@@ -1,28 +1,34 @@
-import { UsersRound } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { requireModuleAccess } from "@/lib/require-permission";
+import { Masthead } from "@/components/ffsa";
 
 export default async function TeamsPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
   await requireModuleAccess(supabase, user.id, "teams");
-  return (
-    <div className="space-y-6">
-      <div>
-        <p className="page-eyebrow">MINISTRY TEAMS</p>
-        <h1 className="page-title">Teams</h1>
-      </div>
 
-      <div className="surface-2 rounded-xl border border-white/[0.06] p-10 text-center">
-        <UsersRound className="h-10 w-10 mx-auto mb-4 opacity-40" />
-        <p className="font-semibold text-white mb-2 uppercase tracking-widest text-sm">Coming Soon</p>
-        <p className="text-sm text-muted-foreground max-w-md mx-auto">
-          The Teams module is under development. It will manage ministry and
-          outreach team rosters, department structure, and team leadership for
-          all FFSA ministries.
-        </p>
+  return (
+    <div className="ffsa-screen">
+      <Masthead context="Ministry teams" title="Teams" />
+
+      {/* Still unbuilt, said plainly. The panel this replaced used
+          dark-theme classes — white text and a translucent white border on
+          what is now a white page, so the copy was invisible. */}
+      <div className="border-b border-rule px-5 py-12 md:px-8 md:py-16">
+        <div className="max-w-xl">
+          <div className="mono-label mb-3">Not built yet</div>
+          <h2 className="font-display text-[34px] font-black uppercase leading-[0.95] text-ink md:text-[44px]">
+            Team rosters
+            <br />
+            will live here
+          </h2>
+          <p className="mt-5 text-[15px] leading-relaxed text-[color:var(--text-secondary)]">
+            Ministry and outreach team rosters, department structure, and team
+            leadership across all FFSA ministries.
+          </p>
+        </div>
       </div>
     </div>
   );

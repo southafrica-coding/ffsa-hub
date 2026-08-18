@@ -169,13 +169,62 @@ Still on the old design in `(portal)`: `profile`, `my-schools/[enrollmentId]`,
 and `my-finance/school-fees-card.tsx`. The prayer-room half of 4d belongs to
 session 1 and was left alone.
 
-### 28 admin routes still on the old design
-Old header (`page-title`): contacts (8), users (2), teams, settings, org-chart,
-mission, ministry, consents.
-Never touched: prayer-room, records-library (6), roles, permissions,
-contacts/import, event form builder, ministry detail.
+### Screenshots
 
-Contacts and users are the highest-traffic of these.
+`docs/redesign/design/screens/` — 4c at 1440 and 375, plus login at both.
+
+**The admin screens are NOT screenshotted, and that is a real gap.** Every
+admin and portal route sits behind Supabase Auth, and the session that built
+them could not sign in to photograph them (entering someone's password is not
+something this agent does). They are verified by `tsc`, `next lint`, a
+passing production build and by reading the rendered markup — not by eye.
+Given this file's own history of "done" meaning less than it looked,
+**someone should click through contacts, users and records-library while
+signed in before this is called finished.** The quickest route: sign in at
+`localhost:3217` and walk the list in the section above.
+
+### 28 admin routes still on the old design → **27 done, 1 left** (session 7)
+
+Recomposed: contacts (9), users (3), teams, settings, org-chart, mission,
+ministry (2), consents, records-library (6), roles, brand-kit.
+
+Scanned paths for the acceptance sweep: `src/app/(admin)` and
+`src/app/(portal)`, every `page.tsx` plus the child components those pages
+render. Result: **`page-title` now appears nowhere under `src/app/(admin)`
+except `prayer-room/prayer-room-client.tsx`**, and `prayer-room/page.tsx` is
+the only admin route without an `.ffsa-screen` root. `npm run build`
+passes; `next lint` is clean on every directory touched except two warnings
+that pre-date this session (`getPermissionId` in the permission manager,
+`availableFields` in the records-library import form — both verified against
+a clean stash).
+
+**Still left: `prayer-room`.** Deliberately untouched — session 1 is
+rebuilding that module in its own worktree (`redesign/prayer-room-ui`) and
+two sessions in one directory is how this project lost work before.
+
+Two judgement calls worth knowing:
+
+- **brand-kit is marked `.ffsa-screen` but its content was left alone.** The
+  page is a specimen of the FFSA brand deck — its rounded cover and its own
+  fonts are the thing being documented. Same standing decision that keeps the
+  five event brand kits out of scope. It runs edge-to-edge; it is not
+  restyled.
+- **Several screens were carrying dark-theme values inline**, invisible or
+  near-invisible on the light page: the contacts tabs nav (yellow-on-black
+  HSL), the user lifecycle pills, the records-library and CSV-import status
+  tints (emerald-300 on translucent green), the org-chart empty state
+  (#100D0A on #2C2823), and the teams / mission / my-mission "coming soon"
+  panels (white text on white). All now on the system's four outlined tones.
+
+### Deleting the transition scaffold — one blocker
+
+The `.admin-content > *:not(.ffsa-screen)` rule in `globals.css` and its
+wrapper in `src/app/(admin)/layout.tsx` are **still in place**, on purpose.
+Deleting them requires every admin route to be recomposed, and prayer-room
+is not. Deleting now would leave a live module edge-to-edge and unpadded.
+
+So this is a one-line hand-off: **when session 1's prayer-room work merges,
+delete that rule and the `.admin-content` wrapper.** Nothing else blocks it.
 
 ---
 

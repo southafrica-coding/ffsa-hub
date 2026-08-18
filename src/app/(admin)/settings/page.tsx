@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { callerIsAdmin } from "@/lib/auth/check-ministry-access";
 import { getAllListOptions } from "@/services/list-options";
 import { SettingsLists } from "./settings-lists";
+import { Masthead } from "@/components/ffsa";
 
 export default async function SettingsPage() {
   const supabase = await createClient();
@@ -16,16 +17,17 @@ export default async function SettingsPage() {
   const { data: lists } = await getAllListOptions(createAdminClient());
 
   return (
-    <div className="space-y-6">
-      <div>
-        <p className="page-eyebrow">SYSTEM</p>
-        <h1 className="page-title">Settings</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Edit the dropdown lists used across the Hub. Add, rename, reorder, or
-          deactivate options — changes take effect everywhere immediately.
-        </p>
+    <div className="ffsa-screen">
+      <Masthead context="System" title="Settings" />
+
+      <p className="max-w-3xl border-b border-rule px-5 py-4 text-[14px] leading-relaxed text-[color:var(--text-secondary)] md:px-8">
+        Edit the dropdown lists used across the Hub. Add, rename, reorder or
+        deactivate options — changes take effect everywhere immediately.
+      </p>
+
+      <div className="px-5 py-6 md:px-8 md:py-7">
+        <SettingsLists lists={lists ?? {}} />
       </div>
-      <SettingsLists lists={lists ?? {}} />
     </div>
   );
 }

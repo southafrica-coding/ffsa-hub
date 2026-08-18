@@ -1,4 +1,5 @@
 "use client";
+import { Masthead } from "@/components/ffsa";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -431,26 +432,24 @@ export function MinistryDetail({
   }
 
   return (
-    <div className="space-y-8">
-      <div>
-        <p className="page-eyebrow">MINISTRY</p>
-        <div className="flex items-start justify-between gap-3">
-          <h1 className="page-title">
-            {ministry.name}
-            {!ministry.is_active && (
-              <span className="ml-2 align-middle text-base text-muted-foreground">
-                (retired)
-              </span>
-            )}
-          </h1>
-          {isAdmin && (
+    <>
+      <Masthead
+        context={ministry.is_active ? "Ministry" : "Ministry · retired"}
+        title={ministry.name}
+        actions={
+          isAdmin ? (
             <MinistryEditDialog ministry={ministry} base={base} busy={busy} call={call} />
-          )}
-        </div>
-        {ministry.description && (
-          <p className="mt-1 text-sm text-muted-foreground">{ministry.description}</p>
-        )}
-      </div>
+          ) : undefined
+        }
+      />
+
+      {ministry.description && (
+        <p className="max-w-3xl border-b border-rule px-5 py-4 text-[14px] leading-relaxed text-[color:var(--text-secondary)] md:px-8">
+          {ministry.description}
+        </p>
+      )}
+
+      <div className="space-y-8 px-5 py-6 md:px-8 md:py-7">
 
       {/* Categories — admin-managed list that sub-divides the team. */}
       {isAdmin && (
@@ -511,7 +510,8 @@ export function MinistryDetail({
           </div>
         )}
       </section>
-    </div>
+      </div>
+    </>
   );
 }
 
