@@ -1,13 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getUserHistory } from "@/services/records-library";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Masthead, SectionBar } from "@/components/ffsa";
 
 export default async function MyHistoryPage() {
   const supabase = await createClient();
@@ -16,140 +10,127 @@ export default async function MyHistoryPage() {
 
   const history = await getUserHistory(supabase, user.id);
 
-  const isEmpty =
-    history.applications.length === 0 &&
-    history.payments.length === 0 &&
-    history.enrollments.length === 0 &&
-    history.documents.length === 0;
+  const total =
+    history.applications.length +
+    history.payments.length +
+    history.enrollments.length +
+    history.documents.length;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <p className="page-eyebrow">PERSONAL</p>
-        <h1 className="page-title">My History</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Records on file from past applications, payments, schools, and
-          documents.
-        </p>
-      </div>
+    <div className="ffsa-screen">
+      <Masthead
+        context={`Personal · ${total} ${total === 1 ? "record" : "records"} on file`}
+        title="My history"
+      />
 
-      {isEmpty && (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-sm text-muted-foreground">
-              Nothing on file yet. If you&apos;ve previously applied to FFSA,
-              staff will link your history here.
-            </p>
-          </CardContent>
-        </Card>
+      <p className="border-b border-rule px-5 py-4 text-[14px] text-[color:var(--text-secondary)] md:px-8">
+        Records on file from past applications, payments, schools and documents.
+      </p>
+
+      {total === 0 && (
+        <div className="px-5 py-12 text-center md:px-8">
+          <p className="mono-label">
+            Nothing on file yet — if you have applied to FFSA before, staff will
+            link your history here
+          </p>
+        </div>
       )}
 
       {history.applications.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Applications</CardTitle>
-            <CardDescription>School and program applications</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {history.applications.map((row: ApplicationRow) => (
-                <RecordRow
-                  key={row.id}
-                  title={row.program_name ?? "Application"}
-                  subtitle={[row.cohort, row.status].filter(Boolean).join(" • ")}
-                  dateLabel="Submitted"
-                  date={row.submitted_at}
-                  raw={row.raw_data}
-                />
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <section>
+          <SectionBar
+            title="Applications"
+            meta={`${history.applications.length}`}
+          />
+          <ul>
+            {history.applications.map((row: ApplicationRow) => (
+              <RecordRow
+                key={row.id}
+                title={row.program_name ?? "Application"}
+                subtitle={[row.cohort, row.status].filter(Boolean).join(" · ")}
+                dateLabel="Submitted"
+                date={row.submitted_at}
+                raw={row.raw_data}
+              />
+            ))}
+          </ul>
+        </section>
       )}
 
       {history.enrollments.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Training attended</CardTitle>
-            <CardDescription>Past enrollments and staff seasons</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {history.enrollments.map((row: EnrollmentRow) => (
-                <RecordRow
-                  key={row.id}
-                  title={row.school_name ?? row.program_name ?? "Enrollment"}
-                  subtitle={[row.program_name, row.role].filter(Boolean).join(" • ")}
-                  dateLabel="Dates"
-                  date={
-                    row.start_date && row.end_date
-                      ? `${row.start_date} – ${row.end_date}`
-                      : row.start_date ?? row.end_date
-                  }
-                  raw={row.raw_data}
-                />
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <section>
+          <SectionBar
+            title="Training attended"
+            meta={`${history.enrollments.length}`}
+          />
+          <ul>
+            {history.enrollments.map((row: EnrollmentRow) => (
+              <RecordRow
+                key={row.id}
+                title={row.school_name ?? row.program_name ?? "Enrollment"}
+                subtitle={[row.program_name, row.role].filter(Boolean).join(" · ")}
+                dateLabel="Dates"
+                date={
+                  row.start_date && row.end_date
+                    ? `${row.start_date} – ${row.end_date}`
+                    : row.start_date ?? row.end_date
+                }
+                raw={row.raw_data}
+              />
+            ))}
+          </ul>
+        </section>
       )}
 
       {history.payments.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Payments</CardTitle>
-            <CardDescription>Historical payment records</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {history.payments.map((row: PaymentRow) => (
-                <RecordRow
-                  key={row.id}
-                  title={
-                    row.amount != null
-                      ? `${row.currency ?? ""} ${row.amount}`.trim()
-                      : "Payment"
-                  }
-                  subtitle={row.description ?? undefined}
-                  dateLabel="Paid"
-                  date={row.paid_at}
-                  raw={row.raw_data}
-                />
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <section>
+          <SectionBar title="Payments" meta={`${history.payments.length}`} />
+          <ul>
+            {history.payments.map((row: PaymentRow) => (
+              <RecordRow
+                key={row.id}
+                title={
+                  row.amount != null
+                    ? `${row.currency ?? ""} ${row.amount}`.trim()
+                    : "Payment"
+                }
+                subtitle={row.description ?? undefined}
+                dateLabel="Paid"
+                date={row.paid_at}
+                raw={row.raw_data}
+              />
+            ))}
+          </ul>
+        </section>
       )}
 
       {history.documents.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Documents</CardTitle>
-            <CardDescription>
-              Passport, insurance, certificates, etc.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {history.documents.map((row: DocumentRow) => (
-                <RecordRow
-                  key={row.id}
-                  title={row.doc_type ?? "Document"}
-                  subtitle={row.identifier ?? undefined}
-                  dateLabel="Expires"
-                  date={row.expires_at}
-                  raw={row.raw_data}
-                  fileUrl={row.file_url}
-                />
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <section>
+          <SectionBar title="Documents" meta={`${history.documents.length}`} />
+          <ul>
+            {history.documents.map((row: DocumentRow) => (
+              <RecordRow
+                key={row.id}
+                title={row.doc_type ?? "Document"}
+                subtitle={row.identifier ?? undefined}
+                dateLabel="Expires"
+                date={row.expires_at}
+                raw={row.raw_data}
+                fileUrl={row.file_url}
+              />
+            ))}
+          </ul>
+        </section>
       )}
     </div>
   );
 }
 
+/**
+ * Two lines closed, the detail on demand. The frame's rule is that a list row
+ * never runs to three lines — so the raw import payload, which can be twenty
+ * fields wide, lives behind the disclosure rather than under the title.
+ */
 function RecordRow({
   title,
   subtitle,
@@ -167,57 +148,61 @@ function RecordRow({
 }) {
   const rawEntries = raw && typeof raw === "object" ? Object.entries(raw) : [];
   return (
-    <details className="border rounded-md p-3 group">
-      <summary className="cursor-pointer flex items-start justify-between gap-3">
-        <div className="space-y-0.5 flex-1">
-          <div className="font-medium text-sm">{title}</div>
-          {subtitle && <div className="text-xs text-muted-foreground">{subtitle}</div>}
-        </div>
-        <div className="text-xs text-muted-foreground shrink-0">
-          {date ? (
-            <>
-              <span className="block">{dateLabel}</span>
-              <span className="block font-medium">{date}</span>
-            </>
-          ) : null}
-        </div>
-      </summary>
-      <div className="mt-3 pt-3 border-t space-y-2">
-        {fileUrl && (
-          <a
-            href={fileUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-block text-xs underline text-blue-700"
-          >
-            Open file
-          </a>
-        )}
-        {rawEntries.length > 0 && (
-          <div>
-            <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
-              Additional details
-            </p>
-            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs">
-              {rawEntries.map(([k, v]) => (
-                <div key={k} className="contents">
-                  <dt className="font-medium text-muted-foreground truncate" title={k}>
-                    {k}
-                  </dt>
-                  <dd className="break-words">
-                    {v == null || v === ""
-                      ? "—"
-                      : typeof v === "object"
-                      ? JSON.stringify(v)
-                      : String(v)}
-                  </dd>
-                </div>
-              ))}
-            </dl>
+    <li className="border-b border-rule">
+      <details className="group">
+        <summary className="flex min-h-[48px] cursor-pointer items-center justify-between gap-4 px-5 py-3.5 hover:bg-[#F7F5EE] md:px-8">
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[15px] font-bold text-ink">{title}</div>
+            {subtitle && <div className="mono-label mt-1 truncate">{subtitle}</div>}
           </div>
-        )}
-      </div>
-    </details>
+          {date && (
+            <div className="shrink-0 text-right">
+              <div className="mono-label">{dateLabel}</div>
+              <div className="mt-0.5 font-mono text-[12px] font-bold text-ink">
+                {date}
+              </div>
+            </div>
+          )}
+        </summary>
+
+        <div className="space-y-3 border-t border-rule bg-bone px-5 py-4 md:px-8">
+          {fileUrl && (
+            <a
+              href={fileUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-block font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-electric underline"
+            >
+              Open file
+            </a>
+          )}
+          {rawEntries.length > 0 && (
+            <div>
+              <p className="mono-label mb-2">Additional details</p>
+              <dl className="grid grid-cols-1 gap-x-6 gap-y-1.5 text-[12.5px] sm:grid-cols-2">
+                {rawEntries.map(([k, v]) => (
+                  <div key={k} className="contents">
+                    <dt
+                      className="truncate font-semibold text-[color:var(--text-tertiary)]"
+                      title={k}
+                    >
+                      {k}
+                    </dt>
+                    <dd className="break-words text-ink">
+                      {v == null || v === ""
+                        ? "—"
+                        : typeof v === "object"
+                          ? JSON.stringify(v)
+                          : String(v)}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          )}
+        </div>
+      </details>
+    </li>
   );
 }
 

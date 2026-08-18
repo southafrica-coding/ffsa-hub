@@ -21,11 +21,7 @@ import {
   type BuyerFieldConfig,
 } from "@/lib/ticketing/buyer-fields";
 import { formatMoney, providersForCurrency } from "@/lib/currencies";
-import {
-  FFSA_BRAND,
-  FFSA_COLORS,
-  FFSA_LOGOS,
-} from "@/lib/brand/ffsa";
+import { FFSA_BRAND, FFSA_COLORS, FFSA_LOGOS } from "@/lib/brand/ffsa";
 import {
   CheckoutQuestionFields,
   type CheckoutFieldClasses,
@@ -38,41 +34,52 @@ import { TicketQuestionsSection } from "./ticket-questions-section";
 import { WaiverSignatureSection } from "./waiver-signature-section";
 
 // ============================================================
-// FIRE & FRAGRANCE — bespoke ticketing storefront (brand='ff')
+// FIRE & FRAGRANCE — public event page (frame 4c)
 // ============================================================
-// The FFSA house-brand event page, designed against the FFSA Brand Deck
-// (South Africa : Brand Guidelines). Sibling to the-send / camps /
-// preachers storefronts; like them it owns the full viewport and injects
-// its own scoped CSS, and it forks the generic storefront's checkout
-// logic verbatim so payment behaviour (PWYW, promo, gift, currency,
-// PayFast/Stripe routing, custom questions) stays identical.
+// The generic F&F storefront (brand='ff', also the default). This is the
+// only surface outsiders see, so it is the one place the editorial system
+// runs at full volume — 118px condensed title, a facts strip, and the
+// registration form inline rather than behind a click.
 //
-// Design language, straight from the deck:
-//   - true-black canvas, oversized ROBOTO BLACK uppercase headlines
-//     (stacked, tight, negative-tracked — the deck's signature)
-//   - Space Mono accents: eyebrows, field-labels, coordinates, prices
-//   - the deck's information design: bold uppercase label + value
-//     (WHEN / WHERE, mirroring SLOGAN / POSITIONING / VISION)
-//   - #FFB801 as the single sharp accent; #C5C2AE bone as muted type;
-//     #4C9F37 green for confirmed states; #000DE5 blue paired with yellow
-//     in the kinetic marquee (the FFX blue+yellow energy expressed as
-//     moving type, NOT a pasted graphic)
-//   - a footer that reproduces the deck cover's contact row verbatim
-// Palette + copy are read from the shared brand module so this page can
-// never drift from the emails or the /brand-kit reference.
+// Recomposed onto the Hub's editorial design system (docs/redesign, frame
+// 4c). It deliberately does NOT compose src/components/ffsa: those
+// primitives assume the signed-in admin shell (Masthead's black rule, the
+// one-NeedsYou-per-screen rule, the 74px rail). This page owns the full
+// viewport and injects its own scoped CSS, exactly as its five siblings do.
+// What it shares with them is the token vocabulary, not the components.
+//
+// The five bespoke event brands (the_send, ffsa_camps, preachers,
+// wild_ones, missio) keep their own fonts and colours and are untouched —
+// event brand kits are out of scope for the redesign.
+//
+// Structure, straight from the frame:
+//   - black top bar, white FF wordmark, yellow REGISTER
+//   - full-bleed masthead: photo layer, 0.35 → 0.94 black gradient,
+//     yellow event tag, 118px condensed title, CTA + seat count
+//   - facts strip: four bone cells, mono label over a 16px value
+//   - body: copy left, registration form inline right (520px)
+//   - black footer carrying the deck's contact row
+//
+// Checkout behaviour (PWYW, promo, gift, currency, PayFast/Stripe routing,
+// custom questions, tier questions, waivers, consent) is unchanged from the
+// previous pass — only the presentation was rebuilt.
 // ============================================================
 
-const FFX_CHECKOUT_CLASSES: CheckoutFieldClasses = {
-  field: "ffx-cq",
-  label: "ffx-cq-label",
-  required: "ffx-req",
-  input: "ffx-input",
-  textarea: "ffx-input ffx-textarea",
-  select: "ffx-input ffx-select",
-  optionRow: "ffx-option",
-  optionText: "ffx-option-text",
-  help: "ffx-help",
-  error: "ffx-err",
+const FFE_CHECKOUT_CLASSES: CheckoutFieldClasses = {
+  field: "ffe-field",
+  // Not `ffe-label`: the frame's mono micro-label is sized for field names
+  // ("FIRST NAME"), and organizers write questions as whole sentences
+  // ("Are you attending alone, with your spouse, or as a family?"). Those
+  // get body type instead — see .ffe-qlabel.
+  label: "ffe-qlabel",
+  required: "ffe-req",
+  input: "ffe-input",
+  textarea: "ffe-input ffe-textarea",
+  select: "ffe-input ffe-select",
+  optionRow: "ffe-option",
+  optionText: "ffe-option-text",
+  help: "ffe-help",
+  error: "ffe-err",
 };
 
 type TicketType = {
@@ -102,6 +109,7 @@ type PublicEvent = {
   end_time: string | null;
   logo_url: string | null;
   currency: string;
+  max_capacity?: number | null;
 };
 
 type LineItem = {
@@ -133,16 +141,31 @@ function remaining(t: TicketType): number | null {
   return Math.max(0, t.capacity - t.quantity_sold);
 }
 
+/** 1140 → "1 140". The frame sets every figure with a thin space. */
+function groupDigits(n: number): string {
+  return n.toLocaleString("en-ZA").replace(/,/g, " ");
+}
+
 export function FfsaStorefront({
   event,
   ticketTypes,
   checkoutQuestions,
   buyerFields,
+  heroImageUrl,
 }: {
   event: PublicEvent;
   ticketTypes: TicketType[];
   checkoutQuestions: FormField[];
   buyerFields: BuyerFieldConfig[];
+  /**
+   * The masthead's full-bleed photo. The frame calls for one, but `events`
+   * has no hero-photo column yet (logo_url is a brand mark, not a cover),
+   * so today this is always undefined and the masthead renders as its black
+   * ground — the gradient and the 118px title carry it. Wired as a prop so
+   * adding the column later is a one-line change in page.tsx, with no
+   * rework here.
+   */
+  heroImageUrl?: string | null;
 }) {
   const bf = buyerFieldMap(buyerFields);
   const currency = event.currency;
@@ -436,6 +459,7 @@ export function FfsaStorefront({
     event.end_date && event.end_date !== event.start_date
       ? `${formatDate(event.start_date)} → ${formatDate(event.end_date)}`
       : formatDate(event.start_date);
+  const dateShort = formatDateShort(event.start_date);
   const timeRange =
     event.start_time && event.end_time
       ? `${formatTime(event.start_time)} – ${formatTime(event.end_time)}`
@@ -443,27 +467,91 @@ export function FfsaStorefront({
         ? formatTime(event.start_time)
         : null;
 
-  // Marquee content — the slogan, repeated, blue ✦ between phrases.
-  const marqueePhrases = [
-    "CATALYZE OUR GENERATION",
-    "EVANGELIZE THE WORLD",
-    "WE MOVE",
-    "TO THE ENDS OF THE EARTH FOR LOVE",
+  // The hero's mono context line: place · date, the frame's
+  // "CAPE TOWN · 02 SEPTEMBER 2026".
+  const heroContext = [event.location, dateShort]
+    .filter(Boolean)
+    .join(" · ")
+    .toUpperCase();
+
+  // ── Real figures only ───────────────────────────────────────
+  // The frame carries headline numerals (seats taken, and a stats row).
+  // Every one here is derived from this event's own tiers — nothing is
+  // invented, and a figure that cannot be computed simply does not render.
+  const soldTotal = ticketTypes.reduce((s, t) => s + (t.quantity_sold ?? 0), 0);
+  const tierCapacityTotal = ticketTypes.reduce(
+    (s, t) => s + (t.capacity ?? 0),
+    0
+  );
+  // Prefer the event's own cap; fall back to the sum of tier caps. Either
+  // may be absent, in which case there is no ratio to draw.
+  const seatCap =
+    event.max_capacity && event.max_capacity > 0
+      ? event.max_capacity
+      : tierCapacityTotal > 0
+        ? tierCapacityTotal
+        : null;
+  const seatPct =
+    seatCap && seatCap > 0
+      ? Math.min(100, Math.round((soldTotal / seatCap) * 100))
+      : null;
+
+  const cheapestCents = visibleTickets.length
+    ? Math.min(...visibleTickets.map((t) => t.display_price_cents))
+    : null;
+  const costLabel =
+    cheapestCents == null
+      ? "—"
+      : cheapestCents === 0
+        ? "Free"
+        : visibleTickets.length > 1
+          ? `From ${money(cheapestCents)}`
+          : money(cheapestCents);
+
+  const daysToGo = daysUntil(event.start_date);
+
+  // The four bone cells. WHEN and COST always hold; WHERE and DOORS only
+  // appear when the event actually carries them, and the grid re-flows to
+  // whatever is left rather than printing an em dash.
+  const facts: Array<{ label: string; value: string }> = [
+    { label: "WHEN", value: dateShort },
+    ...(event.location ? [{ label: "WHERE", value: event.location }] : []),
+    ...(timeRange ? [{ label: "DOORS", value: timeRange }] : []),
+    { label: "COST", value: costLabel },
   ];
 
-  // Palette driven straight from the brand module.
+  // The left column's stats run, same rule: only what is real.
+  const stats: Array<{ value: string; label: string }> = [
+    ...(soldTotal > 0
+      ? [{ value: groupDigits(soldTotal), label: "TICKETS TAKEN SO FAR" }]
+      : []),
+    ...(daysToGo != null && daysToGo >= 0
+      ? [
+          {
+            value: groupDigits(daysToGo),
+            label: daysToGo === 1 ? "DAY TO GO" : "DAYS TO GO",
+          },
+        ]
+      : []),
+    ...(visibleTickets.length > 0
+      ? [
+          {
+            value: String(visibleTickets.length),
+            label: visibleTickets.length === 1 ? "TICKET TYPE" : "TICKET TYPES",
+          },
+        ]
+      : []),
+  ];
+
   const paletteVars = {
     "--blk": FFSA_COLORS.BLACK,
     "--wht": FFSA_COLORS.WHITE,
-    "--bone": FFSA_COLORS.BONE,
     "--ylw": FFSA_COLORS.YELLOW,
-    "--grn": FFSA_COLORS.GREEN,
-    "--blu": FFSA_COLORS.BLUE,
   } as CSSProperties;
 
   return (
     <div
-      className="ffx"
+      className="ffe"
       style={{
         ...paletteVars,
         position: "fixed",
@@ -475,104 +563,130 @@ export function FfsaStorefront({
       <style dangerouslySetInnerHTML={{ __html: scopedCss }} />
 
       {/* ── TOP BAR ─────────────────────────────────────────── */}
-      <header className="ffx-topbar">
+      <header className="ffe-topbar">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          className="ffx-topbar-mark"
+          className="ffe-topbar-mark"
           src={FFSA_LOGOS.WORDMARK_WHITE}
           alt={FFSA_BRAND.legalName}
         />
-        <span className="ffx-topbar-tag">
-          {FFSA_BRAND.region} <i className="ffx-dot" /> Tickets
-        </span>
+        <a href="#register" className="ffe-topbar-cta">
+          Register
+        </a>
       </header>
 
-      {/* ── KINETIC MARQUEE (the FFX energy as moving type) ──── */}
-      <div className="ffx-marquee" aria-hidden>
-        <div className="ffx-marquee-track">
-          {[0, 1].map((dup) => (
-            <div className="ffx-marquee-group" key={dup}>
-              {marqueePhrases.map((p, i) => (
-                <span className="ffx-marquee-item" key={`${dup}-${i}`}>
-                  {p}
-                  <span className="ffx-marquee-sep">✦</span>
-                </span>
-              ))}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <main className="ffx-wrap">
-        {/* ── HERO ──────────────────────────────────────────── */}
-        <section className="ffx-hero ffx-reveal" style={{ animationDelay: "40ms" }}>
+      {/* ── MASTHEAD ────────────────────────────────────────── */}
+      <section className="ffe-hero">
+        {heroImageUrl && (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img className="ffe-hero-photo" src={heroImageUrl} alt="" />
+        )}
+        <div className="ffe-hero-scrim" />
+        <div className="ffe-hero-inner">
           {event.logo_url && (
             /* eslint-disable-next-line @next/next/no-img-element */
-            <img className="ffx-hero-logo" src={event.logo_url} alt="" />
+            <img className="ffe-hero-logo" src={event.logo_url} alt="" />
           )}
-          <p className="ffx-eyebrow">
-            <i className="ffx-dot ffx-dot-y" /> Get your ticket
-          </p>
-          <h1 className="ffx-title">{event.title}</h1>
-          <div className="ffx-rule" />
-
-          <dl className="ffx-coords">
-            <div className="ffx-coord">
-              <dt>When</dt>
-              <dd>
-                {dateLong}
-                {timeRange ? (
-                  <>
-                    <br />
-                    <span className="ffx-coord-sub">{timeRange}</span>
-                  </>
-                ) : null}
-              </dd>
-            </div>
-            {event.location && (
-              <div className="ffx-coord">
-                <dt>Where</dt>
-                <dd>{event.location}</dd>
-              </div>
-            )}
-          </dl>
-
-          {event.description && (
-            <EventDescription html={event.description} className="ffx-desc" />
-          )}
-        </section>
-
-        {/* ── ATTRIBUTES STRIP (deck: brand attributes) ─────── */}
-        <div className="ffx-attrs ffx-reveal" style={{ animationDelay: "120ms" }}>
-          {FFSA_BRAND.attributes.slice(0, 8).map((a, i) => (
-            <span className="ffx-attr" key={a}>
-              {i > 0 && <i className="ffx-attr-sep">/</i>}
-              {a}
-            </span>
-          ))}
-        </div>
-
-        {/* ── TICKETS ───────────────────────────────────────── */}
-        <section className="ffx-block ffx-reveal" style={{ animationDelay: "180ms" }}>
-          <div className="ffx-block-head">
-            <p className="ffx-eyebrow">
-              <i className="ffx-dot ffx-dot-y" /> Tickets
-            </p>
-            {visibleTickets.length > 0 && (
-              <span className="ffx-block-count">
-                {String(visibleTickets.length).padStart(2, "0")}{" "}
-                {visibleTickets.length === 1 ? "Tier" : "Tiers"}
+          <div className="ffe-hero-tags">
+            <span className="ffe-tag">Fire &amp; Fragrance</span>
+            {heroContext && <span className="ffe-hero-context">{heroContext}</span>}
+          </div>
+          <h1 className="ffe-hero-title">{event.title}</h1>
+          <div className="ffe-hero-actions">
+            <a href="#register" className="ffe-hero-cta">
+              {cheapestCents === 0 ? "Register free" : "Get your ticket"}
+              <span className="ffe-hero-cta-arrow">→</span>
+            </a>
+            {seatCap != null && (
+              <span className="ffe-hero-seats">
+                {groupDigits(soldTotal)} of {groupDigits(seatCap)} seats taken
               </span>
             )}
           </div>
+        </div>
+      </section>
 
+      {/* ── FACTS STRIP ─────────────────────────────────────── */}
+      <div
+        className="ffe-facts"
+        style={{ "--facts": facts.length } as CSSProperties}
+      >
+        {facts.map((f) => (
+          <div className="ffe-fact" key={f.label}>
+            <div className="ffe-fact-label">{f.label}</div>
+            <div className="ffe-fact-value">{f.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── BODY + FORM ─────────────────────────────────────── */}
+      <div className="ffe-body">
+        <div className="ffe-copy">
+          <div className="ffe-label">What it is</div>
+          {/* The frame puts a 44px condensed statement here. The event's own
+              headline is already 118px in the masthead two inches above, so
+              repeating it would be noise — the description carries this
+              column, and the condensed weight lands on the stats numerals
+              below. An event with no description falls back to the title so
+              the column is never bare. */}
+          {event.description ? (
+            <EventDescription
+              html={event.description}
+              className="ffe-desc is-lead"
+            />
+          ) : (
+            <>
+              <h2 className="ffe-copy-head">{event.title}</h2>
+              <p className="ffe-desc">
+                {dateLong}
+                {event.location ? ` at ${event.location}` : ""}.
+              </p>
+            </>
+          )}
+
+          {stats.length > 0 && (
+            <div className="ffe-stats">
+              {stats.map((s) => (
+                <div className="ffe-stat" key={s.label}>
+                  <div className="ffe-stat-value">{s.value}</div>
+                  <div className="ffe-stat-label">{s.label}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {seatPct != null && (
+            <div className="ffe-capacity">
+              <div className="ffe-label">Seats taken</div>
+              <div className="ffe-capacity-row">
+                <span className="ffe-capacity-num">{groupDigits(soldTotal)}</span>
+                <span className="ffe-capacity-of">
+                  / {groupDigits(seatCap!)}
+                </span>
+              </div>
+              <div className="ffe-bar">
+                <span style={{ width: `${seatPct}%` }} />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── REGISTRATION, INLINE ──────────────────────────── */}
+        <aside className="ffe-form" id="register">
+          <div className="ffe-label">
+            Registration
+            {cheapestCents === 0 ? " · Free" : ""}
+          </div>
+          <h2 className="ffe-form-head">Save your seat</h2>
+
+          {/* Tickets */}
           {visibleTickets.length === 0 ? (
-            <p className="ffx-empty">
+            <p className="ffe-empty">
               No tickets available right now. Check back soon.
             </p>
           ) : (
-            <ul className="ffx-tickets">
-              {visibleTickets.map((t, idx) => {
+            <ul className="ffe-tickets">
+              {visibleTickets.map((t) => {
                 const onSale = isOnSale(t, now);
                 const rem = remaining(t);
                 const line = lines[t.id];
@@ -582,43 +696,38 @@ export function FfsaStorefront({
                 return (
                   <li
                     key={t.id}
-                    className={`ffx-ticket${selected ? " is-selected" : ""}${
+                    className={`ffe-ticket${selected ? " is-selected" : ""}${
                       !onSale ? " is-off" : ""
                     }`}
                   >
-                    <div className="ffx-ticket-main">
-                      <span className="ffx-ticket-idx">
-                        {String(idx + 1).padStart(2, "0")}
-                      </span>
-                      <div className="ffx-ticket-info">
-                        <div className="ffx-ticket-nameline">
-                          <span className="ffx-ticket-name">{t.name}</span>
+                    <div className="ffe-ticket-main">
+                      <div className="ffe-ticket-info">
+                        <div className="ffe-ticket-nameline">
+                          <span className="ffe-ticket-name">{t.name}</span>
                           {isPwyw && (
-                            <span className="ffx-badge ffx-badge-y">
-                              Pay what you want
-                            </span>
+                            <span className="ffe-badge">Pay what you want</span>
                           )}
                           {!onSale && (
-                            <span className="ffx-badge ffx-badge-off">
+                            <span className="ffe-badge is-off">
                               {rem === 0 ? "Sold out" : "Not on sale"}
                             </span>
                           )}
                         </div>
                         {t.description && (
-                          <p className="ffx-ticket-desc">{t.description}</p>
+                          <p className="ffe-ticket-desc">{t.description}</p>
                         )}
-                        <p className="ffx-ticket-price">
+                        <p className="ffe-ticket-price">
                           {isPwyw
                             ? `From ${money(t.display_price_cents)}`
                             : money(t.display_price_cents)}
                           {rem != null && rem > 0 && rem <= 10 && (
-                            <span className="ffx-ticket-left">
+                            <span className="ffe-ticket-left">
                               Only {rem} left
                             </span>
                           )}
                         </p>
                       </div>
-                      <div className="ffx-ticket-action">
+                      <div className="ffe-ticket-action">
                         {onSale && !isPwyw && (
                           <QtyStepper
                             qty={qty}
@@ -631,7 +740,7 @@ export function FfsaStorefront({
                           (qty === 0 ? (
                             <button
                               type="button"
-                              className="ffx-add"
+                              className="ffe-add"
                               onClick={() => setQty(t, 1)}
                             >
                               Add
@@ -639,7 +748,7 @@ export function FfsaStorefront({
                           ) : (
                             <button
                               type="button"
-                              className="ffx-add is-remove"
+                              className="ffe-add is-remove"
                               onClick={() => setQty(t, 0)}
                             >
                               Remove
@@ -648,12 +757,12 @@ export function FfsaStorefront({
                       </div>
                     </div>
                     {isPwyw && qty > 0 && (
-                      <div className="ffx-pwyw">
-                        <label className="ffx-cq-label">
+                      <div className="ffe-pwyw">
+                        <label className="ffe-label">
                           Your amount ({currency})
                         </label>
                         <input
-                          className="ffx-input"
+                          className="ffe-input"
                           type="number"
                           step="0.01"
                           min={t.display_price_cents / 100}
@@ -667,323 +776,339 @@ export function FfsaStorefront({
               })}
             </ul>
           )}
-        </section>
 
-        {/* ── PROMO + GIFT ──────────────────────────────────── */}
-        {visibleTickets.length > 0 && (
-          <section className="ffx-block ffx-reveal" style={{ animationDelay: "220ms" }}>
-            <div className="ffx-field">
-              <label className="ffx-cq-label">Promo or comp code</label>
-              {appliedPromo ? (
-                <div className="ffx-promo-ok">
-                  <div>
-                    <p className="ffx-promo-ok-code">{appliedPromo.code} applied</p>
-                    <p className="ffx-promo-ok-sub">
-                      {promoDiscountCents > 0
-                        ? `−${money(promoDiscountCents)} off your order`
-                        : appliedPromo.applies_to_ticket_type_id
-                          ? "Add the matching tier to use this code."
-                          : "No discount on the current cart."}
-                    </p>
+          {/* Promo + gift */}
+          {visibleTickets.length > 0 && (
+            <div className="ffe-group">
+              <div className="ffe-field">
+                <label className="ffe-label">Promo or comp code</label>
+                {appliedPromo ? (
+                  <div className="ffe-promo-ok">
+                    <div>
+                      <p className="ffe-promo-ok-code">
+                        {appliedPromo.code} applied
+                      </p>
+                      <p className="ffe-promo-ok-sub">
+                        {promoDiscountCents > 0
+                          ? `−${money(promoDiscountCents)} off your order`
+                          : appliedPromo.applies_to_ticket_type_id
+                            ? "Add the matching tier to use this code."
+                            : "No discount on the current cart."}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="ffe-link"
+                      onClick={removePromo}
+                    >
+                      Remove
+                    </button>
                   </div>
-                  <button type="button" className="ffx-link" onClick={removePromo}>
-                    Remove
-                  </button>
-                </div>
-              ) : (
-                <div className="ffx-promo-row">
-                  <input
-                    className="ffx-input ffx-mono"
-                    type="text"
-                    value={promoCode}
-                    onChange={(e) => {
-                      setPromoCode(e.target.value);
-                      if (promoError) setPromoError(null);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        applyPromo();
-                      }
-                    }}
-                    placeholder="ENTER CODE"
-                  />
-                  <button
-                    type="button"
-                    className="ffx-btn-ghost"
-                    onClick={applyPromo}
-                    disabled={checkingPromo || !promoCode.trim()}
-                  >
-                    {checkingPromo ? "Checking…" : "Apply"}
-                  </button>
+                ) : (
+                  <div className="ffe-promo-row">
+                    <input
+                      className="ffe-input ffe-mono"
+                      type="text"
+                      value={promoCode}
+                      onChange={(e) => {
+                        setPromoCode(e.target.value);
+                        if (promoError) setPromoError(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          applyPromo();
+                        }
+                      }}
+                      placeholder="ENTER CODE"
+                    />
+                    <button
+                      type="button"
+                      className="ffe-btn-ghost"
+                      onClick={applyPromo}
+                      disabled={checkingPromo || !promoCode.trim()}
+                    >
+                      {checkingPromo ? "Checking…" : "Apply"}
+                    </button>
+                  </div>
+                )}
+                {promoError && <p className="ffe-err">{promoError}</p>}
+              </div>
+
+              <div className="ffe-field">
+                <label className="ffe-label">Add a gift ({currency})</label>
+                <input
+                  className="ffe-input"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={donationRands}
+                  onChange={(e) => setDonationRands(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Summary */}
+          {lineCount > 0 && (
+            <div className="ffe-summary">
+              {(promoDiscountCents > 0 || donationCents > 0) && (
+                <div className="ffe-summary-lines">
+                  <div className="ffe-summary-line">
+                    <span>Subtotal</span>
+                    <span className="ffe-mono">{money(subtotalCents)}</span>
+                  </div>
+                  {promoDiscountCents > 0 && (
+                    <div className="ffe-summary-line is-discount">
+                      <span>Discount · {appliedPromo?.code}</span>
+                      <span className="ffe-mono">
+                        −{money(promoDiscountCents)}
+                      </span>
+                    </div>
+                  )}
+                  {donationCents > 0 && (
+                    <div className="ffe-summary-line">
+                      <span>Gift</span>
+                      <span className="ffe-mono">+{money(donationCents)}</span>
+                    </div>
+                  )}
                 </div>
               )}
-              {promoError && <p className="ffx-err">{promoError}</p>}
+              <div className="ffe-total">
+                <span className="ffe-total-label">Total</span>
+                <span className="ffe-total-value">{money(totalCents)}</span>
+              </div>
             </div>
+          )}
 
-            <div className="ffx-field">
-              <label className="ffx-cq-label">Add a gift ({currency})</label>
-              <input
-                className="ffx-input"
-                type="number"
-                step="0.01"
-                min="0"
-                value={donationRands}
-                onChange={(e) => setDonationRands(e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-          </section>
-        )}
-
-        {/* ── SUMMARY ───────────────────────────────────────── */}
-        {lineCount > 0 && (
-          <section className="ffx-summary ffx-reveal">
-            {(promoDiscountCents > 0 || donationCents > 0) && (
-              <div className="ffx-summary-lines">
-                <div className="ffx-summary-line">
-                  <span>Subtotal</span>
-                  <span className="ffx-mono">{money(subtotalCents)}</span>
+          {/* Buyer details */}
+          {lineCount > 0 && (
+            <div className="ffe-group">
+              {(bf.first_name.enabled || bf.last_name.enabled) && (
+                <div className="ffe-grid2">
+                  {bf.first_name.enabled && (
+                    <div className="ffe-field">
+                      <label className="ffe-label">
+                        First name
+                        {bf.first_name.required && (
+                          <span className="ffe-req"> *</span>
+                        )}
+                      </label>
+                      <input
+                        className="ffe-input"
+                        type="text"
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
+                      />
+                    </div>
+                  )}
+                  {bf.last_name.enabled && (
+                    <div className="ffe-field">
+                      <label className="ffe-label">
+                        Last name
+                        {bf.last_name.required && (
+                          <span className="ffe-req"> *</span>
+                        )}
+                      </label>
+                      <input
+                        className="ffe-input"
+                        type="text"
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
+                      />
+                    </div>
+                  )}
                 </div>
-                {promoDiscountCents > 0 && (
-                  <div className="ffx-summary-line is-discount">
-                    <span>Discount · {appliedPromo?.code}</span>
-                    <span className="ffx-mono">−{money(promoDiscountCents)}</span>
-                  </div>
-                )}
-                {donationCents > 0 && (
-                  <div className="ffx-summary-line">
-                    <span>Gift</span>
-                    <span className="ffx-mono">+{money(donationCents)}</span>
-                  </div>
-                )}
-              </div>
-            )}
-            <div className="ffx-total">
-              <span className="ffx-total-label">Total</span>
-              <span className="ffx-total-value">{money(totalCents)}</span>
-            </div>
-          </section>
-        )}
-
-        {/* ── BUYER DETAILS ─────────────────────────────────── */}
-        {lineCount > 0 && (
-          <section className="ffx-block ffx-reveal">
-            <p className="ffx-eyebrow">
-              <i className="ffx-dot ffx-dot-y" /> Your details
-            </p>
-            {(bf.first_name.enabled || bf.last_name.enabled) && (
-              <div className="ffx-grid2">
-                {bf.first_name.enabled && (
-                  <div className="ffx-field">
-                    <label className="ffx-cq-label">
-                      First name
-                      {bf.first_name.required && (
-                        <span className="ffx-req"> *</span>
-                      )}
-                    </label>
-                    <input
-                      className="ffx-input"
-                      type="text"
-                      value={firstName}
-                      onChange={(e) => setFirstName(e.target.value)}
-                    />
-                  </div>
-                )}
-                {bf.last_name.enabled && (
-                  <div className="ffx-field">
-                    <label className="ffx-cq-label">
-                      Last name
-                      {bf.last_name.required && (
-                        <span className="ffx-req"> *</span>
-                      )}
-                    </label>
-                    <input
-                      className="ffx-input"
-                      type="text"
-                      value={lastName}
-                      onChange={(e) => setLastName(e.target.value)}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-            <div className="ffx-field">
-              <label className="ffx-cq-label">
-                Email<span className="ffx-req"> *</span>
-              </label>
-              <input
-                className="ffx-input"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-            {bf.phone.enabled && (
-              <div className="ffx-field">
-                <label className="ffx-cq-label">
-                  Phone
-                  {bf.phone.required && <span className="ffx-req"> *</span>}
+              )}
+              <div className="ffe-field">
+                <label className="ffe-label">
+                  Email<span className="ffe-req"> *</span>
                 </label>
-                <PhoneInputNative
-                  value={phone}
-                  onChange={setPhone}
-                  selectClassName="ffx-input"
-                  inputClassName="ffx-input"
+                <input
+                  className="ffe-input"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                 />
               </div>
-            )}
+              {bf.phone.enabled && (
+                <div className="ffe-field">
+                  <label className="ffe-label">
+                    Phone
+                    {bf.phone.required && <span className="ffe-req"> *</span>}
+                  </label>
+                  <PhoneInputNative
+                    value={phone}
+                    onChange={setPhone}
+                    selectClassName="ffe-input"
+                    inputClassName="ffe-input"
+                  />
+                </div>
+              )}
 
-            {checkoutQuestions.length > 0 && (
-              <div className="ffx-cq-block">
-                <CheckoutQuestionFields
-                  questions={checkoutQuestions}
-                  values={customAnswers}
-                  errors={customErrors}
-                  onChange={(k, val) =>
-                    setCustomAnswers((prev) => ({ ...prev, [k]: val }))
-                  }
-                  classes={FFX_CHECKOUT_CLASSES}
-                />
-              </div>
-            )}
+              {checkoutQuestions.length > 0 && (
+                <div className="ffe-subblock">
+                  <CheckoutQuestionFields
+                    questions={checkoutQuestions}
+                    values={customAnswers}
+                    errors={customErrors}
+                    onChange={(k, val) =>
+                      setCustomAnswers((prev) => ({ ...prev, [k]: val }))
+                    }
+                    classes={FFE_CHECKOUT_CLASSES}
+                  />
+                </div>
+              )}
 
-            {waiverSlots.length > 0 && (
-              <WaiverSignatureSection
-                eventId={event.id}
-                slots={waiverSlots}
-                valuesBySlot={waiverValues}
-                errorsBySlot={waiverErrors}
-                onChange={(slotKey, field, val) =>
-                  setWaiverValues((prev) => ({
-                    ...prev,
-                    [slotKey]: { ...(prev[slotKey] ?? {}), [field]: val },
-                  }))
-                }
-              />
-            )}
-
-            {ticketSlots.length > 0 && (
-              <div className="ffx-cq-block">
-                <TicketQuestionsSection
-                  slots={ticketSlots}
-                  valuesBySlot={ticketAnswers}
-                  errorsBySlot={ticketErrors}
-                  onChange={(slotKey, k, val) =>
-                    setTicketAnswers((prev) => ({
+              {waiverSlots.length > 0 && (
+                <WaiverSignatureSection
+                  eventId={event.id}
+                  slots={waiverSlots}
+                  valuesBySlot={waiverValues}
+                  errorsBySlot={waiverErrors}
+                  onChange={(slotKey, field, val) =>
+                    setWaiverValues((prev) => ({
                       ...prev,
-                      [slotKey]: { ...(prev[slotKey] ?? {}), [k]: val },
+                      [slotKey]: { ...(prev[slotKey] ?? {}), [field]: val },
                     }))
                   }
-                  classes={FFX_CHECKOUT_CLASSES}
-                  titleClassName="ffx-cq-label"
                 />
-              </div>
-            )}
-
-            {bf.marketing_consent.enabled && (
-              <label className="ffx-consent">
-                <input
-                  type="checkbox"
-                  checked={marketingConsent}
-                  onChange={(e) => setMarketingConsent(e.target.checked)}
-                />
-                <span>Keep me posted on FFSA events and gatherings by email.</span>
-              </label>
-            )}
-            <div className={`ffx-consent-box${consentAccepted ? " is-accepted" : ""}`}>
-              <div className="ffx-consent-head">
-                <span className="ffx-consent-title">Required before you can pay</span>
-                <span className="ffx-consent-badge">
-                  {consentAccepted ? "✓ Accepted" : "Required"}
-                </span>
-              </div>
-              <label className="ffx-consent">
-                <input
-                  type="checkbox"
-                  checked={consentAccepted}
-                  onChange={(e) => setConsentAccepted(e.target.checked)}
-                  required
-                />
-                <span>
-                  <span className="ffx-consent-star">* </span>
-                  {TICKET_CONSENT_CHECKBOX_LABEL}{" "}
-                  <a
-                    href={TICKET_CONSENT_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Read the full terms.
-                  </a>
-                </span>
-              </label>
-              {!consentAccepted && (
-                <p className="ffx-consent-warn">
-                  ⚠ Please tick this box to enable the payment button below.
-                </p>
               )}
-            </div>
-          </section>
-        )}
 
-        {/* ── PAY ───────────────────────────────────────────── */}
-        {lineCount > 0 && (
-          <section className="ffx-pay ffx-reveal">
-            {err && <p className="ffx-alert">{err}</p>}
-            {canUsePayfast && (
+              {ticketSlots.length > 0 && (
+                <div className="ffe-subblock">
+                  <TicketQuestionsSection
+                    slots={ticketSlots}
+                    valuesBySlot={ticketAnswers}
+                    errorsBySlot={ticketErrors}
+                    onChange={(slotKey, k, val) =>
+                      setTicketAnswers((prev) => ({
+                        ...prev,
+                        [slotKey]: { ...(prev[slotKey] ?? {}), [k]: val },
+                      }))
+                    }
+                    classes={FFE_CHECKOUT_CLASSES}
+                    titleClassName="ffe-label"
+                  />
+                </div>
+              )}
+
+              {bf.marketing_consent.enabled && (
+                <label className="ffe-consent">
+                  <input
+                    type="checkbox"
+                    checked={marketingConsent}
+                    onChange={(e) => setMarketingConsent(e.target.checked)}
+                  />
+                  <span>
+                    Keep me posted about schools, outreaches and events in my
+                    area.
+                  </span>
+                </label>
+              )}
+
+              <div
+                className={`ffe-consent-box${consentAccepted ? " is-accepted" : ""}`}
+              >
+                <div className="ffe-consent-head">
+                  <span className="ffe-consent-title">
+                    Required before you can pay
+                  </span>
+                  <span className="ffe-consent-badge">
+                    {consentAccepted ? "✓ Accepted" : "Required"}
+                  </span>
+                </div>
+                <label className="ffe-consent">
+                  <input
+                    type="checkbox"
+                    checked={consentAccepted}
+                    onChange={(e) => setConsentAccepted(e.target.checked)}
+                    required
+                  />
+                  <span>
+                    <span className="ffe-consent-star">* </span>
+                    {TICKET_CONSENT_CHECKBOX_LABEL}{" "}
+                    <a
+                      href={TICKET_CONSENT_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Read the full terms.
+                    </a>
+                  </span>
+                </label>
+                {!consentAccepted && (
+                  <p className="ffe-consent-warn">
+                    Please tick this box to enable the payment button below.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Pay */}
+          {lineCount > 0 && (
+            <div className="ffe-pay">
+              {err && <p className="ffe-alert">{err}</p>}
+              {canUsePayfast && (
+                <button
+                  type="button"
+                  className="ffe-cta"
+                  onClick={() => submit("payfast")}
+                  disabled={submitting !== null || !buyerValid || !consentAccepted}
+                >
+                  <span>
+                    {submitting === "payfast"
+                      ? "Starting payment…"
+                      : `Pay ${money(totalCents)}`}
+                  </span>
+                  <span className="ffe-cta-arrow">→</span>
+                </button>
+              )}
               <button
                 type="button"
-                className="ffx-cta"
-                onClick={() => submit("payfast")}
+                className={canUsePayfast ? "ffe-cta-alt" : "ffe-cta"}
+                onClick={() => submit("stripe")}
                 disabled={submitting !== null || !buyerValid || !consentAccepted}
               >
                 <span>
-                  {submitting === "payfast"
+                  {submitting === "stripe"
                     ? "Starting payment…"
-                    : `Pay ${money(totalCents)}`}
+                    : canUsePayfast
+                      ? "Pay with international card"
+                      : `Pay ${money(totalCents)}`}
                 </span>
-                <span className="ffx-cta-arrow">→</span>
+                {!canUsePayfast && <span className="ffe-cta-arrow">→</span>}
               </button>
-            )}
-            <button
-              type="button"
-              className={canUsePayfast ? "ffx-cta-alt" : "ffx-cta"}
-              onClick={() => submit("stripe")}
-              disabled={submitting !== null || !buyerValid || !consentAccepted}
-            >
-              <span>
-                {submitting === "stripe"
-                  ? "Starting payment…"
-                  : canUsePayfast
-                    ? "Pay with international card"
-                    : `Pay ${money(totalCents)}`}
-              </span>
-              {!canUsePayfast && <span className="ffx-cta-arrow">→</span>}
-            </button>
-            <p className="ffx-pay-note">
-              {canUsePayfast
-                ? "Secure checkout via PayFast. Use the international option for cards declined on PayFast or Apple Pay."
-                : "You'll be redirected to Stripe to complete payment securely."}
-            </p>
-          </section>
-        )}
-      </main>
+              <p className="ffe-pay-note">
+                {canUsePayfast
+                  ? "Secure checkout via PayFast. Use the international option for cards declined on PayFast or Apple Pay."
+                  : "You'll be redirected to Stripe to complete payment securely."}
+              </p>
+            </div>
+          )}
 
-      {/* ── FOOTER (reproduces the deck cover's contact row) ──── */}
-      <footer className="ffx-footer">
+          {lineCount === 0 && visibleTickets.length > 0 && (
+            <p className="ffe-form-note">
+              Pick a ticket above and the rest of the form appears here.
+            </p>
+          )}
+        </aside>
+      </div>
+
+      {/* ── FOOTER ──────────────────────────────────────────── */}
+      <footer className="ffe-footer">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          className="ffx-footer-mark"
+          className="ffe-footer-mark"
           src={FFSA_LOGOS.WORDMARK_WHITE}
           alt={FFSA_BRAND.legalName}
         />
-        <p className="ffx-footer-slogan">{FFSA_BRAND.slogan.ffsa}</p>
-        <p className="ffx-footer-contact">
+        <p className="ffe-footer-contact">
           <span>{FFSA_BRAND.contact.instagram}</span>
-          <i className="ffx-dot" />
+          <i className="ffe-sep" />
           <span>{FFSA_BRAND.contact.website}</span>
-          <i className="ffx-dot" />
-          <span>{FFSA_BRAND.contact.address}</span>
         </p>
       </footer>
     </div>
@@ -991,7 +1116,7 @@ export function FfsaStorefront({
 }
 
 // ────────────────────────────────────────────────────────────
-// Quantity stepper — bespoke, square, yellow on active
+// Quantity stepper — square, black on active
 // ────────────────────────────────────────────────────────────
 function QtyStepper({
   qty,
@@ -1003,7 +1128,7 @@ function QtyStepper({
   max: number;
 }) {
   return (
-    <div className={`ffx-stepper${qty > 0 ? " is-active" : ""}`}>
+    <div className={`ffe-stepper${qty > 0 ? " is-active" : ""}`}>
       <button
         type="button"
         aria-label="Remove one"
@@ -1012,7 +1137,7 @@ function QtyStepper({
       >
         −
       </button>
-      <span className="ffx-stepper-num">{qty}</span>
+      <span className="ffe-stepper-num">{qty}</span>
       <button
         type="button"
         aria-label="Add one"
@@ -1036,369 +1161,416 @@ function formatDate(dateStr: string): string {
     return dateStr;
   }
 }
+/** "02 Sep 2026" — the compact form the facts strip and hero line use. */
+function formatDateShort(dateStr: string): string {
+  try {
+    return new Date(dateStr + "T00:00:00").toLocaleDateString("en-ZA", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return dateStr;
+  }
+}
 function formatTime(timeStr: string): string {
   const [h, m] = timeStr.split(":");
   const d = new Date();
   d.setHours(Number.parseInt(h, 10), Number.parseInt(m, 10));
   return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
+/** Whole days from today to the event. Null if the date won't parse. */
+function daysUntil(dateStr: string): number | null {
+  const target = new Date(dateStr + "T00:00:00");
+  if (Number.isNaN(target.getTime())) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((target.getTime() - today.getTime()) / 86_400_000);
+}
 
 // ────────────────────────────────────────────────────────────
-// Scoped CSS — everything lives under `.ffx`
+// Scoped CSS — everything lives under `.ffe`
+// The editorial system's values, written out rather than imported, because
+// this page renders outside the admin shell that defines them.
 // ────────────────────────────────────────────────────────────
 const scopedCss = `
-.ffx{
-  --disp: var(--font-roboto), 'Roboto', 'Helvetica Neue', Arial, sans-serif;
-  --mono: var(--font-space-mono), 'Space Mono', 'Roboto Mono', monospace;
-  --line: rgba(255,255,255,0.12);
-  --line-soft: rgba(255,255,255,0.07);
-  --surf: #0A0A0A;
-  --surf-2: #121212;
-  --bone-dim: rgba(197,194,174,0.62);
-  --bone-faint: rgba(197,194,174,0.34);
-  background: var(--blk);
-  color: var(--wht);
-  font-family: var(--disp);
+.ffe{
+  --disp: var(--font-roboto-condensed), 'Roboto Condensed', 'Arial Narrow', sans-serif;
+  --mono: var(--font-roboto-mono), 'Roboto Mono', monospace;
+  --body: var(--font-roboto), 'Roboto', sans-serif;
+  --bone: #F4F2EA;
+  --bone-3: #E7E4D9;
+  --rule: #DEDACE;
+  --rule-strong: #C7C3B5;
+  --t2: #45423B;
+  --t3: #7C786C;
+  --dim: #C5C2AE;
+  background: var(--wht);
+  color: var(--blk);
+  font-family: var(--body);
+  font-size: 14px;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
 }
-.ffx *{ box-sizing: border-box; }
-/* film grain — the deck's analog warmth */
-.ffx::before{
-  content:''; position:fixed; inset:0; pointer-events:none; z-index:1;
-  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 220 220' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-size:200px 200px; opacity:0.045; mix-blend-mode:screen;
-}
-.ffx > *{ position:relative; z-index:2; }
+.ffe *{ box-sizing: border-box; }
+.ffe img{ max-width:100%; }
 
-/* ── Shared type atoms ── */
-.ffx-eyebrow{
-  margin:0 0 14px; font-family:var(--mono); font-size:11px; font-weight:700;
-  letter-spacing:0.24em; text-transform:uppercase; color:var(--ylw);
-  display:flex; align-items:center; gap:9px;
+/* ── Shared atoms ── */
+/* globals.css carries an app-wide \`label { … !important }\` that puts every
+   label into 9.5px mono caps. That is right for the admin screens it was
+   written for, but this page renders outside that shell and carries
+   sentence-length labels (questions, consent) that become unreadable under
+   it. The overrides below win it back, scoped to .ffe so the shared rule —
+   wanted by ~60 admin routes — is left exactly as it is. */
+.ffe-label,
+.ffe label.ffe-label{
+  display:block; font-family:var(--mono) !important; font-size:9.5px !important;
+  font-weight:700 !important; letter-spacing:0.2em !important;
+  text-transform:uppercase !important; color:var(--t3) !important; margin-bottom:8px;
 }
-.ffx-dot{ display:inline-block; width:5px; height:5px; border-radius:50%; background:currentColor; opacity:0.85; }
-.ffx-dot-y{ background:var(--ylw); opacity:1; }
-.ffx-mono{ font-family:var(--mono); font-variant-numeric:tabular-nums; }
+/* A question is body copy, not a field name. */
+.ffe-qlabel,
+.ffe label.ffe-qlabel{
+  display:block; font-family:var(--body) !important; font-size:13.5px !important;
+  font-weight:600 !important; letter-spacing:normal !important;
+  text-transform:none !important; color:var(--blk) !important;
+  line-height:1.45; margin-bottom:7px;
+}
+.ffe-mono{ font-family:var(--mono); font-variant-numeric:tabular-nums; }
+.ffe-req{ color:#8A6400 !important; }
 
 /* ── Top bar ── */
-.ffx-topbar{
+.ffe-topbar{
   position:sticky; top:0; z-index:20;
-  display:flex; align-items:center; justify-content:space-between;
-  gap:16px; padding:16px 22px;
-  background:rgba(0,0,0,0.72); backdrop-filter:blur(10px);
-  border-bottom:1px solid var(--line-soft);
+  display:flex; align-items:center; justify-content:space-between; gap:16px;
+  padding:13px 20px; background:var(--blk);
 }
-.ffx-topbar-mark{ height:17px; width:auto; display:block; }
-.ffx-topbar-tag{
-  font-family:var(--mono); font-size:10px; font-weight:700; letter-spacing:0.22em;
-  text-transform:uppercase; color:var(--bone); display:flex; align-items:center; gap:8px;
+.ffe-topbar-mark{ width:118px; height:auto; display:block; }
+.ffe-topbar-cta{
+  background:var(--ylw); color:var(--blk); padding:9px 13px;
+  font-family:var(--mono); font-size:10px; font-weight:700; letter-spacing:0.16em;
+  text-transform:uppercase; text-decoration:none; min-height:38px;
+  display:inline-flex; align-items:center;
 }
+.ffe-topbar-cta:hover{ background:#E8A800; color:var(--blk); }
 
-/* ── Kinetic marquee ── */
-.ffx-marquee{
-  overflow:hidden; white-space:nowrap; background:var(--ylw);
-  border-top:1px solid #000; border-bottom:1px solid #000;
+/* ── Masthead ── */
+.ffe-hero{
+  position:relative; overflow:hidden; background:var(--blk);
+  min-height:420px; display:flex;
 }
-.ffx-marquee-track{ display:inline-flex; animation:ffx-marq 32s linear infinite; }
-.ffx-marquee-group{ display:inline-flex; }
-.ffx-marquee-item{
-  font-family:var(--disp); font-weight:900; font-size:14px; letter-spacing:0.04em;
-  text-transform:uppercase; color:#000; padding:9px 0; display:inline-flex; align-items:center;
+@media (min-width:768px){ .ffe-hero{ min-height:520px; } }
+.ffe-hero-photo{
+  position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
 }
-.ffx-marquee-sep{ color:var(--blu); margin:0 0.7em; font-size:12px; transform:translateY(-1px); }
-@keyframes ffx-marq{ from{transform:translateX(0)} to{transform:translateX(-50%)} }
-
-/* ── Layout ── */
-.ffx-wrap{ max-width:760px; margin:0 auto; padding:0 22px 64px; }
-
-/* ── Hero ── */
-.ffx-hero{ padding:56px 0 40px; }
-.ffx-hero-logo{ height:52px; width:auto; object-fit:contain; margin:0 0 22px; display:block; }
-.ffx-title{
-  margin:0; font-family:var(--disp); font-weight:900; text-transform:uppercase;
-  font-size:clamp(2.7rem, 8.4vw, 5.4rem); line-height:0.9; letter-spacing:-0.025em;
-  color:var(--wht); overflow-wrap:break-word; hyphens:none;
+.ffe-hero-scrim{
+  pointer-events:none; position:absolute; inset:0;
+  background:linear-gradient(180deg, rgba(10,10,10,0.35) 20%, rgba(10,10,10,0.94));
 }
-.ffx-rule{ width:64px; height:6px; background:var(--ylw); margin:26px 0 30px; }
-.ffx-coords{ margin:0 0 30px; display:flex; flex-wrap:wrap; gap:34px; }
-.ffx-coord dt{
-  font-family:var(--mono); font-size:10px; font-weight:700; letter-spacing:0.22em;
-  text-transform:uppercase; color:var(--ylw); margin-bottom:7px;
+.ffe-hero-inner{
+  position:relative; align-self:flex-end; width:100%; padding:24px 20px 28px;
 }
-.ffx-coord dd{
-  margin:0; font-family:var(--disp); font-weight:700; font-size:15px; line-height:1.35;
-  color:var(--wht); text-transform:uppercase; letter-spacing:0.01em;
+@media (min-width:768px){ .ffe-hero-inner{ padding:48px; } }
+.ffe-hero-logo{
+  height:44px; width:auto; margin-bottom:18px; display:block;
+  object-fit:contain; object-position:left;
 }
-.ffx-coord-sub{ font-weight:400; color:var(--bone); text-transform:none; }
-.ffx-desc{
-  margin:0; max-width:56ch; font-family:var(--disp); font-weight:400; font-size:15.5px;
-  line-height:1.75; color:var(--bone); white-space:pre-wrap;
-}
-
-/* ── Attributes strip ── */
-.ffx-attrs{
-  display:flex; flex-wrap:wrap; align-items:center; gap:6px 4px;
-  padding:16px 0; border-top:1px solid var(--line-soft); border-bottom:1px solid var(--line-soft);
-}
-.ffx-attr{
+@media (min-width:768px){ .ffe-hero-logo{ height:56px; } }
+.ffe-hero-tags{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+.ffe-tag{
   font-family:var(--mono); font-size:10px; font-weight:700; letter-spacing:0.2em;
-  text-transform:uppercase; color:var(--bone-dim); display:inline-flex; align-items:center;
+  text-transform:uppercase; background:var(--ylw); color:var(--blk); padding:5px 9px;
 }
-.ffx-attr-sep{ color:var(--ylw); font-style:normal; margin:0 10px; opacity:0.7; }
+.ffe-hero-context{
+  font-family:var(--mono); font-size:10px; font-weight:700; letter-spacing:0.18em;
+  color:var(--dim);
+}
+.ffe-hero-title{
+  margin:0; font-family:var(--disp); font-weight:900;
+  font-size:clamp(46px, 10.5vw, 118px);
+  line-height:0.85; letter-spacing:-0.015em; text-transform:uppercase;
+  color:var(--wht); max-width:1000px; overflow-wrap:anywhere;
+}
+.ffe-hero-actions{
+  display:flex; align-items:center; gap:18px; flex-wrap:wrap; margin-top:22px;
+}
+.ffe-hero-cta{
+  display:inline-flex; align-items:center; gap:12px; min-height:48px;
+  background:var(--ylw); color:var(--blk); padding:14px 22px;
+  font-family:var(--mono); font-size:11px; font-weight:700; letter-spacing:0.16em;
+  text-transform:uppercase; text-decoration:none;
+}
+.ffe-hero-cta:hover{ background:#E8A800; color:var(--blk); }
+.ffe-hero-cta-arrow{ font-size:13px; }
+.ffe-hero-seats{
+  font-family:var(--mono); font-size:11px; letter-spacing:0.12em;
+  text-transform:uppercase; color:var(--dim); font-variant-numeric:tabular-nums;
+}
 
-/* ── Section block ── */
-.ffx-block{ padding:38px 0 0; }
-.ffx-block-head{ display:flex; align-items:baseline; justify-content:space-between; gap:16px; margin-bottom:18px; }
-.ffx-block-head .ffx-eyebrow{ margin:0; }
-.ffx-block-count{
-  font-family:var(--mono); font-size:10px; font-weight:700; letter-spacing:0.2em;
-  text-transform:uppercase; color:var(--bone-faint); font-variant-numeric:tabular-nums;
+/* ── Facts strip ── */
+.ffe-facts{
+  display:grid; grid-template-columns:repeat(2, 1fr);
+  border-bottom:1px solid var(--blk); background:var(--bone);
 }
-.ffx-empty{
-  font-family:var(--mono); font-size:13px; color:var(--bone-dim);
-  border:1px solid var(--line); border-radius:14px; padding:22px; text-align:center;
+@media (min-width:768px){
+  .ffe-facts{ grid-template-columns:repeat(var(--facts, 4), 1fr); }
 }
+.ffe-fact{ padding:16px 20px; border-right:1px solid var(--rule); border-top:1px solid var(--rule); }
+@media (min-width:768px){ .ffe-fact{ padding:20px 24px; border-top:none; } }
+.ffe-fact:last-child{ border-right:none; }
+.ffe-fact-label{
+  font-family:var(--mono); font-size:9px; font-weight:700; letter-spacing:0.2em;
+  text-transform:uppercase; color:var(--t3); margin-bottom:6px;
+}
+.ffe-fact-value{ font-size:16px; font-weight:700; color:var(--blk); letter-spacing:-0.01em; }
+
+/* ── Body + form ── */
+.ffe-body{ display:grid; grid-template-columns:1fr; }
+@media (min-width:1024px){ .ffe-body{ grid-template-columns:1fr 520px; } }
+.ffe-copy{ padding:28px 20px; }
+@media (min-width:768px){ .ffe-copy{ padding:48px; } }
+@media (min-width:1024px){ .ffe-copy{ border-right:1px solid var(--blk); } }
+.ffe-copy-head{
+  margin:0; font-family:var(--disp); font-weight:900;
+  font-size:clamp(30px, 5vw, 44px); line-height:0.95; text-transform:uppercase;
+  color:var(--blk); max-width:600px; overflow-wrap:anywhere;
+}
+.ffe-desc{
+  font-size:16px; line-height:1.6; color:#2A2822; margin-top:20px; max-width:620px;
+  text-wrap:pretty;
+}
+.ffe-desc a{ color:#000DE5; }
+/* Leading the column rather than following a heading: the first paragraph
+   sets the size the frame gives this copy, the rest settles back to body. */
+.ffe-desc.is-lead{ margin-top:14px; }
+.ffe-desc.is-lead > :first-child{ font-size:19px; line-height:1.5; color:var(--blk); }
+
+.ffe-stats{
+  display:flex; flex-wrap:wrap; gap:32px; margin-top:32px;
+  border-top:1px solid var(--rule); padding-top:26px;
+}
+@media (min-width:768px){ .ffe-stats{ gap:40px; margin-top:36px; padding-top:28px; } }
+.ffe-stat-value{
+  font-family:var(--disp); font-weight:900; font-size:clamp(34px, 5vw, 44px);
+  line-height:1; color:var(--blk); font-variant-numeric:tabular-nums;
+}
+.ffe-stat-label{
+  font-family:var(--mono); font-size:9.5px; letter-spacing:0.16em;
+  text-transform:uppercase; color:var(--t3); margin-top:3px;
+}
+
+.ffe-capacity{ margin-top:32px; border-top:1px solid var(--rule); padding-top:26px; max-width:420px; }
+.ffe-capacity-row{ display:flex; align-items:baseline; gap:8px; }
+.ffe-capacity-num{
+  font-family:var(--disp); font-weight:900; font-size:44px; line-height:0.9;
+  color:var(--blk); font-variant-numeric:tabular-nums;
+}
+.ffe-capacity-of{ font-family:var(--mono); font-size:11px; color:var(--t3); }
+.ffe-bar{ height:8px; background:var(--bone-3); margin-top:12px; }
+.ffe-bar > span{ display:block; height:8px; background:var(--blk); }
+
+/* ── Registration panel ── */
+.ffe-form{ background:var(--bone); padding:28px 20px; border-top:1px solid var(--blk); }
+@media (min-width:768px){ .ffe-form{ padding:40px; } }
+@media (min-width:1024px){ .ffe-form{ border-top:none; } }
+.ffe-form-head{
+  margin:0 0 22px; font-family:var(--disp); font-weight:900;
+  font-size:34px; line-height:0.95; text-transform:uppercase; color:var(--blk);
+}
+.ffe-form-note{ margin:18px 0 0; font-size:13px; color:var(--t3); }
+.ffe-empty{ margin:0; font-size:14px; color:var(--t2); }
+
+.ffe-group{ margin-top:22px; display:flex; flex-direction:column; gap:14px; }
+.ffe-subblock{ display:flex; flex-direction:column; gap:14px; }
+.ffe-field{ display:block; }
+.ffe-grid2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+
+.ffe-input{
+  width:100%; border:1px solid var(--rule-strong); background:var(--wht);
+  padding:12px 13px; font-size:15px; color:#45423B; font-family:var(--body);
+  border-radius:0; min-height:46px;
+}
+.ffe-input:focus{ outline:none; border-color:var(--blk); box-shadow:inset 0 0 0 1px var(--blk); }
+.ffe-textarea{ min-height:104px; resize:vertical; }
+.ffe-select{ appearance:auto; }
+.ffe-help{ margin:5px 0 0; font-size:12px; color:var(--t3); }
+.ffe-err{ margin:5px 0 0; font-size:12px; color:#B3261E; }
+.ffe-option,
+.ffe label.ffe-option{
+  display:flex; align-items:flex-start; gap:9px; margin-top:7px;
+  min-height:26px; cursor:pointer;
+  font-family:var(--body) !important; font-size:14px !important;
+  font-weight:400 !important; letter-spacing:normal !important;
+  text-transform:none !important; color:var(--t2) !important;
+}
+.ffe-option input{ margin-top:3px; width:16px; height:16px; accent-color:var(--blk); flex-shrink:0; }
+.ffe-option-text{ font-size:14px; color:var(--t2); }
 
 /* ── Tickets ── */
-.ffx-tickets{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:12px; }
-.ffx-ticket{
-  border:1px solid var(--line); border-radius:16px; background:var(--surf);
-  padding:20px; transition:border-color .18s ease, background .18s ease, transform .18s ease;
+.ffe-tickets{ list-style:none; margin:0; padding:0; border-top:1px solid var(--rule-strong); }
+.ffe-ticket{ border-bottom:1px solid var(--rule-strong); padding:15px 0; }
+.ffe-ticket.is-selected{ background:rgba(255,184,1,0.10); }
+.ffe-ticket.is-off{ opacity:0.55; }
+.ffe-ticket-main{ display:flex; align-items:flex-start; justify-content:space-between; gap:14px; }
+.ffe-ticket-info{ min-width:0; }
+.ffe-ticket-nameline{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.ffe-ticket-name{
+  font-family:var(--disp); font-weight:900; font-size:19px; line-height:1;
+  text-transform:uppercase; color:var(--blk);
 }
-.ffx-ticket:hover{ border-color:rgba(255,255,255,0.24); }
-.ffx-ticket.is-selected{
-  border-color:var(--ylw); background:rgba(255,184,1,0.06);
+.ffe-badge{
+  font-family:var(--mono); font-size:8.5px; font-weight:700; letter-spacing:0.14em;
+  text-transform:uppercase; border:1px solid var(--blk); color:var(--blk); padding:3px 6px;
 }
-.ffx-ticket.is-off{ opacity:0.5; }
-.ffx-ticket-main{ display:flex; align-items:flex-start; gap:16px; }
-.ffx-ticket-idx{
-  font-family:var(--mono); font-size:12px; font-weight:700; color:var(--bone-faint);
-  padding-top:3px; font-variant-numeric:tabular-nums; min-width:20px;
+.ffe-badge.is-off{ border-color:var(--rule-strong); color:var(--t3); }
+.ffe-ticket-desc{ margin:6px 0 0; font-size:13px; color:var(--t2); }
+.ffe-ticket-price{
+  margin:8px 0 0; font-family:var(--mono); font-size:13px; font-weight:700;
+  color:var(--blk); font-variant-numeric:tabular-nums;
+  display:flex; align-items:center; gap:10px; flex-wrap:wrap;
 }
-.ffx-ticket.is-selected .ffx-ticket-idx{ color:var(--ylw); }
-.ffx-ticket-info{ flex:1; min-width:0; }
-.ffx-ticket-nameline{ display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
-.ffx-ticket-name{
-  font-family:var(--disp); font-weight:900; font-size:17px; text-transform:uppercase;
-  letter-spacing:-0.01em; color:var(--wht); line-height:1.1;
+.ffe-ticket-left{
+  font-size:9px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase;
+  color:#8A6400; border:1px solid #B98600; padding:2px 5px;
 }
-.ffx-ticket-desc{ margin:8px 0 0; font-size:13.5px; line-height:1.6; color:var(--bone); }
-.ffx-ticket-price{
-  margin:12px 0 0; font-family:var(--mono); font-weight:700; font-size:15px; color:var(--ylw);
-  font-variant-numeric:tabular-nums; display:flex; align-items:center; gap:12px; flex-wrap:wrap;
-}
-.ffx-ticket-left{
-  font-family:var(--mono); font-size:9px; font-weight:700; letter-spacing:0.16em;
-  text-transform:uppercase; color:var(--blk); background:var(--ylw); padding:2px 7px; border-radius:4px;
-}
-.ffx-ticket-action{ flex-shrink:0; }
-.ffx-badge{
-  font-family:var(--mono); font-size:9px; font-weight:700; letter-spacing:0.14em;
-  text-transform:uppercase; padding:3px 8px; border-radius:5px; white-space:nowrap;
-}
-.ffx-badge-y{ color:var(--ylw); border:1px solid rgba(255,184,1,0.4); }
-.ffx-badge-off{ color:var(--bone); border:1px solid var(--line); }
+.ffe-ticket-action{ flex-shrink:0; }
 
-/* ── PWYW input row ── */
-.ffx-pwyw{ margin-top:16px; padding-top:16px; border-top:1px solid var(--line-soft); }
-
-/* ── Quantity stepper ── */
-.ffx-stepper{ display:inline-flex; align-items:center; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
-.ffx-stepper.is-active{ border-color:var(--ylw); }
-.ffx-stepper button{
-  width:38px; height:38px; background:transparent; border:0; color:var(--bone);
-  font-size:19px; line-height:1; cursor:pointer; transition:background .15s ease, color .15s ease;
+.ffe-stepper{
+  display:flex; align-items:center; border:1px solid var(--rule-strong); background:var(--wht);
 }
-.ffx-stepper button:hover:not(:disabled){ color:var(--wht); background:rgba(255,255,255,0.06); }
-.ffx-stepper button:disabled{ opacity:0.3; cursor:default; }
-.ffx-stepper-num{
-  width:34px; text-align:center; font-family:var(--mono); font-weight:700; font-size:15px;
-  color:var(--wht); font-variant-numeric:tabular-nums;
+.ffe-stepper.is-active{ border-color:var(--blk); }
+.ffe-stepper button{
+  width:38px; height:44px; border:0; background:transparent; cursor:pointer;
+  font-size:17px; color:var(--blk); font-family:var(--body);
 }
-.ffx-stepper.is-active .ffx-stepper-num{ color:var(--ylw); }
-
-/* ── Add / remove (PWYW) ── */
-.ffx-add{
-  height:38px; padding:0 20px; border-radius:10px; border:1px solid var(--ylw);
-  background:var(--ylw); color:#000; font-family:var(--disp); font-weight:900; font-size:12px;
-  letter-spacing:0.1em; text-transform:uppercase; cursor:pointer; transition:filter .15s ease;
+.ffe-stepper button:disabled{ color:var(--rule-strong); cursor:not-allowed; }
+.ffe-stepper-num{
+  min-width:32px; text-align:center; font-family:var(--mono); font-weight:700;
+  font-size:14px; font-variant-numeric:tabular-nums;
 }
-.ffx-add:hover{ filter:brightness(1.08); }
-.ffx-add.is-remove{ background:transparent; color:var(--bone); border-color:var(--line); }
-.ffx-add.is-remove:hover{ color:var(--wht); border-color:rgba(255,255,255,0.3); }
-
-/* ── Fields / inputs ── */
-.ffx-field{ margin-bottom:16px; }
-.ffx-field:last-child{ margin-bottom:0; }
-.ffx-grid2{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
-.ffx-cq-label, .ffx-cq .ffx-cq-label{
-  display:block; font-family:var(--mono); font-size:10px; font-weight:700;
-  letter-spacing:0.18em; text-transform:uppercase; color:var(--bone); margin-bottom:8px;
+.ffe-add{
+  min-height:44px; padding:11px 15px; border:1px solid var(--blk); background:var(--blk);
+  color:var(--wht); cursor:pointer;
+  font-family:var(--mono); font-size:10px; font-weight:700; letter-spacing:0.14em;
+  text-transform:uppercase;
 }
-.ffx-req{ color:var(--ylw); }
-.ffx-input{
-  width:100%; padding:12px 14px; background:var(--surf); color:var(--wht);
-  border:1px solid var(--line); border-radius:10px; font-family:var(--disp); font-size:15px;
-  outline:none; transition:border-color .15s ease, box-shadow .15s ease;
-}
-.ffx-input::placeholder{ color:var(--bone-faint); }
-.ffx-input:focus{ border-color:var(--ylw); box-shadow:0 0 0 3px rgba(255,184,1,0.16); }
-.ffx-mono{ font-family:var(--mono); letter-spacing:0.06em; }
-.ffx-textarea{ min-height:100px; resize:vertical; }
-.ffx-select{ appearance:none; }
-.ffx-help{ font-family:var(--disp); font-size:12px; color:var(--bone-faint); margin:7px 0 0; }
-.ffx-err{ font-family:var(--mono); font-size:11px; color:#FF6B5A; margin:8px 0 0; letter-spacing:0.02em; }
-.ffx-cq{ margin-bottom:16px; }
-.ffx-cq-block{ margin-top:6px; padding-top:20px; border-top:1px solid var(--line-soft); display:flex; flex-direction:column; gap:16px; }
-.ffx-option{ display:flex; align-items:center; gap:9px; cursor:pointer; font-family:var(--disp); font-size:14px; color:var(--bone); margin-bottom:6px; }
-.ffx-option input{ accent-color:var(--ylw); }
-.ffx-option-text{ color:var(--bone); }
+.ffe-add:hover{ background:#262622; }
+.ffe-add.is-remove{ background:transparent; color:var(--blk); }
+.ffe-add.is-remove:hover{ background:var(--bone-3); }
+.ffe-pwyw{ margin-top:12px; }
 
 /* ── Promo ── */
-.ffx-promo-row{ display:flex; gap:10px; }
-.ffx-promo-row .ffx-input{ flex:1; text-transform:uppercase; letter-spacing:0.08em; }
-.ffx-btn-ghost{
-  flex-shrink:0; padding:0 20px; border:1px solid var(--line); border-radius:10px; background:transparent;
-  color:var(--wht); font-family:var(--mono); font-size:11px; font-weight:700; letter-spacing:0.14em;
-  text-transform:uppercase; cursor:pointer; transition:border-color .15s ease, color .15s ease;
+.ffe-promo-row{ display:flex; gap:8px; }
+.ffe-promo-row .ffe-input{ text-transform:uppercase; letter-spacing:0.12em; }
+.ffe-btn-ghost{
+  flex-shrink:0; min-height:46px; padding:11px 15px;
+  border:1px solid var(--blk); background:transparent; color:var(--blk); cursor:pointer;
+  font-family:var(--mono); font-size:10px; font-weight:700; letter-spacing:0.14em;
+  text-transform:uppercase;
 }
-.ffx-btn-ghost:hover:not(:disabled){ border-color:var(--ylw); color:var(--ylw); }
-.ffx-btn-ghost:disabled{ opacity:0.4; cursor:default; }
-.ffx-promo-ok{
-  display:flex; align-items:center; justify-content:space-between; gap:14px;
-  border:1px solid rgba(76,159,55,0.4); background:rgba(76,159,55,0.1);
-  border-radius:10px; padding:12px 14px;
+.ffe-btn-ghost:hover:not(:disabled){ background:var(--blk); color:var(--wht); }
+.ffe-btn-ghost:disabled{ opacity:0.4; cursor:not-allowed; }
+.ffe-promo-ok{
+  display:flex; align-items:flex-start; justify-content:space-between; gap:12px;
+  border:1px solid var(--blk); background:var(--wht); padding:12px 13px;
 }
-.ffx-promo-ok-code{ margin:0; font-family:var(--mono); font-size:12px; font-weight:700; color:var(--grn); text-transform:uppercase; letter-spacing:0.06em; }
-.ffx-promo-ok-sub{ margin:3px 0 0; font-size:12px; color:rgba(76,159,55,0.85); }
-.ffx-link{ background:none; border:0; color:var(--bone); font-size:12px; text-decoration:underline; cursor:pointer; flex-shrink:0; }
-.ffx-link:hover{ color:var(--wht); }
+.ffe-promo-ok-code{
+  margin:0; font-family:var(--mono); font-size:11px; font-weight:700;
+  letter-spacing:0.12em; text-transform:uppercase; color:var(--blk);
+}
+.ffe-promo-ok-sub{ margin:3px 0 0; font-size:12.5px; color:var(--t2); }
+.ffe-link{
+  border:0; background:transparent; padding:0; cursor:pointer; text-decoration:underline;
+  font-family:var(--mono); font-size:10px; font-weight:700; letter-spacing:0.12em;
+  text-transform:uppercase; color:var(--t2);
+}
 
 /* ── Summary ── */
-.ffx-summary{ margin-top:34px; border:1px solid var(--line); border-radius:16px; padding:22px; background:var(--surf); }
-.ffx-summary-lines{ display:flex; flex-direction:column; gap:8px; padding-bottom:16px; margin-bottom:16px; border-bottom:1px solid var(--line-soft); }
-.ffx-summary-line{ display:flex; align-items:center; justify-content:space-between; font-size:13px; color:var(--bone); }
-.ffx-summary-line.is-discount{ color:var(--grn); }
-.ffx-total{ display:flex; align-items:baseline; justify-content:space-between; }
-.ffx-total-label{ font-family:var(--mono); font-size:11px; font-weight:700; letter-spacing:0.2em; text-transform:uppercase; color:var(--bone); }
-.ffx-total-value{ font-family:var(--disp); font-weight:900; font-size:clamp(1.9rem,6vw,2.6rem); color:var(--ylw); letter-spacing:-0.02em; font-variant-numeric:tabular-nums; }
+.ffe-summary{ margin-top:22px; border-top:1px solid var(--blk); padding-top:16px; }
+.ffe-summary-lines{ display:flex; flex-direction:column; gap:7px; margin-bottom:12px; }
+.ffe-summary-line{ display:flex; justify-content:space-between; gap:12px; font-size:13.5px; color:var(--t2); }
+.ffe-summary-line.is-discount{ color:#2F6620; }
+.ffe-total{
+  display:flex; align-items:baseline; justify-content:space-between; gap:12px;
+  border-top:1px solid var(--rule-strong); padding-top:12px;
+}
+.ffe-total-label{
+  font-family:var(--mono); font-size:10px; font-weight:700; letter-spacing:0.2em;
+  text-transform:uppercase; color:var(--t3);
+}
+.ffe-total-value{
+  font-family:var(--disp); font-weight:900; font-size:38px; line-height:0.9;
+  color:var(--blk); font-variant-numeric:tabular-nums;
+}
 
 /* ── Consent ── */
-.ffx-consent{ display:flex; align-items:flex-start; gap:11px; margin-top:20px; cursor:pointer; }
-.ffx-consent input{ margin-top:2px; width:16px; height:16px; accent-color:var(--ylw); flex-shrink:0; }
-.ffx-consent span{ font-family:var(--disp); font-size:13.5px; line-height:1.5; color:var(--bone); }
-.ffx-consent-box{ margin-top:20px; border:2px solid var(--ylw); border-radius:12px; padding:16px; background:rgba(255,184,1,0.08); }
-.ffx-consent-box.is-accepted{ border-color:rgba(255,184,1,0.4); background:rgba(255,184,1,0.04); }
-.ffx-consent-box .ffx-consent{ margin-top:0; }
-.ffx-consent-head{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:4px; }
-.ffx-consent-title{ font-family:var(--mono); font-size:11px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--bone); }
-.ffx-consent-badge{ font-family:var(--mono); font-size:10px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; border-radius:999px; padding:3px 9px; background:var(--ylw); color:#1a1a1a; }
-.ffx-consent-box.is-accepted .ffx-consent-badge{ background:rgba(255,184,1,0.2); color:var(--ylw); }
-.ffx-consent-star{ color:#ff5a5a; font-weight:900; }
-.ffx-consent-warn{ margin:8px 0 0 27px; font-family:var(--disp); font-size:12.5px; font-weight:600; color:var(--ylw); }
+.ffe-consent,
+.ffe label.ffe-consent{
+  display:flex; align-items:flex-start; gap:10px; cursor:pointer;
+  font-family:var(--body) !important; font-size:12.5px !important;
+  font-weight:400 !important; letter-spacing:normal !important;
+  text-transform:none !important; color:var(--t2) !important; line-height:1.5;
+}
+.ffe-consent input{ margin-top:2px; width:16px; height:16px; accent-color:var(--blk); flex-shrink:0; }
+.ffe-consent a{ color:#000DE5; text-decoration:underline; }
+.ffe-consent-box{ border:1px solid var(--blk); background:var(--wht); padding:13px; display:flex; flex-direction:column; gap:9px; }
+.ffe-consent-box.is-accepted{ background:rgba(62,127,43,0.06); }
+.ffe-consent-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.ffe-consent-title{
+  font-family:var(--mono); font-size:9.5px; font-weight:700; letter-spacing:0.16em;
+  text-transform:uppercase; color:var(--blk);
+}
+.ffe-consent-badge{
+  font-family:var(--mono); font-size:8.5px; font-weight:700; letter-spacing:0.14em;
+  text-transform:uppercase; border:1px solid var(--rule-strong); color:var(--t3); padding:3px 6px;
+}
+.ffe-consent-box.is-accepted .ffe-consent-badge{ border-color:#3E7F2B; color:#2F6620; }
+.ffe-consent-star{ color:#8A6400; font-weight:700; }
+.ffe-consent-warn{ margin:0; font-size:11.5px; color:#8A6400; }
 
 /* ── Pay ── */
-.ffx-pay{ margin-top:34px; }
-.ffx-alert{
-  font-family:var(--mono); font-size:12px; color:#FF6B5A; border:1px solid rgba(255,107,90,0.4);
-  background:rgba(255,107,90,0.08); border-radius:10px; padding:12px 14px; margin:0 0 16px;
+.ffe-pay{ margin-top:22px; display:flex; flex-direction:column; gap:10px; }
+.ffe-alert{
+  margin:0; border:1px solid #B3261E; color:#B3261E; background:var(--wht);
+  padding:10px 12px; font-size:13px;
 }
-.ffx-cta{
-  width:100%; display:flex; align-items:center; justify-content:space-between; gap:12px;
-  padding:19px 24px; border:0; border-radius:14px; background:var(--ylw); color:#000;
-  font-family:var(--disp); font-weight:900; font-size:16px; letter-spacing:0.02em; text-transform:uppercase;
-  cursor:pointer; transition:transform .12s ease, filter .15s ease; font-variant-numeric:tabular-nums;
+.ffe-cta{
+  display:flex; align-items:center; justify-content:center; gap:12px;
+  width:100%; min-height:52px; padding:15px;
+  border:1px solid var(--blk); background:var(--blk); color:var(--wht); cursor:pointer;
+  font-family:var(--mono); font-size:11px; font-weight:700; letter-spacing:0.18em;
+  text-transform:uppercase;
 }
-.ffx-cta:hover:not(:disabled){ filter:brightness(1.07); transform:translateY(-1px); }
-.ffx-cta:active:not(:disabled){ transform:translateY(0); }
-.ffx-cta:disabled{ opacity:0.4; cursor:default; }
-.ffx-cta-arrow{ font-size:20px; line-height:1; }
-.ffx-cta-alt{
-  width:100%; margin-top:12px; display:flex; align-items:center; justify-content:center; gap:10px;
-  padding:16px 24px; border:1px solid var(--line); border-radius:14px; background:transparent; color:var(--wht);
-  font-family:var(--disp); font-weight:700; font-size:14px; letter-spacing:0.02em; text-transform:uppercase;
-  cursor:pointer; transition:border-color .15s ease, color .15s ease;
+.ffe-cta:hover:not(:disabled){ background:#262622; }
+.ffe-cta:disabled{ opacity:0.45; cursor:not-allowed; }
+.ffe-cta-alt{
+  display:flex; align-items:center; justify-content:center; gap:10px;
+  width:100%; min-height:48px; padding:13px;
+  border:1px solid var(--blk); background:transparent; color:var(--blk); cursor:pointer;
+  font-family:var(--mono); font-size:10px; font-weight:700; letter-spacing:0.16em;
+  text-transform:uppercase;
 }
-.ffx-cta-alt:hover:not(:disabled){ border-color:rgba(255,255,255,0.32); }
-.ffx-cta-alt:disabled{ opacity:0.4; cursor:default; }
-.ffx-pay-note{ margin:16px 0 0; font-family:var(--mono); font-size:11px; line-height:1.6; color:var(--bone-faint); letter-spacing:0.02em; text-align:center; }
+.ffe-cta-alt:hover:not(:disabled){ background:var(--bone-3); }
+.ffe-cta-alt:disabled{ opacity:0.45; cursor:not-allowed; }
+.ffe-cta-arrow{ font-size:13px; }
+.ffe-pay-note{ margin:0; font-size:11.5px; color:var(--t3); text-align:center; line-height:1.5; }
 
-/* ── Footer (deck cover echo) ── */
-.ffx-footer{
-  margin-top:20px; padding:48px 22px 56px; text-align:center;
-  border-top:1px solid var(--line-soft); background:#000;
+/* ── Footer ── */
+.ffe-footer{
+  background:var(--blk); padding:26px 20px;
+  display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;
 }
-.ffx-footer-mark{ height:20px; width:auto; margin:0 auto 18px; display:block; }
-.ffx-footer-slogan{
-  margin:0 0 20px; font-family:var(--mono); font-size:11px; font-weight:700; letter-spacing:0.2em;
-  text-transform:uppercase; color:var(--ylw);
+@media (min-width:768px){ .ffe-footer{ padding:34px 48px; } }
+.ffe-footer-mark{ width:110px; height:auto; display:block; }
+.ffe-footer-contact{
+  margin:0; display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  font-family:var(--mono); font-size:10px; letter-spacing:0.14em;
+  text-transform:uppercase; color:#8E8A7C;
 }
-.ffx-footer-contact{
-  margin:0; display:inline-flex; align-items:center; flex-wrap:wrap; justify-content:center; gap:10px;
-  font-family:var(--mono); font-size:10.5px; letter-spacing:0.08em; color:var(--bone-faint);
-}
-.ffx-footer-contact .ffx-dot{ background:var(--bone-faint); }
+.ffe-sep{ display:inline-block; width:4px; height:4px; background:currentColor; opacity:0.7; }
 
-/* ── Reveal ── */
-.ffx-reveal{ animation:ffx-up .6s cubic-bezier(.2,.7,.2,1) both; }
-@keyframes ffx-up{ from{opacity:0; transform:translateY(16px)} to{opacity:1; transform:none} }
 @media (prefers-reduced-motion: reduce){
-  .ffx-reveal{ animation:none; }
-  .ffx-marquee-track{ animation:none; }
+  .ffe *{ animation:none !important; transition:none !important; }
 }
-
-/* ── Responsive ── */
-@media (max-width:560px){
-  .ffx-grid2{ grid-template-columns:1fr; }
-  .ffx-ticket-main{ flex-wrap:wrap; }
-  .ffx-ticket-action{ width:100%; margin-top:6px; }
-  .ffx-coords{ gap:22px; }
-  .ffx-topbar{ padding:14px 18px; }
-  .ffx-topbar-tag{ white-space:nowrap; font-size:9px; letter-spacing:0.16em; }
-  .ffx-hero{ padding:44px 0 34px; }
-  .ffx-marquee-item{ font-size:12px; }
-  .ffx-footer-contact{ flex-direction:column; gap:6px; }
-}
-
-/* ── Override globals.css's !important input/label chrome inside .ffx ──
-   The app styles every input/textarea/select/label with !important and an
-   old-amber focus ring. We prefix the global selectors with .ffx to raise
-   specificity above them (the global input selector is (0,3,1); .ffx +
-   the same :not() chain is (0,4,1)) so this bespoke surface stays true to
-   the deck — near-black fields, bone labels in mono, a #FFB801 focus. */
-.ffx input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
-.ffx textarea,
-.ffx select{
-  background:var(--surf) !important;
-  border:1px solid var(--line) !important;
-  border-radius:10px !important;
-  color:var(--wht) !important;
-  font-family:var(--disp) !important;
-  font-size:15px !important;
-}
-.ffx input:not([type="checkbox"]):not([type="radio"]):focus,
-.ffx textarea:focus,
-.ffx select:focus{
-  border-color:var(--ylw) !important;
-  box-shadow:0 0 0 3px rgba(255,184,1,0.16) !important;
-  outline:none !important;
-}
-.ffx input::placeholder,
-.ffx textarea::placeholder{ color:var(--bone-faint) !important; }
-.ffx input.ffx-mono:not([type="checkbox"]):not([type="radio"]):not([type="range"]){
-  font-family:var(--mono) !important; letter-spacing:0.08em !important;
-}
-.ffx label.ffx-cq-label{
-  font-family:var(--mono) !important; font-size:10px !important; font-weight:700 !important;
-  letter-spacing:0.18em !important; text-transform:uppercase !important; color:var(--bone) !important;
-}
-.ffx label.ffx-option{
-  font-family:var(--disp) !important; font-size:14px !important; font-weight:400 !important;
-  letter-spacing:normal !important; text-transform:none !important; color:var(--bone) !important;
-}
-.ffx .ffx-option-text{ text-transform:none !important; letter-spacing:normal !important; }
-.ffx .ffx-consent span{ text-transform:none !important; letter-spacing:normal !important; }
-.ffx .ffx-req{ color:var(--ylw) !important; }
 `;

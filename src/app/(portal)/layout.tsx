@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { AdminSidebar } from "@/components/admin-sidebar";
+import { MobileTabBar } from "@/components/mobile-tab-bar";
 import { ProfileCompletionGate } from "@/components/profile-completion-gate";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { BackButton } from "@/components/back-button";
@@ -23,13 +24,19 @@ export default async function PortalLayout({
         menuLoadFailed={menuLoadFailed}
         initials={initials}
       />
-      <main className="flex-1 overflow-y-auto bg-muted/30">
-        <div className="mx-auto max-w-4xl px-6 py-8">
+      {/*
+        Frame 4d: the portal runs edge-to-edge like the rest of the redesign —
+        each screen brings its own Masthead rather than sitting in a centred
+        box. pb-20 on phones keeps the last row clear of the bottom tab bar.
+      */}
+      <main className="flex-1 overflow-y-auto bg-white pb-20 pt-14 md:pb-0 md:pt-0">
+        <div className="px-5 pt-5 md:px-8 md:pt-6">
           <AutoRefresh />
           <BackButton />
-          <ProfileCompletionGate>{children}</ProfileCompletionGate>
         </div>
+        <ProfileCompletionGate>{children}</ProfileCompletionGate>
       </main>
+      <MobileTabBar />
     </div>
   );
 }

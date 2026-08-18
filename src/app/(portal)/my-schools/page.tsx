@@ -1,9 +1,14 @@
 import { createClient } from "@/lib/supabase/server";
 import { getEnrollmentsByUser, getResponsesByUser } from "@/services/schools";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { GraduationCap, FileText, UserCircle2, ClipboardList } from "lucide-react";
 import Link from "next/link";
+import {
+  Masthead,
+  NeedsYou,
+  NeedsYouAction,
+  SectionBar,
+  StatusPill,
+  type Tone,
+} from "@/components/ffsa";
 
 type AssignedStaff = {
   id: string;
@@ -21,29 +26,68 @@ function staffLabel(s: AssignedStaff) {
   return n || s.email;
 }
 
-function PointOfContact({ staff, label }: { staff: AssignedStaff; label: string }) {
+/**
+ * The person walking with you. In the old composition this was a tinted
+ * rounded box under every card; here it is the row's second line, because
+ * frame 4d's rule is that a row never runs to three.
+ */
+function contactLine(staff: AssignedStaff): string | null {
   const name = staffLabel(staff);
-  if (!name) return null;
-  return (
-    <div className="mt-2 flex items-start gap-2 rounded-md border border-primary/20 bg-primary/5 px-2.5 py-2 text-xs">
-      <UserCircle2 className="mt-0.5 h-3.5 w-3.5 text-primary shrink-0" />
-      <div className="leading-tight">
-        <p className="font-medium text-primary uppercase tracking-wider" style={{ fontSize: "9px", letterSpacing: "0.15em" }}>
-          {label}
-        </p>
-        <p className="text-foreground">{name}</p>
-        {staff?.email && (
-          <a
-            href={`mailto:${staff.email}`}
-            className="text-muted-foreground hover:underline"
-          >
-            {staff.email}
-          </a>
-        )}
-      </div>
-    </div>
-  );
+  return name ? `Walking with ${name}` : null;
 }
+
+const ENROLLMENT_TONE: Record<string, Tone> = {
+  arrived: "good",
+  active: "good",
+  waiting_for_arrival: "warn",
+  graduated: "quiet",
+  completed: "quiet",
+  decided_to_leave: "quiet",
+  on_hold: "warn",
+  dismissed: "bad",
+  withdrawn: "bad",
+};
+
+const APP_TONE: Record<string, Tone> = {
+  accepted: "good",
+  submitted: "warn",
+  waiting_for_references: "warn",
+  references_received: "warn",
+  interview_scheduled: "warn",
+  waitlisted: "quiet",
+  cancelled: "quiet",
+  rejected: "bad",
+};
+
+const APP_STATUS_LABELS: Record<string, string> = {
+  submitted: "Submitted",
+  waiting_for_references: "Awaiting references",
+  references_received: "References received",
+  interview_scheduled: "Interview scheduled",
+  accepted: "Accepted",
+  rejected: "Not accepted",
+  waitlisted: "Waitlisted",
+  cancelled: "Cancelled",
+};
+const appStatusLabel = (s: string) => APP_STATUS_LABELS[s] ?? s.replace(/_/g, " ");
+
+type ResponseRow = {
+  id: string;
+  program_id: string;
+  status: string;
+  submitted_at: string | null;
+  assigned_staff: AssignedStaff;
+  programs: { id: string; name: string; code: string } | null;
+};
+
+type EnrollmentRow = {
+  id: string;
+  status: string;
+  enrolled_at: string;
+  completed_at: string | null;
+  assigned_staff: AssignedStaff;
+  programs: { id: string; name: string; code: string; credit_hours: number };
+};
 
 export default async function MySchoolsPage() {
   const supabase = await createClient();
@@ -52,14 +96,18 @@ export default async function MySchoolsPage() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return <p>Not authenticated.</p>;
+    return (
+      <div className="ffsa-screen">
+        <Masthead context="Training &amp; education" title="My training" />
+        <p className="px-5 py-8 text-sm md:px-8">Not authenticated.</p>
+      </div>
+    );
   }
 
   const userId = user.id;
   const { data: enrollments } = await getEnrollmentsByUser(supabase, userId);
   const { data: myResponses } = await getResponsesByUser(supabase, userId);
 
-  // Get programs with open applications
   const { data: openPrograms } = await supabase
     .from("programs")
     .select("id, name, code, credit_hours")
@@ -67,257 +115,160 @@ export default async function MySchoolsPage() {
     .eq("status", "active")
     .order("name", { ascending: true });
 
-  // Build a set of program IDs the user already applied to
-  const appliedProgramIds = new Set(
-    (myResponses ?? []).map((r: { program_id: string }) => r.program_id)
-  );
+  const responses = (myResponses ?? []) as ResponseRow[];
+  const enrolled = (enrollments ?? []) as EnrollmentRow[];
+  const programs = (openPrograms ?? []) as Array<{
+    id: string;
+    name: string;
+    code: string;
+    credit_hours: number;
+  }>;
 
-  // Build a map of programId -> response status
-  const responseStatusMap = new Map<string, string>();
-  const responseStaffMap = new Map<string, AssignedStaff>();
-  for (const r of myResponses ?? []) {
-    const row = r as {
-      program_id: string;
-      status: string;
-      assigned_staff: AssignedStaff;
-    };
-    responseStatusMap.set(row.program_id, row.status);
-    responseStaffMap.set(row.program_id, row.assigned_staff ?? null);
-  }
-
-  const statusColors: Record<string, "default" | "secondary" | "destructive"> = {
-    waiting_for_arrival: "secondary",
-    arrived: "default",
-    graduated: "secondary",
-    dismissed: "destructive",
-    decided_to_leave: "secondary",
-    // legacy fallbacks
-    active: "default",
-    completed: "secondary",
-    withdrawn: "destructive",
-    on_hold: "secondary",
-  };
-
-  const appStatusColors: Record<string, "default" | "secondary" | "destructive"> = {
-    submitted: "secondary",
-    waiting_for_references: "secondary",
-    references_received: "secondary",
-    interview_scheduled: "secondary",
-    accepted: "default",
-    rejected: "destructive",
-    waitlisted: "secondary",
-    cancelled: "secondary",
-  };
-
-  // Friendly, human-readable labels for the raw DB application statuses.
-  const appStatusLabels: Record<string, string> = {
-    submitted: "Submitted",
-    waiting_for_references: "Awaiting references",
-    references_received: "References received",
-    interview_scheduled: "Interview scheduled",
-    accepted: "Accepted",
-    rejected: "Not accepted",
-    waitlisted: "Waitlisted",
-    cancelled: "Cancelled",
-  };
-  const appStatusLabel = (s: string) =>
-    appStatusLabels[s] ?? s.replace(/_/g, " ");
+  const appliedProgramIds = new Set(responses.map((r) => r.program_id));
+  const notYetApplied = programs.filter((p) => !appliedProgramIds.has(p.id));
 
   return (
-    <div className="space-y-6">
-      <div>
-        <p className="page-eyebrow">TRAINING &amp; EDUCATION</p>
-        <h1 className="page-title">My Training</h1>
-      </div>
+    <div className="ffsa-screen">
+      <Masthead
+        context={`Training &amp; education · ${enrolled.length} ${enrolled.length === 1 ? "enrolment" : "enrolments"}`}
+        title="My training"
+      />
 
-      {/* Open Applications Section */}
-      {openPrograms && openPrograms.length > 0 && (
-        <div className="space-y-3">
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Open Applications
-          </h2>
-          <div className="grid gap-4 md:grid-cols-2">
-            {openPrograms.map((program: {
-              id: string;
-              name: string;
-              code: string;
-              credit_hours: number;
-            }) => {
-              const applied = appliedProgramIds.has(program.id);
-              const appStatus = responseStatusMap.get(program.id);
-
-              return (
-                <Card key={program.id} className="hover:border-primary/50 transition-colors">
-                  <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-base">{program.name}</CardTitle>
-                      {applied && appStatus && (
-                        <Badge variant={appStatusColors[appStatus] ?? "secondary"}>
-                          {appStatusLabel(appStatus)}
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="text-sm font-mono text-muted-foreground">
-                      {program.code}
-                    </p>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">
-                        {program.credit_hours} credit hours
-                      </span>
-                      {applied ? (
-                        <span className="text-sm text-muted-foreground">
-                          Application submitted
-                        </span>
-                      ) : (
-                        <Link
-                          href={`/my-schools/apply/${program.id}`}
-                          className="text-sm font-medium text-primary hover:underline"
-                        >
-                          Apply Now &rarr;
-                        </Link>
-                      )}
-                    </div>
-                    {applied && (
-                      <PointOfContact
-                        staff={responseStaffMap.get(program.id) ?? null}
-                        label="Your application contact"
-                      />
-                    )}
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </div>
+      {/* The page's ONE yellow band: something is open that you have not
+          applied to. Nothing else on this screen is yellow. */}
+      {notYetApplied.length > 0 && (
+        <NeedsYou
+          action={
+            notYetApplied.length === 1 ? (
+              <NeedsYouAction href={`/my-schools/apply/${notYetApplied[0].id}`}>
+                Apply
+              </NeedsYouAction>
+            ) : undefined
+          }
+        >
+          {notYetApplied.length === 1
+            ? `Applications are open for ${notYetApplied[0].name}`
+            : `${notYetApplied.length} schools are open for applications`}
+        </NeedsYou>
       )}
 
-      {/* My Applications Section */}
-      <div className="space-y-3">
-        <h2 className="text-lg font-semibold flex items-center gap-2">
-          <ClipboardList className="h-5 w-5" />
-          My Applications
-        </h2>
-
-        {!myResponses || myResponses.length === 0 ? (
-          <Card>
-            <CardContent className="py-6">
-              <p className="text-sm text-muted-foreground text-center">
-                You haven&apos;t submitted any applications yet.
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2">
-            {(myResponses as Array<{
-              id: string;
-              status: string;
-              submitted_at: string | null;
-              assigned_staff: AssignedStaff;
-              programs: { id: string; name: string; code: string } | null;
-            }>).map((response) => (
-              <Card key={response.id}>
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <CardTitle className="text-base">
-                      {response.programs?.name ?? "Program"}
-                    </CardTitle>
-                    <Badge variant={appStatusColors[response.status] ?? "secondary"}>
-                      {appStatusLabel(response.status)}
-                    </Badge>
+      {/* Open applications */}
+      {programs.length > 0 && (
+        <section>
+          <SectionBar title="Open for applications" meta={`${programs.length}`} />
+          <ul>
+            {programs.map((program) => {
+              const applied = appliedProgramIds.has(program.id);
+              const status = responses.find(
+                (r) => r.program_id === program.id
+              )?.status;
+              return (
+                <li
+                  key={program.id}
+                  className="flex min-h-[48px] items-center justify-between gap-4 border-b border-rule px-5 py-3.5 md:px-8"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate font-display text-[17px] font-black uppercase leading-none text-ink">
+                      {program.name}
+                    </div>
+                    <div className="mono-label mt-1.5 truncate">
+                      {program.code} · {program.credit_hours} credit hours
+                    </div>
                   </div>
-                  {response.programs?.code && (
-                    <p className="text-sm font-mono text-muted-foreground">
-                      {response.programs.code}
-                    </p>
+                  {applied && status ? (
+                    <StatusPill tone={APP_TONE[status] ?? "quiet"}>
+                      {appStatusLabel(status)}
+                    </StatusPill>
+                  ) : (
+                    <Link
+                      href={`/my-schools/apply/${program.id}`}
+                      className="shrink-0 border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-white hover:bg-[#262622] hover:text-white"
+                    >
+                      Apply
+                    </Link>
                   )}
-                </CardHeader>
-                <CardContent>
-                  {response.submitted_at && (
-                    <p className="text-sm text-muted-foreground">
-                      Submitted:{" "}
-                      {new Date(response.submitted_at).toLocaleDateString()}
-                    </p>
-                  )}
-                  <PointOfContact
-                    staff={response.assigned_staff}
-                    label="Your application contact"
-                  />
-                </CardContent>
-              </Card>
-            ))}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
+      {/* My applications */}
+      <section>
+        <SectionBar title="My applications" meta={`${responses.length}`} />
+        {responses.length === 0 ? (
+          <div className="border-b border-rule px-5 py-10 text-center md:px-8">
+            <p className="mono-label">You haven&apos;t applied to anything yet</p>
           </div>
-        )}
-      </div>
-
-      {/* Enrollments Section */}
-      <div className="space-y-3">
-        <h2 className="text-lg font-semibold flex items-center gap-2">
-          <GraduationCap className="h-5 w-5" />
-          My Enrollments
-        </h2>
-
-        {!enrollments || enrollments.length === 0 ? (
-          <Card>
-            <CardContent className="py-6">
-              <p className="text-sm text-muted-foreground text-center">
-                You are not currently enrolled in any programs.
-              </p>
-            </CardContent>
-          </Card>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2">
-            {enrollments.map((enrollment: {
-              id: string;
-              status: string;
-              enrolled_at: string;
-              completed_at: string | null;
-              assigned_staff: AssignedStaff;
-              programs: {
-                id: string;
-                name: string;
-                code: string;
-                credit_hours: number;
-              };
-            }) => (
-              <Link key={enrollment.id} href={`/my-schools/${enrollment.id}`}>
-                <Card className="hover:border-primary/50 transition-colors cursor-pointer">
-                  <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-base">
-                        {enrollment.programs.name}
-                      </CardTitle>
-                      <Badge variant={statusColors[enrollment.status] ?? "secondary"}>
-                        {enrollment.status}
-                      </Badge>
+          <ul>
+            {responses.map((response) => {
+              const contact = contactLine(response.assigned_staff);
+              const submitted = response.submitted_at
+                ? `Submitted ${new Date(response.submitted_at).toLocaleDateString("en-ZA")}`
+                : null;
+              return (
+                <li
+                  key={response.id}
+                  className="flex min-h-[48px] items-center justify-between gap-4 border-b border-rule px-5 py-3.5 md:px-8"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate font-display text-[17px] font-black uppercase leading-none text-ink">
+                      {response.programs?.name ?? "Programme"}
                     </div>
-                    <p className="text-sm font-mono text-muted-foreground">
-                      {enrollment.programs.code}
-                    </p>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center justify-between text-sm text-muted-foreground">
-                      <span>
-                        Enrolled:{" "}
-                        {new Date(enrollment.enrolled_at).toLocaleDateString()}
-                      </span>
-                      <span>
-                        {enrollment.programs.credit_hours} credit hours
-                      </span>
+                    {/* One second line: who is walking with you if anyone,
+                        otherwise when you sent it. */}
+                    <div className="mono-label mt-1.5 truncate">
+                      {contact ?? submitted ?? response.programs?.code ?? "—"}
                     </div>
-                    <PointOfContact
-                      staff={enrollment.assigned_staff}
-                      label="Your program contact"
-                    />
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
-          </div>
+                  </div>
+                  <StatusPill tone={APP_TONE[response.status] ?? "quiet"}>
+                    {appStatusLabel(response.status)}
+                  </StatusPill>
+                </li>
+              );
+            })}
+          </ul>
         )}
-      </div>
+      </section>
+
+      {/* Enrolments */}
+      <section>
+        <SectionBar title="My enrolments" meta={`${enrolled.length}`} />
+        {enrolled.length === 0 ? (
+          <div className="border-b border-rule px-5 py-10 text-center md:px-8">
+            <p className="mono-label">You are not enrolled in a school yet</p>
+          </div>
+        ) : (
+          <ul>
+            {enrolled.map((enrollment) => {
+              const contact = contactLine(enrollment.assigned_staff);
+              return (
+                <li key={enrollment.id} className="border-b border-rule">
+                  <Link
+                    href={`/my-schools/${enrollment.id}`}
+                    className="flex min-h-[48px] items-center justify-between gap-4 px-5 py-3.5 hover:bg-[#F7F5EE] md:px-8"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate font-display text-[17px] font-black uppercase leading-none text-ink">
+                        {enrollment.programs.name}
+                      </div>
+                      <div className="mono-label mt-1.5 truncate">
+                        {contact ??
+                          `Enrolled ${new Date(enrollment.enrolled_at).toLocaleDateString("en-ZA")}`}
+                      </div>
+                    </div>
+                    <StatusPill tone={ENROLLMENT_TONE[enrollment.status] ?? "quiet"}>
+                      {enrollment.status.replace(/_/g, " ")}
+                    </StatusPill>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }

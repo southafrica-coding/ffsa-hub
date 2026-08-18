@@ -162,6 +162,9 @@ export default async function PublicEventPage({
     // Drives price formatting and which pay buttons render — PayFast
     // is ZAR-only, so a non-ZAR event is Stripe-only.
     currency: event.currency ?? "ZAR",
+    // The F&F storefront's seat counter reads this; the five bespoke
+    // brands ignore the extra key.
+    max_capacity: event.max_capacity ?? null,
   };
 
   const brand = resolveEventBrand(event);
@@ -222,9 +225,15 @@ export default async function PublicEventPage({
     );
   }
 
-  // brand === "ff" — the FFSA house brand. Bespoke full-viewport
-  // storefront built against the FFSA Brand Deck, reading the same brand
-  // module as the FFSA emails so the buyer's whole journey is one identity.
+  // brand === "ff" — the FFSA house brand, and the default. The generic
+  // F&F public event page, recomposed onto the Hub's editorial design
+  // system (docs/redesign frame 4c). It reads the same brand module as the
+  // FFSA emails, so the buyer's whole journey is one identity.
+  //
+  // heroImageUrl is deliberately not passed: 4c wants a full-bleed photo
+  // masthead, but `events` has no hero-photo column (logo_url is a brand
+  // mark, not a cover). The masthead renders on its black ground until a
+  // column exists, at which point this is a one-line change.
   return (
     <FfsaStorefront
       event={eventProps}

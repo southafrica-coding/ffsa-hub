@@ -113,12 +113,61 @@ matrix, adjustments, refunds), 9e (student fees tab 27a, portal fee view 24a),
 §10 email moments, debtors (26a), copy-to-next-intake (21d).
 
 ### Recipe items never started
-- **Public event page (4c)** — "the loudest surface… the only place the brand
-  runs at full volume". Full-bleed photo masthead, 118px title, facts strip.
-- **Mobile portal (4d / 11b)** — bottom tab bar, 4 items, 48px targets.
 - Module panel extras: saved views as stacked chips (Events), audience segments
   with counts (Communications).
 - Dashboard bottom strip: support raised with a Bar, plus a photo tile.
+
+### 4c public event page — ✅ built (session 7)
+
+`src/app/(public)/e/[slug]/ffsa-storefront.tsx`, rebuilt (not restyled) onto
+the editorial system. Scanned path: `src/app/(public)/e/[slug]/`.
+
+Black top bar · full-bleed masthead with the 0.35→0.94 scrim and a
+`clamp(46px, 10.5vw, 118px)` condensed title · facts strip of bone cells ·
+body copy left with the registration form inline right at 520px · black
+footer. Verified at 1440px and 375px, no horizontal overflow at either.
+
+Three things a later session should know:
+
+- **The masthead photo has no column to read.** 4c calls for a full-bleed
+  photo; `events` has only `logo_url`, which is a brand mark, not a cover.
+  The photo layer is built and wired to a `heroImageUrl` prop that is
+  deliberately not passed — the masthead renders on its black ground until
+  an `events.hero_image_url` column exists, at which point it is one line in
+  `page.tsx`. No migration was taken (session 7 was not allocated one).
+- **Every figure on the page is derived from that event's own tiers.** The
+  frame's headline numerals are marketing copy; the build computes seats
+  taken, days to go and tier count from `quantity_sold` / `capacity` /
+  `max_capacity`, and renders nothing where a figure cannot be computed.
+  Do not reintroduce the frame's literal numbers.
+- **`globals.css` has an app-wide `label { … !important }`.** It puts every
+  label into 9.5px mono caps, which is right for admin screens and wrong for
+  a public page carrying sentence-length questions and consent text. The
+  storefront opts out inside `.ffe` rather than touching the shared rule.
+  The same rule is still flattening consent labels on the five bespoke
+  storefronts — pre-existing, not introduced here, worth a look.
+
+The five bespoke event brands (the_send, ffsa_camps, preachers, wild_ones,
+missio) were not touched; verified Wild Ones still renders its own kit.
+
+### 4d mobile portal — ⚠️ partly built (session 7)
+
+Built: `src/components/mobile-tab-bar.tsx` — four items (School · Finance ·
+Prayer · Me), 48px minimum targets, active tab the only yellow thing on
+screen, `env(safe-area-inset-bottom)` so notched phones don't clip the
+labels. Wired into both the `(portal)` and `(admin)` layouts with `pb-20` on
+phones so the last row clears it. The hamburger drawer stays for Operations
+and System — the bar is the shortcut to the four personal destinations, not
+a replacement for the full menu.
+
+Recomposed onto the system, each with one big numeral and two-line rows:
+my-finance, my-schools, my-events, my-attendance, my-history, my-mission.
+The `(portal)` layout now runs edge-to-edge like the admin one.
+
+Still on the old design in `(portal)`: `profile`, `my-schools/[enrollmentId]`,
+`my-schools/apply/[programId]` (+ its form), `my-finance/outreach/[teamId]`,
+and `my-finance/school-fees-card.tsx`. The prayer-room half of 4d belongs to
+session 1 and was left alone.
 
 ### 28 admin routes still on the old design
 Old header (`page-title`): contacts (8), users (2), teams, settings, org-chart,

@@ -1,22 +1,28 @@
-import { Globe } from "lucide-react";
+import { Masthead } from "@/components/ffsa";
 
 export default function MyMissionPage() {
   return (
-    <div className="space-y-6">
-      <div>
-        <p className="page-eyebrow">OUTREACH &amp; IMPACT</p>
-        <h1 className="page-title">My Mission</h1>
-      </div>
+    <div className="ffsa-screen">
+      <Masthead context="Outreach &amp; impact" title="My mission" />
 
-      <div className="surface-2 rounded-xl border border-white/[0.06] p-10 text-center">
-        <Globe className="h-10 w-10 mx-auto mb-4 opacity-40" />
-        <p className="font-semibold text-white mb-2 uppercase tracking-widest text-sm">Coming Soon</p>
-        <p className="text-sm text-muted-foreground max-w-md mx-auto">
-          Your mission view is under development. You will be able to see your
-          outreach trip history and the ministry statistics you have
-          contributed — salvations, healings, gospel seeds, bibles distributed,
-          and more.
-        </p>
+      {/* Still unbuilt. Said plainly and in the system's own voice rather
+          than dressed up as a card — the old version used dark-theme
+          classes (text-white on a light page) and a rounded panel, both of
+          which the redesign removed. */}
+      <div className="border-b border-rule px-5 py-12 md:px-8 md:py-16">
+        <div className="max-w-xl">
+          <div className="mono-label mb-3">Not built yet</div>
+          <h2 className="font-display text-[34px] font-black uppercase leading-[0.95] text-ink md:text-[44px]">
+            Your outreach history
+            <br />
+            will live here
+          </h2>
+          <p className="mt-5 text-[15px] leading-relaxed text-[color:var(--text-secondary)]">
+            Trips you have been on, and the ministry figures you contributed to
+            — salvations, healings, gospel seeds, bibles distributed. Nothing is
+            being counted for you yet.
+          </p>
+        </div>
       </div>
     </div>
   );
