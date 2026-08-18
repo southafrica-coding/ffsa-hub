@@ -39,6 +39,11 @@ import { TicketsTab } from "./tickets-tab";
 import { OrdersTab } from "./orders-tab";
 import { listRefundsForOrders } from "@/services/order-refunds";
 import { CheckInTab } from "./check-in-tab";
+import { FeedbackTab, type FeedbackFormRow } from "./feedback-tab";
+import {
+  listFeedbackFormsForEvent,
+  countResponsesByForm,
+} from "@/services/event-feedback";
 import {
   listTicketTypesByEvent,
   listPromoCodesByEvent,
@@ -56,6 +61,7 @@ const TABS = [
   { key: "orders", label: "Orders" },
   { key: "check-in", label: "Check-in" },
   { key: "forms", label: "Forms" },
+  { key: "feedback", label: "Feedback" },
 ] as const;
 
 export default async function EventDetailPage({
@@ -89,6 +95,7 @@ export default async function EventDetailPage({
     { data: attendanceTickets },
     { data: identities },
     attendanceCounts,
+    { data: feedbackForms },
   ] = await Promise.all([
     getRegistrationsForEvent(supabase, id),
     getAttendanceForEvent(supabase, id),
@@ -118,7 +125,16 @@ export default async function EventDetailPage({
     // Headcount for the Capacity KPI. The id is already known here, so
     // it rides along with everything else rather than costing a wave.
     getEventAttendanceCounts(supabase, [id]),
+    listFeedbackFormsForEvent(supabase, id),
   ]);
+
+  // Response tallies for the Feedback tab. They depend on the form ids,
+  // so they can't join the Promise.all above.
+  const feedbackRows = (feedbackForms ?? []) as FeedbackFormRow[];
+  const feedbackCounts = await countResponsesByForm(
+    supabase,
+    feedbackRows.map((f) => f.id)
+  );
 
   // null when the read was blocked — the KPI then falls back to the
   // bare capacity figure it showed before.
@@ -255,6 +271,14 @@ export default async function EventDetailPage({
         )}
 
         {tab === "forms" && <FormsTab eventId={id} forms={forms ?? []} />}
+
+        {tab === "feedback" && (
+          <FeedbackTab
+            eventId={id}
+            forms={feedbackRows}
+            responseCounts={feedbackCounts}
+          />
+        )}
       </div>
     </div>
   );
