@@ -1974,8 +1974,18 @@ function ApplicantsTab({
                   </TableCell>
                   <TableCell className="font-medium">
                     {respName(resp)}
+                    {/* Not a privacy flag: it means they applied from outside
+                        the Hub and no account exists yet. Accepting creates one,
+                        which is why it clears on accept. */}
+                    {/* Its own line, not trailing the name: the label is two
+                        words wider than the old "Public" and this column is
+                        narrow enough that inline wrapping broke the name. */}
                     {!resp.user_id && (
-                      <Badge variant="secondary" className="ml-2 text-xs">Public</Badge>
+                      <div className="mt-1">
+                        <Badge variant="secondary" className="whitespace-nowrap text-xs">
+                          No Hub account
+                        </Badge>
+                      </div>
                     )}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
@@ -2199,19 +2209,13 @@ function ApplicantsTab({
           onClose={() => setReviewingResponse(null)}
           extras={
             <div className="space-y-6">
-          {/* Applicant Info */}
+          {/* Email, phone and the submitted date are NOT repeated here — the
+              14c header already carries all three. This is only the structured
+              record captured at submit time for someone with no Hub account. */}
           <div className="text-sm text-muted-foreground space-y-1">
-            <p>Email: {respEmail(reviewingResponse)}</p>
-            <p>
-              Submitted:{" "}
-              {new Date(reviewingResponse.submitted_at).toLocaleDateString()}
-            </p>
             {!reviewingResponse.user_id && reviewingResponse.applicant_info && (
-              <div className="mt-3 bg-muted p-3 space-y-1">
+              <div className="bg-muted p-3 space-y-1">
                 <p className="text-xs font-medium text-foreground uppercase tracking-wider mb-2">Applicant Details</p>
-                {reviewingResponse.applicant_info.phone && (
-                  <p>Phone: {reviewingResponse.applicant_info.phone}</p>
-                )}
                 {reviewingResponse.applicant_info.date_of_birth && (
                   <p>Date of Birth: {reviewingResponse.applicant_info.date_of_birth}</p>
                 )}
@@ -2270,28 +2274,9 @@ function ApplicantsTab({
             )}
           </div>
 
-          {/* Answers */}
-          <div className="space-y-4">
-            {reviewingResponse.answers.map((a, idx) => {
-              const isPhoto = isStoragePath(a.answer ?? "");
-              return (
-                <div key={idx} className="space-y-1">
-                  <Label className="text-sm font-medium">
-                    {a.question_label}
-                  </Label>
-                  <div className="bg-muted p-3 text-sm whitespace-pre-wrap">
-                    {!a.answer ? (
-                      <span className="text-muted-foreground italic">No answer provided</span>
-                    ) : isPhoto ? (
-                      <StorageImage storagePath={a.answer} />
-                    ) : (
-                      a.answer
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          {/* The answers are NOT repeated here. <ApplicantReview> renders them
+              above at 15px/1.5, which is the whole point of frame 14c; this
+              block is only what the team has done about them. */}
 
           {/* References */}
           {referenceSlots.length > 0 && (

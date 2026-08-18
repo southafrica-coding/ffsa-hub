@@ -73,10 +73,10 @@ export function ApplicantReview({
   onNoteChange: (value: string) => void;
   onDecision: (status: "rejected" | "waitlisted" | "accepted") => void;
   onClose: () => void;
-  /** Reference chasing, email history, staff assignment — parent-owned. */
+  /** Reference chasing, email history, staff assignment — parent-owned. Rendered
+   *  inline under the answers: it is all part of the application. */
   extras?: React.ReactNode;
 }) {
-  const [showExtras, setShowExtras] = useState(false);
   // The admin shell animates its content wrapper, and a transformed ancestor
   // becomes the containing block for `position: fixed` — which trapped this
   // screen inside the content column and let it grow past the viewport. It
@@ -173,16 +173,15 @@ export function ApplicantReview({
             )}
 
             {extras && (
-              <div className="py-4">
-                <button
-                  type="button"
-                  onClick={() => setShowExtras((v) => !v)}
-                  aria-expanded={showExtras}
-                  className="mono-label border border-rule-strong px-3 py-2 hover:border-ink"
-                >
-                  {showExtras ? "Hide" : "Show"} reference chasing · email history · assignment
-                </button>
-                {showExtras && <div className="mt-4">{extras}</div>}
+              <div className="pb-6">
+                {/* A deliberate seam. The answers above are hers; everything
+                    below is what the team has done about them — and it is
+                    styled from the pre-redesign screens, so it needs a
+                    boundary rather than bleeding into her application. */}
+                <div className="section-bar -mx-6 mt-2 md:-mx-7">
+                  <span className="section-bar-title">Chasing, history &amp; assignment</span>
+                </div>
+                <div className="mt-5">{extras}</div>
               </div>
             )}
           </div>
