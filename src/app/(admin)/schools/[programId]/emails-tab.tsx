@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -24,9 +24,15 @@ type TemplateRow = {
 export function EmailsTab({
   programId,
   templates,
+  acceptanceSubject,
+  acceptanceBody,
 }: {
   programId: string;
   templates: TemplateRow[];
+  /** Acceptance wording. Stored on `programs`, not `program_email_templates` —
+   *  see <AcceptanceEmailEditor> for why it is special-cased rather than moved. */
+  acceptanceSubject: string | null;
+  acceptanceBody: string | null;
 }) {
   const byType = new Map(templates.map((t) => [t.email_type, t]));
 
@@ -41,19 +47,25 @@ export function EmailsTab({
           in FFSA branding, and any required buttons (status link, reference
           link) are always included.
         </p>
-        <p className="text-xs text-muted-foreground mt-2">
-          The <strong>acceptance email</strong> is edited under the{" "}
-          <strong>Application</strong> tab.
-        </p>
       </div>
 
       {PROGRAM_EMAIL_TYPES.map((type) => (
-        <EmailTypeEditor
-          key={type.key}
-          programId={programId}
-          type={type}
-          initial={byType.get(type.key)}
-        />
+        <Fragment key={type.key}>
+          {/* Accepted sits with the other two decision outcomes, so the three
+              things you can tell an applicant read together. */}
+          {type.key === "application_rejected" && (
+            <AcceptanceEmailEditor
+              programId={programId}
+              initialSubject={acceptanceSubject}
+              initialBody={acceptanceBody}
+            />
+          )}
+          <EmailTypeEditor
+            programId={programId}
+            type={type}
+            initial={byType.get(type.key)}
+          />
+        </Fragment>
       ))}
     </div>
   );
@@ -227,6 +239,149 @@ function EmailTypeEditor({
               "Save"
             )}
           </Button>
+          {error && <span className="text-xs text-destructive">{error}</span>}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * The acceptance email — the one that tells someone they're in.
+ *
+ * It is special-cased rather than listed with the rest because it is stored
+ * differently: `programs.acceptance_email_subject` / `_body`, not the
+ * `program_email_templates` table the other six use. It predates that table
+ * and was never migrated across, which is exactly why it used to be invisible
+ * here and edited under the Application tab instead.
+ *
+ * This editor changes NOTHING about the email — same two columns, same save
+ * endpoint, same "blank means the FFSA default" behaviour, same merge fields.
+ * It only puts the controls where the other emails already are. Note there is
+ * deliberately no "Send this email" toggle: acceptance always sends when you
+ * accept someone, and offering an off switch here would be a behaviour change,
+ * not a relocation.
+ */
+function AcceptanceEmailEditor({
+  programId,
+  initialSubject,
+  initialBody,
+}: {
+  programId: string;
+  initialSubject: string | null;
+  initialBody: string | null;
+}) {
+  const router = useRouter();
+  const [subject, setSubject] = useState(initialSubject ?? "");
+  const [body, setBody] = useState(initialBody ?? "");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const dirty = subject !== (initialSubject ?? "") || body !== (initialBody ?? "");
+
+  async function save() {
+    setSaving(true);
+    setError(null);
+    // Identical to what the Application tab sent: empty becomes null, and null
+    // is what makes the send path fall back to the FFSA default.
+    const res = await fetch("/api/schools/programs", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: programId,
+        acceptance_email_subject: subject.trim() || null,
+        acceptance_email_body: body.trim() || null,
+      }),
+    });
+    setSaving(false);
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      setError(data.error ?? "Could not save");
+      return;
+    }
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+    router.refresh();
+  }
+
+  return (
+    <Card>
+      <CardHeader className="space-y-0">
+        <CardTitle className="text-base flex items-center gap-2">
+          Accepted
+          <Badge variant="outline" className="font-normal capitalize">
+            to applicant
+          </Badge>
+        </CardTitle>
+        <p className="text-sm text-muted-foreground mt-1">
+          Sent the moment you accept someone, along with creating their
+          enrolment. This one always sends — there is no off switch.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-muted-foreground">
+            Subject
+          </label>
+          <Input
+            value={subject}
+            onChange={(e) => setSubject(e.target.value)}
+            placeholder="Blank — the FFSA default subject will be used"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-muted-foreground">
+            Message
+          </label>
+          <Textarea
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            placeholder="Blank — the FFSA default message will be used. Type here to write your own; plain text, one idea per paragraph."
+            rows={5}
+          />
+          <p className="text-xs text-muted-foreground">
+            Merge fields:{" "}
+            {["{{first_name}}", "{{program_name}}"].map((f) => (
+              <code key={f} className="mx-0.5 bg-muted px-1 py-0.5 text-[11px]">
+                {f}
+              </code>
+            ))}
+            <span className="ml-1">
+              Common variants like <code className="bg-muted px-1 py-0.5 text-[11px]">{"{{name}}"}</code>{" "}
+              and <code className="bg-muted px-1 py-0.5 text-[11px]">[Your Name]</code> work too.
+            </span>
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <Button type="button" onClick={save} disabled={!dirty || saving} size="sm">
+            {saving ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" /> Saving…
+              </>
+            ) : saved ? (
+              <>
+                <Check className="h-4 w-4 mr-1" /> Saved
+              </>
+            ) : (
+              "Save"
+            )}
+          </Button>
+          {(subject || body) && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={saving}
+              onClick={() => {
+                setSubject("");
+                setBody("");
+              }}
+            >
+              Clear to FFSA default
+            </Button>
+          )}
           {error && <span className="text-xs text-destructive">{error}</span>}
         </div>
       </CardContent>

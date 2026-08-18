@@ -628,8 +628,6 @@ export function ProgramDetail({
             programName={program.name}
             applicationOpen={program.application_open}
             applicationDeadline={program.application_deadline}
-            acceptanceEmailSubject={program.acceptance_email_subject}
-            acceptanceEmailBody={program.acceptance_email_body}
             questions={questions}
             referenceSlots={referenceSlots}
             referenceQuestions={referenceQuestions}
@@ -652,7 +650,12 @@ export function ProgramDetail({
         </TabsContent>
 
         <TabsContent value="emails" className="mt-0 px-5 py-6 md:px-8">
-          <EmailsTab programId={program.id} templates={emailTemplates} />
+          <EmailsTab
+            programId={program.id}
+            templates={emailTemplates}
+            acceptanceSubject={program.acceptance_email_subject}
+            acceptanceBody={program.acceptance_email_body}
+          />
         </TabsContent>
       </Tabs>
     </div>
@@ -2638,8 +2641,6 @@ function ApplicationTab({
   programName,
   applicationOpen,
   applicationDeadline,
-  acceptanceEmailSubject,
-  acceptanceEmailBody,
   questions,
   referenceSlots,
   referenceQuestions,
@@ -2649,8 +2650,6 @@ function ApplicationTab({
   programName: string;
   applicationOpen: boolean;
   applicationDeadline: string | null;
-  acceptanceEmailSubject: string | null;
-  acceptanceEmailBody: string | null;
   questions: AppQuestion[];
   referenceSlots: ReferenceSlot[];
   referenceQuestions: TreeQuestion[];
@@ -2676,46 +2675,8 @@ function ApplicationTab({
   const [deadline, setDeadline] = useState(applicationDeadline ?? "");
   const [deadlineSaving, setDeadlineSaving] = useState(false);
 
-  // Acceptance email state
-  const [emailSubject, setEmailSubject] = useState(acceptanceEmailSubject ?? "");
-  const [emailBody, setEmailBody] = useState(acceptanceEmailBody ?? "");
-  const [emailSaving, setEmailSaving] = useState(false);
-  const [emailSaved, setEmailSaved] = useState(false);
-  const [emailError, setEmailError] = useState<string | null>(null);
-
-  async function handleSaveAcceptanceEmail() {
-    setEmailSaving(true);
-    setEmailError(null);
-    setEmailSaved(false);
-    try {
-      const res = await fetch("/api/schools/programs", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: programId,
-          acceptance_email_subject: emailSubject.trim() || null,
-          acceptance_email_body: emailBody.trim() || null,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setEmailError(data.error || "Failed to save acceptance email");
-        return;
-      }
-      setEmailSaved(true);
-      setTimeout(() => setEmailSaved(false), 2500);
-      router.refresh();
-    } catch {
-      setEmailError("Network error");
-    } finally {
-      setEmailSaving(false);
-    }
-  }
-
-  function handleResetAcceptanceEmail() {
-    setEmailSubject("");
-    setEmailBody("");
-  }
+  // The acceptance email is edited on the Emails tab now, beside the other
+  // six, so its state and save live in <AcceptanceEmailEditor> there.
 
   function copyPublicLink() {
     const link = publicLink;
@@ -3572,90 +3533,6 @@ function ApplicationTab({
         questions={referenceQuestions}
       />
 
-      {/* ─── ACCEPTANCE EMAIL ─── */}
-      <div className="space-y-4">
-        <div>
-          <h3 className="font-medium">Acceptance Email</h3>
-          <p className="text-xs text-muted-foreground mt-1">
-            The message applicants receive when you accept them into this
-            program. Leave blank to use the default. Use{" "}
-            <code className="font-mono">{"{{first_name}}"}</code> for the
-            applicant&apos;s name and{" "}
-            <code className="font-mono">{"{{program_name}}"}</code> for this
-            program&apos;s name &mdash; both get replaced when the email is
-            sent. Common variants (
-            <code className="font-mono">{"{{name}}"}</code>,{" "}
-            <code className="font-mono">[Your Name]</code>,{" "}
-            <code className="font-mono">{"{first_name}"}</code>) also work.
-          </p>
-        </div>
-
-        <div className="space-y-3 border bg-card p-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="acceptance-subject">Subject Line</Label>
-            <Input
-              id="acceptance-subject"
-              value={emailSubject}
-              onChange={(e) => setEmailSubject(e.target.value)}
-              placeholder={`You've been accepted to {{program_name}}`}
-            />
-            <p className="text-xs text-muted-foreground">
-              Default if blank:{" "}
-              <span className="font-mono">
-                You&apos;ve been accepted to {programCode}
-              </span>
-            </p>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="acceptance-body">Message</Label>
-            <Textarea
-              id="acceptance-body"
-              value={emailBody}
-              onChange={(e) => setEmailBody(e.target.value)}
-              rows={10}
-              placeholder={`Hi {{first_name}},\n\nWe're thrilled to welcome you to {{program_name}}! Your application has been accepted and we can't wait to journey with you.\n\nLook out for a follow-up email with arrival details and a packing list.\n\nBlessings,\nThe FFSA Team`}
-            />
-            <p className="text-xs text-muted-foreground">
-              Plain text. Blank lines become paragraph breaks. Paste any{" "}
-              <span className="font-mono">https://</span> URL and it&apos;ll
-              become clickable; for custom anchor text use{" "}
-              <code className="font-mono">[click here](https://example.com)</code>
-              . The FFSA branded header, footer, and the &ldquo;set up your
-              account&rdquo; button are added automatically.
-            </p>
-          </div>
-
-          {emailError && (
-            <p className="text-sm text-destructive">{emailError}</p>
-          )}
-
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              size="sm"
-              onClick={handleSaveAcceptanceEmail}
-              disabled={emailSaving}
-            >
-              {emailSaving ? "Saving..." : "Save Email"}
-            </Button>
-            {(emailSubject || emailBody) && (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={handleResetAcceptanceEmail}
-                disabled={emailSaving}
-              >
-                Reset to default
-              </Button>
-            )}
-            {emailSaved && (
-              <span className="text-xs text-muted-foreground">Saved.</span>
-            )}
-          </div>
-        </div>
-      </div>
 
     </div>
   );
