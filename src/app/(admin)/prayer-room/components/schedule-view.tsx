@@ -15,7 +15,7 @@ import SetDetail from "./set-detail";
 import MemberPicker from "./member-picker";
 import { ScheduleCalendar, type CalendarSet, type CalendarBlockout } from "./calendar";
 import Wall, { type WallSet, type SeatType, type Band } from "./wall";
-import { WEEKDAY_OPTIONS } from "@/lib/bookings/recurrence";
+import { WEEKDAY_OPTIONS, weeklyOccurrenceDates } from "@/lib/bookings/recurrence";
 import {
   todayISO,
   shiftDays,
@@ -27,7 +27,7 @@ import {
   shiftMonth,
   monthParam,
 } from "@/lib/bookings/dates";
-import { ROLES, roleLabel, fullName, toISODate, addDays } from "./helpers";
+import { ROLES, roleLabel, fullName, toISODate, addDays, formatDateLabel } from "./helpers";
 
 type ViewKind = "wall" | "month" | "day" | "list";
 
@@ -262,8 +262,13 @@ export default function ScheduleView({ userId, isStaff, isMember, tabs, active, 
         open={creating}
         onClose={() => setCreating(false)}
         defaultDate={view === "day" ? anchor : todayISO()}
-        onCreated={async (id) => {
+        onCreated={async (id, firstDate) => {
           setCreating(false);
+          // Move to the week the set actually landed in before opening it. A
+          // weekly series starting on the first matching weekday on or after
+          // "runs from" usually falls in NEXT week, and leaving the wall where
+          // it was made a successful create look like nothing had happened.
+          if (firstDate) setAnchor(firstDate);
           await load();
           setSelectedId(id); // open the new set so they can build the roster
         }}
@@ -283,7 +288,7 @@ function CreateSetDialog({
   open: boolean;
   onClose: () => void;
   defaultDate: string;
-  onCreated: (id: string) => void;
+  onCreated: (id: string, firstDate: string | null) => void;
 }) {
   const [recurrence, setRecurrence] = useState<"none" | "weekly">("none");
   const [setDate, setSetDate] = useState(defaultDate);
@@ -323,6 +328,19 @@ function CreateSetDialog({
         : [...prev, { user_id: userId, name, role: "vocals" }]
     );
   }
+
+  // What this form will actually create. Both of the surprises live here:
+  // a weekly series starts on the first matching weekday ON OR AFTER "runs
+  // from", which is usually NEXT week, and the wall only draws Mon-Fri.
+  // Neither was visible until after you pressed create.
+  const occurrenceDates =
+    recurrence === "weekly" ? weeklyOccurrenceDates(seriesStart, seriesEnd, weekday) : [];
+  const firstDate = recurrence === "weekly" ? occurrenceDates[0] ?? null : setDate || null;
+  const firstIsWeekend = (() => {
+    if (!firstDate) return false;
+    const d = new Date(`${firstDate}T00:00:00Z`).getUTCDay();
+    return d === 0 || d === 6;
+  })();
 
   async function submit() {
     if (endTime <= startTime) {
@@ -367,7 +385,7 @@ function CreateSetDialog({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to create set");
       toast.success(data.count > 1 ? `Created ${data.count} weekly sets` : "Set created — add your roster");
-      onCreated(data.id);
+      onCreated(data.id, data.set_date ?? null);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to create set");
     } finally {
@@ -444,6 +462,28 @@ function CreateSetDialog({
               <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
             </div>
           </div>
+
+          {/* Before you commit: the date this actually lands on. */}
+          {firstDate ? (
+            <div className="border border-rule bg-bone px-3 py-2.5">
+              <div className="mono-label mb-1">First set</div>
+              <div className="text-[13.5px] font-semibold text-ink">
+                {formatDateLabel(firstDate)} · {startTime}–{endTime}
+                {recurrence === "weekly" &&
+                  occurrenceDates.length > 1 &&
+                  ` · ${occurrenceDates.length} in the series`}
+              </div>
+              {firstIsWeekend && (
+                <div className="mt-1 text-[12px] text-amber">
+                  Weekends are not on the wall — this one shows under Month or List.
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="border border-rule bg-bone px-3 py-2.5 text-[13px] text-[color:var(--text-tertiary)]">
+              No dates in that range fall on the chosen day.
+            </div>
+          )}
 
           {/* Title / theme */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

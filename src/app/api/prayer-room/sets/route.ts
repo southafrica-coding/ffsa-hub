@@ -211,7 +211,16 @@ export async function POST(request: Request) {
       });
     }
 
-    return NextResponse.json({ id: created[0].id, count: created.length, seriesId: series.id });
+    // set_date so the caller can move the schedule to the week the series
+    // actually starts in — a weekly series beginning on the first matching
+    // weekday ON OR AFTER "runs from" often lands in NEXT week, and the wall
+    // stays where it was, which reads as "nothing was created".
+    return NextResponse.json({
+      id: created[0].id,
+      set_date: created[0].set_date,
+      count: created.length,
+      seriesId: series.id,
+    });
   }
 
   // ── One-off ─────────────────────────────────────────────────────────────
@@ -244,7 +253,7 @@ export async function POST(request: Request) {
     endTime: end_time,
   });
 
-  return NextResponse.json({ id: set.id, count: 1 });
+  return NextResponse.json({ id: set.id, set_date, count: 1 });
 }
 
 // PUT — update / complete / cancel a set (RLS: owner or staff).
