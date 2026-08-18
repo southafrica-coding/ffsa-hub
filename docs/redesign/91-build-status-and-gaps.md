@@ -172,16 +172,65 @@ session 1 and was left alone.
 ### Screenshots
 
 `docs/redesign/design/screens/` — 4c at 1440 and 375, plus login at both.
+The signed-in screens are not written to disk: the session cookie could not
+be handed to the headless capture script, so the admin/portal review was done
+by eye in a live browser instead. Anyone wanting files for the frames will
+need to capture them while signed in.
 
-**The admin screens are NOT screenshotted, and that is a real gap.** Every
-admin and portal route sits behind Supabase Auth, and the session that built
-them could not sign in to photograph them (entering someone's password is not
-something this agent does). They are verified by `tsc`, `next lint`, a
-passing production build and by reading the rendered markup — not by eye.
-Given this file's own history of "done" meaning less than it looked,
-**someone should click through contacts, users and records-library while
-signed in before this is called finished.** The quickest route: sign in at
-`localhost:3217` and walk the list in the section above.
+### What the signed-in pass found — read this before trusting a sweep
+
+The first version of this section said 27 routes were done on the strength of
+`tsc`, `next lint` and a passing build. **Signing in and looking proved that
+too generous, in a way the build could never have caught**, because every one
+of these routes is `ƒ (Dynamic)` — the build type-checks and bundles them but
+never renders one.
+
+The miss was methodological, and it is the same one this document opens by
+warning about. The acceptance sweep greped for `page-title` and
+`.ffsa-screen` — both **page-shell** markers. The shells were genuinely
+recomposed. But underneath ten of them, the heaviest **child** components
+were still the dark theme, written as inline `hsl()` rather than classes, so
+neither marker matched. On a white page they rendered as near-black panels
+with grey text:
+
+| Component | Inline dark values |
+|---|---|
+| `contacts/event-followup/*` (5 files — the whole sub-module) | 144 |
+| `users/[id]/permission-manager.tsx` | 49 |
+| `users/[id]/role-assignment.tsx` | 17 |
+| `users/users-table.tsx`, `advanced-access.tsx`, `contact-dossier.tsx` | 22 |
+| `contacts/duplicates/duplicates-list.tsx` (selected card was olive-on-gold) | 6 |
+
+261 values were remapped by the **role** each played (ground / rule / muted
+text / accent / good / warn / bad) rather than by flipping lightness, plus 98
+`rounded-*` and `borderRadius` removals — `globals.css` only forces radius 0
+on shadcn `data-slot` elements, so a plain `rounded-md` on a div still
+rendered a radius.
+
+**The lesson for the next session: grep for the theme's VALUES, not for the
+shell's markers.** `hsl(22 `, `hsl(30 8%`, `#0D0B09`, `#F0EBE3` are the dark
+theme's fingerprints and they live in child components.
+
+### Verified by eye, signed in, at 1440 and 375
+
+contacts · contacts/lists · contacts/duplicates · contacts/event-followup ·
+contacts/new · contacts/[id] · users · users/[id]/permissions (including the
+expanded permission manager) · records-library · teams · settings · roles ·
+consents · org-chart · ministry · ministry/[id] · my-finance · my-schools ·
+the mobile tab bar (four 94×63px targets, active state, navigation).
+
+Three things left deliberately, for a person to decide:
+
+- **The org chart still defaults to its Dark canvas.** It has a Paper theme
+  that matches the light system exactly, and the toggle works. Switching the
+  default is a product call, not a redesign cleanup, so it was left alone.
+- **Contact label chips keep their user-assigned colours** (pastel fills
+  against a black/bone/yellow system). Those colours are data on the `labels`
+  table, not styling drift.
+- **Two pre-existing cosmetic bugs on the contacts list at 375**, both
+  unchanged from `origin/main` and both verified as such: the search icon
+  overlaps its placeholder, and the sort `Select` renders empty. Not
+  introduced here, not fixed here.
 
 ### 28 admin routes still on the old design → **27 done, 1 left** (session 7)
 
