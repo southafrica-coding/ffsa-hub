@@ -1,3 +1,19 @@
+import type { Metadata } from "next";
+
+// The link preview says what this link IS. It deliberately names no
+// person: a preview card renders in whatever chat the link was pasted
+// into, so pulling the applicant's or recipient's name in here would
+// leak them to everyone in the room.
+export const metadata: Metadata = {
+  title: "Ticket terms & conditions",
+  description: "The terms that apply when you buy a ticket to a Fire & Fragrance South Africa event.",
+  openGraph: {
+    title: "Ticket terms & conditions",
+    description: "The terms that apply when you buy a ticket to a Fire & Fragrance South Africa event.",
+    type: "website",
+  },
+};
+
 import { Markdown } from "@/components/markdown";
 import {
   PublicFormShell,

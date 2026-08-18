@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getFormBySlug } from "@/services/forms";
 import { emptyFormSchema, type FormSchema } from "@/lib/forms/schema";
 import { FormRuntime } from "./form-runtime";
@@ -6,8 +7,40 @@ import {
   PublicFormNotice,
   type PublicShellBrand,
 } from "@/components/public-form-shell";
+import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
+
+/** What a messaging app shows when this form link is pasted. */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  // The service-role client purely to resolve the event name: anon has no
+  // read on `events`, so the anon client would describe the form with no
+  // idea which event it belongs to — which is the whole point of the
+  // preview. Nothing beyond name/title is exposed, and a form that isn't
+  // live still says so.
+  const supabase = createAdminClient();
+  const { data: form } = await getFormBySlug(supabase, slug);
+
+  if (!form) return { title: "Form not found" };
+
+  const event = (form.events ?? null) as { title?: string } | null;
+  const where = event?.title ? ` · ${event.title}` : "";
+  const description = form.is_active
+    ? `Fill in ${form.name}${where}.`
+    : "This form is not currently open.";
+
+  return {
+    title: form.name,
+    description,
+    openGraph: { title: form.name, description, type: "website" },
+    twitter: { card: "summary_large_image", title: form.name, description },
+  };
+}
 
 function normalizeBrand(raw: unknown): PublicShellBrand {
   if (raw === "the_send") return "the_send";

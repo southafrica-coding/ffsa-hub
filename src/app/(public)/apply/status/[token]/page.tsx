@@ -1,3 +1,21 @@
+import type { Metadata } from "next";
+
+// The link preview says what this link IS. It deliberately names no
+// person: a preview card renders in whatever chat the link was pasted
+// into, so pulling the applicant's or recipient's name in here would
+// leak them to everyone in the room.
+export const metadata: Metadata = {
+  title: "Your application status",
+  description: "Check where your Fire & Fragrance South Africa application has got to.",
+  openGraph: {
+    title: "Your application status",
+    description: "Check where your Fire & Fragrance South Africa application has got to.",
+    type: "website",
+  },
+  // Personal link — never index it.
+  robots: { index: false, follow: false },
+};
+
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notFound } from "next/navigation";
 import {

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getVehicles, type Vehicle } from "@/services/vehicles";
 import { PublicFormNotice } from "@/components/public-form-shell";
@@ -9,6 +10,35 @@ export const dynamic = "force-dynamic";
 // link can be paused from Fleet settings without changing the slug. Anonymous
 // visitors can't pass the settings/fleet RLS, so this reads through the
 // service-role admin client — gated by the slug + the `enabled` toggle.
+/** What a messaging app shows when a vehicle-request link is pasted. */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const supabase = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: link } = await (supabase as any)
+    .from("vehicle_request_link_settings")
+    .select("enabled")
+    .eq("slug", slug)
+    .maybeSingle();
+
+  const title = "Request a vehicle";
+  const description = link?.enabled
+    ? "Book a Fire & Fragrance South Africa vehicle — dates, driver and purpose."
+    : "This vehicle-request link is not currently available.";
+
+  return {
+    title,
+    description,
+    openGraph: { title, description, type: "website" },
+    twitter: { card: "summary_large_image", title, description },
+    robots: { index: false, follow: false },
+  };
+}
+
 export default async function PublicVehicleRequestPage({
   params,
 }: {

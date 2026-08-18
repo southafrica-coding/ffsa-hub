@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getProgramPublicInfo, getQuestionsByProgram, getReferenceSlotsByProgram } from "@/services/schools";
 import { getCountryTiers } from "@/services/school-fees";
@@ -8,6 +9,31 @@ import {
   PublicFormShell,
   PublicFormInputStyles,
 } from "@/components/public-form-shell";
+
+/** What a messaging app shows when an application link is pasted. */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ programId: string }>;
+}): Promise<Metadata> {
+  const { programId } = await params;
+  const supabase = createAdminClient();
+  const { data: program } = await getProgramPublicInfo(supabase, programId);
+
+  if (!program) return { title: "Programme not found" };
+
+  const title = `Apply · ${program.name}`;
+  const description = program.application_open
+    ? `Applications are open for ${program.name}. Start your application.`
+    : `Applications for ${program.name} are currently closed.`;
+
+  return {
+    title,
+    description,
+    openGraph: { title, description, type: "website" },
+    twitter: { card: "summary_large_image", title, description },
+  };
+}
 
 export default async function PublicApplyPage({
   params,
