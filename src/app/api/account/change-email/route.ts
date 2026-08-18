@@ -2,11 +2,9 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { Resend } from "resend";
 import { signEmailChangeToken } from "@/lib/tokens/email-change";
 import { emailChangeConfirmHtml } from "@/lib/email/templates/email-change";
-
-const resend = new Resend(process.env.RESEND_API_KEY?.trim());
+import { getResend } from "@/lib/email/resend";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -73,7 +71,7 @@ export async function POST(request: Request) {
 
   const fromEmail = (process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com").trim();
   try {
-    await resend.emails.send({
+    await getResend().emails.send({
       from: `Fire & Fragrance SA <${fromEmail}>`,
       to: newEmail,
       subject: "Confirm your new FFSA Hub email",

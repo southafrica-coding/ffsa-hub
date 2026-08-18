@@ -1,8 +1,6 @@
-import { Resend } from "resend";
 import { staffAssignedStudentEmailHtml } from "./templates/staff-assigned-student";
 import { staffNewAssignmentEmailHtml } from "./templates/staff-new-assignment";
-
-const resend = new Resend(process.env.RESEND_API_KEY?.trim());
+import { getResend } from "@/lib/email/resend";
 
 type Stage = "application" | "enrollment";
 
@@ -47,7 +45,7 @@ export async function sendStaffAssignmentEmails(opts: {
   try {
     if (opts.student.email) {
       const firstName = opts.student.preferred_name || opts.student.first_name || "there";
-      await resend.emails.send({
+      await getResend().emails.send({
         from: fromHeader,
         to: opts.student.email,
         subject: `Your ${stageLabel} contact — ${opts.programName}`,
@@ -70,7 +68,7 @@ export async function sendStaffAssignmentEmails(opts: {
     if (opts.staff.email) {
       const staffFirstName = opts.staff.preferred_name || opts.staff.first_name || "there";
       const assignedByName = opts.assignedBy ? fullName(opts.assignedBy) || null : null;
-      await resend.emails.send({
+      await getResend().emails.send({
         from: fromHeader,
         to: opts.staff.email,
         subject:

@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { Resend } from "resend";
 import { inviteEmailHtml } from "@/lib/email/templates/invite";
-
-const resend = new Resend(process.env.RESEND_API_KEY?.trim());
+import { getResend } from "@/lib/email/resend";
 
 export async function POST(request: Request) {
   // Verify the calling user is an admin
@@ -75,7 +73,7 @@ export async function POST(request: Request) {
 
   // Send branded email via Resend
   const fromEmail = (process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com").trim();
-  const { error: emailError } = await resend.emails.send({
+  const { error: emailError } = await getResend().emails.send({
     from: `Fire & Fragrance SA <${fromEmail}>`,
     to: email,
     subject: "You're invited to FFSA Hub",

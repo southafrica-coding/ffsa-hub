@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { Resend } from "resend";
 import { resetPasswordEmailHtml } from "@/lib/email/templates/reset-password";
-
-const resend = new Resend(process.env.RESEND_API_KEY?.trim());
+import { getResend } from "@/lib/email/resend";
 
 // Throttle: at most one email per minute, and 3 per hour, per account.
 // Backed by audit_logs so it survives across serverless invocations without
@@ -89,7 +87,7 @@ export async function POST(request: Request) {
 
   const fromEmail = (process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com").trim();
   try {
-    await resend.emails.send({
+    await getResend().emails.send({
       from: `Fire & Fragrance SA <${fromEmail}>`,
       to: email,
       subject: "Reset your FFSA Hub password",

@@ -2,14 +2,13 @@
 // Mirrors send-staff-assignment.ts: transactional system email goes through
 // Resend, and every send is wrapped so a mail failure never breaks the action.
 
-import { Resend } from "resend";
 import { prayerRoomInviteEmailHtml } from "./templates/prayer-room-invite";
 import { prayerRoomInviteAcceptedEmailHtml } from "./templates/prayer-room-invite-accepted";
 import { prayerRoomApplicationReceivedEmailHtml } from "./templates/prayer-room-application-received";
 import { prayerRoomEvaluatorAssignedEmailHtml } from "./templates/prayer-room-evaluator-assigned";
 import { prayerRoomDecisionEmailHtml } from "./templates/prayer-room-decision";
+import { getResend } from "@/lib/email/resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY?.trim());
 const FROM = `Fire & Fragrance SA <${(process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com").trim()}>`;
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || "https://ffsahub.com";
 
@@ -58,7 +57,7 @@ export async function sendPrayerRoomInvite(opts: {
 }) {
   if (!opts.invitee.email) return;
   try {
-    await resend.emails.send({
+    await getResend().emails.send({
       from: FROM,
       to: opts.invitee.email,
       subject: `You're invited to a devo set — ${roleLabel(opts.role)}`,
@@ -87,7 +86,7 @@ export async function sendPrayerRoomInviteAccepted(opts: {
 }) {
   if (!opts.owner.email) return;
   try {
-    await resend.emails.send({
+    await getResend().emails.send({
       from: FROM,
       to: opts.owner.email,
       subject: `${fullName(opts.accepter)} accepted your devo set invite`,
@@ -108,7 +107,7 @@ export async function sendPrayerRoomInviteAccepted(opts: {
 export async function sendPrayerRoomApplicationReceived(applicant: Person) {
   if (!applicant.email) return;
   try {
-    await resend.emails.send({
+    await getResend().emails.send({
       from: FROM,
       to: applicant.email,
       subject: "We've received your prayer room application",
@@ -129,7 +128,7 @@ export async function sendPrayerRoomEvaluatorAssigned(opts: {
 }) {
   if (!opts.evaluator.email) return;
   try {
-    await resend.emails.send({
+    await getResend().emails.send({
       from: FROM,
       to: opts.evaluator.email,
       subject: `Please evaluate ${fullName(opts.applicant)} for the prayer room`,
@@ -152,7 +151,7 @@ export async function sendPrayerRoomDecision(opts: {
 }) {
   if (!opts.applicant.email) return;
   try {
-    await resend.emails.send({
+    await getResend().emails.send({
       from: FROM,
       to: opts.applicant.email,
       subject: opts.approved

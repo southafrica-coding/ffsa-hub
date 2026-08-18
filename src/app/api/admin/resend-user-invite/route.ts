@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { Resend } from "resend";
 import { inviteEmailHtml } from "@/lib/email/templates/invite";
 import { createOnboardingInvite } from "@/lib/auth/onboarding-invite";
-
-const resend = new Resend(process.env.RESEND_API_KEY?.trim());
+import { getResend } from "@/lib/email/resend";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -83,7 +81,7 @@ export async function POST(request: Request) {
   }
 
   const fromEmail = (process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com").trim();
-  const { error: sendError } = await resend.emails.send({
+  const { error: sendError } = await getResend().emails.send({
     from: `Fire & Fragrance SA <${fromEmail}>`,
     to: targetUser.email,
     subject: "Reminder: You're invited to FFSA Hub",

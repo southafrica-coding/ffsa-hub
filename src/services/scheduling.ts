@@ -6,16 +6,15 @@
 // All writes use the admin client (RLS bypass). Reads use whatever the
 // caller passes — RLS allows any authenticated user to read.
 
-import { Resend } from "resend";
 import { schedulingRequestEmailHtml } from "@/lib/email/templates/scheduling-request";
 import { schedulingSlotsSubmittedEmailHtml } from "@/lib/email/templates/scheduling-slots-submitted";
 import { schedulingConfirmedEmailHtml } from "@/lib/email/templates/scheduling-confirmed";
 import { buildIcsInvite } from "@/lib/scheduling/ics";
+import { getResend } from "@/lib/email/resend";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
 
-const resend = new Resend(process.env.RESEND_API_KEY?.trim());
 const FROM_EMAIL = (process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com").trim();
 const FROM_HEADER = `Fire & Fragrance SA <${FROM_EMAIL}>`;
 const SITE_URL =
@@ -133,7 +132,7 @@ export async function createSchedulingRequest(
   let emailError: string | null = null;
   if (input.sendEmail !== false && contact?.email) {
     try {
-      await resend.emails.send({
+      await getResend().emails.send({
         from: FROM_HEADER,
         to: contact.email,
         subject: `Let's schedule a quick call`,
@@ -332,7 +331,7 @@ async function sendSlotsSubmittedNotification(
   if (!requester?.email) return;
 
   try {
-    await resend.emails.send({
+    await getResend().emails.send({
       from: FROM_HEADER,
       to: requester.email,
       subject: `${fullName(contact ?? {}) || "Someone"} sent you times`,
@@ -464,7 +463,7 @@ async function sendConfirmationEmail(
   });
 
   try {
-    await resend.emails.send({
+    await getResend().emails.send({
       from: FROM_HEADER,
       to: contact.email,
       subject: `Confirmed: ${formattedDateTime}`,

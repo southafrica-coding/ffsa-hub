@@ -1,7 +1,5 @@
-import { Resend } from "resend";
 import { referenceRequestApplicantEmailHtml } from "./templates/reference-request-applicant";
-
-const resend = new Resend(process.env.RESEND_API_KEY?.trim());
+import { getResend } from "@/lib/email/resend";
 
 /**
  * Email an applicant asking them to add the required references they didn't
@@ -20,7 +18,7 @@ export async function sendApplicantReferenceRequest(params: {
   const fromEmail = (process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com").trim();
   const statusUrl = `${siteUrl}/apply/status/${params.statusToken}`;
 
-  return resend.emails.send({
+  return getResend().emails.send({
     from: `Fire & Fragrance SA <${fromEmail}>`,
     to: params.toEmail,
     subject: `Action needed: references for ${params.programName}`,

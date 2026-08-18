@@ -2,7 +2,7 @@
 //
 // The single entry point for Resend transactional mail (schools /
 // applicant lifecycle, invites, references, reminders). It does three
-// things every raw resend.emails.send() call was missing:
+// things every raw getResend().emails.send() call was missing:
 //
 //   1. Suppression pre-check — never send to an address that hard-bounced
 //      or filed a spam complaint (email_suppressions, migration 046). A
@@ -15,11 +15,9 @@
 // Best-effort logging: a ledger hiccup never blocks the actual send.
 // Callers get a simple { ok, id, error, suppressed } result.
 
-import { Resend } from "resend";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { recordEmail, markSent, markFailed, markDropped } from "./ledger";
-
-const resend = new Resend(process.env.RESEND_API_KEY?.trim());
+import { getResend } from "@/lib/email/resend";
 
 export type SendTransactionalInput = {
   to: string;
@@ -81,7 +79,7 @@ export async function sendTransactional(
     process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com"
   ).trim();
   const fromName = input.fromName || "Fire & Fragrance SA";
-  const { data, error } = await resend.emails.send({
+  const { data, error } = await getResend().emails.send({
     from: `${fromName} <${fromEmail}>`,
     to: input.to,
     subject: input.subject,

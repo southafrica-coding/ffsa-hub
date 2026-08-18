@@ -1,7 +1,5 @@
-import { Resend } from "resend";
 import { referencesCompleteEmailHtml } from "./templates/references-complete";
-
-const resend = new Resend(process.env.RESEND_API_KEY?.trim());
+import { getResend } from "@/lib/email/resend";
 
 // Emails one recipient that every required reference for an application has
 // been submitted — either the assigned staff member, or (when unassigned) a
@@ -32,7 +30,7 @@ export async function sendReferencesCompleteEmail(opts: {
     : `References complete — ${opts.applicantName} · ${opts.programName}`;
 
   try {
-    await resend.emails.send({
+    await getResend().emails.send({
       from: fromHeader,
       to: opts.staff.email,
       subject,

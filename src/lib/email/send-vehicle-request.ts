@@ -6,12 +6,11 @@
 // /request-vehicle/<slug> link and can't see the in-app feed — they get a
 // confirmation on submit and an approve/deny email on decision.
 
-import { Resend } from "resend";
 import { dateRangeLabel } from "@/lib/bookings/dates";
 import { vehicleRequestReceivedEmailHtml } from "./templates/vehicle-request-received";
 import { vehicleRequestDecisionEmailHtml } from "./templates/vehicle-request-decision";
+import { getResend } from "@/lib/email/resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY?.trim());
 const FROM = `Fire & Fragrance SA <${(process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com").trim()}>`;
 const SITE =
   process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || "https://ffsahub.com";
@@ -33,7 +32,7 @@ export async function sendVehicleRequestReceived(opts: {
 }) {
   if (!opts.email) return;
   try {
-    await resend.emails.send({
+    await getResend().emails.send({
       from: FROM,
       to: opts.email,
       subject: "We've received your vehicle request",
@@ -61,7 +60,7 @@ export async function sendVehicleRequestDecision(opts: {
 }) {
   if (!opts.email) return;
   try {
-    await resend.emails.send({
+    await getResend().emails.send({
       from: FROM,
       to: opts.email,
       subject: opts.approved
