@@ -24,6 +24,7 @@ import {
   BUYER_FIELD_LABELS,
 } from "@/lib/ticketing/buyer-fields";
 import { TICKET_CONSENT_VERSION } from "@/lib/ticketing/consent-terms";
+import { settlePaidOrder } from "@/lib/ticketing/settle";
 import {
   buildWaiverSignatureGroups,
   type TierWaiver,
@@ -37,10 +38,10 @@ import {
 // Steps: validate → reserve inventory atomically → apply promo →
 // create pending order → kick off PayFast → return { redirectUrl }.
 //
-// Free / fully-comped orders (total_cents == 0) are rejected for
-// now — fulfilment without a payment-provider round-trip arrives
-// with ticket 10. Spam protection (Turnstile / rate limit) is a
-// pre-launch item; see the spec.
+// Free / fully-comped orders (total_cents == 0) skip the provider
+// entirely: the order is created, marked paid and fulfilled inline,
+// and the buyer is sent straight to the thanks page. Spam protection
+// (Turnstile / rate limit) is a pre-launch item; see the spec.
 
 type Body = {
   lines?: Array<{
@@ -218,12 +219,10 @@ export async function POST(
       { status: 400 }
     );
   }
-  if (!eligibleProviders.includes(providerName)) {
-    return NextResponse.json(
-      { error: `${providerName} can't take payments in ${currency}.` },
-      { status: 409 }
-    );
-  }
+  // A fully-comped order never reaches a processor, so an ineligible
+  // provider is only a problem when there's actually money to collect.
+  // Enforced with the totals, once the discount is known.
+  const providerEligible = eligibleProviders.includes(providerName);
   const providerImpl: PaymentProvider =
     providerName === "stripe" ? stripeProvider : payfastProvider;
 
@@ -507,16 +506,16 @@ export async function POST(
   const totalCents =
     Math.max(0, subtotalCents - discountCents) + donationCents;
 
-  if (totalCents <= 0) {
-    // Fully-comped orders aren't fulfilled yet — fulfilment arrives
-    // in ticket 10. Roll back and reject for now.
+  // A 100% comp code — or any discount that zeroes the total — is a
+  // real order that simply owes nothing. It never touches PayFast or
+  // Stripe: it's created, settled and fulfilled inline below.
+  const isFreeOrder = totalCents <= 0;
+
+  if (!isFreeOrder && !providerEligible) {
     await rollbackReservations();
     return NextResponse.json(
-      {
-        error:
-          "Free / fully-comped orders aren't supported yet. Add a small donation, or remove the comp code.",
-      },
-      { status: 400 }
+      { error: `${providerName} can't take payments in ${currency}.` },
+      { status: 409 }
     );
   }
 
@@ -537,7 +536,9 @@ export async function POST(
       consent_accepted_at: now.toISOString(),
       status: "pending",
       contact_resolution: "pending",
-      payment_provider: providerName,
+      // No processor is involved in a comped order, so it carries no
+      // provider (the refund path already treats null as "record only").
+      payment_provider: isFreeOrder ? null : providerName,
       currency,
       subtotal_cents: subtotalCents,
       discount_cents: discountCents,
@@ -556,7 +557,9 @@ export async function POST(
       ticket_answers: ticketAnswerGroups as unknown as Json,
       // Per-ticket signed waivers, drained onto tickets at fulfilment.
       waiver_signatures: waiverGroups as unknown as Json,
-      expires_at: expiresAt,
+      // A comped order is settled in the next breath, so it never
+      // needs a reservation window.
+      expires_at: isFreeOrder ? null : expiresAt,
     })
     .select("id")
     .single();
@@ -594,8 +597,33 @@ export async function POST(
     }
   }
 
-  // ── Provider checkout ───────────────────────────────────────
   const base = siteBase(request);
+  const thanksUrl = `${base}/e/${event.public_slug}/thanks?order=${order.id}`;
+
+  // ── Free / fully-comped order: settle it right here ──────────
+  // Same shared settle path the webhooks use, so the order is marked
+  // paid and fulfilled (tickets issued + emailed) exactly once.
+  if (isFreeOrder) {
+    const settled = await settlePaidOrder(supabase, {
+      orderId: order.id,
+      expectedTotalCents: 0,
+      providerPaymentId: null,
+      amountCents: 0,
+    });
+    if (settled.outcome === "error") {
+      // The order is paid; only fulfilment stumbled. Mirror the webhook:
+      // log it and let staff re-issue out-of-band rather than failing a
+      // buyer who owes nothing.
+      console.error(
+        "[checkout] comped-order fulfilment failed for order",
+        order.id,
+        settled.error
+      );
+    }
+    return NextResponse.json({ redirectUrl: thanksUrl });
+  }
+
+  // ── Provider checkout ───────────────────────────────────────
   const totalQty = resolved.reduce((s, l) => s + l.qty, 0);
   const notifyUrl =
     providerName === "stripe"
@@ -609,7 +637,7 @@ export async function POST(
       currency,
       description: describeOrder(event.title, totalQty),
       buyer: { firstName, lastName, email: emailRaw },
-      returnUrl: `${base}/e/${event.public_slug}/thanks?order=${order.id}`,
+      returnUrl: thanksUrl,
       cancelUrl: `${base}/e/${event.public_slug}`,
       notifyUrl,
     });

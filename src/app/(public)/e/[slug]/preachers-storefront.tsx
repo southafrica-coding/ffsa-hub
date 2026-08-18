@@ -317,6 +317,11 @@ export function PreachersStorefront({
 
   const totalCents =
     Math.max(0, subtotalCents - promoDiscountCents) + donationCents;
+
+  // A 100% comp code (or any discount that zeroes the total) means
+  // there's nothing to charge — the checkout API settles the order
+  // inline, so the buyer never sees a payment provider.
+  const isFreeOrder = totalCents <= 0;
   const lineCount = Object.values(lines).reduce((s, l) => s + l.qty, 0);
 
   async function applyPromo() {
@@ -862,48 +867,67 @@ export function PreachersStorefront({
             <span className="pr-pay-total-v">{money(totalCents)}</span>
           </div>
           <p className="pr-pay-note">
-            Secure checkout via {canUsePayfast ? "PayFast" : "Stripe"}.{" "}
+            {isFreeOrder
+              ? "Your code covers this in full — nothing to pay. "
+              : `Secure checkout via ${canUsePayfast ? "PayFast" : "Stripe"}. `}
             {lineCount} pass
             {lineCount === 1 ? "" : "es"} held for you.
           </p>
           {err && <p className="pr-error">{err}</p>}
-          {canUsePayfast && (
+          {isFreeOrder ? (
             <button
               type="button"
-              onClick={() => submit("payfast")}
+              onClick={() => submit(canUsePayfast ? "payfast" : "stripe")}
               disabled={submitting !== null || !buyerValid || !consentAccepted}
               className="pr-paybtn"
             >
-              {submitting === "payfast" ? "LOCKING IT IN…" : `PAY ${money(totalCents)}`}
-              {submitting !== "payfast" && <span className="pr-cta-arrow">&rarr;</span>}
-            </button>
-          )}
-          {/* Stripe is the alternative on a ZAR event and the only
-              option on any other currency, so it takes the primary
-              button styling when PayFast can't be offered. */}
-          <div className={canUsePayfast ? "pr-paybtn-alt-wrap" : undefined}>
-            <button
-              type="button"
-              onClick={() => submit("stripe")}
-              disabled={submitting !== null || !buyerValid || !consentAccepted}
-              className={canUsePayfast ? "pr-paybtn-alt" : "pr-paybtn"}
-            >
-              {submitting === "stripe"
-                ? "LOCKING IT IN…"
-                : canUsePayfast
-                  ? "PAY WITH INTERNATIONAL CARD"
-                  : `PAY ${money(totalCents)}`}
-              {submitting !== "stripe" && (
+              {submitting !== null ? "LOCKING IT IN…" : "GET MY PASSES"}
+              {submitting === null && (
                 <span className="pr-cta-arrow">&rarr;</span>
               )}
             </button>
+          ) : (
+            <>
             {canUsePayfast && (
-              <p className="pr-paybtn-alt-note">
-                Card declined on PayFast? Amex / Apple&nbsp;Pay / Google&nbsp;Pay?
-                Use Stripe.
-              </p>
+              <button
+                type="button"
+                onClick={() => submit("payfast")}
+                disabled={submitting !== null || !buyerValid || !consentAccepted}
+                className="pr-paybtn"
+              >
+                {submitting === "payfast" ? "LOCKING IT IN…" : `PAY ${money(totalCents)}`}
+                {submitting !== "payfast" && <span className="pr-cta-arrow">&rarr;</span>}
+              </button>
             )}
-          </div>
+            {/* Stripe is the alternative on a ZAR event and the only
+                option on any other currency, so it takes the primary
+                button styling when PayFast can't be offered. */}
+            <div className={canUsePayfast ? "pr-paybtn-alt-wrap" : undefined}>
+              <button
+                type="button"
+                onClick={() => submit("stripe")}
+                disabled={submitting !== null || !buyerValid || !consentAccepted}
+                className={canUsePayfast ? "pr-paybtn-alt" : "pr-paybtn"}
+              >
+                {submitting === "stripe"
+                  ? "LOCKING IT IN…"
+                  : canUsePayfast
+                    ? "PAY WITH INTERNATIONAL CARD"
+                    : `PAY ${money(totalCents)}`}
+                {submitting !== "stripe" && (
+                  <span className="pr-cta-arrow">&rarr;</span>
+                )}
+              </button>
+              {canUsePayfast && (
+                <p className="pr-paybtn-alt-note">
+                  Card declined on PayFast? Amex / Apple&nbsp;Pay / Google&nbsp;Pay?
+                  Use Stripe.
+                </p>
+              )}
+            </div>
+
+            </>
+          )}
         </section>
       )}
 

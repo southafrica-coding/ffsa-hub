@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 // POST /api/events/[id]/promo/validate
 // Public, non-committing preview of a promo code. Returns the code's discount
@@ -7,6 +7,12 @@ import { createClient } from "@/lib/supabase/server";
 // can show the buyer their discount live. The authoritative discount is still
 // re-validated and re-computed at /checkout — this route never increments
 // redemption_count or touches reservations.
+//
+// Uses the service-role client, like /checkout does: promo_codes is
+// readable only by staff under RLS, so an anon client would tell every
+// signed-out buyer their perfectly good code "isn't valid". The buyer
+// has already typed the code — this only confirms terms for one they
+// named.
 
 type ValidateBody = {
   code?: string;
@@ -20,7 +26,7 @@ export async function POST(
   context: { params: Promise<{ id: string }> }
 ) {
   const { id: eventId } = await context.params;
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   let body: ValidateBody;
   try {

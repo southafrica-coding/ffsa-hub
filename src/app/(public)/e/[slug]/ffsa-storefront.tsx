@@ -288,6 +288,11 @@ export function FfsaStorefront({
 
   const totalCents =
     Math.max(0, subtotalCents - promoDiscountCents) + donationCents;
+
+  // A 100% comp code (or any discount that zeroes the total) means
+  // there's nothing to charge — the checkout API settles the order
+  // inline, so the buyer never sees a payment provider.
+  const isFreeOrder = totalCents <= 0;
   const lineCount = Object.values(lines).reduce((s, l) => s + l.qty, 0);
 
   async function applyPromo() {
@@ -930,41 +935,69 @@ export function FfsaStorefront({
         {lineCount > 0 && (
           <section className="ffx-pay ffx-reveal">
             {err && <p className="ffx-alert">{err}</p>}
-            {canUsePayfast && (
-              <button
-                type="button"
-                className="ffx-cta"
-                onClick={() => submit("payfast")}
-                disabled={submitting !== null || !buyerValid || !consentAccepted}
-              >
-                <span>
-                  {submitting === "payfast"
-                    ? "Starting payment…"
-                    : `Pay ${money(totalCents)}`}
-                </span>
-                <span className="ffx-cta-arrow">→</span>
-              </button>
+            {isFreeOrder ? (
+              <>
+                <button
+                  type="button"
+                  className="ffx-cta"
+                  onClick={() => submit(canUsePayfast ? "payfast" : "stripe")}
+                  disabled={
+                    submitting !== null || !buyerValid || !consentAccepted
+                  }
+                >
+                  <span>
+                    {submitting !== null ? "Issuing tickets…" : "Get my tickets"}
+                  </span>
+                  <span className="ffx-cta-arrow">→</span>
+                </button>
+                <p className="ffx-pay-note">
+                  Your code covers this in full — nothing to pay. We&apos;ll
+                  email your tickets straight away.
+                </p>
+              </>
+            ) : (
+              <>
+                {canUsePayfast && (
+                  <button
+                    type="button"
+                    className="ffx-cta"
+                    onClick={() => submit("payfast")}
+                    disabled={
+                      submitting !== null || !buyerValid || !consentAccepted
+                    }
+                  >
+                    <span>
+                      {submitting === "payfast"
+                        ? "Starting payment…"
+                        : `Pay ${money(totalCents)}`}
+                    </span>
+                    <span className="ffx-cta-arrow">→</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className={canUsePayfast ? "ffx-cta-alt" : "ffx-cta"}
+                  onClick={() => submit("stripe")}
+                  disabled={
+                    submitting !== null || !buyerValid || !consentAccepted
+                  }
+                >
+                  <span>
+                    {submitting === "stripe"
+                      ? "Starting payment…"
+                      : canUsePayfast
+                        ? "Pay with international card"
+                        : `Pay ${money(totalCents)}`}
+                  </span>
+                  {!canUsePayfast && <span className="ffx-cta-arrow">→</span>}
+                </button>
+                <p className="ffx-pay-note">
+                  {canUsePayfast
+                    ? "Secure checkout via PayFast. Use the international option for cards declined on PayFast or Apple Pay."
+                    : "You'll be redirected to Stripe to complete payment securely."}
+                </p>
+              </>
             )}
-            <button
-              type="button"
-              className={canUsePayfast ? "ffx-cta-alt" : "ffx-cta"}
-              onClick={() => submit("stripe")}
-              disabled={submitting !== null || !buyerValid || !consentAccepted}
-            >
-              <span>
-                {submitting === "stripe"
-                  ? "Starting payment…"
-                  : canUsePayfast
-                    ? "Pay with international card"
-                    : `Pay ${money(totalCents)}`}
-              </span>
-              {!canUsePayfast && <span className="ffx-cta-arrow">→</span>}
-            </button>
-            <p className="ffx-pay-note">
-              {canUsePayfast
-                ? "Secure checkout via PayFast. Use the international option for cards declined on PayFast or Apple Pay."
-                : "You'll be redirected to Stripe to complete payment securely."}
-            </p>
           </section>
         )}
       </main>

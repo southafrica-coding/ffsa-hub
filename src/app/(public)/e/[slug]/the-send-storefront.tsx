@@ -279,6 +279,11 @@ export function TheSendStorefront({
 
   const totalCents =
     Math.max(0, subtotalCents - promoDiscountCents) + donationCents;
+
+  // A 100% comp code (or any discount that zeroes the total) means
+  // there's nothing to charge — the checkout API settles the order
+  // inline, so the buyer never sees a payment provider.
+  const isFreeOrder = totalCents <= 0;
   const lineCount = Object.values(lines).reduce((s, l) => s + l.qty, 0);
 
   async function applyPromo() {
@@ -839,52 +844,75 @@ export function TheSendStorefront({
             <span className="tss-pay-total-v">{money(totalCents)}</span>
           </div>
           <p className="tss-pay-note">
-            {ARROW} SECURE CHECKOUT VIA {canUsePayfast ? "PAYFAST" : "STRIPE"}.{" "}
+            {isFreeOrder ? (
+              <>{ARROW} YOUR CODE COVERS THIS IN FULL — NOTHING TO PAY.{" "}</>
+            ) : (
+              <>
+                {ARROW} SECURE CHECKOUT VIA {canUsePayfast ? "PAYFAST" : "STRIPE"}.{" "}
+              </>
+            )}
             {lineCount} PASS
             {lineCount === 1 ? "" : "ES"} HELD FOR YOU.
           </p>
           {err && <p className="tss-error">{ARROW} {err}</p>}
-          {canUsePayfast && (
+          {isFreeOrder ? (
             <button
               type="button"
-              onClick={() => submit("payfast")}
+              onClick={() => submit(canUsePayfast ? "payfast" : "stripe")}
               disabled={submitting !== null || !buyerValid || !consentAccepted}
               className="tss-paybtn"
             >
-              {submitting === "payfast"
-                ? "DEPLOYING…"
-                : `PAY ${money(totalCents)}`}
-              {submitting !== "payfast" && (
+              {submitting !== null ? "DEPLOYING…" : "GET MY PASSES"}
+              {submitting === null && (
                 <span className="tss-cta-arrow">{ARROW}</span>
               )}
             </button>
-          )}
-          {/* Stripe is the alternative on a ZAR event and the only
-              option on any other currency, so it takes the primary
-              button styling when PayFast can't be offered. */}
-          <div className={canUsePayfast ? "tss-paybtn-alt-wrap" : undefined}>
-            <button
-              type="button"
-              onClick={() => submit("stripe")}
-              disabled={submitting !== null || !buyerValid || !consentAccepted}
-              className={canUsePayfast ? "tss-paybtn-alt" : "tss-paybtn"}
-            >
-              {submitting === "stripe"
-                ? "DEPLOYING…"
-                : canUsePayfast
-                  ? "PAY WITH INTERNATIONAL CARD"
-                  : `PAY ${money(totalCents)}`}
-              {submitting !== "stripe" && (
-                <span className="tss-cta-arrow">{ARROW}</span>
-              )}
-            </button>
+          ) : (
+            <>
             {canUsePayfast && (
-              <p className="tss-paybtn-alt-note">
-                {ARROW} CARD DECLINED ON PAYFAST? AMEX / APPLE&nbsp;PAY / GOOGLE&nbsp;PAY?
-                USE STRIPE.
-              </p>
+              <button
+                type="button"
+                onClick={() => submit("payfast")}
+                disabled={submitting !== null || !buyerValid || !consentAccepted}
+                className="tss-paybtn"
+              >
+                {submitting === "payfast"
+                  ? "DEPLOYING…"
+                  : `PAY ${money(totalCents)}`}
+                {submitting !== "payfast" && (
+                  <span className="tss-cta-arrow">{ARROW}</span>
+                )}
+              </button>
             )}
-          </div>
+            {/* Stripe is the alternative on a ZAR event and the only
+                option on any other currency, so it takes the primary
+                button styling when PayFast can't be offered. */}
+            <div className={canUsePayfast ? "tss-paybtn-alt-wrap" : undefined}>
+              <button
+                type="button"
+                onClick={() => submit("stripe")}
+                disabled={submitting !== null || !buyerValid || !consentAccepted}
+                className={canUsePayfast ? "tss-paybtn-alt" : "tss-paybtn"}
+              >
+                {submitting === "stripe"
+                  ? "DEPLOYING…"
+                  : canUsePayfast
+                    ? "PAY WITH INTERNATIONAL CARD"
+                    : `PAY ${money(totalCents)}`}
+                {submitting !== "stripe" && (
+                  <span className="tss-cta-arrow">{ARROW}</span>
+                )}
+              </button>
+              {canUsePayfast && (
+                <p className="tss-paybtn-alt-note">
+                  {ARROW} CARD DECLINED ON PAYFAST? AMEX / APPLE&nbsp;PAY / GOOGLE&nbsp;PAY?
+                  USE STRIPE.
+                </p>
+              )}
+            </div>
+
+            </>
+          )}
         </section>
       )}
 

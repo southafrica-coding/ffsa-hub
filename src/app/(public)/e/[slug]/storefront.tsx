@@ -205,6 +205,11 @@ export function Storefront({
 
   const totalCents =
     Math.max(0, subtotalCents - promoDiscountCents) + donationCents;
+
+  // A 100% comp code (or any discount that zeroes the total) means
+  // there's nothing to charge — the checkout API settles the order
+  // inline, so the buyer never sees a payment provider.
+  const isFreeOrder = totalCents <= 0;
   const lineCount = Object.values(lines).reduce((s, l) => s + l.qty, 0);
 
   async function applyPromo() {
@@ -724,52 +729,71 @@ export function Storefront({
         <Card>
           <CardContent className="p-6 space-y-3">
             <p className="text-xs text-muted-foreground normal-case tracking-normal">
-              You'll be redirected to {canUsePayfast ? "PayFast" : "Stripe"} to
-              complete payment securely.
+              {isFreeOrder
+                ? "Your code covers this in full — nothing to pay. We'll email your tickets straight away."
+                : `You'll be redirected to ${canUsePayfast ? "PayFast" : "Stripe"} to complete payment securely.`}
             </p>
             {err && (
               <p className="text-sm rounded-md px-3 py-2 status-red normal-case tracking-normal">
                 {err}
               </p>
             )}
-            {canUsePayfast && (
+            {isFreeOrder ? (
               <Button
                 type="button"
-                onClick={() => submit("payfast")}
+                onClick={() => submit(canUsePayfast ? "payfast" : "stripe")}
                 disabled={submitting !== null || !buyerValid || !consentAccepted}
                 size="lg"
                 className="w-full h-12"
               >
-                {submitting === "payfast"
-                  ? "Starting payment…"
-                  : `Pay ${money(totalCents)} →`}
+                {submitting !== null ? "Issuing tickets…" : "Get my tickets →"}
               </Button>
+            ) : (
+              <>
+                {canUsePayfast && (
+                  <Button
+                    type="button"
+                    onClick={() => submit("payfast")}
+                    disabled={
+                      submitting !== null || !buyerValid || !consentAccepted
+                    }
+                    size="lg"
+                    className="w-full h-12"
+                  >
+                    {submitting === "payfast"
+                      ? "Starting payment…"
+                      : `Pay ${money(totalCents)} →`}
+                  </Button>
+                )}
+                {/* Stripe is the secondary option on a ZAR event and the
+                    only one on any other currency, so it takes over the
+                    primary styling when PayFast can't be offered. */}
+                <div className={canUsePayfast ? "pt-1" : undefined}>
+                  <Button
+                    type="button"
+                    onClick={() => submit("stripe")}
+                    disabled={
+                      submitting !== null || !buyerValid || !consentAccepted
+                    }
+                    variant={canUsePayfast ? "outline" : "default"}
+                    size="lg"
+                    className={canUsePayfast ? "w-full h-11" : "w-full h-12"}
+                  >
+                    {submitting === "stripe"
+                      ? "Starting payment…"
+                      : canUsePayfast
+                        ? "Pay with international card (Stripe) →"
+                        : `Pay ${money(totalCents)} →`}
+                  </Button>
+                  {canUsePayfast && (
+                    <p className="text-[11px] text-muted-foreground normal-case tracking-normal mt-2 text-center">
+                      Use this if your card was declined on PayFast, or for
+                      international cards / Apple Pay.
+                    </p>
+                  )}
+                </div>
+              </>
             )}
-            {/* Stripe is the secondary option on a ZAR event and the
-                only one on any other currency, so it takes over the
-                primary styling when PayFast can't be offered. */}
-            <div className={canUsePayfast ? "pt-1" : undefined}>
-              <Button
-                type="button"
-                onClick={() => submit("stripe")}
-                disabled={submitting !== null || !buyerValid || !consentAccepted}
-                variant={canUsePayfast ? "outline" : "default"}
-                size="lg"
-                className={canUsePayfast ? "w-full h-11" : "w-full h-12"}
-              >
-                {submitting === "stripe"
-                  ? "Starting payment…"
-                  : canUsePayfast
-                    ? "Pay with international card (Stripe) →"
-                    : `Pay ${money(totalCents)} →`}
-              </Button>
-              {canUsePayfast && (
-                <p className="text-[11px] text-muted-foreground normal-case tracking-normal mt-2 text-center">
-                  Use this if your card was declined on PayFast, or for
-                  international cards / Apple Pay.
-                </p>
-              )}
-            </div>
           </CardContent>
         </Card>
       )}

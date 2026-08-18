@@ -279,6 +279,11 @@ export function CampsStorefront({
 
   const totalCents =
     Math.max(0, subtotalCents - promoDiscountCents) + donationCents;
+
+  // A 100% comp code (or any discount that zeroes the total) means
+  // there's nothing to charge — the checkout API settles the order
+  // inline, so the buyer never sees a payment provider.
+  const isFreeOrder = totalCents <= 0;
   const lineCount = Object.values(lines).reduce((s, l) => s + l.qty, 0);
 
   async function applyPromo() {
@@ -831,48 +836,71 @@ export function CampsStorefront({
             <span className="cmp-pay-total-v">{money(totalCents)}</span>
           </div>
           <p className="cmp-pay-note">
-            {STAR} secure checkout via {canUsePayfast ? "PayFast" : "Stripe"}.{" "}
+            {isFreeOrder ? (
+              <>{STAR} your code covers this in full — nothing to pay.{" "}</>
+            ) : (
+              <>
+                {STAR} secure checkout via {canUsePayfast ? "PayFast" : "Stripe"}.{" "}
+              </>
+            )}
             {lineCount} pass
             {lineCount === 1 ? "" : "es"} held for you &#128153;
           </p>
           {err && <p className="cmp-error">{STAR} {err}</p>}
-          {canUsePayfast && (
+          {isFreeOrder ? (
             <button
               type="button"
-              onClick={() => submit("payfast")}
+              onClick={() => submit(canUsePayfast ? "payfast" : "stripe")}
               disabled={submitting !== null || !buyerValid || !consentAccepted}
               className="cmp-paybtn"
             >
-              {submitting === "payfast" ? "LOCKING IT IN…" : `PAY ${money(totalCents)}`}
-              {submitting !== "payfast" && <span className="cmp-cta-arrow">&rarr;</span>}
-            </button>
-          )}
-          {/* Stripe is the alternative on a ZAR event and the only
-              option on any other currency, so it takes the primary
-              button styling when PayFast can't be offered. */}
-          <div className={canUsePayfast ? "cmp-paybtn-alt-wrap" : undefined}>
-            <button
-              type="button"
-              onClick={() => submit("stripe")}
-              disabled={submitting !== null || !buyerValid || !consentAccepted}
-              className={canUsePayfast ? "cmp-paybtn-alt" : "cmp-paybtn"}
-            >
-              {submitting === "stripe"
-                ? "LOCKING IT IN…"
-                : canUsePayfast
-                  ? "PAY WITH INTERNATIONAL CARD"
-                  : `PAY ${money(totalCents)}`}
-              {submitting !== "stripe" && (
+              {submitting !== null ? "LOCKING IT IN…" : "GET MY PASSES"}
+              {submitting === null && (
                 <span className="cmp-cta-arrow">&rarr;</span>
               )}
             </button>
+          ) : (
+            <>
             {canUsePayfast && (
-              <p className="cmp-paybtn-alt-note">
-                {STAR} card declined on PayFast? amex / apple&nbsp;pay / google&nbsp;pay?
-                use Stripe.
-              </p>
+              <button
+                type="button"
+                onClick={() => submit("payfast")}
+                disabled={submitting !== null || !buyerValid || !consentAccepted}
+                className="cmp-paybtn"
+              >
+                {submitting === "payfast" ? "LOCKING IT IN…" : `PAY ${money(totalCents)}`}
+                {submitting !== "payfast" && <span className="cmp-cta-arrow">&rarr;</span>}
+              </button>
             )}
-          </div>
+            {/* Stripe is the alternative on a ZAR event and the only
+                option on any other currency, so it takes the primary
+                button styling when PayFast can't be offered. */}
+            <div className={canUsePayfast ? "cmp-paybtn-alt-wrap" : undefined}>
+              <button
+                type="button"
+                onClick={() => submit("stripe")}
+                disabled={submitting !== null || !buyerValid || !consentAccepted}
+                className={canUsePayfast ? "cmp-paybtn-alt" : "cmp-paybtn"}
+              >
+                {submitting === "stripe"
+                  ? "LOCKING IT IN…"
+                  : canUsePayfast
+                    ? "PAY WITH INTERNATIONAL CARD"
+                    : `PAY ${money(totalCents)}`}
+                {submitting !== "stripe" && (
+                  <span className="cmp-cta-arrow">&rarr;</span>
+                )}
+              </button>
+              {canUsePayfast && (
+                <p className="cmp-paybtn-alt-note">
+                  {STAR} card declined on PayFast? amex / apple&nbsp;pay / google&nbsp;pay?
+                  use Stripe.
+                </p>
+              )}
+            </div>
+
+            </>
+          )}
         </section>
       )}
 
