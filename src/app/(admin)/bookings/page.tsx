@@ -1,81 +1,117 @@
-import Link from "next/link";
+// Frame 3c — BOOKINGS. "Spaces and vehicles on one timeline for the day, so
+// clashes are obvious at a glance. Requests waiting on approval sit underneath."
+//
+// This route used to be a hub of two description cards with the day timeline as
+// a read-only strip beneath them. The timeline IS the screen now; the two
+// services are still reachable from the control strip, because the global nav
+// only carries one Bookings entry.
+//
+// THE RULE THAT SHAPES THIS FILE: spaces and vehicles are separate services
+// with separate permission modules. Every read below is fetched and gated per
+// half, and a half the viewer cannot see contributes nothing — no rows, no
+// requests, no heading, no error. `safe()` also means one half failing cannot
+// take the other half's screen down.
+
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { requireAnyModuleAccess, hasModuleAccess } from "@/lib/require-permission";
 import {
-  requireAnyModuleAccess,
-  hasModuleAccess,
-} from "@/lib/require-permission";
-import { Building2, Car, ArrowUpRight } from "lucide-react";
-import { Masthead, SectionBar } from "@/components/ffsa";
-import { getBookings, type BookingWithRefs } from "@/services/bookings";
+  getBookings,
+  getVenues,
+  getBookingAccess,
+  type BookingWithRefs,
+  type Venue,
+} from "@/services/bookings";
 import {
   getVehicleBookings,
+  getVehicles,
+  getVehicleAccess,
+  purposeLabel,
+  type Vehicle,
   type VehicleBookingWithRefs,
 } from "@/services/vehicles";
 import { blockWindow, computeHourRange } from "@/lib/bookings/timegrid";
-import {
-  todayISO,
-  dayHeadingLabel,
-  timeRangeLabel,
-} from "@/lib/bookings/dates";
-import {
-  DayTimeline,
-  type TimelineGroup,
-  type TimelineItem,
-  type TimelineRow,
-} from "./day-timeline";
-
-const BOOKING_TYPES = [
-  {
-    title: "Space Bookings",
-    description:
-      "Request and approve venue & space bookings across FFSA — calendar, recurring slots, and approvals.",
-    href: "/bookings/spaces",
-    icon: Building2,
-    ready: true,
-    module: "bookings",
-  },
-  {
-    title: "Rent a Vehicle",
-    description:
-      "Request a base vehicle for outreach, airport runs, and ministry trips — fleet, drivers, and approvals.",
-    href: "/bookings/vehicles",
-    icon: Car,
-    ready: true,
-    module: "vehicles",
-  },
-];
+import { todayISO, parseDateParam, dateRangeLabel, timeRangeLabel } from "@/lib/bookings/dates";
+import type { TimelineItem, TimelineResource } from "./day-timeline";
+import type { ApprovalRow } from "./approval-queue";
+import { BookingsDay, type Showing } from "./bookings-day";
 
 // Only live bookings occupy a resource — denied / cancelled ones never clash,
-// and a "completed" vehicle trip has already been handed back.
+// and a completed vehicle trip has already been handed back.
 const LIVE_STATUSES = new Set(["pending", "approved"]);
 
-const FALLBACK_COLOR = "#64748b"; // same fallback the spaces day view uses
+const FALLBACK_COLOR = "#64748b"; // the same fallback the spaces day view uses
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
 
-/**
- * Space bookings covering today, grouped into one row per venue that is
- * actually in use. Rows for venues with nothing today are omitted rather than
- * drawn empty, so the hub stays short on a quiet day.
- *
- * Runs ONLY for a user with bookings access, on the same request-scoped client
- * as every other bookings read — RLS is unchanged and nobody's reach widens.
- */
-async function loadSpaceRows(supabase: Client, today: string): Promise<TimelineRow[]> {
-  const { data, error } = await getBookings(supabase, { from: today, to: today });
-  if (error) return [];
+function normalizeShowing(v?: string): Showing {
+  return v === "spaces" || v === "vehicles" ? v : "all";
+}
 
-  const rows = new Map<string, TimelineRow & { sort: number }>();
-  for (const b of (data ?? []) as BookingWithRefs[]) {
+/** Never let one half's failure take the page down. */
+async function safe<T>(load: () => Promise<T>, enabled: boolean, empty: T): Promise<T> {
+  if (!enabled) return empty;
+  try {
+    return await load();
+  } catch {
+    return empty;
+  }
+}
+
+/* ── Spaces half ──────────────────────────────────────────── */
+
+/**
+ * Every active venue is a lane, booked or not — on a screen whose job is "can I
+ * have this room at 3", a free room has to be visible. A venue that has been
+ * deactivated but still has a live booking today keeps its lane, so nothing
+ * silently drops off the grid.
+ */
+async function loadSpaces(
+  supabase: Client,
+  date: string
+): Promise<{ resources: TimelineResource[]; bookings: BookingWithRefs[] }> {
+  const [venuesRes, bookingsRes] = await Promise.all([
+    getVenues(supabase, { activeOnly: true }),
+    getBookings(supabase, { from: date, to: date }),
+  ]);
+
+  const venues = (venuesRes.data ?? []) as Venue[];
+  const bookings = (bookingsRes.data ?? []) as BookingWithRefs[];
+
+  const rows = new Map<string, TimelineResource & { sort: number }>();
+  const put = (
+    id: string,
+    name: string,
+    building: string | null,
+    color: string,
+    sort: number
+  ) => {
+    const key = `venue:${id}`;
+    if (!rows.has(key)) {
+      rows.set(key, {
+        key,
+        name,
+        kind: "Space",
+        meta: building,
+        color: color || FALLBACK_COLOR,
+        items: [],
+        sort,
+      });
+    }
+    return rows.get(key)!;
+  };
+
+  for (const v of venues) put(v.id, v.name, v.building, v.color, v.sort_order ?? 9999);
+
+  for (const b of bookings) {
     if (!LIVE_STATUSES.has(b.status)) continue;
 
-    // No clock window ⇒ the timeline draws a full-width lane block instead of
-    // a zero-width sliver. Two cases: a booking with no times at all (the
-    // "All day" concept in the spaces form), and a multi-day booking that
-    // merely passes through today. Date-only strings are compared as strings —
-    // never parsed into a Date — so nothing can shift a day.
+    // No clock window ⇒ a full-width lane block instead of a zero-width sliver.
+    // Two cases: a booking with no times at all (the spaces form's "all day"),
+    // and a multi-day booking merely passing through this date. Date-only
+    // strings are compared as strings, never parsed into a Date, so nothing can
+    // shift a day.
     const multiDay = !!b.end_date && b.end_date > b.booking_date;
     const window = multiDay ? null : blockWindow(b);
 
@@ -88,37 +124,70 @@ async function loadSpaceRows(supabase: Client, today: string): Promise<TimelineR
       window,
     };
 
-    let row = rows.get(b.venue_id);
-    if (!row) {
-      row = {
-        key: `venue:${b.venue_id}`,
-        label: b.venue?.name ?? "Unnamed space",
-        meta: b.venue?.building ?? null,
-        color: b.venue?.color ?? FALLBACK_COLOR,
-        items: [],
-        sort: b.venue?.sort_order ?? 9999,
-      };
-      rows.set(b.venue_id, row);
-    }
+    const row = put(
+      b.venue_id,
+      b.venue?.name ?? "Unnamed space",
+      b.venue?.building ?? null,
+      b.venue?.color ?? FALLBACK_COLOR,
+      b.venue?.sort_order ?? 9999
+    );
     row.items.push(item);
   }
 
-  return [...rows.values()].sort(
-    (a, b) => a.sort - b.sort || a.label.localeCompare(b.label)
-  );
+  return {
+    resources: [...rows.values()].sort(
+      (a, b) => a.sort - b.sort || a.name.localeCompare(b.name)
+    ),
+    bookings,
+  };
 }
 
-/**
- * Vehicle bookings covering today, one row per assigned vehicle. Vehicle
- * bookings are date-only in the schema (checkout_date → return_date, no times
- * anywhere), so every one of them is an all-day lane block by definition.
- */
-async function loadVehicleRows(supabase: Client, today: string): Promise<TimelineRow[]> {
-  const { data, error } = await getVehicleBookings(supabase, { from: today, to: today });
-  if (error) return [];
+/* ── Vehicles half ────────────────────────────────────────── */
 
-  const rows = new Map<string, TimelineRow & { sort: number }>();
-  for (const b of (data ?? []) as VehicleBookingWithRefs[]) {
+/**
+ * One lane per active vehicle. Vehicle bookings are date-only in the schema
+ * (checkout_date → return_date, no times anywhere), so every one of them is an
+ * all-day block by definition — which is exactly why a van already out shows as
+ * a clash against anything else booked on it that day.
+ */
+async function loadVehicles(
+  supabase: Client,
+  date: string
+): Promise<{ resources: TimelineResource[]; bookings: VehicleBookingWithRefs[] }> {
+  const [fleetRes, bookingsRes] = await Promise.all([
+    getVehicles(supabase, { activeOnly: true }),
+    getVehicleBookings(supabase, { from: date, to: date }),
+  ]);
+
+  const fleet = (fleetRes.data ?? []) as Vehicle[];
+  const bookings = (bookingsRes.data ?? []) as VehicleBookingWithRefs[];
+
+  const rows = new Map<string, TimelineResource & { sort: number }>();
+  const put = (
+    key: string,
+    name: string,
+    meta: string | null,
+    color: string,
+    sort: number
+  ) => {
+    if (!rows.has(key)) {
+      rows.set(key, {
+        key,
+        name,
+        kind: "Vehicle",
+        meta,
+        color: color || FALLBACK_COLOR,
+        items: [],
+        sort,
+      });
+    }
+    return rows.get(key)!;
+  };
+
+  for (const v of fleet)
+    put(`vehicle:${v.id}`, v.name, v.registration_plate, v.color, v.sort_order ?? 9999);
+
+  for (const b of bookings) {
     if (!LIVE_STATUSES.has(b.status)) continue;
 
     const item: TimelineItem = {
@@ -134,56 +203,40 @@ async function loadVehicleRows(supabase: Client, today: string): Promise<Timelin
       .map((a) => a.vehicle)
       .filter((v): v is NonNullable<typeof v> => !!v);
 
-    // A request that hasn't been given a van yet still occupies the day — it
-    // gets its own lane rather than vanishing from the view.
-    const targets = assigned.length
-      ? assigned.map((v) => ({
-          key: `vehicle:${v.id}`,
-          label: v.name,
-          meta: v.registration_plate,
-          color: v.color ?? FALLBACK_COLOR,
-          sort: 0,
-        }))
-      : [
-          {
-            key: "vehicle:unassigned",
-            label: "Awaiting a vehicle",
-            meta: null,
-            color: FALLBACK_COLOR,
-            sort: 1,
-          },
-        ];
-
-    for (const t of targets) {
-      let row = rows.get(t.key);
-      if (!row) {
-        row = { ...t, items: [] };
-        rows.set(t.key, row);
-      }
-      row.items.push(item);
+    if (assigned.length === 0) {
+      // A request that has not been given a van yet still occupies the day — it
+      // gets its own lane rather than vanishing from the view.
+      put("vehicle:unassigned", "Awaiting a vehicle", null, FALLBACK_COLOR, 10_000)
+        .items.push(item);
+      continue;
+    }
+    for (const v of assigned) {
+      put(
+        `vehicle:${v.id}`,
+        v.name,
+        v.registration_plate,
+        v.color ?? FALLBACK_COLOR,
+        9999
+      ).items.push(item);
     }
   }
 
-  return [...rows.values()].sort(
-    (a, b) => a.sort - b.sort || a.label.localeCompare(b.label)
-  );
+  return {
+    resources: [...rows.values()].sort(
+      (a, b) => a.sort - b.sort || a.name.localeCompare(b.name)
+    ),
+    bookings,
+  };
 }
 
-/** Never let one half's failure take the page down — a half that errors is
- *  simply not on the timeline. */
-async function safeRows(
-  load: () => Promise<TimelineRow[]>,
-  enabled: boolean
-): Promise<TimelineRow[]> {
-  if (!enabled) return [];
-  try {
-    return await load();
-  } catch {
-    return [];
-  }
-}
+/* ── Screen ───────────────────────────────────────────────── */
 
-export default async function BookingsHubPage() {
+export default async function BookingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ date?: string; show?: string }>;
+}) {
+  const params = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -191,104 +244,107 @@ export default async function BookingsHubPage() {
   if (!user) redirect("/login");
   await requireAnyModuleAccess(supabase, user.id, ["bookings", "vehicles"]);
 
-  // Only surface the booking types the user can actually open — Space Bookings
-  // is restricted to ministry leaders / booking-admin roles, so vehicle-only
-  // staff shouldn't see a card that would just redirect them out.
-  const access = await Promise.all(
-    BOOKING_TYPES.map((b) => hasModuleAccess(supabase, user.id, b.module))
-  );
-  const bookingTypes = BOOKING_TYPES.filter((_, i) => access[i]);
-
-  // The two halves of the day timeline are fetched independently and gated on
-  // the SAME module access that decides whether the hub card is shown. A user
-  // with vehicles but not spaces gets vehicle rows only — no error, and no
-  // empty "Spaces" heading, because an empty half is never put in `groups`.
-  const canSpaces = access[BOOKING_TYPES.findIndex((b) => b.module === "bookings")];
-  const canVehicles = access[BOOKING_TYPES.findIndex((b) => b.module === "vehicles")];
-
-  const today = todayISO(); // local calendar day, same helper the spaces views use
-  const [spaceRows, vehicleRows] = await Promise.all([
-    safeRows(() => loadSpaceRows(supabase, today), canSpaces),
-    safeRows(() => loadVehicleRows(supabase, today), canVehicles),
+  // The two modules are asked independently. Everything downstream branches off
+  // these two booleans and nothing else.
+  const [canSpaces, canVehicles] = await Promise.all([
+    hasModuleAccess(supabase, user.id, "bookings"),
+    hasModuleAccess(supabase, user.id, "vehicles"),
   ]);
 
-  const groups: TimelineGroup[] = [];
-  if (spaceRows.length) groups.push({ key: "spaces", label: "Spaces", rows: spaceRows });
-  if (vehicleRows.length)
-    groups.push({ key: "vehicles", label: "Vehicles", rows: vehicleRows });
+  const today = todayISO();
+  const date = parseDateParam(params.date);
+  const showing = normalizeShowing(params.show);
 
-  // Hour window: the same helper the spaces day view uses, so both screens
-  // agree on where a block sits. All-day rows contribute no window and so
-  // never stretch the range.
+  // A filter value the viewer has no access to must not blank the screen, so it
+  // can only ever narrow what they were already allowed to see.
+  const wantSpaces = canSpaces && showing !== "vehicles";
+  const wantVehicles = canVehicles && showing !== "spaces";
+
+  const [spaces, vehicles, spaceAccess, vehicleAccess] = await Promise.all([
+    safe(() => loadSpaces(supabase, date), wantSpaces, {
+      resources: [] as TimelineResource[],
+      bookings: [] as BookingWithRefs[],
+    }),
+    safe(() => loadVehicles(supabase, date), wantVehicles, {
+      resources: [] as TimelineResource[],
+      bookings: [] as VehicleBookingWithRefs[],
+    }),
+    safe(() => getBookingAccess(supabase, user.id), canSpaces, null),
+    safe(() => getVehicleAccess(supabase, user.id), canVehicles, null),
+  ]);
+
+  // Spaces first, then vehicles — the frame has no group headings, so the order
+  // plus each lane's own "SPACE" / "VEHICLE" line is what separates them. It is
+  // also why a viewer with one module sees no trace of the other.
+  const resources = [...spaces.resources, ...vehicles.resources];
+
+  // Hour bounds from the timed half only: an all-day lane contributes no window
+  // and so never stretches the day open.
   const { startHour, endHour } = computeHourRange(
-    spaceRows.flatMap((r) => r.items.map((i) => i.window)),
+    spaces.bookings
+      .filter((b) => LIVE_STATUSES.has(b.status))
+      .map((b) => (b.end_date && b.end_date > b.booking_date ? null : blockWindow(b))),
     7,
     19
   );
 
+  // Approvals: only for a half this viewer can approve, and only for a half the
+  // filter is currently showing.
+  const approvals: ApprovalRow[] = [];
+  if (wantSpaces && spaceAccess?.canApprove) {
+    for (const b of spaces.bookings) {
+      if (b.status !== "pending") continue;
+      approvals.push({
+        id: b.id,
+        service: "spaces",
+        resource: b.venue?.name ?? "Unnamed space",
+        when: `${dateRangeLabel(b.booking_date, b.end_date)} · ${timeRangeLabel(
+          b.start_time,
+          b.end_time
+        )}`,
+        why: [b.title, b.requester_name].filter(Boolean).join(" — "),
+        href: `/bookings/spaces/${b.id}`,
+      });
+    }
+  }
+  if (wantVehicles && vehicleAccess?.canApprove) {
+    for (const b of vehicles.bookings) {
+      if (b.status !== "pending") continue;
+      const named = (b.assignments ?? [])
+        .map((a) => a.vehicle?.name)
+        .filter(Boolean)
+        .join(", ");
+      approvals.push({
+        id: b.id,
+        service: "vehicles",
+        resource: named || "Awaiting a vehicle",
+        when: dateRangeLabel(b.checkout_date, b.return_date),
+        why: [b.booking_name, purposeLabel(b.purpose)].filter(Boolean).join(" — "),
+        href: `/bookings/vehicles/${b.id}`,
+      });
+    }
+  }
+  // Anyone who can approve at least one half gets the strip, so "nothing
+  // waiting" is a statement rather than a blank space.
+  const showApprovals =
+    (wantSpaces && !!spaceAccess?.canApprove) ||
+    (wantVehicles && !!vehicleAccess?.canApprove);
+
+
   return (
-    <div className="ffsa-screen">
-      <Masthead context="Reservations" title="Bookings" />
-
-      {/* Frame 3c — spaces and vehicles on one day timeline so a clash reads at
-          a glance. Read-only: every block links back to its own module. */}
-      {(canSpaces || canVehicles) && (
-        <div className="px-5 pt-6 md:px-8 md:pt-7">
-          <div className="border border-ink bg-white">
-            <SectionBar title="Today" meta={dayHeadingLabel(today)} />
-            {groups.length > 0 ? (
-              <DayTimeline groups={groups} startHour={startHour} endHour={endHour} />
-            ) : (
-              <p className="px-6 py-8 text-center text-[13px] text-[color:var(--text-secondary)]">
-                Nothing booked today.
-              </p>
-            )}
-          </div>
-        </div>
-      )}
-
-      <div className="px-5 py-6 md:px-8 md:py-7">
-        <div className="border border-ink">
-          {bookingTypes.map((b) => {
-            const Icon = b.icon;
-            const body = (
-              <div className="flex items-start gap-4 border-b border-rule px-6 py-6 last:border-b-0">
-                <Icon className="mt-1 h-5 w-5 shrink-0 text-[color:var(--text-tertiary)]" />
-                <div className="min-w-0 flex-1">
-                  <h2 className="text-[22px]">{b.title}</h2>
-                  <p className="mt-1.5 max-w-2xl text-[13px] text-[color:var(--text-secondary)]">
-                    {b.description}
-                  </p>
-                </div>
-                {b.ready ? (
-                  <span className="mono-label flex shrink-0 items-center gap-1 pt-1">
-                    Open <ArrowUpRight className="h-3 w-3" />
-                  </span>
-                ) : (
-                  <span className="mono-label shrink-0 pt-1">Soon</span>
-                )}
-              </div>
-            );
-
-            if (b.ready) {
-              return (
-                <Link
-                  key={b.title}
-                  href={b.href}
-                  className="block transition-colors hover:bg-bone"
-                >
-                  {body}
-                </Link>
-              );
-            }
-            return (
-              <div key={b.title} className="opacity-50">
-                {body}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
+    <BookingsDay
+      date={date}
+      today={today}
+      showing={showing}
+      resources={resources}
+      startHour={startHour}
+      endHour={endHour}
+      approvals={approvals}
+      showApprovals={showApprovals}
+      canSpaces={canSpaces}
+      canVehicles={canVehicles}
+      canBookSpace={canSpaces && !!spaceAccess?.canRequest}
+      canBookVehicle={canVehicles && !!vehicleAccess?.canRequest}
+    />
   );
 }
