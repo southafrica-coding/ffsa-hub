@@ -237,8 +237,8 @@ export default function ScheduleView({ userId, isStaff, isMember, tabs, active, 
           }
         >
           {needLead.length === 1
-            ? "1 set here has no lead yet — it holds its slot, but it is not live."
-            : `${needLead.length} sets here have no lead yet — they hold their slots, but they are not live.`}
+            ? "1 set here has nobody in a lead seat — it holds its slot, but it is not live."
+            : `${needLead.length} sets here have nobody in a lead seat — they hold their slots, but they are not live.`}
         </NeedsYou>
       )}
 

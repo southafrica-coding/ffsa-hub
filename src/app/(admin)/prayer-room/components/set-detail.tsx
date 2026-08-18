@@ -149,6 +149,22 @@ export default function SetDetail({
 
   const seatMeta = useMemo(() => new Map(seatTypes.map((s) => [s.id, s])), [seatTypes]);
 
+  /**
+   * Owning a set and holding a lead seat are DIFFERENT things, and calling both
+   * "lead" is what made the wall and this drawer contradict each other: the
+   * wall marks a set as needing a lead when no PRAYER LEAD / WORSHIP LEAD seat
+   * is filled, while the drawer was printing the owner as "LED BY". A set can
+   * be set up by one person and led by another, or by nobody yet.
+   */
+  const leadHolders = useMemo(
+    () =>
+      (set?.slots ?? []).filter(
+        (sl) => sl.status === "filled" && isLeadSeat(sl)
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [set?.slots, seatMeta]
+  );
+
   function seatLabelOf(slot: Slot): string {
     const id = slot.seat_type_id ?? slot.role;
     return seatMeta.get(id)?.label ?? roleLabel(slot.role);
@@ -448,11 +464,19 @@ export default function SetDetail({
                 {formatDateLabel(set.set_date).toUpperCase()} · {durationLabel(set.start_time, set.end_time)}
               </span>
             </div>
-            {set.owner && (
-              <div className="mt-2 font-mono text-[9.5px] tracking-[0.1em] text-[color:var(--text-tertiary)]">
-                LED BY {fullName(set.owner).toUpperCase()}
-              </div>
-            )}
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[9.5px] tracking-[0.1em] text-[color:var(--text-tertiary)]">
+              {set.owner && <span>SET UP BY {fullName(set.owner).toUpperCase()}</span>}
+              {leadHolders.length > 0 ? (
+                <span className="text-ink">
+                  LED BY{" "}
+                  {leadHolders
+                    .map((sl) => displayName(sl.filled).toUpperCase())
+                    .join(" & ")}
+                </span>
+              ) : (
+                <span className="text-amber">NO ONE IN A LEAD SEAT YET</span>
+              )}
+            </div>
           </div>
 
           {set.relocation_note && (
@@ -492,13 +516,17 @@ export default function SetDetail({
             <div className="flex items-baseline justify-between px-6 pb-2.5 pt-4">
               <span className="mono-label">The lineup</span>
               <span className="font-mono text-[9px] font-bold uppercase tracking-[0.1em] text-amber">
-                {openCount === 0 ? "Full" : `${openCount} ${openCount === 1 ? "seat" : "seats"} open`}
+                {set.slots.length === 0
+                  ? "No seats yet"
+                  : openCount === 0
+                    ? "Full"
+                    : `${openCount} ${openCount === 1 ? "seat" : "seats"} open`}
               </span>
             </div>
 
             {set.slots.length === 0 && (
               <p className="px-6 pb-4 text-[13px] text-[color:var(--text-tertiary)]">
-                No seats on this set yet.
+                No seats on this set yet — add the lead seat first, and the set goes live on the wall.
               </p>
             )}
 
@@ -578,7 +606,7 @@ export default function SetDetail({
 
           {set.owner && (
             <div className="bg-bone px-6 py-4 text-[13px] leading-[1.5] text-[color:var(--text-secondary)]">
-              {displayName(set.owner)} leads this set. Ask for a seat and they get a notification.
+              {displayName(set.owner)} set this up. Ask for a seat and they get a notification.
             </div>
           )}
 
