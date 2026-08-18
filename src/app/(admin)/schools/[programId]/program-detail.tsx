@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { QuestionTree, type TreeQuestion } from "@/components/admin/question-tree";
+import { type TreeQuestion } from "@/components/admin/question-tree";
 import { ReferenceQuestionsBuilder } from "./reference-questions-builder";
 import { ProgramCoursesManager, type PhaseCourse } from "./program-courses-manager";
 import { LeadersTab, type ProgramLeaderRow } from "./leaders-tab";
@@ -12,6 +12,10 @@ import { ENROLLMENT_STATUS_LABELS } from "@/lib/schools/student-export-columns";
 import type { ArrivalInsuranceInfo } from "@/lib/schools/arrival-insurance";
 import { Badge } from "@/components/ui/badge";
 import { Masthead, StatusPill } from "@/components/ffsa";
+import { RosterTab, AddStudentButton, type RosterRow, type PhaseCourseRow } from "./roster-tab";
+import { GradesMatrix } from "./grades-matrix";
+import { ApplicantReview, type PipelineStage, type ReviewCheck } from "./applicant-review";
+import { FormBuilder, FormPreview } from "./form-builder";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,16 +41,9 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Trash2, Download, ChevronUp, ChevronDown, Edit2, ClipboardList, Copy, Check, Link as LinkIcon, Archive, BookTemplate, Upload, Loader2, FileText, Send, BarChart3, Calendar, RefreshCw, CheckSquare, Search, Users, MoreHorizontal, UserMinus, RotateCcw, AlertTriangle, ShieldCheck } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-} from "@/components/ui/dropdown-menu";
+import { Plus, Trash2, Download, Edit2, ClipboardList, Copy, Check, Link as LinkIcon, Archive, BookTemplate, Upload, Loader2, FileText, Send, BarChart3, Calendar, RefreshCw, Search, Users, AlertTriangle, ShieldCheck } from "lucide-react";
 import { ProgramActions } from "../program-actions";
 
 // ────────────────────────────────────────────────────────────
@@ -86,6 +83,8 @@ type Enrollment = {
     last_name: string | null;
     preferred_name: string | null;
     email: string | null;
+    /** The roster's FROM column (frame 14a). */
+    nationality?: string | null;
   };
 };
 
@@ -116,6 +115,8 @@ type Program = {
   code: string;
   credit_hours: number;
   status: string;
+  /** 'external' means the school is billed outside the Hub — see frame 14a. */
+  billing_mode?: string | null;
   description: string | null;
   application_open: boolean;
   application_deadline: string | null;
@@ -290,11 +291,6 @@ function isStoragePath(value: string): boolean {
   return value.startsWith("applications/") && value.length > 20;
 }
 
-const LETTER_GRADES = [
-  "A", "A-", "B+", "B", "B-", "C+", "C", "C-",
-  "D+", "D", "D-", "F", "W", "I", "P",
-];
-
 // ────────────────────────────────────────────────────────────
 // MAIN COMPONENT
 // ────────────────────────────────────────────────────────────
@@ -307,6 +303,26 @@ type RefRequestSummary = {
   reminder_sent_at: string | null;
 };
 
+/** Tabs this screen knows. `enrollments` is the pre-14a name for Students and
+ *  is still in the wild as ?tab=enrollments, so it maps rather than 404s. */
+const TAB_KEYS = [
+  "students", "courses", "grades", "applicants", "application", "arrival", "leaders", "emails",
+];
+function normaliseTab(tab: string): string {
+  return tab === "enrollments" ? "students" : tab;
+}
+
+function displayName(u: {
+  first_name: string | null;
+  last_name: string | null;
+  preferred_name: string | null;
+  email: string | null;
+}): string {
+  const first = u.preferred_name || u.first_name || "";
+  const name = `${first} ${u.last_name ?? ""}`.trim();
+  return name || u.email || "Unknown";
+}
+
 export function ProgramDetail({
   program,
   initialTab,
@@ -315,6 +331,8 @@ export function ProgramDetail({
   leaders,
   emailTemplates,
   grades,
+  feesByEnrollment,
+  gradesLastEdit,
   allUsers,
   staffOptions,
   billingCourses,
@@ -339,6 +357,8 @@ export function ProgramDetail({
     reminder_after_days: number | null;
   }[];
   grades: GradeRow[];
+  feesByEnrollment: Record<string, { label: string; owed: boolean }>;
+  gradesLastEdit: { at: string; by: string } | null;
   allUsers: UserOption[];
   staffOptions: StaffUser[];
   billingCourses: PhaseCourse[];
@@ -389,10 +409,64 @@ export function ProgramDetail({
     }
   }
 
+  // ── Roster (frame 14a) ──
+  const activeEnrollments = enrollments.filter((e) => !e.removed_at);
+  const rosterRows: RosterRow[] = enrollments.map((e) => ({
+    enrollmentId: e.id,
+    userId: e.user_id,
+    name: displayName(e.users),
+    from: e.users.nationality ?? null,
+    status: e.status,
+    staffId: e.assigned_staff_id,
+    staffName: e.assigned_staff ? displayName(e.assigned_staff) : null,
+    fee: feesByEnrollment[e.id] ?? { label: "—", owed: false },
+    // A grade row with no letter is a placeholder, not a grade.
+    gradedCount: grades.filter((g) => g.enrollment_id === e.id && g.letter_grade).length,
+    removed: !!e.removed_at,
+  }));
+  const rosterStaffOptions = staffOptions.map((s) => ({ id: s.id, name: displayName(s) }));
+  // A removed enrolment still holds the unique (user, program) slot, so a
+  // removed student stays out of this list until restored or deleted.
+  const enrolledUserIds = new Set(enrollments.map((e) => e.user_id));
+  const enrollableUsers = allUsers
+    .filter((u) => !enrolledUserIds.has(u.id))
+    .map((u) => ({ id: u.id, name: displayName(u), email: u.email }));
+  // Everyone carrying this school: the named leaders plus anyone walking with a
+  // student, counted once even when they are both.
+  const staffOnSchool = new Set<string>([
+    ...leaders.map((l) => l.user_id),
+    ...activeEnrollments.map((e) => e.assigned_staff_id).filter((id): id is string => !!id),
+  ]).size;
+
+  // ── Masthead facts line (frame 14a) ──
+  // Dates come off the course run rather than a field on the program, because
+  // the run is what actually defines when a school starts and ends.
+  const dated = billingCourses.filter((c) => c.start_date && c.end_date);
+  const runStart = dated.length
+    ? dated.reduce((a, c) => (a.start_date! < c.start_date! ? a : c)).start_date!
+    : null;
+  const runEnd = dated.length
+    ? dated.reduce((a, c) => (a.end_date! > c.end_date! ? a : c)).end_date!
+    : null;
+  const runWeeks =
+    runStart && runEnd
+      ? Math.max(1, Math.round((new Date(runEnd).getTime() - new Date(runStart).getTime()) / (86_400_000 * 7)))
+      : null;
+  const monthYear = (iso: string) =>
+    new Date(iso).toLocaleDateString("en-ZA", { month: "short", year: "numeric" }).toUpperCase();
+  const factsLine = [
+    runStart && runEnd ? `${monthYear(runStart)} – ${monthYear(runEnd)}` : null,
+    runWeeks ? `${runWeeks} WEEKS` : null,
+    `${billingCourses.length} ${billingCourses.length === 1 ? "COURSE" : "COURSES"}`,
+    `${program.credit_hours} CREDIT HOURS`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   return (
     <div className="ffsa-screen">
       <Masthead
-        context={`Training · ${program.code} · ${program.credit_hours} credit hours`}
+        context={`Training / ${program.code}`}
         title={program.name}
         actions={
           <>
@@ -402,10 +476,18 @@ export function ProgramDetail({
             <Button variant="outline" size="sm" onClick={() => setEditingProgram(true)}>
               <Edit2 className="mr-1 h-3 w-3" /> Edit
             </Button>
+            <AddStudentButton programId={program.id} options={enrollableUsers} />
             <ProgramActions program={program} variant="button" redirectAfterDelete />
           </>
         }
       />
+
+      {/* The frame's mono line under the title: when this school runs. */}
+      <div className="border-b border-rule bg-white px-5 pb-3 md:px-8">
+        <span className="font-mono text-[10px] font-bold tracking-[0.14em] text-[color:var(--text-secondary)]">
+          {factsLine}
+        </span>
+      </div>
 
       {/* A state, not a task — so it stays bone. The yellow band is reserved
           for something actually waiting on you. */}
@@ -418,12 +500,13 @@ export function ProgramDetail({
         </div>
       )}
 
-      <div className="space-y-6 px-8 py-7">
-        {program.description && (
+      {program.description && (
+        <div className="border-b border-rule bg-white px-5 py-3 md:px-8">
           <p className="max-w-3xl text-[13px] text-[color:var(--text-secondary)]">
             {program.description}
           </p>
-        )}
+        </div>
+      )}
 
       {/* Edit Program Dialog */}
       <Dialog open={editingProgram} onOpenChange={setEditingProgram}>
@@ -459,40 +542,41 @@ export function ProgramDetail({
         </DialogContent>
       </Dialog>
 
-      {/* Tabs */}
       <Tabs
         defaultValue={
-          initialTab &&
-          ["courses", "enrollments", "arrival", "application", "applicants", "leaders", "emails"].includes(initialTab)
-            ? initialTab
-            : "courses"
+          initialTab && TAB_KEYS.includes(normaliseTab(initialTab))
+            ? normaliseTab(initialTab)
+            : "students"
         }
       >
-        <TabsList>
-          <TabsTrigger value="courses">
-            Courses ({billingCourses.length})
-          </TabsTrigger>
-          <TabsTrigger value="enrollments">
-            Enrollments ({enrollments.length})
-          </TabsTrigger>
-          <TabsTrigger value="arrival">
-            Arrival
-          </TabsTrigger>
-          <TabsTrigger value="application">
-            Application
-          </TabsTrigger>
-          <TabsTrigger value="applicants">
-            Applicants ({responses.length})
-          </TabsTrigger>
-          <TabsTrigger value="leaders">
-            Leaders ({leaders.length})
-          </TabsTrigger>
-          <TabsTrigger value="emails">
-            Emails
-          </TabsTrigger>
-        </TabsList>
+        <div className="border-b border-ink bg-white px-5 pt-4 md:px-8">
+          <TabsList>
+            <TabsTrigger value="students">Students ({activeEnrollments.length})</TabsTrigger>
+            <TabsTrigger value="courses">Courses ({billingCourses.length})</TabsTrigger>
+            <TabsTrigger value="grades">Grades</TabsTrigger>
+            <TabsTrigger value="applicants">Applicants ({responses.length})</TabsTrigger>
+            <TabsTrigger value="application">Application form</TabsTrigger>
+            <TabsTrigger value="arrival">Arrival</TabsTrigger>
+            <TabsTrigger value="leaders">Leaders ({leaders.length})</TabsTrigger>
+            <TabsTrigger value="emails">Emails</TabsTrigger>
+          </TabsList>
+        </div>
 
-        <TabsContent value="courses" className="mt-4">
+        {/* Frame 14a — full bleed: the phase run runs to the edge of the screen. */}
+        <TabsContent value="students" className="mt-0">
+          <RosterTab
+            phaseCourses={billingCourses as PhaseCourseRow[]}
+            rows={rosterRows}
+            staffOptions={rosterStaffOptions}
+            courseCount={billingCourses.length}
+            staffOnSchool={staffOnSchool}
+            actions={
+              <StudentsExportPanel programId={program.id} enrollments={enrollments} />
+            }
+          />
+        </TabsContent>
+
+        <TabsContent value="courses" className="mt-0 px-5 py-6 md:px-8">
           <ProgramCoursesManager
             programId={program.id}
             courses={billingCourses}
@@ -500,35 +584,48 @@ export function ProgramDetail({
           />
         </TabsContent>
 
-        <TabsContent value="enrollments" className="mt-4">
-          <EnrollmentsTab
+        {/* Frame 14b */}
+        <TabsContent value="grades" className="mt-0 px-5 py-6 md:px-8">
+          <GradesMatrix
             programId={program.id}
-            enrollments={enrollments}
-            allUsers={allUsers}
+            programCode={program.code}
+            courses={billingCourses.map((c) => ({
+              id: c.id,
+              code: c.code,
+              name: c.name,
+              credit_hours: (c as { credit_hours?: number }).credit_hours ?? 0,
+            }))}
+            students={activeEnrollments.map((e) => ({
+              enrollmentId: e.id,
+              userId: e.user_id,
+              name: displayName(e.users),
+            }))}
+            grades={grades.map((g) => ({
+              enrollment_id: g.enrollment_id,
+              course_id: g.course_id,
+              letter_grade: g.letter_grade,
+            }))}
+            lastEdit={gradesLastEdit}
+          />
+        </TabsContent>
+
+        <TabsContent value="applicants" className="mt-0 px-5 py-6 md:px-8">
+          <ApplicantsTab
+            programId={program.id}
+            programCode={program.code}
+            responses={responses}
+            removedResponses={removedResponses}
+            referenceSlots={referenceSlots}
+            refRequestSummaries={refRequestSummaries}
             staffOptions={staffOptions}
           />
         </TabsContent>
 
-        <TabsContent value="arrival" className="mt-4">
-          <ArrivalTab
-            enrollments={enrollments}
-            arrivalInsurance={arrivalInsurance}
-          />
-        </TabsContent>
-
-        <TabsContent value="grades" className="mt-4">
-          <GradesTab
-            programId={program.id}
-            courses={program.courses}
-            enrollments={enrollments.filter((e) => !e.removed_at)}
-            grades={grades}
-          />
-        </TabsContent>
-
-        <TabsContent value="application" className="mt-4">
+        <TabsContent value="application" className="mt-0">
           <ApplicationTab
             programId={program.id}
             programCode={program.code}
+            programName={program.name}
             applicationOpen={program.application_open}
             applicationDeadline={program.application_deadline}
             acceptanceEmailSubject={program.acceptance_email_subject}
@@ -539,20 +636,14 @@ export function ProgramDetail({
           />
         </TabsContent>
 
-        <TabsContent value="applicants" className="mt-4">
-          <ApplicantsTab
-            programId={program.id}
-            programCode={program.code}
-            responses={responses}
-            removedResponses={removedResponses}
-            referenceSlots={referenceSlots}
-            refRequestSummaries={refRequestSummaries}
-            questions={questions}
-            staffOptions={staffOptions}
+        <TabsContent value="arrival" className="mt-0 px-5 py-6 md:px-8">
+          <ArrivalTab
+            enrollments={enrollments}
+            arrivalInsurance={arrivalInsurance}
           />
         </TabsContent>
 
-        <TabsContent value="leaders" className="mt-4">
+        <TabsContent value="leaders" className="mt-0 px-5 py-6 md:px-8">
           <LeadersTab
             programId={program.id}
             leaders={leaders}
@@ -560,11 +651,10 @@ export function ProgramDetail({
           />
         </TabsContent>
 
-        <TabsContent value="emails" className="mt-4">
+        <TabsContent value="emails" className="mt-0 px-5 py-6 md:px-8">
           <EmailsTab programId={program.id} templates={emailTemplates} />
         </TabsContent>
       </Tabs>
-      </div>
     </div>
   );
 }
@@ -573,275 +663,6 @@ export function ProgramDetail({
 // COURSES TAB
 // ────────────────────────────────────────────────────────────
 
-function CoursesTab({
-  programId,
-  courses,
-}: {
-  programId: string;
-  courses: Course[];
-}) {
-  const router = useRouter();
-  const [showAdd, setShowAdd] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [name, setName] = useState("");
-  const [code, setCode] = useState("");
-  const [creditHours, setCreditHours] = useState("3");
-  const [deleting, setDeleting] = useState<string | null>(null);
-
-  const [editingCourse, setEditingCourse] = useState<Course | null>(null);
-  const [editName, setEditName] = useState("");
-  const [editCode, setEditCode] = useState("");
-  const [editCreditHours, setEditCreditHours] = useState("3");
-  const [editLoading, setEditLoading] = useState(false);
-  const [editError, setEditError] = useState<string | null>(null);
-
-  function startEditCourse(course: Course) {
-    setEditingCourse(course);
-    setEditName(course.name);
-    setEditCode(course.code);
-    setEditCreditHours(String(course.credit_hours));
-    setEditError(null);
-  }
-
-  async function handleEditCourse(e: React.FormEvent) {
-    e.preventDefault();
-    if (!editingCourse) return;
-    setEditLoading(true);
-    setEditError(null);
-    try {
-      const res = await fetch("/api/schools/courses", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: editingCourse.id,
-          name: editName,
-          code: editCode.toUpperCase(),
-          credit_hours: parseInt(editCreditHours) || 0,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setEditError(data.error || "Failed to update course");
-        return;
-      }
-      setEditingCourse(null);
-      router.refresh();
-    } catch {
-      setEditError("Network error");
-    } finally {
-      setEditLoading(false);
-    }
-  }
-
-  async function handleAddCourse(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-
-    try {
-      const res = await fetch("/api/schools/courses", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          program_id: programId,
-          name,
-          code: code.toUpperCase(),
-          credit_hours: parseInt(creditHours) || 3,
-          sort_order: courses.length,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || "Failed to add course");
-        return;
-      }
-
-      setName("");
-      setCode("");
-      setCreditHours("3");
-      setShowAdd(false);
-      router.refresh();
-    } catch {
-      setError("Network error");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleDelete(courseId: string) {
-    if (!confirm("Delete this course? This cannot be undone.")) return;
-    setDeleting(courseId);
-    try {
-      const res = await fetch(`/api/schools/courses?id=${courseId}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        alert(data.error || "Failed to delete course");
-        return;
-      }
-      router.refresh();
-    } catch {
-      alert("Failed to delete course");
-    } finally {
-      setDeleting(null);
-    }
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="flex justify-end">
-        <Button size="sm" onClick={() => setShowAdd(!showAdd)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Course
-        </Button>
-      </div>
-
-      {showAdd && (
-        <div className="border p-4">
-          <form onSubmit={handleAddCourse} className="space-y-3">
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <Label>Course Name *</Label>
-                <Input
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Biblical Studies I"
-                />
-              </div>
-              <div>
-                <Label>Code *</Label>
-                <Input
-                  required
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  placeholder="e.g. BIB101"
-                  className="uppercase"
-                />
-              </div>
-              <div>
-                <Label>Credit Hours</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  value={creditHours}
-                  onChange={(e) => setCreditHours(e.target.value)}
-                />
-              </div>
-            </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
-            <div className="flex gap-2">
-              <Button type="submit" size="sm" disabled={loading}>
-                {loading ? "Adding..." : "Add Course"}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setShowAdd(false)}
-              >
-                Cancel
-              </Button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      <div className="border bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Order</TableHead>
-              <TableHead>Code</TableHead>
-              <TableHead>Course Name</TableHead>
-              <TableHead>Credit Hours</TableHead>
-              <TableHead className="w-[90px]" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {courses.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={5}
-                  className="text-center text-muted-foreground py-8"
-                >
-                  No courses yet. Add courses to this program.
-                </TableCell>
-              </TableRow>
-            ) : (
-              courses.map((course, idx) => (
-                <TableRow key={course.id}>
-                  <TableCell className="text-muted-foreground">
-                    {idx + 1}
-                  </TableCell>
-                  <TableCell className="font-mono text-sm">
-                    {course.code}
-                  </TableCell>
-                  <TableCell className="font-medium">{course.name}</TableCell>
-                  <TableCell>{course.credit_hours}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-muted-foreground"
-                        onClick={() => startEditCourse(course)}
-                      >
-                        <Edit2 className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-muted-foreground hover:text-destructive"
-                        onClick={() => handleDelete(course.id)}
-                        disabled={deleting === course.id}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
-      {/* Edit Course Dialog */}
-      <Dialog open={editingCourse !== null} onOpenChange={(open) => { if (!open) setEditingCourse(null); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Course</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleEditCourse} className="space-y-4">
-            <div className="space-y-1.5">
-              <Label>Course Name *</Label>
-              <Input required value={editName} onChange={(e) => setEditName(e.target.value)} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Code *</Label>
-                <Input required value={editCode} onChange={(e) => setEditCode(e.target.value)} className="uppercase" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Credit Hours</Label>
-                <Input type="number" min="0" value={editCreditHours} onChange={(e) => setEditCreditHours(e.target.value)} />
-              </div>
-            </div>
-            {editError && <p className="text-sm text-destructive">{editError}</p>}
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={() => setEditingCourse(null)}>Cancel</Button>
-              <Button type="submit" size="sm" disabled={editLoading}>{editLoading ? "Saving..." : "Save Changes"}</Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
 
 // ────────────────────────────────────────────────────────────
 // STAFF ASSIGN SELECT
@@ -1212,658 +1033,11 @@ function ArrivalTab({
 // ENROLLMENTS TAB
 // ────────────────────────────────────────────────────────────
 
-function EnrollmentsTab({
-  programId,
-  enrollments,
-  allUsers,
-  staffOptions,
-}: {
-  programId: string;
-  enrollments: Enrollment[];
-  allUsers: UserOption[];
-  staffOptions: StaffUser[];
-}) {
-  const router = useRouter();
-  const [enrollOpen, setEnrollOpen] = useState(false);
-  const [selectedUserId, setSelectedUserId] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
-  const [unassignedOnly, setUnassignedOnly] = useState(false);
-  const [showRemoved, setShowRemoved] = useState(false);
-  const [busyId, setBusyId] = useState<string | null>(null);
-
-  // Filter out already-enrolled users (a removed enrollment still occupies
-  // the unique (user, program) slot, so removed students stay excluded here
-  // until they're restored or permanently deleted).
-  const enrolledIds = new Set(enrollments.map((e) => e.user_id));
-  const availableUsers = allUsers.filter((u) => !enrolledIds.has(u.id));
-
-  async function handleAssignStaff(enrollmentId: string, staffId: string | null) {
-    const res = await fetch("/api/schools/enrollments/assign-staff", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ enrollment_id: enrollmentId, assigned_staff_id: staffId }),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      alert(data.error || "Failed to assign staff");
-      return;
-    }
-    router.refresh();
-  }
-
-  const activeEnrollments = enrollments.filter((e) => !e.removed_at);
-  const removedEnrollments = enrollments.filter((e) => e.removed_at);
-  const removedCount = removedEnrollments.length;
-
-  const visibleEnrollments = showRemoved
-    ? removedEnrollments
-    : unassignedOnly
-      ? activeEnrollments.filter((e) => !e.assigned_staff_id)
-      : activeEnrollments;
-  const unassignedCount = activeEnrollments.filter((e) => !e.assigned_staff_id).length;
-
-  async function handleRemove(enrollmentId: string) {
-    setBusyId(enrollmentId);
-    try {
-      const res = await fetch("/api/schools/enrollments", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: enrollmentId, removed: true }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        alert(data.error || "Failed to remove student");
-        return;
-      }
-      router.refresh();
-    } catch {
-      alert("Failed to remove student");
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  async function handleRestore(enrollmentId: string) {
-    setBusyId(enrollmentId);
-    try {
-      const res = await fetch("/api/schools/enrollments", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: enrollmentId, removed: false }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        alert(data.error || "Failed to restore student");
-        return;
-      }
-      router.refresh();
-    } catch {
-      alert("Failed to restore student");
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  async function handleDelete(enrollment: Enrollment) {
-    if (
-      !confirm(
-        `Permanently delete ${userName(enrollment.users)} from this school?\n\n` +
-          "This removes their enrollment, grades and fees for this program and cannot be undone. " +
-          "Their Hub account is not affected."
-      )
-    ) {
-      return;
-    }
-    setBusyId(enrollment.id);
-    try {
-      const res = await fetch("/api/schools/enrollments", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: enrollment.id }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        alert(data.error || "Failed to delete student");
-        return;
-      }
-      router.refresh();
-    } catch {
-      alert("Failed to delete student");
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  function userName(u: { first_name: string | null; last_name: string | null; preferred_name: string | null; email: string | null }) {
-    if (u.first_name) {
-      return `${u.first_name} ${u.last_name ?? ""}`.trim();
-    }
-    return u.email ?? "Unknown";
-  }
-
-  async function handleEnroll(e: React.FormEvent) {
-    e.preventDefault();
-    if (!selectedUserId) return;
-    setLoading(true);
-    setError(null);
-
-    try {
-      const res = await fetch("/api/schools/enrollments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: selectedUserId, program_id: programId }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || "Failed to enroll user");
-        return;
-      }
-
-      setSelectedUserId("");
-      setEnrollOpen(false);
-      router.refresh();
-    } catch {
-      setError("Network error");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleStatusChange(enrollmentId: string, newStatus: string) {
-    setUpdatingStatus(enrollmentId);
-    try {
-      const res = await fetch("/api/schools/enrollments", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: enrollmentId, status: newStatus }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        alert(data.error || "Failed to update status");
-        return;
-      }
-
-      router.refresh();
-    } catch {
-      alert("Failed to update status");
-    } finally {
-      setUpdatingStatus(null);
-    }
-  }
-
-  const statusColors: Record<string, "default" | "secondary" | "destructive"> = {
-    waiting_for_arrival: "secondary",
-    arrived: "default",
-    graduated: "secondary",
-    dismissed: "destructive",
-    decided_to_leave: "secondary",
-    // legacy fallbacks (pre-migration data, just in case)
-    active: "default",
-    completed: "secondary",
-    withdrawn: "destructive",
-    on_hold: "secondary",
-  };
-
-  const statusLabels = ENROLLMENT_STATUS_LABELS;
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              setUnassignedOnly((v) => !v);
-              setShowRemoved(false);
-            }}
-            className={`flex items-center gap-1.5 border px-2.5 py-1 text-xs font-medium transition-colors ${
-              unassignedOnly && !showRemoved
-                ? "border-ink bg-ink text-white"
-                : "border-border text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Unassigned
-            <span className="bg-bone px-1.5 py-0.5 text-[10px] font-bold">
-              {unassignedCount}
-            </span>
-          </button>
-          {removedCount > 0 && (
-            <button
-              type="button"
-              onClick={() => {
-                setShowRemoved((v) => !v);
-                setUnassignedOnly(false);
-              }}
-              className={`flex items-center gap-1.5 border px-2.5 py-1 text-xs font-medium transition-colors ${
-                showRemoved
-                  ? "border-destructive bg-destructive/15 text-destructive"
-                  : "border-border text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Removed
-              <span className="bg-bone px-1.5 py-0.5 text-[10px] font-bold">
-                {removedCount}
-              </span>
-            </button>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <StudentsExportPanel programId={programId} enrollments={enrollments} />
-          <Dialog open={enrollOpen} onOpenChange={setEnrollOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm">
-              <Plus className="mr-2 h-4 w-4" />
-              Enroll Student
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Enroll Student</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleEnroll} className="space-y-4">
-              <div>
-                <Label>Select Student</Label>
-                <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose a student..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableUsers.length === 0 ? (
-                      <SelectItem value="_none" disabled>
-                        All users are already enrolled
-                      </SelectItem>
-                    ) : (
-                      availableUsers.map((u) => (
-                        <SelectItem key={u.id} value={u.id}>
-                          {userName(u)} {u.email ? `(${u.email})` : ""}
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-              {error && <p className="text-sm text-destructive">{error}</p>}
-              <div className="flex justify-end gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setEnrollOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={loading || !selectedUserId}
-                >
-                  {loading ? "Enrolling..." : "Enroll"}
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
-        </div>
-      </div>
-
-      <div className="border bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Student</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Enrolled</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Assigned Staff</TableHead>
-              <TableHead className="w-[1%]"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {visibleEnrollments.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={6}
-                  className="text-center text-muted-foreground py-8"
-                >
-                  {showRemoved
-                    ? "No removed students."
-                    : enrollments.length === 0
-                      ? "No students enrolled yet."
-                      : "No enrollments match the current filter."}
-                </TableCell>
-              </TableRow>
-            ) : (
-              visibleEnrollments.map((enrollment) => (
-                <TableRow
-                  key={enrollment.id}
-                  className={enrollment.removed_at ? "opacity-60" : undefined}
-                >
-                  <TableCell className="font-medium">
-                    {userName(enrollment.users)}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {enrollment.users.email ?? "—"}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {new Date(enrollment.enrolled_at).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell>
-                    <Select
-                      value={enrollment.status}
-                      onValueChange={(val) =>
-                        handleStatusChange(enrollment.id, val)
-                      }
-                      disabled={updatingStatus === enrollment.id}
-                    >
-                      <SelectTrigger className="w-[170px]">
-                        <Badge variant={statusColors[enrollment.status] ?? "secondary"}>
-                          {statusLabels[enrollment.status] ?? enrollment.status}
-                        </Badge>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="waiting_for_arrival">Waiting for Arrival</SelectItem>
-                        <SelectItem value="arrived">Arrived</SelectItem>
-                        <SelectItem value="dismissed">Dismissed</SelectItem>
-                        <SelectItem value="decided_to_leave">Decided to Leave</SelectItem>
-                        <SelectItem value="graduated">Graduated</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                  <TableCell>
-                    <StaffAssignSelect
-                      value={enrollment.assigned_staff_id}
-                      staffOptions={staffOptions}
-                      onAssign={(staffId) =>
-                        handleAssignStaff(enrollment.id, staffId)
-                      }
-                    />
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          disabled={busyId === enrollment.id}
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                          <span className="sr-only">Student actions</span>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        {enrollment.removed_at ? (
-                          <>
-                            <DropdownMenuItem
-                              onClick={() => handleRestore(enrollment.id)}
-                            >
-                              <RotateCcw className="mr-2 h-4 w-4" />
-                              Restore to school
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="text-destructive focus:text-destructive"
-                              onClick={() => handleDelete(enrollment)}
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Delete permanently
-                            </DropdownMenuItem>
-                          </>
-                        ) : (
-                          <DropdownMenuItem
-                            className="text-destructive focus:text-destructive"
-                            onClick={() => handleRemove(enrollment.id)}
-                          >
-                            <UserMinus className="mr-2 h-4 w-4" />
-                            Remove from school
-                          </DropdownMenuItem>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
-    </div>
-  );
-}
 
 // ────────────────────────────────────────────────────────────
 // GRADES TAB
 // ────────────────────────────────────────────────────────────
 
-function GradesTab({
-  programId,
-  courses,
-  enrollments,
-  grades,
-}: {
-  programId: string;
-  courses: Course[];
-  enrollments: Enrollment[];
-  grades: GradeRow[];
-}) {
-  const router = useRouter();
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
-
-  // Build a map: enrollmentId -> courseId -> letterGrade
-  const gradeMap = new Map<string, Map<string, string>>();
-  for (const g of grades) {
-    if (!gradeMap.has(g.enrollment_id)) {
-      gradeMap.set(g.enrollment_id, new Map());
-    }
-    if (g.letter_grade) {
-      gradeMap.get(g.enrollment_id)!.set(g.course_id, g.letter_grade);
-    }
-  }
-
-  // Local state for edits
-  const [edits, setEdits] = useState<
-    Map<string, Map<string, string | null>>
-  >(new Map());
-
-  function getGrade(enrollmentId: string, courseId: string): string {
-    // Check local edits first
-    const editVal = edits.get(enrollmentId)?.get(courseId);
-    if (editVal !== undefined) return editVal ?? "";
-    // Then check server data
-    return gradeMap.get(enrollmentId)?.get(courseId) ?? "";
-  }
-
-  function setGrade(enrollmentId: string, courseId: string, grade: string) {
-    setEdits((prev) => {
-      const next = new Map(prev);
-      if (!next.has(enrollmentId)) {
-        next.set(enrollmentId, new Map());
-      }
-      next.get(enrollmentId)!.set(courseId, grade || null);
-      return next;
-    });
-    setSuccess(false);
-  }
-
-  function userName(e: Enrollment) {
-    const u = e.users;
-    if (u.first_name) {
-      return `${u.first_name} ${u.last_name ?? ""}`.trim();
-    }
-    return u.email ?? "Unknown";
-  }
-
-  async function handleSave() {
-    setSaving(true);
-    setError(null);
-    setSuccess(false);
-
-    // Collect all grades (edits + existing)
-    const allGrades: Array<{
-      enrollment_id: string;
-      course_id: string;
-      letter_grade: string | null;
-    }> = [];
-
-    for (const enrollment of enrollments) {
-      for (const course of courses) {
-        const grade = getGrade(enrollment.id, course.id);
-        if (grade) {
-          allGrades.push({
-            enrollment_id: enrollment.id,
-            course_id: course.id,
-            letter_grade: grade,
-          });
-        }
-      }
-    }
-
-    if (allGrades.length === 0) {
-      setError("No grades to save");
-      setSaving(false);
-      return;
-    }
-
-    try {
-      const res = await fetch("/api/schools/grades", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ grades: allGrades }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || "Failed to save grades");
-        return;
-      }
-
-      setEdits(new Map());
-      setSuccess(true);
-      router.refresh();
-    } catch {
-      setError("Network error");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  // Filter to active enrollments for grading
-  const activeEnrollments = enrollments.filter(
-    (e) => e.status === "active" || e.status === "completed"
-  );
-
-  if (courses.length === 0) {
-    return (
-      <p className="text-muted-foreground text-sm py-8 text-center">
-        Add courses before entering grades.
-      </p>
-    );
-  }
-
-  if (activeEnrollments.length === 0) {
-    return (
-      <p className="text-muted-foreground text-sm py-8 text-center">
-        Enroll students before entering grades.
-      </p>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          Enter grades for each student. Click Save All when done.
-        </p>
-        <div className="flex items-center gap-3">
-          {success && (
-            <span className="text-sm text-[color:var(--green-text)]">Grades saved!</span>
-          )}
-          {error && <span className="text-sm text-destructive">{error}</span>}
-          <Button onClick={handleSave} disabled={saving} size="sm">
-            {saving ? "Saving..." : "Save All Grades"}
-          </Button>
-        </div>
-      </div>
-
-      <div className="border bg-card overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="sticky left-0 bg-card z-10 min-w-[180px]">
-                Student
-              </TableHead>
-              {courses.map((course) => (
-                <TableHead key={course.id} className="text-center min-w-[100px]">
-                  <div className="font-mono text-xs">{course.code}</div>
-                  <div className="text-xs font-normal text-muted-foreground truncate max-w-[120px]">
-                    {course.name}
-                  </div>
-                </TableHead>
-              ))}
-              <TableHead className="text-center min-w-[80px]">
-                Transcript
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {activeEnrollments.map((enrollment) => (
-              <TableRow key={enrollment.id}>
-                <TableCell className="sticky left-0 bg-card z-10 font-medium">
-                  {userName(enrollment)}
-                </TableCell>
-                {courses.map((course) => (
-                  <TableCell key={course.id} className="p-1">
-                    <Select
-                      value={getGrade(enrollment.id, course.id) || "_empty"}
-                      onValueChange={(val) =>
-                        setGrade(
-                          enrollment.id,
-                          course.id,
-                          val === "_empty" ? "" : val
-                        )
-                      }
-                    >
-                      <SelectTrigger className="h-8 text-center text-sm">
-                        <SelectValue placeholder="—" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="_empty">—</SelectItem>
-                        {LETTER_GRADES.map((g) => (
-                          <SelectItem key={g} value={g}>
-                            {g}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                ))}
-                <TableCell className="text-center">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-muted-foreground hover:text-primary"
-                    onClick={() => {
-                      window.open(
-                        `/api/schools/transcript?userId=${enrollment.user_id}&programId=${programId}`,
-                        "_blank"
-                      );
-                    }}
-                    title="Download Transcript"
-                  >
-                    <Download className="h-4 w-4" />
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-    </div>
-  );
-}
 
 // ────────────────────────────────────────────────────────────
 // APPLICANTS TAB
@@ -1936,6 +1110,51 @@ function ApplicantEmailStatusBadge({ status }: { status: string }) {
   );
 }
 
+/** The pipeline strip across the top of frame 14c. Seven real stages — the
+ *  frame drew six, but dropping one would hide applicants that exist. */
+const PIPELINE_STAGES: Array<[key: string, label: string]> = [
+  ["submitted", "SUBMITTED"],
+  ["waiting_for_references", "WAITING FOR REFS"],
+  ["references_received", "REFS RECEIVED"],
+  ["interview_scheduled", "INTERVIEW"],
+  ["accepted", "ACCEPTED"],
+  ["waitlisted", "WAITLISTED"],
+  ["rejected", "REJECTED"],
+];
+
+/**
+ * The four readiness checks. Deliberately only things the Hub actually knows:
+ * a check it cannot answer would be worse than no check at all.
+ */
+function reviewChecks(resp: AppResponse, refs: ReferenceRequest[]): ReviewCheck[] {
+  const answered = (resp.answers ?? []).filter((a) => a.answer?.trim()).length;
+  const total = (resp.answers ?? []).length;
+  const refsIn = refs.filter((r) => r.status === "submitted").length;
+  const decided = ["accepted", "waitlisted", "rejected"].includes(resp.status);
+  return [
+    {
+      label: "Application form",
+      value: total > 0 && answered === total ? "COMPLETE" : `${answered} OF ${total} ANSWERED`,
+      ok: total > 0 && answered === total,
+    },
+    {
+      label: "References",
+      value: refs.length === 0 ? "NONE ASKED FOR" : `${refsIn} OF ${refs.length} IN`,
+      ok: refs.length > 0 && refsIn === refs.length,
+    },
+    {
+      label: "Interview",
+      value: resp.status === "interview_scheduled" ? "SCHEDULED" : "NOT SCHEDULED",
+      ok: resp.status === "interview_scheduled",
+    },
+    {
+      label: "Hub account",
+      value: resp.user_id ? "ACTIVE" : "NOT CREATED YET",
+      ok: !!resp.user_id || decided,
+    },
+  ];
+}
+
 function ApplicantsTab({
   programId,
   programCode,
@@ -1943,7 +1162,6 @@ function ApplicantsTab({
   removedResponses,
   referenceSlots,
   refRequestSummaries,
-  questions,
   staffOptions,
 }: {
   programId: string;
@@ -1952,7 +1170,6 @@ function ApplicantsTab({
   removedResponses: AppResponse[];
   referenceSlots: ReferenceSlot[];
   refRequestSummaries: RefRequestSummary[];
-  questions: AppQuestion[];
   staffOptions: StaffUser[];
 }) {
   const router = useRouter();
@@ -2383,8 +1600,11 @@ function ApplicantsTab({
     }
   }
 
-  async function handleReviewSave() {
-    if (!reviewingResponse || !reviewStatus) return;
+  /** `statusOverride` lets the 14c decision bar decide without waiting for the
+   *  status select's state to settle. */
+  async function handleReviewSave(statusOverride?: string) {
+    const nextStatus = statusOverride ?? reviewStatus;
+    if (!reviewingResponse || !nextStatus) return;
     setReviewLoading(true);
 
     try {
@@ -2394,7 +1614,7 @@ function ApplicantsTab({
       // application is *transitioning* into accepted — if it's already accepted
       // and we're just editing the notes, fall through to the standard update
       // below (re-running accept would fail with "already accepted").
-      if (reviewStatus === "accepted" && reviewingResponse.status !== "accepted") {
+      if (nextStatus === "accepted" && reviewingResponse.status !== "accepted") {
         const res = await fetch("/api/admin/accept-application", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -2421,7 +1641,7 @@ function ApplicantsTab({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           id: reviewingResponse.id,
-          status: reviewStatus,
+          status: nextStatus,
           admin_notes: reviewNotes.trim() || null,
         }),
       });
@@ -2439,6 +1659,27 @@ function ApplicantsTab({
     } finally {
       setReviewLoading(false);
     }
+  }
+
+  const pipelineStages: PipelineStage[] = PIPELINE_STAGES.map(([key, label]) => ({
+    key,
+    label,
+    count: responses.filter((r) => r.status === key).length,
+  }));
+
+  /** The mono strap above the applicant's name: school · when · who. */
+  function reviewContextLine(resp: AppResponse): string {
+    const info = resp.applicant_info;
+    return [
+      programCode,
+      `SUBMITTED ${new Date(resp.submitted_at)
+        .toLocaleDateString("en-ZA", { day: "2-digit", month: "short" })
+        .toUpperCase()}`,
+      info?.nationality || null,
+      info?.city || null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
   }
 
   return (
@@ -2914,472 +2155,490 @@ function ApplicantsTab({
         </div>
       )}
 
-      {/* Review Dialog */}
-      <Dialog
-        open={reviewingResponse !== null}
-        onOpenChange={(open) => {
-          if (!open) setReviewingResponse(null);
-        }}
-      >
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              Application Review — {reviewingResponse && respName(reviewingResponse)}
-            </DialogTitle>
-          </DialogHeader>
-
-          {reviewingResponse && (
+      {/* ── Frame 14c — applicant review ─────────────────────
+          A screen, not a dialog: the pipeline, her answers at a size you can
+          read, references and readiness beside them, and a decision bar that
+          never scrolls away. */}
+      {reviewingResponse && (
+        <ApplicantReview
+          name={respName(reviewingResponse)}
+          email={respEmail(reviewingResponse)}
+          phone={reviewingResponse.applicant_info?.phone ?? null}
+          contextLine={reviewContextLine(reviewingResponse)}
+          stages={pipelineStages}
+          currentStatus={reviewingResponse.status}
+          answers={reviewingResponse.answers ?? []}
+          references={reviewReferences.map((ref) => ({
+            id: ref.id,
+            slotLabel: ref.reference_slots?.label ?? "Reference",
+            status: ref.status,
+            refereeName: ref.referee_name,
+            org: ref.relationship,
+          }))}
+          refsLoading={refsLoading}
+          checks={reviewChecks(reviewingResponse, reviewReferences)}
+          note={reviewNotes}
+          noteMeta={
+            reviewingResponse.reviewed_at
+              ? `INTERNAL NOTE · LAST TOUCHED ${new Date(reviewingResponse.reviewed_at)
+                  .toLocaleDateString("en-ZA", { day: "2-digit", month: "short" })
+                  .toUpperCase()}`
+              : "INTERNAL NOTE"
+          }
+          acceptConsequence={
+            reviewingResponse.status === "accepted"
+              ? "ALREADY ACCEPTED — SAVING AGAIN ONLY UPDATES THE NOTE."
+              : "ACCEPTING SENDS THE ACCEPTANCE EMAIL AND CREATES THEIR ENROLMENT."
+          }
+          busy={reviewLoading}
+          renderAnswer={(answer) =>
+            isStoragePath(answer) ? <StorageImage storagePath={answer} /> : answer
+          }
+          onNoteChange={setReviewNotes}
+          onDecision={(status) => handleReviewSave(status)}
+          onClose={() => setReviewingResponse(null)}
+          extras={
             <div className="space-y-6">
-              {/* Applicant Info */}
-              <div className="text-sm text-muted-foreground space-y-1">
-                <p>Email: {respEmail(reviewingResponse)}</p>
-                <p>
-                  Submitted:{" "}
-                  {new Date(reviewingResponse.submitted_at).toLocaleDateString()}
-                </p>
-                {!reviewingResponse.user_id && reviewingResponse.applicant_info && (
-                  <div className="mt-3 bg-muted p-3 space-y-1">
-                    <p className="text-xs font-medium text-foreground uppercase tracking-wider mb-2">Applicant Details</p>
-                    {reviewingResponse.applicant_info.phone && (
-                      <p>Phone: {reviewingResponse.applicant_info.phone}</p>
-                    )}
-                    {reviewingResponse.applicant_info.date_of_birth && (
-                      <p>Date of Birth: {reviewingResponse.applicant_info.date_of_birth}</p>
-                    )}
-                    {reviewingResponse.applicant_info.gender && (
-                      <p>Gender: {reviewingResponse.applicant_info.gender}</p>
-                    )}
-                    {reviewingResponse.applicant_info.nationality && (
-                      <p>Nationality: {reviewingResponse.applicant_info.nationality}</p>
-                    )}
-                    {reviewingResponse.applicant_info.country && (
-                      <p>Country: {reviewingResponse.applicant_info.country}</p>
-                    )}
-                    {reviewingResponse.applicant_info.city && (
-                      <p>City: {reviewingResponse.applicant_info.city}</p>
+          {/* Applicant Info */}
+          <div className="text-sm text-muted-foreground space-y-1">
+            <p>Email: {respEmail(reviewingResponse)}</p>
+            <p>
+              Submitted:{" "}
+              {new Date(reviewingResponse.submitted_at).toLocaleDateString()}
+            </p>
+            {!reviewingResponse.user_id && reviewingResponse.applicant_info && (
+              <div className="mt-3 bg-muted p-3 space-y-1">
+                <p className="text-xs font-medium text-foreground uppercase tracking-wider mb-2">Applicant Details</p>
+                {reviewingResponse.applicant_info.phone && (
+                  <p>Phone: {reviewingResponse.applicant_info.phone}</p>
+                )}
+                {reviewingResponse.applicant_info.date_of_birth && (
+                  <p>Date of Birth: {reviewingResponse.applicant_info.date_of_birth}</p>
+                )}
+                {reviewingResponse.applicant_info.gender && (
+                  <p>Gender: {reviewingResponse.applicant_info.gender}</p>
+                )}
+                {reviewingResponse.applicant_info.nationality && (
+                  <p>Nationality: {reviewingResponse.applicant_info.nationality}</p>
+                )}
+                {reviewingResponse.applicant_info.country && (
+                  <p>Country: {reviewingResponse.applicant_info.country}</p>
+                )}
+                {reviewingResponse.applicant_info.city && (
+                  <p>City: {reviewingResponse.applicant_info.city}</p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Email history */}
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-foreground uppercase tracking-wider">
+              Email history
+            </p>
+            {applicantEmails.length === 0 ? (
+              <p className="text-sm text-muted-foreground italic">
+                No emails recorded for this applicant yet.
+              </p>
+            ) : (
+              <ul className="divide-y border">
+                {applicantEmails.map((em) => (
+                  <li
+                    key={em.id}
+                    className="flex items-center justify-between gap-3 px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm truncate">
+                        {em.subject || prettyCategory(em.category)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(
+                          em.sent_at ?? em.created_at
+                        ).toLocaleString()}
+                      </p>
+                      {em.error &&
+                        ["bounced", "complained", "failed", "dropped"].includes(
+                          em.status
+                        ) && (
+                          <p className="text-xs text-destructive">{em.error}</p>
+                        )}
+                    </div>
+                    <ApplicantEmailStatusBadge status={em.status} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* Answers */}
+          <div className="space-y-4">
+            {reviewingResponse.answers.map((a, idx) => {
+              const isPhoto = isStoragePath(a.answer ?? "");
+              return (
+                <div key={idx} className="space-y-1">
+                  <Label className="text-sm font-medium">
+                    {a.question_label}
+                  </Label>
+                  <div className="bg-muted p-3 text-sm whitespace-pre-wrap">
+                    {!a.answer ? (
+                      <span className="text-muted-foreground italic">No answer provided</span>
+                    ) : isPhoto ? (
+                      <StorageImage storagePath={a.answer} />
+                    ) : (
+                      a.answer
                     )}
                   </div>
-                )}
-              </div>
+                </div>
+              );
+            })}
+          </div>
 
-              {/* Email history */}
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-foreground uppercase tracking-wider">
-                  Email history
-                </p>
-                {applicantEmails.length === 0 ? (
-                  <p className="text-sm text-muted-foreground italic">
-                    No emails recorded for this applicant yet.
-                  </p>
-                ) : (
-                  <ul className="divide-y border">
-                    {applicantEmails.map((em) => (
-                      <li
-                        key={em.id}
-                        className="flex items-center justify-between gap-3 px-3 py-2"
+          {/* References */}
+          {referenceSlots.length > 0 && (
+            <div className="space-y-3">
+              <h4 className="text-sm font-medium">References</h4>
+              {!refsLoading &&
+                referenceSlots.some(
+                  (slot) =>
+                    slot.is_required &&
+                    !reviewReferences.some((ref) => ref.slot_id === slot.id)
+                ) && (
+                  <div className="border border-amber-border bg-white p-3">
+                    <p className="flex items-center gap-1.5 text-sm font-medium text-[color:var(--amber)]">
+                      <AlertTriangle className="h-4 w-4" />
+                      Missing required references
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      This application was submitted without:{" "}
+                      {referenceSlots
+                        .filter(
+                          (slot) =>
+                            slot.is_required &&
+                            !reviewReferences.some((ref) => ref.slot_id === slot.id)
+                        )
+                        .map((slot) => slot.label)
+                        .join(", ")}
+                      .
+                    </p>
+                    <div className="mt-2 flex items-center gap-3">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 gap-1.5"
+                        disabled={requestingReferences}
+                        onClick={handleRequestReferences}
                       >
-                        <div className="min-w-0">
-                          <p className="text-sm truncate">
-                            {em.subject || prettyCategory(em.category)}
+                        {requestingReferences ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Send className="h-3.5 w-3.5" />
+                        )}
+                        Email applicant to add references
+                      </Button>
+                      {reviewingResponse?.references_requested_at && (
+                        <span className="text-xs text-muted-foreground">
+                          Requested{" "}
+                          {new Date(
+                            reviewingResponse.references_requested_at
+                          ).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              {refsLoading ? (
+                <p className="text-sm text-muted-foreground">Loading references...</p>
+              ) : reviewReferences.length === 0 ? (
+                <p className="text-sm text-muted-foreground italic">No references were provided with this application.</p>
+              ) : (
+                <div className="space-y-3">
+                  {reviewReferences.map((ref) => (
+                    <div key={ref.id} className="border bg-muted/50 p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium">
+                            {ref.reference_slots?.label ?? "Reference"}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {new Date(
-                              em.sent_at ?? em.created_at
-                            ).toLocaleString()}
+                            {ref.referee_name} · {ref.referee_email}
                           </p>
-                          {em.error &&
-                            ["bounced", "complained", "failed", "dropped"].includes(
-                              em.status
-                            ) && (
-                              <p className="text-xs text-destructive">{em.error}</p>
-                            )}
                         </div>
-                        <ApplicantEmailStatusBadge status={em.status} />
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              {/* Answers */}
-              <div className="space-y-4">
-                {reviewingResponse.answers.map((a, idx) => {
-                  const isPhoto = isStoragePath(a.answer ?? "");
-                  return (
-                    <div key={idx} className="space-y-1">
-                      <Label className="text-sm font-medium">
-                        {a.question_label}
-                      </Label>
-                      <div className="bg-muted p-3 text-sm whitespace-pre-wrap">
-                        {!a.answer ? (
-                          <span className="text-muted-foreground italic">No answer provided</span>
-                        ) : isPhoto ? (
-                          <StorageImage storagePath={a.answer} />
-                        ) : (
-                          a.answer
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* References */}
-              {referenceSlots.length > 0 && (
-                <div className="space-y-3">
-                  <h4 className="text-sm font-medium">References</h4>
-                  {!refsLoading &&
-                    referenceSlots.some(
-                      (slot) =>
-                        slot.is_required &&
-                        !reviewReferences.some((ref) => ref.slot_id === slot.id)
-                    ) && (
-                      <div className="border border-amber-border bg-white p-3">
-                        <p className="flex items-center gap-1.5 text-sm font-medium text-[color:var(--amber)]">
-                          <AlertTriangle className="h-4 w-4" />
-                          Missing required references
-                        </p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          This application was submitted without:{" "}
-                          {referenceSlots
-                            .filter(
-                              (slot) =>
-                                slot.is_required &&
-                                !reviewReferences.some((ref) => ref.slot_id === slot.id)
-                            )
-                            .map((slot) => slot.label)
-                            .join(", ")}
-                          .
-                        </p>
-                        <div className="mt-2 flex items-center gap-3">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-8 gap-1.5"
-                            disabled={requestingReferences}
-                            onClick={handleRequestReferences}
-                          >
-                            {requestingReferences ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <Send className="h-3.5 w-3.5" />
-                            )}
-                            Email applicant to add references
-                          </Button>
-                          {reviewingResponse?.references_requested_at && (
-                            <span className="text-xs text-muted-foreground">
-                              Requested{" "}
-                              {new Date(
-                                reviewingResponse.references_requested_at
-                              ).toLocaleDateString()}
-                            </span>
+                        <div className="flex items-center gap-2">
+                          {ref.status !== "submitted" && editingRefId !== ref.id && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-xs gap-1"
+                              onClick={() => startEditReference(ref)}
+                              title="Change reference name or email"
+                            >
+                              <Edit2 className="h-3 w-3" />
+                              Edit
+                            </Button>
                           )}
+                          {ref.status !== "submitted" && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-xs gap-1"
+                              disabled={sendingReminder === ref.id}
+                              onClick={() => handleSendReminder(ref.id)}
+                              title="Send reminder email"
+                            >
+                              {sendingReminder === ref.id ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Send className="h-3 w-3" />
+                              )}
+                              Remind
+                            </Button>
+                          )}
+                          <Badge variant={ref.status === "submitted" ? "default" : "secondary"}>
+                            {ref.status === "submitted" ? "Submitted" : "Pending"}
+                          </Badge>
                         </div>
                       </div>
-                    )}
-                  {refsLoading ? (
-                    <p className="text-sm text-muted-foreground">Loading references...</p>
-                  ) : reviewReferences.length === 0 ? (
-                    <p className="text-sm text-muted-foreground italic">No references were provided with this application.</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {reviewReferences.map((ref) => (
-                        <div key={ref.id} className="border bg-muted/50 p-3 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="text-sm font-medium">
-                                {ref.reference_slots?.label ?? "Reference"}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {ref.referee_name} · {ref.referee_email}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {ref.status !== "submitted" && editingRefId !== ref.id && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="text-xs gap-1"
-                                  onClick={() => startEditReference(ref)}
-                                  title="Change reference name or email"
-                                >
-                                  <Edit2 className="h-3 w-3" />
-                                  Edit
-                                </Button>
-                              )}
-                              {ref.status !== "submitted" && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="text-xs gap-1"
-                                  disabled={sendingReminder === ref.id}
-                                  onClick={() => handleSendReminder(ref.id)}
-                                  title="Send reminder email"
-                                >
-                                  {sendingReminder === ref.id ? (
-                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                  ) : (
-                                    <Send className="h-3 w-3" />
-                                  )}
-                                  Remind
-                                </Button>
-                              )}
-                              <Badge variant={ref.status === "submitted" ? "default" : "secondary"}>
-                                {ref.status === "submitted" ? "Submitted" : "Pending"}
-                              </Badge>
-                            </div>
+
+                      {/* Inline edit: swap a pending referee's name/email */}
+                      {editingRefId === ref.id && (
+                        <div className="border bg-background p-3 space-y-3">
+                          <div className="space-y-1">
+                            <Label htmlFor={`ref-name-${ref.id}`} className="text-xs">
+                              Reference name
+                            </Label>
+                            <Input
+                              id={`ref-name-${ref.id}`}
+                              value={editRefName}
+                              onChange={(e) => setEditRefName(e.target.value)}
+                              placeholder="Full name"
+                              className="h-8 text-sm"
+                            />
                           </div>
+                          <div className="space-y-1">
+                            <Label htmlFor={`ref-email-${ref.id}`} className="text-xs">
+                              Reference email
+                            </Label>
+                            <Input
+                              id={`ref-email-${ref.id}`}
+                              type="email"
+                              value={editRefEmail}
+                              onChange={(e) => setEditRefEmail(e.target.value)}
+                              placeholder="name@example.com"
+                              className="h-8 text-sm"
+                            />
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Changing the email sends a fresh invite to the new
+                            address and disables the old link.
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              className="text-xs gap-1"
+                              disabled={savingRef}
+                              onClick={() => handleSaveReferenceEdit(ref.id)}
+                            >
+                              {savingRef && <Loader2 className="h-3 w-3 animate-spin" />}
+                              Save
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-xs"
+                              disabled={savingRef}
+                              onClick={cancelEditReference}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                      {ref.status === "submitted" && (
+                        Array.isArray(ref.form_data?.answers) && ref.form_data.answers.length > 0 ? (
+                          <div className="space-y-3 pt-2 border-t text-sm">
+                            {(ref.form_data.answers as Array<{ question_id: string; question_label: string; answer: string }>).map((a) => {
+                              const trimmed = (a.answer ?? "").trim();
+                              if (!trimmed) return null;
+                              // Highlight standalone rating answers (Excellent/Good/Fair/Poor) since they're common.
+                              const ratingColor =
+                                trimmed === "Excellent" ? "text-[color:var(--green-text)]" :
+                                trimmed === "Good" ? "text-electric" :
+                                trimmed === "Fair" ? "text-[color:var(--amber)]" :
+                                trimmed === "Poor" ? "text-destructive" : null;
+                              return (
+                                <div key={a.question_id}>
+                                  <p className="text-xs font-medium text-muted-foreground">{a.question_label}</p>
+                                  <p className={`whitespace-pre-wrap ${ratingColor ?? ""}`}>{trimmed}</p>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                        <div className="space-y-3 pt-2 border-t text-sm">
+                          {/* Basic info */}
+                          <div className="grid grid-cols-2 gap-2">
+                            {ref.relationship && (
+                              <div>
+                                <p className="text-xs font-medium text-muted-foreground">Relationship</p>
+                                <p>{ref.relationship}</p>
+                              </div>
+                            )}
+                            {ref.known_duration && (
+                              <div>
+                                <p className="text-xs font-medium text-muted-foreground">Known Duration</p>
+                                <p>{ref.known_duration}</p>
+                              </div>
+                            )}
+                            {ref.form_data?.whatsapp_number && (
+                              <div>
+                                <p className="text-xs font-medium text-muted-foreground">WhatsApp</p>
+                                <p>{ref.form_data.whatsapp_number}</p>
+                              </div>
+                            )}
+                          </div>
+                          {ref.form_data?.growth_context && (
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground">Growth/Discipleship Context</p>
+                              <p className="whitespace-pre-wrap">{ref.form_data.growth_context}</p>
+                            </div>
+                          )}
 
-                          {/* Inline edit: swap a pending referee's name/email */}
-                          {editingRefId === ref.id && (
-                            <div className="border bg-background p-3 space-y-3">
-                              <div className="space-y-1">
-                                <Label htmlFor={`ref-name-${ref.id}`} className="text-xs">
-                                  Reference name
-                                </Label>
-                                <Input
-                                  id={`ref-name-${ref.id}`}
-                                  value={editRefName}
-                                  onChange={(e) => setEditRefName(e.target.value)}
-                                  placeholder="Full name"
-                                  className="h-8 text-sm"
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <Label htmlFor={`ref-email-${ref.id}`} className="text-xs">
-                                  Reference email
-                                </Label>
-                                <Input
-                                  id={`ref-email-${ref.id}`}
-                                  type="email"
-                                  value={editRefEmail}
-                                  onChange={(e) => setEditRefEmail(e.target.value)}
-                                  placeholder="name@example.com"
-                                  className="h-8 text-sm"
-                                />
-                              </div>
-                              <p className="text-xs text-muted-foreground">
-                                Changing the email sends a fresh invite to the new
-                                address and disables the old link.
-                              </p>
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  size="sm"
-                                  className="text-xs gap-1"
-                                  disabled={savingRef}
-                                  onClick={() => handleSaveReferenceEdit(ref.id)}
-                                >
-                                  {savingRef && <Loader2 className="h-3 w-3 animate-spin" />}
-                                  Save
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="text-xs"
-                                  disabled={savingRef}
-                                  onClick={cancelEditReference}
-                                >
-                                  Cancel
-                                </Button>
+                          {/* Character ratings */}
+                          {ref.form_data?.character_ratings && Object.keys(ref.form_data.character_ratings).length > 0 && (
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground mb-1">Character Assessment</p>
+                              <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs">
+                                {Object.entries(ref.form_data.character_ratings).map(([trait, rating]) => (
+                                  <div key={trait} className="flex justify-between">
+                                    <span className="text-muted-foreground">{trait}</span>
+                                    <span className={
+                                      rating === "Excellent" ? "text-[color:var(--green-text)]" :
+                                      rating === "Good" ? "text-electric" :
+                                      rating === "Fair" ? "text-[color:var(--amber)]" :
+                                      "text-destructive"
+                                    }>{rating as string}</span>
+                                  </div>
+                                ))}
                               </div>
                             </div>
                           )}
-                          {ref.status === "submitted" && (
-                            Array.isArray(ref.form_data?.answers) && ref.form_data.answers.length > 0 ? (
-                              <div className="space-y-3 pt-2 border-t text-sm">
-                                {(ref.form_data.answers as Array<{ question_id: string; question_label: string; answer: string }>).map((a) => {
-                                  const trimmed = (a.answer ?? "").trim();
-                                  if (!trimmed) return null;
-                                  // Highlight standalone rating answers (Excellent/Good/Fair/Poor) since they're common.
-                                  const ratingColor =
-                                    trimmed === "Excellent" ? "text-[color:var(--green-text)]" :
-                                    trimmed === "Good" ? "text-electric" :
-                                    trimmed === "Fair" ? "text-[color:var(--amber)]" :
-                                    trimmed === "Poor" ? "text-destructive" : null;
-                                  return (
-                                    <div key={a.question_id}>
-                                      <p className="text-xs font-medium text-muted-foreground">{a.question_label}</p>
-                                      <p className={`whitespace-pre-wrap ${ratingColor ?? ""}`}>{trimmed}</p>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            ) : (
-                            <div className="space-y-3 pt-2 border-t text-sm">
-                              {/* Basic info */}
-                              <div className="grid grid-cols-2 gap-2">
-                                {ref.relationship && (
-                                  <div>
-                                    <p className="text-xs font-medium text-muted-foreground">Relationship</p>
-                                    <p>{ref.relationship}</p>
-                                  </div>
-                                )}
-                                {ref.known_duration && (
-                                  <div>
-                                    <p className="text-xs font-medium text-muted-foreground">Known Duration</p>
-                                    <p>{ref.known_duration}</p>
-                                  </div>
-                                )}
-                                {ref.form_data?.whatsapp_number && (
-                                  <div>
-                                    <p className="text-xs font-medium text-muted-foreground">WhatsApp</p>
-                                    <p>{ref.form_data.whatsapp_number}</p>
-                                  </div>
-                                )}
-                              </div>
-                              {ref.form_data?.growth_context && (
-                                <div>
-                                  <p className="text-xs font-medium text-muted-foreground">Growth/Discipleship Context</p>
-                                  <p className="whitespace-pre-wrap">{ref.form_data.growth_context}</p>
-                                </div>
-                              )}
+                          {ref.form_data?.additional_comments && (
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground">Additional Comments on Character</p>
+                              <p className="whitespace-pre-wrap">{ref.form_data.additional_comments}</p>
+                            </div>
+                          )}
 
-                              {/* Character ratings */}
-                              {ref.form_data?.character_ratings && Object.keys(ref.form_data.character_ratings).length > 0 && (
-                                <div>
-                                  <p className="text-xs font-medium text-muted-foreground mb-1">Character Assessment</p>
-                                  <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs">
-                                    {Object.entries(ref.form_data.character_ratings).map(([trait, rating]) => (
-                                      <div key={trait} className="flex justify-between">
-                                        <span className="text-muted-foreground">{trait}</span>
-                                        <span className={
-                                          rating === "Excellent" ? "text-[color:var(--green-text)]" :
-                                          rating === "Good" ? "text-electric" :
-                                          rating === "Fair" ? "text-[color:var(--amber)]" :
-                                          "text-destructive"
-                                        }>{rating as string}</span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                              {ref.form_data?.additional_comments && (
-                                <div>
-                                  <p className="text-xs font-medium text-muted-foreground">Additional Comments on Character</p>
-                                  <p className="whitespace-pre-wrap">{ref.form_data.additional_comments}</p>
-                                </div>
-                              )}
-
-                              {/* Short answers */}
-                              {ref.form_data?.christian_history && (
-                                <div>
-                                  <p className="text-xs font-medium text-muted-foreground">Christian History</p>
-                                  <p><strong>{ref.form_data.christian_history}</strong> — {ref.form_data.christian_history_why}</p>
-                                </div>
-                              )}
-                              {ref.form_data?.strengths_weaknesses && (
-                                <div>
-                                  <p className="text-xs font-medium text-muted-foreground">Strengths & Weaknesses</p>
-                                  <p className="whitespace-pre-wrap">{ref.form_data.strengths_weaknesses}</p>
-                                </div>
-                              )}
-                              {ref.form_data?.seeking_growth && (
-                                <div>
-                                  <p className="text-xs font-medium text-muted-foreground">Actively Seeking Growth?</p>
-                                  <p className="whitespace-pre-wrap">{ref.form_data.seeking_growth}</p>
-                                </div>
-                              )}
-                              {ref.form_data?.missions_ministry && (
-                                <div>
-                                  <p className="text-xs font-medium text-muted-foreground">Missions/Ministry Area</p>
-                                  <p className="whitespace-pre-wrap">{ref.form_data.missions_ministry}</p>
-                                </div>
-                              )}
-                              {ref.form_data?.recommendation && (
-                                <div>
-                                  <p className="text-xs font-medium text-muted-foreground">Recommendation</p>
-                                  <p>
-                                    <Badge variant={
-                                      ref.form_data.recommendation === "Yes" ? "default" :
-                                      ref.form_data.recommendation === "No" ? "destructive" :
-                                      "secondary"
-                                    }>
-                                      {ref.form_data.recommendation}
-                                    </Badge>
-                                  </p>
-                                  {ref.form_data.recommendation_explanation && (
-                                    <p className="whitespace-pre-wrap mt-1 text-muted-foreground">{ref.form_data.recommendation_explanation}</p>
-                                  )}
-                                </div>
-                              )}
-                              {ref.form_data?.other_comments && (
-                                <div>
-                                  <p className="text-xs font-medium text-muted-foreground">Other Comments</p>
-                                  <p className="whitespace-pre-wrap">{ref.form_data.other_comments}</p>
-                                </div>
-                              )}
-
-                              {/* Fallback for old-style references without form_data */}
-                              {!ref.form_data && ref.reference_text && (
-                                <div>
-                                  <p className="text-xs font-medium text-muted-foreground">Reference</p>
-                                  <p className="whitespace-pre-wrap">{ref.reference_text}</p>
-                                </div>
+                          {/* Short answers */}
+                          {ref.form_data?.christian_history && (
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground">Christian History</p>
+                              <p><strong>{ref.form_data.christian_history}</strong> — {ref.form_data.christian_history_why}</p>
+                            </div>
+                          )}
+                          {ref.form_data?.strengths_weaknesses && (
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground">Strengths & Weaknesses</p>
+                              <p className="whitespace-pre-wrap">{ref.form_data.strengths_weaknesses}</p>
+                            </div>
+                          )}
+                          {ref.form_data?.seeking_growth && (
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground">Actively Seeking Growth?</p>
+                              <p className="whitespace-pre-wrap">{ref.form_data.seeking_growth}</p>
+                            </div>
+                          )}
+                          {ref.form_data?.missions_ministry && (
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground">Missions/Ministry Area</p>
+                              <p className="whitespace-pre-wrap">{ref.form_data.missions_ministry}</p>
+                            </div>
+                          )}
+                          {ref.form_data?.recommendation && (
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground">Recommendation</p>
+                              <p>
+                                <Badge variant={
+                                  ref.form_data.recommendation === "Yes" ? "default" :
+                                  ref.form_data.recommendation === "No" ? "destructive" :
+                                  "secondary"
+                                }>
+                                  {ref.form_data.recommendation}
+                                </Badge>
+                              </p>
+                              {ref.form_data.recommendation_explanation && (
+                                <p className="whitespace-pre-wrap mt-1 text-muted-foreground">{ref.form_data.recommendation_explanation}</p>
                               )}
                             </div>
-                            )
+                          )}
+                          {ref.form_data?.other_comments && (
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground">Other Comments</p>
+                              <p className="whitespace-pre-wrap">{ref.form_data.other_comments}</p>
+                            </div>
+                          )}
+
+                          {/* Fallback for old-style references without form_data */}
+                          {!ref.form_data && ref.reference_text && (
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground">Reference</p>
+                              <p className="whitespace-pre-wrap">{ref.reference_text}</p>
+                            </div>
                           )}
                         </div>
-                      ))}
+                        )
+                      )}
                     </div>
-                  )}
+                  ))}
                 </div>
               )}
-
-              {/* Assigned Staff */}
-              <div className="border-t pt-4 flex items-center gap-3">
-                <Label className="shrink-0">Assigned Staff:</Label>
-                <StaffAssignSelect
-                  value={reviewingResponse.assigned_staff_id}
-                  staffOptions={staffOptions}
-                  className="h-9 w-[220px] text-sm"
-                  onAssign={(staffId) =>
-                    handleAssignStaff(reviewingResponse.id, staffId)
-                  }
-                />
-              </div>
-
-              {/* Admin Notes */}
-              <div className="space-y-2">
-                <Label>Notes</Label>
-                <Textarea
-                  value={reviewNotes}
-                  onChange={(e) => setReviewNotes(e.target.value)}
-                  placeholder="Internal notes about this applicant (not visible to the applicant)"
-                  rows={3}
-                />
-              </div>
-
-              {/* Status Update */}
-              <div className="flex items-center gap-4 pt-2">
-                <Label>Decision:</Label>
-                <Select value={reviewStatus} onValueChange={setReviewStatus}>
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="submitted">Submitted</SelectItem>
-                    <SelectItem value="waiting_for_references">Waiting for References</SelectItem>
-                    <SelectItem value="references_received">References Received</SelectItem>
-                    <SelectItem value="interview_scheduled">Interview Scheduled</SelectItem>
-                    <SelectItem value="accepted">Accepted</SelectItem>
-                    <SelectItem value="rejected">Rejected</SelectItem>
-                    <SelectItem value="waitlisted">Waitlisted</SelectItem>
-                    <SelectItem value="cancelled">Cancelled</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button
-                  onClick={handleReviewSave}
-                  disabled={reviewLoading || (reviewStatus === reviewingResponse.status && (reviewNotes.trim() || "") === (reviewingResponse.admin_notes || ""))}
-                  size="sm"
-                >
-                  {reviewLoading ? "Saving..." : "Save Decision"}
-                </Button>
-              </div>
             </div>
           )}
-        </DialogContent>
-      </Dialog>
+
+          {/* Assigned Staff */}
+          <div className="border-t pt-4 flex items-center gap-3">
+            <Label className="shrink-0">Assigned Staff:</Label>
+            <StaffAssignSelect
+              value={reviewingResponse.assigned_staff_id}
+              staffOptions={staffOptions}
+              className="h-9 w-[220px] text-sm"
+              onAssign={(staffId) =>
+                handleAssignStaff(reviewingResponse.id, staffId)
+              }
+            />
+          </div>
+
+
+          {/* Status Update */}
+          <div className="flex items-center gap-4 pt-2">
+            <Label>Decision:</Label>
+            <Select value={reviewStatus} onValueChange={setReviewStatus}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="submitted">Submitted</SelectItem>
+                <SelectItem value="waiting_for_references">Waiting for References</SelectItem>
+                <SelectItem value="references_received">References Received</SelectItem>
+                <SelectItem value="interview_scheduled">Interview Scheduled</SelectItem>
+                <SelectItem value="accepted">Accepted</SelectItem>
+                <SelectItem value="rejected">Rejected</SelectItem>
+                <SelectItem value="waitlisted">Waitlisted</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              onClick={() => handleReviewSave()}
+              disabled={reviewLoading || (reviewStatus === reviewingResponse.status && (reviewNotes.trim() || "") === (reviewingResponse.admin_notes || ""))}
+              size="sm"
+            >
+              {reviewLoading ? "Saving..." : "Save Decision"}
+            </Button>
+          </div>
+            </div>
+          }
+        />
+      )}
     </div>
   );
 }
@@ -3391,6 +2650,7 @@ function ApplicantsTab({
 function ApplicationTab({
   programId,
   programCode,
+  programName,
   applicationOpen,
   applicationDeadline,
   acceptanceEmailSubject,
@@ -3401,6 +2661,7 @@ function ApplicationTab({
 }: {
   programId: string;
   programCode: string;
+  programName: string;
   applicationOpen: boolean;
   applicationDeadline: string | null;
   acceptanceEmailSubject: string | null;
@@ -3472,7 +2733,7 @@ function ApplicationTab({
   }
 
   function copyPublicLink() {
-    const link = `${window.location.origin}/apply/${programId}`;
+    const link = publicLink;
     navigator.clipboard.writeText(link);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -3488,6 +2749,13 @@ function ApplicationTab({
   const [qShowWhenAnswer, setQShowWhenAnswer] = useState<string>("");
   const [qLoading, setQLoading] = useState(false);
   const [qError, setQError] = useState<string | null>(null);
+
+  // The public link was read straight off `window` during render, which threw
+  // "window is not defined" on the server and dropped this whole tab to client
+  // rendering. Resolve it after mount instead.
+  const [origin, setOrigin] = useState("");
+  useEffect(() => setOrigin(window.location.origin), []);
+  const publicLink = origin ? `${origin}/apply/${programId}` : `/apply/${programId}`;
 
   // Parent candidates: questions that can trigger follow-ups (yes_no / multiple_choice).
   // Exclude the question being edited to prevent self-reference.
@@ -3628,6 +2896,14 @@ function ApplicationTab({
     setQRequired(q.is_required);
     setQParentId(q.parent_question_id ?? "");
     setQShowWhenAnswer(q.show_when_answer ?? "");
+    setShowAddQuestion(true);
+  }
+
+  /** A field-type chip in the builder appends a question of that type. */
+  function startAddOfType(type: string) {
+    resetQuestionForm();
+    setQType(type);
+    setQRequired(type !== "section_header");
     setShowAddQuestion(true);
   }
 
@@ -3885,7 +3161,7 @@ function ApplicationTab({
               </p>
               <div className="flex items-center gap-2">
                 <div className="flex-1 border bg-background px-3 py-2 text-sm font-mono select-all truncate">
-                  {`${window.location.origin}/apply/${programId}`}
+                  {publicLink}
                 </div>
                 <Button
                   variant="outline"
@@ -4233,35 +3509,7 @@ function ApplicationTab({
           </div>
         )}
 
-        {/* Questions List */}
-        {questions.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-6">
-            No questions yet. Add questions to build the application form.
-          </p>
-        ) : (
-          <div className="space-y-2">
-            <QuestionTree
-              questions={questions}
-              onEdit={startEdit}
-              onDelete={handleDeleteQuestion}
-              onReorder={handleReorderSiblings}
-              onAddFollowUp={startAddFollowUp}
-            />
-          </div>
-        )}
-      </div>
-
-      {/* ─── REFERENCE SLOTS ─── */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="font-medium">Reference Slots ({referenceSlots.length})</h3>
-          {!showAddSlot && !editingSlot && (
-            <Button size="sm" variant="outline" onClick={() => setShowAddSlot(true)}>
-              <Plus className="mr-1 h-3 w-3" /> Add Reference Slot
-            </Button>
-          )}
-        </div>
-
+        {/* ── Frame 15a — the form as one readable list ───────── */}
         {(showAddSlot || editingSlot) && (
           <form onSubmit={handleSaveSlot} className="space-y-3 border bg-card p-4">
             <div className="grid gap-3 sm:grid-cols-2">
@@ -4306,68 +3554,31 @@ function ApplicationTab({
           </form>
         )}
 
-        {referenceSlots.length === 0 && !showAddSlot ? (
-          <p className="text-sm text-muted-foreground text-center py-6">
-            No reference slots configured. Add one to require references from applicants.
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {referenceSlots.map((slot, idx) => (
-              <div
-                key={slot.id}
-                className="flex items-center justify-between border bg-card px-4 py-3"
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">
-                    {slot.label}
-                    {slot.is_required && (
-                      <span className="ml-2 text-xs text-muted-foreground">Required</span>
-                    )}
-                  </p>
-                  {slot.description && (
-                    <p className="text-xs text-muted-foreground truncate">{slot.description}</p>
-                  )}
-                </div>
-                <div className="flex items-center gap-1 ml-2 shrink-0">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted-foreground"
-                    disabled={idx === 0}
-                    onClick={() => handleMoveSlot(slot.id, "up")}
-                  >
-                    <ChevronUp className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted-foreground"
-                    disabled={idx === referenceSlots.length - 1}
-                    onClick={() => handleMoveSlot(slot.id, "down")}
-                  >
-                    <ChevronDown className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted-foreground"
-                    onClick={() => startEditSlot(slot)}
-                  >
-                    <Edit2 className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                    onClick={() => handleDeleteSlot(slot.id)}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        <div className="border border-ink">
+          <FormBuilder
+            questions={questions}
+            slots={referenceSlots}
+            onEdit={startEdit}
+            onDelete={handleDeleteQuestion}
+            onReorder={handleReorderSiblings}
+            onAddFollowUp={startAddFollowUp}
+            onAddOfType={startAddOfType}
+            onAddSlot={() => {
+              resetSlotForm();
+              setShowAddSlot(true);
+            }}
+            onEditSlot={(slot) => startEditSlot(slot as ReferenceSlot)}
+            onMoveSlot={handleMoveSlot}
+            onDeleteSlot={handleDeleteSlot}
+            preview={
+              <FormPreview
+                schoolName={programName}
+                programCode={programCode}
+                questions={questions}
+              />
+            }
+          />
+        </div>
       </div>
 
       {/* ─── REFERENCE QUESTIONS ─── */}

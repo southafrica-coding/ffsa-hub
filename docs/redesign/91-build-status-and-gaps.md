@@ -74,6 +74,91 @@ Everything below is on `main` and deployed (PR #212, commit `aa53496`).
 
 ---
 
+## Built, on a branch, not yet merged
+
+**`redesign/training-depth`** — session 3, `08-training-and-messages.md` §1–4.
+Scope scanned: `src/app/(admin)/schools` (all 12 files) plus `src/services/schools.ts`
+and `src/app/(portal)/my-schools/[enrollmentId]/page.tsx`, both of which had to
+follow the course-model change below.
+
+| Frame | State |
+|---|---|
+| 14a school detail | ✅ masthead + facts line, 300px phase run (only the current phase bordered + 900), six-column roster, amber fees, `—` in #B4B0A2, NeedsYou counts exactly those dashes |
+| 14b grades matrix | ✅ built — **blocked on migration 179 being applied**, see below |
+| 14c applicant review | ✅ full screen, answers at 15px/1.5, decision bar pinned outside the scroll |
+| 15a form builder | ✅ one list, conditionals indented 26px on #F7F5EE with the yellow SHOWS WHEN pill, live public preview |
+
+Verified signed-in against real data (FFBX26, 41 students; TRACK, real conditional
+follow-ups) at 1440px and 375px. No page-level horizontal overflow at 375px on any
+of the four; the grades matrix scrolls inside its own box. **No screenshot files
+were committed** — this folder has no screenshot convention yet and inventing one
+mid-session seemed worse than saying so. Verification was live in the browser.
+
+### Migration 179 — NOT YET APPLIED
+
+`supabase/migrations/179_grades_on_billing_courses.sql`. Apply it through the
+Supabase dashboard SQL editor (never `supabase db push` — CLI history is out of
+sync). **Until it runs, 14b renders correctly but cannot save**: the FK still
+points at `courses`, so a grade edit returns
+`violates foreign key constraint "grades_course_id_fkey"`, which the matrix
+surfaces in its footer and rolls the cell back. That is the designed failure, not
+a bug — but the tab is not finished until the migration is applied.
+
+**Why 179 and not 176:** the parallel-rules table pre-assigns 176/177/178 to
+sessions 2/5/6. Session 3 was listed as "none expected — ask before taking one",
+and this one was asked for and approved.
+
+### The course model, settled
+
+Two course tables have coexisted since 098: `courses` (academic, the FK target of
+`grades`) and `billing_courses` (chronological, what the live Courses tab writes
+through). Only the second was ever maintained — **`courses` holds 1 row across 3
+programs and `grades` is empty**, so 179 re-points `grades.course_id` at
+`billing_courses` and adds `credit_hours` to it. Zero rows to migrate; the
+migration refuses to run if that ever stops being true.
+
+`courses` is left in place, unused, rather than dropped — that is a separate call.
+Every read now aliases it (`courses:billing_courses(*)`) so callers were unchanged.
+The page tolerates the pre-179 schema by retrying the course read without
+`credit_hours`, so a deploy landing before the hand-applied migration degrades
+instead of blanking the tab.
+
+### Two shared-file changes wanted, reported not made
+
+Per the parallel rules, neither was applied here:
+
+1. **`Masthead` needs a `meta` slot.** 14a wants a mono line under the title
+   (dates · weeks · location). It is rendered as a separate strip below the
+   masthead instead, which works but is a second element where the design has one.
+2. **`globals.css` forces `button { font-family: mono !important; text-transform:
+   uppercase }`.** Any button whose label is prose — a form-builder question, a
+   roster row action — has to opt back out with `!font-sans normal-case`. The
+   frame sets `text-transform:none` on that row for the same reason. Worth
+   scoping the global rule to `[data-slot="button"]` instead.
+
+Also wanted, smaller: a **filled** variant of `StatusPill`. 14a's roster status is
+explicitly "a filled pill, not an outline"; that is currently local to the roster.
+
+### Also done on this branch
+
+- Deleted three dead components from `program-detail.tsx` (~900 lines): the old
+  `CoursesTab` (orphaned when Courses moved to `ProgramCoursesManager`),
+  `EnrollmentsTab` (replaced by 14a) and the unlinked `GradesTab`. The file is
+  ~3.6k lines, down from ~4.5k, with the four screens now in their own files.
+- The Grades tab is **linked** for the first time — it had a `TabsContent` with no
+  trigger, so it was unreachable.
+- Fixed a pre-existing SSR crash: `ApplicationTab` read `window.location.origin`
+  during render, so `?tab=application` threw "window is not defined" and dropped
+  the route to client rendering.
+- Enrolment removal/restore/permanent-delete and "+ Add student" survived the
+  rebuild — the frame's roster is six columns and stays six columns, so removal
+  moved to a row menu and the add button to the masthead, where 14a puts it.
+
+**Still outstanding in `08-training-and-messages.md`:** §5 Messages (15b/15c) —
+superseded by doc 11, belongs to session 2 — and §6, frames 16a/16b/17a/17b.
+
+---
+
 ## Not built — the real backlog
 
 ### Prayer room — 1 of 5 UI stages
@@ -93,15 +178,11 @@ of five tabs are the pre-redesign screens.
 The backend is complete and verified end to end, so this is UI work against a
 working data layer.
 
-### `08-training-and-messages.md` — nothing built
-The whole document. Note the handoff's own warning: Messages is the thing every
+### `08-training-and-messages.md` — §1–4 built (branch), §5–6 not
+14a, 14b, 14c and 15a are on `redesign/training-depth` — see the section above.
+What remains is the half the handoff warned about: Messages is the thing every
 later feature sends through, and billing's email moments (07 §10) depend on it.
 
-- 14a school detail: 300px phase run + roster table (student · from · status ·
-  walking with · fees · graded)
-- 14b grades matrix — ungraded cells stay empty white
-- 14c applicant review — answers at 15px/1.5, decision bar pinned outside scroll
-- 15a form builder — one readable list, conditionals indented with a yellow pill
 - 15b/15c Messages — **needs tables `school_message_moments` + `message_sends`**;
   `source` column drives FFSA DEFAULT / THIS SCHOOL and makes revert possible
 - 16a student mail, 16b/17b compose drawer, 17a/17b bulk (N separate emails)
@@ -156,8 +237,10 @@ Contacts and users are the highest-traffic of these.
 `main` and feature branches have collided twice (116, then 164 + 167). Two files
 here were **applied as 164/167 but are named 174/175**; their headers say so.
 
-**Next new migration: 176.** Always branch off `origin/main` and check
-`ls supabase/migrations | sort | tail` first.
+**Next new migration: 180.** 176/177/178 are pre-assigned to sessions 2/5/6 by
+`93-session-prompts.md`; **179** is taken by `redesign/training-depth`
+(grades → billing_courses, written and NOT yet applied). Always branch off
+`origin/main` and check `ls supabase/migrations | sort | tail` first.
 
 ---
 

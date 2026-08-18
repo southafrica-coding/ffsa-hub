@@ -31,9 +31,11 @@ export async function getPrograms(
 export async function getProgramById(supabase: Client, id: string) {
   return supabase
     .from("programs")
-    .select("*, courses(*)")
+    // `courses` aliases billing_courses: Training owns course structure and
+    // that is the table its Courses tab writes through (migration 179).
+    .select("*, courses:billing_courses(*)")
     .eq("id", id)
-    .order("sort_order", { referencedTable: "courses", ascending: true })
+    .order("sequence", { referencedTable: "courses", ascending: true })
     .single();
 }
 
@@ -130,7 +132,9 @@ export async function getEnrollmentsByProgram(supabase: Client, programId: strin
   return supabase
     .from("enrollments")
     .select(
-      "*, users!enrollments_user_id_fkey(id, first_name, last_name, preferred_name, email), assigned_staff:users!enrollments_assigned_staff_id_fkey(id, first_name, last_name, preferred_name, email)"
+      // `nationality` feeds the roster’s FROM column (frame 14a). It is the
+      // country-name dropdown value, not an adjective — see migration 115.
+      "*, users!enrollments_user_id_fkey(id, first_name, last_name, preferred_name, email, nationality), assigned_staff:users!enrollments_assigned_staff_id_fkey(id, first_name, last_name, preferred_name, email)"
     )
     .eq("program_id", programId)
     .order("enrolled_at", { ascending: false });
@@ -184,7 +188,7 @@ export async function listActiveEnrollmentSchools(supabase: Client) {
 export async function getEnrollmentById(supabase: Client, id: string) {
   return supabase
     .from("enrollments")
-    .select("*, programs(*, courses(*)), users!enrollments_user_id_fkey(id, first_name, last_name, preferred_name, email, date_of_birth, nationality)")
+    .select("*, programs(*, courses:billing_courses(*)), users!enrollments_user_id_fkey(id, first_name, last_name, preferred_name, email, date_of_birth, nationality)")
     .eq("id", id)
     .single();
 }
@@ -260,7 +264,9 @@ export async function deleteEnrollment(supabase: Client, id: string) {
 export async function getGradesByEnrollment(supabase: Client, enrollmentId: string) {
   return supabase
     .from("grades")
-    .select("*, courses(*)")
+    // Aliased so callers keep reading `.courses` — since migration 179 the
+    // embedded row is a billing_courses row.
+    .select("*, courses:billing_courses(*)")
     .eq("enrollment_id", enrollmentId)
     .order("created_at", { ascending: true });
 }
@@ -268,7 +274,8 @@ export async function getGradesByEnrollment(supabase: Client, enrollmentId: stri
 export async function getGradesByProgram(supabase: Client, programId: string) {
   return supabase
     .from("grades")
-    .select("*, courses(*), enrollments!inner(id, user_id, program_id)")
+    // `courses` is an alias onto billing_courses — see migration 179.
+    .select("*, courses:billing_courses(*), enrollments!inner(id, user_id, program_id)")
     .eq("enrollments.program_id", programId);
 }
 
@@ -390,12 +397,12 @@ export async function getTranscriptData(
 
   if (!enrollment) return null;
 
-  // Get courses for the program
+  // Course list — billing_courses since migration 179 re-pointed grades at it.
   const { data: courses } = await supabase
-    .from("courses")
+    .from("billing_courses")
     .select("*")
     .eq("program_id", programId)
-    .order("sort_order", { ascending: true });
+    .order("sequence", { ascending: true });
 
   // Get grades for this enrollment
   const { data: grades } = await supabase

@@ -14,6 +14,8 @@ type UserIdentity = {
   last_name: string | null;
   preferred_name: string | null;
   email: string | null;
+  /** The roster's FROM column (frame 14a) reads this off the hydrated row. */
+  nationality: string | null;
 };
 
 /**
@@ -46,7 +48,7 @@ async function hydrateUserIdentities(
 
   const { data: users } = await admin
     .from("users")
-    .select("id, first_name, last_name, preferred_name, email")
+    .select("id, first_name, last_name, preferred_name, email, nationality")
     .in("id", Array.from(ids));
 
   const byId = new Map<string, UserIdentity>(
@@ -108,15 +110,106 @@ export default async function ProgramDetailPage({
 
   const { data: grades } = await getGradesByProgram(supabase, programId);
 
+  // ── Roster fees (frame 14a) ──────────────────────────────
+  // Only a school billed inside the Hub has a schedule to owe against. While a
+  // program is billing_mode = 'external' its students are mid-payment outside
+  // the Hub, so the honest column is "billed outside" — NOT a fabricated
+  // "paid", and never the amber that means someone owes us money.
+  const feesByEnrollment: Record<string, { label: string; owed: boolean }> = {};
+  if (program.billing_mode === "external") {
+    for (const e of enrollments) {
+      feesByEnrollment[e.id] = { label: "BILLED OUTSIDE", owed: false };
+    }
+  } else {
+    // The generated Supabase types predate the billing tables (095/098), so
+    // these reads cast the same way the billing_courses read above does.
+    type PlanRow = { id: string; enrollment_id: string };
+    type ScheduleRow = { plan_id: string; amount_zar: number | string | null; status: string };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: plansRaw } = await (admin as any)
+      .from("student_billing_plans")
+      .select("id, enrollment_id")
+      .eq("program_id", programId);
+    const plans: PlanRow[] = plansRaw ?? [];
+    const planToEnrollment = new Map<string, string>(plans.map((pl) => [pl.id, pl.enrollment_id]));
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: scheduledRaw } = await (admin as any)
+      .from("student_billing_schedule")
+      .select("plan_id, amount_zar, status")
+      .in("plan_id", Array.from(planToEnrollment.keys()));
+    const scheduled: ScheduleRow[] = scheduledRaw ?? [];
+
+    const owedByEnrollment = new Map<string, number>();
+    for (const row of scheduled) {
+      // 'paid' is settled and 'cancelled' was never owed; everything else is
+      // still money the student has to find.
+      if (row.status === "paid" || row.status === "cancelled") continue;
+      const enrollmentId = planToEnrollment.get(row.plan_id);
+      if (!enrollmentId) continue;
+      owedByEnrollment.set(
+        enrollmentId,
+        (owedByEnrollment.get(enrollmentId) ?? 0) + Number(row.amount_zar ?? 0)
+      );
+    }
+
+    for (const e of enrollments) {
+      const owed = owedByEnrollment.get(e.id) ?? 0;
+      const hasPlan = plans.some((pl) => pl.enrollment_id === e.id);
+      feesByEnrollment[e.id] = hasPlan
+        ? owed > 0
+          ? { label: `R ${owed.toLocaleString("en-ZA")} DUE`, owed: true }
+          : { label: "PAID", owed: false }
+        : { label: "NO PLAN", owed: false };
+    }
+  }
+
+  // ── "Last edit" line under the grades matrix (frame 14b) ──
+  let gradesLastEdit: { at: string; by: string } | null = null;
+  const graded = (grades ?? []).filter((g: any) => g.graded_at);
+  if (graded.length > 0) {
+    const newest = graded.reduce((a: any, b: any) =>
+      new Date(a.graded_at) > new Date(b.graded_at) ? a : b
+    );
+    let by = "SOMEONE";
+    if (newest.graded_by) {
+      const { data: grader } = await admin
+        .from("users")
+        .select("first_name, last_name")
+        .eq("id", newest.graded_by)
+        .maybeSingle();
+      if (grader) {
+        by = `${grader.first_name ?? ""} ${(grader.last_name ?? "").slice(0, 1)}`.trim().toUpperCase() || "SOMEONE";
+      }
+    }
+    gradesLastEdit = {
+      at: new Date(newest.graded_at)
+        .toLocaleString("en-ZA", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })
+        .toUpperCase(),
+      by,
+    };
+  }
+
   // Phase-courses (billing_courses) — the unified course concept managed here.
+  // credit_hours arrives with migration 179: it heads each grades-matrix column
+  // ("3 CR") and weights the transcript GPA. Migrations here are applied by hand
+  // through the Supabase dashboard, so a deploy can legitimately land first —
+  // fall back to the pre-179 column list rather than blanking the whole tab.
+  const BASE_COURSE_COLS =
+    "id, code, name, scope, sequence, status, start_date, end_date, arrival_date, lead_staff_id, description";
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: billingCourses } = await (supabase as any)
+  const courseQuery = (cols: string) => (supabase as any)
     .from("billing_courses")
-    .select(
-      "id, code, name, scope, sequence, status, start_date, end_date, arrival_date, lead_staff_id, description"
-    )
+    .select(cols)
     .eq("program_id", programId)
     .order("sequence", { ascending: true });
+
+  const withCredits = await courseQuery(`${BASE_COURSE_COLS}, credit_hours`);
+  let billingCourses = withCredits.data;
+  if (withCredits.error) {
+    ({ data: billingCourses } = await courseQuery(BASE_COURSE_COLS));
+  }
   const { data: courseStaff } = await admin
     .from("users")
     .select("id, first_name, last_name, preferred_name")
@@ -180,6 +273,8 @@ export default async function ProgramDetailPage({
         leaders={leaders ?? []}
         emailTemplates={emailTemplates ?? []}
         grades={grades ?? []}
+        feesByEnrollment={feesByEnrollment}
+        gradesLastEdit={gradesLastEdit}
         allUsers={allUsers ?? []}
         staffOptions={staffOptions}
         billingCourses={billingCourses ?? []}
