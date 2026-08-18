@@ -169,7 +169,7 @@ export default async function ImportDetailPage({
                       href={r.file_url}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-blue-400 hover:underline"
+                      className="text-electric hover:underline"
                     >
                       Open
                     </a>

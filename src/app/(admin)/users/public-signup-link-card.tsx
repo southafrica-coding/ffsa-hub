@@ -99,7 +99,7 @@ export function PublicSignupLinkCard({
               <span
                 className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 ${
                   enabled
-                    ? "bg-green-500/10 text-green-700 dark:text-green-400"
+                    ? "bg-white text-grass-text dark:text-grass-text"
                     : "bg-muted text-muted-foreground"
                 }`}
               >

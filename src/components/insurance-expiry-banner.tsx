@@ -27,11 +27,11 @@ export function InsuranceExpiryBanner({
   return (
     <>
       <div
-        className="mb-6 flex flex-col gap-2 rounded-lg border px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+        className="mb-6 flex flex-col gap-2 border px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
         style={{
-          borderColor: "hsl(28 95% 55% / 0.4)",
-          background: "hsl(28 80% 16%)",
-          color: "hsl(28 95% 82%)",
+          borderColor: "var(--amber-border)",
+          background: "var(--yellow-dim)",
+          color: "var(--amber)",
         }}
       >
         <div className="flex items-start gap-2 text-sm">

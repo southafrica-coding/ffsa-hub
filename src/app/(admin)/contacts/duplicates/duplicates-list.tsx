@@ -239,9 +239,9 @@ function ClusterCard({
             Merge {others.length} into {displayName(survivor)}
           </Button>
         ) : (
-          <div className="rounded-md border border-red-500/30 bg-red-500/10 p-3">
+          <div className="rounded-md border border-destructive bg-white p-3">
             <p className="text-sm flex items-start gap-2">
-              <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-red-400" />
+              <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-destructive" />
               <span>
                 Merge{" "}
                 <span className="font-medium">
@@ -261,7 +261,7 @@ function ClusterCard({
                 size="sm"
                 onClick={doMerge}
                 disabled={busy}
-                className="bg-red-500/15 border border-red-500/30 text-red-400 hover:bg-red-500/25"
+                className="bg-white border border-destructive text-destructive hover:bg-white"
               >
                 {busy ? progress ?? "Merging…" : "Confirm merge"}
               </Button>
@@ -279,7 +279,7 @@ function ClusterCard({
         )}
       </div>
 
-      {error && <p className="text-sm text-red-400 mt-3">{error}</p>}
+      {error && <p className="text-sm text-destructive mt-3">{error}</p>}
     </div>
   );
 }

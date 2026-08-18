@@ -278,7 +278,7 @@ function EmailList({ emails }: { emails: DossierEmail[] }) {
           <span className="text-sm truncate">{e.label}</span>
           <div className="flex items-center gap-2 shrink-0">
             {e.bouncedAt ? (
-              <span className="inline-flex items-center gap-1 text-[11px] text-red-400" title="Bounced">
+              <span className="inline-flex items-center gap-1 text-[11px] text-destructive" title="Bounced">
                 <AlertTriangle className="h-3 w-3" /> bounced
               </span>
             ) : (
@@ -387,8 +387,8 @@ function StatusPill({
   icon?: ReactNode;
 }) {
   const styles: Record<string, string> = {
-    good: "bg-green-500/15 text-green-400",
-    bad: "bg-red-500/15 text-red-400",
+    good: "bg-white text-grass-text",
+    bad: "bg-white text-destructive",
     neutral: "bg-muted text-muted-foreground",
     accent: "",
   };

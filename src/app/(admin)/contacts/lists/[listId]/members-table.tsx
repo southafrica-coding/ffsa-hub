@@ -71,7 +71,7 @@ export function MembersTable({
 
   return (
     <div className="space-y-3">
-      {err && <p className="text-xs text-red-600">{err}</p>}
+      {err && <p className="text-xs text-destructive">{err}</p>}
       <div className="rounded-lg border bg-card overflow-x-auto">
         <Table>
           <TableHeader>
@@ -114,7 +114,7 @@ export function MembersTable({
                     onClick={() => remove(m.id, displayName(m))}
                     disabled={busyId === m.id}
                     aria-label="Remove from list"
-                    className="text-muted-foreground hover:text-red-600 disabled:opacity-40"
+                    className="text-muted-foreground hover:text-destructive disabled:opacity-40"
                   >
                     <X className="h-4 w-4" />
                   </button>

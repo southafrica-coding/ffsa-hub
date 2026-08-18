@@ -96,7 +96,7 @@ export default async function ContactsImportPage() {
                       {row.error_count > 0 ? (
                         <Link
                           href={`/contacts/imports/${row.id}/errors`}
-                          className="text-red-400 hover:text-red-300 hover:underline"
+                          className="text-destructive hover:text-destructive hover:underline"
                         >
                           {row.error_count.toLocaleString()}
                         </Link>

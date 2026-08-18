@@ -90,7 +90,7 @@ export function EmailHistoryCard({ items }: { items: ContactEmailItem[] }) {
                       ["bounced", "complained", "failed", "dropped"].includes(
                         item.status
                       ) && (
-                        <p className="text-xs text-red-600 mt-0.5">
+                        <p className="text-xs text-destructive mt-0.5">
                           {item.reason}
                         </p>
                       )}

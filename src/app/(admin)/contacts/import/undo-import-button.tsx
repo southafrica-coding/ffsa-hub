@@ -59,7 +59,7 @@ export function UndoImportButton({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="text-xs font-medium text-red-400 hover:text-red-300 hover:underline"
+        className="text-xs font-medium text-destructive hover:text-destructive hover:underline"
       >
         Undo
       </button>
@@ -106,7 +106,7 @@ export function UndoImportButton({
               autoFocus
             />
 
-            {error && <p className="text-sm text-red-400 mb-3">{error}</p>}
+            {error && <p className="text-sm text-destructive mb-3">{error}</p>}
 
             <div className="flex justify-end gap-2">
               <button
@@ -125,7 +125,7 @@ export function UndoImportButton({
                 type="button"
                 onClick={handleConfirm}
                 disabled={busy || confirmText !== "DELETE"}
-                className="px-3 py-1.5 rounded bg-red-500/15 border border-red-500/30 text-red-400 text-sm font-medium hover:bg-red-500/25 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="px-3 py-1.5 rounded bg-white border border-destructive text-destructive text-sm font-medium hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {busy ? "Rolling back…" : "Yes, undo import"}
               </button>

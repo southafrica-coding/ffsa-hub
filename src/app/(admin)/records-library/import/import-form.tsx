@@ -426,7 +426,7 @@ export function ImportForm({ templates }: { templates: Template[] }) {
                 disabled={stage === "uploading"}
                 className={`px-3 py-1.5 text-sm rounded-md border capitalize ${
                   recordType === rt
-                    ? "bg-blue-600 text-white border-blue-600"
+                    ? "bg-ink text-white border-ink"
                     : "bg-card text-foreground hover:bg-muted"
                 }`}
               >
@@ -548,7 +548,7 @@ export function ImportForm({ templates }: { templates: Template[] }) {
       )}
 
       {errorMessage && (
-        <div className="border border-red-500/40 bg-red-500/10 text-red-300 rounded-md p-3 text-sm">
+        <div className="border border-destructive bg-white text-destructive rounded-md p-3 text-sm">
           {errorMessage}
         </div>
       )}
@@ -557,15 +557,15 @@ export function ImportForm({ templates }: { templates: Template[] }) {
         <div
           className={`rounded-md p-4 ${
             inFlight
-              ? "border border-blue-500/40 bg-blue-500/10"
+              ? "border border-rule-strong bg-bone"
               : stage === "complete"
-              ? "border border-emerald-500/40 bg-emerald-500/10"
+              ? "border border-grass bg-white"
               : "border bg-muted/50"
           }`}
         >
           <div className="flex items-center gap-2 mb-3">
             {inFlight ? (
-              <Loader2 className="h-4 w-4 animate-spin text-blue-300" />
+              <Loader2 className="h-4 w-4 animate-spin text-electric" />
             ) : null}
             <h3 className="font-semibold text-sm">
               {stage === "uploading"
@@ -580,9 +580,9 @@ export function ImportForm({ templates }: { templates: Template[] }) {
 
           {inFlight && (
             <div className="mb-4 space-y-1.5">
-              <div className="h-3 w-full rounded-full bg-muted overflow-hidden border border-blue-500/30">
+              <div className="h-3 w-full rounded-full bg-muted overflow-hidden border border-rule-strong">
                 <div
-                  className={`h-full bg-blue-500 transition-[width] duration-300 ${
+                  className={`h-full bg-ink transition-[width] duration-300 ${
                     stage === "finalizing" ? "animate-pulse" : ""
                   }`}
                   style={{
@@ -609,7 +609,7 @@ export function ImportForm({ templates }: { templates: Template[] }) {
                     : ""}
                 </span>
               </div>
-              <p className="text-xs text-amber-300">
+              <p className="text-xs text-amber">
                 Keep this tab open — leaving the page will abandon the upload.
               </p>
             </div>
@@ -631,7 +631,7 @@ export function ImportForm({ templates }: { templates: Template[] }) {
         <button
           type="button"
           onClick={startImport}
-          className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700"
+          className="px-4 py-2 bg-ink text-white rounded-md text-sm hover:bg-ink"
         >
           Start import
         </button>
@@ -641,7 +641,7 @@ export function ImportForm({ templates }: { templates: Template[] }) {
         <button
           type="button"
           disabled
-          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600/60 text-white rounded-md text-sm cursor-not-allowed"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-ink/60 text-white rounded-md text-sm cursor-not-allowed"
         >
           <Loader2 className="h-4 w-4 animate-spin" />
           {stage === "uploading" ? "Importing…" : "Finalizing…"}

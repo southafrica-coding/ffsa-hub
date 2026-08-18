@@ -249,7 +249,7 @@ function Row({
     <div className="flex items-center justify-between gap-2 border bg-muted/30 px-3 py-2">
       <div className="flex items-center gap-2 min-w-0">
         {isPrimary && (
-          <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400 shrink-0" />
+          <Star className="h-3.5 w-3.5 fill-amber-400 text-amber shrink-0" />
         )}
         <div className="min-w-0">
           <p className="text-sm truncate">{value}</p>
@@ -282,7 +282,7 @@ function Row({
           )}
           <DropdownMenuItem
             onClick={onRemove}
-            className="text-red-400 focus:text-red-300"
+            className="text-destructive focus:text-destructive"
           >
             Remove
           </DropdownMenuItem>
@@ -314,7 +314,7 @@ function AddRow({
   onSubmit: () => void;
 }) {
   return (
-    <div className=" border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
+    <div className=" border border-amber-border bg-yellow-dim p-3 space-y-2">
       <div className="flex gap-2">
         {kind === "phone" ? (
           <PhoneInputNative
@@ -348,7 +348,7 @@ function AddRow({
           <option value="other">other</option>
         </select>
       </div>
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="flex justify-end gap-2">
         <Button
           variant="ghost"

@@ -105,7 +105,7 @@ export function LabelsCard({
           <button
             type="button"
             onClick={() => setMode("existing")}
-            className="text-xs text-blue-600 hover:underline"
+            className="text-xs text-electric hover:underline"
           >
             + Add
           </button>
@@ -190,14 +190,14 @@ export function LabelsCard({
               />
             )}
 
-            {err && <p className="text-xs text-red-600">{err}</p>}
+            {err && <p className="text-xs text-destructive">{err}</p>}
 
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={addLabel}
                 disabled={busy}
-                className="px-3 py-1 bg-blue-600 text-white text-xs hover:bg-blue-700 disabled:bg-gray-300"
+                className="px-3 py-1 bg-ink text-white text-xs hover:bg-ink disabled:bg-bone-3"
               >
                 Add
               </button>
@@ -208,7 +208,7 @@ export function LabelsCard({
                   setErr(null);
                 }}
                 disabled={busy}
-                className="px-3 py-1 border text-xs hover:bg-gray-50"
+                className="px-3 py-1 border text-xs hover:bg-bone"
               >
                 Cancel
               </button>

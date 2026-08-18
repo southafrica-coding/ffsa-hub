@@ -60,7 +60,7 @@ export function MatchQueueList({ items }: { items: QueueItem[] }) {
   return (
     <div className="space-y-3">
       {errorMessage && (
-        <div className="border border-red-500/40 bg-red-500/10 text-red-300 rounded-md p-3 text-sm">
+        <div className="border border-destructive bg-white text-destructive rounded-md p-3 text-sm">
           {errorMessage}
         </div>
       )}
@@ -106,9 +106,9 @@ export function MatchQueueList({ items }: { items: QueueItem[] }) {
                   <span
                     className={`inline-block px-2 py-0.5 rounded ${
                       item.confidence === "high"
-                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                        ? "bg-white text-grass-text border border-grass"
                         : item.confidence === "medium"
-                        ? "bg-yellow-500/20 text-yellow-200 border border-yellow-500/30"
+                        ? "bg-yellow-dim text-yellow-200 border border-amber-border"
                         : "bg-muted text-muted-foreground border"
                     }`}
                   >

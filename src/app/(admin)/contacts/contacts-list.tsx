@@ -500,7 +500,7 @@ function BulkAddToList({
             setCreatingNew((v) => !v);
             setErr(null);
           }}
-          className="text-xs text-blue-600 hover:underline"
+          className="text-xs text-electric hover:underline"
         >
           {creatingNew ? "Pick existing" : "Create new"}
         </button>
@@ -513,7 +513,7 @@ function BulkAddToList({
         Clear
       </Button>
 
-      {err && <span className="text-xs text-red-600">{err}</span>}
+      {err && <span className="text-xs text-destructive">{err}</span>}
     </div>
   );
 }

@@ -324,7 +324,7 @@ export function CsvImportForm({ labels }: { labels: Label[] }) {
             ))}
           </div>
           {!hasEmailOrPhone && (
-            <p className="text-xs text-red-400 mt-3">
+            <p className="text-xs text-destructive mt-3">
               You must map at least one column to email or phone.
             </p>
           )}
@@ -393,7 +393,7 @@ export function CsvImportForm({ labels }: { labels: Label[] }) {
         <div className="rounded-md border bg-card p-4">
           <h2 className="font-semibold mb-3">4. Import</h2>
           {errorMessage && (
-            <p className="text-sm text-red-400 mb-3">{errorMessage}</p>
+            <p className="text-sm text-destructive mb-3">{errorMessage}</p>
           )}
 
           {summary && (
@@ -433,7 +433,7 @@ export function CsvImportForm({ labels }: { labels: Label[] }) {
           </button>
 
           {stage === "complete" && summary && (
-            <p className="text-sm text-emerald-400 mt-3">
+            <p className="text-sm text-grass-text mt-3">
               ✓ Imported {summary.imported} new, matched {summary.matched} existing,
               {summary.review > 0 ? ` queued ${summary.review} for review,` : ""}{" "}
               errored on {summary.errored}.

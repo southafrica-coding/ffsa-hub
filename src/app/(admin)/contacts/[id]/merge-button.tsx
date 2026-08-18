@@ -280,7 +280,7 @@ export function MergeButton({
               </>
             )}
 
-            {error && <p className="text-sm text-red-400 mt-3">{error}</p>}
+            {error && <p className="text-sm text-destructive mt-3">{error}</p>}
 
             <div className="mt-6 flex justify-end gap-2">
               <Button
@@ -298,7 +298,7 @@ export function MergeButton({
                   size="sm"
                   onClick={confirmMerge}
                   disabled={busy || confirmText !== "MERGE"}
-                  className="bg-red-500/15 border border-red-500/30 text-red-400 hover:bg-red-500/25"
+                  className="bg-white border border-destructive text-destructive hover:bg-white"
                 >
                   {busy ? "Merging…" : "Merge contacts"}
                 </Button>

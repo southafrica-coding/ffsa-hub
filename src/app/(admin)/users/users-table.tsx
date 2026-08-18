@@ -130,7 +130,7 @@ const STAGE_STYLES: Record<
   profile_incomplete: {
     className: "",
     style: {
-      borderColor: "hsl(28 95% 55% / 0.4)",
+      borderColor: "var(--amber-border)",
       color: "var(--amber)",
       background: "var(--yellow-dim)",
     },
@@ -611,7 +611,7 @@ export function UsersTable({
                         <Badge
                           variant="outline"
                           style={{
-                            borderColor: "hsl(28 95% 55% / 0.4)",
+                            borderColor: "var(--amber-border)",
                             color: "var(--amber)",
                             background: "var(--yellow-dim)",
                           }}
@@ -738,7 +738,7 @@ function MissingFieldsPopover({ lifecycle }: { lifecycle: LifecycleInfo }) {
           type="button"
           // Stop the row's onClick from navigating to /users/[id].
           onClick={(e) => e.stopPropagation()}
-          className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] font-medium text-amber-700 underline decoration-dotted underline-offset-2 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-300"
+          className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] font-medium text-amber underline decoration-dotted underline-offset-2 hover:text-amber dark:text-amber dark:hover:text-amber"
         >
           <AlertCircle className="h-3 w-3 shrink-0" />
           {count} missing · {lifecycle.completedRequired}/{lifecycle.totalRequired}

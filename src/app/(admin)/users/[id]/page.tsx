@@ -372,12 +372,12 @@ function ProfileCompletenessCard({
       </div>
 
       {isComplete ? (
-        <p className="text-sm text-emerald-500">
+        <p className="text-sm text-grass-text">
           All required fields are on file.
         </p>
       ) : (
         <div>
-          <p className="text-sm text-orange-400 mb-2">
+          <p className="text-sm text-amber mb-2">
             Missing {missingCount} required field{missingCount === 1 ? "" : "s"}:
           </p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -400,13 +400,13 @@ function ProfileCompletenessCard({
       )}
 
       {insurance.state === "expired" && (
-        <p className="text-sm text-red-400">
+        <p className="text-sm text-destructive">
           Health insurance policy expired
           {insurance.expiryDate ? ` on ${insurance.expiryDate}` : ""}.
         </p>
       )}
       {insurance.state === "expiring" && (
-        <p className="text-sm text-orange-400">
+        <p className="text-sm text-amber">
           Health insurance expires in {insurance.daysLeft ?? 0} day
           {insurance.daysLeft === 1 ? "" : "s"}
           {insurance.expiryDate ? ` (${insurance.expiryDate})` : ""}.
