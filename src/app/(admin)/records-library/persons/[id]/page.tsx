@@ -4,7 +4,7 @@ import { requireModuleAccess } from "@/lib/require-permission";
 import { getPerson, getRecordsForPerson } from "@/services/records-library";
 import { CsvSheet } from "@/components/csv-sheet";
 import { bestPersonName } from "@/lib/person-name";
-import { Masthead, MastheadAction } from "@/components/ffsa";
+import { Masthead } from "@/components/ffsa";
 
 export default async function PersonDetailPage({
   params,
@@ -38,9 +38,18 @@ export default async function PersonDetailPage({
         context="Records library person"
         title={fullName}
         actions={
-          <MastheadAction href={`/print/records-library/persons/${id}`}>
+          // Not MastheadAction: this one must open in a new tab so the record
+          // stays put behind the print view, and MastheadAction has no way to
+          // pass target (it lives in the shared primitives, which this session
+          // reports on rather than edits).
+          <a
+            href={`/print/records-library/persons/${id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-white hover:bg-[#262622] hover:text-white"
+          >
             Print / PDF
-          </MastheadAction>
+          </a>
         }
       />
 
