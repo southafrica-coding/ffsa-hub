@@ -67,11 +67,103 @@ Everything below is on `main` and deployed (PR #212, commit `aa53496`).
 | shadcn override layer (`data-slot` attributes) | ✅ fixed — the overrides were entirely inert before |
 | Dashboard (2a), Events (3a), Training (3b), Finance (5a), Communications (5b), Login (4b) | ✅ recomposed |
 | Bookings (3c) — page chrome | ✅ 15 routes |
+| Bookings (3c) — **the timeline itself, rebuilt** | ✅ see the 3c section below |
 | Event capacity, campaign open/click, finance ledger, bookings day strip | ✅ built (migrations 174, 165) |
 | Prayer room data model + wall (8a) | ✅ migrations 175, 168–171 applied |
 | Prayer room UI — masthead, 9a, 10a, 10b, 11a, 12a, 12b | 🔵 built on `redesign/prayer-room-ui`, not yet merged |
 | Billing: `billing_mode` (172), generation guard + held-charge queue (173) | ✅ with tests |
 | Xero: read side, honest status, per-region org pinning | ✅ |
+
+---
+
+## 3c — bookings timeline, rebuilt (session of 2026-08-18)
+
+The calendar was the "restyled, not rebuilt" case this file called out. `/bookings`
+was a hub of two description cards with the day timeline as a read-only strip
+underneath. **The timeline is the screen now.**
+
+Paths scanned by every acceptance grep below: `src/app/(admin)/bookings` — 46
+files, the whole module. Numbers quoted from any narrower sweep are worthless.
+
+| Frame element | State |
+|---|---|
+| 230px resource column against a black hour header | ✅ |
+| Hour columns as gridlines; blocks positioned by percentage | ✅ |
+| Spaces AND vehicles on ONE timeline | ✅ |
+| Masthead: eyebrow (date · N resources · N waiting), day nav, book action | ✅ |
+| SHOWING — all / spaces only / vehicles only | ⚠️ built, but in the control strip, not the module panel (see below) |
+| "Requests waiting on approval" underneath, with APPROVE | ✅ |
+
+Files: `page.tsx` (data + gating only), `bookings-day.tsx` (the frame),
+`day-timeline.tsx` (the grid), `approval-queue.tsx` (the strip).
+`blockWindow` / `packLanes` / `computeHourRange` are reused from
+`src/lib/bookings/timegrid.ts` — no second geometry vocabulary was invented.
+
+### The separation that matters
+
+Spaces and vehicles are **separate services with separate permission modules**,
+and the rebuild keeps them that way:
+
+- `page.tsx` asks `hasModuleAccess` for `bookings` and for `vehicles`
+  independently, then fetches each half only if its own answer was yes.
+- Each half's fetch is wrapped so one failing cannot take the other's screen
+  down.
+- The frame has **no group headings** — each lane carries its own `SPACE` /
+  `VEHICLE` line. That is per the frame, and it is also structurally why a
+  vehicles-only viewer cannot be shown an empty "Spaces" heading: there is no
+  heading to leave behind.
+- Approvals are gated a second time, per half, on that half's `canApprove`,
+  and APPROVE posts to that half's existing decision route, which re-checks the
+  permission server-side.
+- Vehicle bookings are date-only in the schema, so every one is an all-day
+  block — which is exactly what makes a van already out read as a clash against
+  anything else booked on it that day.
+
+### Deviations from the frame, stated plainly
+
+1. **SHOWING sits in the control strip, not the module panel.** The frame puts
+   it in the 212px panel. Per-module panel content is its own backlog line
+   ("Module panel extras") and needs a shell mechanism that does not exist yet.
+2. **Two book buttons, not one `+ BOOK`.** The two services have separate
+   create routes; a viewer with one module still sees a single button.
+3. **The two service links** (Spaces ↗ / Vehicles ↗) are in the control strip
+   because the global nav carries a single Bookings entry, and those routes
+   still hold the month/week/list views, the fleet and the full review queues.
+   Removing the hub cards without them would have stranded both sub-modules.
+4. **Deny is not on the strip.** The frame shows only APPROVE. Deny, notes and
+   clash detail stay in each service's own review queue.
+
+### Not done in this session
+
+- The spaces module's own **month / week / list** views
+  (`booking-calendar.tsx`, `week-view.tsx`, `day-view.tsx`, `time-grid.tsx`)
+  are untouched. They are still restyled-not-rebuilt. 3c only specifies the day
+  timeline; those views have no frame of their own yet.
+- The vehicles module's `vehicles-view.tsx` list is likewise untouched.
+
+### Verification
+
+Signed in, against the real database, on `redesign/bookings-timeline`:
+
+- **1440×1000** and **375×812**, `/bookings?date=2026-08-31` — a date carrying
+  both a timed space booking (Office 2, 09:35–21:55, which stretches the hour
+  range to 21) and an all-day vehicle booking assigned to three vehicles. Page
+  never scrolls horizontally at 375; the grid scrolls inside its own container.
+- `/bookings?date=2026-08-31&show=vehicles` — 6 lanes, no space rows, no
+  heading, no error. Same code path a vehicles-only viewer takes.
+- Clash rendering has **no real data to exercise it** — nothing in the database
+  overlaps. `/bookings/preview-3c` renders the same `<BookingsDay>` against
+  fixtures with two deliberate clashes (one timed, one all-day). It 404s in
+  production. Keep it: it is the only way to see the clash state, and it caught
+  two defects real data hid — a "now" line drawn on every date rather than
+  today, and narrow blocks dropping the booking title in favour of its clock.
+
+Acceptance sweep over all 46 files in `src/app/(admin)/bookings`: 0 `rounded-*`,
+0 `shadow-*`, 0 `page-title`, exactly one `<Masthead>` per screen across 17
+files. The only hex literals left in the module are the frame's own black-header
+tones (`#C5C2AE`, `#2A2A26`, `#262622`, `#55524A`, `#8C8A80`) and venue /
+vehicle **colour data** (`#0ea5e9`, `#6366f1`, `#64748b` as picker defaults and
+the fallback) — data colours stay, per the decision already recorded below.
 
 ---
 
