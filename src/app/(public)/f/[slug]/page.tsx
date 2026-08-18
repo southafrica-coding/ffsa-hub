@@ -1,4 +1,3 @@
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getFormBySlug } from "@/services/forms";
 import { emptyFormSchema, type FormSchema } from "@/lib/forms/schema";
@@ -46,6 +45,8 @@ function normalizeBrand(raw: unknown): PublicShellBrand {
   if (raw === "the_send") return "the_send";
   if (raw === "ffsa_camps") return "ffsa_camps";
   if (raw === "preachers") return "preachers";
+  if (raw === "wild_ones") return "wild_ones";
+  if (raw === "missio") return "missio";
   return "ff";
 }
 
@@ -55,7 +56,14 @@ export default async function PublicFormPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const supabase = await createClient();
+  // The service-role client, like the ticketing storefront and the
+  // feedback form: anon has NO read on `events` (migration 002/086 give
+  // every SELECT branch an auth.uid() or role test), so the anon client
+  // resolved `form.events` to null and every branded event's form fell
+  // back to the default F&F chrome with no event logo. Publication is
+  // enforced in code immediately below — an inactive form still shows the
+  // notice, exactly as before.
+  const supabase = createAdminClient();
   const { data: form } = await getFormBySlug(supabase, slug);
 
   // For the unavailable-form notice we don't have the event yet, so the
