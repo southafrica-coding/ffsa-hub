@@ -11,6 +11,7 @@
 
 import { notFound } from "next/navigation";
 import Wall, { type WallSet, type SeatType, type Band } from "../components/wall";
+import type { CalendarBlockout } from "../components/calendar";
 
 const SEATS: SeatType[] = [
   { id: "prayer_leader", label: "PRAYER LEAD", is_lead: true },
@@ -75,6 +76,28 @@ const SETS: WallSet[] = [
   set("k", "2026-08-07", "17:00", "19:00", "Friday night worship", true),
 ];
 
+// One timed block-out and one all-day, so both paths are visible.
+const BLOCKOUTS: CalendarBlockout[] = [
+  {
+    id: "bo-1",
+    block_date: "2026-08-05",
+    end_date: "2026-08-05",
+    start_time: "14:00",
+    end_time: "16:00",
+    reason: "Room re-carpeted",
+    relocation_note: null,
+  },
+  {
+    id: "bo-2",
+    block_date: "2026-08-07",
+    end_date: "2026-08-07",
+    start_time: null,
+    end_time: null,
+    reason: "Staff retreat",
+    relocation_note: "Chapel",
+  },
+];
+
 export default function Preview8a() {
   if (process.env.NODE_ENV === "production") notFound();
   return (
@@ -84,7 +107,7 @@ export default function Preview8a() {
         <h1 className="masthead-title">The wall</h1>
       </div>
       <div className="px-5 py-6 md:px-8">
-        <Wall anchorISO="2026-08-03" sets={SETS} seatTypes={SEATS} bands={BANDS} />
+        <Wall anchorISO="2026-08-03" sets={SETS} seatTypes={SEATS} bands={BANDS} blockouts={BLOCKOUTS} />
       </div>
     </div>
   );

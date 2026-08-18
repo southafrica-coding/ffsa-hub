@@ -8,18 +8,32 @@
  * their real duration — so a 30-minute set and a 90-minute set need no special
  * row, which is the whole reason the hour-grid views were dropped.
  *
- * The vocabulary, complete:
- *   bone card     — a set is running
- *   yellow block  — a curated band's set (MORNING / NOON / NIGHT)
- *   dashed white  — a set nobody leads yet: it holds its slot, but is not live
- *   plain white   — nothing there. Unbooked time is NOT a card; white is the
- *                   only "nobody has this" signal.
+ * The vocabulary, complete. FILL says a set exists and whose time it is;
+ * BORDER says whether anyone leads it. The two read independently:
+ *   bone, solid   — a set is running
+ *   bone, dashed  — a set nobody leads yet: it holds its slot, but is not live
+ *   yellow        — a curated band's set (MORNING / NOON / NIGHT), solid or
+ *                   dashed on the same rule
+ *   plain white   — nothing there. White is reserved for unbooked time and
+ *                   means nothing else.
+ *
+ * DEVIATION FROM FRAME 8a, requested 2026-08-18: the frame draws "needs a
+ * lead" as dashed WHITE. That made an existing set indistinguishable in fill
+ * from empty space, so an unled set read as a hole in the week. Fill now
+ * always marks a set.
  */
 
 import { useMemo } from "react";
 import { cn } from "@/lib/utils/cn";
 import { weekDays } from "@/lib/bookings/dates";
-import type { CalendarSet } from "./calendar";
+import {
+  boWin,
+  blockoutTip,
+  groupBlockoutsByDay,
+  isAllDayBlockout,
+  type CalendarBlockout,
+  type CalendarSet,
+} from "./calendar";
 
 /** A seat's identity, enough to know whether it is a lead seat. */
 export type SeatType = { id: string; label: string; is_lead: boolean };
@@ -120,6 +134,7 @@ export default function Wall({
   sets,
   seatTypes,
   bands = [],
+  blockouts = [],
   onOpenSet,
   selectedId,
 }: {
@@ -127,6 +142,8 @@ export default function Wall({
   sets: WallSet[];
   seatTypes: SeatType[];
   bands?: Band[];
+  /** Times the room is not available. The wall drew none of these before. */
+  blockouts?: CalendarBlockout[];
   onOpenSet?: (id: string) => void;
   /** The block the drawer is open on — 9a keeps it highlighted behind the panel. */
   selectedId?: string | null;
@@ -184,6 +201,10 @@ export default function Wall({
     return (start: number, end: number) =>
       ranges.some(([bs, be]) => start < be && end > bs);
   }, [bandRows]);
+
+  // Grouped with the calendar's own helper, so the two views cannot disagree
+  // about which days a multi-day block-out covers.
+  const blockoutsByDay = useMemo(() => groupBlockoutsByDay(blockouts), [blockouts]);
 
   const axisHeight = (DAY_END - DAY_START) * PX_PER_MIN;
   // Hour LINES run to the end of the axis; hour LABELS stop one short of it.
@@ -298,6 +319,35 @@ export default function Wall({
                 />
               ))}
 
+              {/* Block-outs sit under the cards: the room being unavailable
+                  does not erase a set that is still on the books, it explains
+                  it. Black, because fill now carries meaning and bone, yellow
+                  and white are all spoken for. */}
+              {(blockoutsByDay.get(d.iso) ?? []).map((b) => {
+                const w = isAllDayBlockout(b) ? { start: DAY_START, end: DAY_END } : boWin(b);
+                const start = Math.max(w.start, DAY_START);
+                const end = Math.min(w.end, DAY_END);
+                if (end <= start) return null;
+                return (
+                  <div
+                    key={b.id}
+                    title={blockoutTip(b)}
+                    className="absolute left-0 right-0 overflow-hidden border-y border-[#3A3A36] bg-ink px-1.5 py-1"
+                    style={{
+                      top: (start - DAY_START) * PX_PER_MIN,
+                      height: (end - start) * PX_PER_MIN,
+                    }}
+                  >
+                    <div className="font-mono text-[8px] font-bold uppercase tracking-[0.14em] text-yellow">
+                      Blocked out
+                    </div>
+                    {b.reason && (
+                      <div className="truncate text-[9.5px] leading-tight text-[#C5C2AE]">{b.reason}</div>
+                    )}
+                  </div>
+                );
+              })}
+
               {daySets.map((s) => {
                 const start = Math.max(toMin(s.start_time), DAY_START);
                 const end = Math.min(toMin(s.end_time), DAY_END);
@@ -322,10 +372,11 @@ export default function Wall({
                       "absolute left-0 right-0 overflow-hidden px-1.5 text-left",
                       // inset so no two blocks ever touch
                       "mx-[1px]",
-                      // Background says whose time it is, border says whether
-                      // anyone leads it — so a curated set with no lead reads as
-                      // both, instead of the yellow hiding the gap.
-                      curated ? "bg-yellow" : live ? "bg-[color:var(--surface-3)]" : "bg-white",
+                      // Background says a set EXISTS here; border says whether
+                      // anyone leads it. White is reserved for time nobody has
+                      // booked at all, so an unled set no longer reads as a gap
+                      // in the week.
+                      curated ? "bg-yellow" : "bg-[color:var(--surface-3)]",
                       live
                         ? curated
                           ? "border-2 border-ink"
@@ -377,8 +428,9 @@ export default function Wall({
       <div className="flex flex-wrap items-center gap-4 border-t border-ink bg-bone px-4 py-2">
         <Key className="border border-rule-strong bg-[color:var(--surface-3)]">Set running</Key>
         <Key className="border-2 border-ink bg-yellow">Curated band</Key>
-        <Key className="border border-dashed border-ink bg-white">Needs a lead</Key>
+        <Key className="border border-dashed border-ink bg-[color:var(--surface-3)]">Needs a lead</Key>
         <Key className="border border-rule bg-white">Nothing booked</Key>
+        <Key className="border border-[#3A3A36] bg-ink">Blocked out</Key>
       </div>
     </div>
   );

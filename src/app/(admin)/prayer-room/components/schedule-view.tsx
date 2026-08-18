@@ -251,6 +251,7 @@ export default function ScheduleView({ userId, isStaff, isMember, tabs, active, 
             sets={sets as WallSet[]}
             seatTypes={seatTypes}
             bands={bands}
+            blockouts={blockouts}
             onOpenSet={setSelectedId}
             selectedId={selectedId}
           />

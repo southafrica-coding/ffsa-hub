@@ -57,14 +57,14 @@ function winOf(s: CalendarSet): { start: number; end: number } {
   return { start, end: Math.max(toMin(s.end_time), start + 15) };
 }
 // All-day block-out = no time window (whole day / week / range).
-const isAllDayBlockout = (b: CalendarBlockout) => !b.start_time || !b.end_time;
-function boWin(b: CalendarBlockout): { start: number; end: number } {
+export const isAllDayBlockout = (b: CalendarBlockout) => !b.start_time || !b.end_time;
+export function boWin(b: CalendarBlockout): { start: number; end: number } {
   const start = toMin(b.start_time || "");
   return { start, end: Math.max(toMin(b.end_time || ""), start + 15) };
 }
 const hhmm = (t: string | null) => (t || "").slice(0, 5);
 const setTitle = (s: CalendarSet) => s.title || s.theme || "Devo set";
-const blockoutTip = (b: CalendarBlockout) => {
+export const blockoutTip = (b: CalendarBlockout) => {
   const when = isAllDayBlockout(b) ? "all day" : `${hhmm(b.start_time)}–${hhmm(b.end_time)}`;
   return `Blocked ${when}${b.reason ? ` — ${b.reason}` : ""}${b.relocation_note ? ` · sets → ${b.relocation_note}` : ""}`;
 };
@@ -111,7 +111,7 @@ function groupByDay(sets: CalendarSet[]): Map<string, CalendarSet[]> {
 }
 // A multi-day block-out lands on every day it covers, so it shows on each of
 // those days in the calendar.
-function groupBlockoutsByDay(blockouts: CalendarBlockout[]): Map<string, CalendarBlockout[]> {
+export function groupBlockoutsByDay(blockouts: CalendarBlockout[]): Map<string, CalendarBlockout[]> {
   const m = new Map<string, CalendarBlockout[]>();
   for (const b of blockouts) {
     for (const day of blockoutDays(b)) {
