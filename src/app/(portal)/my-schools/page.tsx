@@ -98,7 +98,7 @@ export default async function MySchoolsPage() {
   if (!user) {
     return (
       <div className="ffsa-screen">
-        <Masthead context="Training &amp; education" title="My training" />
+        <Masthead context="Training & education" title="My training" />
         <p className="px-5 py-8 text-sm md:px-8">Not authenticated.</p>
       </div>
     );
@@ -130,7 +130,7 @@ export default async function MySchoolsPage() {
   return (
     <div className="ffsa-screen">
       <Masthead
-        context={`Training &amp; education · ${enrolled.length} ${enrolled.length === 1 ? "enrolment" : "enrolments"}`}
+        context={`Training & education · ${enrolled.length} ${enrolled.length === 1 ? "enrolment" : "enrolments"}`}
         title="My training"
       />
 

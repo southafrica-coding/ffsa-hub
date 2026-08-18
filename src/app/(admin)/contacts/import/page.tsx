@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import { CsvImportForm } from "./csv-import-form";
 import { UndoImportButton } from "./undo-import-button";
+import { Masthead, MastheadAction, SectionBar, StatusPill, type Tone } from "@/components/ffsa";
 
 export default async function ContactsImportPage() {
   const supabase = await createClient();
@@ -30,23 +31,30 @@ export default async function ContactsImportPage() {
   const recentImports = importsResult.data ?? [];
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold mb-1">Import contacts from CSV</h1>
-        <p className="text-sm text-muted-foreground">
-          Upload a CSV of contacts, pick a label to apply to every row, and the system
-          will dedupe by email or phone as it imports.
-        </p>
+    <div className="ffsa-screen">
+      <Masthead
+        context="People & relationships"
+        title="Import contacts"
+        actions={<MastheadAction href="/contacts">All contacts</MastheadAction>}
+      />
+
+      <p className="max-w-3xl border-b border-rule px-5 py-4 text-[14px] leading-relaxed text-[color:var(--text-secondary)] md:px-8">
+        Upload a CSV of contacts, pick a label to apply to every row, and the
+        system will dedupe by email or phone as it imports.
+      </p>
+
+      <div className="px-5 py-6 md:px-8 md:py-7">
+        <CsvImportForm labels={labels} />
       </div>
 
-      <CsvImportForm labels={labels} />
-
       <section>
-        <h2 className="text-lg font-semibold mb-3">Recent imports</h2>
+        <SectionBar title="Recent imports" meta={`${recentImports.length} shown`} />
         {recentImports.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No imports yet.</p>
+          <p className="px-5 py-8 text-center md:px-8">
+            <span className="mono-label">No imports yet</span>
+          </p>
         ) : (
-          <div className="rounded-md border">
+          <div className="mx-5 my-6 border border-ink md:mx-8 md:my-7">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -133,22 +141,21 @@ type ImportRow = {
   labels: { slug: string; name: string } | null;
 };
 
+// Outlined and square on the system's tones — the tints these replaced were
+// dark-theme values (emerald-400 on a translucent ground) left over from
+// before the light redesign.
+const IMPORT_TONE: Record<string, Tone> = {
+  completed: "good",
+  processing: "warn",
+  pending: "warn",
+  failed: "bad",
+  rolled_back: "quiet",
+};
+
 function StatusBadge({ status }: { status: string }) {
-  const cls =
-    status === "completed"
-      ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/20"
-      : status === "processing" || status === "pending"
-      ? "bg-amber-500/15 text-amber-400 border-amber-500/20"
-      : status === "failed"
-      ? "bg-red-500/15 text-red-400 border-red-500/20"
-      : status === "rolled_back"
-      ? "bg-muted text-muted-foreground border-border"
-      : "bg-muted text-muted-foreground border-border";
   return (
-    <span
-      className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium capitalize ${cls}`}
-    >
+    <StatusPill tone={IMPORT_TONE[status] ?? "quiet"}>
       {status.replace(/_/g, " ")}
-    </span>
+    </StatusPill>
   );
 }

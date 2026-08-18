@@ -23,10 +23,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import type { Tables } from "@/types/database";
 import { getLabelColors } from "@/lib/label-color";
 import type { ContactSort } from "@/services/contacts";
+import { StatusPill, type Tone } from "@/components/ffsa";
 
 type PersonType = Tables<"person_types">;
 
@@ -163,7 +164,9 @@ export function ContactsList({
   }
 
   return (
-    <div className="space-y-4">
+    // The screen now runs edge-to-edge, so the list brings its own gutters
+    // rather than relying on the transition scaffold's centred page box.
+    <div className="space-y-4 px-5 py-6 md:px-8 md:py-7">
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[220px] max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -202,12 +205,9 @@ export function ContactsList({
           </SelectContent>
         </Select>
 
-        <Link href="/contacts/new" className="ml-auto">
-          <Button size="sm" className="gap-1">
-            <Plus className="h-4 w-4" />
-            Add Contact
-          </Button>
-        </Link>
+        {/* "Add contact" moved to the masthead, where every screen's primary
+            action now lives — two of them on one screen read as two
+            different things. */}
       </div>
 
       {selected.size > 0 && (
@@ -222,7 +222,7 @@ export function ContactsList({
         />
       )}
 
-      <div className="rounded-lg border bg-card overflow-x-auto">
+      <div className="overflow-x-auto border border-ink bg-white">
         <Table>
           <TableHeader>
             <TableRow>
@@ -307,7 +307,7 @@ export function ContactsList({
                         return (
                           <span
                             key={cl.labels.id}
-                            className="inline-flex items-center text-xs px-1.5 py-0.5 rounded-full border font-medium whitespace-nowrap"
+                            className="inline-flex items-center whitespace-nowrap border px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.1em]"
                             style={{
                               backgroundColor: colors.bg,
                               color: colors.text,
@@ -464,7 +464,7 @@ function BulkAddToList({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-secondary/40 px-4 py-3">
+    <div className="flex flex-wrap items-center gap-3 border border-ink bg-bone px-4 py-3">
       <span className="text-sm font-medium">
         {selectedIds.length} selected
       </span>
@@ -518,19 +518,19 @@ function BulkAddToList({
   );
 }
 
+// Outlined and square, on the system's four tones — the tinted pills this
+// replaced were the last of the pre-redesign palette on this screen.
+const MARKETING_TONE: Record<string, Tone> = {
+  subscribed: "good",
+  unsubscribed_all: "bad",
+  bounced: "warn",
+};
+
 function MarketingChip({ status }: { status: string | null | undefined }) {
-  if (!status) return <span className="text-muted-foreground">—</span>;
-  const cls =
-    status === "subscribed"
-      ? "bg-green-100 text-green-800 border-green-300"
-      : status === "unsubscribed_all"
-      ? "bg-red-100 text-red-800 border-red-300"
-      : status === "bounced"
-      ? "bg-orange-100 text-orange-800 border-orange-300"
-      : "bg-gray-100 text-gray-700 border-gray-300";
+  if (!status) return <span className="text-[color:var(--text-tertiary)]">—</span>;
   return (
-    <span className={`inline-block text-xs px-2 py-0.5 rounded-full border ${cls}`}>
-      {status.replace("_", " ")}
-    </span>
+    <StatusPill tone={MARKETING_TONE[status] ?? "quiet"}>
+      {status.replace(/_/g, " ")}
+    </StatusPill>
   );
 }

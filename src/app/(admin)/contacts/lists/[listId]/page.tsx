@@ -6,6 +6,7 @@ import {
   getListMembers,
 } from "@/services/contact-lists";
 import { MembersTable } from "./members-table";
+import { Masthead, MastheadAction } from "@/components/ffsa";
 
 type MemberRow = {
   added_at: string;
@@ -47,19 +48,22 @@ export default async function ContactListDetailPage({
     .map((m) => ({ ...m.contacts!, added_at: m.added_at }));
 
   return (
-    <div className="space-y-6">
-      <div>
-        <p className="page-eyebrow">PEOPLE &amp; RELATIONSHIPS</p>
-        <h1 className="page-title">{list.name}</h1>
-        {list.description && (
-          <p className="text-sm text-muted-foreground mt-1">{list.description}</p>
-        )}
-        <p className="text-sm text-muted-foreground mt-1">
-          {members.length} contact{members.length === 1 ? "" : "s"}
-        </p>
-      </div>
+    <div className="ffsa-screen">
+      <Masthead
+        context={`List \u00b7 ${members.length} contact${members.length === 1 ? "" : "s"}`}
+        title={list.name}
+        actions={<MastheadAction href="/contacts/lists">All lists</MastheadAction>}
+      />
 
-      <MembersTable listId={listId} members={members} />
+      {list.description && (
+        <p className="border-b border-rule px-5 py-4 text-[14px] text-[color:var(--text-secondary)] md:px-8">
+          {list.description}
+        </p>
+      )}
+
+      <div className="px-5 py-6 md:px-8 md:py-7">
+        <MembersTable listId={listId} members={members} />
+      </div>
     </div>
   );
 }

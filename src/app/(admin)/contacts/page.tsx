@@ -14,6 +14,7 @@ const VALID_SORTS: ContactSort[] = [
 ];
 import { ContactsList } from "./contacts-list";
 import { ContactsTabsNav } from "./contacts-tabs-nav";
+import { Masthead, MastheadAction } from "@/components/ffsa";
 import {
   getAccessibleEventIdsForFollowups,
   userCanAccessFollowupQueue,
@@ -79,22 +80,17 @@ export default async function ContactsPage({
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="page-eyebrow">PEOPLE &amp; RELATIONSHIPS</p>
-          <h1 className="page-title">Contacts</h1>
-          <p className="text-sm text-muted-foreground mt-1">{count ?? 0} contacts</p>
-        </div>
-        <div className="flex gap-2">
-          <a
-            href="/contacts/import"
-            className="inline-flex items-center px-3 py-1.5 rounded border text-sm hover:bg-gray-50"
-          >
-            Import CSV
-          </a>
-        </div>
-      </div>
+    <div className="ffsa-screen">
+      <Masthead
+        context={`People & relationships · ${(count ?? 0).toLocaleString("en-ZA").replace(/,/g, " ")} ${count === 1 ? "contact" : "contacts"}`}
+        title="Contacts"
+        actions={
+          <>
+            <MastheadAction href="/contacts/import">Import CSV</MastheadAction>
+            <MastheadAction href="/contacts/new">+ New contact</MastheadAction>
+          </>
+        }
+      />
 
       <ContactsTabsNav followupPendingCount={pendingCount} />
 
