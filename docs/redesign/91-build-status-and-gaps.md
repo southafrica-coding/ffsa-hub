@@ -91,7 +91,7 @@ at `1525867`). No migration: the data layer for all of this was already applied
 | 10a People tab | ✅ built — replaces the old Directory |
 | 10b lineup / fill a seat / requests to join | ✅ all three panels |
 | 11a person profile | ✅ built, its own screen with a breadcrumb |
-| 11b mobile person profile | ⚠️ responsive, not the designed phone layout |
+| 11b prayer room on a phone | ❌ not attempted — and it is NOT a profile layout, see below |
 | 12a evaluators portal as its own tab | ✅ own tab, gated on `prayer_room.evaluate` |
 | 12b band curation + note privacy | ✅ both panels |
 | 13a/13b two-note evaluation | ✅ unchanged, now opened from the 12a queue |
@@ -117,6 +117,17 @@ everyone except the caller and every row in a lead's inbox read "Unknown".
 **Deleted:** `directory.tsx` (superseded by People), `seat-evaluations.tsx`
 (superseded by the 12a queue).
 
+#### What 11b actually is
+
+Worth stating, because the row above used to say "mobile person profile" and
+that is wrong. **11b is three 390x844 phone screens plus a bottom tab bar** —
+the day as a vertical run (the week grid does not survive a phone), a set's
+lineup, and MINE (seats you asked for, your qualifications). The bar is
+WALL / MINE / PEOPLE / ALERTS. It is the same work as the backlog's
+"Mobile portal (4d / 11b)" item, not a variant of 11a, and its day screen
+carries a full-width TAKE IT on every gap — which is **9b's claim flow**, also
+unbuilt. Build 9b first or the mobile day screen has a dead primary action.
+
 #### Deliberately not built, and why
 
 - **"I'm coming" (9a footer)** — there is no attendance model, only seats. The
@@ -132,6 +143,55 @@ everyone except the caller and every row in a lead's inbox read "Unknown".
 - 10a's seat-category chips sit in the bone filter strip under the tab rule
   rather than on the rule itself — the strip is the system's existing filter row
   (Events uses it) and it survives 375px.
+
+#### Integrating the three gaps — what each actually needs
+
+**1. Attendance ("I'm coming", and 11a's TURNED UP).** These are two different
+things and only one of them is cheap.
+
+*"I'm coming"* is a walk-in RSVP by someone who holds no seat. One table, one
+migration (**176**), one route, one button:
+
+    prayer_room_attendance(id, set_id, user_id, created_at, UNIQUE(set_id, user_id))
+
+RLS: read to authenticated (the wall already is), insert/delete your own row
+only. `POST/DELETE /api/prayer-room/attendance`, and the drawer footer's
+primary becomes I'M COMING with ADD TO CALENDAR demoted to the outline slot.
+Half a day, no product decision needed.
+
+*TURNED UP 21/22* is not the same table and is not a build problem — it is a
+**workflow decision nobody has taken**: somebody has to mark who actually
+showed. The natural hook is the lead marking the set complete
+(`completeSet` already exists), which would become a roll-call of the filled
+seats rather than a one-click status change. That adds `attended boolean` per
+slot and a step to a flow people currently finish in one tap. Do not build it
+until someone decides the lead is willing to do that every set; until then the
+KPI stays SEATS SIGNED OFF, which is real and free.
+
+**2. Hand over.** Nearly there, and the blocker is a policy, not a route.
+`PUT /api/prayer-room/sets` **already whitelists `owner_id`** (route line ~267),
+so the write path exists. What stops it is the RLS from migration 171:
+
+    CREATE POLICY "Update sets" ... WITH CHECK (
+      public.is_prayer_room_staff()
+      OR (owner_id = auth.uid() AND NOT public.prayer_set_is_curated(id))
+    )
+
+`WITH CHECK` tests the NEW row, so an owner handing the set to someone else is
+refused — the new `owner_id` is no longer them. Staff can already do it today.
+To let a lead hand over, migration 176 must split the policy so the USING clause
+(who may edit) stays as it is while the WITH CHECK allows `owner_id` to change
+when the OLD owner is the caller. Then it is UI: reuse `member-picker.tsx` in
+the drawer's HAND OVER slot, and send the new owner an email — the sender
+already exists (`lib/email/send-prayer-room.ts`, five templates), this needs a
+sixth. Roughly a day including the policy test.
+
+**3. 11b.** See above — it is the mobile shell for the module, not a screen, and
+9b gates its primary action. Sequence: 9b claim flow (the two extra drawer
+states: a curated band cannot be claimed, empty white space can) → the mobile
+day run → the bottom bar, whose ALERTS item should hang off the existing
+dashboard notification feed (migration 096) rather than inventing a second one.
+That is its own session, and it is the largest of the three.
 
 #### Still on the old design inside this module
 
