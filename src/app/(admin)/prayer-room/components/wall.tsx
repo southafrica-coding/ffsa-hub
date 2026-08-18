@@ -158,11 +158,15 @@ export default function Wall({
   }, [bandRows]);
 
   const axisHeight = (DAY_END - DAY_START) * PX_PER_MIN;
+  // Hour LINES run to the end of the axis; hour LABELS stop one short of it.
+  // 24:00 is the boundary, not a slot, and labelling it hangs half a label
+  // below the grid. Frames 8a/9a label 05:00 through 23:00.
   const hours = useMemo(() => {
     const out: number[] = [];
     for (let h = DAY_START; h <= DAY_END; h += 60) out.push(h);
     return out;
   }, []);
+  const hourLabels = useMemo(() => hours.filter((h) => h < DAY_END), [hours]);
 
   return (
     <div className="border border-ink bg-white">
@@ -187,10 +191,14 @@ export default function Wall({
       <div className="relative flex" style={{ height: axisHeight }}>
         {/* hour gutter */}
         <div className="relative w-16 shrink-0 border-r border-rule md:w-[92px]">
-          {hours.map((h) => (
+          {/* Sits just under its own hour line rather than centred on it —
+              centring clipped 05:00 against the black header and 24:00 against
+              the legend. 10px clear of the rule, and the axis grey the frames
+              use, which is quieter than the body's tertiary text. */}
+          {hourLabels.map((h) => (
             <div
               key={h}
-              className="absolute right-1 -translate-y-1/2 font-mono text-[8.5px] tracking-[0.1em] text-[color:var(--text-tertiary)]"
+              className="absolute right-2.5 translate-y-px font-mono text-[8.5px] tracking-[0.04em] text-[#B5B1A3] tabular-nums"
               style={{ top: (h - DAY_START) * PX_PER_MIN }}
             >
               {hhmm(h)}
