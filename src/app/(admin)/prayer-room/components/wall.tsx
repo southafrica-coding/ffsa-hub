@@ -79,6 +79,21 @@ function durationLabel(mins: number): string {
  * rule 1. Falls back to the legacy `role` strings when seat_type_id has not
  * been backfilled yet, so this renders correctly either side of migration 167.
  */
+/**
+ * Band names are sized to the gutter, not to a fixed number.
+ *
+ * The frames draw the name at 21px, but their gutter is nominal: measured in
+ * the Hub's own Roboto Condensed Black, caps run ~0.585em per character, so
+ * MORNING at 21px is 86px against the gutter's 72px of text space and lost its
+ * last letter. Band names are created by staff now — AFTERNOON, WATCH OF THE
+ * LORD, anything — so a constant would keep breaking. 21px stays the cap, which
+ * is what short names like NOON and NIGHT still get.
+ */
+const CHAR_EM = 0.585;
+function bandNameSize(name: string, space: number, max: number): number {
+  return Math.max(9, Math.min(max, Math.floor(space / (Math.max(name.length, 1) * CHAR_EM))));
+}
+
 function isLive(set: WallSet, leadSeatIds: Set<string>): boolean {
   return set.slots.some((s) => {
     if (s.status !== "filled") return false;
@@ -212,13 +227,24 @@ export default function Wall({
           {bandRows.map((b) => (
             <div
               key={b.name}
-              className="absolute left-0 right-0 flex flex-col overflow-hidden bg-ink px-1.5 pt-2 md:px-2.5"
+              className="absolute left-0 right-0 flex flex-col overflow-hidden whitespace-nowrap bg-ink px-1.5 pt-2 md:px-2.5"
               style={{
                 top: (b.start - DAY_START) * PX_PER_MIN,
                 height: (b.end - b.start) * PX_PER_MIN,
               }}
             >
-              <span className="font-display text-[13px] font-black uppercase leading-[0.9] tracking-[0.01em] text-white md:text-[21px]">
+              {/* Two spans because the gutter is 64px below md and 92px above,
+                  and an inline font-size cannot be responsive. */}
+              <span
+                className="font-display font-black uppercase leading-[0.9] tracking-[0.01em] text-white md:hidden"
+                style={{ fontSize: bandNameSize(b.name, 52, 15) }}
+              >
+                {b.name}
+              </span>
+              <span
+                className="hidden font-display font-black uppercase leading-[0.9] tracking-[0.01em] text-white md:block"
+                style={{ fontSize: bandNameSize(b.name, 72, 21) }}
+              >
                 {b.name}
               </span>
               <span className="mt-1 font-mono text-[8.5px] font-bold tracking-[0.08em] text-yellow">
