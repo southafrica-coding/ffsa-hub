@@ -36,13 +36,32 @@ export async function POST(
     return NextResponse.json({ error: "code is required" }, { status: 400 });
   }
 
-  const { data: ticket } = await supabase
+  const TICKET_COLUMNS =
+    "id, status, event_id, checked_in_at, ticket_types(name), orders(buyer_first_name, buyer_last_name, buyer_contact_id)";
+
+  const { data: exact } = await supabase
     .from("tickets")
-    .select(
-      "id, status, event_id, checked_in_at, ticket_types(name), orders(buyer_first_name, buyer_last_name, buyer_contact_id)"
-    )
+    .select(TICKET_COLUMNS)
     .eq("code", code)
     .maybeSingle();
+
+  let ticket = exact;
+
+  // Codes are base64url, so the QR path is always exact. Manual entry is
+  // typed by a human at a door, though, and phone keyboards love to
+  // capitalise — fall back to a case-insensitive match. LIKE wildcards are
+  // escaped because "_" is a legal base64url character, and an ambiguous
+  // match (two codes differing only in case) is rejected rather than
+  // guessed at, so we never check in the wrong ticket.
+  if (!ticket) {
+    const escaped = code.replace(/([\\%_])/g, "\\$1");
+    const { data: loose } = await supabase
+      .from("tickets")
+      .select(TICKET_COLUMNS)
+      .ilike("code", escaped)
+      .limit(2);
+    if (loose?.length === 1) ticket = loose[0];
+  }
 
   if (!ticket) {
     return NextResponse.json({ result: "invalid" });
@@ -83,11 +102,31 @@ export async function POST(
     return NextResponse.json({ error: updateErr.message }, { status: 500 });
   }
   if (!updated) {
+    // Either another door scanner beat us to it, or the write was filtered
+    // out by RLS. Re-read to tell them apart — reporting a silently blocked
+    // write as "already checked in" would hide a permissions problem behind
+    // a screen that looks like everything is working.
+    const { data: after } = await supabase
+      .from("tickets")
+      .select("status, checked_in_at")
+      .eq("id", ticket.id)
+      .maybeSingle();
+
+    if (after?.status !== "checked_in") {
+      return NextResponse.json(
+        {
+          error:
+            "Check-in didn't save — your account may not have permission to check tickets in.",
+        },
+        { status: 500 }
+      );
+    }
+
     // Race: another door scanner beat us to it.
     return NextResponse.json({
       result: "already_checked_in",
       ticketTypeName,
-      checkedInAt: new Date().toISOString(),
+      checkedInAt: after.checked_in_at ?? new Date().toISOString(),
     });
   }
 

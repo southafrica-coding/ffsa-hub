@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import jsQR from "jsqr";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 type OkResult = {
@@ -24,10 +25,14 @@ type DisplayItem = {
   at: number;
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type BarcodeDetectorCtor = new (opts?: { formats?: string[] }) => {
   detect: (source: CanvasImageSource) => Promise<Array<{ rawValue: string }>>;
 };
+
+// Longest edge we hand the decoder. Full-res frames from a modern phone
+// camera are 1080p+; downscaling keeps each decode well under the frame
+// budget without hurting read rate at door distance.
+const DECODE_MAX_EDGE = 640;
 
 export function Scanner({
   eventId,
@@ -42,16 +47,11 @@ export function Scanner({
   const [cameraError, setCameraError] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const lastScannedRef = useRef<string>("");
   const lastScannedAtRef = useRef<number>(0);
   const itemIdRef = useRef<number>(0);
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const Detector: BarcodeDetectorCtor | undefined =
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    typeof window !== "undefined" ? (window as any).BarcodeDetector : undefined;
-  const supportsCamera = !!Detector;
 
   // Cleanup camera on unmount.
   useEffect(() => {
@@ -63,6 +63,13 @@ export function Scanner({
 
   async function startCamera() {
     setCameraError(null);
+    if (typeof navigator === "undefined" || !navigator.mediaDevices) {
+      // getUserMedia only exists on secure origins (https / localhost).
+      setCameraError(
+        "This browser won't give the page camera access. Open the Hub over https, or use manual entry below."
+      );
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment" },
@@ -88,17 +95,92 @@ export function Scanner({
     setScanning(false);
   }
 
-  // Scan loop — runs while `scanning` is true.
-  useEffect(() => {
-    if (!scanning || !Detector) return;
-    const detector = new Detector({ formats: ["qr_code"] });
-    const interval = setInterval(async () => {
-      const video = videoRef.current;
-      if (!video || video.readyState < 2) return;
+  const processScan = useCallback(
+    async (code: string) => {
+      const id = ++itemIdRef.current;
+      let result: ScanResult;
       try {
+        const res = await fetch(`/api/events/${eventId}/check-in`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code }),
+        });
+        if (!res.ok) {
+          const data = (await res.json().catch(() => ({}))) as {
+            error?: string;
+          };
+          result = {
+            result: "error",
+            error: data.error ?? `Request failed (${res.status})`,
+          };
+        } else {
+          result = (await res.json()) as ScanResult;
+        }
+      } catch (e) {
+        result = {
+          result: "error",
+          error: e instanceof Error ? e.message : "Network error",
+        };
+      }
+      setItems((prev) =>
+        [{ id, code, result, at: Date.now() }, ...prev].slice(0, 12)
+      );
+    },
+    [eventId]
+  );
+
+  // Scan loop — runs while `scanning` is true.
+  //
+  // Decoding is two-tier: the native BarcodeDetector where the browser has
+  // it (Android Chrome, Chrome on macOS), and a jsQR canvas decode
+  // everywhere else. Safari — iOS and macOS — and Firefox ship no
+  // BarcodeDetector at all, so the native-only path meant door staff on an
+  // iPhone got no camera whatsoever.
+  useEffect(() => {
+    if (!scanning) return;
+
+    const Ctor = (
+      window as unknown as { BarcodeDetector?: BarcodeDetectorCtor }
+    ).BarcodeDetector;
+    const detector = Ctor ? new Ctor({ formats: ["qr_code"] }) : null;
+
+    let cancelled = false;
+
+    const readFrame = async (): Promise<string | null> => {
+      const video = videoRef.current;
+      if (!video || video.readyState < 2) return null;
+
+      if (detector) {
         const codes = await detector.detect(video);
-        if (codes.length === 0) return;
-        const code = codes[0].rawValue;
+        return codes[0]?.rawValue ?? null;
+      }
+
+      const vw = video.videoWidth;
+      const vh = video.videoHeight;
+      if (!vw || !vh) return null;
+      const scale = Math.min(1, DECODE_MAX_EDGE / Math.max(vw, vh));
+      const w = Math.round(vw * scale);
+      const h = Math.round(vh * scale);
+
+      const canvas = (canvasRef.current ??= document.createElement("canvas"));
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+      }
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) return null;
+      ctx.drawImage(video, 0, 0, w, h);
+      const frame = ctx.getImageData(0, 0, w, h);
+      // dontInvert: ticket QRs are always dark-on-light, and skipping the
+      // inverted pass roughly halves the per-frame cost.
+      const found = jsQR(frame.data, w, h, { inversionAttempts: "dontInvert" });
+      return found?.data ?? null;
+    };
+
+    const interval = setInterval(async () => {
+      if (cancelled) return;
+      try {
+        const code = await readFrame();
         if (!code) return;
         const now = Date.now();
         // De-dup: ignore the same code re-scanned within 3 seconds.
@@ -114,41 +196,13 @@ export function Scanner({
       } catch {
         /* Frame-decode errors during normal scanning are expected — ignore. */
       }
-    }, 350);
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scanning, Detector]);
+    }, 250);
 
-  async function processScan(code: string) {
-    const id = ++itemIdRef.current;
-    let result: ScanResult;
-    try {
-      const res = await fetch(`/api/events/${eventId}/check-in`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code }),
-      });
-      if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as {
-          error?: string;
-        };
-        result = {
-          result: "error",
-          error: data.error ?? `Request failed (${res.status})`,
-        };
-      } else {
-        result = (await res.json()) as ScanResult;
-      }
-    } catch (e) {
-      result = {
-        result: "error",
-        error: e instanceof Error ? e.message : "Network error",
-      };
-    }
-    setItems((prev) =>
-      [{ id, code, result, at: Date.now() }, ...prev].slice(0, 12)
-    );
-  }
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [scanning, processScan]);
 
   async function submitManual(e: React.FormEvent) {
     e.preventDefault();
@@ -168,53 +222,42 @@ export function Scanner({
           <p className="text-sm text-muted-foreground">
             Scan ticket QR codes for {eventTitle}, or type a code by hand.
           </p>
-          {supportsCamera ? (
-            <>
-              <div
-                className="overflow-hidden border bg-black relative"
-                style={{ aspectRatio: "16 / 9" }}
+          <div
+            className="rounded-lg overflow-hidden border bg-black relative"
+            style={{ aspectRatio: "16 / 9" }}
+          >
+            <video
+              ref={videoRef}
+              className="w-full h-full object-cover"
+              muted
+              playsInline
+            />
+            {!scanning && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white text-sm">
+                Tap &ldquo;Start scanning&rdquo; to open the camera.
+              </div>
+            )}
+          </div>
+          {cameraError && <p className="text-xs text-red-600">{cameraError}</p>}
+          <div className="flex gap-2">
+            {scanning ? (
+              <button
+                type="button"
+                onClick={stopCamera}
+                className="px-3 py-1.5 rounded border text-sm hover:bg-gray-50"
               >
-                <video
-                  ref={videoRef}
-                  className="w-full h-full object-cover"
-                  muted
-                  playsInline
-                />
-                {!scanning && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white text-sm">
-                    Tap &quot;Start scanning&quot; to open the camera.
-                  </div>
-                )}
-              </div>
-              {cameraError && (
-                <p className="text-xs text-destructive">{cameraError}</p>
-              )}
-              <div className="flex gap-2">
-                {scanning ? (
-                  <button
-                    type="button"
-                    onClick={stopCamera}
-                    className="px-3 py-1.5 border text-sm hover:bg-[color:var(--surface-2)]"
-                  >
-                    Stop scanner
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={startCamera}
-                    className="px-3 py-1.5 bg-ink text-white text-sm hover:bg-[#262622]"
-                  >
-                    Start scanning
-                  </button>
-                )}
-              </div>
-            </>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              Camera scanning isn&apos;t supported in this browser. Use manual entry
-              below — works everywhere.
-            </p>
-          )}
+                Stop scanner
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={startCamera}
+                className="px-3 py-1.5 rounded bg-blue-600 text-white text-sm hover:bg-blue-700"
+              >
+                Start scanning
+              </button>
+            )}
+          </div>
 
           <form onSubmit={submitManual} className="flex gap-2 border-t pt-4">
             <input
@@ -222,11 +265,14 @@ export function Scanner({
               value={manual}
               onChange={(e) => setManual(e.target.value)}
               placeholder="Enter the code by hand"
-              className="flex-1 border px-2 py-1.5 text-sm font-mono"
+              className="flex-1 border rounded px-2 py-1.5 text-sm font-mono"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
             />
             <button
               type="submit"
-              className="px-3 py-1.5 bg-ink text-white text-sm hover:bg-[#262622]"
+              className="px-3 py-1.5 rounded bg-blue-600 text-white text-sm hover:bg-blue-700"
             >
               Check in
             </button>
@@ -240,15 +286,13 @@ export function Scanner({
         </CardHeader>
         <CardContent>
           {items.length === 0 ? (
-            <p className="text-sm text-muted-foreground italic">
-              No scans yet.
-            </p>
+            <p className="text-sm text-muted-foreground italic">No scans yet.</p>
           ) : (
             <ul className="space-y-2">
               {items.map((it) => (
                 <li
                   key={it.id}
-                  className="border p-3"
+                  className="border rounded p-3"
                   style={resultStyle(it.result)}
                 >
                   <div className="flex items-start justify-between gap-3">
