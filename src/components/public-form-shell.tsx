@@ -15,7 +15,13 @@ import { FFSA_SHELL_TOKENS, FFSA_TAGLINE } from "@/lib/brand/ffsa";
 // event's brand so workflow emails, the form page, and the storefront
 // all read as one continuous identity.
 
-export type PublicShellBrand = "ff" | "the_send" | "ffsa_camps" | "preachers";
+export type PublicShellBrand =
+  | "ff"
+  | "the_send"
+  | "ffsa_camps"
+  | "preachers"
+  | "wild_ones"
+  | "missio";
 
 // FFSA ('ff') token set — canonical, from the brand deck. See
 // src/lib/brand/ffsa.ts; don't reintroduce local hexes here.
@@ -85,10 +91,53 @@ export const PREACHERS_SHELL_TOKENS = {
   red: "#E0736A",
 } as const;
 
+// WILD ONES token set — same shape/key names as the others. A dark
+// brand: charcoal paper on a near-black surround, bone type, and one
+// ember accent carried in the `yellow` slot so every generic accent
+// reference (buttons, focus rings, selected cards) reads as flame.
+// Mirrors src/lib/email/wild-ones-shell.ts (WILD_ONES_COLORS).
+export const WILD_ONES_SHELL_TOKENS = {
+  bg: "#0B0A09", // near-black surround
+  card: "#141210", // charcoal paper card
+  cardElev: "#1C1916", // lifted charcoal — input fields
+  border: "#3A322C", // hairline
+  borderSoft: "rgba(245,241,232,0.12)",
+  text: "#F5F1E8", // bone
+  textDim: "rgba(245,241,232,0.72)",
+  textDimmer: "rgba(245,241,232,0.55)",
+  textFaint: "rgba(245,241,232,0.3)",
+  yellow: "#F26B21", // accent slot = ember
+  yellowHover: "#FF8A1E", // gold highlight
+  green: "#7FB069",
+  red: "#E0736A",
+} as const;
+
+// MISSIO token set — same shape/key names as the others. Also dark, but
+// warm and quiet: pine paper on a deep-pine surround, cream type, and a
+// single clay/terracotta accent in the `yellow` slot. Mirrors
+// src/lib/email/missio-shell.ts (MISSIO_COLORS).
+export const MISSIO_SHELL_TOKENS = {
+  bg: "#16332A", // deep pine surround
+  card: "#20463A", // pine paper card
+  cardElev: "#265041", // lifted pine — input fields
+  border: "#35594B", // hairline
+  borderSoft: "rgba(237,228,211,0.14)",
+  text: "#EDE4D3", // cream
+  textDim: "rgba(237,228,211,0.74)",
+  textDimmer: "rgba(237,228,211,0.55)",
+  textFaint: "rgba(237,228,211,0.3)",
+  yellow: "#C56A3F", // accent slot = clay
+  yellowHover: "#D98A5C", // gold highlight
+  green: "#8FBF9F",
+  red: "#E0736A",
+} as const;
+
 export function tokensForBrand(brand: PublicShellBrand) {
   if (brand === "the_send") return THE_SEND_SHELL_TOKENS;
   if (brand === "ffsa_camps") return FFSA_CAMPS_SHELL_TOKENS;
   if (brand === "preachers") return PREACHERS_SHELL_TOKENS;
+  if (brand === "wild_ones") return WILD_ONES_SHELL_TOKENS;
+  if (brand === "missio") return MISSIO_SHELL_TOKENS;
   return PUBLIC_SHELL_TOKENS;
 }
 
@@ -130,7 +179,11 @@ export function PublicFormShell({
           ? "PERMISSION GRANTED"
           : isPreachers
             ? "GO. PREACH."
-            : FFSA_TAGLINE
+            : brand === "wild_ones"
+              ? "CARRY THE FIRE"
+              : brand === "missio"
+                ? "SENT ON MISSION"
+                : FFSA_TAGLINE
       : tagline;
 
   // SEND + FFSA Camps use a flat cream card with a thick coloured border
@@ -160,7 +213,11 @@ export function PublicFormShell({
       ? "'Aileron','Helvetica Neue',Arial,sans-serif"
       : isPreachers
         ? "'Big Shoulders Display','Anton','Impact','Haettenschweiler','Arial Narrow Bold',sans-serif"
-        : "var(--font-condensed, 'Arial Narrow', sans-serif)";
+        : brand === "wild_ones"
+          ? "'Oswald','Anton','Impact','Arial Narrow Bold',sans-serif"
+          : brand === "missio"
+            ? "'Fraunces','Georgia','Times New Roman',serif"
+            : "var(--font-condensed, 'Arial Narrow', sans-serif)";
 
   return (
     <div
@@ -409,6 +466,72 @@ function BrandLockup({ brand }: { brand: PublicShellBrand }) {
       </div>
     );
   }
+  if (brand === "wild_ones") {
+    const tk = WILD_ONES_SHELL_TOKENS;
+    return (
+      <div className="flex flex-col items-center mb-6">
+        <Image
+          src="/brand/wild-ones-wordmark-white.png"
+          alt="WILD ONES"
+          width={240}
+          height={90}
+          priority
+          style={{ objectFit: "contain", maxWidth: "58%", height: "auto", width: "auto" }}
+        />
+        <p
+          style={{
+            margin: "12px 0 0",
+            fontFamily: "'Oswald','Anton','Impact','Arial Narrow Bold',sans-serif",
+            fontSize: 10,
+            fontWeight: 600,
+            color: tk.yellow,
+            letterSpacing: "0.28em",
+            textTransform: "uppercase",
+          }}
+        >
+          CARRY&nbsp;THE&nbsp;FIRE
+        </p>
+      </div>
+    );
+  }
+
+  if (brand === "missio") {
+    const tk = MISSIO_SHELL_TOKENS;
+    // MISSIO has no wordmark asset — the identity IS the serif, set as
+    // live text exactly as the storefront and ticket email do it.
+    return (
+      <div className="flex flex-col items-center mb-6">
+        <p
+          style={{
+            margin: 0,
+            fontFamily: "'Fraunces','Georgia','Times New Roman',serif",
+            fontSize: 34,
+            fontWeight: 700,
+            color: tk.text,
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
+            lineHeight: 1,
+          }}
+        >
+          MISSIO
+        </p>
+        <p
+          style={{
+            margin: "12px 0 0",
+            fontFamily: "Helvetica,Arial,sans-serif",
+            fontSize: 10,
+            fontWeight: 700,
+            color: tk.yellow,
+            letterSpacing: "0.26em",
+            textTransform: "uppercase",
+          }}
+        >
+          &#10013;&nbsp;&nbsp;SENT&nbsp;ON&nbsp;MISSION
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col items-center mb-6">
       <Image
@@ -614,6 +737,63 @@ export const PUBLIC_INPUT_STYLE = inputBaseStyle;
  * Pass brand='the_send' for the navy/cream/gold variant — both versions
  * scope under the same `.ffsa-public` class so the caller's wrapper
  * doesn't have to change. */
+/**
+ * Wins the field chrome back from the admin design layer.
+ *
+ * globals.css styles bare `input` / `textarea` / `select` / `label` /
+ * `button` with `!important` inside `@layer components`, and those rules
+ * are not scoped to the admin shell — so they land on these public pages
+ * too, repainting every field white-on-bone with 9.5px grey labels. On a
+ * dark brand card that reads as glare with near-invisible labels.
+ *
+ * Restating the brand's own values inside `@layer base` takes them back:
+ * for `!important` declarations the cascade REVERSES layer order, so the
+ * earlier layer wins — and unlayered `!important` loses to both. (Checked
+ * in a browser against the live page, not just read off the spec.)
+ *
+ * Values come from the same tokens the unlayered rules above use, so the
+ * two can't drift apart.
+ */
+function adminChromeReclaim(
+  tk: ReturnType<typeof tokensForBrand>,
+  variant: "soft" | "flat",
+  fonts: { body: string; label: string }
+): string {
+  const flat = variant === "flat";
+  return `
+@layer base {
+  .ffsa-public input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="submit"]):not([type="button"]),
+  .ffsa-public textarea,
+  .ffsa-public select {
+    background: ${tk.cardElev} !important;
+    border: ${flat ? "2px" : "1px"} solid ${flat ? tk.border : tk.borderSoft} !important;
+    border-radius: ${flat ? "0" : "10px"} !important;
+    color: ${tk.text} !important;
+    font-family: ${fonts.body} !important;
+    font-size: 15px !important;
+    padding: 11px 14px !important;
+  }
+  .ffsa-public input::placeholder,
+  .ffsa-public textarea::placeholder {
+    color: ${tk.textDimmer} !important;
+  }
+  .ffsa-public label,
+  .ffsa-public .ffsa-public-label {
+    font-family: ${fonts.label} !important;
+    font-size: ${flat ? "11px" : "13px"} !important;
+    font-weight: ${flat ? 700 : 600} !important;
+    letter-spacing: ${flat ? "0.18em" : "normal"} !important;
+    text-transform: ${flat ? "uppercase" : "none"} !important;
+    color: ${tk.text} !important;
+  }
+  .ffsa-public .ffsa-public-btn-primary,
+  .ffsa-public .ffsa-public-btn-ghost {
+    font-family: ${fonts.label} !important;
+  }
+}
+`;
+}
+
 export function PublicFormInputStyles({
   brand = "ff",
 }: {
@@ -734,6 +914,7 @@ export function PublicFormInputStyles({
   content: ' *';
   color: ${tk.red};
 }
+${adminChromeReclaim(tk, "flat", { body: "Helvetica,Arial,sans-serif", label: "'Courier New',Courier,monospace" })}
 `;
     return <style dangerouslySetInnerHTML={{ __html: css }} />;
   }
@@ -853,20 +1034,40 @@ export function PublicFormInputStyles({
   content: ' *';
   color: ${tk.red};
 }
+${adminChromeReclaim(tk, "flat", { body: "Helvetica,Arial,sans-serif", label: "'Courier New',Courier,monospace" })}
 `;
     return <style dangerouslySetInnerHTML={{ __html: css }} />;
   }
 
-  const css = `
+  // ff, preachers, wild_ones and missio all ride the dark-card model, so
+  // they share this branch and differ only by tokens + display face.
+  const tk = tokensForBrand(brand);
+  const displayFont =
+    brand === "missio"
+      ? "'Fraunces','Georgia','Times New Roman',serif"
+      : brand === "wild_ones"
+        ? "'Oswald','Anton','Impact','Arial Narrow Bold',sans-serif"
+        : "'Aileron','Helvetica Neue',Arial,sans-serif";
+  // Same Google Fonts import the bespoke storefronts use, so a form and
+  // its storefront render in one face. Must lead the stylesheet: @import
+  // is only valid before other rules.
+  const fontImport =
+    brand === "missio"
+      ? "@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&display=swap');\n"
+      : brand === "wild_ones"
+        ? "@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&display=swap');\n"
+        : "";
+
+  const css = `${fontImport}
 .ffsa-public input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="submit"]):not([type="button"]),
 .ffsa-public textarea,
 .ffsa-public select {
   width: 100%;
   padding: 11px 14px;
   border-radius: 10px;
-  border: 1px solid ${T.borderSoft};
-  background: ${T.cardElev};
-  color: ${T.text};
+  border: 1px solid ${tk.borderSoft};
+  background: ${tk.cardElev};
+  color: ${tk.text};
   font-size: 15px;
   outline: none;
   transition: border-color .15s ease, box-shadow .15s ease;
@@ -882,18 +1083,19 @@ export function PublicFormInputStyles({
   padding-right: 36px;
 }
 .ffsa-public input:focus, .ffsa-public textarea:focus, .ffsa-public select:focus {
-  border-color: ${T.yellow};
-  box-shadow: 0 0 0 3px ${T.yellow}33;
+  border-color: ${tk.yellow};
+  box-shadow: 0 0 0 3px ${tk.yellow}33;
 }
 .ffsa-public input::placeholder, .ffsa-public textarea::placeholder {
-  color: ${T.textDimmer};
+  color: ${tk.textDimmer};
 }
 .ffsa-public label {
-  color: ${T.text};
+  color: ${tk.text};
 }
 .ffsa-public-btn-primary {
-  background: ${T.yellow};
-  color: ${T.bg};
+  background: ${tk.yellow};
+  color: ${tk.bg};
+  font-family: ${displayFont};
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -905,19 +1107,19 @@ export function PublicFormInputStyles({
   transition: background .15s ease, transform .04s ease;
 }
 .ffsa-public-btn-primary:hover:not(:disabled) {
-  background: ${T.yellowHover};
+  background: ${tk.yellowHover};
 }
 .ffsa-public-btn-primary:active:not(:disabled) {
   transform: translateY(1px);
 }
 .ffsa-public-btn-primary:disabled {
-  background: ${T.borderSoft};
-  color: ${T.textDimmer};
+  background: ${tk.borderSoft};
+  color: ${tk.textDimmer};
   cursor: not-allowed;
 }
 .ffsa-public-btn-ghost {
   background: transparent;
-  color: ${T.textDim};
+  color: ${tk.textDim};
   font-size: 13px;
   padding: 10px 14px;
   border: none;
@@ -925,20 +1127,20 @@ export function PublicFormInputStyles({
   transition: color .15s ease;
 }
 .ffsa-public-btn-ghost:hover:not(:disabled) {
-  color: ${T.text};
+  color: ${tk.text};
 }
 .ffsa-public-card {
-  background: ${T.cardElev};
-  border: 1px solid ${T.borderSoft};
+  background: ${tk.cardElev};
+  border: 1px solid ${tk.borderSoft};
   border-radius: 12px;
   padding: 14px 16px;
 }
 .ffsa-public-card.is-selected {
-  border-color: ${T.yellow};
-  background: ${T.yellow}14;
+  border-color: ${tk.yellow};
+  background: ${tk.yellow}14;
 }
 .ffsa-public-error {
-  color: ${T.red};
+  color: ${tk.red};
   font-size: 13px;
   margin-top: 6px;
 }
@@ -946,13 +1148,14 @@ export function PublicFormInputStyles({
   display: block;
   font-size: 13px;
   font-weight: 600;
-  color: ${T.text};
+  color: ${tk.text};
   margin-bottom: 6px;
 }
 .ffsa-public-label-required::after {
   content: ' *';
-  color: ${T.red};
+  color: ${tk.red};
 }
+${adminChromeReclaim(tk, "soft", { body: "Helvetica,Arial,sans-serif", label: displayFont })}
 `;
   return <style dangerouslySetInnerHTML={{ __html: css }} />;
 }
