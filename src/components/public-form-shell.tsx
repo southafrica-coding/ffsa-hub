@@ -757,7 +757,13 @@ export const PUBLIC_INPUT_STYLE = inputBaseStyle;
 function adminChromeReclaim(
   tk: ReturnType<typeof tokensForBrand>,
   variant: "soft" | "flat",
-  fonts: { body: string; label: string }
+  fonts: {
+    body: string;
+    label: string;
+    /** Restated because globals.css also forces a face, weight, tracking
+     *  and casing onto every bare `button`. */
+    button: { family: string; style?: string; weight: number; spacing: string };
+  }
 ): string {
   const flat = variant === "flat";
   return `
@@ -786,9 +792,18 @@ function adminChromeReclaim(
     text-transform: ${flat ? "uppercase" : "none"} !important;
     color: ${tk.text} !important;
   }
-  .ffsa-public .ffsa-public-btn-primary,
+  .ffsa-public .ffsa-public-btn-primary {
+    font-family: ${fonts.button.family} !important;
+    font-style: ${fonts.button.style ?? "normal"} !important;
+    font-weight: ${fonts.button.weight} !important;
+    letter-spacing: ${fonts.button.spacing} !important;
+    text-transform: uppercase !important;
+  }
   .ffsa-public .ffsa-public-btn-ghost {
-    font-family: ${fonts.label} !important;
+    font-family: ${fonts.body} !important;
+    font-weight: 400 !important;
+    letter-spacing: normal !important;
+    text-transform: none !important;
   }
 }
 `;
@@ -914,7 +929,11 @@ export function PublicFormInputStyles({
   content: ' *';
   color: ${tk.red};
 }
-${adminChromeReclaim(tk, "flat", { body: "Helvetica,Arial,sans-serif", label: "'Courier New',Courier,monospace" })}
+${adminChromeReclaim(tk, "flat", {
+  body: "Helvetica,Arial,sans-serif",
+  label: "'Courier New',Courier,monospace",
+  button: { family: "'Arial Black','Helvetica Neue',Arial,sans-serif", weight: 900, spacing: "0.12em" },
+})}
 `;
     return <style dangerouslySetInnerHTML={{ __html: css }} />;
   }
@@ -1034,7 +1053,16 @@ ${adminChromeReclaim(tk, "flat", { body: "Helvetica,Arial,sans-serif", label: "'
   content: ' *';
   color: ${tk.red};
 }
-${adminChromeReclaim(tk, "flat", { body: "Helvetica,Arial,sans-serif", label: "'Courier New',Courier,monospace" })}
+${adminChromeReclaim(tk, "flat", {
+  body: "Helvetica,Arial,sans-serif",
+  label: "'Courier New',Courier,monospace",
+  button: {
+    family: "'Aileron','Helvetica Neue',Arial,sans-serif",
+    style: "italic",
+    weight: 900,
+    spacing: "0.1em",
+  },
+})}
 `;
     return <style dangerouslySetInnerHTML={{ __html: css }} />;
   }
@@ -1155,7 +1183,11 @@ ${adminChromeReclaim(tk, "flat", { body: "Helvetica,Arial,sans-serif", label: "'
   content: ' *';
   color: ${tk.red};
 }
-${adminChromeReclaim(tk, "soft", { body: "Helvetica,Arial,sans-serif", label: displayFont })}
+${adminChromeReclaim(tk, "soft", {
+  body: "Helvetica,Arial,sans-serif",
+  label: "Helvetica,Arial,sans-serif",
+  button: { family: displayFont, weight: 700, spacing: "0.1em" },
+})}
 `;
   return <style dangerouslySetInnerHTML={{ __html: css }} />;
 }
