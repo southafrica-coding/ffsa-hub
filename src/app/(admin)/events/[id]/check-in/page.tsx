@@ -32,8 +32,9 @@ export default async function CheckInPage({
   return (
     <div className="ffsa-screen">
       <Masthead context={event.title} title="Check-in" />
-      <div className="mx-auto max-w-2xl px-8 py-7">
-        <Scanner eventId={id} eventTitle={event.title} />
+      {/* Tight gutters on a phone — the viewfinder wants the width. */}
+      <div className="mx-auto max-w-2xl px-3 py-4 md:px-8 md:py-7">
+        <Scanner eventId={id} />
       </div>
     </div>
   );
