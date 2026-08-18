@@ -50,9 +50,12 @@ export default async function BookingsPage({
 
   const view = normalizeView(params.view);
   // Unified focus date; falls back to a legacy ?month, then today.
-  const focus = parseDateParam(
-    params.date ?? (params.month ? `${params.month}-01` : undefined)
-  );
+  const rawDate = params.date ?? (params.month ? `${params.month}-01` : undefined);
+  const focus = parseDateParam(rawDate);
+  // Whether the viewer actually asked for this date. When they did not, `focus`
+  // is the SERVER's today — UTC on Vercel — which is not necessarily theirs.
+  // The view corrects it against the browser clock; see bookings-view.tsx.
+  const dateWasChosen = !!rawDate;
   const year = parseInt(focus.slice(0, 4), 10);
   const month = parseInt(focus.slice(5, 7), 10);
 
@@ -107,6 +110,7 @@ export default async function BookingsPage({
       year={year}
       month={month}
       pendingCount={pendingCount}
+      dateWasChosen={dateWasChosen}
       filters={{
         venue: params.venue ?? "all",
         ministry: params.ministry ?? "all",

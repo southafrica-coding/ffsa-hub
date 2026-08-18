@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,6 +34,7 @@ import {
   todayISO,
 } from "@/lib/bookings/dates";
 import { conflictingIds, type BookingWindow } from "@/lib/bookings/conflicts";
+import { buildSpacesHref } from "@/lib/bookings/nav";
 import type {
   BookingAccess,
   BookingWithRefs,
@@ -66,6 +68,7 @@ export function BookingsView({
   month,
   pendingCount,
   filters,
+  dateWasChosen,
 }: {
   bookings: BookingWithRefs[];
   venues: Venue[];
@@ -77,19 +80,28 @@ export function BookingsView({
   month: number;
   pendingCount: number;
   filters: Filters;
+  /** False when the URL carried no date, i.e. the server picked one. */
+  dateWasChosen: boolean;
 }) {
   const router = useRouter();
   const today = todayISO();
 
+  // The server rendered whatever "today" means in ITS timezone. On Vercel that
+  // is UTC, so a South African viewer between 22:00 and midnight would land on
+  // yesterday's schedule without any way to tell. Correct it to the browser's
+  // day — but only when the viewer did not name a date themselves, so this can
+  // never override a deliberate choice. Replaces rather than pushes, so it
+  // leaves no history entry to get stuck on going back.
+  useEffect(() => {
+    if (dateWasChosen || today === date) return;
+    router.replace(buildSpacesHref({ view, date: today, ...filters }));
+  }, [dateWasChosen, today, date, view, filters, router]);
+
+  // Lives in @/lib/bookings/nav so it cannot see `today`: an href built in the
+  // browser must never be shortened by comparing against a clock the server
+  // does not share. See the note there.
   function buildHref(overrides: Partial<Filters & { view: ViewKind; date: string }>) {
-    const next = { view, date, ...filters, ...overrides };
-    const sp = new URLSearchParams();
-    if (next.view && next.view !== "day") sp.set("view", next.view);
-    if (next.date && next.date !== today) sp.set("date", next.date);
-    if (next.venue !== "all") sp.set("venue", next.venue);
-    if (next.ministry !== "all") sp.set("ministry", next.ministry);
-    const qs = sp.toString();
-    return `/bookings/spaces${qs ? `?${qs}` : ""}`;
+    return buildSpacesHref({ view, date, ...filters, ...overrides });
   }
 
   function go(overrides: Partial<Filters & { view: ViewKind; date: string }>) {

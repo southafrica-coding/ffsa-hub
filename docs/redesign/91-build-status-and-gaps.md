@@ -173,6 +173,37 @@ Signed in, against the real database, at 1440×1000 and 375×812:
 
 Neither width scrolls the page horizontally; the grid scrolls inside itself.
 
+### Bug found in prod and fixed: "next day" did nothing (2026-08-19)
+
+Reported by Jack against the live site. On the Spaces day view the back arrow
+worked and the forward arrow did nothing.
+
+Cause: **the href was shortened by comparing against a clock the server does not
+share.** `buildHref` omitted the `date` parameter when it equalled "today", to
+keep the URL tidy. But the page renders on the server — UTC on Vercel — while
+the button that builds the link runs in the browser, on SAST. Between 22:00 and
+midnight those are different days. The server rendered the 18th; the browser
+believed today was the 19th; "next day" computed the 19th, matched the browser's
+today, dropped the parameter — and the server answered with the 18th again.
+
+Two hours a night, on a screen whose whole job is picking a day, and invisible
+in every test and every daytime click-through.
+
+Fixed in two places:
+
+- `src/lib/bookings/nav.ts` — `buildSpacesHref` now always writes the date.
+  It is a separate module specifically so it **cannot see `today`**: the
+  shortcut is not merely removed, it is unavailable. `nav.test.ts` pins the
+  case.
+- The landing day is corrected too. With no `?date`, the server picks *its*
+  today, so the same viewer was being shown yesterday's schedule on arrival.
+  The view now replaces the URL with the browser's day, but only when the
+  viewer named no date, so it can never override a deliberate choice.
+
+**The general rule for this codebase: any "is this today" comparison that spans
+a server render and a client click is comparing two clocks.** Server components
+make this easy to write and impossible to notice.
+
 ### Correction to the previous entry
 
 The 2026-08-18 acceptance sweep reported "0 `rounded-*`". That was true only of
