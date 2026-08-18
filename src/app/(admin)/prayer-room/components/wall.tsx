@@ -61,6 +61,11 @@ const DAY_START = 5 * 60;
 const DAY_END = 24 * 60;
 const PX_PER_MIN = 0.72; // ~820px tall; the density the card layouts assume
 
+/** Ink hatch at low alpha — "struck out", with whatever is underneath still
+ *  legible. Defined once so the legend swatch cannot drift from the wall. */
+const BLOCKOUT_HATCH =
+  "repeating-linear-gradient(45deg, rgba(10,10,10,0.16) 0 5px, rgba(10,10,10,0.04) 5px 11px)";
+
 const WEEKDAYS = [1, 2, 3, 4, 5]; // Mon–Fri. Weekends are not part of the wall.
 const WEEKDAY_LABELS = ["MON", "TUE", "WED", "THU", "FRI"];
 
@@ -319,35 +324,6 @@ export default function Wall({
                 />
               ))}
 
-              {/* Block-outs sit under the cards: the room being unavailable
-                  does not erase a set that is still on the books, it explains
-                  it. Black, because fill now carries meaning and bone, yellow
-                  and white are all spoken for. */}
-              {(blockoutsByDay.get(d.iso) ?? []).map((b) => {
-                const w = isAllDayBlockout(b) ? { start: DAY_START, end: DAY_END } : boWin(b);
-                const start = Math.max(w.start, DAY_START);
-                const end = Math.min(w.end, DAY_END);
-                if (end <= start) return null;
-                return (
-                  <div
-                    key={b.id}
-                    title={blockoutTip(b)}
-                    className="absolute left-0 right-0 overflow-hidden border-y border-[#3A3A36] bg-ink px-1.5 py-1"
-                    style={{
-                      top: (start - DAY_START) * PX_PER_MIN,
-                      height: (end - start) * PX_PER_MIN,
-                    }}
-                  >
-                    <div className="font-mono text-[8px] font-bold uppercase tracking-[0.14em] text-yellow">
-                      Blocked out
-                    </div>
-                    {b.reason && (
-                      <div className="truncate text-[9.5px] leading-tight text-[#C5C2AE]">{b.reason}</div>
-                    )}
-                  </div>
-                );
-              })}
-
               {daySets.map((s) => {
                 const start = Math.max(toMin(s.start_time), DAY_START);
                 const end = Math.min(toMin(s.end_time), DAY_END);
@@ -419,6 +395,48 @@ export default function Wall({
                   </button>
                 );
               })}
+
+              {/* Block-outs sit OVER the sets, struck across them rather than
+                  under them. A solid slab hid the very thing you need when a
+                  block-out lands on a booked hour: which sets are affected. The
+                  hatch is ink at low alpha, so a set underneath still reads —
+                  and it never takes a click, so those sets stay openable. */}
+              {(blockoutsByDay.get(d.iso) ?? []).map((b) => {
+                const w = isAllDayBlockout(b) ? { start: DAY_START, end: DAY_END } : boWin(b);
+                const start = Math.max(w.start, DAY_START);
+                const end = Math.min(w.end, DAY_END);
+                if (end <= start) return null;
+                return (
+                  <div
+                    key={b.id}
+                    title={blockoutTip(b)}
+                    className="pointer-events-none absolute left-0 right-0 z-20 overflow-hidden border-y-2 border-ink"
+                    style={{
+                      top: (start - DAY_START) * PX_PER_MIN,
+                      height: (end - start) * PX_PER_MIN,
+                      background: BLOCKOUT_HATCH,
+                    }}
+                  >
+                    <div className="flex flex-wrap items-center gap-1 p-1">
+                      <span className="bg-ink px-1 py-0.5 font-mono text-[7.5px] font-bold uppercase tracking-[0.12em] text-yellow">
+                        Blocked
+                      </span>
+                      {b.reason && (
+                        <span className="min-w-0 truncate font-mono text-[8px] font-bold uppercase tracking-[0.06em] text-ink">
+                          {b.reason}
+                        </span>
+                      )}
+                    </div>
+                    {/* Where the sets went, which is the question a block-out
+                        raises the moment it lands on a booked hour. */}
+                    {b.relocation_note && (
+                      <div className="truncate bg-yellow px-1 py-0.5 font-mono text-[8px] font-bold uppercase tracking-[0.06em] text-ink">
+                        Moved → {b.relocation_note}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           );
         })}
@@ -430,16 +448,26 @@ export default function Wall({
         <Key className="border-2 border-ink bg-yellow">Curated band</Key>
         <Key className="border border-dashed border-ink bg-[color:var(--surface-3)]">Needs a lead</Key>
         <Key className="border border-rule bg-white">Nothing booked</Key>
-        <Key className="border border-[#3A3A36] bg-ink">Blocked out</Key>
+        <Key className="border-2 border-ink" style={{ background: BLOCKOUT_HATCH }}>
+          Blocked out
+        </Key>
       </div>
     </div>
   );
 }
 
-function Key({ className, children }: { className?: string; children: React.ReactNode }) {
+function Key({
+  className,
+  style,
+  children,
+}: {
+  className?: string;
+  style?: React.CSSProperties;
+  children: React.ReactNode;
+}) {
   return (
     <span className="flex items-center gap-1.5">
-      <span className={cn("inline-block h-3 w-5", className)} />
+      <span className={cn("inline-block h-3 w-5", className)} style={style} />
       <span className="mono-label">{children}</span>
     </span>
   );
