@@ -102,9 +102,8 @@ export function RoleAssignment({
   return (
     <div
       style={{
-        background: "hsl(22 10% 8%)",
-        border: "1px solid hsl(22 8% 14%)",
-        borderRadius: "12px",
+        background: "#FFFFFF",
+        border: "1px solid var(--rule)",
         padding: "20px",
       }}
     >
@@ -113,19 +112,19 @@ export function RoleAssignment({
           fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase",
           fontSize: "1rem",
           letterSpacing: "0.07em",
-          color: "#F0EBE3",
+          color: "var(--text-primary)",
           marginBottom: "4px",
         }}
       >
         Job titles
       </p>
-      <p style={{ fontSize: "13px", color: "hsl(30 8% 50%)", marginBottom: "14px" }}>
+      <p style={{ fontSize: "13px", color: "var(--text-tertiary)", marginBottom: "14px" }}>
         Stack as many as fit the person — access is the combined total of every title.
       </p>
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
         {assigned.length === 0 && (
-          <span style={{ fontSize: "13px", color: "hsl(30 8% 45%)" }}>No titles yet.</span>
+          <span style={{ fontSize: "13px", color: "var(--text-tertiary)" }}>No titles yet.</span>
         )}
 
         {assigned.map((a) => (
@@ -136,9 +135,8 @@ export function RoleAssignment({
               alignItems: "center",
               gap: "6px",
               background: "hsl(42 95% 55% / 0.12)",
-              color: "hsl(42 90% 72%)",
+              color: "var(--ink)",
               border: "1px solid hsl(42 95% 55% / 0.25)",
-              borderRadius: "8px",
               padding: "5px 10px",
               fontSize: "13px",
               fontWeight: 500,
@@ -146,7 +144,7 @@ export function RoleAssignment({
           >
             {a.display_name}
             {a.scope_id && scopeLabels[a.scope_id] && (
-              <span style={{ color: "hsl(42 55% 58%)", fontSize: "11px" }}>
+              <span style={{ color: "var(--ink)", fontSize: "11px" }}>
                 · {scopeLabels[a.scope_id]}
               </span>
             )}
@@ -155,7 +153,7 @@ export function RoleAssignment({
                 onClick={() => removeRole(a)}
                 disabled={busy}
                 aria-label={`Remove ${a.display_name}`}
-                style={{ display: "inline-flex", cursor: "pointer", color: "hsl(42 70% 60%)" }}
+                style={{ display: "inline-flex", cursor: "pointer", color: "var(--ink)" }}
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -172,10 +170,9 @@ export function RoleAssignment({
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "4px",
-                border: "1px dashed hsl(22 8% 28%)",
+                border: "1px dashed var(--rule-strong)",
                 background: "transparent",
-                color: "hsl(30 8% 60%)",
-                borderRadius: "8px",
+                color: "var(--text-secondary)",
                 padding: "5px 10px",
                 fontSize: "13px",
                 cursor: options.length === 0 ? "not-allowed" : "pointer",
@@ -193,9 +190,8 @@ export function RoleAssignment({
                   minWidth: "200px",
                   maxHeight: "260px",
                   overflowY: "auto",
-                  background: "hsl(22 12% 10%)",
-                  border: "1px solid hsl(22 8% 18%)",
-                  borderRadius: "8px",
+                  background: "var(--surface-2)",
+                  border: "1px solid var(--rule-strong)",
                   padding: "4px",
                   boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
                 }}
@@ -211,9 +207,8 @@ export function RoleAssignment({
                         textAlign: "left",
                         padding: "7px 10px",
                         fontSize: "12px",
-                        color: "hsl(30 8% 55%)",
+                        color: "var(--text-tertiary)",
                         background: "transparent",
-                        borderRadius: "6px",
                         cursor: "pointer",
                       }}
                     >
@@ -225,7 +220,7 @@ export function RoleAssignment({
                           display: "block",
                           padding: "7px 10px",
                           fontSize: "12px",
-                          color: "hsl(30 8% 45%)",
+                          color: "var(--text-tertiary)",
                         }}
                       >
                         No programs available.
@@ -241,9 +236,8 @@ export function RoleAssignment({
                           textAlign: "left",
                           padding: "7px 10px",
                           fontSize: "13px",
-                          color: "#F0EBE3",
+                          color: "var(--text-primary)",
                           background: "transparent",
-                          borderRadius: "6px",
                           cursor: "pointer",
                         }}
                       >
@@ -262,15 +256,14 @@ export function RoleAssignment({
                         textAlign: "left",
                         padding: "7px 10px",
                         fontSize: "13px",
-                        color: "#F0EBE3",
+                        color: "var(--text-primary)",
                         background: "transparent",
-                        borderRadius: "6px",
                         cursor: "pointer",
                       }}
                     >
                       {r.display_name}
                       {r.scope_type === "program" && (
-                        <span style={{ color: "hsl(30 8% 45%)", fontSize: "11px" }}> · by program</span>
+                        <span style={{ color: "var(--text-tertiary)", fontSize: "11px" }}> · by program</span>
                       )}
                     </button>
                   ))

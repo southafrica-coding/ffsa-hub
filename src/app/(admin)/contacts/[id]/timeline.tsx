@@ -100,7 +100,7 @@ export function Timeline({
             onChange={(e) => setNote(e.target.value)}
             placeholder="Add a note about this contact…"
             rows={2}
-            className="w-full border rounded text-sm px-2 py-1.5 resize-none"
+            className="w-full border text-sm px-2 py-1.5 resize-none"
             disabled={busy}
           />
           {err && <p className="text-xs text-red-600">{err}</p>}
@@ -109,7 +109,7 @@ export function Timeline({
               type="button"
               onClick={submitNote}
               disabled={busy || !note.trim()}
-              className="px-3 py-1 rounded bg-blue-600 text-white text-xs hover:bg-blue-700 disabled:bg-gray-300"
+              className="px-3 py-1 bg-blue-600 text-white text-xs hover:bg-blue-700 disabled:bg-gray-300"
             >
               Add note
             </button>
@@ -123,14 +123,14 @@ export function Timeline({
             {events.map((ev) => (
               <li key={ev.id} className="flex gap-3">
                 <span
-                  className={`inline-block w-2 h-2 mt-2 rounded-full ${
+                  className={`inline-block w-2 h-2 mt-2 ${
                     (EVENT_COLOR[ev.event_type] ?? "bg-gray-100").split(" ")[0]
                   }`}
                 />
                 <div className="flex-1">
                   <div className="flex items-baseline gap-2">
                     <span
-                      className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+                      className={`text-xs font-medium px-1.5 py-0.5 ${
                         EVENT_COLOR[ev.event_type] ?? "bg-gray-100 text-gray-800"
                       }`}
                     >

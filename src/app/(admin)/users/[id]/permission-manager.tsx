@@ -63,15 +63,14 @@ function ScopeSection({
   return (
     <div
       style={{
-        border: "1px solid hsl(22 8% 14%)",
-        borderRadius: "8px",
+        border: "1px solid var(--rule)",
         overflow: "hidden",
       }}
     >
       {/* Scope header row */}
       <div
         className="flex items-center gap-3 px-4 py-3 cursor-pointer select-none"
-        style={{ background: "hsl(22 10% 7%)" }}
+        style={{ background: "#FFFFFF" }}
         onClick={() => setOpen((o) => !o)}
       >
         {/* Select-all checkbox */}
@@ -80,10 +79,9 @@ function ScopeSection({
           style={{
             width: "18px",
             height: "18px",
-            borderRadius: "4px",
-            border: "1px solid hsl(22 8% 28%)",
+            border: "1px solid var(--rule-strong)",
             background: allChecked
-              ? "hsl(42 95% 55%)"
+              ? "var(--ink)"
               : someChecked
               ? "hsl(42 95% 55% / 0.3)"
               : "transparent",
@@ -97,17 +95,17 @@ function ScopeSection({
           {allChecked ? (
             <Check className="h-3 w-3 text-black" />
           ) : someChecked ? (
-            <Minus className="h-3 w-3" style={{ color: "hsl(42 95% 55%)" }} />
+            <Minus className="h-3 w-3" style={{ color: "var(--ink)" }} />
           ) : null}
         </button>
 
-        <span style={{ fontSize: "13px", fontWeight: 500, color: "#F0EBE3", flex: 1 }}>
+        <span style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-primary)", flex: 1 }}>
           {scope.label}
           <span
             style={{
               fontSize: "9px",
               letterSpacing: "0.15em",
-              color: "hsl(30 8% 42%)",
+              color: "var(--text-tertiary)",
               marginLeft: "8px",
               textTransform: "uppercase",
             }}
@@ -129,7 +127,7 @@ function ScopeSection({
           className="grid gap-x-6 gap-y-2 px-4 py-3"
           style={{
             gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-            borderTop: "1px solid hsl(22 8% 12%)",
+            borderTop: "1px solid var(--rule)",
           }}
         >
           {permissions.map((p) => {
@@ -139,16 +137,15 @@ function ScopeSection({
               <label
                 key={p.id}
                 className="flex items-center gap-2 cursor-pointer"
-                style={{ fontSize: "13px", color: "hsl(30 8% 65%)" }}
+                style={{ fontSize: "13px", color: "var(--text-secondary)" }}
               >
                 <button
                   onClick={() => onToggle(p.id, scope.scope_type, scope.id, !checked)}
                   style={{
                     width: "16px",
                     height: "16px",
-                    borderRadius: "3px",
-                    border: "1px solid hsl(22 8% 28%)",
-                    background: checked ? "hsl(42 95% 55%)" : "transparent",
+                    border: "1px solid var(--rule-strong)",
+                    background: checked ? "var(--ink)" : "transparent",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -224,23 +221,22 @@ function ModuleSection({
   return (
     <div
       style={{
-        background: "hsl(22 10% 8%)",
-        border: "1px solid hsl(22 8% 14%)",
-        borderRadius: "12px",
+        background: "#FFFFFF",
+        border: "1px solid var(--rule)",
         overflow: "hidden",
       }}
     >
       {/* Module header */}
       <div
         className="flex items-center justify-between px-5 py-4"
-        style={{ borderBottom: "1px solid hsl(22 8% 12%)" }}
+        style={{ borderBottom: "1px solid var(--rule)" }}
       >
         <p
           style={{
             fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase",
             fontSize: "1rem",
             letterSpacing: "0.07em",
-            color: "#F0EBE3",
+            color: "var(--text-primary)",
           }}
         >
           {label}
@@ -251,16 +247,15 @@ function ModuleSection({
           <button
             onClick={toggleGlobalAll}
             className="flex items-center gap-1.5 text-xs"
-            style={{ color: "hsl(30 8% 45%)", cursor: "pointer" }}
+            style={{ color: "var(--text-tertiary)", cursor: "pointer" }}
           >
             <div
               style={{
                 width: "16px",
                 height: "16px",
-                borderRadius: "3px",
-                border: "1px solid hsl(22 8% 28%)",
+                border: "1px solid var(--rule-strong)",
                 background: globalAllChecked
-                  ? "hsl(42 95% 55%)"
+                  ? "var(--ink)"
                   : globalSomeChecked
                   ? "hsl(42 95% 55% / 0.3)"
                   : "transparent",
@@ -272,7 +267,7 @@ function ModuleSection({
               {globalAllChecked ? (
                 <Check className="h-2.5 w-2.5 text-black" />
               ) : globalSomeChecked ? (
-                <Minus className="h-2.5 w-2.5" style={{ color: "hsl(42 95% 55%)" }} />
+                <Minus className="h-2.5 w-2.5" style={{ color: "var(--ink)" }} />
               ) : null}
             </div>
             Select all
@@ -288,7 +283,7 @@ function ModuleSection({
           <p
             style={{
               fontSize: "11px",
-              color: "hsl(42 60% 60%)",
+              color: "var(--ink)",
               margin: 0,
             }}
           >
@@ -309,16 +304,15 @@ function ModuleSection({
                 <label
                   key={p.id}
                   className="flex items-center gap-2 cursor-pointer"
-                  style={{ fontSize: "13px", color: "hsl(30 8% 65%)" }}
+                  style={{ fontSize: "13px", color: "var(--text-secondary)" }}
                 >
                   <button
                     onClick={() => onToggle(p.id, null, null, !checked)}
                     style={{
                       width: "16px",
                       height: "16px",
-                      borderRadius: "3px",
-                      border: "1px solid hsl(22 8% 28%)",
-                      background: checked ? "hsl(42 95% 55%)" : "transparent",
+                      border: "1px solid var(--rule-strong)",
+                      background: checked ? "var(--ink)" : "transparent",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -343,7 +337,7 @@ function ModuleSection({
                 fontSize: "9px",
                 letterSpacing: "0.2em",
                 fontWeight: 600,
-                color: "hsl(30 8% 38%)",
+                color: "var(--text-tertiary)",
                 textTransform: "uppercase",
               }}
             >
@@ -605,12 +599,11 @@ export function PermissionManager({
         <div
           style={{
             background: isTargetSuperAdmin
-              ? "hsl(42 30% 10%)"
-              : "hsl(22 10% 8%)",
+              ? "var(--yellow-dim)"
+              : "#FFFFFF",
             border: isTargetSuperAdmin
               ? "1px solid hsl(42 95% 55% / 0.4)"
-              : "1px solid hsl(22 8% 14%)",
-            borderRadius: "12px",
+              : "1px solid var(--rule)",
             padding: "1.25rem 1.5rem",
           }}
         >
@@ -621,8 +614,8 @@ export function PermissionManager({
                   fontSize: "9px",
                   letterSpacing: "0.2em",
                   color: isTargetSuperAdmin
-                    ? "hsl(42 95% 55%)"
-                    : "hsl(30 8% 42%)",
+                    ? "var(--ink)"
+                    : "var(--text-tertiary)",
                   textTransform: "uppercase",
                   fontWeight: 700,
                   marginBottom: "6px",
@@ -639,7 +632,7 @@ export function PermissionManager({
               {isSelf && (
                 <p
                   className="text-xs mt-2"
-                  style={{ color: "hsl(30 8% 55%)" }}
+                  style={{ color: "var(--text-tertiary)" }}
                 >
                   You cannot change your own super_admin status.
                 </p>
@@ -653,11 +646,11 @@ export function PermissionManager({
                 isTargetSuperAdmin
                   ? {
                       borderColor: "hsl(42 95% 55% / 0.4)",
-                      color: "hsl(42 95% 55%)",
+                      color: "var(--ink)",
                     }
                   : {
-                      background: "hsl(42 95% 55%)",
-                      color: "#0D0B09",
+                      background: "var(--ink)",
+                      color: "var(--ink)",
                       fontWeight: 700,
                     }
               }
@@ -676,9 +669,8 @@ export function PermissionManager({
       {isSuperAdmin && (
         <div
           style={{
-            background: "hsl(22 10% 8%)",
-            border: "1px solid hsl(22 8% 14%)",
-            borderRadius: "12px",
+            background: "#FFFFFF",
+            border: "1px solid var(--rule)",
             padding: "1.25rem 1.5rem",
           }}
         >
@@ -686,7 +678,7 @@ export function PermissionManager({
             <div className="flex-1">
               <Label
                 htmlFor="job-title"
-                style={{ fontSize: "9px", letterSpacing: "0.2em", color: "hsl(30 8% 42%)", textTransform: "uppercase" }}
+                style={{ fontSize: "9px", letterSpacing: "0.2em", color: "var(--text-tertiary)", textTransform: "uppercase" }}
               >
                 Job Title
               </Label>
@@ -708,9 +700,8 @@ export function PermissionManager({
                     fontWeight: 700,
                     textTransform: "uppercase",
                     padding: "3px 8px",
-                    borderRadius: "4px",
-                    background: "hsl(42 80% 18%)",
-                    color: "hsl(42 95% 55%)",
+                    background: "var(--yellow-dim)",
+                    color: "var(--ink)",
                   }}
                 >
                   Pending Approval
@@ -724,9 +715,8 @@ export function PermissionManager({
                     fontWeight: 700,
                     textTransform: "uppercase",
                     padding: "3px 8px",
-                    borderRadius: "4px",
-                    background: "hsl(142 60% 20%)",
-                    color: "hsl(142 60% 55%)",
+                    background: "transparent",
+                    color: "var(--green-text)",
                   }}
                 >
                   Active
@@ -736,8 +726,8 @@ export function PermissionManager({
                 onClick={handleSave}
                 disabled={saving || isPending}
                 style={{
-                  background: "hsl(42 95% 55%)",
-                  color: "#0D0B09",
+                  background: "var(--ink)",
+                  color: "var(--ink)",
                   fontWeight: 700,
                 }}
               >
@@ -757,9 +747,8 @@ export function PermissionManager({
         <div
           className="flex items-start justify-between gap-4"
           style={{
-            background: "hsl(22 10% 8%)",
-            border: "1px solid hsl(22 8% 14%)",
-            borderRadius: "12px",
+            background: "#FFFFFF",
+            border: "1px solid var(--rule)",
             padding: "1.25rem 1.5rem",
           }}
         >
@@ -769,13 +758,13 @@ export function PermissionManager({
                 fontSize: "9px",
                 letterSpacing: "0.2em",
                 fontWeight: 700,
-                color: "hsl(42 95% 55%)",
+                color: "var(--ink)",
                 textTransform: "uppercase",
               }}
             >
               Schools Manager View
             </p>
-            <p style={{ fontSize: "13px", color: "#F0EBE3", marginTop: "4px" }}>
+            <p style={{ fontSize: "13px", color: "var(--text-primary)", marginTop: "4px" }}>
               You can flag this user as available to be assigned as a point of
               contact for programs you manage.
             </p>
@@ -783,7 +772,7 @@ export function PermissionManager({
           <Button
             onClick={handleSave}
             disabled={saving || isPending}
-            style={{ background: "hsl(42 95% 55%)", color: "#0D0B09", fontWeight: 700 }}
+            style={{ background: "var(--ink)", color: "var(--ink)", fontWeight: 700 }}
           >
             {saving ? "Saving…" : "Save Changes"}
           </Button>
@@ -797,7 +786,7 @@ export function PermissionManager({
             fontSize: "9px",
             letterSpacing: "0.3em",
             fontWeight: 700,
-            color: "hsl(42 95% 55%)",
+            color: "var(--ink)",
             textTransform: "uppercase",
           }}
         >

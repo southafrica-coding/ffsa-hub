@@ -246,7 +246,7 @@ function Row({
   onRemove: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-2 rounded-md border bg-muted/30 px-3 py-2">
+    <div className="flex items-center justify-between gap-2 border bg-muted/30 px-3 py-2">
       <div className="flex items-center gap-2 min-w-0">
         {isPrimary && (
           <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400 shrink-0" />
@@ -259,7 +259,7 @@ function Row({
             </p>
           )}
         </div>
-        <span className="text-[10px] uppercase tracking-wide text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+        <span className="text-[10px] uppercase tracking-wide text-muted-foreground bg-muted px-1.5 py-0.5 ">
           {label}
         </span>
       </div>
@@ -314,15 +314,15 @@ function AddRow({
   onSubmit: () => void;
 }) {
   return (
-    <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
+    <div className=" border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
       <div className="flex gap-2">
         {kind === "phone" ? (
           <PhoneInputNative
             value={value}
             onChange={onChange}
             wrapperClassName="flex gap-2 flex-1"
-            inputClassName="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
-            selectClassName="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
+            inputClassName="flex h-9 w-full  border border-input bg-transparent px-3 py-1 text-sm"
+            selectClassName="h-9  border border-input bg-transparent px-2 text-sm"
           />
         ) : (
           <Input
@@ -339,7 +339,7 @@ function AddRow({
           value={label}
           onChange={(e) => onLabelChange(e.target.value)}
           disabled={busy}
-          className="border border-input bg-background text-foreground text-sm rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-ring"
+          className="border border-input bg-background text-foreground text-sm px-2 py-1 focus:outline-none focus:ring-2 focus:ring-ring"
         >
           <option value="personal">personal</option>
           <option value="work">work</option>

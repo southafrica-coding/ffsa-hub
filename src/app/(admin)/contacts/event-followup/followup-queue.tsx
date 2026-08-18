@@ -112,13 +112,13 @@ export function FollowupQueue({
 
       {groupedByEvent.length === 0 ? (
         <div
-          className="rounded-xl"
+          className=""
           style={{
-            background: "hsl(22 10% 8%)",
-            border: "1px solid hsl(22 8% 14%)",
+            background: "#FFFFFF",
+            border: "1px solid var(--rule)",
             textAlign: "center",
             padding: "3rem 1rem",
-            color: "hsl(30 8% 45%)",
+            color: "var(--text-tertiary)",
             fontSize: "13px",
           }}
         >
@@ -154,7 +154,7 @@ const th: React.CSSProperties = {
   fontSize: "10px",
   letterSpacing: "0.15em",
   fontWeight: 700,
-  color: "hsl(30 8% 42%)",
+  color: "var(--text-tertiary)",
   textTransform: "uppercase",
   padding: "12px 16px",
 };
@@ -174,10 +174,10 @@ function personLabel(p: {
 function AgeBadge({ days }: { days: number }) {
   const palette =
     days >= 7
-      ? { bg: "hsl(0 60% 18%)", fg: "hsl(0 80% 65%)" }
+      ? { bg: "transparent", fg: "hsl(var(--destructive))" }
       : days >= 3
-      ? { bg: "hsl(42 80% 18%)", fg: "hsl(42 95% 60%)" }
-      : { bg: "hsl(22 10% 14%)", fg: "hsl(30 8% 60%)" };
+      ? { bg: "var(--yellow-dim)", fg: "var(--ink)" }
+      : { bg: "var(--surface-2)", fg: "var(--text-secondary)" };
   return (
     <span
       style={{
@@ -186,7 +186,6 @@ function AgeBadge({ days }: { days: number }) {
         fontWeight: 700,
         letterSpacing: "0.05em",
         padding: "3px 8px",
-        borderRadius: "4px",
         background: palette.bg,
         color: palette.fg,
       }}
@@ -238,7 +237,7 @@ function FilterBar({
         label="Mine"
         count={mineCount}
       />
-      <div style={{ width: "1px", height: "20px", background: "hsl(22 8% 18%)", margin: "0 4px" }} />
+      <div style={{ width: "1px", height: "20px", background: "var(--rule-strong)", margin: "0 4px" }} />
       <Chip
         active={agingFilter === "attention"}
         onClick={() =>
@@ -249,17 +248,16 @@ function FilterBar({
       />
       {events.length > 1 && (
         <>
-          <div style={{ width: "1px", height: "20px", background: "hsl(22 8% 18%)", margin: "0 4px" }} />
+          <div style={{ width: "1px", height: "20px", background: "var(--rule-strong)", margin: "0 4px" }} />
           <select
             value={eventFilter}
             onChange={(e) => onEventChange(e.target.value)}
             style={{
               fontSize: "12px",
               padding: "6px 10px",
-              borderRadius: "999px",
-              border: "1px solid hsl(22 8% 18%)",
-              background: "hsl(22 10% 10%)",
-              color: "#F0EBE3",
+              border: "1px solid var(--rule-strong)",
+              background: "var(--surface-2)",
+              color: "var(--text-primary)",
             }}
           >
             <option value="all">All events</option>
@@ -306,24 +304,24 @@ function EventGroup({
   }
   return (
     <section
-      className="overflow-hidden rounded-xl"
+      className="overflow-hidden "
       style={{
-        background: "hsl(22 10% 8%)",
-        border: "1px solid hsl(22 8% 14%)",
+        background: "#FFFFFF",
+        border: "1px solid var(--rule)",
       }}
     >
       <header
         className="flex items-center justify-between gap-4"
         style={{
           padding: "14px 18px",
-          borderBottom: "1px solid hsl(22 8% 14%)",
-          background: "hsl(22 12% 6%)",
+          borderBottom: "1px solid var(--rule)",
+          background: "#FFFFFF",
         }}
       >
         <div className="flex items-baseline gap-3">
           <h2
             style={{
-              color: "#F0EBE3",
+              color: "var(--text-primary)",
               fontSize: "15px",
               fontWeight: 700,
               letterSpacing: "0.01em",
@@ -333,7 +331,7 @@ function EventGroup({
           </h2>
           <span
             style={{
-              color: "hsl(30 8% 50%)",
+              color: "var(--text-tertiary)",
               fontSize: "11px",
               letterSpacing: "0.15em",
               textTransform: "uppercase",
@@ -349,8 +347,8 @@ function EventGroup({
         <div
           style={{
             padding: "10px 18px",
-            borderBottom: "1px solid hsl(22 8% 14%)",
-            background: "hsl(22 11% 7%)",
+            borderBottom: "1px solid var(--rule)",
+            background: "#FFFFFF",
           }}
         >
           <OutcomeDownloadButtons eventId={eventId} outcomes={outcomes} />
@@ -358,7 +356,7 @@ function EventGroup({
       )}
       <Table>
         <TableHeader>
-          <TableRow style={{ borderColor: "hsl(22 8% 14%)" }}>
+          <TableRow style={{ borderColor: "var(--rule)" }}>
             <TableHead style={th}>Person</TableHead>
             <TableHead style={th}>Outcome</TableHead>
             <TableHead style={th}>Stage</TableHead>
@@ -373,28 +371,28 @@ function EventGroup({
               onClick={() => onRowClick(r.enrollment_id)}
               style={{
                 cursor: "pointer",
-                borderColor: "hsl(22 8% 12%)",
-                background: r.is_unread ? "hsl(42 30% 8%)" : "transparent",
+                borderColor: "var(--rule)",
+                background: r.is_unread ? "var(--yellow-dim)" : "transparent",
               }}
               className="hover:bg-white/5"
             >
               <TableCell>
                 <div
                   className="flex items-center gap-2"
-                  style={{ color: "#F0EBE3", fontSize: "13px", fontWeight: 500 }}
+                  style={{ color: "var(--text-primary)", fontSize: "13px", fontWeight: 500 }}
                 >
                   {personLabel(r.contact)}
                   {r.staff_notes && (
                     <span
                       title="Has staff notes"
-                      style={{ color: "hsl(42 95% 60%)", display: "inline-flex" }}
+                      style={{ color: "var(--ink)", display: "inline-flex" }}
                     >
                       <StickyNote className="h-3 w-3" />
                     </span>
                   )}
                 </div>
                 {r.contact.email && (
-                  <div style={{ color: "hsl(30 8% 50%)", fontSize: "11px" }}>
+                  <div style={{ color: "var(--text-tertiary)", fontSize: "11px" }}>
                     {r.contact.email}
                   </div>
                 )}
@@ -419,14 +417,13 @@ function EventGroup({
                         fontSize: "10.5px",
                         fontWeight: 600,
                         padding: "2px 7px",
-                        borderRadius: "999px",
                         lineHeight: 1.35,
                         background: o.active
-                          ? "hsl(42 80% 14%)"
-                          : "hsl(22 8% 13%)",
-                        color: o.active ? "hsl(42 95% 60%)" : "hsl(30 8% 55%)",
+                          ? "var(--yellow-dim)"
+                          : "var(--rule)",
+                        color: o.active ? "var(--ink)" : "var(--text-tertiary)",
                         border: o.active
-                          ? "1px solid hsl(42 80% 22%)"
+                          ? "1px solid var(--yellow-dim)"
                           : "1px solid transparent",
                       }}
                     >
@@ -436,13 +433,13 @@ function EventGroup({
                 </div>
               </TableCell>
               <TableCell>
-                <div style={{ color: "hsl(30 8% 70%)", fontSize: "12px" }}>
+                <div style={{ color: "var(--text-secondary)", fontSize: "12px" }}>
                   {r.stage_label}
                 </div>
                 {r.total_steps > 0 && (
                   <div
                     style={{
-                      color: "hsl(30 8% 45%)",
+                      color: "var(--text-tertiary)",
                       fontSize: "10px",
                       letterSpacing: "0.05em",
                       marginTop: "2px",
@@ -457,13 +454,13 @@ function EventGroup({
               </TableCell>
               <TableCell>
                 {r.assigned_staff ? (
-                  <span style={{ color: "#F0EBE3", fontSize: "12px" }}>
+                  <span style={{ color: "var(--text-primary)", fontSize: "12px" }}>
                     {personLabel(r.assigned_staff)}
                   </span>
                 ) : (
                   <span
                     style={{
-                      color: "hsl(42 95% 55%)",
+                      color: "var(--ink)",
                       fontSize: "11px",
                       fontWeight: 600,
                       letterSpacing: "0.05em",
@@ -501,12 +498,11 @@ function Chip({
         fontWeight: 600,
         letterSpacing: "0.02em",
         padding: "6px 12px",
-        borderRadius: "999px",
         border: active
-          ? "1px solid hsl(42 95% 55%)"
-          : "1px solid hsl(22 8% 18%)",
-        background: active ? "hsl(42 95% 55% / 0.12)" : "hsl(22 10% 10%)",
-        color: active ? "hsl(42 95% 60%)" : "hsl(30 8% 70%)",
+          ? "1px solid var(--ink)"
+          : "1px solid var(--rule-strong)",
+        background: active ? "hsl(42 95% 55% / 0.12)" : "var(--surface-2)",
+        color: active ? "var(--ink)" : "var(--text-secondary)",
         cursor: "pointer",
         display: "inline-flex",
         alignItems: "center",
@@ -520,9 +516,8 @@ function Chip({
             fontSize: "10px",
             fontWeight: 700,
             padding: "1px 6px",
-            borderRadius: "999px",
-            background: active ? "hsl(42 95% 55%)" : "hsl(22 8% 18%)",
-            color: active ? "#0D0B09" : "hsl(30 8% 70%)",
+            background: active ? "var(--ink)" : "var(--rule-strong)",
+            color: active ? "var(--ink)" : "var(--text-secondary)",
             lineHeight: 1,
           }}
         >

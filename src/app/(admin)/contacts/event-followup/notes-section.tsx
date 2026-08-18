@@ -67,14 +67,14 @@ export function NotesSection({
             fontSize: "9px",
             letterSpacing: "0.25em",
             fontWeight: 700,
-            color: "hsl(42 95% 55%)",
+            color: "var(--ink)",
             textTransform: "uppercase",
           }}
         >
           Notes
         </p>
         {updatedAt && updatedBy && (
-          <span style={{ fontSize: "10px", color: "hsl(30 8% 45%)" }}>
+          <span style={{ fontSize: "10px", color: "var(--text-tertiary)" }}>
             edited by {personLabel(updatedBy)} ·{" "}
             {new Date(updatedAt).toLocaleString()}
           </span>
@@ -89,11 +89,10 @@ export function NotesSection({
         style={{
           marginTop: "8px",
           width: "100%",
-          background: "hsl(22 10% 7%)",
-          border: "1px solid hsl(22 8% 14%)",
-          borderRadius: "8px",
+          background: "#FFFFFF",
+          border: "1px solid var(--rule)",
           padding: "10px 12px",
-          color: "#F0EBE3",
+          color: "var(--text-primary)",
           fontSize: "13px",
           lineHeight: 1.5,
           fontFamily: "inherit",
@@ -103,7 +102,7 @@ export function NotesSection({
       />
 
       <div className="mt-2 flex items-center justify-between gap-2">
-        <span style={{ fontSize: "11px", color: "hsl(0 75% 65%)" }}>
+        <span style={{ fontSize: "11px", color: "hsl(var(--destructive))" }}>
           {error ?? ""}
         </span>
         <Button
@@ -111,8 +110,8 @@ export function NotesSection({
           disabled={!dirty || saving}
           size="sm"
           style={{
-            background: dirty ? "hsl(42 95% 55%)" : "hsl(22 10% 12%)",
-            color: dirty ? "#0D0B09" : "hsl(30 8% 45%)",
+            background: dirty ? "var(--ink)" : "var(--surface-2)",
+            color: dirty ? "var(--ink)" : "var(--text-tertiary)",
             fontWeight: 700,
             fontSize: "12px",
             cursor: dirty && !saving ? "pointer" : "default",

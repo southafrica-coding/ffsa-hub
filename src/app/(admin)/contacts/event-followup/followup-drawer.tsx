@@ -139,36 +139,36 @@ export function FollowupDrawer({
         side="right"
         className="overflow-y-auto"
         style={{
-          background: "#0D0B09",
-          borderColor: "hsl(22 8% 14%)",
+          background: "var(--ink)",
+          borderColor: "var(--rule)",
           width: "100%",
           maxWidth: "560px",
         }}
       >
         <SheetHeader>
-          <SheetTitle style={{ color: "#F0EBE3", fontSize: "18px" }}>
+          <SheetTitle style={{ color: "var(--text-primary)", fontSize: "18px" }}>
             {personLabel(row.contact)}
           </SheetTitle>
         </SheetHeader>
 
         <div className="mt-2 space-y-1">
           {row.contact.email && (
-            <div style={{ color: "hsl(30 8% 60%)", fontSize: "13px" }}>
+            <div style={{ color: "var(--text-secondary)", fontSize: "13px" }}>
               {row.contact.email}
             </div>
           )}
           {row.contact.phone && (
-            <div style={{ color: "hsl(30 8% 60%)", fontSize: "13px" }}>
+            <div style={{ color: "var(--text-secondary)", fontSize: "13px" }}>
               {row.contact.phone}
             </div>
           )}
         </div>
 
         <div
-          className="mt-5 rounded-lg p-4 space-y-3"
+          className="mt-5 p-4 space-y-3"
           style={{
-            background: "hsl(22 10% 7%)",
-            border: "1px solid hsl(22 8% 14%)",
+            background: "#FFFFFF",
+            border: "1px solid var(--rule)",
           }}
         >
           <KV label="Event" value={row.event.title} />
@@ -208,7 +208,7 @@ export function FollowupDrawer({
             <p
               style={{
                 fontSize: "11px",
-                color: "hsl(30 8% 50%)",
+                color: "var(--text-tertiary)",
                 fontStyle: "italic",
               }}
             >
@@ -231,10 +231,10 @@ export function FollowupDrawer({
         <div className="mt-6">
           <Eyebrow label="What they signed up for" />
           <div
-            className="mt-2 rounded-lg p-4"
+            className="mt-2 p-4"
             style={{
-              background: "hsl(22 10% 7%)",
-              border: "1px solid hsl(22 8% 14%)",
+              background: "#FFFFFF",
+              border: "1px solid var(--rule)",
             }}
           >
             {loading ? (
@@ -245,7 +245,7 @@ export function FollowupDrawer({
                 labels={detail.form_submission.field_labels ?? {}}
               />
             ) : (
-              <p style={{ color: "hsl(30 8% 50%)", fontSize: "12px" }}>
+              <p style={{ color: "var(--text-tertiary)", fontSize: "12px" }}>
                 No form submission linked.
               </p>
             )}
@@ -285,8 +285,8 @@ export function FollowupDrawer({
             onClick={onClose}
             disabled={busy}
             style={{
-              borderColor: "hsl(22 8% 18%)",
-              color: "hsl(30 8% 70%)",
+              borderColor: "var(--rule-strong)",
+              color: "var(--text-secondary)",
             }}
           >
             Close
@@ -295,8 +295,8 @@ export function FollowupDrawer({
             onClick={handleMarkFinished}
             disabled={busy}
             style={{
-              background: "hsl(42 95% 55%)",
-              color: "#0D0B09",
+              background: "var(--ink)",
+              color: "var(--ink)",
               fontWeight: 700,
             }}
           >
@@ -328,14 +328,14 @@ function KV({ label, value }: { label: string; value: string }) {
           fontSize: "10px",
           letterSpacing: "0.15em",
           fontWeight: 700,
-          color: "hsl(30 8% 42%)",
+          color: "var(--text-tertiary)",
           textTransform: "uppercase",
           minWidth: "80px",
         }}
       >
         {label}
       </span>
-      <span style={{ fontSize: "13px", color: "#F0EBE3", textAlign: "right" }}>
+      <span style={{ fontSize: "13px", color: "var(--text-primary)", textAlign: "right" }}>
         {value}
       </span>
     </div>
@@ -349,7 +349,7 @@ function Eyebrow({ label }: { label: string }) {
         fontSize: "9px",
         letterSpacing: "0.25em",
         fontWeight: 700,
-        color: "hsl(42 95% 55%)",
+        color: "var(--ink)",
         textTransform: "uppercase",
       }}
     >
@@ -370,7 +370,7 @@ function FormAnswers({
   );
   if (entries.length === 0) {
     return (
-      <p style={{ color: "hsl(30 8% 50%)", fontSize: "12px" }}>
+      <p style={{ color: "var(--text-tertiary)", fontSize: "12px" }}>
         Empty submission.
       </p>
     );
@@ -384,13 +384,13 @@ function FormAnswers({
               fontSize: "10px",
               letterSpacing: "0.15em",
               fontWeight: 700,
-              color: "hsl(30 8% 42%)",
+              color: "var(--text-tertiary)",
               textTransform: "uppercase",
             }}
           >
             {labels[key] ?? key.replaceAll("_", " ")}
           </span>
-          <span style={{ fontSize: "13px", color: "#F0EBE3" }}>
+          <span style={{ fontSize: "13px", color: "var(--text-primary)" }}>
             {formatValue(value)}
           </span>
         </div>
@@ -417,7 +417,7 @@ function WorkflowTrace({ detail }: { detail: FollowupDetail }) {
 
   if (detail.workflow_steps.length === 0) {
     return (
-      <p style={{ color: "hsl(30 8% 50%)", fontSize: "12px" }}>
+      <p style={{ color: "var(--text-tertiary)", fontSize: "12px" }}>
         This workflow has no steps configured.
       </p>
     );
@@ -433,18 +433,18 @@ function WorkflowTrace({ detail }: { detail: FollowupDetail }) {
         const current = !run && idx === detail.current_step;
 
         const icon = done ? (
-          <Check className="h-3.5 w-3.5" style={{ color: "hsl(142 60% 55%)" }} />
+          <Check className="h-3.5 w-3.5" style={{ color: "var(--green-text)" }} />
         ) : failed ? (
-          <X className="h-3.5 w-3.5" style={{ color: "hsl(0 75% 60%)" }} />
+          <X className="h-3.5 w-3.5" style={{ color: "hsl(var(--destructive))" }} />
         ) : current ? (
           <Clock
             className="h-3.5 w-3.5"
-            style={{ color: "hsl(42 95% 55%)" }}
+            style={{ color: "var(--ink)" }}
           />
         ) : (
           <CircleDashed
             className="h-3.5 w-3.5"
-            style={{ color: "hsl(30 8% 35%)" }}
+            style={{ color: "var(--text-tertiary)" }}
           />
         );
 
@@ -460,9 +460,9 @@ function WorkflowTrace({ detail }: { detail: FollowupDetail }) {
         return (
           <li
             key={step.id}
-            className="flex items-start gap-3 rounded p-2"
+            className="flex items-start gap-3 p-2"
             style={{
-              background: current ? "hsl(42 30% 8%)" : "transparent",
+              background: current ? "var(--yellow-dim)" : "transparent",
               border: current
                 ? "1px solid hsl(42 95% 55% / 0.3)"
                 : "1px solid transparent",
@@ -473,7 +473,7 @@ function WorkflowTrace({ detail }: { detail: FollowupDetail }) {
               <div
                 style={{
                   fontSize: "12px",
-                  color: pending ? "hsl(30 8% 50%)" : "#F0EBE3",
+                  color: pending ? "var(--text-tertiary)" : "var(--text-primary)",
                 }}
               >
                 {stepIcon}
@@ -483,7 +483,7 @@ function WorkflowTrace({ detail }: { detail: FollowupDetail }) {
                 <div
                   style={{
                     fontSize: "10px",
-                    color: "hsl(30 8% 45%)",
+                    color: "var(--text-tertiary)",
                     marginTop: "2px",
                   }}
                 >
@@ -521,24 +521,21 @@ function Skeleton() {
       <div
         style={{
           height: "12px",
-          background: "hsl(22 10% 12%)",
-          borderRadius: "4px",
+          background: "var(--surface-2)",
           width: "60%",
         }}
       />
       <div
         style={{
           height: "12px",
-          background: "hsl(22 10% 12%)",
-          borderRadius: "4px",
+          background: "var(--surface-2)",
           width: "80%",
         }}
       />
       <div
         style={{
           height: "12px",
-          background: "hsl(22 10% 12%)",
-          borderRadius: "4px",
+          background: "var(--surface-2)",
           width: "50%",
         }}
       />

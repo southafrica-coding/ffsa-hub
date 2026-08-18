@@ -245,7 +245,7 @@ export default async function UserProfilePage({
       </section>
 
       {isAdmin && (
-        <section className="rounded-xl border p-4 space-y-3">
+        <section className=" border p-4 space-y-3">
           <div>
             <p className="page-eyebrow">HEALTH INSURANCE</p>
             <h2 className="text-xl font-semibold">Policy history</h2>
@@ -291,7 +291,7 @@ export default async function UserProfilePage({
       </section>
 
       {isAdmin && (
-        <section className="rounded-xl border p-4 space-y-3">
+        <section className=" border p-4 space-y-3">
           <div>
             <p className="page-eyebrow">LEGAL</p>
             <h2 className="text-xl font-semibold">Agreements signed</h2>
@@ -357,7 +357,7 @@ function ProfileCompletenessCard({
   const insurance = lifecycle.insurance;
 
   return (
-    <section className="rounded-xl border p-4 space-y-3">
+    <section className=" border p-4 space-y-3">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <p className="page-eyebrow">PROFILE COMPLETENESS</p>
@@ -424,7 +424,7 @@ function InfoCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl border p-4 space-y-3">
+    <div className=" border p-4 space-y-3">
       <h3 className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
         {title}
       </h3>

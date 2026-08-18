@@ -14,7 +14,6 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-const GOLD = "hsl(42 95% 55%)";
 
 type DuplicateContact = {
   id: string;
@@ -46,13 +45,10 @@ export function DuplicatesList({ clusters }: { clusters: Cluster[] }) {
 
   if (clusters.length === 0 || visible.length === 0) {
     return (
-      <div className="rounded-lg border bg-card px-5 py-10 text-center">
-        <ShieldCheck
-          className="h-7 w-7 mx-auto mb-3"
-          style={{ color: GOLD }}
-        />
-        <p className="text-sm font-medium">No possible duplicates</p>
-        <p className="text-xs text-muted-foreground mt-1">
+      <div className="border border-ink bg-white px-5 py-10 text-center">
+        <ShieldCheck className="mx-auto mb-3 h-7 w-7 text-[color:var(--text-tertiary)]" />
+        <p className="mono-label">No possible duplicates</p>
+        <p className="mt-2 text-xs text-[color:var(--text-secondary)]">
           {clusters.length === 0
             ? "Every contact looks distinct by name and phone."
             : "You've reviewed all of them. Nice work."}
@@ -164,24 +160,18 @@ function ClusterCard({
               type="button"
               onClick={() => !busy && setSurvivorId(c.id)}
               disabled={busy}
-              className="text-left rounded-md border p-3 transition-colors disabled:opacity-60"
-              style={{
-                borderColor: selected ? GOLD : undefined,
-                background: selected ? "hsl(42 80% 12%)" : undefined,
-              }}
+              className={`border p-3 text-left transition-colors disabled:opacity-60 ${
+                selected ? "border-ink bg-yellow-dim" : "border-rule-strong bg-white"
+              }`}
             >
               <div className="flex items-center justify-between gap-2 mb-1.5">
                 <div className="flex items-center gap-2 min-w-0">
                   <span
-                    className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border"
-                    style={{
-                      borderColor: selected ? GOLD : "hsl(30 8% 40%)",
-                      background: selected ? GOLD : "transparent",
-                    }}
+                    className={`inline-flex h-4 w-4 shrink-0 items-center justify-center border ${
+                      selected ? "border-ink bg-ink" : "border-rule-strong"
+                    }`}
                   >
-                    {selected && (
-                      <Check className="h-3 w-3" style={{ color: "#0D0B09" }} />
-                    )}
+                    {selected && <Check className="h-3 w-3 text-yellow" />}
                   </span>
                   <span className="text-sm font-medium truncate">
                     {displayName(c)}
@@ -189,15 +179,12 @@ function ClusterCard({
                 </div>
                 {selected ? (
                   <span
-                    className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded"
-                    style={{ background: GOLD, color: "#0D0B09" }}
+                    className="bg-ink px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.12em] text-yellow"
                   >
                     Keep
                   </span>
                 ) : (
-                  <span className="text-[10px] text-muted-foreground">
-                    will merge
-                  </span>
+                  <span className="mono-label">will merge</span>
                 )}
               </div>
 
@@ -300,8 +287,7 @@ function ClusterCard({
 function SignalChip({ icon, label }: { icon: ReactNode; label: string }) {
   return (
     <span
-      className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full"
-      style={{ background: "hsl(42 80% 14%)", color: GOLD }}
+      className="inline-flex items-center gap-1 border border-rule-strong px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.1em] text-[#55524A]"
     >
       {icon}
       {label}

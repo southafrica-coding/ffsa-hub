@@ -106,7 +106,7 @@ export function InviteUserForm() {
           </div>
 
           {success && (
-            <div className="flex items-center gap-2 rounded-md bg-green-50 border border-green-200 p-3 text-sm text-green-800">
+            <div className="flex items-center gap-2 bg-green-50 border border-green-200 p-3 text-sm text-green-800">
               <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
               {success}
             </div>

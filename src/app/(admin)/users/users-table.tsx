@@ -123,32 +123,32 @@ const STAGE_STYLES: Record<
     className: "",
     style: {
       borderColor: "hsl(210 90% 60% / 0.4)",
-      color: "hsl(210 90% 70%)",
-      background: "hsl(210 80% 18%)",
+      color: "var(--electric)",
+      background: "transparent",
     },
   },
   profile_incomplete: {
     className: "",
     style: {
       borderColor: "hsl(28 95% 55% / 0.4)",
-      color: "hsl(28 95% 65%)",
-      background: "hsl(28 80% 16%)",
+      color: "var(--amber)",
+      background: "var(--yellow-dim)",
     },
   },
   pending_approval: {
     className: "",
     style: {
       borderColor: "hsl(42 95% 55% / 0.4)",
-      color: "hsl(42 95% 60%)",
-      background: "hsl(42 80% 18%)",
+      color: "var(--ink)",
+      background: "var(--yellow-dim)",
     },
   },
   inactive: {
     className: "",
     style: {
       borderColor: "hsl(0 0% 50% / 0.3)",
-      color: "hsl(0 0% 70%)",
-      background: "hsl(0 0% 14%)",
+      color: "var(--text-tertiary)",
+      background: "var(--ink)",
     },
   },
 };
@@ -169,7 +169,7 @@ function FilterChip({
       onClick={onClick}
       aria-pressed={active}
       className={
-        "rounded-full border px-3 py-1 text-xs font-medium transition-colors " +
+        " border px-3 py-1 text-xs font-medium transition-colors " +
         (active
           ? "border-primary bg-primary text-primary-foreground"
           : "border-input bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground")
@@ -425,7 +425,7 @@ export function UsersTable({
   }
 
   return (
-    <div className="rounded-lg border bg-card">
+    <div className=" border bg-card">
       <div className="p-3 border-b space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[220px] max-w-sm">
@@ -440,7 +440,7 @@ export function UsersTable({
 
           {/* Department facet */}
           <select
-            className="h-9 rounded-md border border-input bg-transparent px-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            className="h-9 border border-input bg-transparent px-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             value={departmentFilter}
             onChange={(e) => setDepartmentFilter(e.target.value)}
             aria-label="Filter by department"
@@ -563,7 +563,7 @@ export function UsersTable({
                   <TableCell onClick={(e) => e.stopPropagation()}>
                     {isSuperAdmin ? (
                       <select
-                        className="h-8 rounded-md border border-input bg-transparent px-2 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+                        className="h-8 border border-input bg-transparent px-2 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
                         value={currentMembership(user)}
                         disabled={isBusy}
                         onChange={(e) => handleSetMembership(user.id, e.target.value)}
@@ -599,8 +599,8 @@ export function UsersTable({
                           variant="outline"
                           style={{
                             borderColor: "hsl(0 84% 60% / 0.4)",
-                            color: "hsl(0 84% 72%)",
-                            background: "hsl(0 70% 16%)",
+                            color: "hsl(var(--destructive))",
+                            background: "transparent",
                           }}
                           title={`Health insurance expired ${lifecycle.insurance.expiryDate ?? ""}`}
                         >
@@ -612,8 +612,8 @@ export function UsersTable({
                           variant="outline"
                           style={{
                             borderColor: "hsl(28 95% 55% / 0.4)",
-                            color: "hsl(28 95% 65%)",
-                            background: "hsl(28 80% 16%)",
+                            color: "var(--amber)",
+                            background: "var(--yellow-dim)",
                           }}
                           title={`Health insurance expires ${lifecycle.insurance.expiryDate ?? ""}`}
                         >

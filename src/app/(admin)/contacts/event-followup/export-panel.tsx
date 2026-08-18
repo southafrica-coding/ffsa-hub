@@ -168,7 +168,7 @@ export function ExportPanel({
               <button type="button" onClick={() => setAll(true)} style={linkBtn}>
                 All
               </button>
-              <span style={{ color: "hsl(30 8% 35%)" }}> · </span>
+              <span style={{ color: "var(--text-tertiary)" }}> · </span>
               <button type="button" onClick={() => setAll(false)} style={linkBtn}>
                 None
               </button>
@@ -185,7 +185,7 @@ export function ExportPanel({
                       type="checkbox"
                       checked={selected.has(key)}
                       onChange={() => toggle(key)}
-                      style={{ accentColor: "hsl(42 95% 55%)" }}
+                      style={{ accentColor: "var(--ink)" }}
                     />
                     <span>{EXPORT_COLUMN_LABELS[key]}</span>
                   </label>
@@ -204,11 +204,11 @@ export function ExportPanel({
               justifyContent: "center",
               marginTop: "10px",
               background:
-                selected.size === 0 ? "hsl(22 10% 10%)" : "hsl(42 95% 55%)",
-              color: selected.size === 0 ? "hsl(30 8% 40%)" : "#0D0B09",
+                selected.size === 0 ? "var(--surface-2)" : "var(--ink)",
+              color: selected.size === 0 ? "var(--text-tertiary)" : "var(--ink)",
               border:
                 "1px solid " +
-                (selected.size === 0 ? "hsl(22 8% 18%)" : "hsl(42 95% 55%)"),
+                (selected.size === 0 ? "var(--rule-strong)" : "var(--ink)"),
               cursor: selected.size === 0 ? "not-allowed" : "pointer",
             }}
           >
@@ -219,7 +219,7 @@ export function ExportPanel({
             <p
               style={{
                 fontSize: "11px",
-                color: "hsl(0 60% 62%)",
+                color: "hsl(var(--destructive))",
                 marginTop: "6px",
                 textAlign: "center",
               }}
@@ -269,7 +269,7 @@ const perOutcomeLabel: CSSProperties = {
   letterSpacing: "0.12em",
   textTransform: "uppercase",
   fontWeight: 700,
-  color: "hsl(30 8% 45%)",
+  color: "var(--text-tertiary)",
   marginRight: "2px",
 };
 const outcomeChip: CSSProperties = {
@@ -279,10 +279,9 @@ const outcomeChip: CSSProperties = {
   fontSize: "11px",
   fontWeight: 600,
   padding: "4px 9px",
-  borderRadius: "999px",
-  border: "1px solid hsl(22 8% 18%)",
-  background: "hsl(22 10% 10%)",
-  color: "hsl(30 8% 72%)",
+  border: "1px solid var(--rule-strong)",
+  background: "var(--surface-2)",
+  color: "var(--text-secondary)",
   cursor: "pointer",
 };
 
@@ -293,10 +292,9 @@ const pill: CSSProperties = {
   fontSize: "12px",
   fontWeight: 600,
   padding: "6px 12px",
-  borderRadius: "999px",
-  border: "1px solid hsl(22 8% 18%)",
-  background: "hsl(22 10% 10%)",
-  color: "hsl(30 8% 70%)",
+  border: "1px solid var(--rule-strong)",
+  background: "var(--surface-2)",
+  color: "var(--text-secondary)",
   cursor: "pointer",
 };
 const panel: CSSProperties = {
@@ -305,9 +303,8 @@ const panel: CSSProperties = {
   top: "calc(100% + 6px)",
   zIndex: 50,
   width: "280px",
-  background: "hsl(22 12% 7%)",
-  border: "1px solid hsl(22 8% 16%)",
-  borderRadius: "12px",
+  background: "#FFFFFF",
+  border: "1px solid var(--rule)",
   boxShadow: "0 16px 40px rgba(0,0,0,0.5)",
   padding: "14px",
 };
@@ -316,24 +313,23 @@ const labelStyle: CSSProperties = {
   letterSpacing: "0.12em",
   textTransform: "uppercase",
   fontWeight: 700,
-  color: "hsl(30 8% 55%)",
+  color: "var(--text-tertiary)",
 };
 const selectStyle: CSSProperties = {
   width: "100%",
   marginTop: "5px",
   fontSize: "12px",
   padding: "7px 9px",
-  borderRadius: "8px",
-  border: "1px solid hsl(22 8% 18%)",
-  background: "hsl(22 10% 10%)",
-  color: "#F0EBE3",
+  border: "1px solid var(--rule-strong)",
+  background: "var(--surface-2)",
+  color: "var(--text-primary)",
 };
 const groupStyle: CSSProperties = {
   fontSize: "10px",
   letterSpacing: "0.1em",
   textTransform: "uppercase",
   fontWeight: 700,
-  color: "hsl(30 8% 42%)",
+  color: "var(--text-tertiary)",
   margin: "0 0 3px",
 };
 const checkRow: CSSProperties = {
@@ -347,7 +343,7 @@ const checkRow: CSSProperties = {
 };
 const linkBtn: CSSProperties = {
   fontSize: "11px",
-  color: "hsl(42 95% 60%)",
+  color: "var(--ink)",
   background: "none",
   border: "none",
   cursor: "pointer",
