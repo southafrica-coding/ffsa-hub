@@ -32,8 +32,8 @@ export default async function VenuesAdminPage() {
 
   return (
     <div className="ffsa-screen">
-      <Masthead context="Venue scheduling" title="Venues & ministries" />
-      <div className="max-w-3xl px-8 py-7">
+      <Masthead context="Venue scheduling" title="Spaces & ministries" />
+      <div className="max-w-5xl px-5 py-6 md:px-8 md:py-7">
         <VenueAdmin
           venues={(venuesRes.data ?? []) as Venue[]}
           ministries={(ministriesRes.data ?? []) as Ministry[]}

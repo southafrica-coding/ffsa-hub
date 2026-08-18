@@ -67,7 +67,7 @@ Everything below is on `main` and deployed (PR #212, commit `aa53496`).
 | shadcn override layer (`data-slot` attributes) | ✅ fixed — the overrides were entirely inert before |
 | Dashboard (2a), Events (3a), Training (3b), Finance (5a), Communications (5b), Login (4b) | ✅ recomposed |
 | Bookings (3c) — page chrome | ✅ 15 routes |
-| Bookings (3c) — **the timeline itself, rebuilt** | ✅ see the 3c section below |
+| Bookings (3c) — **the timeline itself, rebuilt** | ✅ now the Spaces day view — see the 3c section below |
 | Event capacity, campaign open/click, finance ledger, bookings day strip | ✅ built (migrations 174, 165) |
 | Prayer room data model + wall (8a) | ⚠️ migrations 175, 168, 169, 170 applied — **171 is NOT** (see below) |
 | Prayer room UI — masthead, 9a, 10a, 10b, 11a, 12a, 12b | ✅ merged 2026-08-18 (PR #226, `87cae22`) — no migration |
@@ -76,183 +76,113 @@ Everything below is on `main` and deployed (PR #212, commit `aa53496`).
 
 ---
 
-## 3c — bookings timeline, rebuilt (session of 2026-08-18)
+## 3c — bookings timeline, rebuilt (2026-08-18), then split (same day)
 
-The calendar was the "restyled, not rebuilt" case this file called out. `/bookings`
-was a hub of two description cards with the day timeline as a read-only strip
-underneath. **The timeline is the screen now.**
+The calendar was the "restyled, not rebuilt" case this file called out. It has
+been rebuilt to 3c's structure — 230px resource column, black hour header, hour
+columns as gridlines, blocks positioned by percentage, requests waiting on
+approval underneath — reusing `blockWindow` / `packLanes` / `computeHourRange`
+from `src/lib/bookings/timegrid.ts`.
 
-Paths scanned by every acceptance grep below: `src/app/(admin)/bookings` — 46
-files, the whole module. Numbers quoted from any narrower sweep are worthless.
+Paths scanned by every acceptance grep below: `src/app/(admin)/bookings` — the
+whole module. Numbers quoted from any narrower sweep are worthless.
 
-| Frame element | State |
+### 3c's unified grid was reversed by product decision
+
+**Read this before "restoring" the frame.** 3c draws spaces AND vehicles on one
+timeline so cross-service clashes are obvious. That shipped (PR #223) and was
+then deliberately undone (PR #224) on Jack's instruction:
+
+> "the spaces needs to be its own visual thing and the vehicles doesn't need to
+> be a visual thing it just needs to be a portal for the vehicle rental process"
+
+The reasoning is that the two are not the same kind of thing. A space is a
+timetable — hours, clashes, a day you scan. A vehicle is a rental process —
+request, approve, collect, inspect, return. Forcing the second into lanes made
+it look like a timetable it never was, and every vehicle block was all-day
+anyway (the schema is date-only), so the lanes carried no time information.
+
+What this costs, stated so nobody rediscovers it as a bug: there is no longer
+any screen where a space clash and a vehicle clash are visible together. Vehicle
+double-booking is caught by `getOverlappingAssignments` at assignment time, not
+visually.
+
+### Where things live now
+
+| Route | Shape |
 |---|---|
-| 230px resource column against a black hour header | ✅ |
-| Hour columns as gridlines; blocks positioned by percentage | ✅ |
-| Spaces AND vehicles on ONE timeline | ✅ |
-| Masthead: eyebrow (date · N resources · N waiting), day nav, book action | ✅ |
-| SHOWING — all / spaces only / vehicles only | ⚠️ built, but in the control strip, not the module panel (see below) |
-| "Requests waiting on approval" underneath, with APPROVE | ✅ |
+| `/bookings` | A hub: a list of what there is to book, gated per module. No visualisation. |
+| `/bookings/spaces` | The 3c day timeline, venues only, and **the landing view** — month / week / list sit behind the switcher. |
+| `/bookings/vehicles` | The rental portal, unchanged. Never a timeline. |
 
-Files: `page.tsx` (data + gating only), `bookings-day.tsx` (the frame),
-`day-timeline.tsx` (the grid), `approval-queue.tsx` (the strip).
-`blockWindow` / `packLanes` / `computeHourRange` are reused from
-`src/lib/bookings/timegrid.ts` — no second geometry vocabulary was invented.
+Files: `spaces/day-timeline.tsx` (the grid), `spaces/day-board.tsx` (lanes +
+approvals for a day), `spaces/approval-queue.tsx` (the strip). `spaces/day-view.tsx`
+is deleted — the timeline replaced it.
 
-### The separation that matters
+Because the day view is now the landing view, it takes **pending as well as
+approved** bookings (month / week / list still take approved only). A pending
+request clashing with a confirmed one is exactly what that screen is for. The
+day view carries its own per-day approvals strip; the module-wide `NeedsYou`
+band is suppressed there and kept on the other views, so the same thing is not
+said twice — the strip's meta says "on this day" to keep the two scopes distinct.
 
-Spaces and vehicles are **separate services with separate permission modules**,
-and the rebuild keeps them that way:
+### The approval rule, now visible
 
-- `page.tsx` asks `hasModuleAccess` for `bookings` and for `vehicles`
-  independently, then fetches each half only if its own answer was yes.
-- Each half's fetch is wrapped so one failing cannot take the other's screen
-  down.
-- The frame has **no group headings** — each lane carries its own `SPACE` /
-  `VEHICLE` line. That is per the frame, and it is also structurally why a
-  vehicles-only viewer cannot be shown an empty "Spaces" heading: there is no
-  heading to leave behind.
-- Approvals are gated a second time, per half, on that half's `canApprove`,
-  and APPROVE posts to that half's existing decision route, which re-checks the
-  permission server-side.
-- Vehicle bookings are date-only in the schema, so every one is an all-day
-  block — which is exactly what makes a van already out read as a clash against
-  anything else booked on it that day.
+`venues.requires_approval` (migration 097) already worked end to end — the API
+honours it, the booking form previews it — but it was an unlabelled tickbox in a
+cramped row. `/bookings/spaces/venues` now states both sides:
+
+- **Instant book** (the column default, `false`) — confirms itself, no manager.
+  A clash is **refused outright** (409), because nobody is there to catch it.
+- **Needs approval** — held as pending; a clash is shown to the manager as a
+  warning rather than refused. Managers still auto-confirm their own bookings.
+
+The section bar counts how many spaces are held ("3 of 7 need approval"), and
+the add-row says new spaces are instant book. No migration — this is surfacing,
+not new capability. Copy was checked against `src/app/api/bookings/route.ts`
+rather than written from the field name.
 
 ### Deviations from the frame, stated plainly
 
-1. **SHOWING sits in the control strip, not the module panel.** The frame puts
-   it in the 212px panel. Per-module panel content is its own backlog line
-   ("Module panel extras") and needs a shell mechanism that does not exist yet.
-2. **Two book buttons, not one `+ BOOK`.** The two services have separate
-   create routes; a viewer with one module still sees a single button.
-3. **The two service links** (Spaces ↗ / Vehicles ↗) are in the control strip
-   because the global nav carries a single Bookings entry, and those routes
-   still hold the month/week/list views, the fleet and the full review queues.
-   Removing the hub cards without them would have stranded both sub-modules.
-4. **Deny is not on the strip.** The frame shows only APPROVE. Deny, notes and
-   clash detail stay in each service's own review queue.
+1. **SHOWING (all / spaces / vehicles) is gone**, along with the unified grid it
+   filtered. Nothing left to filter between.
+2. **Deny is not on the approvals strip.** The frame shows only APPROVE; deny,
+   notes and clash detail stay in the full review queue.
+3. Every active venue gets a lane, booked or not — a free room has to be visible
+   on a screen whose job is "can I have this room at 3". Quiet days are a list of
+   FREE rows by design.
 
-### Not done in this session
+### Not done
 
-- The spaces module's own **month / week / list** views
-  (`booking-calendar.tsx`, `week-view.tsx`, `day-view.tsx`, `time-grid.tsx`)
-  are untouched. They are still restyled-not-rebuilt. 3c only specifies the day
-  timeline; those views have no frame of their own yet.
-- The vehicles module's `vehicles-view.tsx` list is likewise untouched.
+- The spaces **month / week / list** views (`booking-calendar.tsx`,
+  `week-view.tsx`, `time-grid.tsx`) are still restyled-not-rebuilt. No frame
+  specifies them.
+- `vehicles-view.tsx` and the vehicle forms are untouched.
 
 ### Verification
 
-Signed in, against the real database, on `redesign/bookings-timeline`:
+Signed in, against the real database, at 1440×1000 and 375×812:
 
-- **1440×1000** and **375×812**, `/bookings?date=2026-08-31` — a date carrying
-  both a timed space booking (Office 2, 09:35–21:55, which stretches the hour
-  range to 21) and an all-day vehicle booking assigned to three vehicles. Page
-  never scrolls horizontally at 375; the grid scrolls inside its own container.
-- `/bookings?date=2026-08-31&show=vehicles` — 6 lanes, no space rows, no
-  heading, no error. Same code path a vehicles-only viewer takes.
-- Clash rendering has **no real data to exercise it** — nothing in the database
-  overlaps. `/bookings/preview-3c` renders the same `<BookingsDay>` against
-  fixtures with two deliberate clashes (one timed, one all-day). It 404s in
-  production. Keep it: it is the only way to see the clash state, and it caught
-  two defects real data hid — a "now" line drawn on every date rather than
-  today, and narrow blocks dropping the booking title in favour of its clock.
+- `/bookings` — hub, two cards, each labelled with its shape.
+- `/bookings/spaces` — lands on the day timeline, venues only.
+- `/bookings/spaces?date=2026-08-31` — a timed booking (Office 2, 09:35–21:55)
+  stretches the hour range to 21 and positions correctly.
+- `/bookings/spaces?view=month` — month view intact.
+- `/bookings/spaces/venues` — approval control flips state and arms Save.
+  **Not saved**: that would have rewritten live booking policy.
 
-Acceptance sweep over all 46 files in `src/app/(admin)/bookings`: 0 `rounded-*`,
-0 `shadow-*`, 0 `page-title`, exactly one `<Masthead>` per screen across 17
-files. The only hex literals left in the module are the frame's own black-header
-tones (`#C5C2AE`, `#2A2A26`, `#262622`, `#55524A`, `#8C8A80`) and venue /
-vehicle **colour data** (`#0ea5e9`, `#6366f1`, `#64748b` as picker defaults and
-the fallback) — data colours stay, per the decision already recorded below.
+Neither width scrolls the page horizontally; the grid scrolls inside itself.
 
----
+### Correction to the previous entry
 
-## Built, on a branch, not yet merged
+The 2026-08-18 acceptance sweep reported "0 `rounded-*`". That was true only of
+the hyphenated form. **17 bare `rounded` classes existed** in the module and were
+not counted — exactly the kind of narrower-than-it-sounds number this document
+exists to prevent. `venue-admin.tsx` is now clean; **12 remain**, all in the
+vehicle forms (`inspection-form`, `vehicle-booking-form`, `agreement-form`,
+`fleet/fleet-admin`), which no frame has covered yet.
 
-**`redesign/training-depth`** — session 3, `08-training-and-messages.md` §1–4.
-Scope scanned: `src/app/(admin)/schools` (all 12 files) plus `src/services/schools.ts`
-and `src/app/(portal)/my-schools/[enrollmentId]/page.tsx`, both of which had to
-follow the course-model change below.
-
-| Frame | State |
-|---|---|
-| 14a school detail | ✅ masthead + facts line, 300px phase run (only the current phase bordered + 900), six-column roster, amber fees, `—` in #B4B0A2, NeedsYou counts exactly those dashes |
-| 14b grades matrix | ✅ built; migration 179 applied, saving verified end to end |
-| 14c applicant review | ✅ full screen, answers at 15px/1.5, decision bar pinned outside the scroll |
-| 15a form builder | ✅ one list, conditionals indented 26px on #F7F5EE with the yellow SHOWS WHEN pill, live public preview |
-
-Verified signed-in against real data (FFBX26, 41 students; TRACK, real conditional
-follow-ups) at 1440px and 375px. No page-level horizontal overflow at 375px on any
-of the four; the grades matrix scrolls inside its own box. **No screenshot files
-were committed** — this folder has no screenshot convention yet and inventing one
-mid-session seemed worse than saying so. Verification was live in the browser.
-
-### Migration 179 — APPLIED 2026-08-18
-
-`supabase/migrations/179_grades_on_billing_courses.sql`, run through the Supabase
-dashboard SQL editor (never `supabase db push` — CLI history is out of sync).
-Verified after the fact: the `credit_hours` column exists and a grade keyed to a
-`billing_courses` id inserts, which the old FK would have rejected.
-
-**Every course is `credit_hours = 0`.** There was nothing to backfill from, so the
-matrix header reads "0 CREDIT HOURS" and the transcript GPA weights everything at
-zero until real values are entered. There is no admin field for it yet — that is
-the first follow-up, and it belongs on the Courses tab beside code and name.
-
-**Why 179 and not 176:** the parallel-rules table pre-assigns 176/177/178 to
-sessions 2/5/6. Session 3 was listed as "none expected — ask before taking one",
-and this one was asked for and approved.
-
-### The course model, settled
-
-Two course tables have coexisted since 098: `courses` (academic, the FK target of
-`grades`) and `billing_courses` (chronological, what the live Courses tab writes
-through). Only the second was ever maintained — **`courses` holds 1 row across 3
-programs and `grades` is empty**, so 179 re-points `grades.course_id` at
-`billing_courses` and adds `credit_hours` to it. Zero rows to migrate; the
-migration refuses to run if that ever stops being true.
-
-`courses` is left in place, unused, rather than dropped — that is a separate call.
-Every read now aliases it (`courses:billing_courses(*)`) so callers were unchanged.
-The page tolerates the pre-179 schema by retrying the course read without
-`credit_hours`, so a deploy landing before the hand-applied migration degrades
-instead of blanking the tab.
-
-### Two shared-file changes wanted, reported not made
-
-Per the parallel rules, neither was applied here:
-
-1. **`Masthead` needs a `meta` slot.** 14a wants a mono line under the title
-   (dates · weeks · location). It is rendered as a separate strip below the
-   masthead instead, which works but is a second element where the design has one.
-2. **`globals.css` forces `button { font-family: mono !important; text-transform:
-   uppercase }`.** Any button whose label is prose — a form-builder question, a
-   roster row action — has to opt back out with `!font-sans normal-case`. The
-   frame sets `text-transform:none` on that row for the same reason. Worth
-   scoping the global rule to `[data-slot="button"]` instead.
-
-Also wanted, smaller: a **filled** variant of `StatusPill`. 14a's roster status is
-explicitly "a filled pill, not an outline"; that is currently local to the roster.
-
-### Also done on this branch
-
-- Deleted three dead components from `program-detail.tsx` (~900 lines): the old
-  `CoursesTab` (orphaned when Courses moved to `ProgramCoursesManager`),
-  `EnrollmentsTab` (replaced by 14a) and the unlinked `GradesTab`. The file is
-  ~3.6k lines, down from ~4.5k, with the four screens now in their own files.
-- The Grades tab is **linked** for the first time — it had a `TabsContent` with no
-  trigger, so it was unreachable.
-- Fixed a pre-existing SSR crash: `ApplicationTab` read `window.location.origin`
-  during render, so `?tab=application` threw "window is not defined" and dropped
-  the route to client rendering.
-- Enrolment removal/restore/permanent-delete and "+ Add student" survived the
-  rebuild — the frame's roster is six columns and stays six columns, so removal
-  moved to a row menu and the add button to the masthead, where 14a puts it.
-
-**Still outstanding in `08-training-and-messages.md`:** §5 Messages (15b/15c) —
-superseded by doc 11, belongs to session 2 — and §6, frames 16a/16b/17a/17b.
-
----
+Grep both forms: `grep -rn '\brounded\b' src/app/\(admin\)/<module>`.
 
 ## Not built — the real backlog
 
@@ -493,6 +423,9 @@ Contacts and users are the highest-traffic of these.
 - **Yellow**: one `<NeedsYou>` band per screen. Hairline yellow ticks (masthead
   rule, lead-KPI mark) are structural accents and may coexist. `Kpi tick={false}`
   where they would compete.
+- **Bookings**: spaces and vehicles are NOT one timeline. 3c drew them together;
+  that was built and then reversed by product decision on 2026-08-18. A space is
+  a timetable, a vehicle is a rental process. Do not "fix" this back.
 - **Event brand kits are out of scope** — storefronts, email templates, brand
   editors keep their own fonts and colours. Bebas/Anton/Space Mono stay loaded
   for them.

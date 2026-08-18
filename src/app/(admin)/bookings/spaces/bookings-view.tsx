@@ -42,15 +42,16 @@ import type {
 import { BookingCalendar } from "./booking-calendar";
 import { BookingList } from "./booking-list";
 import { WeekView } from "./week-view";
-import { DayView } from "./day-view";
+import { DayBoard } from "./day-board";
 
 type ViewKind = "month" | "week" | "day" | "list";
 type Filters = { venue: string; ministry: string };
 
+// Day leads: it is the module's own visual and where Spaces lands.
 const VIEW_OPTIONS: { key: ViewKind; label: string; icon: typeof CalendarDays }[] = [
-  { key: "month", label: "Month", icon: CalendarDays },
-  { key: "week", label: "Week", icon: CalendarRange },
   { key: "day", label: "Day", icon: Clock },
+  { key: "week", label: "Week", icon: CalendarRange },
+  { key: "month", label: "Month", icon: CalendarDays },
   { key: "list", label: "List", icon: ListIcon },
 ];
 
@@ -83,7 +84,7 @@ export function BookingsView({
   function buildHref(overrides: Partial<Filters & { view: ViewKind; date: string }>) {
     const next = { view, date, ...filters, ...overrides };
     const sp = new URLSearchParams();
-    if (next.view && next.view !== "month") sp.set("view", next.view);
+    if (next.view && next.view !== "day") sp.set("view", next.view);
     if (next.date && next.date !== today) sp.set("date", next.date);
     if (next.venue !== "all") sp.set("venue", next.venue);
     if (next.ministry !== "all") sp.set("ministry", next.ministry);
@@ -172,7 +173,7 @@ export function BookingsView({
 
       {/* The page's ONE yellow band — driven by the pending count the page
           already fetches. Never add a second. */}
-      {access.canApprove && pendingCount > 0 && (
+      {access.canApprove && pendingCount > 0 && view !== "day" && (
         <NeedsYou
           action={
             <Link
@@ -190,8 +191,9 @@ export function BookingsView({
       )}
 
       {/* Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-rule bg-bone px-8 py-3">
-        <div className="flex items-center gap-1">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-rule bg-bone px-5 py-3 md:px-8">
+        {/* Wraps: on a phone the count was pushed off the end of the row. */}
+        <div className="flex flex-wrap items-center gap-1">
           <Button
             variant="outline"
             size="icon"
@@ -216,8 +218,8 @@ export function BookingsView({
           <Button variant="ghost" size="sm" className="ml-1" onClick={() => go({ date: today })}>
             Today
           </Button>
-          <span className="mono-label ml-3">
-            {bookings.length} confirmed
+          <span className="mono-label ml-1 md:ml-3">
+            {bookings.length} {view === "day" ? "booked" : "confirmed"}
             {clashIds.size > 0 && (
               <span className="text-destructive">
                 {" "}· {clashIds.size} clash{clashIds.size === 1 ? "" : "es"}
@@ -285,7 +287,13 @@ export function BookingsView({
       ) : view === "week" ? (
         <WeekView bookings={bookings} venues={venues} date={date} clashIds={clashIds} />
       ) : view === "day" ? (
-        <DayView bookings={bookings} venues={columnVenues} date={date} clashIds={clashIds} />
+        <DayBoard
+          bookings={bookings}
+          venues={columnVenues}
+          date={date}
+          today={today}
+          canApprove={access.canApprove}
+        />
       ) : (
         <BookingCalendar
           bookings={bookings}

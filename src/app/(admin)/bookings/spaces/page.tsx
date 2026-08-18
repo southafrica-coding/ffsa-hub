@@ -16,9 +16,11 @@ import { BookingsView } from "./bookings-view";
 
 type ViewKind = "month" | "week" | "day" | "list";
 
+// The day timeline is the module's own visual and its landing view; month,
+// week and list sit behind the switcher.
 function normalizeView(v?: string): ViewKind {
-  if (v === "week" || v === "day" || v === "list") return v;
-  return "month"; // also handles the legacy "calendar" value
+  if (v === "week" || v === "month" || v === "list") return v;
+  return "day"; // also handles the legacy "calendar" value
 }
 
 export default async function BookingsPage({
@@ -76,9 +78,17 @@ export default async function BookingsPage({
   const [venuesRes, ministriesRes, bookingsRes, pendingCount] = await Promise.all([
     getVenues(supabase),
     getMinistries(supabase),
-    // The calendar shows only the confirmed schedule; pending requests live in
-    // the manager's review queue, not here.
-    getBookings(supabase, { from, to, venueId, ministryId, status: "approved" }),
+    // The month / week / list views show only the confirmed schedule; pending
+    // requests live in the manager's review queue, not there. The day timeline
+    // is the exception: a pending request that clashes with a confirmed one is
+    // exactly what that screen exists to show, so it takes both.
+    getBookings(supabase, {
+      from,
+      to,
+      venueId,
+      ministryId,
+      status: view === "day" ? undefined : "approved",
+    }),
     countPendingBookings(supabase),
   ]);
 

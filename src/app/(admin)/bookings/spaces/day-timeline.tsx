@@ -1,17 +1,21 @@
 "use client";
 
-// Frame 3c — the bookings day timeline. Spaces AND vehicles on ONE grid, so a
-// double-booked room or van reads at a glance.
+// The spaces day timeline, built from frame 3c. Every venue is a lane, so a
+// double-booked room reads at a glance.
 //
 // Structure, per the frame: a 230px resource column against a black hour
 // header, hour columns as gridlines, and every booking an absolutely
 // positioned block whose left/width are percentages of the visible day. Rows
-// are RESOURCES, never bookings — that is what makes a clash a clash.
+// are VENUES, never bookings — that is what makes a clash a clash.
+//
+// Scope note: 3c drew spaces and vehicles on one grid. That was reversed by
+// product decision on 2026-08-18 — vehicles are a rental process, not a
+// timetable, so they have a portal instead of lanes. See the 3c section of
+// docs/redesign/91-build-status-and-gaps.md.
 //
 // This file is a pure composition. It owns no data access, no permission rule
-// and no approval logic: the page decides which resources exist and hands them
-// over. A half the viewer cannot see is simply never passed in, so there is no
-// bare heading and no error for them.
+// and no approval logic: the page decides which venues exist and hands them
+// over.
 //
 // Geometry comes from src/lib/bookings/timegrid.ts — the same vocabulary the
 // spaces week/day grids use (blockWindow → minutes-of-day, packLanes →
@@ -22,7 +26,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
 import { packLanes, nowMinutes } from "@/lib/bookings/timegrid";
-import { bookingBlockStyle } from "./spaces/ui";
+import { bookingBlockStyle } from "./ui";
 
 // The frame's block metrics. Rows grow only when bookings actually stack.
 const BLOCK_H = 40;
@@ -40,13 +44,11 @@ export type TimelineItem = {
   window: { start: number; end: number } | null;
 };
 
-/** One lane of the grid: a venue or a vehicle. `kind` is the mono line under
- *  the name and is what tells a space from a van — the frame has no group
- *  headings, and their absence is also why no half can render empty. */
+/** One lane of the grid — a venue. `meta` is the building, shown under the
+ *  name where the column is wide enough to carry it. */
 export type TimelineResource = {
   key: string;
   name: string;
-  kind: string;
   meta?: string | null;
   color: string;
   items: TimelineItem[];
@@ -178,13 +180,13 @@ export function DayTimeline({
                     {/* Wraps rather than truncates: at 136px "Upstairs
                         Classroom" would otherwise read as "Upstairs Cl…". */}
                     <div className="text-[14px] font-bold leading-tight">{res.name}</div>
-                    <div className="mt-0.5 truncate font-mono text-[9px] uppercase tracking-[0.14em] text-[color:var(--text-tertiary)]">
-                      {res.kind}
-                      {/* The building / number plate is the first thing to go
-                          when the column narrows — the kind never is, since it
-                          is what separates a space from a van. */}
-                      {res.meta && <span className="hidden md:inline"> · {res.meta}</span>}
-                    </div>
+                    {/* The building is the first thing to go when the column
+                        narrows to 136px — the venue name never is. */}
+                    {res.meta && (
+                      <div className="mt-0.5 hidden truncate font-mono text-[9px] uppercase tracking-[0.14em] text-[color:var(--text-tertiary)] md:block">
+                        {res.meta}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

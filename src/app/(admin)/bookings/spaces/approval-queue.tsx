@@ -1,14 +1,14 @@
 "use client";
 
 // Frame 3c, lower half — "Requests waiting on approval", sitting under the day
-// timeline. One strip over BOTH services, but each row remembers which service
-// it came from, because spaces and vehicles are separate modules with separate
-// endpoints and separate permissions.
+// timeline. It lists the pending requests for the DAY on screen, which is why
+// it can coexist with the module-wide NeedsYou band above: the band counts
+// every outstanding request, this strip is the ones you are looking at.
 //
-// The page only ever hands over rows for a half the viewer can approve, so an
-// empty list here means "nothing waiting", never "not allowed". Approving posts
-// to that half's existing decision route, which re-checks the permission
-// server-side — this component adds no authority of its own.
+// The page only renders it for someone who can approve, so an empty list here
+// means "nothing waiting on this day", never "not allowed". Approving posts to
+// the existing decision route, which re-checks the permission server-side —
+// this component adds no authority of its own.
 
 import { useState } from "react";
 import Link from "next/link";
@@ -18,20 +18,12 @@ import { SectionBar, StatusPill } from "@/components/ffsa";
 
 export type ApprovalRow = {
   id: string;
-  /** Which service — decides the endpoint and the detail link. */
-  service: "spaces" | "vehicles";
-  /** The venue or vehicle being asked for. */
-  resource: string;
-  /** Date, plus a time range where the service has one. */
+  /** The venue being asked for. */
+  venue: string;
+  /** Date, plus the time range. */
   when: string;
-  /** What it is for. */
+  /** What it is for, and who asked. */
   why: string;
-  href: string;
-};
-
-const ENDPOINT: Record<ApprovalRow["service"], (id: string) => string> = {
-  spaces: (id) => `/api/bookings/${id}/decision`,
-  vehicles: (id) => `/api/vehicles/bookings/${id}/decision`,
 };
 
 export function ApprovalQueue({ initial }: { initial: ApprovalRow[] }) {
@@ -43,7 +35,7 @@ export function ApprovalQueue({ initial }: { initial: ApprovalRow[] }) {
     setBusy(row.id);
     const prev = rows;
     setRows((rs) => rs.filter((r) => r.id !== row.id)); // optimistic
-    const res = await fetch(ENDPOINT[row.service](row.id), {
+    const res = await fetch(`/api/bookings/${row.id}/decision`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ decision: "approved" }),
@@ -63,24 +55,24 @@ export function ApprovalQueue({ initial }: { initial: ApprovalRow[] }) {
     <div className="border border-ink bg-white">
       <SectionBar
         title="Requests waiting on approval"
-        meta={rows.length === 1 ? "1 open" : `${rows.length} open`}
+        meta={rows.length === 1 ? "1 on this day" : `${rows.length} on this day`}
       />
 
       {rows.length === 0 ? (
         <p className="px-6 py-7 text-center text-[13px] text-[color:var(--text-secondary)]">
-          Nothing is waiting on your review.
+          Nothing is waiting on your review for this day.
         </p>
       ) : (
         rows.map((row) => (
           <div
-            key={`${row.service}:${row.id}`}
+            key={row.id}
             className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-rule px-5 py-3.5 last:border-b-0 hover:bg-bone md:flex-nowrap md:gap-4 md:px-[22px]"
           >
             <Link
-              href={row.href}
+              href={`/bookings/spaces/${row.id}`}
               className="w-full shrink-0 text-[14px] font-bold hover:underline md:w-[200px] md:truncate"
             >
-              {row.resource}
+              {row.venue}
             </Link>
             {/* Each field takes its own line on a phone. Sharing one wrapped
                 row squeezed the reason down to a single letter. */}
@@ -91,8 +83,8 @@ export function ApprovalQueue({ initial }: { initial: ApprovalRow[] }) {
               {row.why}
             </div>
             <StatusPill tone="warn">Pending</StatusPill>
-            {/* Deny, notes and the clash detail live in the service's own review
-                queue — this is the one-click yes the frame asks for. */}
+            {/* Deny, notes and the clash detail live in the full review queue —
+                this is the one-click yes the frame asks for. */}
             <button
               type="button"
               onClick={() => approve(row)}
