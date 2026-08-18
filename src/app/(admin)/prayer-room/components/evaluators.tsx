@@ -336,7 +336,7 @@ export default function EvaluatorsPortal({
 
       {/* ── 12b: curating the bands, and who sees a note ── */}
       <div className="grid gap-6 border-t border-ink px-5 py-7 md:px-8 xl:grid-cols-[1fr_470px]">
-        <BandCuration />
+        <BandCuration canCreate={!!me?.staff} />
         <NotePrivacy />
       </div>
 

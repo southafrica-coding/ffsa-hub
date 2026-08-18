@@ -30,12 +30,14 @@ type Block = {
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-export default function BandCuration() {
+export default function BandCuration({ canCreate = false }: { canCreate?: boolean }) {
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [draft, setDraft] = useState<Record<string, { focus: string; start: string; end: string }>>({});
   const [editing, setEditing] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [draftNew, setDraftNew] = useState({ name: "", start: "08:00", end: "09:30", days: [1, 2, 3, 4, 5] });
 
   const load = useCallback(async () => {
     const res = await fetch("/api/prayer-room/template");
@@ -87,6 +89,60 @@ export default function BandCuration() {
     }
   }
 
+  /**
+   * A band is one template block per weekday it runs, so creating one is N
+   * inserts that share a name. Written as staff — RLS lets staff insert into
+   * the template, while migration 171 lets evaluators edit a band afterwards.
+   */
+  async function createBand() {
+    const name = draftNew.name.trim().toUpperCase();
+    if (!name) {
+      toast.error("Give the band a name");
+      return;
+    }
+    if (names.includes(name)) {
+      toast.error(`${name} already exists`);
+      return;
+    }
+    if (draftNew.end <= draftNew.start) {
+      toast.error("The band has to end after it starts");
+      return;
+    }
+    if (draftNew.days.length === 0) {
+      toast.error("Pick at least one day");
+      return;
+    }
+    setBusy("new");
+    try {
+      const results = await Promise.all(
+        draftNew.days.map((d) =>
+          fetch("/api/prayer-room/template", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              day_of_week: d,
+              start_time: draftNew.start,
+              end_time: draftNew.end,
+              title: name,
+              band_name: name,
+              is_curated: true,
+            }),
+          })
+        )
+      );
+      if (results.some((r) => !r.ok)) {
+        toast.error("Could not create the band — prayer room staff only");
+        return;
+      }
+      toast.success(`${name} created on ${draftNew.days.length} days`);
+      setCreating(false);
+      setDraftNew({ name: "", start: "08:00", end: "09:30", days: [1, 2, 3, 4, 5] });
+      await load();
+    } finally {
+      setBusy(null);
+    }
+  }
+
   if (!ready) return null;
 
   return (
@@ -114,9 +170,11 @@ export default function BandCuration() {
 
       {names.length === 0 ? (
         <p className="px-6 py-5 text-[13px] leading-[1.55] text-[color:var(--text-secondary)]">
-          No band is curated yet. Mark a weekly template block as a band
-          (<span className="font-mono text-[11px]">is_curated</span>) and give it a name — MORNING,
-          NOON or NIGHT — and it will anchor the wall and stop being claimable.
+          No band is curated yet, so the wall draws no anchors — migration 171 added the columns
+          but never filled them.{" "}
+          {canCreate
+            ? "Set up MORNING, NOON and NIGHT below and they will anchor the wall and stop being claimable."
+            : "Prayer room staff can set up MORNING, NOON and NIGHT."}
         </p>
       ) : (
         names.map((name) => {
@@ -228,6 +286,99 @@ export default function BandCuration() {
             </div>
           );
         })
+      )}
+
+      {canCreate && (
+        <div className="border-b border-surface-4 px-6 py-[18px]">
+          {creating ? (
+            <div className="border border-rule bg-bone p-3.5">
+              <label className="mono-label mb-1.5 block" htmlFor="band-new-name">
+                Band name
+              </label>
+              <input
+                id="band-new-name"
+                value={draftNew.name}
+                onChange={(e) => setDraftNew((d) => ({ ...d, name: e.target.value }))}
+                placeholder="MORNING"
+                className="w-full border border-rule-strong bg-white px-3 py-2 text-[14px] uppercase"
+              />
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mono-label mb-1.5 block" htmlFor="band-new-start">
+                    Starts
+                  </label>
+                  <input
+                    id="band-new-start"
+                    type="time"
+                    value={draftNew.start}
+                    onChange={(e) => setDraftNew((d) => ({ ...d, start: e.target.value }))}
+                    className="w-full border border-rule-strong bg-white px-3 py-2 text-[14px]"
+                  />
+                </div>
+                <div>
+                  <label className="mono-label mb-1.5 block" htmlFor="band-new-end">
+                    Ends
+                  </label>
+                  <input
+                    id="band-new-end"
+                    type="time"
+                    value={draftNew.end}
+                    onChange={(e) => setDraftNew((d) => ({ ...d, end: e.target.value }))}
+                    className="w-full border border-rule-strong bg-white px-3 py-2 text-[14px]"
+                  />
+                </div>
+              </div>
+              <div className="mono-label mb-1.5 mt-3">Runs on</div>
+              <div className="flex flex-wrap gap-1.5">
+                {[1, 2, 3, 4, 5].map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() =>
+                      setDraftNew((s2) => ({
+                        ...s2,
+                        days: s2.days.includes(d) ? s2.days.filter((x) => x !== d) : [...s2.days, d].sort(),
+                      }))
+                    }
+                    className={cn(
+                      "px-2.5 py-1.5 font-mono text-[9.5px] font-bold uppercase tracking-[0.1em]",
+                      draftNew.days.includes(d)
+                        ? "bg-ink text-white"
+                        : "border border-rule-strong text-[color:var(--text-secondary)]"
+                    )}
+                  >
+                    {DAYS[d]}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-3.5 flex gap-2">
+                <button
+                  type="button"
+                  disabled={busy === "new"}
+                  onClick={createBand}
+                  className="flex-1 bg-ink px-4 py-3 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-white disabled:opacity-40"
+                >
+                  {busy === "new" ? "Creating…" : `Create the band · ${draftNew.days.length} days`}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCreating(false)}
+                  className="border border-ink px-4 py-3 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-ink"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setCreating(true)}
+              className="border border-ink px-3 py-2.5 font-mono text-[9.5px] font-bold uppercase tracking-[0.12em] text-ink hover:bg-bone"
+            >
+              + Set up a band
+            </button>
+          )}
+        </div>
       )}
 
       <div className="bg-bone px-6 py-4">

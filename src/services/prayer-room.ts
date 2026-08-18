@@ -350,6 +350,10 @@ export async function createTemplateBlock(
     end_time: string;
     title?: string | null;
     role_needs?: Record<string, number>;
+    /** Curated-band attributes (migration 171). A band is one block per weekday. */
+    band_name?: string | null;
+    weekly_focus?: string | null;
+    is_curated?: boolean;
   }
 ) {
   return supabase.from("prayer_room_template_blocks").insert(data).select().single();

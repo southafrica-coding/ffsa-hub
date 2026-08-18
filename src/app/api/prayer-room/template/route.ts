@@ -33,12 +33,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "end_time must be after start_time" }, { status: 400 });
   }
 
+  // Curated-band attributes are accepted on create as well as on edit.
+  // Without this a band could only be made by hand-writing SQL: PUT allows
+  // band_name/is_curated but there was no way to create a block that had them,
+  // so migration 171's columns stayed empty and the wall drew no bands.
+  // WHO may set them is still RLS's call — insert is staff-only ("Staff manage
+  // template"), while editing a band is open to evaluators.
   const { data, error } = await createTemplateBlock(supabase, {
     day_of_week,
     start_time,
     end_time,
     title: (body.title as string) ?? null,
     role_needs: (body.role_needs as Record<string, number>) ?? {},
+    band_name: (body.band_name as string) ?? null,
+    weekly_focus: (body.weekly_focus as string) ?? null,
+    is_curated: body.is_curated === true,
   });
   if (error) return NextResponse.json({ error: error.message }, { status: 403 });
   return NextResponse.json(data);

@@ -168,7 +168,7 @@ export default function Wall({
     <div className="border border-ink bg-white">
       {/* header row: gutter + five days */}
       <div className="flex border-b border-ink bg-ink">
-        <div className="w-14 shrink-0" />
+        <div className="w-16 shrink-0 md:w-[92px]" />
         {days.map((d, i) => (
           <div
             key={d.iso}
@@ -186,7 +186,7 @@ export default function Wall({
 
       <div className="relative flex" style={{ height: axisHeight }}>
         {/* hour gutter */}
-        <div className="relative w-14 shrink-0 border-r border-rule">
+        <div className="relative w-16 shrink-0 border-r border-rule md:w-[92px]">
           {hours.map((h) => (
             <div
               key={h}
@@ -196,15 +196,25 @@ export default function Wall({
               {hhmm(h)}
             </div>
           ))}
-          {/* band names sit in the gutter, in black */}
+          {/* Each band is a solid black block in the gutter, spanning its own
+              height — it paints over the hour labels it covers, which is what
+              frames 8a and 9a draw. A small black caption is not the same
+              thing: the block is how the three anchors read as structure
+              rather than as another label on the axis. */}
           {bandRows.map((b) => (
             <div
               key={b.name}
-              className="absolute left-0 right-0 flex items-start justify-end pr-1 pt-1"
-              style={{ top: (b.start - DAY_START) * PX_PER_MIN }}
+              className="absolute left-0 right-0 flex flex-col overflow-hidden bg-ink px-1.5 pt-2 md:px-2.5"
+              style={{
+                top: (b.start - DAY_START) * PX_PER_MIN,
+                height: (b.end - b.start) * PX_PER_MIN,
+              }}
             >
-              <span className="font-display text-[10px] font-black uppercase tracking-[0.06em] text-ink">
+              <span className="font-display text-[13px] font-black uppercase leading-[0.9] tracking-[0.01em] text-white md:text-[21px]">
                 {b.name}
+              </span>
+              <span className="mt-1 font-mono text-[8.5px] font-bold tracking-[0.08em] text-yellow">
+                {hhmm(b.start)}–{hhmm(b.end)}
               </span>
             </div>
           ))}
@@ -226,11 +236,14 @@ export default function Wall({
                 />
               ))}
 
-              {/* band tint + its 2px black rules, behind the cards */}
+              {/* The band's own hours: WHITE between two 2px black rules. A bone
+                  tint reads as "something is booked here", which is exactly
+                  what a band is not — the rules bracket the time, the blocks
+                  inside it say who has it. */}
               {bandRows.map((b) => (
                 <div
                   key={b.name}
-                  className="absolute left-0 right-0 border-y-2 border-ink bg-[color:var(--surface-2)]"
+                  className="absolute left-0 right-0 border-y-2 border-ink bg-white"
                   style={{
                     top: (b.start - DAY_START) * PX_PER_MIN,
                     height: (b.end - b.start) * PX_PER_MIN,

@@ -70,7 +70,7 @@ Everything below is on `main` and deployed (PR #212, commit `aa53496`).
 | Bookings (3c) — **the timeline itself, rebuilt** | ✅ see the 3c section below |
 | Event capacity, campaign open/click, finance ledger, bookings day strip | ✅ built (migrations 174, 165) |
 | Prayer room data model + wall (8a) | ✅ migrations 175, 168–171 applied |
-| Prayer room UI — masthead, 9a, 10a, 10b, 11a, 12a, 12b | 🔵 built on `redesign/prayer-room-ui`, not yet merged |
+| Prayer room UI — masthead, 9a, 10a, 10b, 11a, 12a, 12b | ✅ merged 2026-08-18 (PR #226, `87cae22`) — no migration |
 | Billing: `billing_mode` (172), generation guard + held-charge queue (173) | ✅ with tests |
 | Xero: read side, honest status, per-region org pinning | ✅ |
 
@@ -322,6 +322,37 @@ unbuilt. Build 9b first or the mobile day screen has a dead primary action.
 - 10a's seat-category chips sit in the bone filter strip under the tab rule
   rather than on the rule itself — the strip is the system's existing filter row
   (Events uses it) and it survives 375px.
+
+#### The wall drew no MORNING / NOON / NIGHT (fixed 2026-08-18)
+
+Reported after the merge, and it was two faults at once:
+
+1. **No data, and no way to make any.** Migration 171 added `band_name` and
+   `is_curated` to `prayer_room_template_blocks` but seeded nothing — its own
+   header carries the intended `UPDATE ... SET band_name = 'MORNING'` as a
+   commented-out manual step. So zero rows were curated and the wall had nothing
+   to draw. Worse, 12b's panel could only *edit* bands: its empty state told you
+   to "mark a weekly template block as `is_curated`", which no screen in the Hub
+   could do. `POST /api/prayer-room/template` now accepts `band_name` /
+   `weekly_focus` / `is_curated` (RLS still decides — insert is staff-only,
+   editing a band stays open to evaluators), and the 12b panel has **+ SET UP A
+   BAND**: name, start, end, and which weekdays, creating one block per day.
+2. **The rendering was not the frame.** Frames 8a and 9a draw each band as a
+   solid black block in the gutter — 21px condensed name in white, mono range in
+   yellow — with the band's hours in every day column as **white between two 2px
+   black rules**. What shipped was a small black text caption and a bone tint.
+   A tint reads as "something is booked here", which is the one thing a band is
+   not. Both are now per frame, and the gutter widened to the frame's 92px
+   (64px below `md`) so a 21px condensed name fits.
+
+`prayer-room/preview-8a` renders the wall against fixture bands, same dev-only
+idiom as `bookings/preview-3c` — without it the band treatment cannot be checked
+at all, because every real week has zero bands until someone creates them.
+
+**Still to do, and it needs a human:** the three bands do not exist in
+production. Their real times are FFSA's call, not the design file's
+(08:00–09:30 / 12:00–14:00 / 17:00–19:00 are the frame's illustration). Staff
+create them from the Evaluators tab.
 
 #### Integrating the three gaps — what each actually needs
 
