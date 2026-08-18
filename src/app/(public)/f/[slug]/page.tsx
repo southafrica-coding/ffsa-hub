@@ -1,4 +1,3 @@
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getFormBySlug } from "@/services/forms";
 import { emptyFormSchema, type FormSchema } from "@/lib/forms/schema";
@@ -55,7 +54,13 @@ export default async function PublicFormPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const supabase = await createClient();
+  // Service-role, like every other public page: forms are anon-readable
+  // while active, but the embedded events(...) row is staff-only under
+  // RLS — through the anon client the join came back null and every
+  // logged-out visitor got an unbranded, logo-less form while staff
+  // previewing it signed in saw the real thing. The is_active gate the
+  // RLS policy used to apply is enforced explicitly just below.
+  const supabase = createAdminClient();
   const { data: form } = await getFormBySlug(supabase, slug);
 
   // For the unavailable-form notice we don't have the event yet, so the
