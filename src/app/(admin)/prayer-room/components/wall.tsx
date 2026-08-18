@@ -94,12 +94,25 @@ function bandNameSize(name: string, space: number, max: number): number {
   return Math.max(9, Math.min(max, Math.floor(space / (Math.max(name.length, 1) * CHAR_EM))));
 }
 
-function isLive(set: WallSet, leadSeatIds: Set<string>): boolean {
+export function isLive(set: WallSet, leadSeatIds: Set<string>): boolean {
   return set.slots.some((s) => {
     if (s.status !== "filled") return false;
     const seat = s.seat_type_id ?? s.role ?? "";
     return leadSeatIds.has(seat);
   });
+}
+
+/**
+ * Does this set still have nobody leading it? The wall says so with a dashed
+ * border; the SCREEN says so in words, in one band, away from the cards.
+ */
+export function needsALead(set: WallSet, seatTypes: SeatType[]): boolean {
+  const leads = new Set(
+    seatTypes.length
+      ? seatTypes.filter((s) => s.is_lead).map((s) => s.id)
+      : ["prayer_leader", "worship_leader"]
+  );
+  return !isLive(set, leads);
 }
 
 export default function Wall({
@@ -298,23 +311,26 @@ export default function Wall({
                 // Card density by duration. Column is ~127px wide, so titles
                 // wrap easily — every layout constrains them.
                 const full = mins >= 135;
-                const mid = !full && mins >= 85;
 
                 return (
                   <button
                     key={s.id}
                     type="button"
                     onClick={onOpenSet ? () => onOpenSet(s.id) : undefined}
-                    title={`${hhmm(start)}–${hhmm(end)} · ${title}`}
+                    title={`${hhmm(start)}–${hhmm(end)} · ${title}${live ? "" : " · needs a lead"}`}
                     className={cn(
                       "absolute left-0 right-0 overflow-hidden px-1.5 text-left",
                       // inset so no two blocks ever touch
                       "mx-[1px]",
-                      curated
-                        ? "border-2 border-ink bg-yellow"
-                        : live
-                          ? "border border-rule-strong bg-[color:var(--surface-3)]"
-                          : "border border-dashed border-ink bg-white",
+                      // Background says whose time it is, border says whether
+                      // anyone leads it — so a curated set with no lead reads as
+                      // both, instead of the yellow hiding the gap.
+                      curated ? "bg-yellow" : live ? "bg-[color:var(--surface-3)]" : "bg-white",
+                      live
+                        ? curated
+                          ? "border-2 border-ink"
+                          : "border border-rule-strong"
+                        : "border border-dashed border-ink",
                       // Outline rather than a border swap, so the block does not
                       // change size when the drawer opens on it.
                       s.id === selectedId && "z-10 [outline:3px_solid_#0A0A0A]"
@@ -330,27 +346,25 @@ export default function Wall({
                       {full && <span className="ml-1 font-normal">· {durationLabel(mins)}</span>}
                     </div>
 
-                    {!live ? (
-                      <div className="font-mono text-[8px] font-bold uppercase tracking-[0.1em] text-ink">
-                        Needs a lead
-                      </div>
-                    ) : (
-                      <div
-                        className={cn(
-                          "text-[10px] font-semibold leading-tight text-ink",
-                          full ? "line-clamp-2" : "truncate"
-                        )}
-                      >
-                        {title}
-                      </div>
-                    )}
+                    {/* The title, always. A card that swapped its name for
+                        "NEEDS A LEAD" told you what was missing instead of what
+                        the set IS — and the dashed border already says the
+                        first part. Gaps are reported in the band above the
+                        wall and inside the drawer, not on the card. */}
+                    <div
+                      className={cn(
+                        "text-[10px] font-semibold leading-tight text-ink",
+                        full ? "line-clamp-2" : "truncate"
+                      )}
+                    >
+                      {title}
+                    </div>
 
-                    {full && live && s.owner && (
+                    {full && s.owner && (
                       <div className="truncate font-mono text-[8px] tracking-[0.06em] text-[color:var(--text-secondary)]">
                         {s.owner.preferred_name || s.owner.first_name}
                       </div>
                     )}
-                    {mid && !live && null}
                   </button>
                 );
               })}

@@ -8,13 +8,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChevronLeft, ChevronRight, X, UserPlus, CalendarDays, CalendarRange, List as ListIcon } from "lucide-react";
 import { toast } from "sonner";
-import { MastheadButton } from "@/components/ffsa";
+import { MastheadButton, NeedsYou } from "@/components/ffsa";
 import { cn } from "@/lib/utils/cn";
 import PrayerRoomChrome, { type TabDef, type TabKey } from "./chrome";
 import SetDetail from "./set-detail";
 import MemberPicker from "./member-picker";
 import { ScheduleCalendar, type CalendarSet, type CalendarBlockout } from "./calendar";
-import Wall, { type WallSet, type SeatType, type Band } from "./wall";
+import Wall, { needsALead, type WallSet, type SeatType, type Band } from "./wall";
 import { WEEKDAY_OPTIONS, weeklyOccurrenceDates } from "@/lib/bookings/recurrence";
 import {
   todayISO,
@@ -146,6 +146,11 @@ export default function ScheduleView({ userId, isStaff, isMember, tabs, active, 
     .join(" · ")
     .toUpperCase();
 
+  // Sets nobody leads yet. The wall marks them with a dashed border and gets
+  // on with showing what each set IS; the words belong here, once, in the
+  // screen's one yellow band — not repeated on every card.
+  const needLead = live.filter((s) => needsALead(s as WallSet, seatTypes));
+
   // ↑/↓ in the drawer walk the week in the order the wall draws it.
   const ordered = [...live].sort(
     (a, b) => a.set_date.localeCompare(b.set_date) || a.start_time.localeCompare(b.start_time)
@@ -217,6 +222,25 @@ export default function ScheduleView({ userId, isStaff, isMember, tabs, active, 
           </div>
         )}
       </div>
+
+      {/* The screen's ONE yellow band. */}
+      {!loading && needLead.length > 0 && (
+        <NeedsYou
+          action={
+            <button
+              type="button"
+              onClick={() => setSelectedId(needLead[0].id)}
+              className="shrink-0 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-ink"
+            >
+              Open the first →
+            </button>
+          }
+        >
+          {needLead.length === 1
+            ? "1 set here has no lead yet — it holds its slot, but it is not live."
+            : `${needLead.length} sets here have no lead yet — they hold their slots, but they are not live.`}
+        </NeedsYou>
+      )}
 
       <div className="px-5 py-6 md:px-8 md:py-7">
         {loading ? (
