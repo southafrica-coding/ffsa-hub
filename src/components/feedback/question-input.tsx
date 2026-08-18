@@ -1,121 +1,76 @@
 "use client";
 
-// One feedback question, rendered for the public page.
+// One feedback question, in the Hub's editorial language.
 //
 // Shared by the live form (/fb/<slug>) and the builder's preview pane, so
-// what an admin previews is literally the control the team will see. It
-// leans on the `.ffsa-public` input styling from public-form-shell, and
-// only hand-rolls the controls that have no native equivalent: stars and
-// the numeric scale.
+// what an admin previews is literally the control the team will see.
+//
+// Text fields, selects and textareas are deliberately left unstyled here:
+// globals.css already gives every input the Hub's square, rule-bordered
+// treatment, and inheriting it is what keeps this page looking like the
+// rest of the Hub. Only the controls the Hub has no equivalent for —
+// scored rows and selectable option rows — are built by hand, from the
+// same tokens: ink fill for chosen, rule border for not, and the single
+// yellow tick as the accent.
 
-import {
-  fieldRange,
-  type FeedbackField,
-} from "@/lib/feedback/schema";
-import { tokensForBrand } from "@/components/public-form-shell";
-
-type Tokens = ReturnType<typeof tokensForBrand>;
+import { fieldRange, type FeedbackField } from "@/lib/feedback/schema";
 
 export function QuestionInput({
   field,
   value,
   error,
   onChange,
-  tokens: T,
   disabled,
 }: {
   field: FeedbackField;
   value: unknown;
   error?: string;
   onChange: (v: unknown) => void;
-  tokens: Tokens;
   disabled?: boolean;
 }) {
   const str = typeof value === "string" ? value : "";
-  const label = (
-    <label
-      className={`ffsa-public-label ${
-        field.required ? "ffsa-public-label-required" : ""
-      }`}
-    >
-      {field.label || "Untitled question"}
-    </label>
+
+  const header = (
+    <>
+      <label className="mono-label block">
+        {field.label || "Untitled question"}
+        {field.required && <span className="ml-1 text-[color:var(--yellow-ink,#8A6400)]">*</span>}
+      </label>
+      {field.helpText && (
+        <p className="mt-1 text-[12.5px] leading-relaxed text-[color:var(--text-tertiary)]">
+          {field.helpText}
+        </p>
+      )}
+    </>
   );
-  const help = field.helpText ? (
-    <p
-      style={{
-        fontSize: 12.5,
-        color: T.textDim,
-        margin: "-2px 0 8px",
-        lineHeight: 1.5,
-      }}
-    >
-      {field.helpText}
-    </p>
+  const err = error ? (
+    <p className="mono-label mt-2 text-destructive">{error}</p>
   ) : null;
-  const err = error ? <p className="ffsa-public-error">{error}</p> : null;
 
-  // ── stars ───────────────────────────────────────────────────
-  if (field.type === "rating") {
-    const current = Number(value) || 0;
-    return (
-      <div>
-        {label}
-        {help}
-        <div className="flex items-center gap-1.5" role="radiogroup">
-          {[1, 2, 3, 4, 5].map((n) => {
-            const on = n <= current;
-            return (
-              <button
-                key={n}
-                type="button"
-                role="radio"
-                aria-checked={current === n}
-                aria-label={`${n} out of 5`}
-                disabled={disabled}
-                // Tapping the current value again clears it, which is the
-                // only way to undo an accidental star on a touch screen.
-                onClick={() => onChange(current === n ? "" : n)}
-                style={{
-                  fontSize: 30,
-                  lineHeight: 1,
-                  padding: "2px 3px",
-                  background: "none",
-                  border: "none",
-                  cursor: disabled ? "default" : "pointer",
-                  color: on ? T.yellow : T.borderSoft,
-                  transition: "color .12s ease, transform .06s ease",
-                }}
-              >
-                ★
-              </button>
-            );
-          })}
-          {current > 0 && (
-            <span style={{ fontSize: 12.5, color: T.textDim, marginLeft: 8 }}>
-              {current} / 5
-            </span>
-          )}
-        </div>
-        {err}
-      </div>
-    );
-  }
-
-  // ── numeric scale / NPS ─────────────────────────────────────
-  if (field.type === "scale" || field.type === "nps") {
+  // ── scored rows: rating 1–5, scale, NPS 0–10 ───────────────
+  if (field.type === "rating" || field.type === "scale" || field.type === "nps") {
     const { min, max } = fieldRange(field);
-    const current = value === "" || value === null || value === undefined ? null : Number(value);
+    const current =
+      value === "" || value === null || value === undefined ? null : Number(value);
     const steps: number[] = [];
     for (let n = min; n <= max; n++) steps.push(n);
-    const minLabel = field.type === "nps" ? "Not at all" : field.minLabel;
-    const maxLabel = field.type === "nps" ? "Absolutely" : field.maxLabel;
+    const minLabel =
+      field.type === "nps" ? "Not at all" : field.type === "rating" ? "Poor" : field.minLabel;
+    const maxLabel =
+      field.type === "nps" ? "Absolutely" : field.type === "rating" ? "Excellent" : field.maxLabel;
 
     return (
       <div>
-        {label}
-        {help}
-        <div className="flex flex-wrap gap-1.5" role="radiogroup">
+        {header}
+        {/* Grid, not flex-wrap: an 11-point scale wraps on a phone, and
+            flex-1 would stretch the leftovers on the last row into fat
+            odd cells. auto-fit keeps every cell the same width however
+            many rows it takes. */}
+        <div
+          className="mt-3 grid border-l border-t border-rule bg-white"
+          style={{ gridTemplateColumns: "repeat(auto-fit, minmax(44px, 1fr))" }}
+          role="radiogroup"
+        >
           {steps.map((n) => {
             const on = current === n;
             return (
@@ -125,19 +80,14 @@ export function QuestionInput({
                 role="radio"
                 aria-checked={on}
                 disabled={disabled}
+                // Tapping the chosen value again clears it — the only way
+                // to undo a mis-tap on a phone.
                 onClick={() => onChange(on ? "" : n)}
-                style={{
-                  minWidth: 40,
-                  padding: "9px 0",
-                  flex: "1 1 40px",
-                  fontSize: 14,
-                  fontWeight: on ? 700 : 400,
-                  cursor: disabled ? "default" : "pointer",
-                  border: `2px solid ${on ? T.yellow : T.border}`,
-                  background: on ? T.yellow : T.cardElev,
-                  color: on ? T.card : T.text,
-                  transition: "background .12s ease, border-color .12s ease",
-                }}
+                className={`numeral border-b border-r border-rule py-3 text-center text-[19px] transition-colors ${
+                  on
+                    ? "bg-ink text-white"
+                    : "bg-white text-[color:var(--text-tertiary)] hover:bg-bone"
+                }`}
               >
                 {n}
               </button>
@@ -145,12 +95,9 @@ export function QuestionInput({
           })}
         </div>
         {(minLabel || maxLabel) && (
-          <div
-            className="flex justify-between"
-            style={{ fontSize: 11.5, color: T.textDim, marginTop: 6 }}
-          >
-            <span>{minLabel}</span>
-            <span>{maxLabel}</span>
+          <div className="mt-2 flex justify-between">
+            <span className="mono-label">{minLabel}</span>
+            <span className="mono-label">{maxLabel}</span>
           </div>
         )}
         {err}
@@ -158,90 +105,67 @@ export function QuestionInput({
     );
   }
 
-  // ── pick one — radio cards ──────────────────────────────────
+  // ── pick one ───────────────────────────────────────────────
   if (field.type === "choice" || field.type === "yes_no") {
     const options = field.type === "yes_no" ? ["Yes", "No"] : (field.options ?? []);
     return (
       <div>
-        {label}
-        {help}
-        <div className="space-y-2">
-          {options.map((opt) => {
-            const selected = str === opt;
-            return (
-              <label
-                key={opt}
-                className={`ffsa-public-card flex items-center gap-3 ${
-                  selected ? "is-selected" : ""
-                }`}
-                style={{ padding: "11px 14px", cursor: disabled ? "default" : "pointer" }}
-              >
-                <input
-                  type="radio"
-                  name={field.id}
-                  checked={selected}
-                  disabled={disabled}
-                  onChange={() => onChange(opt)}
-                  style={{ width: 16, height: 16, accentColor: T.yellow, flexShrink: 0 }}
-                />
-                <span style={{ fontSize: 14, color: T.text, lineHeight: 1.45 }}>{opt}</span>
-              </label>
-            );
-          })}
+        {header}
+        <div className="mt-3 space-y-2">
+          {options.map((opt) => (
+            <OptionRow
+              key={opt}
+              kind="radio"
+              name={field.id}
+              label={opt}
+              selected={str === opt}
+              disabled={disabled}
+              onSelect={() => onChange(opt)}
+            />
+          ))}
         </div>
         {err}
       </div>
     );
   }
 
-  // ── pick any — checkbox cards ───────────────────────────────
+  // ── pick any ───────────────────────────────────────────────
   if (field.type === "multi_choice") {
     const picked = Array.isArray(value) ? (value as string[]) : [];
     return (
       <div>
-        {label}
-        {help}
-        <div className="space-y-2">
-          {(field.options ?? []).map((opt) => {
-            const selected = picked.includes(opt);
-            return (
-              <label
-                key={opt}
-                className={`ffsa-public-card flex items-center gap-3 ${
-                  selected ? "is-selected" : ""
-                }`}
-                style={{ padding: "11px 14px", cursor: disabled ? "default" : "pointer" }}
-              >
-                <input
-                  type="checkbox"
-                  checked={selected}
-                  disabled={disabled}
-                  onChange={(e) =>
-                    onChange(
-                      e.target.checked
-                        ? [...picked, opt]
-                        : picked.filter((p) => p !== opt)
-                    )
-                  }
-                  style={{ width: 16, height: 16, accentColor: T.yellow, flexShrink: 0 }}
-                />
-                <span style={{ fontSize: 14, color: T.text, lineHeight: 1.45 }}>{opt}</span>
-              </label>
-            );
-          })}
+        {header}
+        <div className="mt-3 space-y-2">
+          {(field.options ?? []).map((opt) => (
+            <OptionRow
+              key={opt}
+              kind="checkbox"
+              name={field.id}
+              label={opt}
+              selected={picked.includes(opt)}
+              disabled={disabled}
+              onSelect={() =>
+                onChange(
+                  picked.includes(opt)
+                    ? picked.filter((p) => p !== opt)
+                    : [...picked, opt]
+                )
+              }
+            />
+          ))}
         </div>
         {err}
       </div>
     );
   }
 
-  // ── dropdown ────────────────────────────────────────────────
+  // ── dropdown ───────────────────────────────────────────────
   if (field.type === "dropdown") {
     return (
       <div>
-        {label}
-        {help}
+        {header}
         <select
+          className="mt-3 w-full"
           value={str}
           disabled={disabled}
           onChange={(e) => onChange(e.target.value)}
@@ -258,13 +182,13 @@ export function QuestionInput({
     );
   }
 
-  // ── long text ───────────────────────────────────────────────
+  // ── long text ──────────────────────────────────────────────
   if (field.type === "long_text") {
     return (
       <div>
-        {label}
-        {help}
+        {header}
         <textarea
+          className="mt-3 w-full"
           rows={4}
           value={str}
           disabled={disabled}
@@ -276,12 +200,12 @@ export function QuestionInput({
     );
   }
 
-  // ── short text / number / date ──────────────────────────────
+  // ── short text / number / date ─────────────────────────────
   return (
     <div>
-      {label}
-      {help}
+      {header}
       <input
+        className="mt-3 w-full"
         type={field.type === "number" ? "number" : field.type === "date" ? "date" : "text"}
         value={str}
         disabled={disabled}
@@ -290,5 +214,57 @@ export function QuestionInput({
       />
       {err}
     </div>
+  );
+}
+
+/**
+ * A selectable row. Chosen state is carried by an ink border and a solid
+ * yellow bar down the left edge — the design system's one accent, used
+ * once per row rather than as a fill, so a long list doesn't turn into a
+ * wall of yellow.
+ */
+function OptionRow({
+  kind,
+  name,
+  label,
+  selected,
+  disabled,
+  onSelect,
+}: {
+  kind: "radio" | "checkbox";
+  name: string;
+  label: string;
+  selected: boolean;
+  disabled?: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <label
+      className={`flex cursor-pointer items-center gap-3 border px-4 py-3 transition-colors ${
+        selected ? "border-ink bg-bone" : "border-rule bg-white hover:bg-bone"
+      }`}
+    >
+      <span
+        aria-hidden
+        className={`-my-3 -ml-4 mr-1 h-[46px] w-[3px] shrink-0 ${
+          selected ? "bg-yellow" : "bg-transparent"
+        }`}
+      />
+      <input
+        type={kind}
+        name={name}
+        checked={selected}
+        disabled={disabled}
+        onChange={onSelect}
+        className="h-4 w-4 shrink-0 accent-[#0A0A0A]"
+      />
+      {/* globals.css uppercases and mono-tracks every bare `label`, and
+          those properties inherit into the text inside one. An option is
+          someone's own wording — "Registration desk", not "REGISTRATION
+          DESK" — so the row text opts back out explicitly. */}
+      <span className="font-[family-name:var(--font-roboto)] text-[14.5px] font-normal normal-case leading-snug tracking-normal text-[color:var(--text-primary)]">
+        {label}
+      </span>
+    </label>
   );
 }

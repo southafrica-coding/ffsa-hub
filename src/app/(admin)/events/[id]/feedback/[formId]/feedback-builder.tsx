@@ -14,11 +14,6 @@ import {
   type FeedbackSection,
 } from "@/lib/feedback/schema";
 import { QuestionInput } from "@/components/feedback/question-input";
-import {
-  PublicFormInputStyles,
-  tokensForBrand,
-  type PublicShellBrand,
-} from "@/components/public-form-shell";
 
 export type FeedbackFormMeta = {
   id: string;
@@ -36,13 +31,11 @@ export function FeedbackBuilder({
   eventId,
   form,
   initialSchema,
-  brand,
   responseCount,
 }: {
   eventId: string;
   form: FeedbackFormMeta;
   initialSchema: FeedbackSchema;
-  brand: PublicShellBrand;
   responseCount: number;
 }) {
   const router = useRouter();
@@ -308,12 +301,7 @@ export function FeedbackBuilder({
       )}
 
       {tab === "preview" ? (
-        <PreviewPane
-          schema={schema}
-          brand={brand}
-          intro={intro}
-          isAnonymous={isAnonymous}
-        />
+        <PreviewPane schema={schema} intro={intro} isAnonymous={isAnonymous} />
       ) : (
         <>
           {/* ── settings ──────────────────────────────────── */}
@@ -770,68 +758,48 @@ function IconBtn({
   );
 }
 
-// The preview renders the real public control set on the real public
-// surface, so "does this read well on a phone at 11pm" is answerable
-// without publishing the form first.
+// The preview renders the real public controls on the real public
+// surface — same components, same styling — so "does this read well at
+// 11pm on a phone" is answerable without publishing the form first.
 function PreviewPane({
   schema,
-  brand,
   intro,
   isAnonymous,
 }: {
   schema: FeedbackSchema;
-  brand: PublicShellBrand;
   intro: string;
   isAnonymous: boolean;
 }) {
-  const T = tokensForBrand(brand);
   const [values, setValues] = useState<Record<string, unknown>>({});
 
   return (
-    <div className="ffsa-public">
-      <PublicFormInputStyles brand={brand} />
+    <div>
       <p className="mono-label mb-3">
         Preview · answers here are not saved
-        {isAnonymous ? " · anonymous form, no name is asked" : " · the live form asks for a name first"}
+        {isAnonymous
+          ? " · anonymous form, no name is asked"
+          : " · the live form asks for a name first"}
       </p>
-      {/* The page surround, then the card the questions actually sit in.
-          Getting this wrong renders ink-on-navy for the cream-card brands
-          (SEND, Camps), whose `text` token is meant for the card. */}
-      <div style={{ background: T.bg, padding: "28px 20px" }}>
-        <div
-          style={{
-            maxWidth: 520,
-            margin: "0 auto",
-            background: T.card,
-            border: `1px solid ${T.borderSoft}`,
-            padding: "28px 24px",
-          }}
-        >
+      <div className="border border-ink bg-bone p-5 sm:p-8">
+        <div className="mx-auto max-w-[560px] border border-rule bg-white p-6 sm:p-8">
           {intro.trim() && (
-            <p style={{ fontSize: 14.5, color: T.textDim, lineHeight: 1.6, margin: "0 0 24px" }}>
+            <p className="mb-7 text-[15px] leading-relaxed text-[color:var(--text-secondary)]">
               {intro}
             </p>
           )}
           {schema.sections.map((section) => (
-            <div key={section.id} style={{ marginBottom: 36 }}>
-              <h3
-                style={{
-                  fontSize: 20,
-                  color: T.text,
-                  margin: "0 0 4px",
-                  letterSpacing: "-0.01em",
-                }}
-              >
-                {section.title}
-              </h3>
+            <div key={section.id} className="mb-9 last:mb-0">
+              <div className="section-bar mb-5">
+                <span className="section-bar-title">{section.title}</span>
+              </div>
               {section.description && (
-                <p style={{ fontSize: 13.5, color: T.textDim, margin: "0 0 18px", lineHeight: 1.6 }}>
+                <p className="mb-6 text-[14px] leading-relaxed text-[color:var(--text-secondary)]">
                   {section.description}
                 </p>
               )}
-              <div className="space-y-6" style={{ marginTop: 18 }}>
+              <div className="space-y-7">
                 {section.fields.length === 0 ? (
-                  <p style={{ fontSize: 13, color: T.textDimmer, fontStyle: "italic" }}>
+                  <p className="text-sm italic text-muted-foreground">
                     No questions in this section.
                   </p>
                 ) : (
@@ -840,8 +808,9 @@ function PreviewPane({
                       key={field.id}
                       field={field}
                       value={values[field.id]}
-                      onChange={(v) => setValues((p) => ({ ...p, [field.id]: v }))}
-                      tokens={T}
+                      onChange={(v) =>
+                        setValues((p) => ({ ...p, [field.id]: v }))
+                      }
                     />
                   ))
                 )}

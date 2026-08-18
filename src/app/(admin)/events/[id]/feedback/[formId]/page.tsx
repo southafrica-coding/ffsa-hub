@@ -9,7 +9,6 @@ import {
 } from "@/services/event-feedback";
 import { getEventRoles } from "@/services/event-roles";
 import { parseFeedbackSchema } from "@/lib/feedback/schema";
-import type { PublicShellBrand } from "@/components/public-form-shell";
 import { FeedbackBuilder, type FeedbackFormMeta } from "./feedback-builder";
 import { SharePanel, type RosterPerson, type SendRow } from "./share-panel";
 
@@ -18,13 +17,6 @@ const STATUS_TONE: Record<string, Tone> = {
   open: "good",
   closed: "warn",
 };
-
-function normalizeBrand(raw: unknown): PublicShellBrand {
-  if (raw === "the_send") return "the_send";
-  if (raw === "ffsa_camps") return "ffsa_camps";
-  if (raw === "preachers") return "preachers";
-  return "ff";
-}
 
 type RoleRow = {
   role_name: string;
@@ -75,7 +67,7 @@ export default async function FeedbackFormPage({
     listFeedbackResponses(supabase, formId),
   ]);
 
-  const event = (form.events ?? null) as { title?: string; brand?: string | null } | null;
+  const event = (form.events ?? null) as { title?: string } | null;
   const responseRows = (responses ?? []) as { respondent_email: string | null }[];
 
   return (
@@ -110,7 +102,6 @@ export default async function FeedbackFormPage({
           eventId={eventId}
           form={form as FeedbackFormMeta}
           initialSchema={parseFeedbackSchema(form.schema)}
-          brand={normalizeBrand(event?.brand)}
           responseCount={responseRows.length}
         />
 
