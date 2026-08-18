@@ -355,7 +355,7 @@ export default function OnboardingPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center" style={{ background: "#0D0B09" }}>
+      <div className="flex min-h-screen items-center justify-center" style={{ background: "var(--surface-2)" }}>
         <p style={{ color: "var(--text-tertiary)", letterSpacing: "0.2em", fontSize: "11px", textTransform: "uppercase" }}>
           Loading…
         </p>
@@ -380,17 +380,17 @@ export default function OnboardingPage() {
   return (
     <div
       className="min-h-screen flex flex-col"
-      style={{ background: "#0D0B09" }}
+      style={{ background: "var(--surface-2)" }}
     >
       {/* Top bar */}
       <div
         className="flex items-center justify-between px-8 py-5"
-        style={{ borderBottom: "1px solid hsl(22 8% 12%)" }}
+        style={{ borderBottom: "1px solid var(--rule)" }}
       >
         <div className="flex items-center gap-3">
-          <Image src="/brand/ff-wordmark-white.png" alt="Fire & Fragrance" width={140} height={17} style={{ objectFit: "contain", display: "block" }} priority />
+          <Image src="/brand/ff-wordmark-black.png" alt="Fire & Fragrance" width={140} height={17} style={{ objectFit: "contain", display: "block" }} priority />
           <div style={{ height: "1px", width: "12px", background: "var(--yellow)" }} />
-          <span style={{ fontSize: "8px", letterSpacing: "0.3em", fontWeight: 700, color: "var(--yellow)", textTransform: "uppercase" }}>
+          <span style={{ fontSize: "8px", letterSpacing: "0.3em", fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase" }}>
             Hub
           </span>
         </div>
@@ -400,7 +400,7 @@ export default function OnboardingPage() {
       </div>
 
       {/* Step indicator */}
-      <div style={{ borderBottom: "1px solid hsl(22 8% 12%)" }}>
+      <div style={{ borderBottom: "1px solid var(--rule)" }}>
         <div className="flex">
           {activeSteps.map((def, i) => {
             const label = def.label;
@@ -420,7 +420,7 @@ export default function OnboardingPage() {
                     letterSpacing: "0.2em",
                     fontWeight: 700,
                     textTransform: "uppercase",
-                    color: isActive ? "var(--yellow)" : isDone ? "hsl(42 95% 55% / 0.55)" : "var(--text-tertiary)",
+                    color: isActive ? "var(--text-primary)" : isDone ? "var(--text-secondary)" : "var(--text-tertiary)",
                   }}
                 >
                   {label}
@@ -453,17 +453,17 @@ export default function OnboardingPage() {
               style={{
                 marginBottom: "1rem",
                 padding: "0.875rem 1.25rem",
-                borderRadius: "12px",
+                borderRadius: "0",
                 background: "var(--yellow-dim)",
                 border: "1px solid var(--yellow-border)",
               }}
             >
-              <p style={{ fontSize: "9px", letterSpacing: "0.2em", fontWeight: 700, textTransform: "uppercase", color: "var(--yellow)", marginBottom: "3px" }}>
+              <p style={{ fontSize: "9px", letterSpacing: "0.2em", fontWeight: 700, textTransform: "uppercase", color: "var(--text-primary)", marginBottom: "3px" }}>
                 You&rsquo;ve been accepted
               </p>
-              <p style={{ fontSize: "13px", color: "#F0EBE3", lineHeight: 1.4 }}>
+              <p style={{ fontSize: "13px", color: "var(--text-primary)", lineHeight: 1.4 }}>
                 Finish setting up your profile to join{" "}
-                <strong style={{ color: "#fff", fontWeight: 600 }}>{programName}</strong>.
+                <strong style={{ color: "var(--text-primary)", fontWeight: 600 }}>{programName}</strong>.
               </p>
             </div>
           )}
@@ -471,59 +471,59 @@ export default function OnboardingPage() {
           {/* Step card */}
           <div
             style={{
-              background: "hsl(22 10% 8%)",
-              border: "1px solid hsl(22 8% 14%)",
-              borderRadius: "16px",
+              background: "var(--surface-1)",
+              border: "1px solid var(--rule)",
+              borderRadius: "0",
               overflow: "hidden",
             }}
           >
             {/* Card header */}
-            <div style={{ padding: "1.75rem 2rem 1.25rem", borderBottom: "1px solid hsl(22 8% 12%)" }}>
+            <div style={{ padding: "1.75rem 2rem 1.25rem", borderBottom: "1px solid var(--rule)" }}>
               {step === 1 && <>
                 <p className="page-eyebrow" style={{ marginBottom: "6px" }}>Step {currentPos + 1} of {totalSteps}</p>
-                <h2 style={{ fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase", fontSize: "2rem", letterSpacing: "0.04em", color: "#F0EBE3", lineHeight: 1 }}>
+                <h2 style={{ fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase", fontSize: "2rem", letterSpacing: "0.04em", color: "var(--text-primary)", lineHeight: 1 }}>
                   Set Your Password
                 </h2>
                 <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>Create a secure password to log in later.</p>
               </>}
               {step === 2 && <>
                 <p className="page-eyebrow" style={{ marginBottom: "6px" }}>Step {currentPos + 1} of {totalSteps}</p>
-                <h2 style={{ fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase", fontSize: "2rem", letterSpacing: "0.04em", color: "#F0EBE3", lineHeight: 1 }}>
+                <h2 style={{ fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase", fontSize: "2rem", letterSpacing: "0.04em", color: "var(--text-primary)", lineHeight: 1 }}>
                   Personal Information
                 </h2>
                 <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>Tell us about yourself. Fields marked * are required.</p>
               </>}
               {step === 3 && <>
                 <p className="page-eyebrow" style={{ marginBottom: "6px" }}>Step {currentPos + 1} of {totalSteps}</p>
-                <h2 style={{ fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase", fontSize: "2rem", letterSpacing: "0.04em", color: "#F0EBE3", lineHeight: 1 }}>
+                <h2 style={{ fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase", fontSize: "2rem", letterSpacing: "0.04em", color: "var(--text-primary)", lineHeight: 1 }}>
                   Address
                 </h2>
                 <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>Your current residential address in South Africa (or your on-base address). Fields marked * are required.</p>
               </>}
               {step === 4 && <>
                 <p className="page-eyebrow" style={{ marginBottom: "6px" }}>Step {currentPos + 1} of {totalSteps}</p>
-                <h2 style={{ fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase", fontSize: "2rem", letterSpacing: "0.04em", color: "#F0EBE3", lineHeight: 1 }}>
+                <h2 style={{ fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase", fontSize: "2rem", letterSpacing: "0.04em", color: "var(--text-primary)", lineHeight: 1 }}>
                   Passport &amp; Visa
                 </h2>
                 <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>Your passport details are required for everyone. The visa section is only for international staff.</p>
               </>}
               {step === 5 && <>
                 <p className="page-eyebrow" style={{ marginBottom: "6px" }}>Step {currentPos + 1} of {totalSteps}</p>
-                <h2 style={{ fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase", fontSize: "2rem", letterSpacing: "0.04em", color: "#F0EBE3", lineHeight: 1 }}>
+                <h2 style={{ fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase", fontSize: "2rem", letterSpacing: "0.04em", color: "var(--text-primary)", lineHeight: 1 }}>
                   Emergency &amp; Health
                 </h2>
                 <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>Emergency contact and health insurance details. Fields marked * are required.</p>
               </>}
               {step === 6 && <>
                 <p className="page-eyebrow" style={{ marginBottom: "6px" }}>Step {currentPos + 1} of {totalSteps}</p>
-                <h2 style={{ fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase", fontSize: "2rem", letterSpacing: "0.04em", color: "#F0EBE3", lineHeight: 1 }}>
+                <h2 style={{ fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase", fontSize: "2rem", letterSpacing: "0.04em", color: "var(--text-primary)", lineHeight: 1 }}>
                   Your Family
                 </h2>
                 <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>Do you have a spouse or children? Add them here. This is optional — you can skip it and add them later from your profile.</p>
               </>}
               {step === 7 && <>
                 <p className="page-eyebrow" style={{ marginBottom: "6px" }}>Step {currentPos + 1} of {totalSteps}</p>
-                <h2 style={{ fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase", fontSize: "2rem", letterSpacing: "0.04em", color: "#F0EBE3", lineHeight: 1 }}>
+                <h2 style={{ fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase", fontSize: "2rem", letterSpacing: "0.04em", color: "var(--text-primary)", lineHeight: 1 }}>
                   Privacy &amp; Consent
                 </h2>
                 <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>Please review and accept our data processing agreement.</p>
@@ -549,7 +549,7 @@ export default function OnboardingPage() {
                       required disabled={passwordSet} />
                   </div>
                   {passwordSet && (
-                    <p style={{ fontSize: "12px", color: "hsl(142 55% 58%)", fontWeight: 600 }}>
+                    <p style={{ fontSize: "12px", color: "var(--green-text)", fontWeight: 600 }}>
                       ✓ Password set successfully!
                     </p>
                   )}
@@ -893,7 +893,7 @@ export default function OnboardingPage() {
                               letterSpacing: "0.1em",
                               textTransform: "uppercase",
                               fontWeight: 700,
-                              color: "var(--yellow)",
+                              color: "var(--text-primary)",
                               textDecoration: "underline",
                             }}
                           >
@@ -932,7 +932,7 @@ export default function OnboardingPage() {
             {/* Card footer / nav */}
             <div
               className="flex justify-between items-center"
-              style={{ padding: "1rem 2rem", borderTop: "1px solid hsl(22 8% 12%)" }}
+              style={{ padding: "1rem 2rem", borderTop: "1px solid var(--rule)" }}
             >
               <Button
                 variant="outline"
