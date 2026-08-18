@@ -69,7 +69,7 @@ Everything below is on `main` and deployed (PR #212, commit `aa53496`).
 | Bookings (3c) — page chrome | ✅ 15 routes |
 | Bookings (3c) — **the timeline itself, rebuilt** | ✅ see the 3c section below |
 | Event capacity, campaign open/click, finance ledger, bookings day strip | ✅ built (migrations 174, 165) |
-| Prayer room data model + wall (8a) | ✅ migrations 175, 168–171 applied |
+| Prayer room data model + wall (8a) | ⚠️ migrations 175, 168, 169, 170 applied — **171 is NOT** (see below) |
 | Prayer room UI — masthead, 9a, 10a, 10b, 11a, 12a, 12b | ✅ merged 2026-08-18 (PR #226, `87cae22`) — no migration |
 | Billing: `billing_mode` (172), generation guard + held-charge queue (173) | ✅ with tests |
 | Xero: read side, honest status, per-region org pinning | ✅ |
@@ -322,6 +322,35 @@ unbuilt. Build 9b first or the mobile day screen has a dead primary action.
 - 10a's seat-category chips sit in the bone filter strip under the tab rule
   rather than on the rule itself — the strip is the system's existing filter row
   (Events uses it) and it survives 375px.
+
+#### Migration 171 was never applied (found 2026-08-18)
+
+This file said "migrations 175, 168–171 applied". **171 is not.** Probed
+directly against production:
+
+    prayer_room_seat_types            OK   (167/175)
+    prayer_room_qualifications        OK   (168)
+    prayer_room_evaluations           OK   (169)
+    prayer_room_seat_requests         OK   (170)
+    prayer_room_evaluation_requests   OK   (170)
+    prayer_room_template_blocks       OK as a table, but band_name /
+                                      is_curated / weekly_focus DO NOT EXIST
+                                      -> 42703, so 171 never ran
+
+**Why nobody noticed for a whole session.** `/api/prayer-room/wall-meta` wraps
+its reads in a `safe()` helper that turns any error into `[]`, so a missing
+COLUMN and an empty TABLE are indistinguishable to every caller. The wall drew
+no bands, the 12b panel showed "no band is curated yet", and both looked like
+"nobody has set the bands up" rather than "the migration is missing". That
+graceful degradation was deliberate — the module has to render on a database
+partway through its migrations — but it hides a real schema gap. Worth making a
+schema error distinguishable from empty data, at least in development.
+
+The lesson this file already carries, applied to itself: a "migrations applied"
+row is a claim like any other, and the only way to know is to ask the database.
+
+**Until 171 is applied**, `+ SET UP A BAND` returns
+`Could not find the 'band_name' column` and the wall can never draw an anchor.
 
 #### The wall drew no MORNING / NOON / NIGHT (fixed 2026-08-18)
 
