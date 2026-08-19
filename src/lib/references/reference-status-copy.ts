@@ -19,6 +19,13 @@ export function referenceCountPhrase(n: number): string {
   return `all ${n} references`;
 }
 
+/** "your reference" / "both of your references" / "all 3 of your references" */
+export function referenceCountPossessive(n: number): string {
+  if (n <= 1) return "your reference";
+  if (n === 2) return "both of your references";
+  return `all ${n} of your references`;
+}
+
 /** Verb agreement for the phrase above. */
 export function referenceCountVerb(n: number): "has" | "have" {
   return n <= 1 ? "has" : "have";
