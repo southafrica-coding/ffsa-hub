@@ -523,3 +523,42 @@ version). Build the `messages` model from doc 11 first — billing's email momen
 
 Numbering note: design docs own 05–11. Analysis written by earlier sessions moved
 to **90–92** so it cannot be mistaken for a design brief.
+
+---
+
+## Session A — contacts directory + users · MERGED 2026-08-19 (PR #258, `92f67e8`)
+
+No migration. Frame **35a built**: search-first (searches `contact_emails` /
+`contact_phones` rather than the denormalised primaries, and reports what it
+matched on), 250px bone label aside with live counts, five-column real table,
+and the button that hands the current filter to Communications.
+
+Also cleared out of `(admin)/contacts` and `(admin)/users`: **36** non-zero
+inline `borderRadius`, **16** `#0D0B09`, **152** `hsl()` references to the old
+dark palette. Those inline styles are what actually rendered — the utility
+classes were already square via the config. 23 of the yellows were *text* on a
+white surface, i.e. illegible on `main` until this landed.
+
+Bug fixed in passing: the contacts label filter never filtered — `.eq()` on an
+outer embed returns every contact with non-matching labels merely emptied out.
+
+**Deferred to session G** (schema): `labels.kind`, so the sidebar has one label
+group rather than the frame's arrival/manual split; `person_types`;
+`marketing_status` as a cache of a `consent_events` ledger.
+
+**Still open on this screen:**
+- **Never visually verified.** No screenshot at 1440 or 375, and no Vercel
+  preview (the deployment failed on a Git-author permission, not a build error).
+  The frame check in the definition of done above has NOT been run on 35a.
+- Five demographic columns (DOB, marital, city, country, nationality) left the
+  list to match the frame's five. Still on the record and in the quick-view.
+- `contacts-list.tsx` (536 lines) is orphaned but not deleted.
+
+### Correction to the 2026-08-19 audit above
+
+That audit read `origin/main` only, so its "revised order" describes **merged
+state, not outstanding work**. PR #224 already carried the portal, the public
+routes and 27 admin routes; it was closed at Jack's direction on 2026-08-19 and
+its branch deleted (recovery SHA `87b925f`, restore command in a comment on
+#224). Before treating any remaining item as unstarted, check the open branches
+— this repo runs a dozen worktrees at once.
