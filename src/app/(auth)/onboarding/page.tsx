@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { updateUserProfile, completeOnboarding } from "@/services/users";
+import { updateUserProfile } from "@/services/users";
 import { isExpiryDatePast } from "@/lib/users/profile-fields";
 import { validatePassword } from "@/lib/auth/password";
 import { Button } from "@/components/ui/button";
@@ -345,7 +345,12 @@ export default function OnboardingPage() {
         health_insurance_expiry_date: nullify(form.health_insurance_expiry_date),
       });
       if (profileError) throw new Error(profileError.message);
-      await completeOnboarding(supabase, userId);
+      // Completion runs server-side so it can also notify the people admins.
+      const res = await fetch("/api/onboarding/complete", { method: "POST" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Could not finish setting up your account.");
+      }
       router.push("/dashboard");
     } catch (err: any) {
       setError(err.message ?? "Something went wrong. Please try again.");

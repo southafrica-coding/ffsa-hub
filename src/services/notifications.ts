@@ -17,6 +17,7 @@ import { getVehicleAccess } from "./vehicles";
 import { dateRangeLabel } from "@/lib/bookings/dates";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { callerIsAdmin, getLedMinistryIds } from "@/lib/auth/check-ministry-access";
+import { staffSignupNotifyEmails } from "@/lib/email/send-new-staff-notice";
 import {
   getInsuranceStatus,
   hasValidQueuedPolicy,
@@ -173,6 +174,66 @@ async function staffApprovalNotifs(supabase: Client, userId: string): Promise<Ap
       read: false,
     };
   });
+}
+
+// New staff who FINISHED onboarding in the last two weeks. Distinct from
+// staffApprovalNotifs above: that one covers people stuck at
+// status='pending_approval', while self-service signups skip that state
+// entirely and land active — so nobody heard about them at all.
+//
+// Scoped to the STAFF_SIGNUP_NOTIFY_EMAIL list (the same env var that drives
+// the email notice) plus super_admins. Reading other users' rows needs the
+// service-role client — see the users-RLS note on insuranceExpiryNotifs.
+const NEW_STAFF_WINDOW_DAYS = 14;
+
+async function newStaffOnboardedNotifs(
+  supabase: Client,
+  userId: string
+): Promise<AppNotification[]> {
+  const notifyList = staffSignupNotifyEmails();
+  let allowed = false;
+  if (notifyList.length > 0) {
+    const { data: me } = await supabase
+      .from("users")
+      .select("email")
+      .eq("id", userId)
+      .maybeSingle();
+    const myEmail = (me?.email ?? "").trim().toLowerCase();
+    allowed = !!myEmail && notifyList.includes(myEmail);
+  }
+  if (!allowed) allowed = await isSuperAdmin(supabase, userId);
+  if (!allowed) return [];
+
+  const since = new Date(
+    Date.now() - NEW_STAFF_WINDOW_DAYS * 24 * 60 * 60 * 1000
+  ).toISOString();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin: any = createAdminClient();
+  const { data } = await admin
+    .from("users")
+    .select("id, first_name, last_name, display_name, email, accepted_at")
+    .eq("signup_type", "staff")
+    .gte("accepted_at", since)
+    .order("accepted_at", { ascending: false })
+    .limit(CAP);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return ((data ?? []) as any[])
+    .filter((u) => u.id !== userId) // never announce yourself to yourself
+    .map((u) => {
+      const { label, ts } = timeAgo(u.accepted_at);
+      const name = personName(u);
+      return {
+        key: `new-staff:${u.id}`,
+        kind: "user" as const,
+        title: "New staff member joined",
+        body: u.email ? `${name} · ${u.email}` : name,
+        href: `/users/${u.id}`,
+        when: label,
+        ts,
+        read: false,
+      };
+    });
 }
 
 // Tell vehicle approvers/managers when a request arrives through the PUBLIC
@@ -382,7 +443,7 @@ async function insuranceExpiryNotifs(supabase: Client, userId: string): Promise<
     .map(({ _days, _tier, ...n }) => n);
 }
 
-const PROVIDERS = [bookingNotifs, bookingDecisionNotifs, staffApprovalNotifs, vehicleRequestNotifs, recordsMatchNotifs, insuranceExpiryNotifs];
+const PROVIDERS = [bookingNotifs, bookingDecisionNotifs, staffApprovalNotifs, newStaffOnboardedNotifs, vehicleRequestNotifs, recordsMatchNotifs, insuranceExpiryNotifs];
 
 // ── Public API ─────────────────────────────────────────────
 
