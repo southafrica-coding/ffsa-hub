@@ -244,6 +244,30 @@
   }
   input::placeholder, textarea::placeholder { color: var(--text-quiet) !important; }
 
+  /* Search fields put a Lucide icon inside the box and clear it with Tailwind's
+     pl-* utility — but the !important padding above (needed to beat shadcn's own
+     px-3) outguns any utility, so the icon lands on top of the text. Restore the
+     utility's padding at higher specificity than the blanket rule. Add a size
+     here if a field ever needs one we don't cover. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]).pl-8 {
+    padding-left: 2rem !important;
+  }
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]).pl-9 {
+    padding-left: 2.25rem !important;
+  }
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]).pl-10 {
+    padding-left: 2.5rem !important;
+  }
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]).pr-8 {
+    padding-right: 2rem !important;
+  }
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]).pr-9 {
+    padding-right: 2.25rem !important;
+  }
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]).pr-10 {
+    padding-right: 2.5rem !important;
+  }
+
   /* ── Label — mono, wide tracking ── */
   [data-slot="label"], label {
     font-family: var(--font-mono-brand) !important;
