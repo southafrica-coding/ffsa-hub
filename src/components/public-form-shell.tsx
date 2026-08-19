@@ -825,8 +825,31 @@ function adminChromeReclaim(
      ("🇿🇦 +27") outright. Found by auditing computed contrast across the
      rendered form, not by reading the classes. */
   .ffsa-public .text-primary { color: ${tk.yellow} !important; }
-  .ffsa-public .text-accent-foreground,
-  .ffsa-public .text-accent-foreground * { color: ${tk.text} !important; }
+  /*
+   * The `[data-slot]` component layer, which no class-based selector can
+   * reach — that is why the phone country-code trigger stayed invisible after
+   * the utilities above were reclaimed.
+   *
+   * globals.css paints every shadcn slot with `!important` off the light
+   * palette (`--ink`, `--text-secondary`) and is not scoped to the admin
+   * shell, so a transparent-background variant on a dark card renders
+   * near-black on near-black. Only the see-through variants need reclaiming:
+   * `default` and `destructive` set their own background, so they stay
+   * self-consistent.
+   */
+  .ffsa-public [data-slot="button"][data-variant="outline"],
+  .ffsa-public [data-slot="button"][data-variant="outline"] *,
+  .ffsa-public [data-slot="button"][data-variant="ghost"],
+  .ffsa-public [data-slot="button"][data-variant="ghost"] * {
+    color: ${tk.text} !important;
+  }
+  .ffsa-public [data-slot="button"][data-variant="outline"] {
+    border-color: ${tk.borderSoft} !important;
+  }
+  .ffsa-public [data-slot="button"][data-variant="outline"]:hover,
+  .ffsa-public [data-slot="button"][data-variant="ghost"]:hover {
+    background: ${tk.cardElev} !important;
+  }
   .ffsa-public .border,
   .ffsa-public .border-t,
   .ffsa-public .border-b {
