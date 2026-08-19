@@ -14,7 +14,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-const GOLD = "hsl(42 95% 55%)";
+const GOLD = "#0A0A0A";
 
 type DuplicateContact = {
   id: string;
@@ -175,12 +175,12 @@ function ClusterCard({
                   <span
                     className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border"
                     style={{
-                      borderColor: selected ? GOLD : "hsl(30 8% 40%)",
+                      borderColor: selected ? GOLD : "#45423B",
                       background: selected ? GOLD : "transparent",
                     }}
                   >
                     {selected && (
-                      <Check className="h-3 w-3" style={{ color: "#0D0B09" }} />
+                      <Check className="h-3 w-3" style={{ color: "#0A0A0A" }} />
                     )}
                   </span>
                   <span className="text-sm font-medium truncate">
@@ -190,7 +190,7 @@ function ClusterCard({
                 {selected ? (
                   <span
                     className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded"
-                    style={{ background: GOLD, color: "#0D0B09" }}
+                    style={{ background: GOLD, color: "#0A0A0A" }}
                   >
                     Keep
                   </span>

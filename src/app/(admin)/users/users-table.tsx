@@ -138,8 +138,8 @@ const STAGE_STYLES: Record<
   pending_approval: {
     className: "",
     style: {
-      borderColor: "hsl(42 95% 55% / 0.4)",
-      color: "hsl(42 95% 60%)",
+      borderColor: "#FFF4D9",
+      color: "#0A0A0A",
       background: "hsl(42 80% 18%)",
     },
   },

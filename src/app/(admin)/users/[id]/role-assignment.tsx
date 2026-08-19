@@ -102,9 +102,9 @@ export function RoleAssignment({
   return (
     <div
       style={{
-        background: "hsl(22 10% 8%)",
+        background: "#FFFFFF",
         border: "1px solid hsl(22 8% 14%)",
-        borderRadius: "12px",
+        borderRadius: 0,
         padding: "20px",
       }}
     >
@@ -119,13 +119,13 @@ export function RoleAssignment({
       >
         Job titles
       </p>
-      <p style={{ fontSize: "13px", color: "hsl(30 8% 50%)", marginBottom: "14px" }}>
+      <p style={{ fontSize: "13px", color: "#55524A", marginBottom: "14px" }}>
         Stack as many as fit the person — access is the combined total of every title.
       </p>
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
         {assigned.length === 0 && (
-          <span style={{ fontSize: "13px", color: "hsl(30 8% 45%)" }}>No titles yet.</span>
+          <span style={{ fontSize: "13px", color: "#45423B" }}>No titles yet.</span>
         )}
 
         {assigned.map((a) => (
@@ -135,10 +135,10 @@ export function RoleAssignment({
               display: "inline-flex",
               alignItems: "center",
               gap: "6px",
-              background: "hsl(42 95% 55% / 0.12)",
+              background: "#FFF4D9",
               color: "hsl(42 90% 72%)",
-              border: "1px solid hsl(42 95% 55% / 0.25)",
-              borderRadius: "8px",
+              border: "1px solid #FFF4D9",
+              borderRadius: 0,
               padding: "5px 10px",
               fontSize: "13px",
               fontWeight: 500,
@@ -174,8 +174,8 @@ export function RoleAssignment({
                 gap: "4px",
                 border: "1px dashed hsl(22 8% 28%)",
                 background: "transparent",
-                color: "hsl(30 8% 60%)",
-                borderRadius: "8px",
+                color: "#7C786C",
+                borderRadius: 0,
                 padding: "5px 10px",
                 fontSize: "13px",
                 cursor: options.length === 0 ? "not-allowed" : "pointer",
@@ -195,7 +195,7 @@ export function RoleAssignment({
                   overflowY: "auto",
                   background: "hsl(22 12% 10%)",
                   border: "1px solid hsl(22 8% 18%)",
-                  borderRadius: "8px",
+                  borderRadius: 0,
                   padding: "4px",
                   boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
                 }}
@@ -211,9 +211,9 @@ export function RoleAssignment({
                         textAlign: "left",
                         padding: "7px 10px",
                         fontSize: "12px",
-                        color: "hsl(30 8% 55%)",
+                        color: "#7C786C",
                         background: "transparent",
-                        borderRadius: "6px",
+                        borderRadius: 0,
                         cursor: "pointer",
                       }}
                     >
@@ -225,7 +225,7 @@ export function RoleAssignment({
                           display: "block",
                           padding: "7px 10px",
                           fontSize: "12px",
-                          color: "hsl(30 8% 45%)",
+                          color: "#45423B",
                         }}
                       >
                         No programs available.
@@ -243,7 +243,7 @@ export function RoleAssignment({
                           fontSize: "13px",
                           color: "#F0EBE3",
                           background: "transparent",
-                          borderRadius: "6px",
+                          borderRadius: 0,
                           cursor: "pointer",
                         }}
                       >
@@ -264,13 +264,13 @@ export function RoleAssignment({
                         fontSize: "13px",
                         color: "#F0EBE3",
                         background: "transparent",
-                        borderRadius: "6px",
+                        borderRadius: 0,
                         cursor: "pointer",
                       }}
                     >
                       {r.display_name}
                       {r.scope_type === "program" && (
-                        <span style={{ color: "hsl(30 8% 45%)", fontSize: "11px" }}> · by program</span>
+                        <span style={{ color: "#45423B", fontSize: "11px" }}> · by program</span>
                       )}
                     </button>
                   ))

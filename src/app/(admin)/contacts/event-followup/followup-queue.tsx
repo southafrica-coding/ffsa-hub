@@ -114,11 +114,11 @@ export function FollowupQueue({
         <div
           className="rounded-xl"
           style={{
-            background: "hsl(22 10% 8%)",
+            background: "#FFFFFF",
             border: "1px solid hsl(22 8% 14%)",
             textAlign: "center",
             padding: "3rem 1rem",
-            color: "hsl(30 8% 45%)",
+            color: "#45423B",
             fontSize: "13px",
           }}
         >
@@ -154,7 +154,7 @@ const th: React.CSSProperties = {
   fontSize: "10px",
   letterSpacing: "0.15em",
   fontWeight: 700,
-  color: "hsl(30 8% 42%)",
+  color: "#45423B",
   textTransform: "uppercase",
   padding: "12px 16px",
 };
@@ -176,8 +176,8 @@ function AgeBadge({ days }: { days: number }) {
     days >= 7
       ? { bg: "hsl(0 60% 18%)", fg: "hsl(0 80% 65%)" }
       : days >= 3
-      ? { bg: "hsl(42 80% 18%)", fg: "hsl(42 95% 60%)" }
-      : { bg: "hsl(22 10% 14%)", fg: "hsl(30 8% 60%)" };
+      ? { bg: "hsl(42 80% 18%)", fg: "#0A0A0A" }
+      : { bg: "#F1EFE7", fg: "#7C786C" };
   return (
     <span
       style={{
@@ -186,7 +186,7 @@ function AgeBadge({ days }: { days: number }) {
         fontWeight: 700,
         letterSpacing: "0.05em",
         padding: "3px 8px",
-        borderRadius: "4px",
+        borderRadius: 0,
         background: palette.bg,
         color: palette.fg,
       }}
@@ -256,9 +256,9 @@ function FilterBar({
             style={{
               fontSize: "12px",
               padding: "6px 10px",
-              borderRadius: "999px",
+              borderRadius: 0,
               border: "1px solid hsl(22 8% 18%)",
-              background: "hsl(22 10% 10%)",
+              background: "#F4F2EA",
               color: "#F0EBE3",
             }}
           >
@@ -308,7 +308,7 @@ function EventGroup({
     <section
       className="overflow-hidden rounded-xl"
       style={{
-        background: "hsl(22 10% 8%)",
+        background: "#FFFFFF",
         border: "1px solid hsl(22 8% 14%)",
       }}
     >
@@ -333,7 +333,7 @@ function EventGroup({
           </h2>
           <span
             style={{
-              color: "hsl(30 8% 50%)",
+              color: "#55524A",
               fontSize: "11px",
               letterSpacing: "0.15em",
               textTransform: "uppercase",
@@ -387,14 +387,14 @@ function EventGroup({
                   {r.staff_notes && (
                     <span
                       title="Has staff notes"
-                      style={{ color: "hsl(42 95% 60%)", display: "inline-flex" }}
+                      style={{ color: "#0A0A0A", display: "inline-flex" }}
                     >
                       <StickyNote className="h-3 w-3" />
                     </span>
                   )}
                 </div>
                 {r.contact.email && (
-                  <div style={{ color: "hsl(30 8% 50%)", fontSize: "11px" }}>
+                  <div style={{ color: "#55524A", fontSize: "11px" }}>
                     {r.contact.email}
                   </div>
                 )}
@@ -419,12 +419,12 @@ function EventGroup({
                         fontSize: "10.5px",
                         fontWeight: 600,
                         padding: "2px 7px",
-                        borderRadius: "999px",
+                        borderRadius: 0,
                         lineHeight: 1.35,
                         background: o.active
                           ? "hsl(42 80% 14%)"
                           : "hsl(22 8% 13%)",
-                        color: o.active ? "hsl(42 95% 60%)" : "hsl(30 8% 55%)",
+                        color: o.active ? "#0A0A0A" : "#7C786C",
                         border: o.active
                           ? "1px solid hsl(42 80% 22%)"
                           : "1px solid transparent",
@@ -436,13 +436,13 @@ function EventGroup({
                 </div>
               </TableCell>
               <TableCell>
-                <div style={{ color: "hsl(30 8% 70%)", fontSize: "12px" }}>
+                <div style={{ color: "#9A9689", fontSize: "12px" }}>
                   {r.stage_label}
                 </div>
                 {r.total_steps > 0 && (
                   <div
                     style={{
-                      color: "hsl(30 8% 45%)",
+                      color: "#45423B",
                       fontSize: "10px",
                       letterSpacing: "0.05em",
                       marginTop: "2px",
@@ -463,7 +463,7 @@ function EventGroup({
                 ) : (
                   <span
                     style={{
-                      color: "hsl(42 95% 55%)",
+                      color: "#0A0A0A",
                       fontSize: "11px",
                       fontWeight: 600,
                       letterSpacing: "0.05em",
@@ -501,12 +501,12 @@ function Chip({
         fontWeight: 600,
         letterSpacing: "0.02em",
         padding: "6px 12px",
-        borderRadius: "999px",
+        borderRadius: 0,
         border: active
-          ? "1px solid hsl(42 95% 55%)"
+          ? "1px solid #0A0A0A"
           : "1px solid hsl(22 8% 18%)",
-        background: active ? "hsl(42 95% 55% / 0.12)" : "hsl(22 10% 10%)",
-        color: active ? "hsl(42 95% 60%)" : "hsl(30 8% 70%)",
+        background: active ? "#FFF4D9" : "#F4F2EA",
+        color: active ? "#0A0A0A" : "#9A9689",
         cursor: "pointer",
         display: "inline-flex",
         alignItems: "center",
@@ -520,9 +520,9 @@ function Chip({
             fontSize: "10px",
             fontWeight: 700,
             padding: "1px 6px",
-            borderRadius: "999px",
-            background: active ? "hsl(42 95% 55%)" : "hsl(22 8% 18%)",
-            color: active ? "#0D0B09" : "hsl(30 8% 70%)",
+            borderRadius: 0,
+            background: active ? "#FFB801" : "hsl(22 8% 18%)",
+            color: active ? "#0A0A0A" : "#9A9689",
             lineHeight: 1,
           }}
         >

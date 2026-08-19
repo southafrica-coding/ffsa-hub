@@ -181,3 +181,25 @@ export async function pickLeastUsedLabelColor(supabase: Client): Promise<string>
   }
   return bestHex;
 }
+
+// ────────────────────────────────────────────────────────────
+// Label counts for the directory sidebar (frame 35a)
+// ────────────────────────────────────────────────────────────
+// "The count beside each one is live, so a filtered list is already the
+// audience." Counts are of ACTIVE contacts only — an archived person is not
+// someone you would mail, so including them would make every count a lie the
+// moment you clicked through to the list.
+export async function getLabelCounts(
+  supabase: Client
+): Promise<Map<string, number>> {
+  const { data } = await supabase
+    .from("contact_labels")
+    .select("label_id, contacts!inner(status)")
+    .eq("contacts.status", "active");
+
+  const counts = new Map<string, number>();
+  for (const row of (data ?? []) as Array<{ label_id: string }>) {
+    counts.set(row.label_id, (counts.get(row.label_id) ?? 0) + 1);
+  }
+  return counts;
+}

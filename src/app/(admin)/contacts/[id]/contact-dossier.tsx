@@ -29,7 +29,7 @@ import type {
   DossierForm,
 } from "@/services/contact-dossier";
 
-const GOLD = "hsl(42 95% 55%)";
+const GOLD = "#0A0A0A";
 
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
@@ -367,7 +367,7 @@ function Stat({ n, label, icon }: { n: number; label: string; icon: ReactNode })
       style={{
         borderColor: active ? GOLD : undefined,
         background: active ? "hsl(42 80% 10%)" : undefined,
-        color: active ? undefined : "hsl(30 8% 45%)",
+        color: active ? undefined : "#45423B",
       }}
     >
       <span style={{ color: active ? GOLD : "inherit" }}>{icon}</span>

@@ -64,14 +64,14 @@ function ScopeSection({
     <div
       style={{
         border: "1px solid hsl(22 8% 14%)",
-        borderRadius: "8px",
+        borderRadius: 0,
         overflow: "hidden",
       }}
     >
       {/* Scope header row */}
       <div
         className="flex items-center gap-3 px-4 py-3 cursor-pointer select-none"
-        style={{ background: "hsl(22 10% 7%)" }}
+        style={{ background: "#FFFFFF" }}
         onClick={() => setOpen((o) => !o)}
       >
         {/* Select-all checkbox */}
@@ -80,12 +80,12 @@ function ScopeSection({
           style={{
             width: "18px",
             height: "18px",
-            borderRadius: "4px",
+            borderRadius: 0,
             border: "1px solid hsl(22 8% 28%)",
             background: allChecked
-              ? "hsl(42 95% 55%)"
+              ? "#0A0A0A"
               : someChecked
-              ? "hsl(42 95% 55% / 0.3)"
+              ? "#FFF4D9"
               : "transparent",
             display: "flex",
             alignItems: "center",
@@ -97,7 +97,7 @@ function ScopeSection({
           {allChecked ? (
             <Check className="h-3 w-3 text-black" />
           ) : someChecked ? (
-            <Minus className="h-3 w-3" style={{ color: "hsl(42 95% 55%)" }} />
+            <Minus className="h-3 w-3" style={{ color: "#0A0A0A" }} />
           ) : null}
         </button>
 
@@ -107,7 +107,7 @@ function ScopeSection({
             style={{
               fontSize: "9px",
               letterSpacing: "0.15em",
-              color: "hsl(30 8% 42%)",
+              color: "#45423B",
               marginLeft: "8px",
               textTransform: "uppercase",
             }}
@@ -139,16 +139,16 @@ function ScopeSection({
               <label
                 key={p.id}
                 className="flex items-center gap-2 cursor-pointer"
-                style={{ fontSize: "13px", color: "hsl(30 8% 65%)" }}
+                style={{ fontSize: "13px", color: "#9A9689" }}
               >
                 <button
                   onClick={() => onToggle(p.id, scope.scope_type, scope.id, !checked)}
                   style={{
                     width: "16px",
                     height: "16px",
-                    borderRadius: "3px",
+                    borderRadius: 0,
                     border: "1px solid hsl(22 8% 28%)",
-                    background: checked ? "hsl(42 95% 55%)" : "transparent",
+                    background: checked ? "#FFB801" : "transparent",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -224,9 +224,9 @@ function ModuleSection({
   return (
     <div
       style={{
-        background: "hsl(22 10% 8%)",
+        background: "#FFFFFF",
         border: "1px solid hsl(22 8% 14%)",
-        borderRadius: "12px",
+        borderRadius: 0,
         overflow: "hidden",
       }}
     >
@@ -251,18 +251,18 @@ function ModuleSection({
           <button
             onClick={toggleGlobalAll}
             className="flex items-center gap-1.5 text-xs"
-            style={{ color: "hsl(30 8% 45%)", cursor: "pointer" }}
+            style={{ color: "#45423B", cursor: "pointer" }}
           >
             <div
               style={{
                 width: "16px",
                 height: "16px",
-                borderRadius: "3px",
+                borderRadius: 0,
                 border: "1px solid hsl(22 8% 28%)",
                 background: globalAllChecked
-                  ? "hsl(42 95% 55%)"
+                  ? "#0A0A0A"
                   : globalSomeChecked
-                  ? "hsl(42 95% 55% / 0.3)"
+                  ? "#FFF4D9"
                   : "transparent",
                 display: "flex",
                 alignItems: "center",
@@ -272,7 +272,7 @@ function ModuleSection({
               {globalAllChecked ? (
                 <Check className="h-2.5 w-2.5 text-black" />
               ) : globalSomeChecked ? (
-                <Minus className="h-2.5 w-2.5" style={{ color: "hsl(42 95% 55%)" }} />
+                <Minus className="h-2.5 w-2.5" style={{ color: "#0A0A0A" }} />
               ) : null}
             </div>
             Select all
@@ -309,16 +309,16 @@ function ModuleSection({
                 <label
                   key={p.id}
                   className="flex items-center gap-2 cursor-pointer"
-                  style={{ fontSize: "13px", color: "hsl(30 8% 65%)" }}
+                  style={{ fontSize: "13px", color: "#9A9689" }}
                 >
                   <button
                     onClick={() => onToggle(p.id, null, null, !checked)}
                     style={{
                       width: "16px",
                       height: "16px",
-                      borderRadius: "3px",
+                      borderRadius: 0,
                       border: "1px solid hsl(22 8% 28%)",
-                      background: checked ? "hsl(42 95% 55%)" : "transparent",
+                      background: checked ? "#FFB801" : "transparent",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -343,7 +343,7 @@ function ModuleSection({
                 fontSize: "9px",
                 letterSpacing: "0.2em",
                 fontWeight: 600,
-                color: "hsl(30 8% 38%)",
+                color: "#2A2822",
                 textTransform: "uppercase",
               }}
             >
@@ -606,11 +606,11 @@ export function PermissionManager({
           style={{
             background: isTargetSuperAdmin
               ? "hsl(42 30% 10%)"
-              : "hsl(22 10% 8%)",
+              : "#FFFFFF",
             border: isTargetSuperAdmin
-              ? "1px solid hsl(42 95% 55% / 0.4)"
+              ? "1px solid #FFF4D9"
               : "1px solid hsl(22 8% 14%)",
-            borderRadius: "12px",
+            borderRadius: 0,
             padding: "1.25rem 1.5rem",
           }}
         >
@@ -621,8 +621,8 @@ export function PermissionManager({
                   fontSize: "9px",
                   letterSpacing: "0.2em",
                   color: isTargetSuperAdmin
-                    ? "hsl(42 95% 55%)"
-                    : "hsl(30 8% 42%)",
+                    ? "#0A0A0A"
+                    : "#45423B",
                   textTransform: "uppercase",
                   fontWeight: 700,
                   marginBottom: "6px",
@@ -639,7 +639,7 @@ export function PermissionManager({
               {isSelf && (
                 <p
                   className="text-xs mt-2"
-                  style={{ color: "hsl(30 8% 55%)" }}
+                  style={{ color: "#7C786C" }}
                 >
                   You cannot change your own super_admin status.
                 </p>
@@ -652,12 +652,12 @@ export function PermissionManager({
               style={
                 isTargetSuperAdmin
                   ? {
-                      borderColor: "hsl(42 95% 55% / 0.4)",
-                      color: "hsl(42 95% 55%)",
+                      borderColor: "#FFF4D9",
+                      color: "#0A0A0A",
                     }
                   : {
-                      background: "hsl(42 95% 55%)",
-                      color: "#0D0B09",
+                      background: "#FFB801",
+                      color: "#0A0A0A",
                       fontWeight: 700,
                     }
               }
@@ -676,9 +676,9 @@ export function PermissionManager({
       {isSuperAdmin && (
         <div
           style={{
-            background: "hsl(22 10% 8%)",
+            background: "#FFFFFF",
             border: "1px solid hsl(22 8% 14%)",
-            borderRadius: "12px",
+            borderRadius: 0,
             padding: "1.25rem 1.5rem",
           }}
         >
@@ -686,7 +686,7 @@ export function PermissionManager({
             <div className="flex-1">
               <Label
                 htmlFor="job-title"
-                style={{ fontSize: "9px", letterSpacing: "0.2em", color: "hsl(30 8% 42%)", textTransform: "uppercase" }}
+                style={{ fontSize: "9px", letterSpacing: "0.2em", color: "#45423B", textTransform: "uppercase" }}
               >
                 Job Title
               </Label>
@@ -708,9 +708,9 @@ export function PermissionManager({
                     fontWeight: 700,
                     textTransform: "uppercase",
                     padding: "3px 8px",
-                    borderRadius: "4px",
+                    borderRadius: 0,
                     background: "hsl(42 80% 18%)",
-                    color: "hsl(42 95% 55%)",
+                    color: "#0A0A0A",
                   }}
                 >
                   Pending Approval
@@ -724,7 +724,7 @@ export function PermissionManager({
                     fontWeight: 700,
                     textTransform: "uppercase",
                     padding: "3px 8px",
-                    borderRadius: "4px",
+                    borderRadius: 0,
                     background: "hsl(142 60% 20%)",
                     color: "hsl(142 60% 55%)",
                   }}
@@ -736,8 +736,8 @@ export function PermissionManager({
                 onClick={handleSave}
                 disabled={saving || isPending}
                 style={{
-                  background: "hsl(42 95% 55%)",
-                  color: "#0D0B09",
+                  background: "#FFB801",
+                  color: "#0A0A0A",
                   fontWeight: 700,
                 }}
               >
@@ -757,9 +757,9 @@ export function PermissionManager({
         <div
           className="flex items-start justify-between gap-4"
           style={{
-            background: "hsl(22 10% 8%)",
+            background: "#FFFFFF",
             border: "1px solid hsl(22 8% 14%)",
-            borderRadius: "12px",
+            borderRadius: 0,
             padding: "1.25rem 1.5rem",
           }}
         >
@@ -769,7 +769,7 @@ export function PermissionManager({
                 fontSize: "9px",
                 letterSpacing: "0.2em",
                 fontWeight: 700,
-                color: "hsl(42 95% 55%)",
+                color: "#0A0A0A",
                 textTransform: "uppercase",
               }}
             >
@@ -783,7 +783,7 @@ export function PermissionManager({
           <Button
             onClick={handleSave}
             disabled={saving || isPending}
-            style={{ background: "hsl(42 95% 55%)", color: "#0D0B09", fontWeight: 700 }}
+            style={{ background: "#FFB801", color: "#0A0A0A", fontWeight: 700 }}
           >
             {saving ? "Saving…" : "Save Changes"}
           </Button>
@@ -797,7 +797,7 @@ export function PermissionManager({
             fontSize: "9px",
             letterSpacing: "0.3em",
             fontWeight: 700,
-            color: "hsl(42 95% 55%)",
+            color: "#0A0A0A",
             textTransform: "uppercase",
           }}
         >

@@ -12,11 +12,98 @@ export type ContactSort =
   | "name_desc"
   | "recent";
 
+// One identifier (an email or a phone) that matched a search term, with
+// enough provenance for the directory to say WHAT it matched on — frame 35a's
+// "matched on an old phone she no longer uses".
+export type IdentifierHit = {
+  contactId: string;
+  kind: "email" | "phone";
+  value: string;
+  isPrimary: boolean;
+  // 1-based position among that contact's identifiers of the same kind, so the
+  // UI can render "PHONE 2" rather than the raw value.
+  position: number;
+};
+
+// Contacts whose identifiers match `term`, across contact_emails and
+// contact_phones rather than the denormalised contacts.email / contacts.phone
+// cache. This is the difference between "she is not in the system" and "she is,
+// under the address she used in 2023".
+//
+// Capped: a term like "0" would match every phone on file and blow the URL
+// length of the id.in.() filter that consumes this. The cap is generous
+// relative to any real lookup and is reported so the caller can say so.
+export const IDENTIFIER_MATCH_CAP = 200;
+
+export async function findContactsByIdentifier(
+  supabase: Client,
+  term: string
+): Promise<{ hits: IdentifierHit[]; capped: boolean }> {
+  const like = `%${term.replace(/[,()]/g, "")}%`;
+  const normalized = term.replace(/[^0-9+a-zA-Z@.]/g, "");
+
+  const [emails, phones] = await Promise.all([
+    supabase
+      .from("contact_emails")
+      .select("contact_id, email, is_primary, created_at")
+      .ilike("email", like)
+      .order("created_at", { ascending: true })
+      .limit(IDENTIFIER_MATCH_CAP + 1),
+    // Phones are matched on both the raw and the normalised column: someone
+    // types "082 445 1120" but E.164 stores "+27824451120", and vice versa.
+    supabase
+      .from("contact_phones")
+      .select("contact_id, phone, phone_normalized, is_primary, created_at")
+      .or(
+        `phone.ilike.${like}` +
+          (normalized ? `,phone_normalized.ilike.%${normalized}%` : "")
+      )
+      .order("created_at", { ascending: true })
+      .limit(IDENTIFIER_MATCH_CAP + 1),
+  ]);
+
+  const hits: IdentifierHit[] = [];
+  // Position is per contact per kind, in the order the identifiers were added.
+  const seen = new Map<string, number>();
+
+  for (const row of (emails.data ?? []) as Array<Record<string, unknown>>) {
+    const contactId = row.contact_id as string;
+    const n = (seen.get(`e:${contactId}`) ?? 0) + 1;
+    seen.set(`e:${contactId}`, n);
+    hits.push({
+      contactId,
+      kind: "email",
+      value: row.email as string,
+      isPrimary: Boolean(row.is_primary),
+      position: n,
+    });
+  }
+  for (const row of (phones.data ?? []) as Array<Record<string, unknown>>) {
+    const contactId = row.contact_id as string;
+    const n = (seen.get(`p:${contactId}`) ?? 0) + 1;
+    seen.set(`p:${contactId}`, n);
+    hits.push({
+      contactId,
+      kind: "phone",
+      value: row.phone as string,
+      isPrimary: Boolean(row.is_primary),
+      position: n,
+    });
+  }
+
+  const capped = hits.length > IDENTIFIER_MATCH_CAP;
+  return { hits: capped ? hits.slice(0, IDENTIFIER_MATCH_CAP) : hits, capped };
+}
+
 export async function getContacts(
   supabase: Client,
   options?: {
     status?: string;
     search?: string;
+    // Contact ids already known to match by identifier (from
+    // findContactsByIdentifier). OR-ed with the name/cache columns so a hit on
+    // a non-primary address still returns the person.
+    identifierMatchIds?: string[];
     labelId?: string;
     marketingStatus?: string;
     sort?: ContactSort;
@@ -24,10 +111,17 @@ export async function getContacts(
     offset?: number;
   }
 ) {
+  // contact_emails/contact_phones are selected as COUNTS only — the directory's
+  // "3 emails, 2 phones on file" line needs the number, not the addresses, and
+  // pulling every identifier for 25 rows would triple the payload.
+  //
+  // The label filter needs an INNER join to actually filter; a plain embed
+  // returns every contact with the non-matching labels merely emptied out.
+  const labelJoin = options?.labelId ? "contact_labels!inner" : "contact_labels";
   let query = supabase
     .from("contacts")
     .select(
-      "*, person_type_assignments(person_types(*)), contact_labels(labels(id, slug, name, color))",
+      `*, person_type_assignments(person_types(*)), ${labelJoin}(labels(id, slug, name, color)), contact_emails(count), contact_phones(count)`,
       { count: "exact" }
     );
 
@@ -84,10 +178,19 @@ export async function getContacts(
       .map((token) => token.replace(/[,()]/g, ""))
       .filter(Boolean);
 
+    // Ids that matched on an identifier are OR-ed in alongside the column
+    // filters. They are added to EVERY token's clause because the identifier
+    // lookup was run against the whole search string — a two-token search like
+    // "naledi 082" should still surface her if the phone alone identified her.
+    const idClause =
+      options.identifierMatchIds && options.identifierMatchIds.length > 0
+        ? `,id.in.(${options.identifierMatchIds.join(",")})`
+        : "";
+
     for (const token of tokens) {
       const term = `%${token}%`;
       query = query.or(
-        columns.map((column) => `${column}.ilike.${term}`).join(",")
+        columns.map((column) => `${column}.ilike.${term}`).join(",") + idClause
       );
     }
   }

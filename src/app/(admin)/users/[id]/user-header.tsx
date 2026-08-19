@@ -52,8 +52,8 @@ export function UserHeader({
   const stageColors: Record<UserLifecycleStage, { bg: string; fg: string }> = {
     active: { bg: "hsl(142 60% 20%)", fg: "hsl(142 60% 55%)" },
     profile_incomplete: { bg: "hsl(28 70% 16%)", fg: "hsl(32 90% 60%)" },
-    pending_approval: { bg: "hsl(42 80% 18%)", fg: "hsl(42 95% 55%)" },
-    invited: { bg: "hsl(22 8% 15%)", fg: "hsl(30 8% 55%)" },
+    pending_approval: { bg: "hsl(42 80% 18%)", fg: "#0A0A0A" },
+    invited: { bg: "hsl(22 8% 15%)", fg: "#7C786C" },
     inactive: { bg: "hsl(0 45% 16%)", fg: "hsl(0 70% 62%)" },
   };
   const s = stageColors[lifecycle.stage];
@@ -90,7 +90,7 @@ export function UserHeader({
               fontWeight: 700,
               textTransform: "uppercase",
               padding: "2px 7px",
-              borderRadius: "4px",
+              borderRadius: 0,
               background: s.bg,
               color: s.fg,
             }}

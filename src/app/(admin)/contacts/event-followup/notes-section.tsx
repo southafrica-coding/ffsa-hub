@@ -67,14 +67,14 @@ export function NotesSection({
             fontSize: "9px",
             letterSpacing: "0.25em",
             fontWeight: 700,
-            color: "hsl(42 95% 55%)",
+            color: "#0A0A0A",
             textTransform: "uppercase",
           }}
         >
           Notes
         </p>
         {updatedAt && updatedBy && (
-          <span style={{ fontSize: "10px", color: "hsl(30 8% 45%)" }}>
+          <span style={{ fontSize: "10px", color: "#45423B" }}>
             edited by {personLabel(updatedBy)} ·{" "}
             {new Date(updatedAt).toLocaleString()}
           </span>
@@ -89,9 +89,9 @@ export function NotesSection({
         style={{
           marginTop: "8px",
           width: "100%",
-          background: "hsl(22 10% 7%)",
+          background: "#FFFFFF",
           border: "1px solid hsl(22 8% 14%)",
-          borderRadius: "8px",
+          borderRadius: 0,
           padding: "10px 12px",
           color: "#F0EBE3",
           fontSize: "13px",
@@ -111,8 +111,8 @@ export function NotesSection({
           disabled={!dirty || saving}
           size="sm"
           style={{
-            background: dirty ? "hsl(42 95% 55%)" : "hsl(22 10% 12%)",
-            color: dirty ? "#0D0B09" : "hsl(30 8% 45%)",
+            background: dirty ? "#FFB801" : "#0A0A0A",
+            color: dirty ? "#0A0A0A" : "#45423B",
             fontWeight: 700,
             fontSize: "12px",
             cursor: dirty && !saving ? "pointer" : "default",

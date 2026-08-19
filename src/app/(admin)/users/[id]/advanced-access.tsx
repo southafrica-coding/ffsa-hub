@@ -8,9 +8,9 @@ export function AdvancedAccess({ children }: { children: ReactNode }) {
   return (
     <div
       style={{
-        background: "hsl(22 10% 8%)",
+        background: "#FFFFFF",
         border: "1px solid hsl(22 8% 14%)",
-        borderRadius: "12px",
+        borderRadius: 0,
         overflow: "hidden",
       }}
     >
@@ -21,15 +21,15 @@ export function AdvancedAccess({ children }: { children: ReactNode }) {
       >
         <span
           className="flex items-center gap-2"
-          style={{ fontSize: "13px", color: "hsl(30 8% 60%)" }}
+          style={{ fontSize: "13px", color: "#7C786C" }}
         >
           <SlidersHorizontal className="h-3.5 w-3.5" />
           Advanced · custom access for this one person
         </span>
         {open ? (
-          <ChevronDown className="h-4 w-4" style={{ color: "hsl(30 8% 45%)" }} />
+          <ChevronDown className="h-4 w-4" style={{ color: "#45423B" }} />
         ) : (
-          <ChevronRight className="h-4 w-4" style={{ color: "hsl(30 8% 45%)" }} />
+          <ChevronRight className="h-4 w-4" style={{ color: "#45423B" }} />
         )}
       </button>
       {open && (

@@ -139,7 +139,7 @@ export function FollowupDrawer({
         side="right"
         className="overflow-y-auto"
         style={{
-          background: "#0D0B09",
+          background: "#0A0A0A",
           borderColor: "hsl(22 8% 14%)",
           width: "100%",
           maxWidth: "560px",
@@ -153,12 +153,12 @@ export function FollowupDrawer({
 
         <div className="mt-2 space-y-1">
           {row.contact.email && (
-            <div style={{ color: "hsl(30 8% 60%)", fontSize: "13px" }}>
+            <div style={{ color: "#7C786C", fontSize: "13px" }}>
               {row.contact.email}
             </div>
           )}
           {row.contact.phone && (
-            <div style={{ color: "hsl(30 8% 60%)", fontSize: "13px" }}>
+            <div style={{ color: "#7C786C", fontSize: "13px" }}>
               {row.contact.phone}
             </div>
           )}
@@ -167,7 +167,7 @@ export function FollowupDrawer({
         <div
           className="mt-5 rounded-lg p-4 space-y-3"
           style={{
-            background: "hsl(22 10% 7%)",
+            background: "#FFFFFF",
             border: "1px solid hsl(22 8% 14%)",
           }}
         >
@@ -208,7 +208,7 @@ export function FollowupDrawer({
             <p
               style={{
                 fontSize: "11px",
-                color: "hsl(30 8% 50%)",
+                color: "#55524A",
                 fontStyle: "italic",
               }}
             >
@@ -233,7 +233,7 @@ export function FollowupDrawer({
           <div
             className="mt-2 rounded-lg p-4"
             style={{
-              background: "hsl(22 10% 7%)",
+              background: "#FFFFFF",
               border: "1px solid hsl(22 8% 14%)",
             }}
           >
@@ -245,7 +245,7 @@ export function FollowupDrawer({
                 labels={detail.form_submission.field_labels ?? {}}
               />
             ) : (
-              <p style={{ color: "hsl(30 8% 50%)", fontSize: "12px" }}>
+              <p style={{ color: "#55524A", fontSize: "12px" }}>
                 No form submission linked.
               </p>
             )}
@@ -286,7 +286,7 @@ export function FollowupDrawer({
             disabled={busy}
             style={{
               borderColor: "hsl(22 8% 18%)",
-              color: "hsl(30 8% 70%)",
+              color: "#9A9689",
             }}
           >
             Close
@@ -295,8 +295,8 @@ export function FollowupDrawer({
             onClick={handleMarkFinished}
             disabled={busy}
             style={{
-              background: "hsl(42 95% 55%)",
-              color: "#0D0B09",
+              background: "#FFB801",
+              color: "#0A0A0A",
               fontWeight: 700,
             }}
           >
@@ -328,7 +328,7 @@ function KV({ label, value }: { label: string; value: string }) {
           fontSize: "10px",
           letterSpacing: "0.15em",
           fontWeight: 700,
-          color: "hsl(30 8% 42%)",
+          color: "#45423B",
           textTransform: "uppercase",
           minWidth: "80px",
         }}
@@ -349,7 +349,7 @@ function Eyebrow({ label }: { label: string }) {
         fontSize: "9px",
         letterSpacing: "0.25em",
         fontWeight: 700,
-        color: "hsl(42 95% 55%)",
+        color: "#0A0A0A",
         textTransform: "uppercase",
       }}
     >
@@ -370,7 +370,7 @@ function FormAnswers({
   );
   if (entries.length === 0) {
     return (
-      <p style={{ color: "hsl(30 8% 50%)", fontSize: "12px" }}>
+      <p style={{ color: "#55524A", fontSize: "12px" }}>
         Empty submission.
       </p>
     );
@@ -384,7 +384,7 @@ function FormAnswers({
               fontSize: "10px",
               letterSpacing: "0.15em",
               fontWeight: 700,
-              color: "hsl(30 8% 42%)",
+              color: "#45423B",
               textTransform: "uppercase",
             }}
           >
@@ -417,7 +417,7 @@ function WorkflowTrace({ detail }: { detail: FollowupDetail }) {
 
   if (detail.workflow_steps.length === 0) {
     return (
-      <p style={{ color: "hsl(30 8% 50%)", fontSize: "12px" }}>
+      <p style={{ color: "#55524A", fontSize: "12px" }}>
         This workflow has no steps configured.
       </p>
     );
@@ -439,12 +439,12 @@ function WorkflowTrace({ detail }: { detail: FollowupDetail }) {
         ) : current ? (
           <Clock
             className="h-3.5 w-3.5"
-            style={{ color: "hsl(42 95% 55%)" }}
+            style={{ color: "#0A0A0A" }}
           />
         ) : (
           <CircleDashed
             className="h-3.5 w-3.5"
-            style={{ color: "hsl(30 8% 35%)" }}
+            style={{ color: "#2A2822" }}
           />
         );
 
@@ -464,7 +464,7 @@ function WorkflowTrace({ detail }: { detail: FollowupDetail }) {
             style={{
               background: current ? "hsl(42 30% 8%)" : "transparent",
               border: current
-                ? "1px solid hsl(42 95% 55% / 0.3)"
+                ? "1px solid #FFF4D9"
                 : "1px solid transparent",
             }}
           >
@@ -473,7 +473,7 @@ function WorkflowTrace({ detail }: { detail: FollowupDetail }) {
               <div
                 style={{
                   fontSize: "12px",
-                  color: pending ? "hsl(30 8% 50%)" : "#F0EBE3",
+                  color: pending ? "#55524A" : "#F0EBE3",
                 }}
               >
                 {stepIcon}
@@ -483,7 +483,7 @@ function WorkflowTrace({ detail }: { detail: FollowupDetail }) {
                 <div
                   style={{
                     fontSize: "10px",
-                    color: "hsl(30 8% 45%)",
+                    color: "#45423B",
                     marginTop: "2px",
                   }}
                 >
@@ -521,24 +521,24 @@ function Skeleton() {
       <div
         style={{
           height: "12px",
-          background: "hsl(22 10% 12%)",
-          borderRadius: "4px",
+          background: "#0A0A0A",
+          borderRadius: 0,
           width: "60%",
         }}
       />
       <div
         style={{
           height: "12px",
-          background: "hsl(22 10% 12%)",
-          borderRadius: "4px",
+          background: "#0A0A0A",
+          borderRadius: 0,
           width: "80%",
         }}
       />
       <div
         style={{
           height: "12px",
-          background: "hsl(22 10% 12%)",
-          borderRadius: "4px",
+          background: "#0A0A0A",
+          borderRadius: 0,
           width: "50%",
         }}
       />

@@ -53,9 +53,9 @@ export function ContactsTabsNav({
             href={tab.href}
             className="relative inline-flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors"
             style={{
-              color: active ? "hsl(42 95% 60%)" : "hsl(30 8% 55%)",
+              color: active ? "#0A0A0A" : "#7C786C",
               borderBottom: active
-                ? "2px solid hsl(42 95% 55%)"
+                ? "2px solid #0A0A0A"
                 : "2px solid transparent",
               marginBottom: "-1px",
             }}
@@ -70,11 +70,11 @@ export function ContactsTabsNav({
                     letterSpacing: "0.05em",
                     fontWeight: 700,
                     padding: "2px 7px",
-                    borderRadius: "999px",
+                    borderRadius: 0,
                     background: active
-                      ? "hsl(42 95% 55%)"
+                      ? "#0A0A0A"
                       : "hsl(42 80% 18%)",
-                    color: active ? "#0D0B09" : "hsl(42 95% 55%)",
+                    color: active ? "#0A0A0A" : "#0A0A0A",
                     lineHeight: 1,
                   }}
                 >
