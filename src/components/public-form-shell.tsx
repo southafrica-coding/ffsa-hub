@@ -805,6 +805,26 @@ function adminChromeReclaim(
     letter-spacing: normal !important;
     text-transform: none !important;
   }
+  /*
+   * Surfaces, for the same reason as the fields above.
+   *
+   * These pages also use the admin design system's semantic utilities —
+   * bg-card, text-foreground, border — and those read their values from the
+   * :root theme, which the redesign (#212) flipped from dark to light. The
+   * labels above are forced to the brand's bone text, so a white bg-card left
+   * every label white-on-white: an application form with no readable field
+   * names. Restating the surface tokens keeps the utilities honest on a dark
+   * shell instead of requiring each public page to avoid them.
+   */
+  .ffsa-public .bg-card { background-color: ${tk.card} !important; }
+  .ffsa-public .bg-background { background-color: ${tk.bg} !important; }
+  .ffsa-public .text-foreground { color: ${tk.text} !important; }
+  .ffsa-public .text-muted-foreground { color: ${tk.textDim} !important; }
+  .ffsa-public .border,
+  .ffsa-public .border-t,
+  .ffsa-public .border-b {
+    border-color: ${tk.borderSoft} !important;
+  }
 }
 `;
 }
