@@ -523,3 +523,317 @@ version). Build the `messages` model from doc 11 first — billing's email momen
 
 Numbering note: design docs own 05–11. Analysis written by earlier sessions moved
 to **90–92** so it cannot be mistaken for a design brief.
+
+---
+---
+
+# Audit — 2026-08-19 · `handoff/` catch-up plan vs `main`
+
+Run against `origin/main` at `fa2a18f`, migrations `001`–`180`.
+
+## Why this section exists
+
+An untracked `handoff/` folder in the `CODING/ffsa-platform` checkout carries a
+parallel copy of docs 01–13 plus `14-build-status.md` and `15-catch-up-plan.md`.
+Its headline claim — *"the visual layer never landed; `globals.css` still holds
+the dark theme"* — **is false against `main`.** It says so itself in passing:
+*"migrations present: `001`–`106` (nothing above 106)"*. It audited a snapshot
+from before PR #212 merged on 2026-08-17.
+
+**Do not run its Session 1.** `handoff/01-globals.css` is 486 lines; `main`'s
+`src/app/globals.css` is 550 and is that file *plus* later fixes — the mobile
+masthead `clamp(34px, 7.5vw, 58px)`, the search-icon `pl-*` padding restoration,
+the `h-9` select-clipping fix, `.ff-email-content` opting rich text out of
+uppercase/tracking, and the `.ffsa-screen` transition scaffold.
+`handoff/04-ffsa-primitives.tsx` is 137 lines against `main`'s 354 / 17 exports.
+Replacing either "wholesale" is a revert, not a catch-up.
+
+Its `15-catch-up-plan.md` sessions are re-audited below. Where a thing exists on
+`main` under a different name, the name on `main` wins — the gap is the missing
+*column or behaviour*, not the missing table name.
+
+---
+
+## Sessions 1–3 · the design system and its rollout
+
+### Session 1 — **DONE.** Nothing to do.
+
+| Target | State on `main` |
+|---|---|
+| `globals.css` editorial light, `--radius: 0` | Present, superset of the handoff |
+| Roboto Condensed / Roboto / Roboto Mono in `layout.tsx` | Present |
+| `tailwind.config.ts` — every radius `0`, every shadow `none`, `letterSpacing.label/chip`, surface ramp, brand colours | Present |
+| `src/components/ffsa/index.tsx` | Present — 354 lines, 17 exports (handoff has 8) |
+
+`Bebas_Neue` is still imported in `layout.tsx`, deliberately: only
+`(public)/e/[slug]/the-send-storefront.tsx` reads `var(--font-bebas)`, and
+storefront brand kits are out of scope. **Not a gap.**
+
+There is also no false "steps 2–7 are done" line in `CLAUDE.md` on `main` to
+correct — that sentence exists only in the snapshot `handoff/14` was quoting.
+
+### Session 2 — **DONE**, except the screen it names.
+
+`src/components/admin-sidebar.tsx` is the 74px black rail + 212px bone panel
+(`w-[74px] bg-ink`, `w-[212px] border-r border-ink bg-bone`). The shell landed.
+But session 2 says *convert Contacts first* — **Contacts was never converted**,
+so the pattern was proven on other modules instead. See below.
+
+### Session 3 — **PARTIAL.** 27 admin pages, the whole portal, and most public routes remain.
+
+`.ffsa-screen` is the reliable marker for an admin route recomposed onto the
+primitives (it opts a page into the full-bleed workspace). Per admin module:
+
+| Module | pages | recomposed |
+|---|---|---|
+| bookings | 17 | **all 17** |
+| finance | 9 | **all** |
+| events | 8 | 7 of 8 |
+| communications | 6 | **all 6** |
+| schools | 2 | **all** |
+| prayer-room | 2 | **all** |
+| dashboard | 1 | **yes** |
+| **contacts** | **9** | **0** |
+| **records-library** | **6** | **0** |
+| **users** | **3** | **0** |
+| **ministry** | **2** | **0** |
+| brand-kit · consents · mission · org-chart · roles · settings · teams | 1 each | **0** |
+
+**27 admin pages unrecomposed.** Contacts (9) and users (3) are the highest
+traffic, exactly as session 2 predicted when it chose Contacts as the proving
+ground.
+
+Outside `(admin)`:
+
+- **`(auth)` — done.** `src/app/(auth)/auth-shell.tsx` carries login, join,
+  forgot/reset password and onboarding (frame 4b). `.ffsa-screen` is an admin-layout
+  opt-in and its absence here is expected, not a gap.
+- **`(portal)` — not started.** All 7 areas (`my-finance`, `my-schools`,
+  `my-events`, `my-attendance`, `my-history`, `my-mission`, `profile`) still lead
+  with `<h1 className="page-title">` and import nothing from `src/components/ffsa`.
+  Frame 4d is unbuilt.
+- **`(public)` — mixed and mostly deliberate.** Storefronts and brand kits are
+  explicitly out of scope; `apply`, `reference`, `schedule`, `preferences`,
+  `unsubscribe` are not, and are unconverted.
+
+### Acceptance sweep — scanned `src/app` + `src/components`, excluding `src/components/ui`
+
+| Pattern | hits | files |
+|---|---|---|
+| `rounded-(sm\|md\|lg\|xl\|2xl\|3xl\|full)` | 275 | 99 |
+| `bg-card` | 70 | 33 |
+| `page-title` | 41 | 35 |
+| inline `borderRadius: <non-zero>` | 83 | 34 |
+| dark hex `0D0B09` | 30 | 15 |
+| `shadow-(sm\|md\|lg\|xl\|2xl)` | 22 | 14 |
+| `Bebas` | 2 | 1 (the-send-storefront, in scope by design) |
+
+**Read these two groups differently.** `tailwind.config.ts` resolves every radius
+token to `0` and every shadow to `none`, and `--card` is white — so the utility
+classes are *hygiene debt that renders correctly today*. The ones that actually
+leak to screen are the **inline styles**: `borderRadius: "16px"` and friends beat
+the config because they are element styles, not utilities. Worst offenders:
+`users/[id]/permission-manager.tsx` (11), `apply/status/[token]/reference-editor.tsx`
+(7), `users/[id]/role-assignment.tsx` (7), `account/security/page.tsx` (5),
+`contacts/event-followup/followup-queue.tsx` (5). One is inside a *finished*
+module: `dashboard/dashboard-customize-panel.tsx` sets `borderRadius: "16px"` on
+its own frame.
+
+`page-title` (41 hits / 35 files) is the truest "this screen was never
+recomposed" marker — better than the radius count.
+
+---
+
+## Sessions 4–9 · module by module
+
+### Session 4 · Widget dashboard — **mostly built, under a different architecture**
+
+`handoff/15` says *"nothing of this exists in code"*. Wrong.
+
+**Exists:** `src/lib/dashboard/widget-registry.ts` — a **16-widget** catalogue with
+`key`, `title`, `description`, `category`, `defaultOrder`, `fullWidth`, plus
+role-aware `gate(ctx)` and `defaultEnabled(ctx)` predicates over a precomputed
+`DashboardContext`. Migration `135_dashboard_layouts` stores one ordered
+`[{key, enabled}]` JSONB per user. `dashboard-customize-panel.tsx` does drag
+reorder (dnd-kit `arrayMove`) and show/hide toggles. All 16 widget components are
+wired.
+
+**The session-4 rule is already enforced, and documented in the migration itself:**
+*"a stored layout is a preference, never an authorisation"* — every widget's API
+route re-checks permission server-side, so enabling a widget you lack access to
+yields an empty widget, not data.
+
+**Genuinely missing:**
+1. **S/M/L sizing.** Only a `fullWidth` boolean exists.
+2. **Per-instance `config` jsonb.** A widget cannot be parameterised, so the same
+   widget cannot appear twice configured differently.
+3. **Pinning and dismissal.** No `pinned_by` / `dismissed_at`; a leader cannot push
+   a widget to someone, and there is no dismissal signal back.
+4. **Role-default layouts as rows.** Defaults are code predicates, not
+   `dashboard_layouts` rows per role. This is arguably better — but 33b's right
+   column cannot be edited without a deploy.
+5. **Role-locked entries "greyed and labelled, never hidden."** `gate()` *removes*
+   ungated widgets from the panel. The spec wants them visible and explained.
+6. The catalogue is in code, not a `dashboard_widgets` table. **Treat as a decision,
+   not a gap** — it keeps the registry and the render map in one file.
+
+### Session 5 · Vehicles — **the nine deltas mostly stand**
+
+**Exists:** migrations `103`–`107`, `112`. `vehicles`, `vehicle_bookings`,
+`vehicle_booking_assignments`, `vehicle_booking_drivers`, `vehicle_inspections`
+(+ files), `vehicle_payments` (PayFast, ZAR cents), `vehicle_agreements`
+(e-signature), `vehicle_request_link_settings` + `bookings.source` +
+`submitted_ip` for a public request link, and `107` adding `home_country`,
+`fx_rate`, `usd_amount` and the `VehicleRent` Xero code.
+
+**The shape is confirmed wrong-direction**, as `handoff/12` says. On
+`vehicle_bookings`: `currency text NOT NULL DEFAULT 'USD'`, `pricing_per_day`,
+`status CHECK (pending|approved|denied|cancelled|completed)`, and a named-vehicle
+assignment table. Migration `112` added a public **request** form — an intake for
+the same approval queue, not a shop.
+
+**Genuinely missing — all nine deltas, unchanged:**
+`vehicle_class` + `quantity` on the booking · assignments becoming optional ·
+rate on the class with `ZAR` default · `'held'` status + `hold_expires_at` + a
+**cron** sweep (never a browser timer) · the availability endpoint with two
+projections of one query, gated in the route · a paid public booking path with
+`public_token` · `vehicle_coupons` + redemptions · `service_last_km` /
+`service_interval_km` / `licence_expires_on` · `vehicle_settings` buffer day and
+`vehicle_payments.kind`.
+
+Two rules to carry into that work: licence expiry is **inclusive**, and
+availability is the **minimum across the whole window**.
+
+Note for whoever picks this up: PR #234 already split bookings so vehicles are a
+**rental portal with no grid**, which is the right direction for this session.
+
+### Session 6 · Consent and the message log — **the ledger is missing; the log is 90% there under another name**
+
+**Exists:** `141_email_messages` is the `messages` table in all but name — one row
+per email across every provider and module, with `to_email`, `contact_id`,
+`provider`, `provider_message_id`, `category`, `subject`, `event_id`, `order_id`,
+a generic `(source_type, source_id)` pair, an 8-state `status`, `bounce_type`, and
+per-transition timestamps. A Resend delivery webhook advances it. The per-contact
+"Email history" card ships (PR #130). Campaigns, campaign labels, sending
+identities, preferences and unsubscribe all exist and are good.
+
+**Genuinely missing:**
+1. **`consent_events`** — append-only, one row per event, with source and lawful
+   basis. `034_consent_agreements` / `164_consent_kinds_and_policies` are **policy
+   acceptance**, not marketing consent. Do not repurpose them.
+2. **`contacts.marketing_status` is still the source of truth** (`041`, a 4-value
+   CHECK with a plain index). The spec wants it inverted into a read-only cache of
+   the ledger.
+3. **The plain-words `reason` column.** `email_messages.category` is a slug
+   (`'ticket_confirmation'`), not "She is in DTS 26-2 students". That column is the
+   entire point of the per-person log at 29d — it is a small migration and it is
+   the highest-value single item in this session.
+4. **A send path that refuses on no lawful basis**, with transactional and urgent
+   event mail as the only bypass, urgent being typed-to-confirm and counted.
+5. The one-time ask to contacts with no consent record (31c).
+
+Sequences and the reply inbox stay deferred to session 9.
+
+### Session 7 · Finance — **further along than the plan assumes**
+
+`handoff/15` says `scheduled_charges` does not exist. It does — as
+**`student_billing_schedule`** (`095`).
+
+**Exists, and matches the spec closely:**
+- `fee_charge_items` carries **all four due anchors** (`acceptance`, `month_day`,
+  `fixed_date`, `relative_to_arrival`) and **all four generation rules**
+  (`immediate`, `preceding_month_15th`, `fixed_date`, `days_before_due`), with
+  cadence and quantity. No hardcoded dates.
+- `student_billing_schedule` holds `scheduled_generation_date` separately from
+  `due_date`, with a `scheduled → generated → sent → paid` status and Xero linkage
+  including `combined_group_key`.
+- **`172_program_billing_mode`** — `billing_mode` with every existing program set
+  to `external`, new ones `hub_scheduled`. Session 9a of the old plan, done.
+- **`173_billing_needs_decision`** — the `needs_decision` hold with the three named
+  outcomes, and its comment records that the API had been silently writing every
+  row as `scheduled`, which would have backdated a late acceptance. Session 9b's
+  queue half, done.
+- `098`/`100`/`179` billing courses, `101` program pricing.
+
+**Genuinely missing:**
+1. **The approval-limits matrix.** No `approval_limit*` table anywhere — so
+   "one table read by every screen that gives money away, nobody approves their
+   own" is unenforced.
+2. **The reconciliation inbox.** No reconciliation table; nothing implements
+   match-on-invoice-number-or-name-plus-exact-amount, and there is no "held money
+   stays visible" surface.
+3. **"Issued can only be credited" is not enforced in the schema** — there is no
+   constraint or trigger stopping a `generated` row being rebuilt. The rule exists
+   in the docs and (partly) in the API. It should be a database guarantee.
+4. **The four editable email moments per charge** (invoice / reminder / overdue /
+   receipt), each carrying amount, reference and full bank details in the body.
+5. Frames 27a (student fees tab) and 24a (portal fee view).
+
+### Session 8 · Outreach budgets — **a built module with the wrong line model**
+
+`handoff/15` says *"only `outreach_budget_categories` (`008`) exists — effectively
+a new module"*. Wrong. Migration `008` creates **nine** tables:
+`outreach_teams`, `outreach_team_members`, `outreach_budget_categories`,
+`outreach_team_budgets`, `outreach_fund_releases`, `outreach_cash_batches`,
+`outreach_expenses`, `outreach_receipts`, `outreach_closeouts`. There are live
+routes at `(admin)/finance/outreach` and `(portal)/my-finance/outreach`, and a
+`src/services/outreach-finance.ts`.
+
+**Genuinely missing — the model deltas, not the module:**
+1. **`amount × frequency × people`.** `outreach_team_budgets` is
+   `(team_id, category_id, people_count, budget_amount_zar)` — a flat amount per
+   category. No `frequency`, and no per-line "follows team size" vs "fixed" flag.
+2. **Owner kinds as a table.** Ownership is hardcoded to `team_id`. A school,
+   ministry, region or partner church cannot own a budget without a migration —
+   which is precisely what the polymorphic-owner requirement exists to prevent.
+3. **Sections** within a budget.
+4. **The importer** in full — header-row detection, the blank-heading description
+   column, rand-with-commas parsing, a described zero kept, skipped rows greyed
+   **with a reason** by spreadsheet row number, and a total mismatch never silently
+   overwritten. Nothing of this exists.
+5. **The receipt with a nullable budget line** — a field photo with no line saving
+   as "needs a line", with uploading and checking as separate steps.
+6. The 24-hour undo on an import receipt.
+
+### Session 9 · Contacts deltas — **4 of 6 exist under other names**
+
+Contacts is the most complete module in the codebase: `068`/`076` contact
+identifiers (`contact_emails` / `contact_phones`), `087` permission access,
+`findDedupMatches` in `src/services/contact-upsert.ts`, and routes for
+`duplicates`, `import`, `imports`, `lists`, `event-followup`.
+
+| `handoff/13` delta | State |
+|---|---|
+| `contact_imports` | **Exists as `csv_imports`** (`047`) — filename, row_count, label, imported/matched/review/error counts, `error_log` jsonb |
+| `contact_merge_decisions` | **Exists as `dedup_review_queue`** (`047`) — verify it records the *decision*, not just the pending pair |
+| `activity_events` | Exists (`043`), with a `csv_imported` kind |
+| **`labels.kind` (arrival vs manual)** | **Missing.** `labels` has `category`, `color`, `is_preset`, `is_active`, `sending_identity_id` — no `kind` |
+| **Retire `person_types` into labels** | **Not done.** `person_types` is still live from `001`, and `137_signup_links` still writes to it |
+| **`contact_relationships` (symmetrical)** | **Missing entirely.** Closest is `153_household_members` / `160_household_member_contact`, which is a different model |
+| `marketing_status` derived from the ledger | Blocked on `consent_events` — see session 6 |
+
+---
+
+## Revised order
+
+Sessions 1 and 2's shell are done, and sessions 4, 7 and 8 are far enough along
+that running them as written would rebuild working code. What is actually left,
+cheapest-first:
+
+1. **Contacts + users recomposition** (12 pages) — session 2's own choice of
+   proving ground, still unconverted, and the highest-traffic admin routes.
+2. **`email_messages.reason`** — one column, and the thing that makes the
+   per-person log worth having.
+3. **`consent_events`** + inverting `marketing_status` into a cache, then the send
+   path that refuses without a lawful basis.
+4. **The finance guarantees** — the approval-limits matrix, a schema-level
+   "issued can only be credited", then the reconciliation inbox.
+5. **Portal (frame 4d)** — 7 areas, all still on `page-title`.
+6. **Outreach line model** — frequency, owner kinds, then the importer.
+7. **Vehicles** — the nine deltas, on top of PR #234's portal split.
+8. **Dashboard extras** — sizing, per-instance config, pinning/dismissal.
+9. **Remaining 15 admin pages**, then the in-scope public routes.
+
+Hygiene to fold into whichever screen you are already touching: the 34 files with
+inline non-zero `borderRadius` (these render), then `page-title`, then the
+utility-class residue (which does not render).
