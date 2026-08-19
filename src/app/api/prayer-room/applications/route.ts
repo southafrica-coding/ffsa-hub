@@ -38,12 +38,21 @@ export async function POST(request: Request) {
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const body = await request.json().catch(() => ({}));
-  const labelIds = Array.isArray(body.labelIds) ? (body.labelIds as string[]) : [];
+  // Seats now, not labels (migration 181). Each carries the applicant's own
+  // claim about having been evaluated for it before — a claim, never a fact.
+  const seats = Array.isArray(body.seats)
+    ? (body.seats as { seat_type_id?: unknown; previously_evaluated?: unknown }[])
+        .filter((s) => typeof s?.seat_type_id === "string" && s.seat_type_id)
+        .map((s) => ({
+          seat_type_id: s.seat_type_id as string,
+          previously_evaluated: s.previously_evaluated === true,
+        }))
+    : [];
 
   const { data, error } = await createApplication(supabase, {
     applicant_id: user.id,
     background: (body.background as string) ?? null,
-    labelIds,
+    seats,
   });
   if (error || !data) {
     // 23505 = unique violation → already has an in-flight application

@@ -27,6 +27,8 @@ interface Props {
   userName: string;
   isStaff: boolean;
   isMember: boolean;
+  /** Signed off for at least one seat — may put a set on the wall unasked. */
+  inCatalogue: boolean;
   isEvaluator: boolean;
   canViewDirectory: boolean;
   pendingCount: number;
@@ -37,6 +39,7 @@ export default function PrayerRoomClient({
   userName,
   isStaff,
   isMember,
+  inCatalogue,
   isEvaluator,
   canViewDirectory,
   pendingCount,
@@ -52,7 +55,10 @@ export default function PrayerRoomClient({
     ...(showPeople ? [{ key: "people" as const, label: "People" }] : []),
     // The yellow mark is 12a's tell that this tab is not everyone's.
     ...(showEvaluators ? [{ key: "evaluators" as const, label: "Evaluators", mark: true }] : []),
-    isMember ? { key: "mine" as const, label: "My sets" } : { key: "join" as const, label: "Join the room" },
+    ...(isMember ? [{ key: "mine" as const, label: "My sets" }] : []),
+    // Always present. A member who now plays drums needs the same form a new
+    // person needs — there is no other way to be evaluated for a new seat.
+    { key: "join" as const, label: isMember ? "Get evaluated" : "Join the room" },
     ...(isStaff ? [{ key: "manage" as const, label: "Manage" }] : []),
   ];
 
@@ -65,6 +71,7 @@ export default function PrayerRoomClient({
           userId={userId}
           isStaff={isStaff}
           isMember={isMember}
+          inCatalogue={inCatalogue}
           tabs={tabs}
           active={tab}
           onTabChange={setTab}
@@ -75,7 +82,7 @@ export default function PrayerRoomClient({
         <People {...shared} isEvaluator={isEvaluator} isStaff={isStaff} myName={userName} />
       )}
 
-      {tab === "evaluators" && showEvaluators && <EvaluatorsPortal {...shared} userId={userId} />}
+      {tab === "evaluators" && showEvaluators && <EvaluatorsPortal {...shared} userId={userId} myName={userName} />}
 
       {tab === "mine" && isMember && (
         <>
@@ -86,11 +93,14 @@ export default function PrayerRoomClient({
         </>
       )}
 
-      {tab === "join" && !isMember && (
+      {tab === "join" && (
         <>
-          <PrayerRoomChrome context="Ask to join the prayer room team" {...shared} />
+          <PrayerRoomChrome
+            context={isMember ? "Ask to be evaluated for another seat" : "Join the prayer room team"}
+            {...shared}
+          />
           <div className="px-5 py-6 md:px-8 md:py-7">
-            <ApplyForm />
+            <ApplyForm isMember={isMember} />
           </div>
         </>
       )}

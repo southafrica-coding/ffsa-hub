@@ -46,6 +46,8 @@ interface Props {
   userId: string;
   isStaff: boolean;
   isMember: boolean;
+  /** Signed off for at least one seat. Migration 181 gates set creation on it. */
+  inCatalogue: boolean;
   /** The module tab strip, rendered as part of this screen (frames 10a/12a). */
   tabs: TabDef[];
   active: TabKey;
@@ -68,7 +70,7 @@ function rangeFor(view: ViewKind, anchor: string): { from: string; to: string } 
   return { from: days[0], to: days[days.length - 1] };
 }
 
-export default function ScheduleView({ userId, isStaff, isMember, tabs, active, onTabChange }: Props) {
+export default function ScheduleView({ userId, isStaff, isMember, inCatalogue, tabs, active, onTabChange }: Props) {
   const [weekView, setWeekView] = useState<Exclude<ViewKind, "day">>("wall");
   const view: ViewKind = active === "day" ? "day" : weekView;
   const [anchor, setAnchor] = useState<string>(() => todayISO());
@@ -189,7 +191,18 @@ export default function ScheduleView({ userId, isStaff, isMember, tabs, active, 
         active={active}
         onChange={onTabChange}
         actions={
-          (isMember || isStaff) && <MastheadButton onClick={() => setCreating(true)}>+ New set</MastheadButton>
+          <>
+            {/* The on-ramp, always here and never behind a tab. It is how a new
+                person joins AND how a member gets evaluated for a new seat. */}
+            <MastheadButton tone="outline" onClick={() => onTabChange("join")}>
+              {isMember ? "+ Get evaluated" : "+ Join the prayer room"}
+            </MastheadButton>
+            {/* Creating a set needs a signed-off seat (migration 181). Staff
+                always can. Saying why beats a button that fails on click. */}
+            {(isStaff || inCatalogue) && (
+              <MastheadButton onClick={() => setCreating(true)}>+ New set</MastheadButton>
+            )}
+          </>
         }
       />
 
@@ -208,6 +221,12 @@ export default function ScheduleView({ userId, isStaff, isMember, tabs, active, 
             Today
           </Button>
         </div>
+
+        {isMember && !isStaff && !inCatalogue && (
+          <span className="font-mono text-[9.5px] uppercase tracking-[0.08em] text-[color:var(--text-tertiary)]">
+            Signed off for a seat and you can put sets on the wall yourself
+          </span>
+        )}
 
         {active === "week" && (
           <div className="ml-auto flex flex-wrap gap-1.5">

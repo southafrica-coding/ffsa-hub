@@ -30,6 +30,7 @@ import {
 import { cn } from "@/lib/utils/cn";
 import PrayerRoomChrome, { type TabDef, type TabKey } from "./chrome";
 import EvaluationForm from "./evaluation-form";
+import PersonProfile from "./person-profile";
 import BandCuration from "./band-curation";
 import Evaluations from "./evaluations";
 import { fullName, type Person } from "./helpers";
@@ -89,11 +90,14 @@ export default function EvaluatorsPortal({
   active,
   onChange,
   userId,
+  myName,
 }: {
   tabs: TabDef[];
   active: TabKey;
   onChange: (key: TabKey) => void;
   userId: string;
+  /** Whose name a sign-off is recorded under. */
+  myName: string;
 }) {
   const [queue, setQueue] = useState<QueueRow[]>([]);
   const [booked, setBooked] = useState<QueueRow[]>([]);
@@ -105,6 +109,11 @@ export default function EvaluatorsPortal({
   const [evaluating, setEvaluating] = useState<QueueRow | null>(null);
   const [booking, setBooking] = useState<QueueRow | null>(null);
   const [when, setWhen] = useState("");
+  // Members carrying no signed-off seat at all. Migration 181 made a seat the
+  // thing that lets someone put a set on the wall, so everyone who joined
+  // before it has to be signed off by hand — this is where that happens.
+  const [unsigned, setUnsigned] = useState<{ user_id: string; name: string }[]>([]);
+  const [signingOff, setSigningOff] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -116,6 +125,14 @@ export default function EvaluatorsPortal({
       setEvaluators(d.evaluators ?? []);
       setSeatTypes(d.seatTypes ?? []);
       setMe(d.me ?? null);
+
+      const peopleRes = await fetch("/api/prayer-room/people");
+      const people = peopleRes.ok ? await peopleRes.json() : { roster: [] };
+      setUnsigned(
+        (people.roster ?? [])
+          .filter((r: { signed_off: string[] }) => (r.signed_off ?? []).length === 0)
+          .map((r: { user_id: string; user: Person }) => ({ user_id: r.user_id, name: fullName(r.user) }))
+      );
     } finally {
       setLoading(false);
     }
@@ -158,6 +175,22 @@ export default function EvaluatorsPortal({
   ]
     .join(" · ")
     .toUpperCase();
+
+  if (signingOff) {
+    return (
+      <PersonProfile
+        userId={signingOff}
+        onBack={() => {
+          setSigningOff(null);
+          load();
+        }}
+        canEvaluate
+        isStaff={!!me?.staff}
+        evaluatorName={myName}
+        onChanged={load}
+      />
+    );
+  }
 
   return (
     <>
@@ -333,6 +366,38 @@ export default function EvaluatorsPortal({
           </div>
         </div>
       </div>
+
+      {/* Everyone who is a member but signed off for nothing. Until an
+          evaluator records what they can do, they cannot put a set on the
+          wall — so this list is the queue that clears that. */}
+      {unsigned.length > 0 && (
+        <div className="border-t border-ink">
+          <SectionBar
+            title="Nobody has signed these people off"
+            meta={`${unsigned.length} waiting on you`}
+          />
+          <p className="border-b border-surface-4 px-5 py-3.5 text-[13px] leading-[1.55] text-[color:var(--text-secondary)] md:px-7">
+            They are members, but carry no signed-off seat — so they cannot put a set on the wall
+            yet. Open one and record what they are approved for.
+          </p>
+          {unsigned.map((u) => (
+            <div
+              key={u.user_id}
+              className="flex items-center gap-3 border-b border-surface-4 px-5 py-2.5 md:px-7"
+            >
+              <Initials name={u.name} size={28} />
+              <span className="min-w-0 flex-1 truncate text-[13.5px] font-bold text-ink">{u.name}</span>
+              <button
+                type="button"
+                onClick={() => setSigningOff(u.user_id)}
+                className="shrink-0 bg-ink px-2.5 py-2 font-mono text-[9.5px] font-bold uppercase tracking-[0.1em] text-white"
+              >
+                Sign off →
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ── 12b: curating the bands, and who sees a note ── */}
       <div className="grid gap-6 border-t border-ink px-5 py-7 md:px-8 xl:grid-cols-[1fr_470px]">

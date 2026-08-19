@@ -15,6 +15,7 @@ const APPLICATION_SELECT = `
   evaluator:evaluator_id(${NAME_FIELDS}),
   decider:decided_by(${NAME_FIELDS}),
   skills:prayer_room_application_skills(label:label_id(id, name, category)),
+  seats:prayer_room_application_seats(seat_type_id, previously_evaluated),
   evaluations:prayer_room_evaluations(id, notes, met_at, created_at, evaluator_id)
 `;
 
@@ -24,7 +25,12 @@ const APPLICATION_SELECT = `
 
 export async function createApplication(
   supabase: Client,
-  data: { applicant_id: string; background?: string | null; labelIds: string[] }
+  data: {
+    applicant_id: string;
+    background?: string | null;
+    /** Seats the person says they do, with their own claim about prior evaluation. */
+    seats: { seat_type_id: string; previously_evaluated: boolean }[];
+  }
 ) {
   const { data: app, error } = await supabase
     .from("prayer_room_applications")
@@ -34,12 +40,16 @@ export async function createApplication(
 
   if (error || !app) return { data: app, error };
 
-  if (data.labelIds.length > 0) {
-    const rows = data.labelIds.map((label_id) => ({ application_id: app.id, label_id }));
-    const { error: skillErr } = await supabase
-      .from("prayer_room_application_skills")
-      .insert(rows);
-    if (skillErr) return { data: app, error: skillErr };
+  // Seats, not labels (migration 181). A label could never answer "has this
+  // person been evaluated for drums" — it is a Hub-wide taxonomy, not a seat.
+  if (data.seats.length > 0) {
+    const rows = data.seats.map((s) => ({
+      application_id: app.id,
+      seat_type_id: s.seat_type_id,
+      previously_evaluated: s.previously_evaluated,
+    }));
+    const { error: seatErr } = await supabase.from("prayer_room_application_seats").insert(rows);
+    if (seatErr) return { data: app, error: seatErr };
   }
 
   return { data: app, error: null };
@@ -69,7 +79,7 @@ export async function getApplicationById(supabase: Client, id: string) {
 export async function getMyLatestApplication(supabase: Client, userId: string) {
   return supabase
     .from("prayer_room_applications")
-    .select(`*, skills:prayer_room_application_skills(label:label_id(id, name))`)
+    .select(`*, skills:prayer_room_application_skills(label:label_id(id, name)), seats:prayer_room_application_seats(seat_type_id, previously_evaluated)`)
     .eq("applicant_id", userId)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -132,7 +142,11 @@ export async function decideApplication(
   // load applicant + desired skills
   const { data: app, error: loadErr } = await adminClient
     .from("prayer_room_applications")
-    .select(`applicant_id, skills:prayer_room_application_skills(label_id)`)
+    .select(
+      `applicant_id,
+       skills:prayer_room_application_skills(label_id),
+       seats:prayer_room_application_seats(seat_type_id)`
+    )
     .eq("id", data.id)
     .single();
   if (loadErr || !app) return { data: null, error: loadErr };
@@ -158,6 +172,24 @@ export async function decideApplication(
         { user_id: app.applicant_id, status: "active", approved_by: data.decided_by },
         { onConflict: "user_id" }
       );
+
+    // Sign off the seats they were approved for. THIS is what puts someone in
+    // the catalogue — approval used to make you a member and copy some labels,
+    // and never touched prayer_room_qualifications, so "approved" and "signed
+    // off for a seat" were unrelated facts and nothing enforced the difference.
+    const seatIds: string[] = (app.seats ?? []).map((s: { seat_type_id: string }) => s.seat_type_id);
+    if (seatIds.length > 0) {
+      await adminClient.from("prayer_room_qualifications").upsert(
+        seatIds.map((seat_type_id) => ({
+          user_id: app.applicant_id,
+          seat_type_id,
+          state: "signed_off",
+          updated_by: data.decided_by,
+          updated_at: new Date().toISOString(),
+        })),
+        { onConflict: "user_id,seat_type_id" }
+      );
+    }
 
     // copy desired skills onto the user (ignore ones they already have)
     const labelIds: string[] = (app.skills ?? []).map((s: { label_id: string }) => s.label_id);
