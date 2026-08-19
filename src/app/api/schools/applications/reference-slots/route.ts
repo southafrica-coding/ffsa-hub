@@ -8,19 +8,22 @@ import {
   countRequiredReferenceSlots,
 } from "@/services/schools";
 
-// Every FFSA school requires its references, and the whole applicant-facing
+// Every FFSA school asks for two references, and the whole applicant-facing
 // story is built on that: the apply form blocks submission without them, the
-// confirmation email says the review waits for them, and the status tracker
-// counts them in. A program left with no required slot would quietly break all
-// three — applications would sail through with nobody to vouch for anyone.
+// confirmation email says the review waits for "both of your references", and
+// the status tracker counts them in. A program that drops below two would
+// quietly break all three — applications would come in short, and the email
+// would promise a wait for references nobody was asked for.
 //
-// So the last required slot can't be deleted or made optional. Both guards live
-// here rather than in a DB constraint because the rule is "not fewer than one",
-// which a CHECK on a single row can't see.
-const LAST_SLOT_ERROR =
-  "This is the program's last required reference. A school can't take applications without at least one, so add another reference first if you want to replace this one.";
+// So a program can't be taken below two required references, by deletion or by
+// demoting one to optional. A school wanting three is free to add one; this is
+// a floor, not a fixed count. Both guards live here rather than in a DB
+// constraint because the rule counts sibling rows, which a CHECK can't see.
+const MIN_REQUIRED_REFERENCE_SLOTS = 2;
 
-async function wouldLeaveNoRequiredSlot(
+const MIN_SLOTS_ERROR = `Every school asks for at least ${MIN_REQUIRED_REFERENCE_SLOTS} references. Add another reference first if you want to replace this one.`;
+
+async function wouldDropBelowMinimum(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
   slotId: string
@@ -29,7 +32,8 @@ async function wouldLeaveNoRequiredSlot(
   // Slot missing, or already optional → removing it changes no requirement.
   if (!slot?.is_required) return false;
   const { count } = await countRequiredReferenceSlots(supabase, slot.program_id);
-  return (count ?? 0) <= 1;
+  // `count` includes the slot being removed, so losing it lands one lower.
+  return (count ?? 0) - 1 < MIN_REQUIRED_REFERENCE_SLOTS;
 }
 
 export async function POST(request: Request) {
@@ -85,8 +89,8 @@ export async function PUT(request: Request) {
   }
 
   // Demoting the last required reference is the same loss as deleting it.
-  if (is_required === false && (await wouldLeaveNoRequiredSlot(supabase, id))) {
-    return NextResponse.json({ error: LAST_SLOT_ERROR }, { status: 409 });
+  if (is_required === false && (await wouldDropBelowMinimum(supabase, id))) {
+    return NextResponse.json({ error: MIN_SLOTS_ERROR }, { status: 409 });
   }
 
   const updateData: Record<string, unknown> = {};
@@ -121,8 +125,8 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "id is required" }, { status: 400 });
   }
 
-  if (await wouldLeaveNoRequiredSlot(supabase, id)) {
-    return NextResponse.json({ error: LAST_SLOT_ERROR }, { status: 409 });
+  if (await wouldDropBelowMinimum(supabase, id)) {
+    return NextResponse.json({ error: MIN_SLOTS_ERROR }, { status: 409 });
   }
 
   const { error } = await deleteReferenceSlot(supabase, id);
