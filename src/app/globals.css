@@ -268,6 +268,16 @@
     padding-right: 2.5rem !important;
   }
 
+  /* Same story vertically: a control that sets its own height has less room
+     than 12px + 12px + a line of text, so it clips itself — a native select at
+     h-9 shows 10px of a 14.5px line and the descenders are cut off. When the
+     height is explicit, let it win and centre the text in it instead. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):is(.h-7, .h-8, .h-9, .h-10, .h-11, .h-12),
+  select:is(.h-7, .h-8, .h-9, .h-10, .h-11, .h-12) {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
   /* ── Label — mono, wide tracking ── */
   [data-slot="label"], label {
     font-family: var(--font-mono-brand) !important;
