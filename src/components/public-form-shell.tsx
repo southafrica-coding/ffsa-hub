@@ -805,6 +805,55 @@ function adminChromeReclaim(
     letter-spacing: normal !important;
     text-transform: none !important;
   }
+  /*
+   * Surfaces, for the same reason as the fields above.
+   *
+   * These pages also use the admin design system's semantic utilities —
+   * bg-card, text-foreground, border — and those read their values from the
+   * :root theme, which the redesign (#212) flipped from dark to light. The
+   * labels above are forced to the brand's bone text, so a white bg-card left
+   * every label white-on-white: an application form with no readable field
+   * names. Restating the surface tokens keeps the utilities honest on a dark
+   * shell instead of requiring each public page to avoid them.
+   */
+  .ffsa-public .bg-card { background-color: ${tk.card} !important; }
+  .ffsa-public .bg-background { background-color: ${tk.bg} !important; }
+  .ffsa-public .text-foreground { color: ${tk.text} !important; }
+  .ffsa-public .text-muted-foreground { color: ${tk.textDim} !important; }
+  /* --primary and --accent-foreground are both near-black in the light theme,
+     which hid the consent agreement link and the phone country-code trigger
+     ("🇿🇦 +27") outright. Found by auditing computed contrast across the
+     rendered form, not by reading the classes. */
+  .ffsa-public .text-primary { color: ${tk.yellow} !important; }
+  /*
+   * The [data-slot] component layer, which no class-based selector can
+   * reach — that is why the phone country-code trigger stayed invisible after
+   * the utilities above were reclaimed.
+   *
+   * globals.css paints every shadcn slot with !important off the light
+   * palette (--ink, --text-secondary) and is not scoped to the admin shell,
+   * so a transparent-background variant on a dark card renders near-black on
+   * near-black. Only the see-through variants need reclaiming: default and
+   * destructive set their own background, so they stay self-consistent.
+   */
+  .ffsa-public [data-slot="button"][data-variant="outline"],
+  .ffsa-public [data-slot="button"][data-variant="outline"] *,
+  .ffsa-public [data-slot="button"][data-variant="ghost"],
+  .ffsa-public [data-slot="button"][data-variant="ghost"] * {
+    color: ${tk.text} !important;
+  }
+  .ffsa-public [data-slot="button"][data-variant="outline"] {
+    border-color: ${tk.borderSoft} !important;
+  }
+  .ffsa-public [data-slot="button"][data-variant="outline"]:hover,
+  .ffsa-public [data-slot="button"][data-variant="ghost"]:hover {
+    background: ${tk.cardElev} !important;
+  }
+  .ffsa-public .border,
+  .ffsa-public .border-t,
+  .ffsa-public .border-b {
+    border-color: ${tk.borderSoft} !important;
+  }
 }
 `;
 }
