@@ -826,16 +826,15 @@ function adminChromeReclaim(
      rendered form, not by reading the classes. */
   .ffsa-public .text-primary { color: ${tk.yellow} !important; }
   /*
-   * The `[data-slot]` component layer, which no class-based selector can
+   * The [data-slot] component layer, which no class-based selector can
    * reach — that is why the phone country-code trigger stayed invisible after
    * the utilities above were reclaimed.
    *
-   * globals.css paints every shadcn slot with `!important` off the light
-   * palette (`--ink`, `--text-secondary`) and is not scoped to the admin
-   * shell, so a transparent-background variant on a dark card renders
-   * near-black on near-black. Only the see-through variants need reclaiming:
-   * `default` and `destructive` set their own background, so they stay
-   * self-consistent.
+   * globals.css paints every shadcn slot with !important off the light
+   * palette (--ink, --text-secondary) and is not scoped to the admin shell,
+   * so a transparent-background variant on a dark card renders near-black on
+   * near-black. Only the see-through variants need reclaiming: default and
+   * destructive set their own background, so they stay self-consistent.
    */
   .ffsa-public [data-slot="button"][data-variant="outline"],
   .ffsa-public [data-slot="button"][data-variant="outline"] *,
