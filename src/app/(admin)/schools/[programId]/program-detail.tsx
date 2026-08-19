@@ -3024,7 +3024,14 @@ function ApplicationTab({
     if (!confirm("Delete this reference slot?")) return;
     try {
       const res = await fetch(`/api/schools/applications/reference-slots?id=${id}`, { method: "DELETE" });
-      if (res.ok) router.refresh();
+      if (!res.ok) {
+        // The server refuses to remove a program's last required reference.
+        // Without this the click just did nothing, with no explanation.
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || "Failed to delete reference slot");
+        return;
+      }
+      router.refresh();
     } catch {
       alert("Failed to delete reference slot");
     }

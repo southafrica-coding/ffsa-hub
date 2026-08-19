@@ -336,9 +336,19 @@ export function FormBuilder({
             }
           />
           {slots.length === 0 ? (
-            <p className="mono-label px-6 py-6 text-center">
-              No references asked for — add a slot to require one
-            </p>
+            // Not a neutral empty state: every FFSA school requires references,
+            // and an application submitted without them has nobody to vouch for
+            // the applicant. Reads as attention, not as a blank list.
+            <div className="px-6 py-5 text-center">
+              <p className="text-sm font-semibold text-[#8A6400]">
+                This school is asking for no references
+              </p>
+              <p className="mt-1 text-xs text-[color:var(--text-tertiary)]">
+                Applications will be accepted with nobody to vouch for the
+                applicant, and the confirmation email won&apos;t mention
+                references. Add a slot before sharing the apply link.
+              </p>
+            </div>
           ) : (
             slots.map((slot, i) => (
               <div

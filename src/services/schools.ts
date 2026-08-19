@@ -672,6 +672,26 @@ export async function getReferenceSlotsByProgram(supabase: Client, programId: st
     .order("sort_order", { ascending: true });
 }
 
+export async function getReferenceSlotById(supabase: Client, id: string) {
+  return supabase
+    .from("reference_slots")
+    .select("id, program_id, label, is_required")
+    .eq("id", id)
+    .maybeSingle();
+}
+
+/** How many REQUIRED reference slots a program has. */
+export async function countRequiredReferenceSlots(
+  supabase: Client,
+  programId: string
+) {
+  return supabase
+    .from("reference_slots")
+    .select("id", { count: "exact", head: true })
+    .eq("program_id", programId)
+    .eq("is_required", true);
+}
+
 export async function createReferenceSlot(supabase: Client, data: {
   program_id: string;
   label: string;
