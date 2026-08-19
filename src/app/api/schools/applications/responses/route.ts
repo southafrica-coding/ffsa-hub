@@ -16,6 +16,7 @@ import { sendTransactional } from "@/lib/email/send-transactional";
 import { resolveProgramEmail } from "@/lib/email/render-program-email";
 import { sendReferenceInvite } from "@/lib/email/send-reference-invite";
 import { syncApplicantToContact } from "@/lib/applications/sync-contact";
+import { hasEnoughReferenceSlots } from "@/lib/references/minimum-slots";
 import { referenceReminderEmailHtml } from "@/lib/email/templates/reference-reminder";
 import { applicationRejectedEmailHtml } from "@/lib/email/templates/application-rejected";
 import { applicationWaitlistedEmailHtml } from "@/lib/email/templates/application-waitlisted";
@@ -87,6 +88,18 @@ export async function POST(request: Request) {
     supabase,
     program_id
   );
+  // A program short of the floor can't take applications at all — see
+  // minimum-slots.ts. Mirrors the public endpoint.
+  if (!hasEnoughReferenceSlots(requiredSlotsCheck)) {
+    return NextResponse.json(
+      {
+        error:
+          "This program isn't ready to take applications yet. Please contact us so we can get it set up.",
+      },
+      { status: 409 }
+    );
+  }
+
   const submittedRefs: Array<{
     slot_id?: string;
     referee_name?: string;

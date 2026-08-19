@@ -7,20 +7,12 @@ import {
   getReferenceSlotById,
   countRequiredReferenceSlots,
 } from "@/services/schools";
+import { MIN_REQUIRED_REFERENCE_SLOTS } from "@/lib/references/minimum-slots";
 
-// Every FFSA school asks for two references, and the whole applicant-facing
-// story is built on that: the apply form blocks submission without them, the
-// confirmation email says the review waits for "both of your references", and
-// the status tracker counts them in. A program that drops below two would
-// quietly break all three — applications would come in short, and the email
-// would promise a wait for references nobody was asked for.
-//
-// So a program can't be taken below two required references, by deletion or by
-// demoting one to optional. A school wanting three is free to add one; this is
-// a floor, not a fixed count. Both guards live here rather than in a DB
-// constraint because the rule counts sibling rows, which a CHECK can't see.
-const MIN_REQUIRED_REFERENCE_SLOTS = 2;
-
+// A program can't be taken below the floor, by deletion or by demoting a slot
+// to optional — see minimum-slots.ts for why the number matters. Both guards
+// live here rather than in a DB constraint because the rule counts sibling
+// rows, which a CHECK can't see.
 const MIN_SLOTS_ERROR = `Every school asks for at least ${MIN_REQUIRED_REFERENCE_SLOTS} references. Add another reference first if you want to replace this one.`;
 
 async function wouldDropBelowMinimum(

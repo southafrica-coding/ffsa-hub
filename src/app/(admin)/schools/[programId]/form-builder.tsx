@@ -33,6 +33,10 @@ import { CSS } from "@dnd-kit/utilities";
 import { QUESTION_TYPE_LABELS, type TreeQuestion } from "@/components/admin/question-tree";
 import { SectionBar } from "@/components/ffsa";
 import { cn } from "@/lib/utils/cn";
+import {
+  MIN_REQUIRED_REFERENCE_SLOTS,
+  countRequiredSlots,
+} from "@/lib/references/minimum-slots";
 
 export type BuilderSlot = {
   id: string;
@@ -228,11 +232,11 @@ export function FormBuilder({
   /** The public form as an applicant sees it, rendered by the parent. */
   preview: React.ReactNode;
 }) {
-  // Mirrors MIN_REQUIRED_REFERENCE_SLOTS in the reference-slots API, which is
-  // where the rule is actually enforced — this is the same floor stated ahead
-  // of time, so a leader sees the shortfall instead of hitting a 409.
-  const MIN_REQUIRED_SLOTS = 2;
-  const requiredSlotCount = slots.filter((s) => s.is_required).length;
+  // The same floor the API enforces, stated ahead of time so a leader sees the
+  // shortfall here instead of hitting a 409 (or shipping an apply link that
+  // won't open).
+  const MIN_REQUIRED_SLOTS = MIN_REQUIRED_REFERENCE_SLOTS;
+  const requiredSlotCount = countRequiredSlots(slots);
 
   const childrenByParent = new Map<string, TreeQuestion[]>();
   for (const q of questions) {
