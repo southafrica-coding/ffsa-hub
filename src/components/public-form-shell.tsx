@@ -820,6 +820,13 @@ function adminChromeReclaim(
   .ffsa-public .bg-background { background-color: ${tk.bg} !important; }
   .ffsa-public .text-foreground { color: ${tk.text} !important; }
   .ffsa-public .text-muted-foreground { color: ${tk.textDim} !important; }
+  /* --primary and --accent-foreground are both near-black in the light theme,
+     which hid the consent agreement link and the phone country-code trigger
+     ("🇿🇦 +27") outright. Found by auditing computed contrast across the
+     rendered form, not by reading the classes. */
+  .ffsa-public .text-primary { color: ${tk.yellow} !important; }
+  .ffsa-public .text-accent-foreground,
+  .ffsa-public .text-accent-foreground * { color: ${tk.text} !important; }
   .ffsa-public .border,
   .ffsa-public .border-t,
   .ffsa-public .border-b {
