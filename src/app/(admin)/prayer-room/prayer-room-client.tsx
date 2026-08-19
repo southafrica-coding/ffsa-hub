@@ -58,7 +58,7 @@ export default function PrayerRoomClient({
     ...(isMember ? [{ key: "mine" as const, label: "My sets" }] : []),
     // Always present. A member who now plays drums needs the same form a new
     // person needs — there is no other way to be evaluated for a new seat.
-    { key: "join" as const, label: isMember ? "Get evaluated" : "Join the room" },
+    { key: "join" as const, label: "Join the room" },
     ...(isStaff ? [{ key: "manage" as const, label: "Manage" }] : []),
   ];
 

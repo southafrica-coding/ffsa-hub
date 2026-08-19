@@ -192,10 +192,12 @@ export default function ScheduleView({ userId, isStaff, isMember, inCatalogue, t
         onChange={onTabChange}
         actions={
           <>
-            {/* The on-ramp, always here and never behind a tab. It is how a new
-                person joins AND how a member gets evaluated for a new seat. */}
+            {/* The on-ramp, always here and never behind a tab. One label for
+                everyone: a member adding a seat is doing the same thing a new
+                person is — joining the room for something they are not in it
+                for yet. */}
             <MastheadButton tone="outline" onClick={() => onTabChange("join")}>
-              {isMember ? "+ Get evaluated" : "+ Join the prayer room"}
+              + Join the prayer room
             </MastheadButton>
             {/* Creating a set needs a signed-off seat (migration 181). Staff
                 always can. Saying why beats a button that fails on click. */}
