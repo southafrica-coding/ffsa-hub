@@ -4,6 +4,7 @@ import { redirect, notFound } from "next/navigation";
 import { requireModuleAccess } from "@/lib/require-permission";
 import { getImport, getRecordsForImport } from "@/services/records-library";
 import { bestPersonName } from "@/lib/person-name";
+import { Masthead } from "@/components/ffsa";
 
 export default async function ImportDetailPage({
   params,
@@ -24,9 +25,10 @@ export default async function ImportDetailPage({
   const records = await getRecordsForImport(supabase, id);
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-8">
+    <div className="ffsa-screen">
+      <Masthead context="Records library · Import" title={imp.filename} />
+      <div className="space-y-8 px-5 py-6 md:px-8">
       <div>
-        <h1 className="text-2xl font-bold mb-1">{imp.filename}</h1>
         <p className="text-sm text-muted-foreground">
           <span className="capitalize">{imp.record_type}</span> ·{" "}
           <StatusBadge status={imp.status} /> · Uploaded{" "}
@@ -174,6 +176,7 @@ export default async function ImportDetailPage({
           </Table>
         </Section>
       )}
+      </div>
     </div>
   );
 }

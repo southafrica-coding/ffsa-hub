@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { requireModuleAccess } from "@/lib/require-permission";
 import { listImports, listPersons } from "@/services/records-library";
 import { bestPersonName } from "@/lib/person-name";
+import { Masthead } from "@/components/ffsa";
 
 export default async function RecordsLibraryPage() {
   const supabase = await createClient();
@@ -31,10 +32,11 @@ export default async function RecordsLibraryPage() {
   const pendingQueueCount = queueResult.count;
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-8">
+    <div className="ffsa-screen">
+      <Masthead context="System" title="Records Library" />
+      <div className="space-y-8 px-5 py-6 md:px-8">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold mb-1">Records Library</h1>
           <p className="text-sm text-muted-foreground max-w-2xl">
             Upload CSVs of historical staff/student data — applications,
             payments, schools attended, documents. When a user is invited or
@@ -61,7 +63,7 @@ export default async function RecordsLibraryPage() {
           </Link>
           <Link
             href="/records-library/import"
-            className="px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            className="px-3 py-2 text-sm bg-ink text-white hover:bg-[#2A2822]"
           >
             Upload CSV
           </Link>
@@ -177,6 +179,7 @@ export default async function RecordsLibraryPage() {
           </div>
         )}
       </section>
+      </div>
     </div>
   );
 }

@@ -9,6 +9,7 @@ import {
 } from "@/services/records-library";
 import { bestPersonName } from "@/lib/person-name";
 import { PersonsBrowser } from "./persons-browser";
+import { Masthead } from "@/components/ffsa";
 
 const PAGE_SIZE = 50;
 
@@ -58,10 +59,11 @@ export default async function LibraryPersonsPage({
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="ffsa-screen">
+      <Masthead context="Records library" title="All library persons" />
+      <div className="space-y-6 px-5 py-6 md:px-8">
       <div className="flex items-baseline justify-between">
         <div>
-          <h1 className="text-2xl font-bold mb-1">All library persons</h1>
           <p className="text-sm text-muted-foreground">
             Every person record across every CSV import. Use the filters and
             search below to find what you need.
@@ -168,6 +170,7 @@ export default async function LibraryPersonsPage({
         total={total}
         baseSearch={sp}
       />
+      </div>
     </div>
   );
 }

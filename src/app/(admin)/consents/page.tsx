@@ -7,6 +7,7 @@ import {
   getConsentAgreementsList,
 } from "@/services/consent";
 import { ConsentsTable, type ConsentRow } from "./consents-table";
+import { Masthead } from "@/components/ffsa";
 
 export const dynamic = "force-dynamic";
 
@@ -80,34 +81,32 @@ export default async function ConsentsPage() {
   }));
 
   return (
-    <div className="space-y-6">
-      <div>
-        <p className="page-eyebrow">LEGAL</p>
-        <h1 className="page-title">Consent &amp; agreement records</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Every policy acceptance on record — staff, students and public
-          applicants. Open any record to view or print the exact document that
-          was signed, or export the list as CSV.
-        </p>
+    <div className="ffsa-screen">
+      <Masthead context="Legal" title="Consent & agreement records" />
+      <div className="space-y-6 px-5 py-6 md:px-8">
+          <p className="max-w-2xl text-sm text-[#55524A]">
+            Every policy acceptance on record — staff, students and public
+            applicants. Open any record to view or print the exact document that
+            was signed, or export the list as CSV.
+          </p>
+        {versions.length > 0 && (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {versions.map((v) => (
+              <div key={v.version} className="rounded-xl border p-4">
+                <p className="text-sm font-medium">{v.title}</p>
+                <p className="text-xs text-muted-foreground font-mono">{v.version}</p>
+                <p className="mt-2 text-2xl font-semibold">{v.count}</p>
+                <p className="text-xs text-muted-foreground">signatures</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <ConsentsTable
+          rows={rows}
+          versions={versions.map((v) => ({ version: v.version, title: v.title }))}
+        />
       </div>
-
-      {versions.length > 0 && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {versions.map((v) => (
-            <div key={v.version} className="rounded-xl border p-4">
-              <p className="text-sm font-medium">{v.title}</p>
-              <p className="text-xs text-muted-foreground font-mono">{v.version}</p>
-              <p className="mt-2 text-2xl font-semibold">{v.count}</p>
-              <p className="text-xs text-muted-foreground">signatures</p>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <ConsentsTable
-        rows={rows}
-        versions={versions.map((v) => ({ version: v.version, title: v.title }))}
-      />
     </div>
   );
 }

@@ -30,6 +30,7 @@ import { excludedProfileFields, applyListOptions } from "@/lib/users/profile-fie
 import { INSURANCE_PROVIDERS } from "@/lib/profile/options";
 import { getAllListOptions, activeSets } from "@/services/list-options";
 import { listActiveMinistries } from "@/services/ministries";
+import { Masthead } from "@/components/ffsa";
 
 export default async function ProfilePage() {
   const supabase = await createClient();
@@ -131,20 +132,28 @@ export default async function ProfilePage() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="ffsa-screen">
+      {/* The avatar rides in the masthead's action slot so the identity stays
+          one block — a portrait stacked above a 58px condensed name reads as
+          two separate headers. */}
+      <Masthead
+        context="My profile"
+        title={fullName}
+        actions={
+          <AvatarUploader
+            userId={user.id}
+            initialSrc={user.avatar_url}
+            name={avatarName}
+            size={72}
+          />
+        }
+      />
+      <div className="space-y-8 px-5 py-6 md:px-8">
       <ProfileIncompleteSummary lifecycle={lifecycle} />
 
       <div className="flex items-start gap-5">
-        <AvatarUploader
-          userId={user.id}
-          initialSrc={user.avatar_url}
-          name={avatarName}
-          size={72}
-        />
         <div className="flex-1 min-w-0">
-          <p className="page-eyebrow">MY PROFILE</p>
-          <h1 className="page-title truncate">{fullName}</h1>
-          <div className="text-sm text-muted-foreground mt-1">
+          <div className="text-sm text-[#55524A]">
             {user.email ?? "—"}
             {user.preferred_name &&
               user.first_name &&
@@ -279,6 +288,7 @@ export default async function ProfilePage() {
         </div>
         <ProfileRecords userId={user.id} canOpenLibrary={false} />
       </section>
+      </div>
     </div>
   );
 }

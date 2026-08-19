@@ -352,3 +352,25 @@ export function DateBlock({ day, mon, invert }: { day: string; mon: string; inve
     </div>
   );
 }
+
+/* ── A module that exists in the nav but not yet in code ──
+   Two modules (Mission, Teams) are placeholders. They were each drawing their
+   own dark-theme panel — white text on a white page after the light redesign.
+   One component so the third one doesn't invent a fourth look. */
+export function ComingSoon({
+  icon,
+  children,
+}: {
+  icon?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="border border-rule bg-bone px-6 py-14 text-center">
+      {icon && <div className="mb-4 flex justify-center text-[#9A9689]">{icon}</div>}
+      <p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-ink">
+        Not built yet
+      </p>
+      <p className="mx-auto mt-3 max-w-md text-sm text-[#55524A]">{children}</p>
+    </div>
+  );
+}

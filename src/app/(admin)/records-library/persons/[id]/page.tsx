@@ -6,6 +6,7 @@ import { requireModuleAccess } from "@/lib/require-permission";
 import { getPerson, getRecordsForPerson } from "@/services/records-library";
 import { CsvSheet } from "@/components/csv-sheet";
 import { bestPersonName } from "@/lib/person-name";
+import { Masthead } from "@/components/ffsa";
 
 export default async function PersonDetailPage({
   params,
@@ -34,10 +35,11 @@ export default async function PersonDetailPage({
     : null;
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-8">
+    <div className="ffsa-screen">
+      <Masthead context="Records library · Person" title={fullName} />
+      <div className="space-y-8 px-5 py-6 md:px-8">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold mb-1">{fullName}</h1>
           <p className="text-sm text-muted-foreground">
             {person.email ?? "no email"}
             {person.date_of_birth ? ` · DOB ${person.date_of_birth}` : ""}
@@ -196,6 +198,7 @@ export default async function PersonDetailPage({
           />
         </Section>
       )}
+      </div>
     </div>
   );
 }

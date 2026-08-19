@@ -15,6 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Masthead } from "@/components/ffsa";
 
 export default async function MyOutreachTeamPage({
   params,
@@ -79,12 +80,11 @@ export default async function MyOutreachTeamPage({
   );
 
   return (
-    <div className="space-y-6">
+    <div className="ffsa-screen">
+      <Masthead context="My finance · Outreach" title={team.team_name} />
+      <div className="space-y-6 px-5 py-6 md:px-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="page-title">
-            {team.team_name}
-          </h1>
           <p className="text-sm text-muted-foreground">
             {team.programs?.name} · {team.location ?? "TBD"}
             {team.country && `, ${team.country}`}
@@ -318,6 +318,7 @@ export default async function MyOutreachTeamPage({
           </CardContent>
         </Card>
       )}
+      </div>
     </div>
   );
 }

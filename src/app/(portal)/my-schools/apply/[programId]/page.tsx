@@ -9,6 +9,7 @@ import { getCountryTiers } from "@/services/school-fees";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { ApplicationForm } from "./application-form";
+import { Masthead } from "@/components/ffsa";
 
 export default async function ApplyPage({
   params,
@@ -110,11 +111,10 @@ export default async function ApplyPage({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="ffsa-screen">
+      <Masthead context="My training · Application" title={`Apply to ${program.name}`} />
+      <div className="space-y-6 px-5 py-6 md:px-8">
       <div>
-        <h1 className="page-title">
-          Apply to {program.name}
-        </h1>
         <p className="text-sm text-muted-foreground">
           {program.code}
           {program.description && ` — ${program.description}`}
@@ -128,6 +128,7 @@ export default async function ApplyPage({
         countries={countries}
         initialNationality={profile?.nationality ?? ""}
       />
+      </div>
     </div>
   );
 }

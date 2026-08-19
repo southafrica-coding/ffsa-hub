@@ -16,6 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { TranscriptButton } from "./transcript-button";
+import { Masthead } from "@/components/ffsa";
 
 export default async function EnrollmentDetailPage({
   params,
@@ -124,11 +125,11 @@ export default async function EnrollmentDetailPage({
     };
 
   return (
-    <div className="space-y-6">
-      {/* Program Header */}
+    <div className="ffsa-screen">
+      <Masthead context="My training" title={program.name} />
+      <div className="space-y-6 px-5 py-6 md:px-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="page-title">{program.name}</h1>
           <p className="text-sm text-muted-foreground">
             {program.code} &middot;{" "}
             {new Date(enrollment.enrolled_at).toLocaleDateString()} &middot;{" "}
@@ -242,6 +243,7 @@ export default async function EnrollmentDetailPage({
             )}
           </TableBody>
         </Table>
+      </div>
       </div>
     </div>
   );

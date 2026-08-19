@@ -122,7 +122,7 @@ export function MatchQueueList({ items }: { items: QueueItem[] }) {
                   type="button"
                   onClick={() => act(item.id, "approve")}
                   disabled={busyId === item.id}
-                  className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 disabled:opacity-50"
+                  className="px-3 py-1.5 bg-ink text-white text-sm hover:bg-[#2A2822] disabled:opacity-50"
                 >
                   Approve link
                 </button>

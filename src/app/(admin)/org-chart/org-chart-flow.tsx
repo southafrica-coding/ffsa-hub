@@ -298,7 +298,7 @@ export function OrgChartFlow({ data }: { data: OrgChartData }) {
   return (
     <div
       className={`orgx ${theme}`}
-      style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 150px)", minHeight: 560, borderRadius: 12, overflow: "hidden", border: "1px solid var(--hair)" }}
+      style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 150px)", minHeight: 560, borderRadius: 0, overflow: "hidden", border: "1px solid var(--hair)" }}
     >
       <ReactFlowProvider>
         <FlowInner data={data} theme={theme} setTheme={setAndSave} />

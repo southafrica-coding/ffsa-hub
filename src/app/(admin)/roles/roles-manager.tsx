@@ -20,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { Permission, PermissionsByModule } from "@/services/permissions";
+import { Masthead } from "@/components/ffsa";
 
 type Role = {
   id: string;
@@ -164,15 +165,17 @@ export function RolesManager({
   if (editing !== null) {
     const isNew = editing === "new";
     return (
-      <div className="space-y-6 max-w-3xl">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => setEditing(null)}>
-            <ArrowLeft className="h-4 w-4 mr-1" /> Back
-          </Button>
-          <h1 className="page-title">
-            {isNew ? "New role" : `Edit ${(editing as Role).display_name}`}
-          </h1>
-        </div>
+      <div className="ffsa-screen">
+        <Masthead
+          context="System settings · Roles"
+          title={isNew ? "New role" : `Edit ${(editing as Role).display_name}`}
+          actions={
+            <Button variant="ghost" size="sm" onClick={() => setEditing(null)}>
+              <ArrowLeft className="h-4 w-4 mr-1" /> Back
+            </Button>
+          }
+        />
+        <div className="max-w-3xl space-y-6 px-5 py-6 md:px-8">
 
         <div className="space-y-4 rounded-lg border bg-card p-5">
           <div className="space-y-1.5">
@@ -253,6 +256,7 @@ export function RolesManager({
             </span>
           )}
         </div>
+        </div>
       </div>
     );
   }
@@ -313,60 +317,59 @@ export function RolesManager({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="ffsa-screen">
       <div className="flex items-center justify-between">
-        <div>
-          <p className="page-eyebrow">SYSTEM SETTINGS</p>
-          <h1 className="page-title">Roles</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+      <Masthead context="System settings" title="Roles" />
+      <div className="space-y-6 px-5 py-6 md:px-8">
+          <p className="max-w-2xl text-sm text-[#55524A]">
             Job titles that grant access. Edit one and everyone who holds it updates instantly.
           </p>
+          <Button onClick={openNew}>
+            <Plus className="h-4 w-4 mr-1" /> New role
+          </Button>
         </div>
-        <Button onClick={openNew}>
-          <Plus className="h-4 w-4 mr-1" /> New role
-        </Button>
-      </div>
 
-      <div className="space-y-3">
-        {jobTitles.length === 0 ? (
-          <p className="rounded-lg border border-dashed bg-card/40 p-6 text-center text-sm text-muted-foreground">
-            No job titles yet. Create one with &ldquo;New role&rdquo;.
-          </p>
-        ) : (
-          jobTitles.map(roleCard)
-        )}
-      </div>
-
-      {superAdmin && (
-        <div className="space-y-2">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Master key
-          </p>
-          {roleCard(superAdmin)}
-        </div>
-      )}
-
-      {otherBuiltIns.length > 0 && (
-        <div className="rounded-lg border bg-card/40">
-          <button
-            onClick={() => setShowBuiltIns((o) => !o)}
-            className="flex w-full items-center justify-between px-4 py-3 text-sm text-muted-foreground"
-          >
-            <span className="inline-flex items-center gap-2">
-              <Lock className="h-3.5 w-3.5" />
-              Built-in roles · read-only ({otherBuiltIns.length})
-            </span>
-            {showBuiltIns ? (
-              <ChevronDown className="h-4 w-4" />
-            ) : (
-              <ChevronRight className="h-4 w-4" />
-            )}
-          </button>
-          {showBuiltIns && (
-            <div className="space-y-3 border-t p-3">{otherBuiltIns.map(roleCard)}</div>
+        <div className="space-y-3">
+          {jobTitles.length === 0 ? (
+            <p className="rounded-lg border border-dashed bg-card/40 p-6 text-center text-sm text-muted-foreground">
+              No job titles yet. Create one with &ldquo;New role&rdquo;.
+            </p>
+          ) : (
+            jobTitles.map(roleCard)
           )}
         </div>
-      )}
+
+        {superAdmin && (
+          <div className="space-y-2">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Master key
+            </p>
+            {roleCard(superAdmin)}
+          </div>
+        )}
+
+        {otherBuiltIns.length > 0 && (
+          <div className="rounded-lg border bg-card/40">
+            <button
+              onClick={() => setShowBuiltIns((o) => !o)}
+              className="flex w-full items-center justify-between px-4 py-3 text-sm text-muted-foreground"
+            >
+              <span className="inline-flex items-center gap-2">
+                <Lock className="h-3.5 w-3.5" />
+                Built-in roles · read-only ({otherBuiltIns.length})
+              </span>
+              {showBuiltIns ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
+            </button>
+            {showBuiltIns && (
+              <div className="space-y-3 border-t p-3">{otherBuiltIns.map(roleCard)}</div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

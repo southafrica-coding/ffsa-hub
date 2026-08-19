@@ -12,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Masthead } from "@/components/ffsa";
 
 export default async function MyAttendancePage() {
   const supabase = await createClient();
@@ -31,77 +32,75 @@ export default async function MyAttendancePage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <p className="page-eyebrow">PERSONAL</p>
-        <h1 className="page-title">My Attendance</h1>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Attendance Records</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Event</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Checked In</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {!attendance || attendance.length === 0 ? (
+    <div className="ffsa-screen">
+      <Masthead context="Personal" title="My Attendance" />
+      <div className="space-y-6 px-5 py-6 md:px-8">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Attendance Records</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell
-                    colSpan={4}
-                    className="text-center text-muted-foreground py-8"
-                  >
-                    No attendance records found
-                  </TableCell>
+                  <TableHead>Event</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Checked In</TableHead>
                 </TableRow>
-              ) : (
-                attendance.map(
-                  (att: {
-                    id: string;
-                    status: string;
-                    checked_in_at: string | null;
-                    events: {
+              </TableHeader>
+              <TableBody>
+                {!attendance || attendance.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={4}
+                      className="text-center text-muted-foreground py-8"
+                    >
+                      No attendance records found
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  attendance.map(
+                    (att: {
                       id: string;
-                      title: string;
-                      start_date: string;
-                      location: string | null;
-                    } | null;
-                  }) => (
-                    <TableRow key={att.id}>
-                      <TableCell className="font-medium">
-                        {att.events?.title ?? "—"}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {att.events?.start_date ?? "—"}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={statusColors[att.status]}
-                          className="capitalize"
-                        >
-                          {att.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {att.checked_in_at
-                          ? new Date(att.checked_in_at).toLocaleString()
-                          : "—"}
-                      </TableCell>
-                    </TableRow>
+                      status: string;
+                      checked_in_at: string | null;
+                      events: {
+                        id: string;
+                        title: string;
+                        start_date: string;
+                        location: string | null;
+                      } | null;
+                    }) => (
+                      <TableRow key={att.id}>
+                        <TableCell className="font-medium">
+                          {att.events?.title ?? "—"}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {att.events?.start_date ?? "—"}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={statusColors[att.status]}
+                            className="capitalize"
+                          >
+                            {att.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {att.checked_in_at
+                            ? new Date(att.checked_in_at).toLocaleString()
+                            : "—"}
+                        </TableCell>
+                      </TableRow>
+                    )
                   )
-                )
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

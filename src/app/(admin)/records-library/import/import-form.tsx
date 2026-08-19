@@ -426,7 +426,7 @@ export function ImportForm({ templates }: { templates: Template[] }) {
                 disabled={stage === "uploading"}
                 className={`px-3 py-1.5 text-sm rounded-md border capitalize ${
                   recordType === rt
-                    ? "bg-blue-600 text-white border-blue-600"
+                    ? "bg-ink text-white border-ink"
                     : "bg-card text-foreground hover:bg-muted"
                 }`}
               >
@@ -631,7 +631,7 @@ export function ImportForm({ templates }: { templates: Template[] }) {
         <button
           type="button"
           onClick={startImport}
-          className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700"
+          className="px-4 py-2 bg-ink text-white text-sm hover:bg-[#2A2822]"
         >
           Start import
         </button>
@@ -641,7 +641,7 @@ export function ImportForm({ templates }: { templates: Template[] }) {
         <button
           type="button"
           disabled
-          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600/60 text-white rounded-md text-sm cursor-not-allowed"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-[#55524A] text-white text-sm cursor-not-allowed"
         >
           <Loader2 className="h-4 w-4 animate-spin" />
           {stage === "uploading" ? "Importing…" : "Finalizing…"}

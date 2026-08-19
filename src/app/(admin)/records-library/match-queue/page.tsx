@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { requireModuleAccess } from "@/lib/require-permission";
 import { listMatchQueue } from "@/services/records-library";
 import { MatchQueueList } from "./match-queue-list";
+import { Masthead } from "@/components/ffsa";
 
 export default async function MatchQueuePage() {
   const supabase = await createClient();
@@ -14,9 +15,10 @@ export default async function MatchQueuePage() {
   const queue = queueRes.data ?? [];
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
+    <div className="ffsa-screen">
+      <Masthead context="Records library" title="Match queue" />
+      <div className="space-y-6 px-5 py-6 md:px-8">
       <div>
-        <h1 className="text-2xl font-bold mb-1">Match queue</h1>
         <p className="text-sm text-gray-600">
           These library records partially matched an existing user but
           didn&apos;t meet the auto-link bar. Approve to link, reject to
@@ -24,6 +26,7 @@ export default async function MatchQueuePage() {
         </p>
       </div>
       <MatchQueueList items={queue} />
+      </div>
     </div>
   );
 }
