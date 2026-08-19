@@ -3,7 +3,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getProgramPublicInfo, getQuestionsByProgram, getReferenceSlotsByProgram } from "@/services/schools";
 import { getCountryTiers } from "@/services/school-fees";
 import { getCurrentConsentAgreement } from "@/services/consent";
-import { hasEnoughReferenceSlots } from "@/lib/references/minimum-slots";
 import { PublicApplicationForm } from "./public-application-form";
 import {
   PublicFormNotice,
@@ -68,22 +67,6 @@ export default async function PublicApplyPage({
 
   const { data: questions } = await getQuestionsByProgram(supabase, programId);
   const { data: referenceSlots } = await getReferenceSlotsByProgram(supabase, programId);
-
-  // A program whose references haven't been set up can't take applications —
-  // the submit endpoint refuses them (see minimum-slots.ts). Catch it here so
-  // nobody fills in a long form only to be turned away at the end. Reads as
-  // "not open yet", because from the applicant's side that's exactly what it
-  // is; the shortfall is flagged to staff in the program's form builder.
-  if (!hasEnoughReferenceSlots(referenceSlots)) {
-    return (
-      <PublicFormNotice
-        eyebrow="Applications"
-        heading="Not open yet"
-        body={`Applications for ${program.name} aren't open just yet. Please check back shortly.`}
-      />
-    );
-  }
-
   const { data: agreement } = await getCurrentConsentAgreement(supabase);
   const { data: countryRows } = await getCountryTiers(supabase);
   const countries = (countryRows ?? []).map(

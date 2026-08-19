@@ -14,7 +14,6 @@ import {
 } from "@/services/consent";
 import { notifyApplicationSubmitted } from "@/lib/slack/notify";
 import { syncApplicantToContact } from "@/lib/applications/sync-contact";
-import { hasEnoughReferenceSlots } from "@/lib/references/minimum-slots";
 import { normaliseGender } from "@/lib/schools/demographics";
 import { sendTransactional } from "@/lib/email/send-transactional";
 import { resolveProgramEmail } from "@/lib/email/render-program-email";
@@ -123,21 +122,6 @@ export async function POST(request: Request) {
   // public form's guard was easy to bypass (empty/partial references were
   // silently dropped and still accepted), so this is the authoritative check.
   const { data: referenceSlots } = await getReferenceSlotsByProgram(supabase, program_id);
-
-  // A program short of the floor can't take applications at all: accepting one
-  // would produce an application nobody can vouch for, and a confirmation email
-  // promising a wait for references that were never asked for. This is a staff
-  // configuration mistake, so the apply page keeps the form off the screen
-  // (see the apply page) — reaching here means the form was bypassed.
-  if (!hasEnoughReferenceSlots(referenceSlots)) {
-    return NextResponse.json(
-      {
-        error:
-          "This program isn't ready to take applications yet. Please contact us so we can get it set up.",
-      },
-      { status: 409 }
-    );
-  }
 
   const submittedReferences: Array<{
     slot_id?: string;
