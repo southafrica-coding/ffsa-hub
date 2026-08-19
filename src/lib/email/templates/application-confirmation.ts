@@ -1,5 +1,9 @@
 import { renderEmailShell, escapeHtml, bodyParagraph, emphasis } from "../shell";
-import { referenceSubmittedNote } from "@/lib/references/reference-status-copy";
+import {
+  referenceCountIsAre,
+  referenceCountPossessive,
+  referenceSubmittedNote,
+} from "@/lib/references/reference-status-copy";
 
 export function applicationConfirmationEmailHtml({
   firstName,
@@ -29,11 +33,15 @@ export function applicationConfirmationEmailHtml({
     eyebrow: "Application Received",
     heading: `Thank You,<br/>${escapeHtml(firstName)}`,
     bodyHtml: hasReferences
-      ? // The references panel carries the tracker pointer here, so this path
-        // skips the fine-print line that would otherwise sit above it.
+      ? // The wait for references is stated in the body itself, so the panel
+        // below drops its own version of it and the tracker pointer moves there.
         `
       ${bodyParagraph(`Your application to ${emphasis(escapeHtml(programName))} has been received.`)}
-      ${bodyParagraph("Our team will review it and get back to you as soon as we can — you'll receive an email once a decision has been made.")}
+      ${bodyParagraph(
+        `Our team will review your application once ${referenceCountPossessive(
+          referenceCount
+        )} ${referenceCountIsAre(referenceCount)} submitted and get back to you as soon as possible.`
+      )}
       ${bodyParagraph("If you have any questions in the meantime, feel free to reach out to us.")}
     `
       : `
@@ -45,6 +53,8 @@ export function applicationConfirmationEmailHtml({
     notice: hasReferences
       ? applicationReferenceNotice(referenceCount, {
           hasTracker: !!statusUrl,
+          // The body above already says the review waits on the references.
+          includeWaitNote: false,
         })
       : null,
     cta: statusUrl ? { label: "Track Your Application", url: statusUrl } : undefined,
@@ -56,10 +66,16 @@ export function applicationConfirmationEmailHtml({
  * The references panel. Lives here rather than inline so the send site can hand
  * the same block to resolveProgramEmail — a school that has rewritten its
  * "application received" copy still can't drop this.
+ *
+ * `includeWaitNote` is what keeps that guarantee honest in both directions. The
+ * FFSA default body states the wait itself, so it passes false and the panel is
+ * purely the reassuring half. A leader's custom body may say nothing about
+ * references at all, so the send site leaves it on and the panel states the wait
+ * — an applicant is never told to sit tight without being told what for.
  */
 export function applicationReferenceNotice(
   referenceCount: number,
-  opts?: { hasTracker?: boolean }
+  opts?: { hasTracker?: boolean; includeWaitNote?: boolean }
 ): { label: string; html: string } {
   const referees =
     referenceCount === 1 ? "Your referee has" : "Your referees have each";
@@ -68,10 +84,14 @@ export function applicationReferenceNotice(
       ? " You can see when it arrives on your application tracker below."
       : " You can see when each one arrives on your application tracker below."
     : "";
+  const waitNote =
+    opts?.includeWaitNote === false
+      ? ""
+      : `${escapeHtml(referenceSubmittedNote(referenceCount))} `;
   return {
     label: referenceCount === 1 ? "Your reference" : "Your references",
     html:
-      `${escapeHtml(referenceSubmittedNote(referenceCount))} ` +
+      waitNote +
       `${referees} been emailed a link, so there's nothing more you need to do.` +
       tracker,
   };
