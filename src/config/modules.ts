@@ -18,6 +18,7 @@ import {
   Palette,
   SlidersHorizontal,
   Scale,
+  Target,
   type LucideIcon,
 } from "lucide-react";
 
@@ -135,6 +136,14 @@ export const ADMIN_MODULES: ModuleDefinition[] = [
     icon: HeartHandshake,
     description: "Ministries and their staff teams",
     requiredRoles: ["super_admin", "admin", "ministry_leader"],
+  },
+  {
+    id: "okrs",
+    label: "OKRs",
+    href: "/okrs",
+    icon: Target,
+    description: "Ministry objectives and key results, with a dated check-in history",
+    requiredRoles: [], // ministry OKRs are meant to be seen by the whole base
   },
   {
     id: "brand-kit",
