@@ -1,0 +1,18 @@
+[
+  { "line": 43,   "ministrySlug": "leadership_team",    "note": "Base-wide OKRs. Two near-identical blocks: line 2 says 'fundraiser before the end of 2025', line 43 says 2026 — 43 looks like the current one. CONFIRM." },
+  { "line": 82,   "ministrySlug": "prayer_and_worship", "note": "The reworked single-objective block. Line 138 is the older 7-objective version; line 204 is literally labelled 'old 2026'. CONFIRM which the team works from." },
+  { "line": 209,  "ministrySlug": "training",           "note": "Lines 209 and 241 are the same four objectives with different progress. CONFIRM which is current." },
+  { "line": 273,  "ministrySlug": "training",           "subcategory": "DBS", "note": "DBS appears once. Is it its own ministry or a Training sub-team?" },
+  { "line": 346,  "ministrySlug": "",                   "note": "Finance — no staff_ministries row seeded for it. Needs a ministry created first, or mapping onto Operations." },
+  { "line": 479,  "ministrySlug": "hulk",               "note": "'HULC / FFSA Tours' vs plain 'HULC' at line 510. Note the seeded slug is 'hulk' (a typo in migration 126, kept). CONFIRM which block, and whether Tours is a subcategory." },
+  { "line": 573,  "ministrySlug": "project_54",         "note": "Line 541 is the older four-objective version." },
+  { "line": 671,  "ministrySlug": "education",          "subcategory": "Educating for Life", "note": "EFL — ministry or a sub-team of Education?" },
+  { "line": 712,  "ministrySlug": "woven",              "note": "Brave Love — women's ministry. Woven is the closest seeded ministry; CONFIRM." },
+  { "line": 759,  "ministrySlug": "",                   "note": "The Watchmen — men's ministry. No obvious seeded ministry." },
+  { "line": 797,  "ministrySlug": "education",          "subcategory": "Rooted Christian Academy", "note": "Two blocks, 797 and 828." },
+  { "line": 860,  "ministrySlug": "operations",         "note": "Line 893 ('OPERATIONS') is the same four objectives. CONFIRM which." },
+  { "line": 924,  "ministrySlug": "",                   "note": "1040 Crossfit / RTC — no seeded ministry." },
+  { "line": 975,  "ministrySlug": "",                   "note": "Hope Again — no seeded ministry." },
+  { "line": 1006, "ministrySlug": "",                   "note": "Old Age Homes. Line 1038 is preceded by a '2025' marker, so 1006 is the newer of the pair." },
+  { "line": 1069, "ministrySlug": "",                   "note": "Evangelism — no seeded ministry." }
+]
