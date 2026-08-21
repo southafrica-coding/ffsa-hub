@@ -12,21 +12,24 @@ import { ObjectiveDialog } from "./objective-dialog";
 import { KeyResultDialog } from "./key-result-dialog";
 
 /**
- * One ministry's objectives and key results.
+ * One group's objectives and key results — a staff ministry or an OKR-only
+ * team, it renders the same either way.
  *
- * Scope-agnostic on purpose — it takes objectives and a canEdit flag, nothing
- * about ministries, so the individual-OKR build can reuse it as-is.
+ * Scope-agnostic on purpose: it takes objectives and a canEdit flag, nothing
+ * about who owns them, so the individual-OKR build can reuse it as-is.
  */
-export function MinistryOkrs({
+export function OwnerOkrs({
   objectives,
   canEdit,
   cycleId,
   ministryId,
+  teamId,
 }: {
   objectives: OkrObjective[];
   canEdit: boolean;
   cycleId: string;
-  ministryId: string;
+  ministryId: string | null;
+  teamId: string | null;
 }) {
   const router = useRouter();
   const [openKrId, setOpenKrId] = useState<string | null>(null);
@@ -157,6 +160,7 @@ export function MinistryOkrs({
           objective={editingObjective === "new" ? null : editingObjective}
           cycleId={cycleId}
           ministryId={ministryId}
+          teamId={teamId}
           onClose={() => setEditingObjective(null)}
         />
       )}

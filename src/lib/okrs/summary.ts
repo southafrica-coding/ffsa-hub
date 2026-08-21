@@ -1,12 +1,16 @@
 // Roll-ups for the OKR wall.
 //
-// The wall renders every ministry's objectives for a cycle in one shot, so the
+// The wall renders every group's objectives for a cycle in one shot, so the
 // counts are reduced in JS from the rows already fetched rather than asked for
 // separately. RLS has already decided what is in that array, so the totals a
 // viewer sees are the totals they are allowed to see.
+//
+// A "group" is a staff ministry OR an OKR-only team (The Watchmen, Hope Again,
+// and the others that write OKRs without being ministries). The wall treats
+// them identically — only edit rights tell them apart.
 
 import { emptyStatusCounts } from "./progress";
-import type { MinistryOkrSummary, OkrObjective, OkrStatus } from "@/types/okrs";
+import type { OkrOwner, OkrOwnerSummary, OkrObjective, OkrStatus } from "@/types/okrs";
 
 export interface WallTotals {
   objectives: number;
@@ -14,35 +18,44 @@ export interface WallTotals {
   byStatus: Record<OkrStatus, number>;
 }
 
-export function summariseByMinistry(
+/** The id an objective is grouped under, whichever kind of owner it has. */
+export function ownerIdOf(objective: OkrObjective): string | null {
+  return objective.staff_ministry_id ?? objective.okr_team_id ?? null;
+}
+
+export function toOwners(
+  ministries: { id: string; name: string; slug: string }[],
+  teams: { id: string; name: string; slug: string }[]
+): OkrOwner[] {
+  return [
+    ...ministries.map((m) => ({ ...m, kind: "ministry" as const })),
+    ...teams.map((t) => ({ ...t, kind: "team" as const })),
+  ];
+}
+
+export function summariseByOwner(
   objectives: OkrObjective[],
-  ministries: { id: string; name: string; slug: string }[]
-): MinistryOkrSummary[] {
-  const byId = new Map<string, MinistryOkrSummary>();
-  for (const m of ministries) {
-    byId.set(m.id, {
-      staff_ministry_id: m.id,
-      name: m.name,
-      slug: m.slug,
-      objectives: 0,
-      keyResults: 0,
-      byStatus: emptyStatusCounts(),
-    });
+  owners: OkrOwner[]
+): OkrOwnerSummary[] {
+  const byId = new Map<string, OkrOwnerSummary>();
+  for (const o of owners) {
+    byId.set(o.id, { ...o, objectives: 0, keyResults: 0, byStatus: emptyStatusCounts() });
   }
 
-  for (const o of objectives) {
-    const row = byId.get(o.staff_ministry_id);
-    // A ministry that was retired after its OKRs were written still has rows;
-    // skip rather than invent a nameless card for it.
+  for (const objective of objectives) {
+    const id = ownerIdOf(objective);
+    const row = id ? byId.get(id) : undefined;
+    // A ministry retired after its OKRs were written still has rows; skip
+    // rather than invent a nameless card for it.
     if (!row) continue;
     row.objectives += 1;
-    for (const kr of o.okr_key_results ?? []) {
+    for (const kr of objective.okr_key_results ?? []) {
       row.keyResults += 1;
       row.byStatus[kr.current_status] += 1;
     }
   }
 
-  // Ministries with nothing written for this cycle are dropped — an empty card
+  // Groups with nothing written for this cycle are dropped — an empty card
   // reads as "this ministry has no OKRs" when the truth is "not yet entered".
   return [...byId.values()]
     .filter((r) => r.objectives > 0)

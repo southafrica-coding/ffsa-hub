@@ -3,8 +3,14 @@ import Link from "next/link";
 
 import { createClient } from "@/lib/supabase/server";
 import { listMinistries } from "@/services/ministries";
-import { getCycleBySlug, getCurrentCycle, listCycles, listObjectives } from "@/services/okrs";
-import { summariseByMinistry, totals } from "@/lib/okrs/summary";
+import {
+  getCycleBySlug,
+  getCurrentCycle,
+  listCycles,
+  listObjectives,
+  listOkrTeams,
+} from "@/services/okrs";
+import { summariseByOwner, toOwners, totals } from "@/lib/okrs/summary";
 import { Masthead, KpiStrip, Kpi, StatusPill } from "@/components/ffsa";
 import { statusLabel, statusTone } from "@/lib/okrs/progress";
 import type { OkrCycle, OkrObjective } from "@/types/okrs";
@@ -51,16 +57,22 @@ export default async function OkrsPage({
     );
   }
 
-  const [{ data: objectiveRows }, { data: ministryRows }] = await Promise.all([
-    listObjectives(supabase, { cycleId: cycle.id, scope: "ministry" }),
-    // Via the service, not supabase.from(...): staff_ministries postdates the
-    // last src/types/database.ts regeneration, so the typed client rejects it.
-    listMinistries(supabase),
-  ]);
+  const [{ data: objectiveRows }, { data: ministryRows }, { data: teamRows }] =
+    await Promise.all([
+      listObjectives(supabase, { cycleId: cycle.id, scope: "ministry" }),
+      // Via the services, not supabase.from(...): staff_ministries and
+      // okr_teams both postdate the last src/types/database.ts regeneration,
+      // so the typed client rejects them by name.
+      listMinistries(supabase),
+      listOkrTeams(supabase),
+    ]);
 
   const objectives = (objectiveRows ?? []) as OkrObjective[];
-  const ministries = (ministryRows ?? []) as { id: string; name: string; slug: string }[];
-  const summaries = summariseByMinistry(objectives, ministries);
+  const owners = toOwners(
+    (ministryRows ?? []) as { id: string; name: string; slug: string }[],
+    (teamRows ?? []) as { id: string; name: string; slug: string }[]
+  );
+  const summaries = summariseByOwner(objectives, owners);
   const t = totals(objectives);
 
   const completePct = t.keyResults > 0 ? (t.byStatus.complete / t.keyResults) * 100 : 0;
@@ -74,7 +86,7 @@ export default async function OkrsPage({
       />
 
       <KpiStrip>
-        <Kpi label="Ministries" value={String(summaries.length)} lead />
+        <Kpi label="Groups" value={String(summaries.length)} lead />
         <Kpi label="Objectives" value={String(t.objectives)} />
         <Kpi
           label="Key results"
@@ -105,8 +117,8 @@ export default async function OkrsPage({
           <div className="border-t border-rule">
             {summaries.map((m) => (
               <Link
-                key={m.staff_ministry_id}
-                href={`/okrs/${m.staff_ministry_id}?cycle=${cycle.slug}`}
+                key={m.id}
+                href={`/okrs/${m.id}?cycle=${cycle.slug}`}
                 className="block border-b border-rule bg-white px-4 py-4 hover:bg-bone md:px-5"
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">

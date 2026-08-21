@@ -25,11 +25,20 @@ npx tsx scripts/import-okrs.ts --inspect
 
 Lists every block with its counts and first objective. Use it to decide.
 
-Copy `okrs-manifest.example.json` to `okrs-manifest.json` and fill in a
-`ministrySlug` for every block you want (slugs come from
-`public.staff_ministries`). Blocks left out are simply not imported. Where a
-sheet block is really a sub-team, add `"subcategory": "<name>"` and it lands on
-`okr_objectives.subcategory_id` under the parent ministry.
+Copy `okrs-manifest.example.json` to `okrs-manifest.json` and give every block
+you want exactly one owner:
+
+- `"ministrySlug": "operations"` — a real staff ministry, from
+  `public.staff_ministries`. Its leaders can then edit those OKRs.
+- `"teamSlug": "the_watchmen"` — a group that writes OKRs without being a
+  ministry, from `public.okr_teams`. Everyone can read these; only leadership
+  and admins can edit them, because a team has no roster and so nobody the
+  database can recognise as its leader.
+
+Blocks left out are simply not imported. Where a sheet block is really a
+sub-team of a ministry, add `"subcategory": "<name>"` and it lands on
+`okr_objectives.subcategory_id` under the parent. Subcategories only apply to
+ministries, not to teams.
 
 ```
 npx tsx scripts/import-okrs.ts --dry-run --cycle=2026

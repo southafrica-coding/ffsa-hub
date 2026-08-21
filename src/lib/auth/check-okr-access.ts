@@ -30,13 +30,21 @@ export async function isLeadershipTeam(
   return ((data as unknown[] | null)?.length ?? 0) > 0;
 }
 
-/** Admin, leadership team, or an active leader of that ministry. */
+/**
+ * Admin, leadership team, or an active leader of that ministry.
+ *
+ * A NULL ministryId means the objective belongs to an OKR-only team, which has
+ * no roster and therefore no leader the database could recognise — so those
+ * come out editable by leadership and admins only. Same result as the SQL
+ * side, where leads_staff_ministry(NULL) collapses to is_admin().
+ */
 export async function callerCanEditMinistryOkrs(
   supabase: Client,
   userId: string,
-  ministryId: string
+  ministryId: string | null
 ): Promise<boolean> {
   if (await isLeadershipTeam(supabase, userId)) return true;
+  if (!ministryId) return callerIsAdmin(supabase, userId);
   // callerLeadsMinistry already folds in the admin check.
   return callerLeadsMinistry(supabase, userId, ministryId);
 }
@@ -59,7 +67,11 @@ export async function callerCanEditObjective(
     .maybeSingle();
   if (!data) return false;
 
-  const row = data as { staff_ministry_id: string; scope: string; owner_user_id: string | null };
+  const row = data as {
+    staff_ministry_id: string | null;
+    scope: string;
+    owner_user_id: string | null;
+  };
   if (row.scope === "individual" && row.owner_user_id === userId) return true;
   return callerCanEditMinistryOkrs(supabase, userId, row.staff_ministry_id);
 }

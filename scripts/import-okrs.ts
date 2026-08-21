@@ -60,7 +60,9 @@ const pending: PendingKeyResult[] = [];
 
 interface ManifestEntry {
   line: number;
-  ministrySlug: string;
+  /** Exactly one of ministrySlug / teamSlug — see okr_objectives_owner_group_ck. */
+  ministrySlug?: string;
+  teamSlug?: string;
   subcategory?: string;
   note?: string;
 }
@@ -149,14 +151,32 @@ async function main() {
     ((ministries ?? []) as { id: string; slug: string }[]).map((m) => [m.slug, m.id])
   );
 
-  // A missing ministry aborts the run. Creating one here would have side
-  // effects — the leadership_team role trigger keys off the slug, and the
+  const { data: teams } = await supabase.from("okr_teams").select("id, name, slug");
+  const teamBySlug = new Map(
+    ((teams ?? []) as { id: string; slug: string }[]).map((t) => [t.slug, t.id])
+  );
+
+  // Exactly one owning group per entry, matching the database constraint.
+  const badOwner = manifest.filter((e) => !e.ministrySlug === !e.teamSlug);
+  if (badOwner.length > 0) {
+    console.error("Every manifest entry needs exactly one of ministrySlug or teamSlug:");
+    for (const b of badOwner) console.error(`  line ${b.line} — ${b.note ?? ""}`);
+    process.exit(1);
+  }
+
+  // A missing group aborts the run. Creating a staff ministry here would have
+  // side effects — the leadership_team role trigger keys off the slug, and the
   // Ministry nav keys off membership — so that decision belongs to a person.
-  const unmapped = manifest.filter((e) => !ministryBySlug.has(e.ministrySlug));
+  const unmapped = manifest.filter((e) =>
+    e.teamSlug ? !teamBySlug.has(e.teamSlug) : !ministryBySlug.has(e.ministrySlug!)
+  );
   if (unmapped.length > 0) {
-    console.error("Manifest names ministry slugs that do not exist in staff_ministries:");
-    for (const u of unmapped) console.error(`  ${u.ministrySlug} (sheet line ${u.line})`);
-    console.error("\nAvailable:", [...ministryBySlug.keys()].join(", "));
+    console.error("Manifest names groups that do not exist:");
+    for (const u of unmapped) {
+      console.error(`  ${u.teamSlug ?? u.ministrySlug} (sheet line ${u.line})`);
+    }
+    console.error("\nMinistries:", [...ministryBySlug.keys()].join(", "));
+    console.error("OKR teams: ", [...teamBySlug.keys()].join(", "));
     process.exit(1);
   }
 
@@ -200,14 +220,24 @@ async function main() {
 
   for (const entry of manifest) {
     const block = byLine.get(entry.line)!;
-    const ministryId = ministryBySlug.get(entry.ministrySlug)!;
-    const subcategoryId = entry.subcategory
-      ? subRows.find(
-          (s) =>
-            s.staff_ministry_id === ministryId &&
-            s.name.toLowerCase() === entry.subcategory!.toLowerCase()
-        )?.id ?? null
-      : null;
+    const ministryId = entry.ministrySlug ? ministryBySlug.get(entry.ministrySlug)! : null;
+    const teamId = entry.teamSlug ? teamBySlug.get(entry.teamSlug)! : null;
+
+    if (entry.subcategory && !ministryId) {
+      console.error(
+        `Line ${entry.line}: a subcategory only exists under a ministry, and this entry names a team.`
+      );
+      process.exit(1);
+    }
+
+    const subcategoryId =
+      entry.subcategory && ministryId
+        ? subRows.find(
+            (s) =>
+              s.staff_ministry_id === ministryId &&
+              s.name.toLowerCase() === entry.subcategory!.toLowerCase()
+          )?.id ?? null
+        : null;
 
     if (entry.subcategory && !subcategoryId) {
       console.error(
@@ -232,6 +262,7 @@ async function main() {
             cycle_id: cycle.id,
             scope: "ministry",
             staff_ministry_id: ministryId,
+            okr_team_id: teamId,
             subcategory_id: subcategoryId,
             position: o.position,
             title: o.title,

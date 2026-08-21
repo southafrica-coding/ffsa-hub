@@ -10,7 +10,8 @@
 -- This migration models it properly:
 --
 --   okr_cycles      one row per OKR year (2025, 2026); exactly one is current
---   okr_objectives  an objective, owned by a staff ministry
+--   okr_teams       a group that writes OKRs but is NOT a staff ministry
+--   okr_objectives  an objective, owned by a staff ministry OR an okr_team
 --   okr_key_results the KRs under it, with a REQUIRED status and an OPTIONAL
 --                   numeric metric (start/target/current)
 --   okr_checkins    the dated log of progress updates — the reason this is a
@@ -22,6 +23,16 @@
 -- columns, the CHECK constraint and the RLS policies for it are all here from
 -- day one, deliberately, so that build needs no second migration and no
 -- backfill — only UI and routes.
+--
+-- WHY okr_teams EXISTS. Several groups that write OKRs are not staff
+-- ministries and should not become ones: The Watchmen, Hope Again, Old Age
+-- Homes, Evangelism, Brave Love. Making them ministries would give them
+-- rosters, departments, nav entries and a leadership role trigger they have no
+-- use for. So an objective is owned by exactly one of a staff_ministry or an
+-- okr_team, enforced by a CHECK. Team-owned OKRs are readable by everyone, the
+-- same as ministry ones; they are editable by leadership and admins only,
+-- because a team with no membership table has nobody the database can call its
+-- leader. If a team later becomes a real ministry, repoint its objectives.
 --
 -- AUDIENCES.
 --   ministry objectives   readable by every authenticated user;
@@ -98,16 +109,44 @@ END;
 $$;
 
 -- ────────────────────────────────────────────────────────────
--- 3. OBJECTIVES
+-- 3. OKR-ONLY TEAMS
+-- ────────────────────────────────────────────────────────────
+-- Deliberately thin: a name and a slug. No members, no leaders, no department
+-- link. The moment one of these needs a roster it should become a staff
+-- ministry instead, and its objectives repointed.
+
+CREATE TABLE IF NOT EXISTS public.okr_teams (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name        text NOT NULL,
+  slug        text NOT NULL UNIQUE,
+  description text,
+  is_active   boolean NOT NULL DEFAULT true,
+  sort_order  integer NOT NULL DEFAULT 0,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+INSERT INTO public.okr_teams (name, slug, sort_order) VALUES
+  ('The Watchmen',  'the_watchmen',  10),
+  ('Brave Love',    'brave_love',    20),
+  ('Hope Again',    'hope_again',    30),
+  ('Old Age Homes', 'old_age_homes', 40),
+  ('Evangelism',    'evangelism',    50)
+ON CONFLICT (slug) DO NOTHING;
+
+-- ────────────────────────────────────────────────────────────
+-- 4. OBJECTIVES
 -- ────────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS public.okr_objectives (
   id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   cycle_id          uuid NOT NULL REFERENCES public.okr_cycles (id) ON DELETE CASCADE,
   scope             public.okr_scope NOT NULL DEFAULT 'ministry',
-  -- NOT NULL even for individual objectives: "your ministry leader can see it"
-  -- is the visibility rule, so the link is what makes that rule expressible.
-  staff_ministry_id uuid NOT NULL REFERENCES public.staff_ministries (id) ON DELETE CASCADE,
+  -- Exactly one owner: a staff ministry or an OKR-only team (see the XOR
+  -- constraint below). For individual objectives it is always the ministry —
+  -- "your ministry leader can see it" is the visibility rule, and the link is
+  -- what makes that rule expressible.
+  staff_ministry_id uuid REFERENCES public.staff_ministries (id) ON DELETE CASCADE,
+  okr_team_id       uuid REFERENCES public.okr_teams (id) ON DELETE CASCADE,
   subcategory_id    uuid REFERENCES public.staff_ministry_subcategories (id) ON DELETE SET NULL,
   owner_user_id     uuid REFERENCES public.users (id) ON DELETE CASCADE,
   position          integer NOT NULL DEFAULT 0,
@@ -124,6 +163,16 @@ CREATE TABLE IF NOT EXISTS public.okr_objectives (
   CONSTRAINT okr_objectives_scope_owner_ck CHECK (
     (scope = 'ministry'   AND owner_user_id IS NULL) OR
     (scope = 'individual' AND owner_user_id IS NOT NULL)
+  ),
+  -- Exactly one owning group, never both, never neither.
+  CONSTRAINT okr_objectives_owner_group_ck CHECK (
+    (staff_ministry_id IS NOT NULL AND okr_team_id IS NULL) OR
+    (staff_ministry_id IS NULL     AND okr_team_id IS NOT NULL)
+  ),
+  -- An individual's OKRs hang off their ministry; an OKR-only team has no
+  -- members, so there is nobody for an individual objective to belong to.
+  CONSTRAINT okr_objectives_individual_needs_ministry_ck CHECK (
+    scope = 'ministry' OR staff_ministry_id IS NOT NULL
   )
 );
 
@@ -133,13 +182,15 @@ CREATE INDEX IF NOT EXISTS idx_okr_objectives_owner
   ON public.okr_objectives (owner_user_id, cycle_id) WHERE owner_user_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_okr_objectives_scope
   ON public.okr_objectives (scope, cycle_id);
+CREATE INDEX IF NOT EXISTS idx_okr_objectives_cycle_team
+  ON public.okr_objectives (cycle_id, okr_team_id, position) WHERE okr_team_id IS NOT NULL;
 
 DROP TRIGGER IF EXISTS set_updated_at ON public.okr_objectives;
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.okr_objectives
   FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
 -- ────────────────────────────────────────────────────────────
--- 4. KEY RESULTS
+-- 5. KEY RESULTS
 -- ────────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS public.okr_key_results (
@@ -187,7 +238,7 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.okr_key_results
   FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
 -- ────────────────────────────────────────────────────────────
--- 5. CHECK-INS
+-- 6. CHECK-INS
 -- ────────────────────────────────────────────────────────────
 -- checkin_on is a date because people back-date an update to the week it
 -- covers; created_at breaks ties between two check-ins on the same date.
@@ -269,7 +320,7 @@ CREATE TRIGGER okr_checkins_refresh_kr
   FOR EACH ROW EXECUTE FUNCTION public.refresh_okr_key_result_state();
 
 -- ────────────────────────────────────────────────────────────
--- 6. VISIBILITY / EDIT HELPERS
+-- 7. VISIBILITY / EDIT HELPERS
 -- ────────────────────────────────────────────────────────────
 -- SECURITY DEFINER is not optional here: these read okr_objectives and are
 -- called from the okr_key_results and okr_checkins policies, which would
@@ -305,6 +356,11 @@ $$;
 
 -- No separate is_point_leader branch: leads_staff_ministry already matches any
 -- active leader, and a point leader is one.
+--
+-- For a TEAM-owned objective staff_ministry_id is NULL, and
+-- leads_staff_ministry(NULL) collapses to is_admin() — its EXISTS can never
+-- match a NULL. So team OKRs come out editable by admins and leadership only,
+-- which is the intended rule, without a separate branch.
 CREATE OR REPLACE FUNCTION public.can_edit_okr_objective(target_objective_id uuid)
 RETURNS boolean
 LANGUAGE sql
@@ -379,10 +435,11 @@ GRANT EXECUTE ON FUNCTION public.can_view_okr_key_result(uuid)                  
 GRANT EXECUTE ON FUNCTION public.can_edit_okr_key_result(uuid)                   TO authenticated;
 
 -- ────────────────────────────────────────────────────────────
--- 7. RLS
+-- 8. RLS
 -- ────────────────────────────────────────────────────────────
 
 ALTER TABLE public.okr_cycles      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.okr_teams       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.okr_objectives  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.okr_key_results ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.okr_checkins    ENABLE ROW LEVEL SECURITY;
@@ -396,6 +453,18 @@ CREATE POLICY "OKR cycles are readable"
 DROP POLICY IF EXISTS "Leadership manages OKR cycles" ON public.okr_cycles;
 CREATE POLICY "Leadership manages OKR cycles"
   ON public.okr_cycles FOR ALL TO authenticated
+  USING (public.is_admin() OR public.has_role('leadership_team'))
+  WITH CHECK (public.is_admin() OR public.has_role('leadership_team'));
+
+-- OKR-only teams ─────────────────────────────────────────────
+DROP POLICY IF EXISTS "OKR teams are readable" ON public.okr_teams;
+CREATE POLICY "OKR teams are readable"
+  ON public.okr_teams FOR SELECT TO authenticated
+  USING (auth.uid() IS NOT NULL);
+
+DROP POLICY IF EXISTS "Leadership manages OKR teams" ON public.okr_teams;
+CREATE POLICY "Leadership manages OKR teams"
+  ON public.okr_teams FOR ALL TO authenticated
   USING (public.is_admin() OR public.has_role('leadership_team'))
   WITH CHECK (public.is_admin() OR public.has_role('leadership_team'));
 
@@ -507,6 +576,17 @@ CREATE POLICY "OKR check-ins deletable by author or leadership"
 --   SELECT current_status, last_checkin_at
 --     FROM public.okr_key_results WHERE id = '<kr>';
 --     -- expect: not_started, NULL
+--
+--   -- OKR-only teams seeded:
+--   SELECT name, slug FROM public.okr_teams ORDER BY sort_order;
+--     -- expect: The Watchmen, Brave Love, Hope Again, Old Age Homes, Evangelism
+--   -- An objective must have exactly one owning group:
+--   INSERT INTO public.okr_objectives (cycle_id, title) VALUES ('<cycle>', 'orphan');
+--     -- expect: violates check constraint "okr_objectives_owner_group_ck"
+--   -- ...and an individual objective cannot hang off a team:
+--   INSERT INTO public.okr_objectives (cycle_id, scope, okr_team_id, owner_user_id, title)
+--     VALUES ('<cycle>', 'individual', '<team>', auth.uid(), 'no');
+--     -- expect: violates "okr_objectives_individual_needs_ministry_ck"
 --
 --   -- "No ratio, no bar" is enforced here, not just in the UI:
 --   INSERT INTO public.okr_key_results (objective_id, description, metric_start)

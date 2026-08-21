@@ -15,11 +15,14 @@ export function ObjectiveDialog({
   objective,
   cycleId,
   ministryId,
+  teamId,
   onClose,
 }: {
   objective: OkrObjective | null;
   cycleId: string;
-  ministryId: string;
+  /** Exactly one of ministryId / teamId is set — see migration 182. */
+  ministryId: string | null;
+  teamId: string | null;
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -40,7 +43,12 @@ export function ObjectiveDialog({
       description: description.trim() || null,
       timeline: timeline.trim() || null,
       owner_note: ownerNote.trim() || null,
-      ...(objective ? {} : { cycle_id: cycleId, staff_ministry_id: ministryId }),
+      ...(objective
+        ? {}
+        : {
+            cycle_id: cycleId,
+            ...(teamId ? { okr_team_id: teamId } : { staff_ministry_id: ministryId }),
+          }),
     };
 
     const res = await fetch(

@@ -19,8 +19,10 @@ const KEY_RESULT_FIELDS =
   "metric_unit, metric_start, metric_target, current_status, current_value, last_checkin_at";
 
 const OBJECTIVE_FIELDS =
-  "id, cycle_id, scope, staff_ministry_id, subcategory_id, owner_user_id, position, " +
+  "id, cycle_id, scope, staff_ministry_id, okr_team_id, subcategory_id, owner_user_id, position, " +
   "title, description, owner_note, timeline, is_archived";
+
+const TEAM_FIELDS = "id, name, slug, description, is_active, sort_order";
 
 const CYCLE_FIELDS = "id, name, slug, starts_on, ends_on, is_current";
 
@@ -62,6 +64,26 @@ export async function setCurrentCycle(supabase: Client, id: string) {
   return supabase.rpc("set_current_okr_cycle", { target_cycle_id: id });
 }
 
+/* ── OKR-only teams ─────────────────────────────────── */
+
+/**
+ * Groups that write OKRs without being staff ministries. Kept separate from
+ * staff_ministries on purpose — these have no roster, no leaders and no
+ * department; see the note at the top of migration 182.
+ */
+export async function listOkrTeams(supabase: Client) {
+  return supabase
+    .from("okr_teams")
+    .select(TEAM_FIELDS)
+    .eq("is_active", true)
+    .order("sort_order", { ascending: true })
+    .order("name", { ascending: true });
+}
+
+export async function getOkrTeam(supabase: Client, id: string) {
+  return supabase.from("okr_teams").select(TEAM_FIELDS).eq("id", id).maybeSingle();
+}
+
 /* ── Objectives ─────────────────────────────────────── */
 
 /**
@@ -73,6 +95,7 @@ export async function listObjectives(
   filters: {
     cycleId: string;
     ministryId?: string;
+    teamId?: string;
     scope?: "ministry" | "individual";
     ownerUserId?: string;
     includeArchived?: boolean;
@@ -84,6 +107,7 @@ export async function listObjectives(
     .eq("cycle_id", filters.cycleId);
 
   if (filters.ministryId) q = q.eq("staff_ministry_id", filters.ministryId);
+  if (filters.teamId) q = q.eq("okr_team_id", filters.teamId);
   if (filters.scope) q = q.eq("scope", filters.scope);
   if (filters.ownerUserId) q = q.eq("owner_user_id", filters.ownerUserId);
   if (!filters.includeArchived) q = q.eq("is_archived", false);
@@ -105,7 +129,9 @@ export async function createObjective(
   supabase: Client,
   input: {
     cycle_id: string;
-    staff_ministry_id: string;
+    /** Exactly one of staff_ministry_id / okr_team_id. */
+    staff_ministry_id?: string | null;
+    okr_team_id?: string | null;
     scope?: "ministry" | "individual";
     owner_user_id?: string | null;
     subcategory_id?: string | null;
@@ -136,16 +162,13 @@ export async function deleteObjective(supabase: Client, id: string) {
 export async function nextObjectivePosition(
   supabase: Client,
   cycleId: string,
-  ministryId: string
+  owner: { ministryId?: string | null; teamId?: string | null }
 ): Promise<number> {
-  const { data } = await supabase
-    .from("okr_objectives")
-    .select("position")
-    .eq("cycle_id", cycleId)
-    .eq("staff_ministry_id", ministryId)
-    .order("position", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  let q = supabase.from("okr_objectives").select("position").eq("cycle_id", cycleId);
+  q = owner.teamId
+    ? q.eq("okr_team_id", owner.teamId)
+    : q.eq("staff_ministry_id", owner.ministryId);
+  const { data } = await q.order("position", { ascending: false }).limit(1).maybeSingle();
   return ((data as { position: number } | null)?.position ?? 0) + 1;
 }
 

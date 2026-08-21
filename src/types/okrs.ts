@@ -43,11 +43,27 @@ export interface OkrKeyResult {
   last_checkin_at: string | null;
 }
 
+/**
+ * A group that writes OKRs but is not a staff ministry — The Watchmen, Hope
+ * Again, Old Age Homes, Evangelism, Brave Love. No roster, no leaders: if one
+ * ever needs those it should become a staff ministry instead.
+ */
+export interface OkrTeam {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  is_active: boolean;
+  sort_order: number;
+}
+
 export interface OkrObjective {
   id: string;
   cycle_id: string;
   scope: OkrScope;
-  staff_ministry_id: string;
+  /** Exactly one of staff_ministry_id / okr_team_id is set. */
+  staff_ministry_id: string | null;
+  okr_team_id: string | null;
   subcategory_id: string | null;
   owner_user_id: string | null;
   position: number;
@@ -72,11 +88,19 @@ export interface OkrCheckin {
   author_name?: string | null;
 }
 
-/** Per-ministry roll-up for the OKR wall. */
-export interface MinistryOkrSummary {
-  staff_ministry_id: string;
+/**
+ * An owning group as the wall sees it — a staff ministry or an OKR-only team.
+ * The wall does not care which; only edit rights do.
+ */
+export interface OkrOwner {
+  id: string;
   name: string;
   slug: string;
+  kind: "ministry" | "team";
+}
+
+/** Per-owner roll-up for the OKR wall. */
+export interface OkrOwnerSummary extends OkrOwner {
   objectives: number;
   keyResults: number;
   byStatus: Record<OkrStatus, number>;
