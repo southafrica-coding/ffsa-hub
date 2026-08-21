@@ -71,12 +71,12 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
     key: "staff-insurance",
     title: "Staff insurance alerts",
     description:
-      "Your team members whose health insurance is missing, expired, or expiring soon. Ministry leaders see their ministry; the dev team sees everyone.",
+      "Staff whose health insurance is missing, expired, or expiring soon. Dev team only — insurance is medical data, so it is not shown to ministry leaders.",
     category: "Overview",
     defaultOrder: 15,
     fullWidth: true,
-    gate: (c) => c.isAdmin || c.isMinistryLeader,
-    defaultEnabled: (c) => c.isAdmin || c.isMinistryLeader,
+    gate: (c) => c.isAdmin,
+    defaultEnabled: (c) => c.isAdmin,
   },
   {
     key: "upcoming-events",

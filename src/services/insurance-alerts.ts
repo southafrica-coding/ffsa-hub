@@ -5,16 +5,19 @@
 // file) and returns a plain list scoped to the viewer rather than routed
 // notifications.
 //
-// Escalation, mirroring the ministry-tab model:
-//   - ministry leaders / point leaders → their ministries' staff
-//   - dev team (super_admin/admin)     → everyone, org-wide
+// Scope: the dev team (super_admin/admin) only, org-wide.
 //
-// Reads other users' insurance + roster data (which a ministry leader has no
-// RLS access to), so it uses the service-role client for the cross-user scan
-// and only ever returns rows the viewer is entitled to.
+// Ministry leaders used to see their own roster here. That was withdrawn: a
+// person's health insurance is medical data, and a ministry_leader membership
+// is handed out for roster admin, not for medical oversight. Anyone holding
+// one was being shown their team's policy state on the dashboard homescreen.
+//
+// Reads other users' insurance + roster data (which the viewer has no RLS
+// access to), so it uses the service-role client for the cross-user scan and
+// only ever returns rows the viewer is entitled to.
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { callerIsAdmin, getLedMinistryIds } from "@/lib/auth/check-ministry-access";
+import { callerIsAdmin } from "@/lib/auth/check-ministry-access";
 import {
   getInsuranceStatus,
   hasValidQueuedPolicy,
@@ -56,9 +59,8 @@ export async function getStaffInsuranceAlerts(
   supabase: Client,
   userId: string
 ): Promise<StaffInsuranceAlert[]> {
-  const isDevTeam = await callerIsAdmin(supabase, userId);
-  const ledMinistryIds = new Set(await getLedMinistryIds(supabase, userId));
-  if (!isDevTeam && ledMinistryIds.size === 0) return [];
+  // Dev team only — see the medical-data note at the top of this file.
+  if (!(await callerIsAdmin(supabase, userId))) return [];
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin: any = createAdminClient();
@@ -79,8 +81,6 @@ export async function getStaffInsuranceAlerts(
 
   for (const r of all) {
     const ministryId: string = r.staff_ministry_id;
-    // Scope: dev team sees everyone; leaders only their led ministries.
-    if (!isDevTeam && !ledMinistryIds.has(ministryId)) continue;
     if (r.user_id === userId) continue; // never alert someone about themselves
     // Skip deactivated/archived accounts.
     if (r.user?.status === "inactive" || r.user?.status === "archived") continue;

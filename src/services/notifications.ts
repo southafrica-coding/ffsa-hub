@@ -16,7 +16,7 @@ import { getBookingAccess, getPendingRequests, getMyDecidedBookings } from "./bo
 import { getVehicleAccess } from "./vehicles";
 import { dateRangeLabel } from "@/lib/bookings/dates";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { callerIsAdmin, getLedMinistryIds } from "@/lib/auth/check-ministry-access";
+import { callerIsAdmin } from "@/lib/auth/check-ministry-access";
 import { staffSignupNotifyEmails } from "@/lib/email/send-new-staff-notice";
 import {
   getInsuranceStatus,
@@ -332,10 +332,14 @@ function expiryPhrase(daysLeft: number, date: string): string {
 }
 
 async function insuranceExpiryNotifs(supabase: Client, userId: string): Promise<AppNotification[]> {
-  // Fast path: only leaders and the dev team ever receive these.
+  // Dev team (super_admin/admin) only. Ministry leaders used to receive their
+  // own roster's expiry alerts; that was withdrawn because health insurance is
+  // medical data and a ministry_leader membership is granted for roster admin,
+  // not medical oversight. The empty led-ministry set below keeps the tier
+  // logic intact while leaving only the dev_team tier reachable.
   const isDevTeam = await callerIsAdmin(supabase, userId);
-  const ledMinistryIds = new Set(await getLedMinistryIds(supabase, userId));
-  if (!isDevTeam && ledMinistryIds.size === 0) return [];
+  if (!isDevTeam) return [];
+  const ledMinistryIds = new Set<string>();
 
   // Cross-user scan (service-role): every active membership with the member's
   // insurance + the ministry's slug, so we can resolve both the affected

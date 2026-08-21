@@ -102,6 +102,9 @@ function ModulePanel({
   onNavClick,
   menuLoadFailed,
   onRefresh,
+  inDrawer = false,
+  initials,
+  onSignOut,
 }: {
   area: AreaId;
   modules: { id: string; label: string; href: string; icon: React.ComponentType<{ className?: string }> }[];
@@ -109,11 +112,20 @@ function ModulePanel({
   onNavClick?: () => void;
   menuLoadFailed?: boolean;
   onRefresh?: () => void;
+  /** In the phone drawer the panel is the whole sheet, not a 212px column. */
+  inDrawer?: boolean;
+  initials?: string;
+  onSignOut?: () => void;
 }) {
   const title = AREAS.find((a) => a.id === area)?.label ?? "";
 
   return (
-    <aside className="flex w-[212px] shrink-0 flex-col border-r border-ink bg-bone">
+    <aside
+      className={cn(
+        "flex flex-col bg-bone",
+        inDrawer ? "min-h-0 flex-1" : "w-[212px] shrink-0 border-r border-ink"
+      )}
+    >
       <div className="border-b border-ink px-[18px] pb-4 pt-5">
         <div className="font-display text-[22px] font-black uppercase leading-none text-ink">{title}</div>
         <div className="mono-label mt-1">FFSA Hub · Potch</div>
@@ -131,6 +143,11 @@ function ModulePanel({
       )}
 
       <nav className="flex flex-1 flex-col gap-px overflow-y-auto p-2.5">
+        {modules.length === 0 && (
+          <p className="px-2.5 py-3 text-[13px] leading-snug text-[color:var(--text-secondary)]">
+            Nothing in {title.toLowerCase()} for your access yet.
+          </p>
+        )}
         {modules.map((mod) => {
           const active = pathname === mod.href || pathname.startsWith(mod.href + "/");
           return (
@@ -155,6 +172,30 @@ function ModulePanel({
               className="flex items-center gap-2.5 border-t border-ink px-[18px] py-3 text-[13px] font-semibold text-[#2A2822] hover:bg-bone-3">
           <KeyRound className="h-[15px] w-[15px]" /> Change password
         </Link>
+      )}
+
+      {inDrawer && onSignOut && (
+        <div className="mt-auto border-t border-ink">
+          <Link
+            href="/profile"
+            onClick={onNavClick}
+            className="flex items-center gap-2.5 px-[18px] py-3 text-[13px] font-semibold text-[#2A2822] hover:bg-bone-3"
+          >
+            <span className="flex h-[26px] w-[26px] shrink-0 items-center justify-center bg-ink font-display text-[11px] font-black text-white">
+              {initials || "\u00B7"}
+            </span>
+            My profile
+          </Link>
+          <button
+            onClick={() => {
+              onNavClick?.();
+              onSignOut();
+            }}
+            className="flex w-full items-center gap-2.5 border-t border-rule px-[18px] py-3.5 text-[13px] font-semibold text-[#2A2822] hover:bg-bone-3"
+          >
+            <LogOut className="h-[15px] w-[15px]" /> Sign out
+          </button>
+        </div>
       )}
     </aside>
   );
@@ -224,8 +265,17 @@ export function AdminSidebar({ userRoles, permittedModules, menuLoadFailed, init
                 </button>
               ))}
             </div>
-            <ModulePanel area={area} modules={modules} pathname={pathname}
-                         onNavClick={() => setMobileOpen(false)} />
+            <ModulePanel
+              area={area}
+              modules={modules}
+              pathname={pathname}
+              onNavClick={() => setMobileOpen(false)}
+              menuLoadFailed={menuLoadFailed}
+              onRefresh={() => router.refresh()}
+              inDrawer
+              initials={initials}
+              onSignOut={handleSignOut}
+            />
           </div>
         </SheetContent>
       </Sheet>

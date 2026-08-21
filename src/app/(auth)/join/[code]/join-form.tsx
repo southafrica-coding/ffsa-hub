@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { validatePassword } from "@/lib/auth/password";
 import { Button } from "@/components/ui/button";
@@ -114,6 +115,21 @@ export function JoinForm({ code, type }: Props) {
       <p className="mt-4 text-[14px] leading-relaxed text-[color:var(--text-secondary)]">
         {TYPE_COPY[type].blurb}
       </p>
+
+      {/* The way out, above the fold. A sign-up link gets forwarded around, so
+          people who already have an account land here by accident; the "Sign
+          in" line at the foot of the form sits below eight fields on a phone,
+          which is the same as not being there. */}
+      <Link
+        href="/login"
+        className="mt-6 flex items-center justify-between gap-3 border border-ink bg-bone px-4 py-3.5 transition-colors hover:bg-bone-3"
+      >
+        <span className="text-[13px] leading-snug text-[#2A2822]">
+          Already have an account?{" "}
+          <span className="font-semibold text-ink underline underline-offset-4">Sign in instead</span>
+        </span>
+        <ArrowRight className="h-4 w-4 shrink-0 text-ink" />
+      </Link>
 
       <form onSubmit={handleSubmit} className="mt-9 space-y-6">
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">

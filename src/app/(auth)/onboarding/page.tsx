@@ -22,6 +22,7 @@ import {
   INSURANCE_PROVIDERS,
 } from "@/lib/profile/options";
 import Image from "next/image";
+import { LogOut } from "lucide-react";
 
 // Ordered step definitions. Which steps are shown depends on the user's
 // signup type — community members skip the Passport & Visa step (that's
@@ -86,6 +87,12 @@ const EMPTY_FORM: FormData = {
 export default function OnboardingPage() {
   const router = useRouter();
   const supabase = createClient();
+
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
+  }
 
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<FormData>(EMPTY_FORM);
@@ -399,9 +406,20 @@ export default function OnboardingPage() {
             Hub
           </span>
         </div>
-        <p style={{ fontSize: "10px", letterSpacing: "0.2em", color: "var(--text-tertiary)", textTransform: "uppercase" }}>
-          Account Setup
-        </p>
+        <div className="flex items-center gap-4">
+          <p style={{ fontSize: "10px", letterSpacing: "0.2em", color: "var(--text-tertiary)", textTransform: "uppercase" }}>
+            Account Setup
+          </p>
+          {/* The wizard is otherwise a dead end: someone who reached it on the
+              wrong account had no way back to the login screen. */}
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="flex items-center gap-1.5 text-[12px] font-semibold text-[color:var(--text-secondary)] underline underline-offset-4 hover:text-ink"
+          >
+            <LogOut className="h-3.5 w-3.5" /> Sign out
+          </button>
+        </div>
       </div>
 
       {/* Step indicator */}
