@@ -8,7 +8,6 @@ import {
   getCurrentCycle,
   listCycles,
   listObjectives,
-  listOkrTeams,
 } from "@/services/okrs";
 import { summariseByOwner, toOwners, totals, writesOkrs } from "@/lib/okrs/summary";
 import { Masthead, KpiStrip, Kpi, MastheadAction, SectionBar, StatusPill } from "@/components/ffsa";
@@ -63,7 +62,6 @@ export default async function OkrsPage({
   const [
     { data: objectiveRows },
     { data: ministryRows },
-    { data: teamRows },
     isAdmin,
     onLeadership,
     ledMinistryIds,
@@ -74,7 +72,6 @@ export default async function OkrsPage({
     // okr_teams both postdate the last src/types/database.ts regeneration,
     // so the typed client rejects them by name.
     listMinistries(supabase),
-    listOkrTeams(supabase),
     callerIsAdmin(supabase, user.id),
     isLeadershipTeam(supabase, user.id),
     getLedMinistryIds(supabase, user.id),
@@ -104,10 +101,10 @@ export default async function OkrsPage({
     ministries.filter((m) => !m.is_active).map((m) => m.id)
   );
 
-  const owners = toOwners(
-    ministries,
-    (teamRows ?? []) as { id: string; name: string; slug: string }[]
-  );
+  // Ministries only. OKR-only teams were seeded to hold Google Sheet blocks
+  // that had no ministry; the sheet import is gone, and the wall is meant to
+  // mirror the Department list, so they do not belong here.
+  const owners = toOwners(ministries, []);
   const summaries = summariseByOwner(objectives, owners);
   const started = summaries.filter((s) => s.objectives > 0);
   const notStarted = summaries.filter((s) => s.objectives === 0);
