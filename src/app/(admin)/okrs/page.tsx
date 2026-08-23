@@ -10,7 +10,7 @@ import {
   listObjectives,
   listOkrTeams,
 } from "@/services/okrs";
-import { summariseByOwner, toOwners, totals } from "@/lib/okrs/summary";
+import { summariseByOwner, toOwners, totals, writesOkrs } from "@/lib/okrs/summary";
 import { Masthead, KpiStrip, Kpi, MastheadAction, SectionBar, StatusPill } from "@/components/ffsa";
 import { statusLabel, statusTone } from "@/lib/okrs/progress";
 import { callerIsAdmin, getLedMinistryIds } from "@/lib/auth/check-ministry-access";
@@ -89,14 +89,17 @@ export default async function OkrsPage({
     is_active: boolean;
   }[];
 
-  // Active ministries, plus any retired one that still has OKRs in this cycle.
-  // Without that second half the KPI totals would exceed the sum of the cards
-  // the moment somebody retires a ministry — the objectives are still counted
-  // by totals(), but their owner would have vanished from the card list.
+  // Anything with objectives in this cycle stays on the wall no matter what —
+  // otherwise totals() would keep counting its key results while its card
+  // vanished, and the KPI strip would quietly exceed the sum of the cards.
+  // Past that, a ministry has to be active AND be the kind of ministry that
+  // writes OKRs at all (see writesOkrs — "No Ministry" is not).
   const withObjectives = new Set(
     objectives.map((o) => o.staff_ministry_id).filter((id): id is string => !!id)
   );
-  const ministries = allMinistries.filter((m) => m.is_active || withObjectives.has(m.id));
+  const ministries = allMinistries.filter(
+    (m) => withObjectives.has(m.id) || (m.is_active && writesOkrs(m))
+  );
   const retiredIds = new Set(
     ministries.filter((m) => !m.is_active).map((m) => m.id)
   );

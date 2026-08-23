@@ -18,6 +18,20 @@ export interface WallTotals {
   byStatus: Record<OkrStatus, number>;
 }
 
+/**
+ * Ministries that exist for other reasons and have no OKRs to write.
+ *
+ * "No Ministry" is the Department option for staff who aren't on a ministry —
+ * a real, active row that people's profiles point at, so it cannot simply be
+ * retired. It has no leaders and nothing to set objectives about, so a "not
+ * started" card for it is noise on the wall.
+ */
+export const NON_OKR_MINISTRY_SLUGS = new Set(["no_ministry"]);
+
+export function writesOkrs(ministry: { slug: string }): boolean {
+  return !NON_OKR_MINISTRY_SLUGS.has(ministry.slug);
+}
+
 /** The id an objective is grouped under, whichever kind of owner it has. */
 export function ownerIdOf(objective: OkrObjective): string | null {
   return objective.staff_ministry_id ?? objective.okr_team_id ?? null;

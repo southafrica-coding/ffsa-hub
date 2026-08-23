@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { summariseByOwner, toOwners, totals, ownerIdOf } from "./summary";
+import { summariseByOwner, toOwners, totals, ownerIdOf, writesOkrs } from "./summary";
 import type { OkrObjective } from "@/types/okrs";
 
 function objective(over: Partial<OkrObjective> = {}): OkrObjective {
@@ -110,5 +110,18 @@ describe("totals", () => {
     expect(t.keyResults).toBe(2);
     expect(t.byStatus.complete).toBe(1);
     expect(t.byStatus.stuck).toBe(1);
+  });
+});
+
+describe("writesOkrs", () => {
+  it("keeps ordinary ministries", () => {
+    expect(writesOkrs({ slug: "operations" })).toBe(true);
+    expect(writesOkrs({ slug: "prayer_and_worship" })).toBe(true);
+  });
+
+  it("excludes No Ministry", () => {
+    // It is an active row three people point their Department at, so it cannot
+    // be retired — but it has no leaders and nothing to set objectives about.
+    expect(writesOkrs({ slug: "no_ministry" })).toBe(false);
   });
 });
