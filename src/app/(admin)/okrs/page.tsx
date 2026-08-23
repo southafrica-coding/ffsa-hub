@@ -11,10 +11,13 @@ import {
   listOkrTeams,
 } from "@/services/okrs";
 import { summariseByOwner, toOwners, totals } from "@/lib/okrs/summary";
-import { Masthead, KpiStrip, Kpi, StatusPill } from "@/components/ffsa";
+import { Masthead, KpiStrip, Kpi, MastheadAction, SectionBar, StatusPill } from "@/components/ffsa";
 import { statusLabel, statusTone } from "@/lib/okrs/progress";
-import type { OkrCycle, OkrObjective } from "@/types/okrs";
+import { callerIsAdmin, getLedMinistryIds } from "@/lib/auth/check-ministry-access";
+import { callerCanManageCycles, isLeadershipTeam } from "@/lib/auth/check-okr-access";
+import type { OkrCycle, OkrObjective, OkrOwnerSummary } from "@/types/okrs";
 import { CycleSwitcher } from "./cycle-switcher";
+import { NewMinistryButton } from "./new-ministry-button";
 
 /**
  * The OKR wall — every ministry's objectives for one cycle.
@@ -57,23 +60,64 @@ export default async function OkrsPage({
     );
   }
 
-  const [{ data: objectiveRows }, { data: ministryRows }, { data: teamRows }] =
-    await Promise.all([
-      listObjectives(supabase, { cycleId: cycle.id, scope: "ministry" }),
-      // Via the services, not supabase.from(...): staff_ministries and
-      // okr_teams both postdate the last src/types/database.ts regeneration,
-      // so the typed client rejects them by name.
-      listMinistries(supabase),
-      listOkrTeams(supabase),
-    ]);
+  const [
+    { data: objectiveRows },
+    { data: ministryRows },
+    { data: teamRows },
+    isAdmin,
+    onLeadership,
+    ledMinistryIds,
+    canManageCycles,
+  ] = await Promise.all([
+    listObjectives(supabase, { cycleId: cycle.id, scope: "ministry" }),
+    // Via the services, not supabase.from(...): staff_ministries and
+    // okr_teams both postdate the last src/types/database.ts regeneration,
+    // so the typed client rejects them by name.
+    listMinistries(supabase),
+    listOkrTeams(supabase),
+    callerIsAdmin(supabase, user.id),
+    isLeadershipTeam(supabase, user.id),
+    getLedMinistryIds(supabase, user.id),
+    callerCanManageCycles(supabase, user.id),
+  ]);
 
   const objectives = (objectiveRows ?? []) as OkrObjective[];
+  const allMinistries = (ministryRows ?? []) as {
+    id: string;
+    name: string;
+    slug: string;
+    is_active: boolean;
+  }[];
+
+  // Active ministries, plus any retired one that still has OKRs in this cycle.
+  // Without that second half the KPI totals would exceed the sum of the cards
+  // the moment somebody retires a ministry — the objectives are still counted
+  // by totals(), but their owner would have vanished from the card list.
+  const withObjectives = new Set(
+    objectives.map((o) => o.staff_ministry_id).filter((id): id is string => !!id)
+  );
+  const ministries = allMinistries.filter((m) => m.is_active || withObjectives.has(m.id));
+  const retiredIds = new Set(
+    ministries.filter((m) => !m.is_active).map((m) => m.id)
+  );
+
   const owners = toOwners(
-    (ministryRows ?? []) as { id: string; name: string; slug: string }[],
+    ministries,
     (teamRows ?? []) as { id: string; name: string; slug: string }[]
   );
   const summaries = summariseByOwner(objectives, owners);
+  const started = summaries.filter((s) => s.objectives > 0);
+  const notStarted = summaries.filter((s) => s.objectives === 0);
   const t = totals(objectives);
+
+  // The gap list goes to people who can act on it — a ministry's own leaders,
+  // leadership team, admins — rather than onto the wall every staff member
+  // sees. Blank ministries on a shared screen read as a scoreboard.
+  const seesGaps = isAdmin || onLeadership || ledMinistryIds.length > 0;
+
+  // On a closed cycle "not started" is a permanent historical fact, not a
+  // to-do, and canEdit is false on every one of those pages anyway.
+  const showNotStarted = seesGaps && cycle.is_current && notStarted.length > 0;
 
   const completePct = t.keyResults > 0 ? (t.byStatus.complete / t.keyResults) * 100 : 0;
 
@@ -82,11 +126,22 @@ export default async function OkrsPage({
       <Masthead
         context="Strategy"
         title="OKRs"
-        actions={<CycleSwitcher cycles={cycles} active={cycle.slug} />}
+        actions={
+          <>
+            <CycleSwitcher cycles={cycles} active={cycle.slug} />
+            {canManageCycles && <MastheadAction href="/okrs/cycles">Cycles</MastheadAction>}
+            {isAdmin && <NewMinistryButton cycleSlug={cycle.slug} />}
+          </>
+        }
       />
 
       <KpiStrip>
-        <Kpi label="Groups" value={String(summaries.length)} lead />
+        <Kpi
+          label="Groups started"
+          value={String(started.length)}
+          foot={`of ${summaries.length}`}
+          lead
+        />
         <Kpi label="Objectives" value={String(t.objectives)} />
         <Kpi
           label="Key results"
@@ -111,37 +166,104 @@ export default async function OkrsPage({
 
         {summaries.length === 0 ? (
           <p className="text-[13px] text-[color:var(--text-secondary)]">
+            No ministries or teams exist yet.
+          </p>
+        ) : started.length === 0 && !showNotStarted ? (
+          <p className="text-[13px] text-[color:var(--text-secondary)]">
             Nothing has been entered for the {cycle.name} cycle yet.
           </p>
         ) : (
-          <div className="border-t border-rule">
-            {summaries.map((m) => (
-              <Link
-                key={m.id}
-                href={`/okrs/${m.id}?cycle=${cycle.slug}`}
-                className="block border-b border-rule bg-white px-4 py-4 hover:bg-bone md:px-5"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <span className="font-display text-[17px] font-bold text-ink">{m.name}</span>
-                  <span className="font-mono text-[10px] tracking-[0.08em] text-[#7C786C]">
-                    {m.objectives} objective{m.objectives === 1 ? "" : "s"} ·{" "}
-                    {m.keyResults} key result{m.keyResults === 1 ? "" : "s"}
-                  </span>
+          <>
+            {started.length > 0 && (
+              <div className="border-t border-rule">
+                {started.map((m) => (
+                  <OwnerRow
+                    key={m.id}
+                    owner={m}
+                    cycleSlug={cycle.slug}
+                    retired={retiredIds.has(m.id)}
+                  />
+                ))}
+              </div>
+            )}
+
+            {showNotStarted && (
+              <div className={started.length > 0 ? "mt-8" : undefined}>
+                <SectionBar title="Not started yet" meta={`${notStarted.length}`} />
+                <div className="border-t border-rule">
+                  {notStarted.map((m) => (
+                    <OwnerRow key={m.id} owner={m} cycleSlug={cycle.slug} retired={false} />
+                  ))}
                 </div>
-                <div className="mt-2.5 flex flex-wrap gap-1.5">
-                  {(Object.keys(m.byStatus) as (keyof typeof m.byStatus)[])
-                    .filter((s) => m.byStatus[s] > 0)
-                    .map((s) => (
-                      <StatusPill key={s} tone={statusTone(s)}>
-                        {m.byStatus[s]} {statusLabel(s)}
-                      </StatusPill>
-                    ))}
-                </div>
-              </Link>
-            ))}
-          </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * One group's row on the wall. The started and not-started variants share a
+ * shape on purpose so the list keeps one rhythm — the empty one is quieter,
+ * but it must still read as clickable, not disabled, since clicking it is how
+ * you start writing.
+ */
+function OwnerRow({
+  owner,
+  cycleSlug,
+  retired,
+}: {
+  owner: OkrOwnerSummary;
+  cycleSlug: string;
+  retired: boolean;
+}) {
+  const empty = owner.objectives === 0;
+
+  return (
+    <Link
+      href={`/okrs/${owner.id}?cycle=${cycleSlug}`}
+      className="block border-b border-rule bg-white px-4 py-4 hover:bg-bone md:px-5"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        {/* Weight and size stay put when empty so row heights do not jitter. */}
+        <span
+          className={`font-display text-[17px] font-bold ${
+            empty ? "text-[color:var(--text-secondary)]" : "text-ink"
+          }`}
+        >
+          {owner.name}
+          {retired && (
+            <span className="ml-2 font-mono text-[9px] uppercase tracking-[0.14em] text-[#7C786C]">
+              retired
+            </span>
+          )}
+        </span>
+        <span className="font-mono text-[10px] tracking-[0.08em] text-[#7C786C]">
+          {empty ? (
+            "Start →"
+          ) : (
+            <>
+              {owner.objectives} objective{owner.objectives === 1 ? "" : "s"} ·{" "}
+              {owner.keyResults} key result{owner.keyResults === 1 ? "" : "s"}
+            </>
+          )}
+        </span>
+      </div>
+      <div className="mt-2.5 flex flex-wrap gap-1.5">
+        {empty ? (
+          <StatusPill tone="quiet">No OKRs yet</StatusPill>
+        ) : (
+          (Object.keys(owner.byStatus) as (keyof typeof owner.byStatus)[])
+            .filter((st) => owner.byStatus[st] > 0)
+            .map((st) => (
+              <StatusPill key={st} tone={statusTone(st)}>
+                {owner.byStatus[st]} {statusLabel(st)}
+              </StatusPill>
+            ))
+        )}
+      </div>
+    </Link>
   );
 }

@@ -67,8 +67,13 @@ export function OwnerOkrs({
       )}
 
       {objectives.length === 0 ? (
+        // Every ministry is linked from the wall now, including ones nobody has
+        // written yet, so a reader without edit rights lands here often. Say who
+        // can fill it in rather than leaving them at a dead end.
         <p className="text-[13px] text-[color:var(--text-secondary)]">
-          No objectives for this cycle yet.
+          {canEdit
+            ? "No objectives yet — add the first one to get started."
+            : "No objectives have been written for this cycle yet."}
         </p>
       ) : (
         <div className="space-y-7">

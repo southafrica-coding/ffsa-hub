@@ -55,11 +55,14 @@ export function summariseByOwner(
     }
   }
 
-  // Groups with nothing written for this cycle are dropped — an empty card
-  // reads as "this ministry has no OKRs" when the truth is "not yet entered".
-  return [...byId.values()]
-    .filter((r) => r.objectives > 0)
-    .sort((a, b) => a.name.localeCompare(b.name));
+  // Every group is returned, including ones with nothing written yet, so the
+  // wall can double as a to-do list for leaders. Started groups sort first;
+  // the caller renders the rest under their own heading and is responsible for
+  // labelling them "not started" rather than letting an empty card imply the
+  // ministry has no OKRs at all.
+  return [...byId.values()].sort(
+    (a, b) => Number(b.objectives > 0) - Number(a.objectives > 0) || a.name.localeCompare(b.name)
+  );
 }
 
 export function totals(objectives: OkrObjective[]): WallTotals {

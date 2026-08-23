@@ -17,19 +17,27 @@ export function CycleSwitcher({ cycles, active }: { cycles: OkrCycle[]; active: 
 
   if (cycles.length <= 1) return null;
 
+  // The width wrapper is load-bearing. SearchableSelect sizes its <select>
+  // w-full inside a div with no width of its own, which is right in a form
+  // column but wrong here: Masthead's actions slot is a flex row, so the div
+  // becomes a shrinkable flex item, collapses under the label's natural width,
+  // and the absolutely-positioned chevron ends up on top of "2026 (current)".
+  // Masthead's own shrink-0 protects the container, not this child.
   return (
-    <SearchableSelect
-      value={active}
-      onChange={(slug) => {
-        const next = new URLSearchParams(params.toString());
-        next.set("cycle", slug);
-        router.push(`${pathname}?${next.toString()}`);
-      }}
-      options={cycles.map((c) => ({
-        value: c.slug,
-        label: c.is_current ? `${c.name} (current)` : c.name,
-      }))}
-      placeholder="Cycle"
-    />
+    <div className="w-full min-w-[11rem] shrink-0 sm:w-[13rem]">
+      <SearchableSelect
+        value={active}
+        onChange={(slug) => {
+          const next = new URLSearchParams(params.toString());
+          next.set("cycle", slug);
+          router.push(`${pathname}?${next.toString()}`);
+        }}
+        options={cycles.map((c) => ({
+          value: c.slug,
+          label: c.is_current ? `${c.name} (current)` : c.name,
+        }))}
+        placeholder="Cycle"
+      />
+    </div>
   );
 }
