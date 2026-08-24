@@ -246,6 +246,21 @@ export async function POST(request: Request) {
         .update({ user_id: userId })
         .eq("id", response_id);
 
+      // Household match (migration 181): if a Hub member already entered this
+      // person as their spouse using this email, flag the household as a
+      // PENDING match. Nothing is shared until they confirm it on their first
+      // sign-in — then they inherit the family and skip the spouse/children
+      // questions. Only on this branch: an account that already existed is
+      // past its creation window and is never auto-linked.
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (adminSupabase as any).rpc("link_household_on_signup", {
+          p_user_id: userId,
+        });
+      } catch {
+        // Non-fatal — they simply get their own household.
+      }
+
       // Assign default self_service role
       const { data: selfServiceRole } = await adminSupabase
         .from("roles")

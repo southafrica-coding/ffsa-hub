@@ -15,7 +15,12 @@ export async function GET() {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const { data, error } = await getHouseholdMembers(supabase, user.id);
+  // Hide the caller's own identity row: once a spouse has their own Hub
+  // account they maintain those details on their profile, not as a family
+  // member of themselves. Their spouse still sees the row.
+  const { data, error } = await getHouseholdMembers(supabase, user.id, {
+    excludeLinkedUserId: user.id,
+  });
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

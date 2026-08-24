@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isExpiryDatePast } from "@/lib/users/profile-fields";
 import { getMinistryBySlug } from "@/services/ministries";
+import { setHouseholdHasChildren } from "@/services/household";
 
 export async function PUT(request: Request) {
   const supabase = await createClient();
@@ -28,9 +29,17 @@ export async function PUT(request: Request) {
     "health_insurance_expiry_date",
     "passport_country", "passport_number", "passport_expiry_date",
     "visa_category", "visa_type", "visa_expiry_date",
-    // Answer to "Do you have children?" (drives the staff children gate).
-    "has_children",
   ];
+
+  // Answer to "Do you have children?" (drives the staff children gate).
+  // Since migration 181 this is a HOUSEHOLD fact, not a user one, so that a
+  // spouse who links to an existing household inherits the answer instead of
+  // being asked again. The request shape is unchanged — it's routed here.
+  const hasChildrenGiven = "has_children" in body;
+  const hasChildren =
+    hasChildrenGiven && body.has_children != null
+      ? Boolean(body.has_children)
+      : null;
 
   const updateData: Record<string, unknown> = {};
   for (const key of allowedFields) {
@@ -39,7 +48,7 @@ export async function PUT(request: Request) {
     }
   }
 
-  if (Object.keys(updateData).length === 0) {
+  if (Object.keys(updateData).length === 0 && !hasChildrenGiven) {
     return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
   }
 
@@ -84,13 +93,29 @@ export async function PUT(request: Request) {
     }
   }
 
-  const { error } = await supabase
-    .from("users")
-    .update(updateData)
-    .eq("id", user.id);
+  if (hasChildrenGiven) {
+    const { error: householdError } = await setHouseholdHasChildren(
+      supabase,
+      user.id,
+      hasChildren
+    );
+    if (householdError) {
+      return NextResponse.json(
+        { error: householdError.message },
+        { status: 500 }
+      );
+    }
+  }
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (Object.keys(updateData).length > 0) {
+    const { error } = await supabase
+      .from("users")
+      .update(updateData)
+      .eq("id", user.id);
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
   }
 
   return NextResponse.json({ success: true });

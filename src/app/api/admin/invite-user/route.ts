@@ -155,6 +155,19 @@ export async function POST(request: Request) {
     // Non-fatal: surface in logs but don't block the invite.
   }
 
+  // Household match (migration 181): if a Hub member already entered this
+  // person as their spouse using this email, flag the household as a PENDING
+  // match. Nothing is shared until they confirm it on their next sign-in —
+  // then they inherit the family and skip the spouse/children questions.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (adminSupabase as any).rpc("link_household_on_signup", {
+      p_user_id: newUserId,
+    });
+  } catch {
+    // Non-fatal — they simply get their own household.
+  }
+
   return NextResponse.json({
     success: true,
     user_id: newUserId,

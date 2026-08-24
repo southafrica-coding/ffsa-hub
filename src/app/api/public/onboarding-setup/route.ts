@@ -61,6 +61,19 @@ export async function POST(request: Request) {
     .update({ used_at: new Date().toISOString() })
     .eq("id", invite.id);
 
+  // Household match (migration 181): if a Hub member already entered this
+  // person as their spouse using this email, flag the household as a PENDING
+  // match. Nothing is shared until they confirm it on their next sign-in —
+  // then they inherit the family and skip the spouse/children questions.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (adminSupabase as any).rpc("link_household_on_signup", {
+      p_user_id: invite.user_id,
+    });
+  } catch {
+    // Non-fatal — they simply get their own household.
+  }
+
   await adminSupabase.from("audit_logs").insert({
     user_id: invite.user_id,
     action: "onboarding_setup",
