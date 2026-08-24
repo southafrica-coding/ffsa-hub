@@ -15,6 +15,7 @@ import {
   type HouseholdMember,
 } from "@/components/profile/household-members";
 import { getHouseholdMembers } from "@/services/household";
+import { HouseholdLinkCard } from "@/components/profile/household-link-card";
 import {
   AgreementsCard,
   type SignedAgreement,
@@ -40,7 +41,12 @@ export default async function ProfilePage() {
   const { data: insurancePolicies } = await getInsurancePolicies(supabase, user.id);
   const insuranceRows = (insurancePolicies ?? []) as InsurancePolicyRow[];
 
-  const { data: householdRows } = await getHouseholdMembers(supabase, user.id);
+  // Exclude the caller's own spouse-identity row when they're linked: those
+  // details live on their own profile above, not as a family member of
+  // themselves. Their spouse still sees the row.
+  const { data: householdRows } = await getHouseholdMembers(supabase, user.id, {
+    excludeLinkedUserId: user.id,
+  });
   const householdMembers = (householdRows ?? []) as HouseholdMember[];
 
   // Policies this user has personally signed (RLS: own records only). Resolve
@@ -235,9 +241,14 @@ export default async function ProfilePage() {
           <p className="text-sm text-muted-foreground mt-1">
             Your spouse and children. For a spouse we just need their name and
             email; for children, their passport, visa and health-insurance
-            details. This is optional and you can update it any time.
+            details. If your spouse has their own Hub account with that email,
+            you both see and edit the same records &mdash; only one of you needs
+            to fill the children in.
           </p>
         </div>
+        <HouseholdLinkCard
+          linkedAt={(row.household_linked_at ?? null) as string | null}
+        />
         <div className="rounded-xl border p-4">
           <HouseholdMembers
             initialMembers={householdMembers}

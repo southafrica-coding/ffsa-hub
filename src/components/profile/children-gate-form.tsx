@@ -25,8 +25,10 @@ import { isChildComplete } from "@/lib/users/profile-fields";
 //      Hub unblocks. No -> clears the gate.
 //
 // Spouse is optional and never blocks; the complete-child requirement only
-// applies when they actually have children. `users.has_children` drives the
-// mandatory children logic and is the only piece persisted server-side here.
+// applies when they actually have children. The children yes/no answer is the
+// only piece persisted server-side here — it lives on the HOUSEHOLD since
+// migration 181 (the API route handles that), so a spouse who links to this
+// household inherits the answer and never sees this gate.
 type Step =
   | "spouse-ask"
   | "spouse-add"
@@ -144,8 +146,10 @@ export function ChildrenGateForm({
         <CardHeader className="text-center">
           <CardTitle className="text-xl">Add your spouse</CardTitle>
           <CardDescription>
-            We just need their first name, last name and email so their own
-            account can be linked later.
+            We just need their first name, last name and email. If they sign
+            up for the Hub with that same email, they&rsquo;ll be joined to
+            your family record &mdash; so only one of you ever fills in the
+            children.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

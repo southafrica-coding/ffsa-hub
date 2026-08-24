@@ -24,7 +24,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   }
 
-  const { data, error } = await supabase.rpc(
+  // The generated Database types predate migration 181 — cast per repo
+  // convention (same as the onboarding_invites / library RPC call sites).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any).rpc(
     action === "confirm" ? "confirm_household_link" : "decline_household_link"
   );
   if (error) {
@@ -56,7 +59,8 @@ export async function DELETE() {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const { error } = await supabase.rpc("unlink_household");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any).rpc("unlink_household");
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

@@ -866,6 +866,11 @@ export default function OnboardingPage() {
                     their passport, visa and health-insurance details. This is
                     optional and can be updated any time from your profile.
                   </p>
+                  <p style={{ fontSize: "13px", color: "var(--text-secondary)", lineHeight: 1.55 }}>
+                    If your spouse signs up for the Hub with the email you enter
+                    here, they&rsquo;ll be joined to this same family record
+                    &mdash; only one of you needs to fill in the children.
+                  </p>
                   <HouseholdMembers
                     initialMembers={[]}
                     loadOnMount

@@ -3,6 +3,7 @@ import { ProfileCompletionForm } from "./profile-completion-form";
 import { RequiredAgreementsForm } from "./required-agreements-form";
 import { InsuranceExpiryBanner } from "./insurance-expiry-banner";
 import { ChildrenGateForm } from "./profile/children-gate-form";
+import { HouseholdLinkConfirmForm } from "./profile/household-link-confirm-form";
 import { GateOverlay } from "./profile/gate-overlay";
 import type { HouseholdMember } from "./profile/household-members";
 import {
@@ -14,7 +15,8 @@ import {
 } from "@/lib/users/profile-fields";
 import { getAllListOptions, activeSets } from "@/services/list-options";
 import { listActiveMinistries } from "@/services/ministries";
-import { getHouseholdMembers } from "@/services/household";
+import { getHouseholdMembers, getHousehold } from "@/services/household";
+import { getHouseholdLinkState } from "@/services/household-link";
 import { getOutstandingConsents } from "@/services/consent";
 
 // True if the user counts as staff — either their self-signup type is
@@ -148,6 +150,31 @@ export async function ProfileCompletionGate({
     );
   }
 
+  // 1a) Pending household match — someone already on the Hub entered this
+  //     person as their spouse using this email (migration 181). Nothing of
+  //     that household is readable until they confirm here, so this runs
+  //     BEFORE the family gate: a "yes" means they inherit the family and
+  //     never see the spouse/children questions at all.
+  const pendingHouseholdId = (row.pending_household_id ?? null) as string | null;
+  if (pendingHouseholdId && row.household_link_declined_at == null) {
+    const linkState = await getHouseholdLinkState(pendingHouseholdId);
+    if (linkState) {
+      const { data: ownMembers } = await getHouseholdMembers(supabase, user.id);
+      return (
+        <BlockingOverlay
+          panel={
+            <HouseholdLinkConfirmForm
+              displayName={linkState.displayName}
+              hasOwnFamilyData={(ownMembers?.length ?? 0) > 0}
+            />
+          }
+        >
+          {children}
+        </BlockingOverlay>
+      );
+    }
+  }
+
   // 1b) Children gate — STAFF only. On next login every staff member must
   //     answer "Do you have children?"; a "yes" then requires at least one
   //     fully-complete child record before the Hub unblocks. Students /
@@ -155,8 +182,15 @@ export async function ProfileCompletionGate({
   //     count and never block.
   const isStaff = await userIsStaff(supabase, user.id, row);
   if (isStaff) {
-    const hasChildren = (row.has_children ?? null) as boolean | null;
-    const { data: householdRows } = await getHouseholdMembers(supabase, user.id);
+    // has_children lives on the HOUSEHOLD since migration 181, so a spouse
+    // who linked to an existing household inherits the answer and is never
+    // asked again.
+    const { data: household } = await getHousehold(supabase, user.id);
+    const hasChildren = ((household as { has_children?: boolean | null } | null)
+      ?.has_children ?? null) as boolean | null;
+    const { data: householdRows } = await getHouseholdMembers(supabase, user.id, {
+      excludeLinkedUserId: user.id,
+    });
     const members = (householdRows ?? []) as Array<Record<string, unknown>>;
     const unanswered = hasChildren == null;
     const childrenBlock = getChildrenBlock(hasChildren, members);
