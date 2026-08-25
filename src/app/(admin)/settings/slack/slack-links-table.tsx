@@ -14,6 +14,31 @@ export type SlackLinkRow = {
   source: "self" | "admin" | "email_match" | null;
 };
 
+// Slack error codes → what to actually do about them. Without this the
+// page can only say "N failed", which looks like a data problem when
+// it is almost always a one-line config fix.
+const ERROR_HELP: Record<string, string> = {
+  missing_scope:
+    "The Slack app is missing a permission it needs. Its scopes look right in the config, but the bot token predates them — go to api.slack.com/apps → FFSA Hub Activity → OAuth & Permissions and click Reinstall to Workspace, then try again.",
+  not_allowed_token_type:
+    "The token in SLACK_BOT_TOKEN isn't a bot token. It should start with xoxb-.",
+  invalid_auth:
+    "Slack rejected the token. Check SLACK_BOT_TOKEN in the Vercel project env (Production and Preview) and redeploy.",
+  account_inactive:
+    "The Slack app's token has been deactivated. Reinstall the app to the workspace.",
+  token_revoked:
+    "The Slack token has been revoked. Reinstall the app to the workspace and update SLACK_BOT_TOKEN.",
+  ratelimited:
+    "Slack rate-limited the run. Wait a minute and click the button again — it only fills gaps, so re-running is safe.",
+  no_bot_token:
+    "SLACK_BOT_TOKEN isn't set in this environment, so nothing was sent to Slack at all.",
+  already_linked_to_another_user:
+    "That Slack account is already linked to a different Hub profile.",
+  db_write_failed: "The match succeeded but saving it to the Hub failed.",
+  aborted_after_repeated_failures:
+    "Stopped early: every call was failing, so the run was cut short rather than repeating a call that can't succeed.",
+};
+
 const SOURCE_LABEL: Record<string, string> = {
   self: "Self",
   admin: "Admin",
@@ -32,6 +57,7 @@ export function SlackLinksTable({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorCodes, setErrorCodes] = useState<Record<string, number>>({});
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
 
@@ -52,6 +78,7 @@ export function SlackLinksTable({
     setMatching(true);
     setMessage(null);
     setError(null);
+    setErrorCodes({});
     try {
       const data = await post({ action: "auto_match" });
       const r = data.result as {
@@ -59,7 +86,9 @@ export function SlackLinksTable({
         matched: number;
         notFound: number;
         failed: number;
+        errors?: Record<string, number>;
       };
+      setErrorCodes(r.errors ?? {});
       setMessage(
         `Checked ${r.attempted} unlinked ${
           r.attempted === 1 ? "person" : "people"
@@ -127,13 +156,34 @@ export function SlackLinksTable({
 
       {matching && (
         <p className="text-sm text-muted-foreground">
-          Checking each unlinked person against Slack, paced to stay inside
-          Slack&rsquo;s rate limits. This can take a minute &mdash; leave the
-          page open.
+          Checking each unlinked person against Slack, paced at roughly one
+          per 1.3 seconds to stay inside Slack&rsquo;s rate limits. With a
+          few hundred people that is several minutes &mdash; leave the page
+          open. If it&rsquo;s clearly broken it stops early rather than
+          grinding through them all.
         </p>
       )}
       {message && <p className="text-sm text-muted-foreground">{message}</p>}
       {error && <p className="text-sm text-destructive">{error}</p>}
+
+      {Object.keys(errorCodes).length > 0 && (
+        <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-sm">
+          <p className="font-medium">Why the matching failed</p>
+          <ul className="mt-2 space-y-2">
+            {Object.entries(errorCodes).map(([code, count]) => (
+              <li key={code}>
+                <code className="text-xs">{code}</code>
+                <span className="text-muted-foreground"> &times; {count}</span>
+                {ERROR_HELP[code] && (
+                  <p className="mt-0.5 text-muted-foreground">
+                    {ERROR_HELP[code]}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="overflow-x-auto rounded-xl border">
         <table className="w-full text-sm">

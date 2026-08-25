@@ -30,6 +30,12 @@ export type SlackLinkState = {
   source: LinkSource | null;
 };
 
+/** Gap between lookups. users.lookupByEmail is Tier 3 (~50/min). */
+const LOOKUP_INTERVAL_MS = 1300;
+
+/** Give up once this many consecutive-ish failures land with no successes. */
+const ABORT_AFTER_FAILURES = 5;
+
 /** Slack member ids look like U0123ABCD / W0123ABCD (Enterprise Grid). */
 const MEMBER_ID_PATTERN = /^[UW][A-Z0-9]{6,}$/;
 
@@ -187,6 +193,13 @@ export type AutoMatchResult = {
   matched: number;
   notFound: number;
   failed: number;
+  /**
+   * Slack error codes seen, with counts — e.g. { missing_scope: 165 }.
+   * Surfaced to the admin UI because "165 failed" with no reason is
+   * unactionable: missing_scope, ratelimited and invalid_auth all
+   * look identical from the outside but need different fixes.
+   */
+  errors: Record<string, number>;
 };
 
 /**
@@ -205,9 +218,17 @@ export async function autoMatchByEmail(
     matched: 0,
     notFound: 0,
     failed: 0,
+    errors: {},
   };
 
-  if (!process.env.SLACK_BOT_TOKEN) return result;
+  const note = (code: string) => {
+    result.errors[code] = (result.errors[code] ?? 0) + 1;
+  };
+
+  if (!process.env.SLACK_BOT_TOKEN) {
+    note("no_bot_token");
+    return result;
+  }
 
   const { data, error } = await admin
     .from("users")
@@ -224,18 +245,26 @@ export async function autoMatchByEmail(
 
   for (const user of rows) {
     result.attempted += 1;
-    // users.lookupByEmail is Tier 3 (~50/min) — pace it.
-    await new Promise((r) => setTimeout(r, 150));
+    // users.lookupByEmail is Tier 3: ~50 requests/minute. 1.3s between
+    // calls keeps us just under that. The original 150ms was ~8x over
+    // the limit and would have started returning `ratelimited` partway
+    // through a run of this size.
+    await new Promise((r) => setTimeout(r, LOOKUP_INTERVAL_MS));
 
     try {
       const res = await slack.lookupUserByEmail(user.email as string);
       if (!res.ok || !res.user) {
-        if (res.error === "users_not_found") result.notFound += 1;
-        else result.failed += 1;
+        if (res.error === "users_not_found") {
+          result.notFound += 1;
+        } else {
+          result.failed += 1;
+          note(res.error ?? "unknown");
+        }
         continue;
       }
       if (await memberIdTakenBy(admin, res.user.id, user.id)) {
         result.failed += 1;
+        note("already_linked_to_another_user");
         continue;
       }
       const stored = await storeLink(admin, {
@@ -243,11 +272,24 @@ export async function autoMatchByEmail(
         memberId: res.user.id,
         source: "email_match",
       });
-      if (stored) result.matched += 1;
-      else result.failed += 1;
+      if (stored) {
+        result.matched += 1;
+      } else {
+        result.failed += 1;
+        note("db_write_failed");
+      }
     } catch (err) {
       console.error("[slack-links] lookup threw", err);
       result.failed += 1;
+      note(err instanceof Error ? err.message : "threw");
+    }
+
+    // A wall of identical errors means the run is broken, not that
+    // individual people are missing — stop rather than spend minutes
+    // repeating a call that cannot succeed.
+    if (result.failed >= ABORT_AFTER_FAILURES && result.matched === 0) {
+      note("aborted_after_repeated_failures");
+      break;
     }
   }
 
