@@ -61,9 +61,10 @@ export type WidgetDef = {
 // isVehiclesPerson / isPrayerRoomStaff / hasStaffRole, so a new person's
 // first screen after the profile gate was "Your dashboard is empty. Use
 // Customise above to choose what appears here." Three widgets now default
-// on for everyone, matching the baseline access floor exactly: the base
-// calendar, their own space bookings, and the prayer room week. Each is
-// already ungated, and each has a real empty state.
+// on for everyone who can actually use them: the base calendar and the
+// prayer room week are open to every account, and space bookings follows
+// the module's own access rule (migration 162 — ministry leaders and the
+// booking admin roles, NOT the baseline floor). Each has a real empty state.
 
 export const WIDGET_REGISTRY: WidgetDef[] = [
   {
@@ -106,10 +107,13 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
     category: "Bookings",
     defaultOrder: 30,
     fullWidth: false,
-    // On for everyone: space booking is part of the baseline access floor,
-    // so these are the person's OWN bookings. Empty state reads
-    // "No upcoming bookings".
-    defaultEnabled: () => true,
+    // Space Bookings is NOT part of the baseline floor — migration 162 took
+    // bookings.view off self_service, leaving the module to ministry leaders,
+    // booking managers, leadership_team and admins. Gated on the same
+    // predicate as the page guard so this never offers a door that will not
+    // open; on by default for exactly the people who can walk through it.
+    gate: (c) => c.hasBookingsAccess,
+    defaultEnabled: (c) => c.hasBookingsAccess,
   },
   {
     key: "vehicles",

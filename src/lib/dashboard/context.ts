@@ -11,6 +11,7 @@ import {
 import { callerIsAdmin, getLedMinistryIds } from "@/lib/auth/check-ministry-access";
 import { isPrayerRoomStaff } from "@/lib/auth/prayer-room-access";
 import { getVehicleAccess } from "@/services/vehicles";
+import { hasModuleAccess } from "@/lib/require-permission";
 
 export type DashboardContext = {
   // super_admin / admin — the "dev team" tier. Sees everything by default.
@@ -25,13 +26,18 @@ export type DashboardContext = {
   // canView is near-universal (self_service floor), so "is a vehicles person"
   // keys off manage/approve.
   isVehiclesPerson: boolean;
+  // Space Bookings is NOT part of the baseline floor: migration 162 removed
+  // bookings.view from self_service, leaving it to ministry leaders, booking
+  // managers, leadership_team and admins. Same predicate the page guard uses,
+  // so the dashboard cannot offer a module the page will refuse.
+  hasBookingsAccess: boolean;
 };
 
 export async function buildDashboardContext(
   supabase: SupabaseClient,
   userId: string
 ): Promise<DashboardContext> {
-  const [roleRows, isAdmin, schools, ledMinistryIds, prayer, vehicles] =
+  const [roleRows, isAdmin, schools, ledMinistryIds, prayer, vehicles, bookings] =
     await Promise.all([
       supabase.from("user_roles").select("roles!inner(name)").eq("user_id", userId),
       callerIsAdmin(supabase, userId),
@@ -39,6 +45,7 @@ export async function buildDashboardContext(
       getLedMinistryIds(supabase, userId),
       isPrayerRoomStaff(supabase, userId),
       getVehicleAccess(supabase, userId),
+      hasModuleAccess(supabase, userId, "bookings"),
     ]);
 
   const userRoles = new Set<string>(
@@ -68,5 +75,6 @@ export async function buildDashboardContext(
     isMinistryLeader: ledMinistryIds.length > 0,
     isPrayerRoomStaff: prayer,
     isVehiclesPerson,
+    hasBookingsAccess: bookings,
   };
 }
