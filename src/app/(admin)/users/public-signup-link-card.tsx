@@ -97,9 +97,9 @@ export function PublicSignupLinkCard({
               <LinkIcon className="h-4 w-4 text-muted-foreground" />
               <h3 className="text-sm font-semibold">{label}</h3>
               <span
-                className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 ${
                   enabled
-                    ? "bg-green-500/10 text-green-700 dark:text-green-400"
+                    ? "bg-white text-grass-text dark:text-grass-text"
                     : "bg-muted text-muted-foreground"
                 }`}
               >
@@ -120,7 +120,7 @@ export function PublicSignupLinkCard({
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="flex-1 min-w-0 rounded-md border bg-muted/40 px-3 py-2 font-mono text-xs truncate">
+          <div className="flex-1 min-w-0 border bg-muted/40 px-3 py-2 font-mono text-xs truncate">
             {url}
           </div>
           <Button onClick={handleCopy} size="sm" variant="default">

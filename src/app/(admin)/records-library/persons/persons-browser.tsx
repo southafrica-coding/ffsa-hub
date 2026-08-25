@@ -156,7 +156,7 @@ export function PersonsBrowser({
           {activeFilters.map((f) => (
             <span
               key={f}
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-300 border border-blue-500/30"
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-bone text-electric border border-rule-strong"
             >
               {f}
             </span>

@@ -103,8 +103,7 @@ export function RoleAssignment({
     <div
       style={{
         background: "#FFFFFF",
-        border: "1px solid hsl(22 8% 14%)",
-        borderRadius: 0,
+        border: "1px solid var(--rule)",
         padding: "20px",
       }}
     >
@@ -113,7 +112,7 @@ export function RoleAssignment({
           fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase",
           fontSize: "1rem",
           letterSpacing: "0.07em",
-          color: "#F0EBE3",
+          color: "var(--text-primary)",
           marginBottom: "4px",
         }}
       >
@@ -136,9 +135,8 @@ export function RoleAssignment({
               alignItems: "center",
               gap: "6px",
               background: "#FFF4D9",
-              color: "hsl(42 90% 72%)",
+              color: "var(--ink)",
               border: "1px solid #FFF4D9",
-              borderRadius: 0,
               padding: "5px 10px",
               fontSize: "13px",
               fontWeight: 500,
@@ -146,7 +144,7 @@ export function RoleAssignment({
           >
             {a.display_name}
             {a.scope_id && scopeLabels[a.scope_id] && (
-              <span style={{ color: "hsl(42 55% 58%)", fontSize: "11px" }}>
+              <span style={{ color: "var(--ink)", fontSize: "11px" }}>
                 · {scopeLabels[a.scope_id]}
               </span>
             )}
@@ -155,7 +153,7 @@ export function RoleAssignment({
                 onClick={() => removeRole(a)}
                 disabled={busy}
                 aria-label={`Remove ${a.display_name}`}
-                style={{ display: "inline-flex", cursor: "pointer", color: "hsl(42 70% 60%)" }}
+                style={{ display: "inline-flex", cursor: "pointer", color: "var(--ink)" }}
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -172,10 +170,9 @@ export function RoleAssignment({
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "4px",
-                border: "1px dashed hsl(22 8% 28%)",
+                border: "1px dashed var(--rule-strong)",
                 background: "transparent",
                 color: "#7C786C",
-                borderRadius: 0,
                 padding: "5px 10px",
                 fontSize: "13px",
                 cursor: options.length === 0 ? "not-allowed" : "pointer",
@@ -193,9 +190,8 @@ export function RoleAssignment({
                   minWidth: "200px",
                   maxHeight: "260px",
                   overflowY: "auto",
-                  background: "hsl(22 12% 10%)",
-                  border: "1px solid hsl(22 8% 18%)",
-                  borderRadius: 0,
+                  background: "var(--surface-2)",
+                  border: "1px solid var(--rule-strong)",
                   padding: "4px",
                   boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
                 }}
@@ -213,7 +209,6 @@ export function RoleAssignment({
                         fontSize: "12px",
                         color: "#7C786C",
                         background: "transparent",
-                        borderRadius: 0,
                         cursor: "pointer",
                       }}
                     >
@@ -241,9 +236,8 @@ export function RoleAssignment({
                           textAlign: "left",
                           padding: "7px 10px",
                           fontSize: "13px",
-                          color: "#F0EBE3",
+                          color: "var(--text-primary)",
                           background: "transparent",
-                          borderRadius: 0,
                           cursor: "pointer",
                         }}
                       >
@@ -262,9 +256,8 @@ export function RoleAssignment({
                         textAlign: "left",
                         padding: "7px 10px",
                         fontSize: "13px",
-                        color: "#F0EBE3",
+                        color: "var(--text-primary)",
                         background: "transparent",
-                        borderRadius: 0,
                         cursor: "pointer",
                       }}
                     >

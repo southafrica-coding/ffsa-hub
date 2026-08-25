@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Chip } from "@/components/ffsa";
 
 /**
  * Top-of-page nav for the /users/[id]/* routes. Profile is visible to
@@ -26,18 +27,10 @@ export function UserTabs({
   }
 
   return (
-    <div className="flex gap-1 border-b">
+    <div className="flex flex-wrap items-center gap-1.5 border-b border-rule bg-bone px-5 py-3 md:px-8">
       {tabs.map((tab) => (
-        <Link
-          key={tab.key}
-          href={tab.href}
-          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-            active === tab.key
-              ? "border-blue-500 text-foreground"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          {tab.label}
+        <Link key={tab.key} href={tab.href}>
+          <Chip active={active === tab.key}>{tab.label}</Chip>
         </Link>
       ))}
     </div>

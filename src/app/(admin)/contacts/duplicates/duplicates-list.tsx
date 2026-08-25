@@ -46,7 +46,7 @@ export function DuplicatesList({ clusters }: { clusters: Cluster[] }) {
 
   if (clusters.length === 0 || visible.length === 0) {
     return (
-      <div className="rounded-lg border bg-card px-5 py-10 text-center">
+      <div className=" border bg-card px-5 py-10 text-center">
         <ShieldCheck
           className="h-7 w-7 mx-auto mb-3"
           style={{ color: GOLD }}
@@ -132,7 +132,7 @@ function ClusterCard({
   }
 
   return (
-    <div className="rounded-lg border bg-card p-4 sm:p-5">
+    <div className=" border bg-card p-4 sm:p-5">
       {/* Signals / reasons */}
       <div className="flex flex-wrap items-center gap-2 mb-4">
         {cluster.signals.phone && (
@@ -144,7 +144,7 @@ function ClusterCard({
         {cluster.reasons.map((r) => (
           <span
             key={r}
-            className="text-[11px] text-muted-foreground font-mono px-2 py-0.5 rounded bg-muted/40"
+            className="text-[11px] text-muted-foreground font-mono px-2 py-0.5 bg-muted/40"
           >
             {r}
           </span>
@@ -164,16 +164,16 @@ function ClusterCard({
               type="button"
               onClick={() => !busy && setSurvivorId(c.id)}
               disabled={busy}
-              className="text-left rounded-md border p-3 transition-colors disabled:opacity-60"
+              className="text-left border p-3 transition-colors disabled:opacity-60"
               style={{
                 borderColor: selected ? GOLD : undefined,
-                background: selected ? "hsl(42 80% 12%)" : undefined,
+                background: selected ? "var(--yellow-dim)" : undefined,
               }}
             >
               <div className="flex items-center justify-between gap-2 mb-1.5">
                 <div className="flex items-center gap-2 min-w-0">
                   <span
-                    className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border"
+                    className="inline-flex h-4 w-4 shrink-0 items-center justify-center border"
                     style={{
                       borderColor: selected ? GOLD : "#45423B",
                       background: selected ? GOLD : "transparent",
@@ -189,7 +189,7 @@ function ClusterCard({
                 </div>
                 {selected ? (
                   <span
-                    className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded"
+                    className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 "
                     style={{ background: GOLD, color: "#0A0A0A" }}
                   >
                     Keep
@@ -252,9 +252,9 @@ function ClusterCard({
             Merge {others.length} into {displayName(survivor)}
           </Button>
         ) : (
-          <div className="rounded-md border border-red-500/30 bg-red-500/10 p-3">
+          <div className=" border border-destructive bg-white p-3">
             <p className="text-sm flex items-start gap-2">
-              <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-red-400" />
+              <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-destructive" />
               <span>
                 Merge{" "}
                 <span className="font-medium">
@@ -274,7 +274,7 @@ function ClusterCard({
                 size="sm"
                 onClick={doMerge}
                 disabled={busy}
-                className="bg-red-500/15 border border-red-500/30 text-red-400 hover:bg-red-500/25"
+                className="bg-white border border-destructive text-destructive hover:bg-white"
               >
                 {busy ? progress ?? "Merging…" : "Confirm merge"}
               </Button>
@@ -292,7 +292,7 @@ function ClusterCard({
         )}
       </div>
 
-      {error && <p className="text-sm text-red-400 mt-3">{error}</p>}
+      {error && <p className="text-sm text-destructive mt-3">{error}</p>}
     </div>
   );
 }
@@ -300,8 +300,8 @@ function ClusterCard({
 function SignalChip({ icon, label }: { icon: ReactNode; label: string }) {
   return (
     <span
-      className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full"
-      style={{ background: "hsl(42 80% 14%)", color: GOLD }}
+      className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 "
+      style={{ background: "var(--yellow-dim)", color: GOLD }}
     >
       {icon}
       {label}

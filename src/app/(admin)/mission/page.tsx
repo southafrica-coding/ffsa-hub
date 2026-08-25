@@ -1,29 +1,33 @@
-import { Globe } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { requireModuleAccess } from "@/lib/require-permission";
+import { Masthead } from "@/components/ffsa";
 
 export default async function MissionPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
   await requireModuleAccess(supabase, user.id, "mission");
-  return (
-    <div className="space-y-6">
-      <div>
-        <p className="page-eyebrow">OUTREACH &amp; IMPACT</p>
-        <h1 className="page-title">Mission</h1>
-      </div>
 
-      <div className="surface-2 rounded-xl border border-white/[0.06] p-10 text-center">
-        <Globe className="h-10 w-10 mx-auto mb-4 opacity-40" />
-        <p className="font-semibold text-white mb-2 uppercase tracking-widest text-sm">Coming Soon</p>
-        <p className="text-sm text-muted-foreground max-w-md mx-auto">
-          The Mission module is under development. It will track outreach
-          trips, visiting teams, and ministry impact statistics including
-          salvations, healings, gospel seeds, bibles distributed, and hours
-          of prayer across all FFSA ministry activities.
-        </p>
+  return (
+    <div className="ffsa-screen">
+      <Masthead context="Outreach &amp; impact" title="Mission" />
+
+      {/* See teams/page.tsx — same dark-theme panel, same fix. */}
+      <div className="border-b border-rule px-5 py-12 md:px-8 md:py-16">
+        <div className="max-w-xl">
+          <div className="mono-label mb-3">Not built yet</div>
+          <h2 className="font-display text-[34px] font-black uppercase leading-[0.95] text-ink md:text-[44px]">
+            Outreach trips
+            <br />
+            and what came of them
+          </h2>
+          <p className="mt-5 text-[15px] leading-relaxed text-[color:var(--text-secondary)]">
+            Trips, visiting teams, and ministry impact — salvations, healings,
+            gospel seeds, bibles distributed, and hours of prayer across every
+            FFSA activity. Nothing is being counted yet.
+          </p>
+        </div>
       </div>
     </div>
   );

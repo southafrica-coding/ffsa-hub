@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { requireModuleAccess } from "@/lib/require-permission";
 import { getContactLists } from "@/services/contact-lists";
 import { ContactsTabsNav } from "../contacts-tabs-nav";
+import { Masthead } from "@/components/ffsa";
 import { ListsManager } from "./lists-manager";
 
 type ListWithCount = {
@@ -34,18 +35,17 @@ export default async function ContactListsPage() {
   }));
 
   return (
-    <div className="space-y-6">
-      <div>
-        <p className="page-eyebrow">PEOPLE &amp; RELATIONSHIPS</p>
-        <h1 className="page-title">Contacts</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          {lists.length} list{lists.length === 1 ? "" : "s"}
-        </p>
-      </div>
+    <div className="ffsa-screen">
+      <Masthead
+        context={`People & relationships \u00b7 ${lists.length} list${lists.length === 1 ? "" : "s"}`}
+        title="Contacts"
+      />
 
       <ContactsTabsNav followupPendingCount={null} />
 
-      <ListsManager lists={lists} />
+      <div className="px-5 py-6 md:px-8 md:py-7">
+        <ListsManager lists={lists} />
+      </div>
     </div>
   );
 }

@@ -208,7 +208,7 @@ export function ExportPanel({
               color: selected.size === 0 ? "#45423B" : "#0A0A0A",
               border:
                 "1px solid " +
-                (selected.size === 0 ? "hsl(22 8% 18%)" : "#0A0A0A"),
+                (selected.size === 0 ? "var(--rule-strong)" : "#0A0A0A"),
               cursor: selected.size === 0 ? "not-allowed" : "pointer",
             }}
           >
@@ -219,7 +219,7 @@ export function ExportPanel({
             <p
               style={{
                 fontSize: "11px",
-                color: "hsl(0 60% 62%)",
+                color: "hsl(var(--destructive))",
                 marginTop: "6px",
                 textAlign: "center",
               }}
@@ -279,8 +279,7 @@ const outcomeChip: CSSProperties = {
   fontSize: "11px",
   fontWeight: 600,
   padding: "4px 9px",
-  borderRadius: 0,
-  border: "1px solid hsl(22 8% 18%)",
+  border: "1px solid var(--rule-strong)",
   background: "#F4F2EA",
   color: "#C7C3B5",
   cursor: "pointer",
@@ -293,8 +292,7 @@ const pill: CSSProperties = {
   fontSize: "12px",
   fontWeight: 600,
   padding: "6px 12px",
-  borderRadius: 0,
-  border: "1px solid hsl(22 8% 18%)",
+  border: "1px solid var(--rule-strong)",
   background: "#F4F2EA",
   color: "#9A9689",
   cursor: "pointer",
@@ -305,9 +303,8 @@ const panel: CSSProperties = {
   top: "calc(100% + 6px)",
   zIndex: 50,
   width: "280px",
-  background: "hsl(22 12% 7%)",
-  border: "1px solid hsl(22 8% 16%)",
-  borderRadius: 0,
+  background: "#FFFFFF",
+  border: "1px solid var(--rule)",
   boxShadow: "0 16px 40px rgba(0,0,0,0.5)",
   padding: "14px",
 };
@@ -323,10 +320,9 @@ const selectStyle: CSSProperties = {
   marginTop: "5px",
   fontSize: "12px",
   padding: "7px 9px",
-  borderRadius: 0,
-  border: "1px solid hsl(22 8% 18%)",
+  border: "1px solid var(--rule-strong)",
   background: "#F4F2EA",
-  color: "#F0EBE3",
+  color: "var(--text-primary)",
 };
 const groupStyle: CSSProperties = {
   fontSize: "10px",

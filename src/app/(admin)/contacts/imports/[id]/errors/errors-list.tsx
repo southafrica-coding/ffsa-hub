@@ -143,7 +143,7 @@ export function ErrorsList({
                     ) : e.status === "resolved" ? (
                       <Link
                         href={`/contacts/${e.resolved_contact_id}`}
-                        className="text-xs text-emerald-400 hover:underline"
+                        className="text-xs text-grass-text hover:underline"
                       >
                         View contact →
                       </Link>
@@ -187,14 +187,14 @@ function ErrorCodeBadge({ code }: { code: string }) {
   const label = ERROR_CODE_LABELS[code] ?? code;
   const cls =
     code === "missing_contact_method" || code === "no_valid_identifier"
-      ? "bg-amber-500/15 text-amber-400 border-amber-500/20"
+      ? "bg-yellow-dim text-amber border-amber-border"
       : code === "duplicate_key"
-      ? "bg-blue-500/15 text-blue-400 border-blue-500/20"
+      ? "bg-ink/15 text-electric border-blue-500/20"
       : code === "transient"
       ? "bg-purple-500/15 text-purple-400 border-purple-500/20"
       : code === "reconstructed_unknown"
       ? "bg-muted text-muted-foreground border-border"
-      : "bg-red-500/15 text-red-400 border-red-500/20";
+      : "bg-white text-destructive border-destructive";
   return (
     <span
       className={`inline-flex w-fit items-center rounded border px-1.5 py-0.5 text-[10px] font-medium ${cls}`}
@@ -308,7 +308,7 @@ function RetryModal({
         </div>
 
         {msg && (
-          <p className="mt-4 text-sm text-amber-400">{msg}</p>
+          <p className="mt-4 text-sm text-amber">{msg}</p>
         )}
 
         <div className="mt-6 flex justify-end gap-2">

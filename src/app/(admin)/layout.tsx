@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { AdminSidebar } from "@/components/admin-sidebar";
+import { MobileTabBar } from "@/components/mobile-tab-bar";
 import { ProfileCompletionGate } from "@/components/profile-completion-gate";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { BackButton } from "@/components/back-button";
@@ -23,7 +24,8 @@ export default async function AdminLayout({
         menuLoadFailed={menuLoadFailed}
         initials={initials}
       />
-      <main className="flex-1 overflow-y-auto bg-background pt-14 md:pt-0">
+      {/* pb-20 on phones keeps the last row clear of the frame-4d tab bar. */}
+      <main className="flex-1 overflow-y-auto bg-background pb-20 pt-14 md:pb-0 md:pt-0">
         {/*
           Redesign transition: migrated screens render edge-to-edge (their own
           Masthead spans the full workspace). Screens not yet recomposed keep
@@ -39,6 +41,7 @@ export default async function AdminLayout({
           <ProfileCompletionGate>{children}</ProfileCompletionGate>
         </div>
       </main>
+      <MobileTabBar />
     </div>
   );
 }

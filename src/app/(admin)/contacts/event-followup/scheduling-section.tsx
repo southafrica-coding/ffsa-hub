@@ -106,10 +106,10 @@ export function SchedulingSection({
           Scheduling
         </p>
         <div
-          className="mt-2 rounded-lg p-4 flex items-center justify-between gap-3"
+          className="mt-2 p-4 flex items-center justify-between gap-3"
           style={{
             background: "#FFFFFF",
-            border: "1px solid hsl(22 8% 14%)",
+            border: "1px solid var(--rule)",
           }}
         >
           <div style={{ color: "#7C786C", fontSize: "13px" }}>
@@ -167,10 +167,10 @@ export function SchedulingSection({
       </p>
 
       <div
-        className="mt-2 rounded-lg p-4"
+        className="mt-2 p-4"
         style={{
           background: "#FFFFFF",
-          border: "1px solid hsl(22 8% 14%)",
+          border: "1px solid var(--rule)",
         }}
       >
         <StatusPill status={scheduling.status} expired={expired} />
@@ -187,7 +187,7 @@ export function SchedulingSection({
           )}
 
           {scheduling.status === "pending" && expired && (
-            <p style={{ color: "hsl(0 60% 60%)", fontSize: "13px" }}>
+            <p style={{ color: "hsl(var(--destructive))", fontSize: "13px" }}>
               This link has expired. Cancel and send a new request.
             </p>
           )}
@@ -208,10 +208,10 @@ export function SchedulingSection({
                       setConfirmMsg("");
                     }}
                     disabled={busy}
-                    className="w-full flex items-center justify-between gap-3 rounded p-2.5 text-left transition-colors hover:bg-white/5"
+                    className="w-full flex items-center justify-between gap-3 p-2.5 text-left transition-colors hover:bg-white/5"
                     style={{
-                      border: "1px solid hsl(22 8% 18%)",
-                      color: "#F0EBE3",
+                      border: "1px solid var(--rule-strong)",
+                      color: "var(--text-primary)",
                       fontSize: "13px",
                       background: "#F4F2EA",
                     }}
@@ -237,7 +237,7 @@ export function SchedulingSection({
           {scheduling.status === "scheduled" && chosenSlot && (
             <p
               style={{
-                color: "hsl(142 60% 55%)",
+                color: "var(--green-text)",
                 fontSize: "14px",
                 fontWeight: 600,
               }}
@@ -286,7 +286,7 @@ export function SchedulingSection({
               size="sm"
               onClick={() => setRequestOpen(true)}
               style={{
-                borderColor: "hsl(22 8% 18%)",
+                borderColor: "var(--rule-strong)",
                 color: "#9A9689",
               }}
             >
@@ -313,12 +313,12 @@ export function SchedulingSection({
         <DialogContent
           style={{
             background: "#0A0A0A",
-            borderColor: "hsl(22 8% 14%)",
-            color: "#F0EBE3",
+            borderColor: "var(--rule)",
+            color: "var(--text-primary)",
           }}
         >
           <DialogHeader>
-            <DialogTitle style={{ color: "#F0EBE3" }}>
+            <DialogTitle style={{ color: "var(--text-primary)" }}>
               Confirm this time
             </DialogTitle>
           </DialogHeader>
@@ -372,7 +372,7 @@ export function SchedulingSection({
               variant="outline"
               onClick={() => setConfirmTarget(null)}
               disabled={busy}
-              style={{ borderColor: "hsl(22 8% 18%)", color: "#9A9689" }}
+              style={{ borderColor: "var(--rule-strong)", color: "#9A9689" }}
             >
               Cancel
             </Button>
@@ -409,18 +409,18 @@ function StatusPill({
 
   if (expired) {
     label = "expired";
-    bg = "hsl(0 60% 18%)";
-    fg = "hsl(0 80% 65%)";
+    bg = "transparent";
+    fg = "hsl(var(--destructive))";
   } else if (status === "pending") {
-    bg = "hsl(42 80% 18%)";
+    bg = "var(--yellow-dim)";
     fg = "#0A0A0A";
   } else if (status === "awaiting_selection") {
     label = "needs your pick";
-    bg = "hsl(42 80% 18%)";
+    bg = "var(--yellow-dim)";
     fg = "#0A0A0A";
   } else if (status === "scheduled") {
-    bg = "hsl(142 50% 18%)";
-    fg = "hsl(142 60% 65%)";
+    bg = "transparent";
+    fg = "var(--green-text)";
   }
 
   return (
@@ -431,7 +431,6 @@ function StatusPill({
         fontWeight: 700,
         letterSpacing: "0.1em",
         padding: "3px 8px",
-        borderRadius: 0,
         background: bg,
         color: fg,
         textTransform: "uppercase",
@@ -457,10 +456,10 @@ function MagicLinkRow({ url }: { url: string }) {
 
   return (
     <div
-      className="flex items-center gap-2 rounded p-2"
+      className="flex items-center gap-2 p-2"
       style={{
         background: "#F4F2EA",
-        border: "1px solid hsl(22 8% 14%)",
+        border: "1px solid var(--rule)",
       }}
     >
       <code
@@ -480,10 +479,9 @@ function MagicLinkRow({ url }: { url: string }) {
         onClick={handleCopy}
         style={{
           background: "transparent",
-          border: "1px solid hsl(22 8% 18%)",
+          border: "1px solid var(--rule-strong)",
           padding: "4px 8px",
-          borderRadius: 0,
-          color: copied ? "hsl(142 60% 55%)" : "#7C786C",
+          color: copied ? "var(--green-text)" : "#7C786C",
           fontSize: "11px",
           cursor: "pointer",
           display: "inline-flex",
@@ -560,12 +558,12 @@ function RequestDialog({
       <DialogContent
         style={{
           background: "#0A0A0A",
-          borderColor: "hsl(22 8% 14%)",
-          color: "#F0EBE3",
+          borderColor: "var(--rule)",
+          color: "var(--text-primary)",
         }}
       >
         <DialogHeader>
-          <DialogTitle style={{ color: "#F0EBE3" }}>
+          <DialogTitle style={{ color: "var(--text-primary)" }}>
             Request availability
           </DialogTitle>
         </DialogHeader>
@@ -621,7 +619,7 @@ function RequestDialog({
             variant="outline"
             onClick={onClose}
             disabled={busy}
-            style={{ borderColor: "hsl(22 8% 18%)", color: "#9A9689" }}
+            style={{ borderColor: "var(--rule-strong)", color: "#9A9689" }}
           >
             Cancel
           </Button>

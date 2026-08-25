@@ -98,7 +98,7 @@ export function ContactDossier({ dossier }: { dossier: ContactDossier }) {
         <Section title="Events & attendance" icon={<CalendarCheck className="h-4 w-4" />}>
           <div className="space-y-2">
             {dossier.events.map((e, i) => (
-              <div key={e.eventId ?? i} className="rounded-md border bg-muted/20 px-3 py-2">
+              <div key={e.eventId ?? i} className=" border bg-muted/20 px-3 py-2">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-medium truncate">{e.title}</span>
                   <span className="text-xs text-muted-foreground shrink-0">{fmtDate(e.startDate)}</span>
@@ -125,7 +125,7 @@ export function ContactDossier({ dossier }: { dossier: ContactDossier }) {
         <Section title="Outcomes" icon={<Target className="h-4 w-4" />}>
           <div className="space-y-1.5">
             {dossier.outcomes.map((o, i) => (
-              <div key={i} className="flex items-center justify-between gap-2 rounded-md border bg-muted/20 px-3 py-2">
+              <div key={i} className="flex items-center justify-between gap-2 border bg-muted/20 px-3 py-2">
                 <div className="min-w-0">
                   <span className="text-sm font-medium">{o.name}</span>
                   {o.eventTitle && (
@@ -144,7 +144,7 @@ export function ContactDossier({ dossier }: { dossier: ContactDossier }) {
         <Section title="Workflows & follow-up" icon={<Workflow className="h-4 w-4" />}>
           <div className="space-y-2">
             {dossier.workflows.map((w) => (
-              <div key={w.id} className="rounded-md border bg-muted/20 px-3 py-2">
+              <div key={w.id} className=" border bg-muted/20 px-3 py-2">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-medium truncate">{w.name}</span>
                   <StatusPill
@@ -176,7 +176,7 @@ export function ContactDossier({ dossier }: { dossier: ContactDossier }) {
         <Section title="Scheduled calls" icon={<CalendarClock className="h-4 w-4" />}>
           <div className="space-y-2">
             {dossier.calls.map((c, i) => (
-              <div key={i} className="rounded-md border bg-muted/20 px-3 py-2">
+              <div key={i} className=" border bg-muted/20 px-3 py-2">
                 <div className="flex items-center justify-between gap-2">
                   <StatusPill
                     label={c.status.replace(/_/g, " ")}
@@ -212,7 +212,7 @@ export function ContactDossier({ dossier }: { dossier: ContactDossier }) {
         <Section title="Orders & tickets" icon={<Receipt className="h-4 w-4" />}>
           <div className="space-y-1.5">
             {dossier.orders.map((o, i) => (
-              <div key={i} className="flex items-center justify-between gap-2 rounded-md border bg-muted/20 px-3 py-2">
+              <div key={i} className="flex items-center justify-between gap-2 border bg-muted/20 px-3 py-2">
                 <div className="min-w-0">
                   <span className="text-sm font-medium">{money(o.totalCents, o.currency)}</span>
                   {o.eventTitle && <span className="text-xs text-muted-foreground"> · {o.eventTitle}</span>}
@@ -232,7 +232,7 @@ export function ContactDossier({ dossier }: { dossier: ContactDossier }) {
         <Section title="Training" icon={<GraduationCap className="h-4 w-4" />}>
           <div className="space-y-1.5">
             {dossier.applications.map((a, i) => (
-              <div key={`app-${i}`} className="flex items-center justify-between gap-2 rounded-md border bg-muted/20 px-3 py-2">
+              <div key={`app-${i}`} className="flex items-center justify-between gap-2 border bg-muted/20 px-3 py-2">
                 <div className="min-w-0">
                   <span className="text-sm font-medium">{a.programName}</span>
                   <span className="text-xs text-muted-foreground"> · application</span>
@@ -247,7 +247,7 @@ export function ContactDossier({ dossier }: { dossier: ContactDossier }) {
               </div>
             ))}
             {dossier.enrollments.map((e, i) => (
-              <div key={`enr-${i}`} className="flex items-center justify-between gap-2 rounded-md border bg-muted/20 px-3 py-2">
+              <div key={`enr-${i}`} className="flex items-center justify-between gap-2 border bg-muted/20 px-3 py-2">
                 <div className="min-w-0">
                   <span className="text-sm font-medium">{e.programName}</span>
                   <span className="text-xs text-muted-foreground"> · enrolled</span>
@@ -274,11 +274,11 @@ function EmailList({ emails }: { emails: DossierEmail[] }) {
   return (
     <div className="space-y-1.5">
       {shown.map((e, i) => (
-        <div key={i} className="flex items-center justify-between gap-2 rounded-md border bg-muted/20 px-3 py-2">
+        <div key={i} className="flex items-center justify-between gap-2 border bg-muted/20 px-3 py-2">
           <span className="text-sm truncate">{e.label}</span>
           <div className="flex items-center gap-2 shrink-0">
             {e.bouncedAt ? (
-              <span className="inline-flex items-center gap-1 text-[11px] text-red-400" title="Bounced">
+              <span className="inline-flex items-center gap-1 text-[11px] text-destructive" title="Bounced">
                 <AlertTriangle className="h-3 w-3" /> bounced
               </span>
             ) : (
@@ -307,7 +307,7 @@ function EmailList({ emails }: { emails: DossierEmail[] }) {
 function FormRow({ form }: { form: DossierForm }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="rounded-md border bg-muted/20">
+    <div className=" border bg-muted/20">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -363,10 +363,10 @@ function Stat({ n, label, icon }: { n: number; label: string; icon: ReactNode })
   const active = n > 0;
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm"
+      className="inline-flex items-center gap-1.5 border px-2.5 py-1.5 text-sm"
       style={{
         borderColor: active ? GOLD : undefined,
-        background: active ? "hsl(42 80% 10%)" : undefined,
+        background: active ? "var(--yellow-dim)" : undefined,
         color: active ? undefined : "#45423B",
       }}
     >
@@ -387,15 +387,15 @@ function StatusPill({
   icon?: ReactNode;
 }) {
   const styles: Record<string, string> = {
-    good: "bg-green-500/15 text-green-400",
-    bad: "bg-red-500/15 text-red-400",
+    good: "bg-grass/15 text-grass-text",
+    bad: "bg-white text-destructive",
     neutral: "bg-muted text-muted-foreground",
     accent: "",
   };
   return (
     <span
-      className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full capitalize ${styles[tone]}`}
-      style={tone === "accent" ? { background: "hsl(42 80% 14%)", color: GOLD } : undefined}
+      className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 capitalize ${styles[tone]}`}
+      style={tone === "accent" ? { background: "var(--yellow-dim)", color: GOLD } : undefined}
     >
       {icon}
       {label}

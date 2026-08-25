@@ -95,7 +95,7 @@ export function ListsManager({ lists }: { lists: ListItem[] }) {
             onChange={(e) => setDescription(e.target.value)}
             disabled={busy}
           />
-          {err && <p className="text-xs text-red-600">{err}</p>}
+          {err && <p className="text-xs text-destructive">{err}</p>}
           <div className="flex gap-2">
             <Button size="sm" onClick={createList} disabled={busy}>
               Create
@@ -117,7 +117,7 @@ export function ListsManager({ lists }: { lists: ListItem[] }) {
         </div>
       )}
 
-      {!creating && err && <p className="text-xs text-red-600">{err}</p>}
+      {!creating && err && <p className="text-xs text-destructive">{err}</p>}
 
       {lists.length === 0 ? (
         <div className="rounded-lg border bg-card p-8 text-center text-sm text-muted-foreground">
@@ -147,7 +147,7 @@ export function ListsManager({ lists }: { lists: ListItem[] }) {
                 onClick={() => deleteList(list.id, list.name)}
                 disabled={busy}
                 aria-label="Delete list"
-                className="absolute top-3 right-3 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-red-600 transition"
+                className="absolute top-3 right-3 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive transition"
               >
                 <Trash2 className="h-4 w-4" />
               </button>

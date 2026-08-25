@@ -2,6 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Chip } from "@/components/ffsa";
+
+// Rebuilt onto the system: this nav was still carrying the dark theme's
+// hardcoded HSL values (yellow text on a dark rule) inline, which the light
+// redesign has no place for. It is now the same hairline chip strip the
+// Events screen uses, so the two modules read as one app.
 
 type Tab = {
   key: string;
@@ -18,69 +24,54 @@ export function ContactsTabsNav({
   const pathname = usePathname();
 
   const tabs: Tab[] = [
-    { key: "list", label: "All Contacts", href: "/contacts" },
+    { key: "list", label: "All contacts", href: "/contacts" },
     { key: "lists", label: "Lists", href: "/contacts/lists" },
     {
       key: "event-followup",
-      label: "Event Follow-up",
+      label: "Event follow-up",
       href: "/contacts/event-followup",
       badgeCount: followupPendingCount,
     },
     {
       key: "duplicates",
-      label: "Possible Duplicates",
+      label: "Possible duplicates",
       href: "/contacts/duplicates",
     },
   ];
 
   function isActive(tab: Tab) {
-    if (tab.key === "list") {
-      return pathname === "/contacts";
-    }
+    if (tab.key === "list") return pathname === "/contacts";
     return pathname.startsWith(tab.href);
   }
 
   return (
-    <nav
-      className="flex items-center gap-1 border-b"
-      style={{ borderColor: "hsl(22 8% 14%)" }}
-    >
+    <nav className="flex flex-wrap items-center gap-1.5 border-b border-rule bg-bone px-5 py-3 md:px-8">
       {tabs.map((tab) => {
         const active = isActive(tab);
+        const badge =
+          tab.badgeCount !== undefined &&
+          tab.badgeCount !== null &&
+          tab.badgeCount > 0
+            ? tab.badgeCount
+            : null;
         return (
-          <Link
-            key={tab.key}
-            href={tab.href}
-            className="relative inline-flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors"
-            style={{
-              color: active ? "#0A0A0A" : "#7C786C",
-              borderBottom: active
-                ? "2px solid #0A0A0A"
-                : "2px solid transparent",
-              marginBottom: "-1px",
-            }}
-          >
-            {tab.label}
-            {tab.badgeCount !== undefined &&
-              tab.badgeCount !== null &&
-              tab.badgeCount > 0 && (
+          <Link key={tab.key} href={tab.href}>
+            <Chip active={active}>
+              {tab.label}
+              {badge !== null && (
+                // Square, never a pill — and it inverts with the chip so the
+                // count stays readable on the active black ground.
                 <span
-                  style={{
-                    fontSize: "10px",
-                    letterSpacing: "0.05em",
-                    fontWeight: 700,
-                    padding: "2px 7px",
-                    borderRadius: 0,
-                    background: active
-                      ? "#0A0A0A"
-                      : "hsl(42 80% 18%)",
-                    color: active ? "#0A0A0A" : "#0A0A0A",
-                    lineHeight: 1,
-                  }}
+                  className={
+                    active
+                      ? "bg-yellow px-1.5 py-0.5 text-ink"
+                      : "bg-ink px-1.5 py-0.5 text-white"
+                  }
                 >
-                  {tab.badgeCount}
+                  {badge}
                 </span>
               )}
+            </Chip>
           </Link>
         );
       })}

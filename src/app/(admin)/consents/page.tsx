@@ -7,6 +7,7 @@ import {
   getConsentAgreementsList,
 } from "@/services/consent";
 import { ConsentsTable, type ConsentRow } from "./consents-table";
+import { Masthead, KpiStrip, Kpi } from "@/components/ffsa";
 
 export const dynamic = "force-dynamic";
 
@@ -80,34 +81,40 @@ export default async function ConsentsPage() {
   }));
 
   return (
-    <div className="space-y-6">
-      <div>
-        <p className="page-eyebrow">LEGAL</p>
-        <h1 className="page-title">Consent &amp; agreement records</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Every policy acceptance on record — staff, students and public
-          applicants. Open any record to view or print the exact document that
-          was signed, or export the list as CSV.
-        </p>
-      </div>
+    <div className="ffsa-screen">
+      <Masthead
+        context={`Legal · ${rows.length} record${rows.length === 1 ? "" : "s"}`}
+        title="Consent records"
+      />
 
+      <p className="max-w-3xl border-b border-rule px-5 py-4 text-[14px] leading-relaxed text-[color:var(--text-secondary)] md:px-8">
+        Every policy acceptance on record — staff, students and public
+        applicants. Open any record to view or print the exact document that was
+        signed, or export the list as CSV.
+      </p>
+
+      {/* Signature counts per policy version, as a KPI strip rather than a
+          grid of rounded cards. */}
       {versions.length > 0 && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {versions.map((v) => (
-            <div key={v.version} className="rounded-xl border p-4">
-              <p className="text-sm font-medium">{v.title}</p>
-              <p className="text-xs text-muted-foreground font-mono">{v.version}</p>
-              <p className="mt-2 text-2xl font-semibold">{v.count}</p>
-              <p className="text-xs text-muted-foreground">signatures</p>
-            </div>
+        <KpiStrip>
+          {versions.map((v, i) => (
+            <Kpi
+              key={v.version}
+              label={v.title}
+              value={String(v.count)}
+              foot={`${v.version} · signatures`}
+              lead={i === 0}
+            />
           ))}
-        </div>
+        </KpiStrip>
       )}
 
-      <ConsentsTable
-        rows={rows}
-        versions={versions.map((v) => ({ version: v.version, title: v.title }))}
-      />
+      <div className="px-5 py-6 md:px-8 md:py-7">
+        <ConsentsTable
+          rows={rows}
+          versions={versions.map((v) => ({ version: v.version, title: v.title }))}
+        />
+      </div>
     </div>
   );
 }

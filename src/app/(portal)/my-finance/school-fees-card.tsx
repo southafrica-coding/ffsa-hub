@@ -37,11 +37,11 @@ const formatCurrency = (amount: number) =>
   }).format(amount);
 
 const STATUS_COLORS: Record<string, string> = {
-  pending: "bg-gray-100 text-gray-800",
-  partially_paid: "bg-yellow-100 text-yellow-800",
-  paid: "bg-green-100 text-green-800",
-  overdue: "bg-red-100 text-red-800",
-  waived: "bg-blue-100 text-blue-800",
+  pending: "bg-bone text-ink",
+  partially_paid: "bg-yellow-dim text-amber",
+  paid: "bg-white text-grass-text",
+  overdue: "bg-white text-destructive",
+  waived: "bg-blue-100 text-electric",
 };
 
 const TIER_LABELS: Record<string, string> = {
@@ -130,7 +130,7 @@ export function SchoolFeesCard({ fee }: { fee: StudentFee }) {
                 </span>
               </div>
               {Number(fee.discount_zar) > 0 && (
-                <div className="flex justify-between text-green-600">
+                <div className="flex justify-between text-grass-text">
                   <span>Discount</span>
                   <span className="font-mono">
                     -{formatCurrency(Number(fee.discount_zar))}
@@ -138,7 +138,7 @@ export function SchoolFeesCard({ fee }: { fee: StudentFee }) {
                 </div>
               )}
               {Number(fee.scholarship_zar) > 0 && (
-                <div className="flex justify-between text-green-600">
+                <div className="flex justify-between text-grass-text">
                   <span>Scholarship</span>
                   <span className="font-mono">
                     -{formatCurrency(Number(fee.scholarship_zar))}
@@ -177,7 +177,7 @@ export function SchoolFeesCard({ fee }: { fee: StudentFee }) {
           <span>Balance Remaining</span>
           <span
             className={`font-mono ${
-              balance > 0 ? "text-destructive" : "text-green-600"
+              balance > 0 ? "text-destructive" : "text-grass-text"
             }`}
           >
             {formatCurrency(balance)}
@@ -218,7 +218,7 @@ export function SchoolFeesCard({ fee }: { fee: StudentFee }) {
                         </span>
                       )}
                     </div>
-                    <span className="font-mono text-green-600">
+                    <span className="font-mono text-grass-text">
                       {formatCurrency(Number(p.amount_zar))}
                     </span>
                   </div>

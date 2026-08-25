@@ -140,13 +140,13 @@ export function FollowupDrawer({
         className="overflow-y-auto"
         style={{
           background: "#0A0A0A",
-          borderColor: "hsl(22 8% 14%)",
+          borderColor: "var(--rule)",
           width: "100%",
           maxWidth: "560px",
         }}
       >
         <SheetHeader>
-          <SheetTitle style={{ color: "#F0EBE3", fontSize: "18px" }}>
+          <SheetTitle style={{ color: "var(--text-primary)", fontSize: "18px" }}>
             {personLabel(row.contact)}
           </SheetTitle>
         </SheetHeader>
@@ -165,10 +165,10 @@ export function FollowupDrawer({
         </div>
 
         <div
-          className="mt-5 rounded-lg p-4 space-y-3"
+          className="mt-5 p-4 space-y-3"
           style={{
             background: "#FFFFFF",
-            border: "1px solid hsl(22 8% 14%)",
+            border: "1px solid var(--rule)",
           }}
         >
           <KV label="Event" value={row.event.title} />
@@ -231,10 +231,10 @@ export function FollowupDrawer({
         <div className="mt-6">
           <Eyebrow label="What they signed up for" />
           <div
-            className="mt-2 rounded-lg p-4"
+            className="mt-2 p-4"
             style={{
               background: "#FFFFFF",
-              border: "1px solid hsl(22 8% 14%)",
+              border: "1px solid var(--rule)",
             }}
           >
             {loading ? (
@@ -285,7 +285,7 @@ export function FollowupDrawer({
             onClick={onClose}
             disabled={busy}
             style={{
-              borderColor: "hsl(22 8% 18%)",
+              borderColor: "var(--rule-strong)",
               color: "#9A9689",
             }}
           >
@@ -335,7 +335,7 @@ function KV({ label, value }: { label: string; value: string }) {
       >
         {label}
       </span>
-      <span style={{ fontSize: "13px", color: "#F0EBE3", textAlign: "right" }}>
+      <span style={{ fontSize: "13px", color: "var(--text-primary)", textAlign: "right" }}>
         {value}
       </span>
     </div>
@@ -390,7 +390,7 @@ function FormAnswers({
           >
             {labels[key] ?? key.replaceAll("_", " ")}
           </span>
-          <span style={{ fontSize: "13px", color: "#F0EBE3" }}>
+          <span style={{ fontSize: "13px", color: "var(--text-primary)" }}>
             {formatValue(value)}
           </span>
         </div>
@@ -433,9 +433,9 @@ function WorkflowTrace({ detail }: { detail: FollowupDetail }) {
         const current = !run && idx === detail.current_step;
 
         const icon = done ? (
-          <Check className="h-3.5 w-3.5" style={{ color: "hsl(142 60% 55%)" }} />
+          <Check className="h-3.5 w-3.5" style={{ color: "var(--green-text)" }} />
         ) : failed ? (
-          <X className="h-3.5 w-3.5" style={{ color: "hsl(0 75% 60%)" }} />
+          <X className="h-3.5 w-3.5" style={{ color: "hsl(var(--destructive))" }} />
         ) : current ? (
           <Clock
             className="h-3.5 w-3.5"
@@ -460,9 +460,9 @@ function WorkflowTrace({ detail }: { detail: FollowupDetail }) {
         return (
           <li
             key={step.id}
-            className="flex items-start gap-3 rounded p-2"
+            className="flex items-start gap-3 p-2"
             style={{
-              background: current ? "hsl(42 30% 8%)" : "transparent",
+              background: current ? "var(--yellow-dim)" : "transparent",
               border: current
                 ? "1px solid #FFF4D9"
                 : "1px solid transparent",
@@ -473,7 +473,7 @@ function WorkflowTrace({ detail }: { detail: FollowupDetail }) {
               <div
                 style={{
                   fontSize: "12px",
-                  color: pending ? "#55524A" : "#F0EBE3",
+                  color: pending ? "#55524A" : "var(--text-primary)",
                 }}
               >
                 {stepIcon}
@@ -522,7 +522,6 @@ function Skeleton() {
         style={{
           height: "12px",
           background: "#0A0A0A",
-          borderRadius: 0,
           width: "60%",
         }}
       />
@@ -530,7 +529,6 @@ function Skeleton() {
         style={{
           height: "12px",
           background: "#0A0A0A",
-          borderRadius: 0,
           width: "80%",
         }}
       />
@@ -538,7 +536,6 @@ function Skeleton() {
         style={{
           height: "12px",
           background: "#0A0A0A",
-          borderRadius: 0,
           width: "50%",
         }}
       />

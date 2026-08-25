@@ -90,10 +90,9 @@ export function NotesSection({
           marginTop: "8px",
           width: "100%",
           background: "#FFFFFF",
-          border: "1px solid hsl(22 8% 14%)",
-          borderRadius: 0,
+          border: "1px solid var(--rule)",
           padding: "10px 12px",
-          color: "#F0EBE3",
+          color: "var(--text-primary)",
           fontSize: "13px",
           lineHeight: 1.5,
           fontFamily: "inherit",
@@ -103,7 +102,7 @@ export function NotesSection({
       />
 
       <div className="mt-2 flex items-center justify-between gap-2">
-        <span style={{ fontSize: "11px", color: "hsl(0 75% 65%)" }}>
+        <span style={{ fontSize: "11px", color: "hsl(var(--destructive))" }}>
           {error ?? ""}
         </span>
         <Button

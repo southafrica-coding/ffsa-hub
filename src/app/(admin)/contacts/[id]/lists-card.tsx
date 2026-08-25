@@ -97,7 +97,7 @@ export function ListsCard({
           <button
             type="button"
             onClick={() => setMode(available.length > 0 ? "existing" : "new")}
-            className="text-xs text-blue-600 hover:underline"
+            className="text-xs text-electric hover:underline"
           >
             + Add
           </button>
@@ -114,7 +114,7 @@ export function ListsCard({
               return (
                 <span
                   key={list.id}
-                  className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium bg-secondary"
+                  className="inline-flex items-center gap-1 text-xs px-2 py-0.5 border font-medium bg-secondary"
                   title={`Added ${new Date(cl.added_at).toLocaleString()}`}
                 >
                   <Link href={`/contacts/lists/${list.id}`} className="hover:underline">
@@ -161,7 +161,7 @@ export function ListsCard({
               <select
                 value={pickId}
                 onChange={(e) => setPickId(e.target.value)}
-                className="w-full border rounded text-sm px-2 py-1"
+                className="w-full border text-sm px-2 py-1"
                 disabled={busy}
               >
                 <option value="">— pick a list —</option>
@@ -177,19 +177,19 @@ export function ListsCard({
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 placeholder="New list name"
-                className="w-full border rounded text-sm px-2 py-1"
+                className="w-full border text-sm px-2 py-1"
                 disabled={busy}
               />
             )}
 
-            {err && <p className="text-xs text-red-600">{err}</p>}
+            {err && <p className="text-xs text-destructive">{err}</p>}
 
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={addToList}
                 disabled={busy}
-                className="px-3 py-1 rounded bg-blue-600 text-white text-xs hover:bg-blue-700 disabled:bg-gray-300"
+                className="px-3 py-1 bg-ink text-white text-xs hover:bg-ink disabled:bg-bone-3"
               >
                 Add
               </button>
@@ -200,7 +200,7 @@ export function ListsCard({
                   setErr(null);
                 }}
                 disabled={busy}
-                className="px-3 py-1 rounded border text-xs hover:bg-gray-50"
+                className="px-3 py-1 border text-xs hover:bg-bone"
               >
                 Cancel
               </button>

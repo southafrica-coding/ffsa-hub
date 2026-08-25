@@ -9,6 +9,7 @@ import { UsersTable } from "./users-table";
 import { InviteUserForm } from "./invite-user-form";
 import { PublicSignupLinkCard } from "./public-signup-link-card";
 import { headers } from "next/headers";
+import { Masthead } from "@/components/ffsa";
 
 export default async function UsersPage() {
   const supabase = await createClient();
@@ -123,15 +124,14 @@ export default async function UsersPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <p className="page-eyebrow">SYSTEM ACCESS</p>
-          <h1 className="page-title">Users</h1>
-          <p className="text-sm text-muted-foreground mt-1">{count ?? 0} user accounts</p>
-        </div>
-        {isSuperAdmin && <InviteUserForm />}
-      </div>
+    <div className="ffsa-screen">
+      <Masthead
+        context={`System access · ${count ?? 0} user ${count === 1 ? "account" : "accounts"}`}
+        title="Users"
+        actions={isSuperAdmin ? <InviteUserForm /> : undefined}
+      />
+
+      <div className="space-y-6 px-5 py-6 md:px-8 md:py-7">
 
       {isSuperAdmin && signupLinks.length > 0 && (
         <div className="space-y-3">
@@ -186,6 +186,7 @@ export default async function UsersPage() {
         schoolByUser={schoolByUser}
         isSuperAdmin={isSuperAdmin}
       />
+      </div>
     </div>
   );
 }

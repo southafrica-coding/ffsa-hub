@@ -1,4 +1,5 @@
 import { AvatarUploader } from "@/components/avatar-uploader";
+import { StatusPill, type Tone } from "@/components/ffsa";
 import {
   deriveUserLifecycle,
   type UserLifecycleInput,
@@ -49,14 +50,16 @@ export function UserHeader({
     ...user,
     last_sign_in_at: authLastSignInAt ?? user.last_sign_in_at ?? null,
   });
-  const stageColors: Record<UserLifecycleStage, { bg: string; fg: string }> = {
-    active: { bg: "hsl(142 60% 20%)", fg: "hsl(142 60% 55%)" },
-    profile_incomplete: { bg: "hsl(28 70% 16%)", fg: "hsl(32 90% 60%)" },
-    pending_approval: { bg: "hsl(42 80% 18%)", fg: "#0A0A0A" },
-    invited: { bg: "hsl(22 8% 15%)", fg: "#7C786C" },
-    inactive: { bg: "hsl(0 45% 16%)", fg: "hsl(0 70% 62%)" },
+  // The stage tints here were dark-theme HSL values written inline — green
+  // on a near-black ground. On the light system a stage is an outlined pill
+  // in one of the four tones, same as every other status in the app.
+  const STAGE_TONE: Record<UserLifecycleStage, Tone> = {
+    active: "good",
+    profile_incomplete: "warn",
+    pending_approval: "warn",
+    invited: "quiet",
+    inactive: "bad",
   };
-  const s = stageColors[lifecycle.stage];
 
   const title = derivedTitle ?? user.job_title ?? null;
 
@@ -64,39 +67,27 @@ export function UserHeader({
     user.first_name ?? user.email ?? "?";
 
   return (
-    <div className="flex items-start gap-5">
+    <div className="flex items-start gap-4 border-b border-ink bg-white px-5 pb-4 pt-5 md:gap-5 md:px-8 md:pb-5 md:pt-6">
       <AvatarUploader
         userId={user.id}
         initialSrc={user.avatar_url}
         name={avatarName}
         size={72}
       />
-      <div className="flex-1 min-w-0">
-        <p className="page-eyebrow">{eyebrow}</p>
-        <h1 className="page-title truncate">{name}</h1>
-        <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mt-1 text-sm text-muted-foreground">
+      <div className="min-w-0 flex-1">
+        <div className="masthead-context">{eyebrow}</div>
+        <h1 className="masthead-title truncate">{name}</h1>
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-[color:var(--text-secondary)]">
           <span className="truncate">{user.email ?? "—"}</span>
           {title && (
             <>
-              <span className="opacity-50">·</span>
+              <span className="opacity-40">·</span>
               <span>{title}</span>
             </>
           )}
-          <span className="opacity-50">·</span>
-          <span
-            style={{
-              fontSize: "10px",
-              letterSpacing: "0.1em",
-              fontWeight: 700,
-              textTransform: "uppercase",
-              padding: "2px 7px",
-              borderRadius: 0,
-              background: s.bg,
-              color: s.fg,
-            }}
-          >
+          <StatusPill tone={STAGE_TONE[lifecycle.stage]}>
             {lifecycle.label}
-          </span>
+          </StatusPill>
         </div>
       </div>
     </div>

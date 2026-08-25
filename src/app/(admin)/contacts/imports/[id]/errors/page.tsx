@@ -6,6 +6,7 @@ import { getCsvImport } from "@/services/csv-imports";
 import { listImportErrors } from "@/services/csv-import-errors";
 import { ErrorsList } from "./errors-list";
 import { ReconstructErrorsForm } from "./reconstruct-errors-form";
+import { Masthead, MastheadAction, Chip } from "@/components/ffsa";
 
 type SearchParams = { status?: string };
 
@@ -48,18 +49,19 @@ export default async function ImportErrorsPage({
   ]);
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-bold">Errored rows</h1>
-        <p className="text-sm text-muted-foreground">
-          From{" "}
-          <span className="font-mono text-foreground">{imp.filename}</span>{" "}
-          (imported {new Date(imp.created_at).toLocaleString()}). Fix &amp; retry
-          to land them as contacts, or dismiss to clear them from the queue.
-        </p>
-      </div>
+    <div className="ffsa-screen">
+      <Masthead
+        context={`Import · ${imp.filename}`}
+        title="Errored rows"
+        actions={<MastheadAction href="/contacts/import">All imports</MastheadAction>}
+      />
 
-      <div className="flex items-center gap-2 border-b">
+      <p className="max-w-3xl border-b border-rule px-5 py-4 text-[14px] leading-relaxed text-[color:var(--text-secondary)] md:px-8">
+        Imported {new Date(imp.created_at).toLocaleString("en-ZA")}. Fix &amp;
+        retry to land them as contacts, or dismiss to clear them from the queue.
+      </p>
+
+      <div className="flex flex-wrap items-center gap-1.5 border-b border-rule bg-bone px-5 py-3 md:px-8">
         <FilterTab
           importId={importId}
           status="pending"
@@ -90,12 +92,13 @@ export default async function ImportErrorsPage({
         />
       </div>
 
+      <div className="px-5 py-6 md:px-8 md:py-7">
       {errors.length === 0 ? (
-        <div className="rounded-md border bg-card p-8 text-center">
-          <p className="text-sm text-muted-foreground">
+        <div className="border border-ink bg-white p-8 text-center">
+          <p className="mono-label">
             {statusFilter === "pending"
-              ? "No pending errors. 🎉"
-              : `No ${statusFilter} errors.`}
+              ? "No pending errors"
+              : `No ${statusFilter} errors`}
           </p>
           {statusFilter === "pending" && pendingCount === 0 && imp.error_count > 0 && resolvedCount + dismissedCount === 0 && (
             <ReconstructPrompt importId={importId} expectedCount={imp.error_count} />
@@ -108,6 +111,7 @@ export default async function ImportErrorsPage({
           status={statusFilter}
         />
       )}
+      </div>
     </div>
   );
 }
@@ -154,18 +158,11 @@ function FilterTab({
 }) {
   const active = status === current;
   return (
-    <Link
-      href={`/contacts/imports/${importId}/errors?status=${status}`}
-      className={
-        active
-          ? "border-b-2 border-primary text-foreground px-3 py-2 text-sm font-medium -mb-px"
-          : "border-b-2 border-transparent text-muted-foreground hover:text-foreground px-3 py-2 text-sm font-medium -mb-px"
-      }
-    >
-      {label}{" "}
-      <span className="text-xs text-muted-foreground tabular-nums">
-        ({count.toLocaleString()})
-      </span>
+    <Link href={`/contacts/imports/${importId}/errors?status=${status}`}>
+      <Chip active={active}>
+        {label}
+        <span className="tabular-nums">{count.toLocaleString("en-ZA")}</span>
+      </Chip>
     </Link>
   );
 }
@@ -178,12 +175,12 @@ function ReconstructPrompt({
   expectedCount: number;
 }) {
   return (
-    <div className="mt-6 rounded-md border border-amber-500/30 bg-amber-500/10 p-4 text-left">
-      <p className="text-sm text-amber-300 font-medium mb-1">
+    <div className="mt-6 border border-amber-border bg-yellow-dim p-4 text-left">
+      <p className="mb-1 text-sm font-semibold text-[color:var(--amber)]">
         This import recorded {expectedCount.toLocaleString()} errored rows but
         none are logged here.
       </p>
-      <p className="text-xs text-muted-foreground mb-3">
+      <p className="mb-3 text-xs text-[color:var(--text-secondary)]">
         That means the import ran before per-row error capture was deployed.
         Re-upload the original CSV below and we&apos;ll reconstruct the lost
         errors by comparing each row to what landed in contacts.

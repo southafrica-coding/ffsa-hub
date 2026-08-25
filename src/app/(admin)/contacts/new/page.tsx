@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/card";
 import { AlertTriangle } from "lucide-react";
 import { getLabelColors } from "@/lib/label-color";
+import { Masthead, MastheadAction } from "@/components/ffsa";
 
 interface DuplicateMatch {
   id: string;
@@ -224,11 +225,14 @@ export default function NewContactPage() {
   const hasNewIdentifiers = !!(form.email.trim() || form.phone.trim());
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <div>
-        <p className="page-eyebrow">PEOPLE &amp; RELATIONSHIPS</p>
-        <h1 className="page-title">Add Contact</h1>
-      </div>
+    <div className="ffsa-screen">
+      <Masthead
+        context="People & relationships"
+        title="Add contact"
+        actions={<MastheadAction href="/contacts">All contacts</MastheadAction>}
+      />
+
+      <div className="max-w-2xl space-y-6 px-5 py-6 md:px-8 md:py-7">
 
       {duplicates.length > 0 && (
         <Card style={{ borderColor: 'var(--yellow-border)', background: 'rgba(245,197,24,0.06)' }}>
@@ -401,6 +405,7 @@ export default function NewContactPage() {
           </form>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

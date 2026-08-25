@@ -29,6 +29,7 @@ import { Timeline } from "./timeline";
 import { EmailHistoryCard } from "./email-history-card";
 import { ContactDossier } from "./contact-dossier";
 import { EditContactDialog } from "./edit-contact-dialog";
+import { Masthead, StatusPill, type Tone } from "@/components/ffsa";
 
 export default async function ContactDetailPage({
   params,
@@ -113,35 +114,32 @@ export default async function ContactDetailPage({
     ) ?? [];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="page-eyebrow">PEOPLE &amp; RELATIONSHIPS</p>
-          <h1 className="page-title">
-            {contact.preferred_name ?? contact.first_name} {contact.last_name}
-          </h1>
-          {contact.preferred_name && (
-            <p className="text-sm text-muted-foreground mt-1">
-              Legal name: {contact.first_name} {contact.last_name}
-            </p>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <MarketingStatusBadge status={contact.marketing_status} />
-          <Badge variant={contact.status === "active" ? "default" : "outline"} className="capitalize">
-            {contact.status}
-          </Badge>
-          {canEdit && (
-            <EditContactDialog contact={contact} genderOptions={genderOptions} />
-          )}
-          <MergeButton
-            sourceContactId={id}
-            sourceName={`${contact.preferred_name ?? contact.first_name} ${contact.last_name}`.trim()}
-          />
-        </div>
-      </div>
+    <div className="ffsa-screen">
+      <Masthead
+        context={
+          contact.preferred_name
+            ? `People & relationships · legally ${contact.first_name} ${contact.last_name}`
+            : "People & relationships"
+        }
+        title={`${contact.preferred_name ?? contact.first_name} ${contact.last_name}`}
+        actions={
+          <>
+            <MarketingStatusBadge status={contact.marketing_status} />
+            <StatusPill tone={contact.status === "active" ? "good" : "quiet"}>
+              {contact.status}
+            </StatusPill>
+            {canEdit && (
+              <EditContactDialog contact={contact} genderOptions={genderOptions} />
+            )}
+            <MergeButton
+              sourceContactId={id}
+              sourceName={`${contact.preferred_name ?? contact.first_name} ${contact.last_name}`.trim()}
+            />
+          </>
+        }
+      />
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-6 px-5 py-6 md:px-8 md:py-7 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
           <IdentifiersCard
             contactId={id}
@@ -267,25 +265,23 @@ export default async function ContactDetailPage({
 function Field({ label, value }: { label: string; value: string | null | undefined }) {
   return (
     <div>
-      <p className="text-sm font-medium text-muted-foreground">{label}</p>
-      <p className="text-sm">{value ?? "—"}</p>
+      <p className="mono-label">{label}</p>
+      <p className="mt-1 text-sm text-ink">{value ?? "—"}</p>
     </div>
   );
 }
 
+const MARKETING_TONE: Record<string, Tone> = {
+  subscribed: "good",
+  unsubscribed_all: "bad",
+  bounced: "warn",
+};
+
 function MarketingStatusBadge({ status }: { status: string | null }) {
   if (!status) return null;
-  const cls =
-    status === "subscribed"
-      ? "bg-green-100 text-green-800"
-      : status === "unsubscribed_all"
-      ? "bg-red-100 text-red-800"
-      : status === "bounced"
-      ? "bg-orange-100 text-orange-800"
-      : "bg-gray-100 text-gray-800";
   return (
-    <span className={`inline-block px-2 py-0.5 rounded text-xs ${cls}`}>
-      {status.replace("_", " ")}
-    </span>
+    <StatusPill tone={MARKETING_TONE[status] ?? "quiet"}>
+      {status.replace(/_/g, " ")}
+    </StatusPill>
   );
 }

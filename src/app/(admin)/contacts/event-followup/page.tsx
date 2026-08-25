@@ -13,6 +13,7 @@ import {
 import { getFollowupQueue } from "@/services/event-followup";
 import { ContactsTabsNav } from "../contacts-tabs-nav";
 import { FollowupQueue } from "./followup-queue";
+import { Masthead, NeedsYou } from "@/components/ffsa";
 
 export default async function EventFollowupPage() {
   const supabase = await createClient();
@@ -53,24 +54,30 @@ export default async function EventFollowupPage() {
   ).length;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="page-eyebrow">PEOPLE &amp; RELATIONSHIPS</p>
-          <h1 className="page-title">Contacts</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {queue.length} active follow-up{queue.length === 1 ? "" : "s"}
-          </p>
-        </div>
-      </div>
+    <div className="ffsa-screen">
+      <Masthead
+        context={`People & relationships \u00b7 ${queue.length} active follow-up${queue.length === 1 ? "" : "s"}`}
+        title="Contacts"
+      />
 
       <ContactsTabsNav followupPendingCount={pendingCount} />
 
-      <FollowupQueue
-        queue={queue}
-        handlersByEvent={handlersByEvent}
-        currentUserId={user.id}
-      />
+      {/* The screen's ONE yellow band: rows nobody has picked up. */}
+      {pendingCount > 0 && (
+        <NeedsYou>
+          {pendingCount === 1
+            ? "1 follow-up is unassigned or unread"
+            : `${pendingCount} follow-ups are unassigned or unread`}
+        </NeedsYou>
+      )}
+
+      <div className="px-5 py-6 md:px-8 md:py-7">
+        <FollowupQueue
+          queue={queue}
+          handlersByEvent={handlersByEvent}
+          currentUserId={user.id}
+        />
+      </div>
     </div>
   );
 }

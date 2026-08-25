@@ -208,7 +208,7 @@ export function ApplicationForm({
     return (
       <Card>
         <CardContent className="py-8 text-center space-y-4">
-          <CheckCircle className="h-12 w-12 text-green-600 mx-auto" />
+          <CheckCircle className="h-12 w-12 text-grass-text mx-auto" />
           <h2 className="text-lg font-semibold">Application Submitted!</h2>
           {submittedReferenceCount > 0 ? (
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
@@ -354,7 +354,7 @@ export function ApplicationForm({
             </p>
           </div>
           {requiredReferenceCount > 0 && (
-            <p className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-muted-foreground">
+            <p className="rounded-md border border-amber-border bg-yellow-dim p-3 text-xs text-muted-foreground">
               {referenceHeadsUpNote(requiredReferenceCount)}
             </p>
           )}

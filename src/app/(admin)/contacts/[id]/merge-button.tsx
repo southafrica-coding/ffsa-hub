@@ -148,7 +148,7 @@ export function MergeButton({
           onClick={() => !busy && reset()}
         >
           <div
-            className="bg-card text-card-foreground border rounded-lg max-w-lg w-full p-6 shadow-2xl"
+            className="bg-card text-card-foreground border max-w-lg w-full p-6 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-lg font-semibold mb-1">
@@ -178,7 +178,7 @@ export function MergeButton({
                         key={c.id}
                         type="button"
                         onClick={() => loadPreview(c)}
-                        className="w-full text-left rounded-md border bg-muted/30 hover:bg-muted px-3 py-2"
+                        className="w-full text-left border bg-muted/30 hover:bg-muted px-3 py-2"
                       >
                         <p className="text-sm font-medium">
                           {c.first_name} {c.last_name}
@@ -199,7 +199,7 @@ export function MergeButton({
               </>
             ) : (
               <>
-                <div className="rounded-md border bg-muted/30 px-3 py-2 mb-4">
+                <div className=" border bg-muted/30 px-3 py-2 mb-4">
                   <p className="text-sm font-medium">
                     Target: {picked.first_name} {picked.last_name}
                   </p>
@@ -280,7 +280,7 @@ export function MergeButton({
               </>
             )}
 
-            {error && <p className="text-sm text-red-400 mt-3">{error}</p>}
+            {error && <p className="text-sm text-destructive mt-3">{error}</p>}
 
             <div className="mt-6 flex justify-end gap-2">
               <Button
@@ -298,7 +298,7 @@ export function MergeButton({
                   size="sm"
                   onClick={confirmMerge}
                   disabled={busy || confirmText !== "MERGE"}
-                  className="bg-red-500/15 border border-red-500/30 text-red-400 hover:bg-red-500/25"
+                  className="bg-white border border-destructive text-destructive hover:bg-white"
                 >
                   {busy ? "Merging…" : "Merge contacts"}
                 </Button>

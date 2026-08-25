@@ -4,6 +4,7 @@ import { redirect, notFound } from "next/navigation";
 import { requireModuleAccess } from "@/lib/require-permission";
 import { getImport, getRecordsForImport } from "@/services/records-library";
 import { bestPersonName } from "@/lib/person-name";
+import { Masthead, MastheadAction, StatusPill, type Tone } from "@/components/ffsa";
 
 export default async function ImportDetailPage({
   params,
@@ -24,15 +25,22 @@ export default async function ImportDetailPage({
   const records = await getRecordsForImport(supabase, id);
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold mb-1">{imp.filename}</h1>
-        <p className="text-sm text-muted-foreground">
-          <span className="capitalize">{imp.record_type}</span> ·{" "}
-          <StatusBadge status={imp.status} /> · Uploaded{" "}
-          {new Date(imp.created_at).toLocaleString()}
+    <div className="ffsa-screen">
+      <Masthead
+        context={`Records library import · ${imp.record_type}`}
+        title={imp.filename}
+        actions={
+          <>
+            <StatusBadge status={imp.status} />
+            <MastheadAction href="/records-library">Library</MastheadAction>
+          </>
+        }
+      />
+
+      <div className="space-y-8 px-5 py-6 md:px-8 md:py-7">
+        <p className="mono-label">
+          Uploaded {new Date(imp.created_at).toLocaleString("en-ZA")}
         </p>
-      </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <Stat label="Rows in CSV" value={imp.row_count} />
@@ -161,7 +169,7 @@ export default async function ImportDetailPage({
                       href={r.file_url}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-blue-400 hover:underline"
+                      className="text-electric hover:underline"
                     >
                       Open
                     </a>
@@ -174,6 +182,7 @@ export default async function ImportDetailPage({
           </Table>
         </Section>
       )}
+      </div>
     </div>
   );
 }
@@ -252,20 +261,15 @@ function PersonLink({
   );
 }
 
+const RL_TONE: Record<string, Tone> = {
+  completed: "good",
+  processing: "warn",
+  pending: "warn",
+  failed: "bad",
+};
+
 function StatusBadge({ status }: { status: string }) {
-  const cls =
-    status === "completed"
-      ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-      : status === "processing" || status === "pending"
-      ? "bg-yellow-500/20 text-yellow-200 border border-yellow-500/30"
-      : status === "failed"
-      ? "bg-red-500/20 text-red-300 border border-red-500/30"
-      : "bg-muted text-muted-foreground border";
-  return (
-    <span className={`inline-block px-2 py-0.5 rounded text-xs ${cls}`}>
-      {status}
-    </span>
-  );
+  return <StatusPill tone={RL_TONE[status] ?? "quiet"}>{status}</StatusPill>;
 }
 
 type PersonRow = {

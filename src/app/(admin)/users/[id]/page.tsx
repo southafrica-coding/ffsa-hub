@@ -31,7 +31,6 @@ import {
   groupMissingFields,
 } from "@/lib/users/lifecycle";
 import { listActiveMinistries } from "@/services/ministries";
-import { AdminHouseholdPanel } from "./household-panel";
 import { UserHeader } from "./user-header";
 import { UserTabs } from "./user-tabs";
 import { EditProfileDialog } from "./edit-profile-dialog";
@@ -181,12 +180,12 @@ export default async function UserProfilePage({
   });
 
   return (
-    <div className="space-y-6">
+    <div className="ffsa-screen">
       <UserHeader
         user={targetUser}
         authLastSignInAt={authLastSignInAt}
         derivedTitle={derivedTitle}
-        eyebrow="STAFF PROFILE"
+        eyebrow="Staff profile"
       />
       <UserTabs
         userId={id}
@@ -194,6 +193,7 @@ export default async function UserProfilePage({
         showPermissions={canManagePermissions}
       />
 
+      <div className="space-y-6 px-5 py-6 md:px-8 md:py-7">
       <ProfileCompletenessCard lifecycle={lifecycle} />
 
       {isAdmin && (
@@ -245,7 +245,7 @@ export default async function UserProfilePage({
       </section>
 
       {isAdmin && (
-        <section className="rounded-xl border p-4 space-y-3">
+        <section className=" border p-4 space-y-3">
           <div>
             <p className="page-eyebrow">HEALTH INSURANCE</p>
             <h2 className="text-xl font-semibold">Policy history</h2>
@@ -283,8 +283,6 @@ export default async function UserProfilePage({
         </section>
       )}
 
-      {isAdmin && <AdminHouseholdPanel userId={id} />}
-
       <section>
         <SecurityActivityCard
           events={securityEvents}
@@ -293,7 +291,7 @@ export default async function UserProfilePage({
       </section>
 
       {isAdmin && (
-        <section className="rounded-xl border p-4 space-y-3">
+        <section className=" border p-4 space-y-3">
           <div>
             <p className="page-eyebrow">LEGAL</p>
             <h2 className="text-xl font-semibold">Agreements signed</h2>
@@ -318,6 +316,7 @@ export default async function UserProfilePage({
         </div>
         <ProfileRecords userId={id} canOpenLibrary={true} />
       </section>
+      </div>
     </div>
   );
 }
@@ -358,7 +357,7 @@ function ProfileCompletenessCard({
   const insurance = lifecycle.insurance;
 
   return (
-    <section className="rounded-xl border p-4 space-y-3">
+    <section className=" border p-4 space-y-3">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <p className="page-eyebrow">PROFILE COMPLETENESS</p>
@@ -373,12 +372,12 @@ function ProfileCompletenessCard({
       </div>
 
       {isComplete ? (
-        <p className="text-sm text-emerald-500">
+        <p className="text-sm text-grass-text">
           All required fields are on file.
         </p>
       ) : (
         <div>
-          <p className="text-sm text-orange-400 mb-2">
+          <p className="text-sm text-amber mb-2">
             Missing {missingCount} required field{missingCount === 1 ? "" : "s"}:
           </p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -401,13 +400,13 @@ function ProfileCompletenessCard({
       )}
 
       {insurance.state === "expired" && (
-        <p className="text-sm text-red-400">
+        <p className="text-sm text-destructive">
           Health insurance policy expired
           {insurance.expiryDate ? ` on ${insurance.expiryDate}` : ""}.
         </p>
       )}
       {insurance.state === "expiring" && (
-        <p className="text-sm text-orange-400">
+        <p className="text-sm text-amber">
           Health insurance expires in {insurance.daysLeft ?? 0} day
           {insurance.daysLeft === 1 ? "" : "s"}
           {insurance.expiryDate ? ` (${insurance.expiryDate})` : ""}.
@@ -425,7 +424,7 @@ function InfoCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl border p-4 space-y-3">
+    <div className=" border p-4 space-y-3">
       <h3 className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
         {title}
       </h3>
@@ -437,10 +436,8 @@ function InfoCard({
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
-        {label}
-      </div>
-      <div className="text-sm mt-0.5">{value}</div>
+      <div className="mono-label">{label}</div>
+      <div className="mt-1 text-sm text-ink">{value}</div>
     </div>
   );
 }

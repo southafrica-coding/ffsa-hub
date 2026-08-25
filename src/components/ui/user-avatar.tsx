@@ -33,13 +33,11 @@ export function UserAvatar({
       <img
         src={src}
         alt={name ?? "User avatar"}
-        className={`shrink-0 rounded-full object-cover ${className ?? ""}`}
+        className={`shrink-0 object-cover ${className ?? ""}`}
         style={{
           ...baseStyle,
-          border: borderWidth
-            ? "1px solid hsl(42 95% 55% / 0.3)"
-            : "none",
-          background: "hsl(22 10% 8%)",
+          border: borderWidth ? "1px solid var(--rule-strong)" : "none",
+          background: "var(--surface-3)",
         }}
       />
     );
@@ -47,7 +45,7 @@ export function UserAvatar({
 
   return (
     <div
-      className={`flex items-center justify-center shrink-0 rounded-full font-bold ${className ?? ""}`}
+      className={`flex items-center justify-center shrink-0 font-bold ${className ?? ""}`}
       style={{
         ...baseStyle,
         background: "hsl(42 95% 55% / 0.12)",

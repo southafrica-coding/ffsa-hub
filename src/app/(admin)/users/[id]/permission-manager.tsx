@@ -63,8 +63,7 @@ function ScopeSection({
   return (
     <div
       style={{
-        border: "1px solid hsl(22 8% 14%)",
-        borderRadius: 0,
+        border: "1px solid var(--rule)",
         overflow: "hidden",
       }}
     >
@@ -80,8 +79,7 @@ function ScopeSection({
           style={{
             width: "18px",
             height: "18px",
-            borderRadius: 0,
-            border: "1px solid hsl(22 8% 28%)",
+            border: "1px solid var(--rule-strong)",
             background: allChecked
               ? "#0A0A0A"
               : someChecked
@@ -101,7 +99,7 @@ function ScopeSection({
           ) : null}
         </button>
 
-        <span style={{ fontSize: "13px", fontWeight: 500, color: "#F0EBE3", flex: 1 }}>
+        <span style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-primary)", flex: 1 }}>
           {scope.label}
           <span
             style={{
@@ -129,7 +127,7 @@ function ScopeSection({
           className="grid gap-x-6 gap-y-2 px-4 py-3"
           style={{
             gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-            borderTop: "1px solid hsl(22 8% 12%)",
+            borderTop: "1px solid var(--rule)",
           }}
         >
           {permissions.map((p) => {
@@ -146,8 +144,7 @@ function ScopeSection({
                   style={{
                     width: "16px",
                     height: "16px",
-                    borderRadius: 0,
-                    border: "1px solid hsl(22 8% 28%)",
+                    border: "1px solid var(--rule-strong)",
                     background: checked ? "#FFB801" : "transparent",
                     display: "flex",
                     alignItems: "center",
@@ -225,22 +222,21 @@ function ModuleSection({
     <div
       style={{
         background: "#FFFFFF",
-        border: "1px solid hsl(22 8% 14%)",
-        borderRadius: 0,
+        border: "1px solid var(--rule)",
         overflow: "hidden",
       }}
     >
       {/* Module header */}
       <div
         className="flex items-center justify-between px-5 py-4"
-        style={{ borderBottom: "1px solid hsl(22 8% 12%)" }}
+        style={{ borderBottom: "1px solid var(--rule)" }}
       >
         <p
           style={{
             fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase",
             fontSize: "1rem",
             letterSpacing: "0.07em",
-            color: "#F0EBE3",
+            color: "var(--text-primary)",
           }}
         >
           {label}
@@ -257,8 +253,7 @@ function ModuleSection({
               style={{
                 width: "16px",
                 height: "16px",
-                borderRadius: 0,
-                border: "1px solid hsl(22 8% 28%)",
+                border: "1px solid var(--rule-strong)",
                 background: globalAllChecked
                   ? "#0A0A0A"
                   : globalSomeChecked
@@ -288,7 +283,7 @@ function ModuleSection({
           <p
             style={{
               fontSize: "11px",
-              color: "hsl(42 60% 60%)",
+              color: "var(--ink)",
               margin: 0,
             }}
           >
@@ -316,8 +311,7 @@ function ModuleSection({
                     style={{
                       width: "16px",
                       height: "16px",
-                      borderRadius: 0,
-                      border: "1px solid hsl(22 8% 28%)",
+                      border: "1px solid var(--rule-strong)",
                       background: checked ? "#FFB801" : "transparent",
                       display: "flex",
                       alignItems: "center",
@@ -605,12 +599,11 @@ export function PermissionManager({
         <div
           style={{
             background: isTargetSuperAdmin
-              ? "hsl(42 30% 10%)"
+              ? "var(--yellow-dim)"
               : "#FFFFFF",
             border: isTargetSuperAdmin
               ? "1px solid #FFF4D9"
-              : "1px solid hsl(22 8% 14%)",
-            borderRadius: 0,
+              : "1px solid var(--rule)",
             padding: "1.25rem 1.5rem",
           }}
         >
@@ -677,8 +670,7 @@ export function PermissionManager({
         <div
           style={{
             background: "#FFFFFF",
-            border: "1px solid hsl(22 8% 14%)",
-            borderRadius: 0,
+            border: "1px solid var(--rule)",
             padding: "1.25rem 1.5rem",
           }}
         >
@@ -708,8 +700,7 @@ export function PermissionManager({
                     fontWeight: 700,
                     textTransform: "uppercase",
                     padding: "3px 8px",
-                    borderRadius: 0,
-                    background: "hsl(42 80% 18%)",
+                    background: "var(--yellow-dim)",
                     color: "#0A0A0A",
                   }}
                 >
@@ -724,9 +715,8 @@ export function PermissionManager({
                     fontWeight: 700,
                     textTransform: "uppercase",
                     padding: "3px 8px",
-                    borderRadius: 0,
-                    background: "hsl(142 60% 20%)",
-                    color: "hsl(142 60% 55%)",
+                    background: "transparent",
+                    color: "var(--green-text)",
                   }}
                 >
                   Active
@@ -758,8 +748,7 @@ export function PermissionManager({
           className="flex items-start justify-between gap-4"
           style={{
             background: "#FFFFFF",
-            border: "1px solid hsl(22 8% 14%)",
-            borderRadius: 0,
+            border: "1px solid var(--rule)",
             padding: "1.25rem 1.5rem",
           }}
         >
@@ -775,7 +764,7 @@ export function PermissionManager({
             >
               Schools Manager View
             </p>
-            <p style={{ fontSize: "13px", color: "#F0EBE3", marginTop: "4px" }}>
+            <p style={{ fontSize: "13px", color: "var(--text-primary)", marginTop: "4px" }}>
               You can flag this user as available to be assigned as a point of
               contact for programs you manage.
             </p>

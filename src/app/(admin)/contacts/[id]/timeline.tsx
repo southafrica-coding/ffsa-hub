@@ -44,17 +44,17 @@ const EVENT_LABEL: Record<string, string> = {
 };
 
 const EVENT_COLOR: Record<string, string> = {
-  contact_created: "bg-green-100 text-green-800",
-  label_added: "bg-blue-100 text-blue-800",
-  label_removed: "bg-orange-100 text-orange-800",
+  contact_created: "bg-white text-grass-text",
+  label_added: "bg-blue-100 text-electric",
+  label_removed: "bg-yellow-dim text-amber",
   form_submitted: "bg-purple-100 text-purple-800",
-  csv_imported: "bg-gray-100 text-gray-800",
+  csv_imported: "bg-bone text-ink",
   email_sent: "bg-cyan-100 text-cyan-800",
   email_opened: "bg-cyan-100 text-cyan-800",
   email_clicked: "bg-cyan-100 text-cyan-800",
-  email_bounced: "bg-red-100 text-red-800",
-  email_unsubscribed: "bg-red-100 text-red-800",
-  note_added: "bg-yellow-100 text-yellow-800",
+  email_bounced: "bg-white text-destructive",
+  email_unsubscribed: "bg-white text-destructive",
+  note_added: "bg-yellow-dim text-amber",
 };
 
 export function Timeline({
@@ -100,16 +100,16 @@ export function Timeline({
             onChange={(e) => setNote(e.target.value)}
             placeholder="Add a note about this contact…"
             rows={2}
-            className="w-full border rounded text-sm px-2 py-1.5 resize-none"
+            className="w-full border text-sm px-2 py-1.5 resize-none"
             disabled={busy}
           />
-          {err && <p className="text-xs text-red-600">{err}</p>}
+          {err && <p className="text-xs text-destructive">{err}</p>}
           <div className="flex justify-end">
             <button
               type="button"
               onClick={submitNote}
               disabled={busy || !note.trim()}
-              className="px-3 py-1 rounded bg-blue-600 text-white text-xs hover:bg-blue-700 disabled:bg-gray-300"
+              className="px-3 py-1 bg-ink text-white text-xs hover:bg-ink disabled:bg-bone-3"
             >
               Add note
             </button>
@@ -123,15 +123,15 @@ export function Timeline({
             {events.map((ev) => (
               <li key={ev.id} className="flex gap-3">
                 <span
-                  className={`inline-block w-2 h-2 mt-2 rounded-full ${
-                    (EVENT_COLOR[ev.event_type] ?? "bg-gray-100").split(" ")[0]
+                  className={`inline-block w-2 h-2 mt-2 ${
+                    (EVENT_COLOR[ev.event_type] ?? "bg-bone").split(" ")[0]
                   }`}
                 />
                 <div className="flex-1">
                   <div className="flex items-baseline gap-2">
                     <span
-                      className={`text-xs font-medium px-1.5 py-0.5 rounded ${
-                        EVENT_COLOR[ev.event_type] ?? "bg-gray-100 text-gray-800"
+                      className={`text-xs font-medium px-1.5 py-0.5 ${
+                        EVENT_COLOR[ev.event_type] ?? "bg-bone text-ink"
                       }`}
                     >
                       {EVENT_LABEL[ev.event_type] ?? ev.event_type}
@@ -154,31 +154,31 @@ export function Timeline({
 function EventDetails({ ev }: { ev: ActivityEvent }) {
   if (ev.event_type === "label_added" || ev.event_type === "label_removed") {
     return (
-      <p className="text-sm text-gray-700">
+      <p className="text-sm text-ink">
         {ev.labels?.name ?? "Unknown label"}
         {ev.payload?.added_via ? (
-          <span className="text-xs text-gray-500"> · via {String(ev.payload.added_via)}</span>
+          <span className="text-xs text-[color:var(--text-tertiary)]"> · via {String(ev.payload.added_via)}</span>
         ) : null}
       </p>
     );
   }
   if (ev.event_type === "form_submitted") {
     return (
-      <p className="text-sm text-gray-700">
+      <p className="text-sm text-ink">
         Form: {ev.forms?.name ?? "—"}
       </p>
     );
   }
   if (ev.event_type === "csv_imported") {
     return (
-      <p className="text-sm text-gray-700">
+      <p className="text-sm text-ink">
         {ev.labels?.name ? `Tagged with ${ev.labels.name}` : "CSV import"}
       </p>
     );
   }
   if (ev.event_type === "note_added" && ev.payload?.note) {
     return (
-      <p className="text-sm text-gray-700 whitespace-pre-wrap">
+      <p className="text-sm text-ink whitespace-pre-wrap">
         {String(ev.payload.note)}
       </p>
     );
@@ -191,7 +191,7 @@ function EventDetails({ ev }: { ev: ActivityEvent }) {
     ev.event_type === "email_bounced"
   ) {
     return (
-      <p className="text-sm text-gray-700">
+      <p className="text-sm text-ink">
         {ev.campaigns?.subject ?? ev.campaigns?.name ?? "Campaign"}
       </p>
     );

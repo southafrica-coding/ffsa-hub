@@ -9,8 +9,7 @@ export function AdvancedAccess({ children }: { children: ReactNode }) {
     <div
       style={{
         background: "#FFFFFF",
-        border: "1px solid hsl(22 8% 14%)",
-        borderRadius: 0,
+        border: "1px solid var(--rule)",
         overflow: "hidden",
       }}
     >
@@ -33,7 +32,7 @@ export function AdvancedAccess({ children }: { children: ReactNode }) {
         )}
       </button>
       {open && (
-        <div style={{ borderTop: "1px solid hsl(22 8% 12%)", padding: "16px 8px" }}>
+        <div style={{ borderTop: "1px solid var(--rule)", padding: "16px 8px" }}>
           {children}
         </div>
       )}

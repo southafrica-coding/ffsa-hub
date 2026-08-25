@@ -5,16 +5,16 @@
 export default function ContactDetailLoading() {
   return (
     <div className="space-y-6 animate-pulse">
-      <div className="h-3 w-20 rounded bg-muted" />
+      <div className="h-3 w-20 bg-muted" />
 
       <div className="flex items-start justify-between">
         <div className="space-y-2">
-          <div className="h-3 w-40 rounded bg-muted" />
-          <div className="h-8 w-72 rounded bg-muted" />
+          <div className="h-3 w-40 bg-muted" />
+          <div className="h-8 w-72 bg-muted" />
         </div>
         <div className="flex gap-2">
-          <div className="h-6 w-20 rounded-full bg-muted/70" />
-          <div className="h-6 w-16 rounded-full bg-muted/70" />
+          <div className="h-6 w-20 bg-muted/70" />
+          <div className="h-6 w-16 bg-muted/70" />
         </div>
       </div>
 
@@ -36,10 +36,10 @@ export default function ContactDetailLoading() {
 
 function CardBlock({ lines, title = false }: { lines: number; title?: boolean }) {
   return (
-    <div className="rounded-lg border border-border bg-card p-6 space-y-3">
-      {title && <div className="h-4 w-32 rounded bg-muted" />}
+    <div className=" border border-border bg-card p-6 space-y-3">
+      {title && <div className="h-4 w-32 bg-muted" />}
       {Array.from({ length: lines }).map((_, i) => (
-        <div key={i} className="h-3 w-full rounded bg-muted/50" />
+        <div key={i} className="h-3 w-full bg-muted/50" />
       ))}
     </div>
   );
