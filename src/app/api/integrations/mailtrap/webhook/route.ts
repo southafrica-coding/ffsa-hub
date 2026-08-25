@@ -4,6 +4,7 @@ import {
   applyProviderEvent,
   type NormalizedDeliveryEvent,
 } from "@/lib/email/ledger";
+import { recordConsentEvent } from "@/lib/consent/record";
 
 // POST /api/integrations/mailtrap/webhook — Mailtrap delivery events.
 // Mailtrap posts { events: [ { event, message_id, email, ... } ] }.
@@ -124,15 +125,35 @@ export async function POST(request: Request) {
 
     // Hard bounces + complaints feed the global suppression list (both paths).
     if ((ev.event === "bounce" || ev.event === "spam") && ev.email) {
+      const normalizedEmail = ev.email.trim().toLowerCase();
       await admin
         .from("email_suppressions")
         .upsert(
           {
-            email_normalized: ev.email.trim().toLowerCase(),
+            email_normalized: normalizedEmail,
             reason: ev.event === "spam" ? "complaint" : "hard_bounce",
           },
           { onConflict: "email_normalized", ignoreDuplicates: true }
         );
+
+      // A spam complaint is an objection under POPIA, so it belongs in the
+      // consent log as well as the suppression list (migration 187). A
+      // bounce is not — a broken mailbox says nothing about what she wants.
+      if (ev.event === "spam") {
+        const { data: contact } = await admin
+          .from("contacts")
+          .select("id")
+          .eq("email_normalized", normalizedEmail)
+          .maybeSingle();
+        if (contact?.id) {
+          await recordConsentEvent(admin, {
+            contactId: contact.id,
+            kind: "objected",
+            source: "complaint",
+            evidence: { note: "Marked as spam at the provider" },
+          });
+        }
+      }
     }
 
     handled++;

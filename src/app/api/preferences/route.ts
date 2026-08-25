@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyPrefsToken } from "@/lib/tokens/unsubscribe";
+import {
+  recordConsentEvent,
+  evidenceFromRequest,
+} from "@/lib/consent/record";
 
 // POST /api/preferences — public, token-authorized.
 // Body: { token, keepLabelIds: string[] }  — labels NOT kept get unsubscribed.
@@ -42,6 +46,17 @@ export async function POST(request: Request) {
       related_campaign_id: v.campaignId ?? null,
       payload: { scope: "all", source: "preferences_page" },
     });
+    // The evidenced record beside the operational one (migration 187).
+    await recordConsentEvent(admin, {
+      contactId: v.contactId,
+      kind: "unsubscribed",
+      source: "preferences_page",
+      labelId: null,
+      evidence: {
+        ...evidenceFromRequest(request),
+        campaignId: v.campaignId ?? null,
+      },
+    });
     return NextResponse.json({ ok: true, scope: "all" });
   }
 
@@ -72,6 +87,16 @@ export async function POST(request: Request) {
       related_label_id: labelId,
       related_campaign_id: v.campaignId ?? null,
       payload: { scope: "label", source: "preferences_page" },
+    });
+    await recordConsentEvent(admin, {
+      contactId: v.contactId,
+      kind: "muted_topic",
+      source: "preferences_page",
+      labelId,
+      evidence: {
+        ...evidenceFromRequest(request),
+        campaignId: v.campaignId ?? null,
+      },
     });
   }
 
