@@ -319,6 +319,9 @@ export async function fulfillOrder(
     contactId: order.buyer_contact_id ?? null,
     eventId: order.event_id,
     orderId,
+    // Names the event rather than the code path, so this still explains
+    // itself on her record long after the order is closed.
+    reason: `Her ticket order for ${order.events.title} was paid`,
   });
 
   const sendResult = await sendViaMailtrap({

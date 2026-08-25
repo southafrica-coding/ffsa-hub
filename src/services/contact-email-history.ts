@@ -7,6 +7,13 @@
 //   email_messages (migr 141)— transactional email (tickets, invites,
 //                              references, …) — the bucket Phase 1 added
 //
+// Migration 185/186 began folding all three into email_messages. While the
+// old tables still exist and still back v_campaign_stats, this file keeps
+// the union and filters folded-in rows out of the transactional bucket by
+// their legacy_table marker. When campaign_recipients and
+// workflow_email_sends finally go, this whole file collapses to one query
+// against v_person_messages.
+//
 // Each source stores the same delivery signals (sent/delivered/opened/
 // bounced/complained), so we normalize them into one shape and merge.
 // Every query degrades to empty on error, so a not-yet-migrated table or
@@ -136,12 +143,23 @@ async function fetchTransactionalEmails(
   admin: Client,
   contactId: string
 ): Promise<ContactEmailItem[]> {
+  // `.is("legacy_table", null)` keeps this bucket to email_messages rows
+  // that ORIGINATED here. Campaign and workflow sends now also land in
+  // email_messages — mirrored live by the campaign sender, and backfilled
+  // by migration 186 — and those are already represented by the two
+  // buckets above. Without this filter every campaign email would appear
+  // twice in her history.
+  //
+  // Written as a filter rather than a post-fetch check on purpose: it must
+  // also keep the `.limit(100)` honest, or 100 rows of duplicates could
+  // crowd out the transactional mail this bucket exists to show.
   const { data, error } = await admin
     .from("email_messages")
     .select(
       "id, category, subject, status, error, sent_at, delivered_at, opened_at, bounced_at, complained_at, created_at"
     )
     .eq("contact_id", contactId)
+    .is("legacy_table", null)
     .order("created_at", { ascending: false })
     .limit(100);
   if (error || !data) return [];

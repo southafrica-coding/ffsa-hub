@@ -55,6 +55,64 @@ export async function sendableThisRun(
 }
 
 /**
+ * Mirror a campaign send into email_messages (migration 185).
+ *
+ * campaign_recipients remains the campaign sender's own book — v_campaign_stats
+ * reads it and the resume logic keys off it — but the unified ledger is what
+ * the person log (frame 29d) reads. Without this, every campaign sent after
+ * 185's backfill would be missing from her history, which is precisely the
+ * fragmentation 185 set out to end.
+ *
+ * legacy_table/legacy_id carry the campaign_recipients row id, so re-running
+ * 185's backfill inserts nothing for rows already mirrored here.
+ *
+ * Best-effort, like the rest of the ledger: a logging failure must never break
+ * or duplicate an actual send.
+ */
+async function mirrorToLedger(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  m: {
+    legacyId: string | null;
+    toEmail: string;
+    contactId: string;
+    campaignId: string;
+    campaignName: string;
+    subject: string;
+    identityId: string | null;
+    status: "sent" | "failed";
+    providerMessageId?: string | null;
+    error?: string | null;
+    sentAt: string | null;
+  }
+) {
+  if (!m.legacyId) return; // no id to key on — skip rather than risk a duplicate
+  try {
+    await supabase.from("email_messages").insert({
+      to_email: m.toEmail,
+      contact_id: m.contactId,
+      provider: "mailtrap",
+      provider_message_id: m.providerMessageId ?? null,
+      category: "campaign",
+      subject: m.subject,
+      source_type: "campaign",
+      source_id: m.campaignId,
+      status: m.status,
+      error: m.error ?? null,
+      sent_at: m.sentAt,
+      from_identity_id: m.identityId,
+      // Plain words, naming the campaign — still legible on her record a
+      // year from now, when the campaign itself may be long deleted.
+      reason: `Campaign: ${m.campaignName}`,
+      legacy_table: "campaign_recipients",
+      legacy_id: m.legacyId,
+    });
+  } catch {
+    // Deliberately silent: see the doc comment.
+  }
+}
+
+/**
  * Fetch every row of a PostgREST query, paging past the default 1000-row cap.
  * `build(from, to)` must return a query with `.range(from, to)` applied AND a
  * stable `.order(<unique column>)` — without a deterministic order the page
@@ -262,18 +320,50 @@ export async function sendCampaignBatch(
     processed++;
     if (result.error) {
       failed++;
-      await supabase.from("campaign_recipients").insert({
-        campaign_id: campaignId,
-        contact_id: recipient.contact_id,
-        bounce_reason: result.error.slice(0, 300),
+      const { data: crRow } = await supabase
+        .from("campaign_recipients")
+        .insert({
+          campaign_id: campaignId,
+          contact_id: recipient.contact_id,
+          bounce_reason: result.error.slice(0, 300),
+        })
+        .select("id")
+        .single();
+      await mirrorToLedger(supabase, {
+        legacyId: crRow?.id ?? null,
+        toEmail: recipient.email,
+        contactId: recipient.contact_id,
+        campaignId,
+        campaignName: campaign.name,
+        subject: campaign.subject,
+        identityId: campaign.sending_identity_id,
+        status: "failed",
+        error: result.error.slice(0, 300),
+        sentAt: null,
       });
     } else {
       sent++;
-      await supabase.from("campaign_recipients").insert({
-        campaign_id: campaignId,
-        contact_id: recipient.contact_id,
-        provider_message_id: result.messageId,
-        sent_at: nowIso,
+      const { data: crRow } = await supabase
+        .from("campaign_recipients")
+        .insert({
+          campaign_id: campaignId,
+          contact_id: recipient.contact_id,
+          provider_message_id: result.messageId,
+          sent_at: nowIso,
+        })
+        .select("id")
+        .single();
+      await mirrorToLedger(supabase, {
+        legacyId: crRow?.id ?? null,
+        toEmail: recipient.email,
+        contactId: recipient.contact_id,
+        campaignId,
+        campaignName: campaign.name,
+        subject: campaign.subject,
+        identityId: campaign.sending_identity_id,
+        status: "sent",
+        providerMessageId: result.messageId,
+        sentAt: nowIso,
       });
       await supabase.from("activity_events").insert({
         contact_id: recipient.contact_id,

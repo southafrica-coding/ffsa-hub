@@ -38,6 +38,19 @@ export type RecordEmailInput = {
   orderId?: string | null;
   sourceType?: string | null;
   sourceId?: string | null;
+  /**
+   * WHY this person is getting this, in plain words, decided at the call
+   * site because that is the only place that knows. "Her ticket order was
+   * paid", "She is in DTS 26-2 students", "60 days before she arrived".
+   *
+   * Frame 29d reads this straight out. Never an enum and never assembled
+   * from ids — the point is that it still means something to a human a
+   * year later, after the campaign has been deleted and the rule rewritten.
+   */
+  reason?: string | null;
+  /** 'email' (default) or 'in_hub'. */
+  channel?: "email" | "in_hub";
+  fromIdentityId?: string | null;
 };
 
 /**
@@ -63,6 +76,9 @@ export async function recordEmail(
         order_id: input.orderId ?? null,
         source_type: input.sourceType ?? null,
         source_id: input.sourceId ?? null,
+        reason: input.reason ?? null,
+        channel: input.channel ?? "email",
+        from_identity_id: input.fromIdentityId ?? null,
         status: "queued",
       })
       .select("id")

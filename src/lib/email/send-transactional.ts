@@ -31,6 +31,13 @@ export type SendTransactionalInput = {
   /** Generic source linkage for non-contact records (schools etc.). */
   sourceType?: string | null;
   sourceId?: string | null;
+  /**
+   * WHY she is getting this, in plain words — read straight out by the
+   * person log (frame 29d). Callers know the answer; the ledger does not.
+   * Falls back to the category, which is better than nothing but is a
+   * label rather than an explanation.
+   */
+  reason?: string | null;
 };
 
 export type SendTransactionalResult =
@@ -51,6 +58,7 @@ export async function sendTransactional(
     contactId: input.contactId ?? null,
     sourceType: input.sourceType ?? null,
     sourceId: input.sourceId ?? null,
+    reason: input.reason ?? `Transactional: ${input.category}`,
   };
 
   // 1. Suppression pre-check. A suppressed recipient is a known-bad
