@@ -1,10 +1,12 @@
 /**
  * Broadcast DM engine — Hub → every person's Slack DM.
  *
- * This is the "everyone needs to know" path. Recipients are derived,
- * never subscribed: every active user with a linked slack_user_id,
- * minus anyone who muted the module, minus the actor. Nothing to keep
- * in sync, nothing to go stale.
+ * This is the "everyone involved needs to know" path. Recipients are
+ * derived, never subscribed: each broadcast type declares an AUDIENCE
+ * (see ./audiences.ts) which is resolved from real membership or
+ * permissions at send time, then narrowed to those with a linked Slack
+ * account, minus anyone who muted the module, minus the actor. Nothing
+ * to keep in sync, nothing to go stale.
  *
  * Each recipient gets a `notifications` row (migration 069) written
  * BEFORE the DM is attempted, then updated with the outcome. That
@@ -22,6 +24,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import * as slack from "./client";
 import { findBroadcastType } from "./broadcast-types";
+import { resolveAudience, type AudienceKey } from "./audiences";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AdminClient = any;
@@ -85,6 +88,7 @@ export async function sendBroadcast(args: {
   let unlinked: number;
   try {
     const resolved = await resolveRecipients(admin, {
+      audience: broadcastType.audience,
       module: broadcastType.module,
       actorUserId: args.actorUserId ?? null,
     });
@@ -141,27 +145,37 @@ export async function sendBroadcast(args: {
 // ────────────────────────────────────────────────────────────
 
 /**
- * Everyone active with a Slack account, minus this module's muters and
- * minus the actor.
+ * The broadcast's audience, narrowed to those we can actually reach:
+ * minus people with no linked Slack account, minus this module's
+ * muters, minus the actor.
  *
- * `unlinked` counts active users with no slack_user_id. It is reported
- * rather than silently dropped so the admin coverage page can show how
- * much of the team a broadcast actually reaches.
+ * `unlinked` counts people IN THE AUDIENCE with no slack_user_id — not
+ * the whole Hub. It's reported rather than silently dropped so the
+ * admin page can show how much of the relevant group a broadcast
+ * actually reaches.
  */
 async function resolveRecipients(
   admin: AdminClient,
-  opts: { module: string; actorUserId: string | null }
+  opts: { audience: AudienceKey; module: string; actorUserId: string | null }
 ): Promise<{ recipients: Recipient[]; unlinked: number }> {
-  const { data, error } = await admin
-    .from("users")
-    .select("id, slack_user_id")
-    .neq("is_active", false);
-  if (error) throw error;
+  const audienceIds = await resolveAudience(admin, opts.audience);
+  if (audienceIds.length === 0) return { recipients: [], unlinked: 0 };
 
-  const rows = (data ?? []) as Array<{
-    id: string;
-    slack_user_id: string | null;
-  }>;
+  // Only active accounts, and only ones we can reach. Chunked because
+  // an .in() over a large audience can outgrow the URL length limit.
+  const rows: Array<{ id: string; slack_user_id: string | null }> = [];
+  for (let i = 0; i < audienceIds.length; i += 200) {
+    const chunk = audienceIds.slice(i, i + 200);
+    const { data, error } = await admin
+      .from("users")
+      .select("id, slack_user_id")
+      .in("id", chunk)
+      .neq("is_active", false);
+    if (error) throw error;
+    rows.push(
+      ...((data ?? []) as Array<{ id: string; slack_user_id: string | null }>)
+    );
+  }
 
   const linked = rows.filter((u) => !!u.slack_user_id);
   const unlinked = rows.length - linked.length;

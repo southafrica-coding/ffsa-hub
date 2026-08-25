@@ -21,6 +21,7 @@ import { SlackLinkCard } from "@/components/profile/slack-link-card";
 import { NotificationPrefsCard } from "@/components/profile/notification-prefs-card";
 import { getSlackLink } from "@/services/slack-links";
 import { activeBroadcastModules } from "@/lib/slack/broadcast-types";
+import { AUDIENCE_LABEL } from "@/lib/slack/audiences";
 import {
   AgreementsCard,
   type SignedAgreement,
@@ -68,6 +69,7 @@ export default async function ProfilePage() {
       key: t.key,
       label: t.label,
       description: t.description,
+      audience: AUDIENCE_LABEL[t.audience],
     })),
   }));
   // The generated Database types predate migration 069's

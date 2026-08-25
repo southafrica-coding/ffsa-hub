@@ -15,7 +15,12 @@ type ModuleRow = {
   key: string;
   label: string;
   description: string;
-  types: Array<{ key: string; label: string; description: string }>;
+  types: Array<{
+    key: string;
+    label: string;
+    description: string;
+    audience: string;
+  }>;
 };
 
 export function NotificationPrefsCard({
@@ -101,7 +106,12 @@ export function NotificationPrefsCard({
                 </p>
                 <ul className="mt-1.5 list-disc space-y-0.5 pl-5 text-xs text-muted-foreground">
                   {mod.types.map((t) => (
-                    <li key={t.key}>{t.description}</li>
+                    <li key={t.key}>
+                      {t.description}{" "}
+                      <span className="opacity-70">
+                        (sent to: {t.audience.toLowerCase()})
+                      </span>
+                    </li>
                   ))}
                 </ul>
               </div>

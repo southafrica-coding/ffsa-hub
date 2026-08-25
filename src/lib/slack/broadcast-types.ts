@@ -1,3 +1,5 @@
+import type { AudienceKey } from "./audiences";
+
 /**
  * Registry of broadcast notification types.
  *
@@ -39,6 +41,16 @@ export type BroadcastType = {
   /** Stable key; stored on notifications.event_type. */
   key: string;
   module: BroadcastModule;
+  /**
+   * Who this goes to. Resolved at send time by
+   * src/lib/slack/audiences.ts — always a query over real membership
+   * or permissions, never a maintained list.
+   *
+   * Reach for "everyone" sparingly: it means all ~165 Hub accounts,
+   * students and community included, most of whom have no stake in
+   * any one module.
+   */
+  audience: AudienceKey;
   /** Shown in the preferences UI. */
   label: string;
   description: string;
@@ -48,6 +60,7 @@ export const BROADCAST_TYPES: BroadcastType[] = [
   {
     key: "prayer_room_blockout",
     module: "prayer_room",
+    audience: "prayer_room",
     label: "Prayer room block-out",
     description:
       "A manager has blocked out a time and devo sets have had to move.",
