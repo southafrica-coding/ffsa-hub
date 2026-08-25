@@ -131,6 +131,10 @@ sections 1-4. Open the design file at frames 14a, 14b, 14c, 15a.
 SCOPE: src/app/(admin)/schools only. Skip section 5 (Messages) — that belongs
 to doc 11 and session 2.
 
+Note the shell is ALREADY recomposed (verified 2026-08-25): schools/page.tsx,
+[programId]/page.tsx and program-detail.tsx all carry .ffsa-screen and a
+Masthead from the step-6 pass. What is missing is the DEPTH below that chrome.
+
 14a school detail: masthead with breadcrumb, 300px phase run on the left
 (only the CURRENT phase gets a black border and 900 weight), roster table with
 six columns — student · from · status · walking with · fees · graded. Fees
@@ -162,17 +166,18 @@ Screenshots per frame. Update the status file.
 ```
 Read docs/redesign/91-build-status-and-gaps.md. Open the design file at frame 3c.
 
-SCOPE: src/app/(admin)/bookings. The page chrome is already recomposed across
-15 routes — what remains is the calendar itself, which was restyled rather than
-rebuilt. Rebuild it.
+SCOPE: src/app/(admin)/bookings. SMALLER THAN IT LOOKS — verified in code
+2026-08-25.
 
-3c wants spaces AND vehicles on ONE day timeline so clashes are visible: 230px
-resource column, hour columns, blocks positioned by percentage.
+3c's geometry IS ALREADY BUILT. src/app/(admin)/bookings/day-timeline.tsx (242
+lines) puts spaces AND vehicles on one timeline with the 230px resource column,
+percentage-positioned blocks, lane packing via blockWindow / packLanes /
+computeHourRange, and per-row clash ids. READ IT FIRST — do not rebuild it.
 
-Reuse blockWindow / packLanes / computeHourRange from src/lib/bookings/timegrid.ts
-— the same helpers the existing views use. A read-only "Today" composition
-already exists on the bookings hub (DayTimeline); this session makes that the
-main experience rather than a strip.
+What is actually missing: it is mounted READ-ONLY as a "Today" strip on the
+bookings hub (page.tsx ~line 240, under a SectionBar). This session promotes it
+to the main bookings experience — date navigation off today, the full visible
+hour range rather than a strip, and whatever interaction 3c shows.
 
 Hard constraint: spaces and vehicles are SEPARATE services with SEPARATE
 permission modules. Fetch and gate each half independently — someone who can

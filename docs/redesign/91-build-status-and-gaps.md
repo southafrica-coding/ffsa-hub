@@ -562,3 +562,22 @@ routes and 27 admin routes; it was closed at Jack's direction on 2026-08-19 and
 its branch deleted (recovery SHA `87b925f`, restore command in a comment on
 #224). Before treating any remaining item as unstarted, check the open branches
 — this repo runs a dozen worktrees at once.
+
+## Verified against main, 2026-08-25 (commit b3c3b22)
+
+Re-checked in code rather than carried over from earlier claims. Migrations
+still end at 175, so **next migration is 176**. `npx vitest run` → 7/7 pass.
+
+| Session | State in code | What remains |
+|---|---|---|
+| 1 Prayer room UI | Data layer complete (168-171, 175 applied). All 19 components wired; the wall (8a) IS mounted, via `components/schedule-view.tsx`. **Zero `Masthead` and zero `NeedsYou` across the whole module**, and `prayer-room/page.tsx` still has no `.ffsa-screen`. | 9a/10a/10b/11a/12a/12b + module chrome. Also: the OLD `calendar.tsx` (`ScheduleCalendar`) still renders alongside the wall inside schedule-view — decide whether it survives. Band curation is bolted inside `evaluations.tsx` and `my-seats` inside `my-sets.tsx` rather than being their own tabs. |
+| 2 Communications | No generic `messages` table exists. `email_messages` (141) live with Resend webhooks; campaigns, `v_campaign_stats` (174), identities, labels, suppressions all live. No reconciliation doc written. | Everything. Write `94-communications-reconciliation.md` FIRST. |
+| 3 Training depth | Shell already recomposed — `.ffsa-screen` + `Masthead` on schools/page.tsx, [programId]/page.tsx and program-detail.tsx. `program-detail.tsx` is 4,467 lines. No form-builder conditionals anywhere. | 14a roster depth, 14b grade matrix, 14c applicant review, 15a builder. NOT the chrome. |
+| 4 Bookings 3c | **Further along than previously recorded.** `day-timeline.tsx` (242 lines) already implements 3c: both services on one timeline, 230px resource column, lane packing, per-row clash ids, each half permission-gated independently. | Only the promotion — it is mounted read-only as a "Today" strip on the hub. Make it the main experience with date navigation. Do not rebuild the geometry. |
+| 5 Billing | 9a + 9b done and tested (7/7). `generate-invoices` already accepts `dryRun`. `needs-decision` route live. `billing_emails_enabled` exists and is surfaced in the UI. | No Xero **webhook** route exists (only callback/connect/disconnect/invoices/organisations/status). No `awaiting_approval` status, no three-tier matching, no reconciliation inbox. |
+| 6 Outreach | Tables predate the redesign (008, 016, 017). `budget-import.tsx` (471 lines), `expense-import.tsx` and the import API all exist. | **The flagged risk is real and unguarded**: zero occurrences of duplicate / idempotency / batch-id / undo anywhere in the import path. Reconcile doc 10 against the existing tables before adding any. |
+| 7 Public + old routes | 28 admin routes still lack `.ffsa-screen`. Generic `e/[slug]/storefront.tsx` is still old shadcn `Card` composition — zero editorial markers. No mobile bottom tab bar anywhere. | 4c, 4d, the 28 routes, then delete the scaffold (globals.css ~line 484 + layout.tsx ~line 34). |
+
+Correction to an earlier note: the prayer room wall is NOT unmounted. An import
+trace that searched only `components/<name>` missed intra-folder `./<name>`
+imports.
