@@ -51,6 +51,15 @@ type ParsedExpense = {
   manualCategoryId: string | null;
 };
 
+/** What the server actually did — never inferred from a row count. */
+type ImportResult = {
+  batchId: string;
+  offered: number;
+  created: number;
+  skipped: number;
+  duplicatedInFile: string[];
+};
+
 function slugify(text: string): string {
   return text
     .toLowerCase()
@@ -209,6 +218,8 @@ export function ExpenseImport({
   const [rows, setRows] = useState<ParsedExpense[]>([]);
   const [loading, setLoading] = useState(false);
   const [imported, setImported] = useState(false);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [result, setResult] = useState<ImportResult | null>(null);
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -230,6 +241,7 @@ export function ExpenseImport({
           const parsed = parseExpenseSheet(rawRows, categories);
           if (parsed && parsed.length > 0) {
             setRows(parsed);
+            setFileName(file.name);
             setImported(false);
             return;
           }
@@ -256,52 +268,83 @@ export function ExpenseImport({
     const importable = rows.filter(
       (r) => r.matchedCategory || r.manualCategoryId
     );
-    let succeeded = 0;
-    let failed = 0;
 
     try {
-      for (const row of importable) {
-        const categoryId = row.manualCategoryId || row.matchedCategory?.id;
-        const res = await fetch("/api/finance/outreach/expenses", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            team_id: teamId,
-            category_id: categoryId,
+      // One request for the whole sheet. The server keys each row by its
+      // content, so re-importing the same file writes nothing instead of
+      // doubling every figure the way the per-row loop used to.
+      const res = await fetch("/api/finance/outreach/expenses/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          team_id: teamId,
+          filename: fileName,
+          rows: importable.map((row) => ({
+            category_id: row.manualCategoryId || row.matchedCategory?.id,
             expense_date: row.date,
             receipt_code: row.receiptCode,
             vendor: row.vendor,
             // description is NOT NULL in DB — fall back to category name
             description: row.description || row.categoryName,
             purchaser: row.purchaser,
-            payment_method: "card",
-            // local_amount is NOT NULL in DB — use ZAR amount for ZAR-only entries
+            // local_amount is NOT NULL in DB — ZAR amount for ZAR-only entries
             local_currency: "ZAR",
             local_amount: row.zarAmount,
             zar_amount: row.zarAmount,
             exchange_rate: 1,
             notes: row.notes,
-          }),
-        });
+          })),
+        }),
+      });
 
-        if (res.ok) {
-          succeeded++;
-        } else {
-          failed++;
-        }
+      const json = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        toast.error(json?.error ?? "Import failed");
+        return;
       }
 
-      if (succeeded > 0) {
-        toast.success(
-          `Imported ${succeeded} expense${succeeded !== 1 ? "s" : ""}${failed > 0 ? `. ${failed} failed.` : ""}`
-        );
-        setImported(true);
-        router.refresh();
+      setResult(json as ImportResult);
+      setImported(true);
+
+      if (json.created === 0) {
+        toast.success("Already imported — nothing changed");
       } else {
-        toast.error("All imports failed");
+        toast.success(
+          `Imported ${json.created} expense${json.created !== 1 ? "s" : ""}` +
+            (json.skipped > 0 ? `, skipped ${json.skipped} already there` : "")
+        );
       }
+      router.refresh();
     } catch {
       toast.error("Network error during import");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  /** Undo the whole batch, so a wrong sheet can simply be run again. */
+  async function handleUndo() {
+    if (!result) return;
+    setLoading(true);
+    try {
+      const res = await fetch(
+        `/api/finance/outreach/expenses/import?batch_id=${result.batchId}`,
+        { method: "DELETE" }
+      );
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        toast.error(json?.error ?? "Could not undo the import");
+        return;
+      }
+      toast.success(`Removed ${json.removed} imported expense${json.removed !== 1 ? "s" : ""}`);
+      setResult(null);
+      setImported(false);
+      setRows([]);
+      if (fileRef.current) fileRef.current.value = "";
+      router.refresh();
+    } catch {
+      toast.error("Network error");
     } finally {
       setLoading(false);
     }
@@ -322,6 +365,8 @@ export function ExpenseImport({
         if (!v) {
           setRows([]);
           setImported(false);
+          setResult(null);
+          setFileName(null);
           if (fileRef.current) fileRef.current.value = "";
         }
       }}
@@ -449,7 +494,38 @@ export function ExpenseImport({
                 </Table>
               </div>
 
+              {/* What the import actually did. A re-run of the same sheet
+                  reports 0 created and every row skipped, which is the
+                  whole point — silence used to read as success. */}
+              {result && (
+                <div className="border border-ink bg-[#F7F5EE] px-4 py-3 text-[13px]">
+                  <p className="font-semibold">
+                    {result.created} imported
+                    {result.skipped > 0 && `, ${result.skipped} already there`}
+                  </p>
+                  {result.created === 0 && result.skipped > 0 && (
+                    <p className="mt-1 text-[color:var(--text-secondary)]">
+                      This sheet had already been imported. Nothing changed.
+                    </p>
+                  )}
+                  {result.duplicatedInFile.length > 0 && (
+                    <p className="mt-1 text-[color:var(--text-secondary)]">
+                      {result.duplicatedInFile.length} row
+                      {result.duplicatedInFile.length !== 1 ? "s were" : " was"}{" "}
+                      repeated inside the file itself and counted once:{" "}
+                      {result.duplicatedInFile.slice(0, 3).join(", ")}
+                      {result.duplicatedInFile.length > 3 && "…"}
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div className="flex justify-end gap-2">
+                {result && (
+                  <Button variant="outline" onClick={handleUndo} disabled={loading}>
+                    Undo this import
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   onClick={() => {
