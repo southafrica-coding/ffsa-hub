@@ -1,3 +1,9 @@
+> **STOP — READ FIRST (2026-08-25).** Sessions **1, 3 and 4 are already
+> built and merged.** Session 4 is finished outright. Sessions 1 and 3 have
+> only small tails left. Do NOT run those prompts as written — you would
+> rebuild merged work. See the TRUE-state table in
+> `91-build-status-and-gaps.md`. Next migration is **184**, not 176.
+
 # Session prompts
 
 One session per block. Paste the block as the opening message. Each is scoped so

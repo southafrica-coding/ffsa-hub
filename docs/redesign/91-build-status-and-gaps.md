@@ -563,7 +563,9 @@ its branch deleted (recovery SHA `87b925f`, restore command in a comment on
 #224). Before treating any remaining item as unstarted, check the open branches
 — this repo runs a dozen worktrees at once.
 
-## Verified against main, 2026-08-25 (commit b3c3b22)
+## SUPERSEDED — read the section below instead
+
+## (stale) Verified against main, 2026-08-25 (commit b3c3b22)
 
 Re-checked in code rather than carried over from earlier claims. Migrations
 still end at 175, so **next migration is 176**. `npx vitest run` → 7/7 pass.
@@ -581,3 +583,32 @@ still end at 175, so **next migration is 176**. `npx vitest run` → 7/7 pass.
 Correction to an earlier note: the prayer room wall is NOT unmounted. An import
 trace that searched only `components/<name>` missed intra-folder `./<name>`
 imports.
+
+## TRUE state, verified on main fca5309, 2026-08-25
+
+The section above was produced against a STALE worktree — a `git checkout main`
+had silently failed (main was checked out in another worktree), the `&&`
+short-circuited, and the audit ran on an old tree. Main was eight migrations
+ahead. Three of the seven sessions were already built and merged.
+
+**NEXT MIGRATION IS 184.** Note 181 is ALREADY duplicated on main
+(`181_prayer_room_seat_catalogue.sql` and `181_shared_households.sql`) — the
+collision this doc warns about happened again while the warning was being
+written.
+
+| Session | Real state | Remaining |
+|---|---|---|
+| 1 Prayer room | **Largely DONE and merged.** `chrome.tsx` (module masthead + tabs), `people.tsx` 289 lines (10a/10b), `person-profile.tsx` 471 lines (11a), `evaluators.tsx` 567 lines (12a/12b) — all built, all carrying Masthead/NeedsYou, all mounted in `prayer-room-client.tsx`. Migration 181 added the seat catalogue. | Confirm 9a set drawer against the frame. Old `calendar.tsx` still coexists with the wall — decide if it goes. |
+| 2 Communications | **Not started.** No `messages` table, no reconciliation doc. | All of it. Reconciliation doc FIRST. |
+| 3 Training | **Largely DONE and merged.** `roster-tab.tsx` 634 lines (14a), `grades-matrix.tsx` 311 lines (14b), `applicant-review.tsx` (14c), migration 179 moved grades onto billing_courses. | 15a form builder — no SHOWS WHEN conditional UI exists in the admin builder. |
+| 4 Bookings | **DONE and merged, then evolved past the frame.** PR #223 rebuilt the calendar as 3c; PR #234 split it — spaces get the timeline (`bookings/spaces/day-timeline.tsx`), vehicles get a portal. | Nothing. Close this session. |
+| 5 Billing | 9a + 9b only. No Xero **webhook** route (only callback/connect/disconnect/invoices/organisations/status). No `awaiting_approval`. | 18b, 21b, 21c, 22a, 22b. |
+| 6 Outreach | Import UI and API exist. **Zero duplicate / idempotency / batch-id / undo guards — confirmed on real main.** Re-running an import silently doubles the numbers. | The guard is a live data bug, worth doing before the frames. |
+| 7 Public + routes | 26 of 75 admin routes still lack `.ffsa-screen`. Generic `e/[slug]/storefront.tsx` has zero editorial markers. No mobile tab bar. | 4c, 4d, 26 routes, then delete the scaffold. |
+
+### Process lesson
+
+`git checkout main && git reset --hard origin/main` is unsafe in a repo with
+many worktrees: main is often checked out elsewhere, checkout fails, `&&`
+short-circuits, and the audit silently reads a stale tree. **Audit from a
+worktree created fresh off `origin/main`, and print the HEAD sha first.**
