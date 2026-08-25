@@ -16,6 +16,7 @@ import {
   Building2,
   Network,
   Palette,
+  MessageSquare,
   SlidersHorizontal,
   Scale,
   Target,
@@ -195,6 +196,14 @@ export const SYSTEM_MODULES: ModuleDefinition[] = [
     href: "/settings",
     icon: SlidersHorizontal,
     description: "Editable dropdown lists",
+    requiredRoles: ["super_admin", "admin"],
+  },
+  {
+    id: "slack",
+    label: "Slack",
+    href: "/settings/slack",
+    icon: MessageSquare,
+    description: "Who the Hub can message",
     requiredRoles: ["super_admin", "admin"],
   },
 ];
