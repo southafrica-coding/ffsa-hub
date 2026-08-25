@@ -1,5 +1,7 @@
 {
-  "regions": ["fra1"],
+  "regions": [
+    "fra1"
+  ],
   "crons": [
     {
       "path": "/api/cron/send-scheduled",
@@ -28,6 +30,10 @@
     {
       "path": "/api/cron/reconcile-payments",
       "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/cron/check-sending-domains",
+      "schedule": "0 4 * * *"
     }
   ]
 }

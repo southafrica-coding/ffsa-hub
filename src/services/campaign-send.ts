@@ -5,6 +5,7 @@ import {
 } from "@/lib/campaigns/blocks";
 import { sendViaMailtrap } from "@/lib/email/mailtrap";
 import { substituteFirstName, escapeHtml } from "@/lib/email/placeholders";
+import { sendingBlockedReason } from "@/lib/email/dns-checks";
 import { signPrefsToken } from "@/lib/tokens/unsubscribe";
 import { getEffectiveBrand } from "@/services/brand";
 
@@ -194,11 +195,22 @@ export async function sendCampaignBatch(
   const { data: campaign, error: cErr } = await supabase
     .from("campaigns")
     .select(
-      "*, sending_identities(from_email, from_name, reply_to), campaign_labels(label_id)"
+      "*, sending_identities(from_email, from_name, reply_to, sending_domains(domain, dkim_ok, last_checked_at)), campaign_labels(label_id)"
     )
     .eq("id", campaignId)
     .maybeSingle();
   if (cErr || !campaign) return { ...base, ok: false, error: "Campaign not found" };
+
+  // Doc 11 §8: do not send from a domain whose DKIM is missing — receivers
+  // treat that mail as forged, so the send costs sender reputation and
+  // delivers nothing. sendingBlockedReason fails OPEN on a domain that has
+  // never been checked, so this can never stop mail because the daily job
+  // has not run yet.
+  const sendingDomain = campaign.sending_identities?.sending_domains;
+  if (sendingDomain) {
+    const blocked = sendingBlockedReason(sendingDomain);
+    if (blocked) return { ...base, ok: false, error: blocked };
+  }
 
   if (campaign.status === "sent") return { ...base, done: true };
   if (campaign.status === "cancelled" || campaign.status === "failed") {
