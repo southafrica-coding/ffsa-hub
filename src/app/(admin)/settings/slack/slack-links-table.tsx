@@ -18,6 +18,8 @@ export type SlackLinkRow = {
 // page can only say "N failed", which looks like a data problem when
 // it is almost always a one-line config fix.
 const ERROR_HELP: Record<string, string> = {
+  invalid_arguments:
+    "Slack couldn't read the request. This was a Hub bug — the users.* lookups were being sent as JSON when Slack only accepts form encoding for them. Fixed; if you still see this, something else is malformed.",
   missing_scope:
     "The Slack app is missing a permission it needs. Its scopes look right in the config, but the bot token predates them — go to api.slack.com/apps → FFSA Hub Activity → OAuth & Permissions and click Reinstall to Workspace, then try again.",
   not_allowed_token_type:

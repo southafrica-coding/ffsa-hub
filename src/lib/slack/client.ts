@@ -31,6 +31,20 @@ export type SlackResponse<T = unknown> = {
  * callers can decide whether to swallow or surface the error.
  * Network failures surface as plain `Error` from `fetch`.
  */
+// Slack's Web API is NOT uniformly JSON. The write methods we use
+// (chat.postMessage, conversations.open) accept an application/json
+// body, but the users.* read methods only accept form encoding — send
+// them JSON and Slack never parses the arguments, returning
+// `invalid_arguments` as if the call itself were malformed.
+//
+// This bit us: users.lookupByEmail failed for every single user with
+// invalid_arguments while channel posting worked fine, which looked
+// for all the world like a scopes or token problem.
+const FORM_ENCODED_METHODS = new Set([
+  "users.lookupByEmail",
+  "users.info",
+]);
+
 async function callSlack<T = Record<string, unknown>>(
   method: string,
   body: Record<string, unknown>
@@ -40,13 +54,30 @@ async function callSlack<T = Record<string, unknown>>(
     throw new Error("SLACK_BOT_TOKEN not configured");
   }
 
+  const useForm = FORM_ENCODED_METHODS.has(method);
+
+  let contentType: string;
+  let payload: string;
+  if (useForm) {
+    const form = new URLSearchParams();
+    for (const [key, value] of Object.entries(body)) {
+      if (value === undefined || value === null) continue;
+      form.set(key, String(value));
+    }
+    contentType = "application/x-www-form-urlencoded; charset=utf-8";
+    payload = form.toString();
+  } else {
+    contentType = "application/json; charset=utf-8";
+    payload = JSON.stringify(body);
+  }
+
   const res = await fetch(`${SLACK_API_BASE}/${method}`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json; charset=utf-8",
+      "Content-Type": contentType,
     },
-    body: JSON.stringify(body),
+    body: payload,
   });
 
   // Slack always returns JSON — even errors are HTTP 200 with ok:false.
