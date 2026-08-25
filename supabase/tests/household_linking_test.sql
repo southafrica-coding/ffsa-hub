@@ -25,7 +25,7 @@ DECLARE
   out text := '';
 BEGIN
   -- helper: record a check
-  CREATE TEMP TABLE _res(n serial, name text, expected text, actual text, ok boolean) ON COMMIT DROP;
+  CREATE TEMP TABLE _res(seq serial, name text, expected text, actual text, ok boolean) ON COMMIT DROP;
 
   -- ── fixtures ────────────────────────────────────────────────
   INSERT INTO public.users (id, email, first_name, last_name, status, created_at)
@@ -152,7 +152,7 @@ BEGIN
   -- ── report, then abort so nothing persists ──────────────────
   SELECT string_agg(
       (CASE WHEN ok THEN 'PASS  ' ELSE 'FAIL  ' END) || rpad(name,42) ||
-      ' expected=' || expected || ' actual=' || actual, E'\n' ORDER BY n)
+      ' expected=' || expected || ' actual=' || actual, E'\n' ORDER BY seq)
     INTO out FROM _res;
   SELECT count(*) FILTER (WHERE NOT ok) INTO n FROM _res;
   RAISE EXCEPTION E'\n===== HOUSEHOLD LINKING TEST =====\n%\n\n%\n(transaction deliberately aborted - no data written)',
