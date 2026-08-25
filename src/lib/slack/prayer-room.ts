@@ -55,7 +55,7 @@ async function debugInfo(channel: string): Promise<{ channelLen: number; team: s
   return { channelLen: channel.length, team };
 }
 
-export async function notifyPrayerRoomBlockout(args: {
+export type BlockoutArgs = {
   blockDate: string;
   endDate: string;
   startTime: string | null;
@@ -63,15 +63,19 @@ export async function notifyPrayerRoomBlockout(args: {
   reason: string | null;
   relocationNote: string | null;
   affected: AffectedSet[];
-}): Promise<SlackResult> {
-  const channel = process.env.SLACK_PRAYER_ROOM_CHANNEL_ID;
-  if (!process.env.SLACK_BOT_TOKEN || !channel) {
-    console.warn(
-      "[slack/prayer-room] SLACK_BOT_TOKEN or SLACK_PRAYER_ROOM_CHANNEL_ID missing — skipping block-out post"
-    );
-    return { ok: false, skipped: "not_configured" };
-  }
+};
 
+/**
+ * Build the block-out message once, so the #devoset-communication
+ * channel post and the personal DM broadcast say exactly the same
+ * thing. Two renderings of the same announcement drifting apart is
+ * how people end up acting on different information.
+ */
+export function buildBlockoutMessage(args: BlockoutArgs): {
+  title: string;
+  blocks: unknown[];
+  body: string;
+} {
   // Span first: one day → "Sat 4 Jul", a range → "Sat 4 Jul → Fri 10 Jul".
   const multiDay = args.endDate && args.endDate !== args.blockDate;
   const dateSpan = multiDay ? `${dateLabel(args.blockDate)} → ${dateLabel(args.endDate)}` : dateLabel(args.blockDate);
@@ -112,6 +116,22 @@ export async function notifyPrayerRoomBlockout(args: {
     type: "context",
     elements: [{ type: "mrkdwn", text: `<${APP_URL}/prayer-room|Open the prayer room schedule>` }],
   });
+
+  return { title, blocks, body: lines.join("\n") };
+}
+
+export async function notifyPrayerRoomBlockout(
+  args: BlockoutArgs
+): Promise<SlackResult> {
+  const channel = process.env.SLACK_PRAYER_ROOM_CHANNEL_ID;
+  if (!process.env.SLACK_BOT_TOKEN || !channel) {
+    console.warn(
+      "[slack/prayer-room] SLACK_BOT_TOKEN or SLACK_PRAYER_ROOM_CHANNEL_ID missing — skipping block-out post"
+    );
+    return { ok: false, skipped: "not_configured" };
+  }
+
+  const { title, blocks } = buildBlockoutMessage(args);
 
   try {
     const res = await slack.postMessage({ channel, text: title, blocks });

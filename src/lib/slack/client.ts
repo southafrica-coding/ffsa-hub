@@ -128,3 +128,24 @@ export function authTest() {
     bot_id?: string;
   }>("auth.test", {});
 }
+
+// ────────────────────────────────────────────────────────────
+// users.info
+// ------------------------------------------------------------
+// Resolve a Slack member id (U…) to its profile. Used when someone
+// pastes their own member id on /profile so we can echo the matched
+// name back at them — linking to a stranger's account by typo is
+// otherwise silent and very hard to notice.
+// ────────────────────────────────────────────────────────────
+
+export function getUserInfo(slackUserId: string) {
+  return callSlack<{
+    user?: {
+      id: string;
+      name?: string;
+      deleted?: boolean;
+      is_bot?: boolean;
+      profile?: { real_name?: string; display_name?: string; email?: string };
+    };
+  }>("users.info", { user: slackUserId });
+}

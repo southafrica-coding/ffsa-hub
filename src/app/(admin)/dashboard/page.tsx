@@ -10,7 +10,10 @@ import {
 
 import { MyAssignmentsCard } from "./my-assignments-card";
 import { StaffWorkloadCard } from "./staff-workload-card";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { NotificationFeed } from "./notification-feed";
+import { SlackConnectBanner } from "@/components/profile/slack-connect-banner";
+import { getSlackLink } from "@/services/slack-links";
 import { UpcomingEventsWidget } from "./upcoming-events-widget";
 import { MyBookingsCard } from "./my-bookings-card";
 import { StaffInsuranceCard } from "./staff-insurance-card";
@@ -133,6 +136,12 @@ export default async function DashboardPage() {
     fullWidth: getWidget(key)?.fullWidth ?? true,
   }));
 
+  // Nudge anyone who can't be DM'd yet. Best-effort — a failed read
+  // just means no nudge, never a broken dashboard.
+  const slackLink = authUser
+    ? await getSlackLink(createAdminClient(), authUser.id).catch(() => null)
+    : null;
+
   return (
     <div className="ffsa-screen">
       <Masthead context={weekContext()} title="Dashboard" />
@@ -145,6 +154,8 @@ export default async function DashboardPage() {
             : `${pendingApprovals} staff members are waiting on approval`}
         </NeedsYou>
       )}
+
+      <SlackConnectBanner show={!!authUser && !!slackLink && !slackLink.slackUserId} />
 
       <div className="px-5 py-6 md:px-8 md:py-7">
         {slots.length === 0 ? <EmptyDashboard /> : <DashboardGrid slots={slots} nodes={nodes} />}

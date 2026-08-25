@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser, getInsurancePolicies } from "@/services/users";
 import { redirect } from "next/navigation";
 
@@ -16,6 +17,10 @@ import {
 } from "@/components/profile/household-members";
 import { getHouseholdMembers } from "@/services/household";
 import { HouseholdLinkCard } from "@/components/profile/household-link-card";
+import { SlackLinkCard } from "@/components/profile/slack-link-card";
+import { NotificationPrefsCard } from "@/components/profile/notification-prefs-card";
+import { getSlackLink } from "@/services/slack-links";
+import { activeBroadcastModules } from "@/lib/slack/broadcast-types";
 import {
   AgreementsCard,
   type SignedAgreement,
@@ -49,6 +54,34 @@ export default async function ProfilePage() {
     excludeLinkedUserId: user.id,
   });
   const householdMembers = (householdRows ?? []) as HouseholdMember[];
+
+  // Slack link + per-module mutes. The link is read via the admin client
+  // because users.slack_user_id isn't exposed to the RLS client; the prefs
+  // row is the caller's own, so it reads fine under RLS (and is absent
+  // until they first toggle something, which means "nothing muted").
+  const slackLink = await getSlackLink(createAdminClient(), user.id);
+  const broadcastModules = activeBroadcastModules().map((m) => ({
+    key: m.key as string,
+    label: m.label,
+    description: m.description,
+    types: m.types.map((t) => ({
+      key: t.key,
+      label: t.label,
+      description: t.description,
+    })),
+  }));
+  // The generated Database types predate migration 069's
+  // notification_preferences — cast per repo convention (same as the
+  // household link / onboarding_invites call sites).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: prefsRow } = await (supabase as any)
+    .from("notification_preferences")
+    .select("muted_modules")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  const mutedModules =
+    ((prefsRow as { muted_modules: string[] | null } | null)?.muted_modules) ??
+    [];
 
   // Policies this user has personally signed (RLS: own records only). Resolve
   // each record's agreement title from the exact version they accepted; cache
@@ -260,6 +293,28 @@ export default async function ProfilePage() {
             }}
           />
         </div>
+      </section>
+
+      <section className="space-y-3">
+        <div>
+          <p className="page-eyebrow">NOTIFICATIONS</p>
+          <h2 className="text-xl font-semibold">Slack messages</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            The Hub messages you directly in Slack when something happens that
+            you need to know about, rather than adding you to another group
+            channel.
+          </p>
+        </div>
+        <SlackLinkCard
+          slackUserId={slackLink.slackUserId}
+          linkedAt={slackLink.linkedAt}
+          source={slackLink.source}
+        />
+        <NotificationPrefsCard
+          modules={broadcastModules}
+          mutedModules={mutedModules}
+          slackConnected={!!slackLink.slackUserId}
+        />
       </section>
 
       <section className="space-y-3">
