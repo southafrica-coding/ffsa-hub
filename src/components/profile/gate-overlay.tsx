@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { GateEscape } from "./gate-escape";
 
 // Full-screen blocking overlay for the profile / children / consent gates.
 //
@@ -25,8 +26,14 @@ export function GateOverlay({ children }: { children: React.ReactNode }) {
       data-blocking-gate="true"
       className="fixed inset-0 z-[100] overflow-y-auto bg-black"
     >
-      <div className="flex min-h-full items-center justify-center p-4 sm:p-8">
-        {children}
+      {/* GateEscape lives here rather than inside each panel so all four
+          gates — profile, household link, children, consents — get a way
+          out from one place. */}
+      <div className="mx-auto flex min-h-full w-full max-w-2xl flex-col justify-center p-4 sm:p-8">
+        <GateEscape />
+        {/* Panels keep their own max-widths (lg / md / 2xl) and centre
+            inside this column, so none of them narrows. */}
+        <div className="flex w-full justify-center">{children}</div>
       </div>
     </div>,
     document.body

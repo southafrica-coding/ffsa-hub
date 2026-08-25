@@ -55,6 +55,15 @@ export type WidgetDef = {
 // ones later. Admins ("dev team") keep the pre-role-based default set, so
 // their defaultEnabled mirrors the old global defaults; everyone else gets a
 // strictly curated set — only the widgets their roles call for.
+//
+// "Curated" previously meant EMPTY for an account with no role: every
+// defaultEnabled tested isAdmin / hasSchoolsAccess / isMinistryLeader /
+// isVehiclesPerson / isPrayerRoomStaff / hasStaffRole, so a new person's
+// first screen after the profile gate was "Your dashboard is empty. Use
+// Customise above to choose what appears here." Three widgets now default
+// on for everyone, matching the baseline access floor exactly: the base
+// calendar, their own space bookings, and the prayer room week. Each is
+// already ungated, and each has a real empty state.
 
 export const WIDGET_REGISTRY: WidgetDef[] = [
   {
@@ -85,8 +94,10 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
     category: "Overview",
     defaultOrder: 20,
     fullWidth: false,
-    defaultEnabled: (c) =>
-      c.isAdmin || c.hasStaffRole || c.hasSchoolsAccess || c.isMinistryLeader,
+    // On for everyone: the base calendar is the one thing every account
+    // has a reason to see, and the widget self-hides when there is nothing
+    // scheduled rather than showing an empty box.
+    defaultEnabled: () => true,
   },
   {
     key: "my-bookings",
@@ -95,7 +106,10 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
     category: "Bookings",
     defaultOrder: 30,
     fullWidth: false,
-    defaultEnabled: (c) => c.isAdmin || c.isMinistryLeader,
+    // On for everyone: space booking is part of the baseline access floor,
+    // so these are the person's OWN bookings. Empty state reads
+    // "No upcoming bookings".
+    defaultEnabled: () => true,
   },
   {
     key: "vehicles",
@@ -115,7 +129,10 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
     category: "Prayer Room",
     defaultOrder: 40,
     fullWidth: true,
-    defaultEnabled: (c) => c.isAdmin || c.isPrayerRoomStaff,
+    // On for everyone: the prayer room is in the baseline access floor, so
+    // gating its widget to prayer-room STAFF hid it from exactly the people
+    // the floor was meant to include.
+    defaultEnabled: () => true,
   },
   {
     key: "stat-cards",
