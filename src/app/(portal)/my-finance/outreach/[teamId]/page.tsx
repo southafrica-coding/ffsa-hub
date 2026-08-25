@@ -15,6 +15,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Masthead, KpiStrip, Kpi, StatusPill, type Tone } from "@/components/ffsa";
+
+const TEAM_TONE: Record<string, Tone> = {
+  active: "good",
+  planning: "warn",
+  review: "warn",
+  closed: "quiet",
+};
 
 export default async function MyOutreachTeamPage({
   params,
@@ -36,8 +44,8 @@ export default async function MyOutreachTeamPage({
 
   if (!team) {
     return (
-      <div className="space-y-4">
-        <p className="text-destructive">
+      <div className="ffsa-screen">
+        <p className="px-5 py-8 text-sm text-destructive md:px-8">
           Team not found or you don&apos;t have access.
         </p>
       </div>
@@ -51,15 +59,6 @@ export default async function MyOutreachTeamPage({
       getTeamCashBatches(supabase, teamId),
     ]);
 
-  const statusColors: Record<
-    string,
-    "default" | "secondary" | "destructive"
-  > = {
-    planning: "secondary",
-    active: "default",
-    review: "secondary",
-    closed: "destructive",
-  };
 
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat("en-ZA", {
@@ -79,62 +78,34 @@ export default async function MyOutreachTeamPage({
   );
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="page-title">
-            {team.team_name}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {team.programs?.name} · {team.location ?? "TBD"}
-            {team.country && `, ${team.country}`}
-          </p>
-        </div>
-        <Badge variant={statusColors[team.status] ?? "secondary"}>
-          {team.status}
-        </Badge>
-      </div>
+    <div className="ffsa-screen">
+      <Masthead
+        context={[team.programs?.name, team.location ?? "Location TBC", team.country]
+          .filter(Boolean)
+          .join(" · ")}
+        title={team.team_name}
+        actions={
+          <StatusPill tone={TEAM_TONE[team.status] ?? "quiet"}>
+            {team.status}
+          </StatusPill>
+        }
+      />
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="pt-4">
-            <p className="text-xs text-muted-foreground">Total Budget</p>
-            <p className="text-lg font-bold font-mono">
-              {formatCurrency(team.total_budget_zar)}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <p className="text-xs text-muted-foreground">Total Released</p>
-            <p className="text-lg font-bold font-mono">
-              {formatCurrency(totalReleased)}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <p className="text-xs text-muted-foreground">Total Spent</p>
-            <p className="text-lg font-bold font-mono">
-              {formatCurrency(totalSpent)}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <p className="text-xs text-muted-foreground">Remaining</p>
-            <p
-              className={`text-lg font-bold font-mono ${
-                totalReleased - totalSpent < 0 ? "text-destructive" : ""
-              }`}
-            >
-              {formatCurrency(totalReleased - totalSpent)}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Money, so the numerals drop to 26px — a formatted rand figure will
+          not fit at the strip's default 54. */}
+      <KpiStrip>
+        <Kpi label="Total budget" value={formatCurrency(team.total_budget_zar)} size={26} lead />
+        <Kpi label="Total released" value={formatCurrency(totalReleased)} size={26} />
+        <Kpi label="Total spent" value={formatCurrency(totalSpent)} size={26} />
+        <Kpi
+          label="Remaining"
+          value={formatCurrency(totalReleased - totalSpent)}
+          size={26}
+          valueColor={totalReleased - totalSpent < 0 ? "hsl(var(--destructive))" : undefined}
+        />
+      </KpiStrip>
 
+      <div className="space-y-6 px-5 py-6 md:px-8 md:py-7">
       {/* Recent Expenses */}
       <Card>
         <CardHeader>
@@ -318,6 +289,7 @@ export default async function MyOutreachTeamPage({
           </CardContent>
         </Card>
       )}
+      </div>
     </div>
   );
 }

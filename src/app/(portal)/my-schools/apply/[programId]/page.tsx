@@ -9,6 +9,7 @@ import { getCountryTiers } from "@/services/school-fees";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { ApplicationForm } from "./application-form";
+import { Masthead, MastheadAction } from "@/components/ffsa";
 
 export default async function ApplyPage({
   params,
@@ -35,9 +36,10 @@ export default async function ApplyPage({
 
   if (!program || program.status !== "active" || !program.application_open) {
     return (
-      <div className="space-y-4">
-        <p className="text-destructive">
-          This application is not currently available.
+      <div className="ffsa-screen">
+        <Masthead context="Application" title="Not available" />
+        <p className="px-5 py-8 text-sm text-[color:var(--text-secondary)] md:px-8">
+          This application is not currently open.
         </p>
       </div>
     );
@@ -60,7 +62,9 @@ export default async function ApplyPage({
     };
 
     return (
-      <div className="space-y-4">
+      <div className="ffsa-screen">
+        <Masthead context="Application" title={program.name} />
+        <div className="px-5 py-6 md:px-8 md:py-7">
         <Card>
           <CardContent className="py-8 text-center space-y-3">
             <h2 className="text-lg font-semibold">Application Already Submitted</h2>
@@ -75,6 +79,7 @@ export default async function ApplyPage({
             </div>
           </CardContent>
         </Card>
+        </div>
       </div>
     );
   }
@@ -101,26 +106,30 @@ export default async function ApplyPage({
 
   if (!questions || questions.length === 0) {
     return (
-      <div className="space-y-4">
-        <p className="text-muted-foreground">
-          This application has no questions yet. Please check back later.
+      <div className="ffsa-screen">
+        <Masthead context="Application" title="Not ready yet" />
+        <p className="px-5 py-8 text-sm text-[color:var(--text-secondary)] md:px-8">
+          This application has no questions yet — please check back later.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="page-title">
-          Apply to {program.name}
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          {program.code}
-          {program.description && ` — ${program.description}`}
-        </p>
-      </div>
+    <div className="ffsa-screen">
+      <Masthead
+        context={`Application · ${program.code}`}
+        title={`Apply to ${program.name}`}
+        actions={<MastheadAction href="/my-schools">My training</MastheadAction>}
+      />
 
+      {program.description && (
+        <p className="max-w-3xl border-b border-rule px-5 py-4 text-[14px] leading-relaxed text-[color:var(--text-secondary)] md:px-8">
+          {program.description}
+        </p>
+      )}
+
+      <div className="px-5 py-6 md:px-8 md:py-7">
       <ApplicationForm
         programId={programId}
         questions={questions}
@@ -128,6 +137,7 @@ export default async function ApplyPage({
         countries={countries}
         initialNationality={profile?.nationality ?? ""}
       />
+      </div>
     </div>
   );
 }

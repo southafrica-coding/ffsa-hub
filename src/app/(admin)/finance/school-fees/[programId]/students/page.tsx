@@ -31,8 +31,8 @@ export default async function ProgramStudentsPage({
   const { data: program } = await getProgramById(supabase, programId);
   if (!program) {
     return (
-      <div className="space-y-4">
-        <p className="text-destructive">Program not found.</p>
+      <div className="ffsa-screen">
+        <p className="px-5 py-8 text-sm text-destructive md:px-8">Program not found.</p>
       </div>
     );
   }

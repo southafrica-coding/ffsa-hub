@@ -20,8 +20,10 @@ export default async function CheckInPage({
   if (!user) redirect("/login");
   if (!(await canManageEvents(supabase, user.id, ["events.manage_attendance"]))) {
     return (
-      <div className="p-6 text-center text-sm text-destructive">
-        You don&apos;t have permission to check tickets in for this event.
+      <div className="ffsa-screen">
+        <p className="px-5 py-8 text-sm text-destructive md:px-8">
+          You don&apos;t have permission to check tickets in for this event.
+        </p>
       </div>
     );
   }

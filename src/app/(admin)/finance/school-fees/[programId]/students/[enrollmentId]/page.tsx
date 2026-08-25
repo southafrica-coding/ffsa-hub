@@ -36,8 +36,8 @@ export default async function StudentBillingPage({
 
   if (!enrollment || !program) {
     return (
-      <div className="space-y-4">
-        <p className="text-destructive">Student or program not found.</p>
+      <div className="ffsa-screen">
+        <p className="px-5 py-8 text-sm text-destructive md:px-8">Student or program not found.</p>
       </div>
     );
   }

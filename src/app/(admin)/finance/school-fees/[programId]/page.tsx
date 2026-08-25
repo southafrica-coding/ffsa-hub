@@ -23,8 +23,8 @@ export default async function ProgramFeesPage({
 
   if (programError || !program) {
     return (
-      <div className="space-y-4">
-        <p className="text-destructive">Program not found.</p>
+      <div className="ffsa-screen">
+        <p className="px-5 py-8 text-sm text-destructive md:px-8">Program not found.</p>
       </div>
     );
   }
@@ -59,9 +59,8 @@ export default async function ProgramFeesPage({
     (e: { id: string }) => !feeEnrollmentIds.has(e.id)
   );
 
-  // No wrapper: ProgramFeesDetail's root carries `.ffsa-screen`, which only
-  // works on a direct child of .admin-content. The "Billing schedules" link
-  // moved into that component's masthead.
+  // No wrapper: ProgramFeesDetail's root is this screen's root, and the
+  // "Billing schedules" link lives in that component's masthead.
   return (
     <ProgramFeesDetail
       program={program}

@@ -6,7 +6,7 @@ import {
   gradeToPoints,
 } from "@/services/schools";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
 import {
   Table,
   TableBody,
@@ -16,6 +16,19 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { TranscriptButton } from "./transcript-button";
+import { Masthead, KpiStrip, Kpi, StatusPill, type Tone } from "@/components/ffsa";
+
+const ENROLLMENT_TONE: Record<string, Tone> = {
+  arrived: "good",
+  active: "good",
+  waiting_for_arrival: "warn",
+  on_hold: "warn",
+  graduated: "quiet",
+  completed: "quiet",
+  decided_to_leave: "quiet",
+  dismissed: "bad",
+  withdrawn: "bad",
+};
 
 export default async function EnrollmentDetailPage({
   params,
@@ -40,8 +53,11 @@ export default async function EnrollmentDetailPage({
 
   if (error || !enrollment) {
     return (
-      <div className="space-y-4">
-        <p className="text-destructive">Enrollment not found.</p>
+      <div className="ffsa-screen">
+        <Masthead context="Training" title="Not found" />
+        <p className="px-5 py-8 text-sm text-destructive md:px-8">
+          That enrolment could not be found.
+        </p>
       </div>
     );
   }
@@ -109,83 +125,51 @@ export default async function EnrollmentDetailPage({
       0
     );
 
-  const statusColors: Record<string, "default" | "secondary" | "destructive"> =
-    {
-      waiting_for_arrival: "secondary",
-      arrived: "default",
-      graduated: "secondary",
-      dismissed: "destructive",
-      decided_to_leave: "secondary",
-      // legacy fallbacks
-      active: "default",
-      completed: "secondary",
-      withdrawn: "destructive",
-      on_hold: "secondary",
-    };
 
   return (
-    <div className="space-y-6">
-      {/* Program Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="page-title">{program.name}</h1>
-          <p className="text-sm text-muted-foreground">
-            {program.code} &middot;{" "}
-            {new Date(enrollment.enrolled_at).toLocaleDateString()} &middot;{" "}
-            <Badge variant={statusColors[enrollment.status] ?? "secondary"}>
-              {enrollment.status}
-            </Badge>
-          </p>
-        </div>
-        <TranscriptButton
-          userId={enrollment.user_id}
-          programId={program.id}
-        />
-      </div>
+    <div className="ffsa-screen">
+      <Masthead
+        context={`${program.code} · enrolled ${new Date(enrollment.enrolled_at).toLocaleDateString("en-ZA")}`}
+        title={program.name}
+        actions={
+          <>
+            <StatusPill tone={ENROLLMENT_TONE[enrollment.status] ?? "quiet"}>
+              {enrollment.status.replace(/_/g, " ")}
+            </StatusPill>
+            <TranscriptButton
+              userId={enrollment.user_id}
+              programId={program.id}
+            />
+          </>
+        }
+      />
 
-      {/* GPA Summary */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">
-              Cumulative GPA
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p style={{ fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase", fontSize: "2.5rem", letterSpacing: "0.02em", color: "var(--yellow)", lineHeight: 1 }}>
-              {gpa !== null ? gpa.toFixed(2) : "N/A"}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">
-              Credits Earned
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p style={{ fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase", fontSize: "2.5rem", letterSpacing: "0.02em", color: "var(--yellow)", lineHeight: 1 }}>
-              {totalCreditsEarned}{" "}
-              <span className="text-base font-normal text-muted-foreground">
-                / {program.credit_hours || totalCreditsAttempted}
-              </span>
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">
-              Credits Attempted
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p style={{ fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase", fontSize: "2.5rem", letterSpacing: "0.02em", color: "var(--yellow)", lineHeight: 1 }}>{totalCreditsAttempted}</p>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Frame 4d's rule: one big numeral per screen, and yellow is reserved
+          for the single NeedsYou band. These three were 2.5rem yellow
+          condensed — now the system's KPI strip, black, with the lead cell
+          carrying the only accent tick. */}
+      <KpiStrip>
+        {/* An em dash at the strip's 54px reads as a redaction bar, not as
+            "nothing yet" — so an ungraded GPA drops to a quiet mono note. */}
+        <Kpi
+          label="Cumulative GPA"
+          value={gpa !== null ? gpa.toFixed(2) : "Not graded yet"}
+          size={gpa !== null ? 54 : 15}
+          valueColor={gpa !== null ? undefined : "var(--text-tertiary)"}
+          lead
+          tick={gpa !== null}
+        />
+        <Kpi
+          label="Credits earned"
+          value={String(totalCreditsEarned)}
+          foot={`of ${program.credit_hours || totalCreditsAttempted}`}
+        />
+        <Kpi label="Credits attempted" value={String(totalCreditsAttempted)} />
+      </KpiStrip>
 
       {/* Grades Table */}
-      <div className="rounded-lg border bg-card">
+      <div className="px-5 py-6 md:px-8 md:py-7">
+      <div className="border border-ink bg-white">
         <Table>
           <TableHeader>
             <TableRow>
@@ -242,6 +226,7 @@ export default async function EnrollmentDetailPage({
             )}
           </TableBody>
         </Table>
+      </div>
       </div>
     </div>
   );

@@ -437,6 +437,32 @@
     overflow-wrap: anywhere;
   }
 
+  /* An EDITABLE masthead title. The event form builder's page title is an
+     input — the form's name, renamed in place — and the global input rule
+     above would otherwise flatten it to 14.5px Roboto in a bordered box.
+     The !importants exist only to out-rank that rule, not by preference.
+
+     It runs smaller than a static masthead title on purpose: 58px is sized
+     for a fixed word like "Events", whereas a form name is user-supplied and
+     long, and an input cannot wrap — at 58px "Send Night 2026 — Take Action"
+     scrolls out of its own box and you cannot read the end of it. */
+  input.masthead-title:not([type="checkbox"]):not([type="radio"]):not([type="range"]) {
+    font-family: var(--font-condensed) !important;
+    font-size: clamp(20px, 3.2vw, 32px) !important;
+    font-weight: 900 !important;
+    line-height: 1.05 !important;
+    letter-spacing: -0.01em !important;
+    text-transform: uppercase !important;
+    color: var(--text-primary) !important;
+    background: transparent !important;
+    border: 0 !important;
+    border-bottom: 1px solid transparent !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+  }
+  input.masthead-title:not([type="checkbox"]):not([type="radio"]):hover  { border-bottom-color: var(--rule-strong) !important; }
+  input.masthead-title:not([type="checkbox"]):not([type="radio"]):focus  { border-bottom-color: var(--ink) !important; }
+
   /* Black section bar — the header for any panel or table group */
   .section-bar {
     display: flex; align-items: center; justify-content: space-between;
@@ -509,19 +535,6 @@
     font-family: var(--font-condensed); font-size: clamp(2.25rem, 4vw, 3.625rem);
     font-weight: 900; letter-spacing: -0.01em; line-height: 0.9;
     text-transform: uppercase; color: var(--text-primary);
-  }
-
-  /* Redesign transition scaffold — see src/app/(admin)/layout.tsx.
-     Screens recomposed onto the primitives mark their root `.ffsa-screen`
-     and run edge-to-edge; everything else keeps the old centred page box.
-     Delete this rule once every admin screen is migrated. */
-  .admin-content > *:not(.ffsa-screen) {
-    max-width: 72rem;
-    margin-inline: auto;
-    padding: 0 1rem 1.5rem;
-  }
-  @media (min-width: 768px) {
-    .admin-content > *:not(.ffsa-screen) { padding: 0 1.5rem 2rem; }
   }
 
   /* Surfaces */

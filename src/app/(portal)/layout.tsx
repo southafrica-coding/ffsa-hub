@@ -29,15 +29,8 @@ export default async function PortalLayout({
         own Masthead rather than sitting in a centred box. pb-20 on phones
         keeps the last row clear of the bottom tab bar.
 
-        The `admin-content` class is the SAME transition scaffold the admin
-        shell uses (globals.css): it re-applies the old centred, padded page
-        box to any root child not marked `.ffsa-screen`. The portal needs it
-        because four of its screens — profile, my-schools/[enrollmentId],
-        my-schools/apply/[programId], my-finance/outreach/[teamId] — are not
-        recomposed yet, and without it they render flush to the rail with no
-        gutters. Drop the class here when those four are done.
       */}
-      <main className="admin-content flex-1 overflow-y-auto bg-white pb-20 pt-14 md:pb-0 md:pt-0">
+      <main className="flex-1 overflow-y-auto bg-white pb-20 pt-14 md:pb-0 md:pt-0">
         <div className="px-5 pt-5 md:px-8 md:pt-6">
           <AutoRefresh />
           <BackButton />

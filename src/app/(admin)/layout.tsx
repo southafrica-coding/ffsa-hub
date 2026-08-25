@@ -26,14 +26,7 @@ export default async function AdminLayout({
       />
       {/* pb-20 on phones keeps the last row clear of the frame-4d tab bar. */}
       <main className="flex-1 overflow-y-auto bg-background pb-20 pt-14 md:pb-0 md:pt-0">
-        {/*
-          Redesign transition: migrated screens render edge-to-edge (their own
-          Masthead spans the full workspace). Screens not yet recomposed keep
-          the old centred, padded page box — `.admin-content` in globals.css
-          applies it to any root child that isn't marked `.ffsa-screen`.
-          When every screen is migrated, drop the rule and this comment.
-        */}
-        <div className="admin-content animate-fade-up">
+        <div className="animate-fade-up">
           <div className="mx-auto max-w-6xl px-4 md:px-6 pt-6 md:pt-8">
             <AutoRefresh />
             <BackButton />

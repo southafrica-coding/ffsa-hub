@@ -1,6 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
-import Link from "next/link";
 import { getFormById } from "@/services/forms";
 import { getEventOutcomes } from "@/services/event-outcomes";
 import { getCachedActiveLabels } from "@/lib/cached-reads";
@@ -34,17 +33,12 @@ export default async function FormBuilderPage({
       : emptyFormSchema();
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <Link
-          href={`/events/${eventId}/forms/${formId}/responses`}
-          className="border border-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] transition-colors hover:bg-[color:var(--surface-2)]"
-        >
-          View responses →
-        </Link>
-      </div>
+    // The builder owns this screen's header — its title is an editable field,
+    // so a second static Masthead would print the form name twice.
+    <div className="ffsa-screen">
       <FormBuilder
         eventId={eventId}
+        responsesHref={`/events/${eventId}/forms/${formId}/responses`}
         form={{
           id: form.id,
           name: form.name,

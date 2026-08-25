@@ -15,6 +15,8 @@ import {
   parentValueChoices,
 } from "@/lib/forms/schema";
 import { QrPanel } from "./qr-panel";
+import { StatusPill } from "@/components/ffsa";
+import Link from "next/link";
 
 type Outcome = { id: string; name: string };
 type Label = { id: string; slug: string; name: string; color: string | null };
@@ -92,12 +94,16 @@ export function FormBuilder({
   initialSchema,
   outcomes,
   labels,
+  responsesHref,
 }: {
   eventId: string;
   form: FormMeta;
   initialSchema: FormSchema;
   outcomes: Outcome[];
   labels: Label[];
+  /** Where "View responses" goes. Passed in so the page's one action row
+   *  lives here with Save and Publish rather than floating above them. */
+  responsesHref: string;
 }) {
   const router = useRouter();
   const [name, setName] = useState(form.name);
@@ -223,34 +229,41 @@ export function FormBuilder({
     typeof window !== "undefined" ? `${window.location.origin}/f/${form.slug}` : `/f/${form.slug}`;
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1">
+    <>
+      {/* The masthead IS the name field. This page's title has always been
+          editable in place, so stacking a static Masthead on top of it would
+          print the form's name twice — the condensed title below is the
+          input. */}
+      <div className="flex flex-col gap-4 border-b border-ink bg-white px-5 pb-4 pt-5 md:flex-row md:items-end md:justify-between md:gap-8 md:px-8 md:pb-5 md:pt-6">
+        <div className="min-w-0 flex-1">
+          <div className="masthead-context">
+            Event form
+            <span className="font-mono normal-case tracking-normal text-[color:var(--text-tertiary)]">
+              {publicUrl}
+            </span>
+          </div>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="text-xl font-bold bg-transparent border-b border-transparent hover:border-border focus:border-foreground outline-none w-full"
+            aria-label="Form name"
+            className="masthead-title w-full outline-none"
           />
-          <p className="text-xs text-muted-foreground mt-1">
-            Public URL: <span className="font-mono">{publicUrl}</span>
-          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <span
-            className={`text-xs px-2 py-0.5 ${
-              isActive
-                ? "border border-grass text-grass-text"
-                : "bg-secondary text-secondary-foreground border border-border"
-            }`}
-          >
+        <div className="flex shrink-0 flex-wrap items-center gap-2.5 md:pb-1">
+          <StatusPill tone={isActive ? "good" : "quiet"}>
             {isActive ? "Published" : "Draft"}
-          </span>
+          </StatusPill>
+          <Link
+            href={responsesHref}
+            className="shrink-0 border border-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-ink hover:bg-bone"
+          >
+            View responses
+          </Link>
           <button
             type="button"
             onClick={() => save()}
             disabled={busy}
-            className="px-3 py-1.5 border text-sm hover:bg-accent disabled:opacity-50"
+            className="shrink-0 border border-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-ink hover:bg-bone disabled:opacity-50"
           >
             Save
           </button>
@@ -259,7 +272,7 @@ export function FormBuilder({
               type="button"
               onClick={() => save(false)}
               disabled={busy}
-              className="px-3 py-1.5 border text-sm hover:bg-accent disabled:opacity-50"
+              className="shrink-0 border border-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-ink hover:bg-bone disabled:opacity-50"
             >
               Unpublish
             </button>
@@ -268,13 +281,15 @@ export function FormBuilder({
               type="button"
               onClick={() => save(true)}
               disabled={busy}
-              className="px-3 py-1.5 bg-ink text-white text-sm hover:bg-[#262622] disabled:opacity-50"
+              className="shrink-0 border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-white hover:bg-[#262622] disabled:opacity-50"
             >
-              Save &amp; Publish
+              Save &amp; publish
             </button>
           )}
         </div>
       </div>
+
+      <div className="space-y-4 px-5 py-6 md:px-8 md:py-7">
       {err && <p className="text-sm text-destructive">{err}</p>}
       {msg && <p className="text-sm text-grass-text">{msg}</p>}
 
@@ -403,7 +418,8 @@ export function FormBuilder({
       >
         + Add step
       </button>
-    </div>
+      </div>
+    </>
   );
 }
 

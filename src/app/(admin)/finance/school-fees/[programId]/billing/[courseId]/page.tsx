@@ -32,8 +32,8 @@ export default async function CourseDetailPage({
 
   if (!program || !course) {
     return (
-      <div className="space-y-4">
-        <p className="text-destructive">Course not found.</p>
+      <div className="ffsa-screen">
+        <p className="px-5 py-8 text-sm text-destructive md:px-8">Course not found.</p>
       </div>
     );
   }

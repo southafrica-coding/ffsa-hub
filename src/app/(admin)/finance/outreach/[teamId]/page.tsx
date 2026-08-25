@@ -28,8 +28,8 @@ export default async function OutreachTeamDetailPage({
 
   if (teamError || !team) {
     return (
-      <div className="space-y-4">
-        <p className="text-destructive">Team not found.</p>
+      <div className="ffsa-screen">
+        <p className="px-5 py-8 text-sm text-destructive md:px-8">Team not found.</p>
       </div>
     );
   }
@@ -75,8 +75,7 @@ export default async function OutreachTeamDetailPage({
       (receiptCounts[row.expense_id] || 0) + 1;
   }
 
-  // No wrapper: TeamDetail's root carries `.ffsa-screen`, which only works on a
-  // direct child of .admin-content.
+  // No wrapper: TeamDetail's root is this screen's root.
   return (
     <TeamDetail
       team={team}

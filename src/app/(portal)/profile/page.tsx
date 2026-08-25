@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser, getInsurancePolicies } from "@/services/users";
 import { redirect } from "next/navigation";
-import { Badge } from "@/components/ui/badge";
+
 import { ProfileRecords } from "@/components/profile-records";
 import { AvatarUploader } from "@/components/avatar-uploader";
 import { EditableProfileSection } from "@/components/profile/editable-profile-section";
@@ -31,6 +31,7 @@ import { excludedProfileFields, applyListOptions } from "@/lib/users/profile-fie
 import { INSURANCE_PROVIDERS } from "@/lib/profile/options";
 import { getAllListOptions, activeSets } from "@/services/list-options";
 import { listActiveMinistries } from "@/services/ministries";
+import { SectionBar, Chip } from "@/components/ffsa";
 
 export default async function ProfilePage() {
   const supabase = await createClient();
@@ -137,20 +138,21 @@ export default async function ProfilePage() {
   };
 
   return (
-    <div className="space-y-8">
-      <ProfileIncompleteSummary lifecycle={lifecycle} />
-
-      <div className="flex items-start gap-5">
+    <div className="ffsa-screen">
+      {/* Masthead shaped by hand rather than composed from <Masthead>: this
+          screen leads with the avatar uploader, which the primitive has no
+          slot for. Same rule, same type scale. */}
+      <div className="flex items-start gap-4 border-b border-ink bg-white px-5 pb-4 pt-5 md:gap-5 md:px-8 md:pb-5 md:pt-6">
         <AvatarUploader
           userId={user.id}
           initialSrc={user.avatar_url}
           name={avatarName}
           size={72}
         />
-        <div className="flex-1 min-w-0">
-          <p className="page-eyebrow">MY PROFILE</p>
-          <h1 className="page-title truncate">{fullName}</h1>
-          <div className="text-sm text-muted-foreground mt-1">
+        <div className="min-w-0 flex-1">
+          <div className="masthead-context">My profile</div>
+          <h1 className="masthead-title truncate">{fullName}</h1>
+          <div className="mt-2 text-sm text-[color:var(--text-secondary)]">
             {user.email ?? "—"}
             {user.preferred_name &&
               user.first_name &&
@@ -170,14 +172,10 @@ export default async function ProfilePage() {
                   scope_id: string | null;
                   roles: { display_name: string } | null;
                 }) => (
-                  <Badge key={ur.id} variant="secondary">
+                  <Chip key={ur.id}>
                     {ur.roles?.display_name ?? "Unknown"}
-                    {ur.scope_type && (
-                      <span className="ml-1 opacity-60">
-                        ({ur.scope_type})
-                      </span>
-                    )}
-                  </Badge>
+                    {ur.scope_type && <span>({ur.scope_type})</span>}
+                  </Chip>
                 )
               )}
             </div>
@@ -185,15 +183,14 @@ export default async function ProfilePage() {
         </div>
       </div>
 
-      <section className="space-y-3">
-        <div>
-          <p className="page-eyebrow">MY DETAILS</p>
-          <h2 className="text-xl font-semibold">Personal information</h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            Everything we have on file. Use the Edit button on any section to
-            keep it up to date.
-          </p>
-        </div>
+      <ProfileIncompleteSummary lifecycle={lifecycle} />
+
+      <SectionBar title="Personal information" meta="Everything on file" />
+
+      <section className="space-y-3 px-5 py-6 md:px-8 md:py-7">
+        <p className="max-w-2xl text-sm text-[color:var(--text-secondary)]">
+          Use the Edit button on any section to keep it up to date.
+        </p>
         <div className="grid gap-4 lg:grid-cols-2">
           {PROFILE_SECTIONS.map((rawSection) => {
             // Hide fields that don't apply to this user's signup type

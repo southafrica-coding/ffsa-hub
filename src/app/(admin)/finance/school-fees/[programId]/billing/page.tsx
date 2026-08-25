@@ -16,8 +16,8 @@ export default async function ProgramBillingPage({
   const { data: program, error } = await getProgramById(supabase, programId);
   if (error || !program) {
     return (
-      <div className="space-y-4">
-        <p className="text-destructive">Program not found.</p>
+      <div className="ffsa-screen">
+        <p className="px-5 py-8 text-sm text-destructive md:px-8">Program not found.</p>
       </div>
     );
   }

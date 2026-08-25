@@ -24,8 +24,8 @@ export default async function OutreachFinancePage() {
       getUnmatchedFeePayments(supabase),
     ]);
 
-  // Rendered without a wrapper: the client component's root carries
-  // `.ffsa-screen`, and that class only works on a direct child of .admin-content.
+  // Rendered without a wrapper: the client component's root is this
+  // screen's root.
   return (
     <OutreachDashboardClient
       teams={(teams ?? []) as Parameters<typeof OutreachDashboardClient>[0]["teams"]}
