@@ -166,18 +166,18 @@ export default function ApplyForm({ isMember = false }: { isMember?: boolean }) 
             <div
               key={s.id}
               className={cn(
-                "flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-surface-4 px-5 py-3 md:px-7",
+                "flex flex-col items-stretch gap-2 border-b border-surface-4 px-5 py-3 md:flex-row md:flex-wrap md:items-center md:gap-x-4 md:gap-y-2 md:px-7",
                 on && "bg-bone"
               )}
             >
-              <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3">
+              <label className="flex min-w-0 flex-1 cursor-pointer flex-wrap items-center gap-x-3 gap-y-1">
                 <input
                   type="checkbox"
                   checked={on}
                   onChange={(e) => setPicked((p) => ({ ...p, [s.id]: e.target.checked }))}
                   className="h-4 w-4 shrink-0 accent-[#0A0A0A]"
                 />
-                <span className="font-display text-[20px] font-black uppercase leading-none text-ink">
+                <span className="min-w-0 font-display text-[20px] font-black uppercase leading-[1.1] text-ink">
                   {s.label}
                 </span>
                 {s.is_lead && <span className="mono-label">Lead seat</span>}
@@ -185,7 +185,7 @@ export default function ApplyForm({ isMember = false }: { isMember?: boolean }) 
 
               {/* Only meaningful once they have said they do it. */}
               {on && (
-                <label className="flex cursor-pointer items-center gap-2 border border-rule-strong bg-white px-2.5 py-1.5">
+                <label className="flex w-full cursor-pointer items-center gap-2 border border-rule-strong bg-white px-2.5 py-1.5 md:w-auto">
                   <input
                     type="checkbox"
                     checked={!!before[s.id]}
