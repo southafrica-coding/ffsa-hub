@@ -62,10 +62,7 @@ export default async function ConsentAgreementPage({
       heading={agreement.title}
       maxWidth={760}
     >
-      <div
-        className="prose prose-invert max-w-none"
-        style={{ color: T.textDim }}
-      >
+      <div style={{ color: T.text }}>
         <Markdown source={agreement.body_markdown} />
       </div>
       <p

@@ -39,10 +39,7 @@ export default function TicketTermsPage() {
       heading="Ticket Purchase Terms & Consent Agreement"
       maxWidth={760}
     >
-      <div
-        className="prose prose-invert max-w-none"
-        style={{ color: T.textDim }}
-      >
+      <div style={{ color: T.text }}>
         <Markdown source={TICKET_CONSENT_MARKDOWN} />
       </div>
       <p
