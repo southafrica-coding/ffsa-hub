@@ -12,7 +12,7 @@ import {
   HOUSEHOLD_VISA_LONG_TERM_FIELDS,
   HOUSEHOLD_INSURANCE_FIELDS,
   HOUSEHOLD_RELATIONSHIP_OPTIONS,
-  isChildComplete,
+  missingChildFields,
   type FieldConfig,
 } from "@/lib/users/profile-fields";
 
@@ -252,16 +252,25 @@ export function HouseholdMembers({
       }
       // Gate mode: every field is mandatory before the record counts toward
       // clearing the children gate. Validate against the same rule the gate uses.
-      if (
-        requireComplete &&
-        !isChildComplete({ ...values, is_international: isInternational })
-      ) {
-        setError(
-          "Please fill in every field for this child" +
-            (isInternational ? " (including visa details)" : "") +
-            " before saving."
-        );
-        return;
+      if (requireComplete) {
+        // Name the fields that are actually missing. The old blanket message
+        // mentioned visa details whenever the child was international, which
+        // sent parents back to re-check a visa that was already filled in
+        // when the real gap was somewhere else (gender, date of birth…).
+        const missing = missingChildFields({
+          ...values,
+          is_international: isInternational,
+        });
+        if (missing.length > 0) {
+          setError(
+            `Still needed for this child: ${missing.join(", ")}.` +
+              (missing.includes("Health Insurance Provider") &&
+              values.health_insurance_provider?.trim().toLowerCase() === "none"
+                ? " Every child needs real cover on file, so \u201cNone\u201d can\u2019t be used here."
+                : "")
+          );
+          return;
+        }
       }
     }
     setSaving(true);
@@ -348,6 +357,19 @@ export function HouseholdMembers({
                 <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                   {relationshipLabel(m.relationship)}
                 </span>
+                {/* In gate mode, say up front what each child is still
+                    missing — the parent shouldn't have to open the form and
+                    guess which field is holding the Hub closed. */}
+                {requireComplete && m.relationship === "child" && (() => {
+                  const missing = missingChildFields(
+                    m as unknown as Record<string, unknown>
+                  );
+                  return missing.length === 0 ? null : (
+                    <p className="mt-1 text-xs text-destructive">
+                      Still needed: {missing.join(", ")}
+                    </p>
+                  );
+                })()}
               </div>
               {editing === null && (
                 <div className="flex shrink-0 items-center gap-1">

@@ -15,7 +15,7 @@ import {
   type HouseholdMember,
   type SelfDefaults,
 } from "@/components/profile/household-members";
-import { isChildComplete } from "@/lib/users/profile-fields";
+import { isChildComplete, missingChildFields } from "@/lib/users/profile-fields";
 
 // Blocking family gate for staff. A short flow with explicit yes/no questions:
 //
@@ -98,8 +98,25 @@ export function ChildrenGateForm({
         (m) => m.relationship === "child" && isChildComplete(m)
       );
       if (!hasCompleteChild) {
+        // Say what's outstanding per child rather than a blanket "fill in
+        // all their details" — otherwise a parent who has filled in the visa
+        // has no way to see which field is actually holding them up.
+        const children = list.filter((m) => m.relationship === "child");
+        const detail = children
+          .map((m) => {
+            const missing = missingChildFields(
+              m as unknown as Record<string, unknown>
+            );
+            return missing.length
+              ? `${m.full_name || "This child"} — still needed: ${missing.join(", ")}`
+              : null;
+          })
+          .filter(Boolean)
+          .join("; ");
         setError(
-          "Please add at least one child with all their details filled in before continuing."
+          children.length === 0
+            ? "Please add at least one child with all their details filled in before continuing."
+            : `Please complete every child's details before continuing. ${detail}.`
         );
         return;
       }

@@ -421,24 +421,41 @@ export const CHILD_REQUIRED_FIELDS: string[] = [
 // insurance provider is real (not empty / "none"), including visa fields
 // when the child is flagged international.
 export function isChildComplete(member: Record<string, unknown>): boolean {
+  return missingChildFields(member).length === 0;
+}
+
+// The human labels of everything still missing on a child record, in
+// display order. isChildComplete is just "this list is empty", so the two
+// can never drift — and the forms can tell the user exactly WHICH field is
+// missing instead of a blanket "fill in every field" (which read as "your
+// visa details are wrong" even when the gap was, say, gender).
+export function missingChildFields(member: Record<string, unknown>): string[] {
   const empty = (key: string) => {
     const v = member[key];
     return v === null || v === undefined || String(v).trim() === "";
   };
-  if (CHILD_REQUIRED_FIELDS.some(empty)) return false;
+  const labelFor = (key: string) =>
+    HOUSEHOLD_MEMBER_FIELDS.find((f) => f.field === key)?.label ?? key;
 
+  const missing = CHILD_REQUIRED_FIELDS.filter(empty).map(labelFor);
+
+  // "None" is a real option on the provider dropdown but not an acceptable
+  // answer for a child, so it counts as missing rather than filled in.
   const provider = String(member["health_insurance_provider"] ?? "")
     .trim()
     .toLowerCase();
-  if (provider === "" || provider === "none") return false;
+  if (provider === "none" && !missing.includes(labelFor("health_insurance_provider"))) {
+    missing.push(labelFor("health_insurance_provider"));
+  }
 
   if (member["is_international"]) {
-    if (empty("visa_category")) return false;
+    if (empty("visa_category")) missing.push(labelFor("visa_category"));
     if (member["visa_category"] === "long_term") {
-      if (empty("visa_type") || empty("visa_expiry_date")) return false;
+      if (empty("visa_type")) missing.push(labelFor("visa_type"));
+      if (empty("visa_expiry_date")) missing.push(labelFor("visa_expiry_date"));
     }
   }
-  return true;
+  return missing;
 }
 
 export type ChildrenBlock = { reason: "children_incomplete" };
