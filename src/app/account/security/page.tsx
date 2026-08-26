@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { validatePassword } from "@/lib/auth/password";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ShieldCheck, ShieldAlert, ChevronRight } from "lucide-react";
+import Link from "next/link";
 
 const fieldStyle = {
   background: "hsl(20 12% 5%)",
@@ -59,6 +60,7 @@ export default function SecurityPage() {
   const router = useRouter();
   const supabase = createClient();
   const [email, setEmail] = useState<string | null>(null);
+  const [twoFactorOn, setTwoFactorOn] = useState<boolean | null>(null);
 
   // — Change password —
   const [current, setCurrent] = useState("");
@@ -85,6 +87,12 @@ export default function SecurityPage() {
         return;
       }
       setEmail(data.user.email ?? null);
+
+      const { data: factors } = await supabase.auth.mfa.listFactors();
+      if (!active) return;
+      setTwoFactorOn(
+        (factors?.totp ?? []).some((f) => f.status === "verified")
+      );
     })();
     return () => {
       active = false;
@@ -194,6 +202,42 @@ export default function SecurityPage() {
           <ArrowLeft className="h-4 w-4" />
           Back
         </button>
+
+        {/* — Two-factor authentication — */}
+        <Link href="/account/security/two-factor" style={{ display: "block", textDecoration: "none" }}>
+          <div style={{ ...cardStyle, padding: "1.6rem 1.75rem" }}>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p style={eyebrowStyle}>Two-Factor Authentication</p>
+                <div className="flex items-center gap-2" style={{ marginTop: "0.35rem" }}>
+                  {twoFactorOn === null ? (
+                    <span style={{ fontSize: "13px", color: "hsl(30 8% 45%)" }}>Checking…</span>
+                  ) : twoFactorOn ? (
+                    <>
+                      <ShieldCheck className="h-4 w-4" style={{ color: "hsl(140 50% 55%)" }} />
+                      <span style={{ fontSize: "13px", fontWeight: 600, color: "hsl(140 50% 62%)" }}>
+                        Status: Enabled
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <ShieldAlert className="h-4 w-4" style={{ color: "hsl(42 95% 55%)" }} />
+                      <span style={{ fontSize: "13px", fontWeight: 600, color: "hsl(42 95% 60%)" }}>
+                        Status: Disabled
+                      </span>
+                    </>
+                  )}
+                </div>
+                <p style={{ fontSize: "12.5px", color: "hsl(30 8% 45%)", lineHeight: 1.7, marginTop: "0.5rem" }}>
+                  {twoFactorOn
+                    ? "Manage your authenticator and recovery codes."
+                    : "Add a code from your authenticator app to every sign-in."}
+                </p>
+              </div>
+              <ChevronRight className="h-4 w-4 shrink-0" style={{ color: "hsl(30 8% 40%)" }} />
+            </div>
+          </div>
+        </Link>
 
         {/* — Change password — */}
         <div style={cardStyle}>

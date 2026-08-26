@@ -1,5 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import {
+  deriveAuthState,
+  gateDecision,
+  twoFactorRequired,
+} from "@/lib/auth/two-factor-state";
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -95,6 +100,42 @@ export async function middleware(request: NextRequest) {
     url.pathname = "/login";
     url.searchParams.set("redirect", pathname);
     return NextResponse.redirect(url);
+  }
+
+  // — Two-factor gate —
+  //
+  // This is the ONLY place full application access is granted, so it is the
+  // only place the gate needs to hold. A correct password alone leaves the
+  // session at aal1; nothing below lets an aal1 session through to a protected
+  // page or API route, whatever the browser asks for. The decision itself is
+  // pure (see gateDecision) and unit-tested.
+  if (user) {
+    const { data: aal } =
+      await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    const state = deriveAuthState(
+      true,
+      aal?.currentLevel ?? null,
+      aal?.nextLevel ?? null,
+      twoFactorRequired()
+    );
+    const decision = gateDecision(state, pathname);
+
+    if (decision.kind === "forbid") {
+      return NextResponse.json(
+        { error: decision.reason, twoFactor: state },
+        { status: 403 }
+      );
+    }
+
+    if (decision.kind === "redirect") {
+      const url = request.nextUrl.clone();
+      url.pathname = decision.target;
+      url.search = "";
+      if (decision.carryRedirect) url.searchParams.set("redirect", pathname);
+      return NextResponse.redirect(url);
+    }
+
+    if (state !== "authenticated") return supabaseResponse;
   }
 
   if (user && pathname === "/login") {
