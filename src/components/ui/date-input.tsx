@@ -8,6 +8,23 @@ import { cn } from "@/lib/utils/cn";
 // - Stored value (onChange payload): ISO YYYY-MM-DD, or "" while incomplete
 // - No min/max constraints, no native picker — designed for birthdays and
 //   expiry dates where the OS date picker is hostile (far-past / far-future).
+//
+// Two things this has to get right, because both used to fail SILENTLY —
+// the box looked filled while the stored value was "", so the user was told
+// a field was blank while staring at their own typing:
+//
+//   1. American input order. Plenty of our staff are US citizens and type
+//      MM/DD/YYYY out of habit. When the middle number is > 12 there is no
+//      valid day-first reading of it, so the month-first one is the only
+//      thing the user can have meant — take it rather than storing nothing.
+//      Genuinely ambiguous dates (both parts <= 12) stay day-first as
+//      labelled; we never guess where a guess could be wrong.
+//   2. Impossible calendar days. "31/02/2024" used to sail through as
+//      2024-02-31 and blow up on the Postgres insert instead. Days are now
+//      checked against the real length of the month.
+//
+// Anything the caller cannot parse is reported through `onValidityChange`
+// so the field can show why, instead of failing somewhere far away.
 
 function isoToDisplay(iso: string): string {
   if (!iso) return "";
@@ -16,18 +33,47 @@ function isoToDisplay(iso: string): string {
   return iso;
 }
 
-function displayToIso(display: string): string {
+// Days in a month, honouring leap years, so 31/02 and 31/04 are rejected
+// here rather than by the database.
+function daysInMonth(year: number, month: number): number {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+export type DateParse =
+  | { iso: string; problem: null }
+  // "incomplete" = still being typed; not an error worth showing.
+  | { iso: ""; problem: "incomplete" | "impossible-day" | "bad-month" };
+
+export function parseDisplayDate(display: string): DateParse {
   const m = display.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/);
-  if (!m) return "";
-  const dN = parseInt(m[1], 10);
-  const mN = parseInt(m[2], 10);
+  if (!m) return { iso: "", problem: "incomplete" };
+  let dN = parseInt(m[1], 10);
+  let mN = parseInt(m[2], 10);
   let yN = parseInt(m[3], 10);
   if (m[3].length === 2) yN = yN < 30 ? 2000 + yN : 1900 + yN;
-  if (mN < 1 || mN > 12 || dN < 1 || dN > 31) return "";
+
+  // Month-first rescue: a middle number over 12 cannot be a month, so the
+  // user typed MM/DD. Only unambiguous when the first number IS a valid
+  // month — otherwise there's no reading at all.
+  if (mN > 12 && dN >= 1 && dN <= 12) {
+    const swap = dN;
+    dN = mN;
+    mN = swap;
+  }
+
+  if (mN < 1 || mN > 12) return { iso: "", problem: "bad-month" };
+  if (dN < 1 || dN > daysInMonth(yN, mN)) {
+    return { iso: "", problem: "impossible-day" };
+  }
+
   const dd = String(dN).padStart(2, "0");
   const mm = String(mN).padStart(2, "0");
   const yyyy = String(yN).padStart(4, "0");
-  return `${yyyy}-${mm}-${dd}`;
+  return { iso: `${yyyy}-${mm}-${dd}`, problem: null };
+}
+
+function displayToIso(display: string): string {
+  return parseDisplayDate(display).iso;
 }
 
 function autoFormat(input: string): string {
@@ -83,11 +129,15 @@ export interface DateInputProps
   extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "type"> {
   value: string;
   onChange: (isoOrEmpty: string) => void;
+  // Set when the typed text looks finished but isn't a real date. Callers
+  // that don't care can ignore it; the field explains itself regardless.
+  onValidityChange?: (problem: DateParse["problem"]) => void;
 }
 
 export const DateInput = React.forwardRef<HTMLInputElement, DateInputProps>(
-  ({ value, onChange, className, placeholder = "DD/MM/YYYY", ...rest }, ref) => {
+  ({ value, onChange, onValidityChange, className, placeholder = "DD/MM/YYYY", ...rest }, ref) => {
     const [display, setDisplay] = React.useState<string>(() => isoToDisplay(value));
+    const [problem, setProblem] = React.useState<DateParse["problem"]>(null);
 
     React.useEffect(() => {
       const next = isoToDisplay(value);
@@ -101,12 +151,27 @@ export const DateInput = React.forwardRef<HTMLInputElement, DateInputProps>(
     function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
       const formatted = autoFormat(e.target.value);
       setDisplay(formatted);
-      onChange(displayToIso(formatted));
+      const parsed = parseDisplayDate(formatted);
+      // A half-typed date isn't a mistake — only complain once they've
+      // stopped short of something we can read.
+      const next = formatted.length >= 8 ? parsed.problem : null;
+      setProblem(next);
+      onValidityChange?.(next);
+      onChange(parsed.iso);
     }
 
+    const message =
+      problem === "bad-month"
+        ? "That isn't a date we can read. Please use DD/MM/YYYY."
+        : problem === "impossible-day"
+          ? "That day doesn't exist in that month. Please check it."
+          : null;
+
     return (
+      <>
       <input
         ref={ref}
+        aria-invalid={message ? true : undefined}
         type="text"
         inputMode="numeric"
         autoComplete="off"
@@ -121,6 +186,8 @@ export const DateInput = React.forwardRef<HTMLInputElement, DateInputProps>(
         )}
         {...rest}
       />
+      {message && <p className="mt-1 text-xs text-destructive">{message}</p>}
+      </>
     );
   }
 );
