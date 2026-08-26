@@ -9,7 +9,9 @@ import {
   type OrderExportColumnKey,
 } from "@/lib/ticketing/order-export-columns";
 
-const STORAGE_KEY = "orders-export-columns";
+// v2: bumped when the answer columns were added, so saved selections don't
+// silently exclude them.
+const STORAGE_KEY = "orders-export-columns-v2";
 
 function buildExportHref(eventId: string, cols: OrderExportColumnKey[]): string {
   const params = new URLSearchParams();

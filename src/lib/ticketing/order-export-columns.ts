@@ -24,7 +24,12 @@ export type OrderExportColumnKey =
   | "paid_at"
   | "refunded_at"
   | "cancelled_at"
-  | "staff_notes";
+  | "staff_notes"
+  // Answer columns are dynamic: each expands, in the CSV route, into one
+  // column per question label defined on the event (checkout questions)
+  // or across its tiers (per-ticket questions).
+  | "checkout_answers"
+  | "ticket_answers";
 
 // Canonical CSV column order — also the default emitted when nothing is
 // deselected, so an un-customized download is stable.
@@ -51,6 +56,14 @@ export const ORDER_EXPORT_COLUMN_ORDER: OrderExportColumnKey[] = [
   "refunded_at",
   "cancelled_at",
   "staff_notes",
+  "checkout_answers",
+  "ticket_answers",
+];
+
+// The dynamic (expanding) columns — they carry no single value of their own.
+export const ORDER_EXPORT_ANSWER_COLUMNS: OrderExportColumnKey[] = [
+  "checkout_answers",
+  "ticket_answers",
 ];
 
 export const ORDER_EXPORT_COLUMN_LABELS: Record<OrderExportColumnKey, string> = {
@@ -76,6 +89,8 @@ export const ORDER_EXPORT_COLUMN_LABELS: Record<OrderExportColumnKey, string> = 
   refunded_at: "Refunded At",
   cancelled_at: "Cancelled At",
   staff_notes: "Staff Notes",
+  checkout_answers: "Checkout Questions",
+  ticket_answers: "Per-Ticket Questions",
 };
 
 // Grouping for the column-picker UI. (CSV order stays ORDER_EXPORT_COLUMN_ORDER.)
@@ -112,6 +127,7 @@ export const ORDER_EXPORT_COLUMN_GROUPS: {
     keys: ["created_at", "paid_at", "refunded_at", "cancelled_at"],
   },
   { group: "Extra", keys: ["staff_notes"] },
+  { group: "Answers", keys: ["checkout_answers", "ticket_answers"] },
 ];
 
 const KEY_SET = new Set<string>(ORDER_EXPORT_COLUMN_ORDER);
