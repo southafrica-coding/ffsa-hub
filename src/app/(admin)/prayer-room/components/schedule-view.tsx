@@ -134,15 +134,22 @@ export default function ScheduleView({ userId, isStaff, isMember, tabs, active, 
   // The masthead's context line: what this week actually looks like, rather
   // than a label that would say the same thing on every week of the year.
   const live = sets.filter((s) => s.status !== "cancelled");
-  const openSeats = live.reduce(
-    (n, s) => n + (s.slots ?? []).filter((sl) => sl.status === "open").length,
-    0
-  );
-  const context = [
-    headerLabel,
-    `${live.length} ${live.length === 1 ? "set" : "sets"}`,
-    openSeats === 0 ? "every seat filled" : `${openSeats} ${openSeats === 1 ? "seat" : "seats"} open`,
-  ]
+  const seats = live.flatMap((s) => s.slots ?? []);
+  const openSeats = seats.filter((sl) => sl.status === "open").length;
+  // "Every seat filled" is only true where there were seats to fill. A week with
+  // nothing on it, or sets nobody has built a lineup for yet, has none — and
+  // saying every seat is filled over an empty wall reads as a broken screen.
+  const seatLine =
+    openSeats > 0
+      ? `${openSeats} ${openSeats === 1 ? "seat" : "seats"} open`
+      : seats.length > 0
+        ? "every seat filled"
+        : "no lineup yet";
+  const context = (
+    live.length === 0
+      ? [headerLabel, "nothing booked"]
+      : [headerLabel, `${live.length} ${live.length === 1 ? "set" : "sets"}`, seatLine]
+  )
     .join(" · ")
     .toUpperCase();
 
