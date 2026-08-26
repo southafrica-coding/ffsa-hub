@@ -77,9 +77,13 @@ export function BookingForm({
   }
 
   const selectedVenue = venues.find((v) => v.id === form.venue_id);
-  // What happens to THIS booking on submit: managers always auto-confirm; for
-  // everyone else it depends on the space's approval setting.
-  const willAutoConfirm = canApprove || !(selectedVenue?.requires_approval ?? false);
+  // Two separate facts, kept apart on purpose. The SPACE either needs approval
+  // or it doesn't — that never changes with who is looking. What changes is
+  // what happens to THIS booking: a manager's own request auto-confirms even
+  // on a held space. Collapsing the two told a manager "this space doesn't
+  // need approval" about a space that does.
+  const venueNeedsApproval = selectedVenue?.requires_approval ?? false;
+  const willAutoConfirm = canApprove || !venueNeedsApproval;
 
   function validate(): string | null {
     if (!form.venue_id) return "Please choose a venue.";
@@ -225,7 +229,13 @@ export function BookingForm({
                 </SelectContent>
               </Select>
               {selectedVenue &&
-                (willAutoConfirm ? (
+                (venueNeedsApproval && canApprove ? (
+                  <p className="flex items-center gap-1.5 text-xs text-grass-text">
+                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                    This space needs approval — yours confirms straight away
+                    because you&apos;re a booking manager.
+                  </p>
+                ) : willAutoConfirm ? (
                   <p className="flex items-center gap-1.5 text-xs text-grass-text">
                     <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
                     Instant confirmation — this space doesn&apos;t need approval.

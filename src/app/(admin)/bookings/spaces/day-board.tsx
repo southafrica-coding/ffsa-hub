@@ -57,7 +57,8 @@ export function DayBoard({
     name: string,
     building: string | null,
     color: string,
-    sort: number
+    sort: number,
+    byApproval: boolean
   ) => {
     const key = `venue:${id}`;
     if (!rows.has(key)) {
@@ -66,6 +67,7 @@ export function DayBoard({
         name,
         meta: building,
         color: color || FALLBACK_COLOR,
+        byApproval,
         items: [],
         sort,
       });
@@ -73,17 +75,22 @@ export function DayBoard({
     return rows.get(key)!;
   };
 
-  for (const v of venues) put(v.id, v.name, v.building, v.color, v.sort_order ?? 9999);
+  for (const v of venues)
+    put(v.id, v.name, v.building, v.color, v.sort_order ?? 9999, v.requires_approval);
 
   for (const b of live) {
     // A venue that has been deactivated but still has a live booking keeps its
     // lane, so nothing silently drops off the grid.
+    // The booking's embedded venue carries no approval flag, so a lane that
+    // only exists because of a live booking on a deactivated venue falls back
+    // to the venue list — and to false when it isn't there at all.
     const row = put(
       b.venue_id,
       b.venue?.name ?? "Unnamed space",
       b.venue?.building ?? null,
       b.venue?.color ?? FALLBACK_COLOR,
-      b.venue?.sort_order ?? 9999
+      b.venue?.sort_order ?? 9999,
+      venues.find((v) => v.id === b.venue_id)?.requires_approval ?? false
     );
     const window = windowFor(b);
     const item: TimelineItem = {

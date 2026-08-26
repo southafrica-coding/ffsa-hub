@@ -51,6 +51,10 @@ export type TimelineResource = {
   name: string;
   meta?: string | null;
   color: string;
+  /** True when the space is held — a request on it goes to a booking manager
+   *  rather than confirming. An empty lane on a held space is not "yours to
+   *  take", and saying only "Free" read as though it were. */
+  byApproval?: boolean;
   items: TimelineItem[];
 };
 
@@ -187,6 +191,11 @@ export function DayTimeline({
                         {res.meta}
                       </div>
                     )}
+                    {res.byApproval && (
+                      <div className="mt-1 inline-flex items-center border border-ink px-1.5 py-px font-mono text-[9px] uppercase tracking-[0.14em]">
+                        By approval
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -256,7 +265,7 @@ export function DayTimeline({
 
                 {res.items.length === 0 && (
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 font-mono text-[9px] uppercase tracking-[0.14em] text-[color:var(--text-quiet)]">
-                    Free
+                    {res.byApproval ? "Free — request to book" : "Free"}
                   </span>
                 )}
               </div>
