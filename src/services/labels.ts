@@ -192,14 +192,30 @@ export async function pickLeastUsedLabelColor(supabase: Client): Promise<string>
 export async function getLabelCounts(
   supabase: Client
 ): Promise<Map<string, number>> {
-  const { data } = await supabase
-    .from("contact_labels")
-    .select("label_id, contacts!inner(status)")
-    .eq("contacts.status", "active");
+  // One exact count per label rather than one big read of contact_labels.
+  // PostgREST caps any read at its max-rows setting (1000 here) no matter
+  // what limit is asked for, and contact_labels is well past that — the
+  // single-read version silently counted only the first 1000 rows, so
+  // every label after the first few showed 0 while its list showed the
+  // real people. Counting per label is bounded by the number of labels,
+  // not by how many contacts hold them, so it cannot drift again.
+  const { data: labels } = await supabase
+    .from("labels")
+    .select("id")
+    .eq("is_active", true);
+
+  const ids = ((labels ?? []) as Array<{ id: string }>).map((l) => l.id);
 
   const counts = new Map<string, number>();
-  for (const row of (data ?? []) as Array<{ label_id: string }>) {
-    counts.set(row.label_id, (counts.get(row.label_id) ?? 0) + 1);
-  }
+  await Promise.all(
+    ids.map(async (id) => {
+      const { count } = await supabase
+        .from("contact_labels")
+        .select("contact_id, contacts!inner(status)", { count: "exact", head: true })
+        .eq("label_id", id)
+        .eq("contacts.status", "active");
+      counts.set(id, count ?? 0);
+    })
+  );
   return counts;
 }
