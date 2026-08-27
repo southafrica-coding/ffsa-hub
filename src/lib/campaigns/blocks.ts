@@ -285,7 +285,11 @@ export type EmailDesign = {
   linkColor?: string;
   buttonColor?: string;
   showHeader?: boolean;
+  /** Where the brand logo sits in the header band. Defaults to centre. */
+  logoAlign?: LogoAlign;
 };
+
+export type LogoAlign = "left" | "center" | "right";
 
 export type CampaignBlockType = CampaignBlock["type"];
 
@@ -318,6 +322,7 @@ export type Theme = EffectiveBrand & {
   headingFontFamily: BlockFontFamily;
   headingColor: string;
   showHeader: boolean;
+  logoAlign: LogoAlign;
 };
 
 export function resolveTheme(
@@ -341,6 +346,7 @@ export function resolveTheme(
     headingFontFamily: design?.heading?.fontFamily || "display",
     headingColor: design?.heading?.color || brand.primary_color,
     showHeader: design?.showHeader ?? true,
+    logoAlign: design?.logoAlign ?? "center",
   };
 }
 
@@ -582,7 +588,7 @@ function headerHtml(brand: Theme): string {
   const r = brand.cardBorderRadius;
   const band = `<tr><td style="height:4px;background:${brand.primary_color};border-radius:${r}px ${r}px 0 0;"></td></tr>`;
   if (!brand.logo_url) return band;
-  return `${band}<tr><td style="padding:36px 56px 8px;text-align:left;">
+  return `${band}<tr><td style="padding:36px 56px 8px;text-align:${brand.logoAlign};">
 <img src="${safeUrl(brand.logo_url)}" alt="${escapeHtml(brand.org_name)}" style="display:inline-block;max-height:48px;max-width:200px;height:auto;border:0;"/>
 </td></tr>`;
 }

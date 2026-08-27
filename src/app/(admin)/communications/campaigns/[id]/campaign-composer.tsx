@@ -42,6 +42,7 @@ import {
   type ColumnCell,
   type SectionLayout,
   type EmailDesign,
+  type LogoAlign,
   COLUMN_ALLOWED_TYPES,
   FONT_CATALOG,
   editorWebFontsHref,
@@ -1697,6 +1698,17 @@ function DesignPanel({
             <div>Header logo comes from this sender’s brand kit.</div>
           </div>
         </div>
+        <SegmentedPicker
+          label="Logo position"
+          value={d.logoAlign ?? "center"}
+          disabled={disabled}
+          options={[
+            { value: "left", label: "Left" },
+            { value: "center", label: "Centre" },
+            { value: "right", label: "Right" },
+          ]}
+          onChange={(v) => onChange({ logoAlign: v as LogoAlign })}
+        />
         <a
           href="/communications/brand"
           target="_blank"

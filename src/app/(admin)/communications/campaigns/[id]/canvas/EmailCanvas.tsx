@@ -62,7 +62,9 @@ export function EmailCanvas({
               }}
             />
             {theme.logo_url && (
-              <div style={{ padding: "28px 56px 4px" }}>
+              <div
+                style={{ padding: "28px 56px 4px", textAlign: theme.logoAlign }}
+              >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={theme.logo_url}
