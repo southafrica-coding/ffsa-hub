@@ -979,6 +979,18 @@ export function CampaignComposer({
                 </option>
               ))}
             </select>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Logo, colours and footer come from this sender’s{" "}
+              <a
+                href="/communications/brand"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium underline underline-offset-2"
+              >
+                brand kit
+              </a>
+              .
+            </p>
           </Field>
 
           <p className="text-xs text-muted-foreground md:col-span-2">
@@ -1122,6 +1134,7 @@ export function CampaignComposer({
               {designOpen ? (
                 <DesignPanel
                   design={body.design}
+                  brand={brand}
                   disabled={sent}
                   onChange={updateDesign}
                   onClose={() => setDesignOpen(false)}
@@ -1523,11 +1536,13 @@ function SectionPaletteItem({
 // Global per-email design overrides (Template design). Writes body.design.
 function DesignPanel({
   design,
+  brand,
   disabled,
   onChange,
   onClose,
 }: {
   design: EmailDesign | undefined;
+  brand: EffectiveBrand;
   disabled: boolean;
   onChange: (patch: Partial<EmailDesign>) => void;
   onClose: () => void;
@@ -1544,6 +1559,41 @@ function DesignPanel({
         Applies to the whole email, on top of your Brand Kit. Leave a field blank
         to keep the brand default.
       </p>
+
+      <Section title="Brand & logo">
+        <div className="flex items-center gap-3 rounded border bg-muted/30 p-2">
+          <div className="flex h-10 w-24 shrink-0 items-center justify-center rounded bg-white">
+            {brand.logo_url ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={brand.logo_url}
+                alt={brand.org_name}
+                style={{ maxHeight: 32, maxWidth: 88, height: "auto" }}
+              />
+            ) : (
+              <span className="text-[10px] text-muted-foreground">No logo</span>
+            )}
+          </div>
+          <div className="min-w-0 text-[11px] text-muted-foreground">
+            <div className="truncate font-medium text-foreground">
+              {brand.org_name}
+            </div>
+            <div>Header logo comes from this sender’s brand kit.</div>
+          </div>
+        </div>
+        <a
+          href="/communications/brand"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-[11px] font-medium underline underline-offset-2"
+        >
+          Change logo &amp; brand colours →
+        </a>
+        <p className="text-[10px] text-muted-foreground">
+          Opens the Brand Kit in a new tab. Changes apply to every email sent
+          from this sender — reload this page to see them here.
+        </p>
+      </Section>
 
       <Section title="Background & card">
         <div className="grid grid-cols-2 gap-1.5">
@@ -1594,7 +1644,7 @@ function DesignPanel({
             disabled={disabled}
             className="rounded"
           />
-          Show Fire &amp; Fragrance header
+          Show brand header (logo bar)
         </label>
       </Section>
 
