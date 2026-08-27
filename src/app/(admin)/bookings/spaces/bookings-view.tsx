@@ -133,6 +133,12 @@ export function BookingsView({
 
   const clashIds = conflictingIds(bookings as unknown as BookingWindow[]);
 
+  // Making a booking is the write side of the module. Everyone can SEE the
+  // schedule; only ministry leaders and the booking admins can add to it, so
+  // every create affordance — and "My requests", which can only ever be empty
+  // for someone who cannot request — hangs off this.
+  const canCreate = access.canRequest || access.canApprove || access.canManage;
+
   const columnVenues = venues.filter(
     (v) => v.is_active && (filters.venue === "all" || v.id === filters.venue)
   );
@@ -144,12 +150,14 @@ export function BookingsView({
         title="Space Bookings"
         actions={
           <>
-            <Link href="/bookings/spaces/my-requests">
-              <Button variant="ghost" size="sm" className="gap-1.5">
-                <Inbox className="h-4 w-4" />
-                My requests
-              </Button>
-            </Link>
+            {canCreate && (
+              <Link href="/bookings/spaces/my-requests">
+                <Button variant="ghost" size="sm" className="gap-1.5">
+                  <Inbox className="h-4 w-4" />
+                  My requests
+                </Button>
+              </Link>
+            )}
             {access.canApprove && (
               <Link href="/bookings/spaces/requests">
                 <Button variant="outline" size="sm" className="gap-1.5">
@@ -171,7 +179,7 @@ export function BookingsView({
                 </Button>
               </Link>
             )}
-            {(access.canRequest || access.canApprove || access.canManage) && (
+            {canCreate && (
               <Link href="/bookings/spaces/new">
                 <Button size="sm" className="gap-1.5">
                   <Plus className="h-4 w-4" />
@@ -294,7 +302,7 @@ export function BookingsView({
         <BookingList
           bookings={bookings}
           clashIds={clashIds}
-          canCreate={access.canRequest || access.canApprove || access.canManage}
+          canCreate={canCreate}
         />
       ) : view === "week" ? (
         <WeekView bookings={bookings} venues={venues} date={date} clashIds={clashIds} />
@@ -305,6 +313,7 @@ export function BookingsView({
           date={date}
           today={today}
           canApprove={access.canApprove}
+          canCreate={canCreate}
         />
       ) : (
         <BookingCalendar
@@ -313,6 +322,7 @@ export function BookingsView({
           clashIds={clashIds}
           year={year}
           month={month}
+          canCreate={canCreate}
         />
       )}
       </div>

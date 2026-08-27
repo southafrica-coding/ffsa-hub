@@ -88,6 +88,7 @@ export function DayTimeline({
   startHour,
   endHour,
   isToday,
+  canRequest = false,
 }: {
   resources: TimelineResource[];
   startHour: number;
@@ -95,6 +96,10 @@ export function DayTimeline({
   /** The "now" line is a lie on any other day — paging to next Tuesday must not
    *  draw a marker across it. */
   isToday: boolean;
+  /** Whether the viewer may request a booking. When they cannot, a free lane
+   *  just reads "Free" — inviting them to request something they can't is
+   *  worse than saying nothing. */
+  canRequest?: boolean;
 }) {
   // The marker is read after mount only: the server renders in the deploy
   // region's clock and the browser in the user's, and a day timeline is the one
@@ -265,7 +270,7 @@ export function DayTimeline({
 
                 {res.items.length === 0 && (
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 font-mono text-[9px] uppercase tracking-[0.14em] text-[color:var(--text-quiet)]">
-                    {res.byApproval ? "Free — request to book" : "Free"}
+                    {res.byApproval && canRequest ? "Free — request to book" : "Free"}
                   </span>
                 )}
               </div>

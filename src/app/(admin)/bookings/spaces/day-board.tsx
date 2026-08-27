@@ -37,6 +37,7 @@ export function DayBoard({
   date,
   today,
   canApprove,
+  canCreate,
 }: {
   /** The day's bookings, already narrowed to this date by the page. */
   bookings: BookingWithRefs[];
@@ -46,6 +47,9 @@ export function DayBoard({
   date: string;
   today: string;
   canApprove: boolean;
+  /** Whether the viewer may create a booking. A view-only viewer is not told
+   *  a free space is theirs to request. */
+  canCreate: boolean;
 }) {
   const live = bookings.filter((b) => LIVE_STATUSES.has(b.status));
 
@@ -134,6 +138,7 @@ export function DayBoard({
             startHour={startHour}
             endHour={endHour}
             isToday={date === today}
+            canRequest={canCreate}
           />
         ) : (
           <p className="px-6 py-10 text-center text-[13px] text-[color:var(--text-secondary)]">

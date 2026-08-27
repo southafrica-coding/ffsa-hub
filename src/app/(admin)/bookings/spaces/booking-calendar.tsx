@@ -25,12 +25,15 @@ export function BookingCalendar({
   clashIds,
   year,
   month,
+  canCreate,
 }: {
   bookings: BookingWithRefs[];
   venues: Venue[];
   clashIds: Set<string>;
   year: number;
   month: number;
+  /** Whether the viewer may create a booking — hides the per-day "+". */
+  canCreate: boolean;
 }) {
   const days = monthGridDays(year, month);
   const today = todayISO();
@@ -102,13 +105,15 @@ export function BookingCalendar({
                       {dayBookings.length}
                     </span>
                   )}
-                  <Link
-                    href={`/bookings/spaces/new?date=${d}`}
-                    aria-label="New booking on this day"
-                    className="absolute inset-0 flex items-center justify-center text-[color:var(--text-tertiary)] opacity-0 transition-all hover:text-ink group-hover:opacity-100"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                  </Link>
+                  {canCreate && (
+                    <Link
+                      href={`/bookings/spaces/new?date=${d}`}
+                      aria-label="New booking on this day"
+                      className="absolute inset-0 flex items-center justify-center text-[color:var(--text-tertiary)] opacity-0 transition-all hover:text-ink group-hover:opacity-100"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </Link>
+                  )}
                 </span>
               </div>
 
