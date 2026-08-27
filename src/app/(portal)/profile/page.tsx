@@ -264,7 +264,7 @@ export default async function ProfilePage() {
         </div>
       </section>
 
-      <section className="space-y-3">
+      <section className="space-y-3 px-5 pb-6 md:px-8 md:pb-7">
         <div>
           <p className="page-eyebrow">MY HOUSEHOLD</p>
           <h2 className="text-xl font-semibold">Family members</h2>
@@ -295,7 +295,7 @@ export default async function ProfilePage() {
         </div>
       </section>
 
-      <section className="space-y-3">
+      <section className="space-y-3 px-5 pb-6 md:px-8 md:pb-7">
         <div>
           <p className="page-eyebrow">NOTIFICATIONS</p>
           <h2 className="text-xl font-semibold">Slack messages</h2>
@@ -317,7 +317,7 @@ export default async function ProfilePage() {
         />
       </section>
 
-      <section className="space-y-3">
+      <section className="space-y-3 px-5 pb-6 md:px-8 md:pb-7">
         <div>
           <p className="page-eyebrow">LEGAL</p>
           <h2 className="text-xl font-semibold">Agreements you&rsquo;ve signed</h2>
@@ -331,7 +331,7 @@ export default async function ProfilePage() {
         </div>
       </section>
 
-      <section className="space-y-3">
+      <section className="space-y-3 px-5 pb-6 md:px-8 md:pb-7">
         <div>
           <p className="page-eyebrow">RECORDS ON FILE</p>
           <h2 className="text-xl font-semibold">Your attached history</h2>
