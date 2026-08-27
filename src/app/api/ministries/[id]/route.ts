@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { callerIsAdmin } from "@/lib/auth/check-ministry-access";
+import { parseMinistryType } from "@/lib/ministries/ministry-type";
 
-// Rename / retire (is_active) a ministry. Admin-only.
+// Rename / retire (is_active) / reclassify (ministry_type) a ministry.
+// Admin-only.
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -22,6 +24,12 @@ export async function PATCH(
   if (typeof body.name === "string" && body.name.trim()) update.name = body.name.trim();
   if (typeof body.description === "string") update.description = body.description;
   if (typeof body.is_active === "boolean") update.is_active = body.is_active;
+  if (body.ministry_type !== undefined) {
+    const ministryType = parseMinistryType(body.ministry_type);
+    if (!ministryType)
+      return NextResponse.json({ error: "Invalid ministry type" }, { status: 400 });
+    update.ministry_type = ministryType;
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin: any = createAdminClient();

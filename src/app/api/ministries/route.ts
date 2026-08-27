@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { callerIsAdmin } from "@/lib/auth/check-ministry-access";
+import {
+  DEFAULT_MINISTRY_TYPE,
+  parseMinistryType,
+} from "@/lib/ministries/ministry-type";
 
 function slugify(s: string): string {
   return s
@@ -28,14 +32,28 @@ export async function POST(request: Request) {
   if (!slug)
     return NextResponse.json({ error: "Could not derive a slug from the name" }, { status: 400 });
 
+  // Omitted → main. Present but not a known type → reject rather than
+  // silently filing the ministry under the wrong section.
+  const ministryType =
+    body.ministry_type === undefined
+      ? DEFAULT_MINISTRY_TYPE
+      : parseMinistryType(body.ministry_type);
+  if (!ministryType)
+    return NextResponse.json({ error: "Invalid ministry type" }, { status: 400 });
+
   // ministries isn't in the generated DB types until they're regenerated;
   // cast (matches the codebase pattern for role_permissions).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin: any = createAdminClient();
   const { data, error } = await admin
     .from("staff_ministries")
-    .insert({ name, slug, description: body.description ?? null })
-    .select("id, name, slug")
+    .insert({
+      name,
+      slug,
+      description: body.description ?? null,
+      ministry_type: ministryType,
+    })
+    .select("id, name, slug, ministry_type")
     .single();
   if (error) {
     const msg =
@@ -50,7 +68,7 @@ export async function POST(request: Request) {
     action: "create",
     resource_type: "ministries",
     resource_id: data.id,
-    changes: { name, slug },
+    changes: { name, slug, ministry_type: ministryType },
   });
 
   return NextResponse.json({ success: true, ministry: data });

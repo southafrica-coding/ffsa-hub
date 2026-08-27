@@ -19,6 +19,12 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { UserAvatar } from "@/components/ui/user-avatar";
+import {
+  MINISTRY_TYPES,
+  MINISTRY_TYPE_LABELS,
+  ministryTypeOf,
+  type MinistryType,
+} from "@/lib/ministries/ministry-type";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import {
   Command,
@@ -434,7 +440,13 @@ export function MinistryDetail({
   return (
     <>
       <Masthead
-        context={ministry.is_active ? "Ministry" : "Ministry · retired"}
+        context={[
+          MINISTRY_TYPE_LABELS[ministryTypeOf(ministry.ministry_type)],
+          "ministry",
+          ministry.is_active ? null : "retired",
+        ]
+          .filter(Boolean)
+          .join(" · ")}
         title={ministry.name}
         actions={
           isAdmin ? (
@@ -539,11 +551,15 @@ function MinistryEditDialog({
     ministry.description ?? ""
   );
   const [isActive, setIsActive] = useState<boolean>(ministry.is_active ?? true);
+  const [ministryType, setMinistryType] = useState<MinistryType>(
+    ministryTypeOf(ministry.ministry_type)
+  );
 
   function reset() {
     setName(ministry.name ?? "");
     setDescription(ministry.description ?? "");
     setIsActive(ministry.is_active ?? true);
+    setMinistryType(ministryTypeOf(ministry.ministry_type));
   }
 
   async function submit() {
@@ -555,6 +571,7 @@ function MinistryEditDialog({
         name: name.trim(),
         description: description.trim() || null,
         is_active: isActive,
+        ministry_type: ministryType,
       },
       "Ministry updated"
     );
@@ -587,6 +604,23 @@ function MinistryEditDialog({
               onChange={(e) => setName(e.target.value)}
               autoFocus
             />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="ministry-edit-type">Type</Label>
+            {/* Native <select> on purpose — Radix popover selects don't open
+                in Safari (PR #193). */}
+            <select
+              id="ministry-edit-type"
+              className="h-10 w-full"
+              value={ministryType}
+              onChange={(e) => setMinistryType(e.target.value as MinistryType)}
+            >
+              {MINISTRY_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {MINISTRY_TYPE_LABELS[t]}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="ministry-edit-desc">Description</Label>

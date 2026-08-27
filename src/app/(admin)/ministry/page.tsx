@@ -6,6 +6,11 @@ import { listMinistries } from "@/services/ministries";
 import { callerIsAdmin, getLedMinistryIds } from "@/lib/auth/check-ministry-access";
 import { NewMinistryButton } from "./new-ministry-button";
 import { Masthead, StatusPill } from "@/components/ffsa";
+import {
+  MINISTRY_TYPES,
+  MINISTRY_TYPE_SECTION_LABELS,
+  ministryTypeOf,
+} from "@/lib/ministries/ministry-type";
 
 export default async function MinistryPage() {
   const supabase = await createClient();
@@ -25,6 +30,15 @@ export default async function MinistryPage() {
     (m) => isAdmin || ledIds.includes(m.id)
   );
 
+  // Split into Main / Part-time sections, keeping each section in the order
+  // listMinistries already returned. A section with no ministries renders
+  // nothing at all, so a Hub with only main ministries looks unchanged.
+  const sections = MINISTRY_TYPES.map((type) => ({
+    type,
+    label: MINISTRY_TYPE_SECTION_LABELS[type],
+    items: visible.filter((m) => ministryTypeOf(m.ministry_type) === type),
+  })).filter((s) => s.items.length > 0);
+
   return (
     <div className="ffsa-screen">
       <Masthead
@@ -39,9 +53,18 @@ export default async function MinistryPage() {
         </div>
       ) : (
         // Two-line rows rather than a rounded card grid: a ministry is a
-        // name, a blurb and a headcount, which is a row.
+        // name, a blurb and a headcount, which is a row. Rows are grouped
+        // under a Main / Part-time heading — but only once there is more
+        // than one group, so the common case reads as a single plain list.
+        sections.map((section) => (
+        <div key={section.type}>
+          {sections.length > 1 && (
+            <div className="mono-label border-b border-rule bg-[#F7F5EE] px-5 py-2 md:px-8">
+              {section.label}
+            </div>
+          )}
         <ul>
-          {visible.map((m) => {
+          {section.items.map((m) => {
             const count = m.staff_ministry_members?.[0]?.count ?? 0;
             return (
               <li key={m.id} className="border-b border-rule">
@@ -66,6 +89,8 @@ export default async function MinistryPage() {
             );
           })}
         </ul>
+        </div>
+        ))
       )}
     </div>
   );

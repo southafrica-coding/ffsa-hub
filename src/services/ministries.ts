@@ -17,21 +17,30 @@ const MEMBER_USER_FIELDS =
 export async function listMinistries(supabase: Client) {
   return supabase
     .from("staff_ministries")
-    .select("id, name, slug, description, is_active, sort_order, staff_ministry_members(count)")
+    .select(
+      "id, name, slug, description, is_active, sort_order, ministry_type, staff_ministry_members(count)"
+    )
     .order("name", { ascending: true });
 }
 
 /**
- * Active staff ministries (slug + name), for the profile Department picker.
+ * Active MAIN staff ministries (slug + name), for the Department picker on
+ * the profile, the completion gate and the admin user page.
+ *
  * The Ministry tab is the single source of truth for departments; callers map
- * rows to { value: slug, label: name }. RLS is `auth.uid() IS NOT NULL`, so the
- * normal server client suffices.
+ * rows to { value: slug, label: name }. Part-time ministries are deliberately
+ * excluded — a department is the main ministry someone serves in, and people
+ * join part-time ministries through the roster instead. Retired ministries are
+ * excluded for the same reason they always were.
+ *
+ * RLS is `auth.uid() IS NOT NULL`, so the normal server client suffices.
  */
 export async function listActiveMinistries(supabase: Client) {
   return supabase
     .from("staff_ministries")
     .select("name, slug")
     .eq("is_active", true)
+    .eq("ministry_type", "main")
     .order("sort_order", { ascending: true })
     .order("name", { ascending: true });
 }
@@ -52,7 +61,7 @@ export async function getMinistryBySlug(supabase: Client, slug: string) {
 export async function getMinistry(supabase: Client, id: string) {
   return supabase
     .from("staff_ministries")
-    .select("id, name, slug, description, is_active, sort_order")
+    .select("id, name, slug, description, is_active, sort_order, ministry_type")
     .eq("id", id)
     .single();
 }
