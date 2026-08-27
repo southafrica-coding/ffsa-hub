@@ -52,6 +52,7 @@ export async function GET(request: Request) {
     const patch: Record<string, unknown> = {
       last_checked_at: new Date().toISOString(),
       last_error: check.error,
+      dkim_selector: check.dkimSelector ?? d.dkim_selector,
       expected_records: check.expected,
       updated_at: new Date().toISOString(),
     };

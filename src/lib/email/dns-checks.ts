@@ -15,6 +15,11 @@ export type DomainCheck = {
   spfOk: boolean;
   dkimOk: boolean;
   dmarcOk: boolean;
+  /**
+   * The selector DKIM was actually found at. Set when the check discovered it
+   * by probing, so the caller can store it and stop guessing next time.
+   */
+  dkimSelector: string | null;
   /** What to paste into DNS, for the records that are missing. */
   expected: { kind: "SPF" | "DKIM" | "DMARC"; host: string; value: string }[];
   error: string | null;
@@ -61,6 +66,16 @@ export function parseDkim(records: string[][]): boolean {
   });
 }
 
+/**
+ * Selectors to probe when none is recorded.
+ *
+ * Providers publish DKIM under a fixed selector — Mailtrap delegates rwmt1 and
+ * rwmt2 as CNAMEs, Resend uses `resend` — and resolveTxt follows the CNAME to
+ * the real key. Probing these is exactly the lookup a receiving mail server
+ * does, so it establishes DKIM as genuinely present rather than assuming it.
+ */
+const KNOWN_DKIM_SELECTORS = ["rwmt1", "rwmt2", "resend"] as const;
+
 async function txt(host: string): Promise<string[][]> {
   try {
     return await dns.resolveTxt(host);
@@ -82,18 +97,27 @@ export async function checkDomain(
   const expected: DomainCheck["expected"] = [];
 
   try {
-    const [spfRecords, dmarcRecords, dkimRecords] = await Promise.all([
+    // With no stored selector, probe the ones our providers publish under
+    // rather than reporting a configured domain as unauthenticated — which
+    // blocked sending on a domain whose DKIM was in DNS all along.
+    const candidates = dkimSelector ? [dkimSelector] : [...KNOWN_DKIM_SELECTORS];
+
+    const [spfRecords, dmarcRecords, dkimResults] = await Promise.all([
       txt(d),
       txt(`_dmarc.${d}`),
-      dkimSelector ? txt(`${dkimSelector}._domainkey.${d}`) : Promise.resolve([]),
+      Promise.all(
+        candidates.map(async (sel) => ({
+          selector: sel,
+          ok: parseDkim(await txt(`${sel}._domainkey.${d}`)),
+        }))
+      ),
     ]);
 
     const spfOk = parseSpf(spfRecords);
     const dmarcOk = parseDmarc(dmarcRecords);
-    // Without a selector we cannot look DKIM up at all. Reported as not OK
-    // with a record to paste, rather than as a pass — an unverifiable domain
-    // is not a verified one.
-    const dkimOk = dkimSelector ? parseDkim(dkimRecords) : false;
+    const found = dkimResults.find((r) => r.ok) ?? null;
+    const dkimOk = found !== null;
+    const foundSelector = found?.selector ?? dkimSelector ?? null;
 
     if (!spfOk) {
       expected.push({
@@ -123,12 +147,20 @@ export async function checkDomain(
       });
     }
 
-    return { spfOk, dkimOk, dmarcOk, expected, error: null };
+    return {
+      spfOk,
+      dkimOk,
+      dmarcOk,
+      dkimSelector: foundSelector,
+      expected,
+      error: null,
+    };
   } catch (e) {
     return {
       spfOk: false,
       dkimOk: false,
       dmarcOk: false,
+      dkimSelector,
       expected,
       error: e instanceof Error ? e.message : "DNS lookup failed",
     };

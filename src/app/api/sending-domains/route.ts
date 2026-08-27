@@ -76,7 +76,9 @@ export async function POST(request: Request) {
   const check = await checkDomain(domain.domain, selector);
 
   const patch: Record<string, unknown> = {
-    dkim_selector: selector,
+    // Store the selector the check actually found, so the next run looks it up
+    // directly instead of probing.
+    dkim_selector: check.dkimSelector ?? selector,
     last_checked_at: new Date().toISOString(),
     last_error: check.error,
     expected_records: check.expected,
