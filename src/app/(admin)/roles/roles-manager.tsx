@@ -43,6 +43,13 @@ const MODULE_LABELS: Record<string, string> = {
   "prayer-room": "Prayer Room",
   "records-library": "Records Library",
   administration: "Administration",
+  bookings: "Space Bookings",
+  vehicles: "Rent a Vehicle",
+  "org-chart": "Org Chart",
+  ministry: "Ministry",
+  legal: "Legal",
+  okrs: "OKRs",
+  "brand-kit": "Brand Kit",
 };
 
 export function RolesManager({

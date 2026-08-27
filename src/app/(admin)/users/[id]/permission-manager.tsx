@@ -18,6 +18,15 @@ const MODULE_LABELS: Record<string, string> = {
   communications: "Communications",
   mission: "Mission",
   "prayer-room": "Prayer Room",
+  bookings: "Space Bookings",
+  vehicles: "Rent a Vehicle",
+  "org-chart": "Org Chart",
+  "records-library": "Records Library",
+  ministry: "Ministry",
+  legal: "Legal",
+  okrs: "OKRs",
+  "brand-kit": "Brand Kit",
+  administration: "Administration",
 };
 
 // Which scope_type applies to each module
@@ -581,16 +590,26 @@ export function PermissionManager({
     }
   }
 
-  const moduleOrder = [
-    "contacts",
-    "events",
-    "schools",
-    "teams",
-    "finance",
-    "communications",
-    "mission",
-    "prayer-room",
-  ];
+  // Preferred order for the modules we lay out deliberately; anything else in
+  // the catalog (Space Bookings, Vehicles, Org Chart, …) follows alphabetically
+  // so a new module is grantable the moment its permissions exist.
+  const moduleOrder = (() => {
+    const preferred = [
+      "contacts",
+      "events",
+      "schools",
+      "teams",
+      "finance",
+      "communications",
+      "mission",
+      "prayer-room",
+    ];
+    const present = Object.keys(effectivePermissionsByModule);
+    const extra = present
+      .filter((m) => !preferred.includes(m))
+      .sort((a, b) => (MODULE_LABELS[a] ?? a).localeCompare(MODULE_LABELS[b] ?? b));
+    return [...preferred.filter((m) => present.includes(m)), ...extra];
+  })();
 
   return (
     <div className="space-y-6">
