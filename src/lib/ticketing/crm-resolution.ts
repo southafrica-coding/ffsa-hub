@@ -8,8 +8,10 @@
 //      - link orders.buyer_contact_id, set contact_resolution = 'resolved'.
 //      - upsert event_registrations (UNIQUE(contact_id,event_id) prevents
 //        a duplicate row if the buyer had a prior free RSVP).
-//      - apply the event's base_label_id ONLY if marketing_consent=true
-//        (handled inside upsertContactWithDedup via labelId).
+//      - apply the event's base_label_id to every buyer (handled
+//        inside upsertContactWithDedup via labelId). The label is a
+//        CRM audience marker, not an email-consent record — consent
+//        lives in the contact consent/opt-out tables.
 //      - write a ticket_purchased activity_event.
 //   3. If queued for review: set contact_resolution = 'review_queued'
 //      and leave it for staff. The order + tickets are unaffected;
@@ -50,12 +52,11 @@ export async function resolveOrderToCrm(
     return { ok: true }; // already done
   }
 
-  // 2. Run the existing dedup/upsert. Marketing-consent gates the
-  //    email-list label — unticked = no label, just a contact +
-  //    purchase record.
-  const consentLabelId = order.marketing_consent
-    ? (order.events?.base_label_id ?? null)
-    : null;
+  // 2. Run the existing dedup/upsert. Every buyer gets the event's
+  //    base label, the same as anyone who submits the event form —
+  //    marketing_consent still governs email sending, not membership
+  //    of the event's audience.
+  const eventLabelId = order.events?.base_label_id ?? null;
   const slugForSource =
     order.events?.public_slug ?? order.event_id;
 
@@ -66,7 +67,7 @@ export async function resolveOrderToCrm(
       email: order.buyer_email,
       phone: order.buyer_phone,
     },
-    labelId: consentLabelId,
+    labelId: eventLabelId,
     addedVia: `ticket:${orderId}`,
     userId: null,
     source: `ticket:${slugForSource}`,
