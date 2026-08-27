@@ -99,7 +99,11 @@ export async function checkDomain(
       expected.push({
         kind: "SPF",
         host: d,
-        value: "v=spf1 include:_spf.resend.com include:spf.mailtrap.io ~all",
+        // Mailtrap's SPF include is _spf.smtp.mailtrap.live — spf.mailtrap.io
+        // does not resolve, so copying that value produced an SPF record
+        // that authorised nothing.
+        value:
+          "v=spf1 include:_spf.resend.com include:_spf.smtp.mailtrap.live ~all",
       });
     }
     if (!dkimOk) {
