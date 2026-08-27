@@ -71,6 +71,7 @@ import type { EffectiveBrand } from "@/services/brand";
 import { RichText } from "@/components/communications/rich-text";
 import { ImageCropDialog } from "@/components/communications/image-crop-dialog";
 import { EmailCanvas } from "./canvas/EmailCanvas";
+import { SendDialog, type SendPhase } from "./send-dialog";
 
 type Label = { id: string; slug: string; name: string };
 type Identity = { id: string; display_name: string; from_email: string };
@@ -210,6 +211,9 @@ export function CampaignComposer({
   const [err, setErr] = useState<string | null>(null);
   const [scheduleAt, setScheduleAt] = useState("");
   const [sendState, setSendState] = useState<"idle" | "sending" | "done">("idle");
+  const [sendDialog, setSendDialog] = useState<SendPhase | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [handedOff, setHandedOff] = useState(false);
   const [sendProgress, setSendProgress] = useState({ sent: 0, failed: 0 });
   const [testEmail, setTestEmail] = useState(currentUserEmail ?? "");
   const [testState, setTestState] = useState<"idle" | "sending" | "done">("idle");
@@ -733,33 +737,39 @@ export function CampaignComposer({
     if (res.ok) setCustomTemplates((cur) => cur.filter((t) => t.id !== id));
   }
 
-  async function sendNow() {
+  // Opens the confirmation step. The send itself runs in runSend, so the
+  // dialog can show what's about to go out before anything leaves.
+  function sendNow() {
     const pf = preflightError();
     if (pf) return setErr(pf);
-    if (
-      !confirm(
-        `Send "${name}" to ${audienceCount} contact${
-          audienceCount === 1 ? "" : "s"
-        } now?`
-      )
-    )
-      return;
-
     setErr(null);
     setMsg(null);
-    if (!(await persist())) return setErr("Could not save the email.");
+    setSendError(null);
+    setHandedOff(false);
+    setSendProgress({ sent: 0, failed: 0 });
+    setSendDialog("confirm");
+  }
+
+  async function runSend() {
+    setSendDialog("sending");
+    if (!(await persist())) {
+      setSendError("Could not save the email before sending.");
+      setSendDialog("error");
+      return;
+    }
 
     setSendState("sending");
     let totalSent = 0;
     let totalFailed = 0;
-    let handedOff = false;
+    let handedOff = false; // local tally; mirrored into state at the end
     for (let i = 0; i < 1000; i++) {
       const res = await fetch(`/api/campaigns/${campaign.id}/send`, {
         method: "POST",
       });
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
-        setErr(data.error ?? "Send failed");
+        setSendError(data.error ?? "Send failed");
+        setSendDialog("error");
         setSendState("idle");
         return;
       }
@@ -782,6 +792,8 @@ export function CampaignComposer({
       }
     }
     setSendState("done");
+    setHandedOff(handedOff);
+    setSendDialog("done");
     if (handedOff) {
       setMsg(
         `Sending has started — ${totalSent} sent so far. The rest will send ` +
@@ -1326,10 +1338,30 @@ export function CampaignComposer({
             )}
             {sendState === "done" && (
               <p className="text-sm text-emerald-400">
-                ✓ Email sent — {sendProgress.sent} delivered to the provider
+                ✓ Email sent — {sendProgress.sent} accepted by the provider
                 {sendProgress.failed > 0 ? `, ${sendProgress.failed} failed` : ""}.
               </p>
             )}
+
+            <SendDialog
+              open={sendDialog !== null}
+              phase={sendDialog ?? "confirm"}
+              campaignId={campaign.id}
+              campaignName={name}
+              subject={subject}
+              fromName={
+                identities.find((i) => i.id === identityId)?.display_name ??
+                "—"
+              }
+              audienceCount={audienceCount}
+              progress={{ ...sendProgress, handedOff }}
+              error={sendError}
+              onConfirm={runSend}
+              onClose={() => {
+                setSendDialog(null);
+                router.refresh();
+              }}
+            />
             {sendState === "idle" && (
               <div className="space-y-2">
                 <div className="flex flex-wrap items-end gap-4">
