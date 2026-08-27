@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -49,6 +49,8 @@ export function KeyResultDialog({
   );
   const [metricUnit, setMetricUnit] = useState(keyResult?.metric_unit ?? "");
   const [saving, setSaving] = useState(false);
+  const [addedCount, setAddedCount] = useState(0);
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const [error, setError] = useState<string | null>(null);
 
   const metricInvalid =
@@ -57,7 +59,11 @@ export function KeyResultDialog({
       metricTarget.trim() === "" ||
       Number(metricStart) === Number(metricTarget));
 
-  async function submit(e: React.FormEvent) {
+  /**
+   * `again` keeps the dialog open and clears it for the next one, instead of
+   * closing. Entering six key results should not mean six open/close cycles.
+   */
+  async function submit(e: React.FormEvent, again = false) {
     e.preventDefault();
     if (metricInvalid) {
       setError("A tracked key result needs a start and a target, and they must differ.");
@@ -92,6 +98,22 @@ export function KeyResultDialog({
       setError((await res.json().catch(() => ({}))).error ?? "Could not save that key result");
       return;
     }
+
+    if (again) {
+      // Deliberately keeps `tracked` and metric_unit: a run of key results
+      // measured in people is usually all measured in people, and re-picking
+      // the unit each time is exactly the friction this removes.
+      setAddedCount((n) => n + 1);
+      setDescription("");
+      setLabel("");
+      setNotes("");
+      setMetricStart("");
+      setMetricTarget("");
+      descriptionRef.current?.focus();
+      router.refresh();
+      return;
+    }
+
     onClose();
     router.refresh();
   }
@@ -121,6 +143,7 @@ export function KeyResultDialog({
             <Label htmlFor="kr-description">Key result</Label>
             <Textarea
               id="kr-description"
+              ref={descriptionRef}
               required
               rows={3}
               value={description}
@@ -217,18 +240,32 @@ export function KeyResultDialog({
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 
-          <div className="flex justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             {keyResult ? (
               <Button type="button" variant="outline" onClick={remove}>
                 Delete
               </Button>
+            ) : addedCount > 0 ? (
+              <span className="font-mono text-[10px] tracking-[0.08em] text-[#7C786C]">
+                {addedCount} added
+              </span>
             ) : (
               <span />
             )}
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button type="button" variant="outline" onClick={onClose}>
-                Cancel
+                {addedCount > 0 ? "Done" : "Cancel"}
               </Button>
+              {!keyResult && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={saving || description.trim() === ""}
+                  onClick={(e) => submit(e, true)}
+                >
+                  Save &amp; add another
+                </Button>
+              )}
               <Button type="submit" disabled={saving || description.trim() === ""}>
                 {saving ? "Saving…" : keyResult ? "Save changes" : "Add key result"}
               </Button>

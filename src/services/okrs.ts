@@ -20,7 +20,7 @@ const KEY_RESULT_FIELDS =
 
 const OBJECTIVE_FIELDS =
   "id, cycle_id, scope, staff_ministry_id, okr_team_id, subcategory_id, owner_user_id, position, " +
-  "title, description, owner_note, timeline, is_archived";
+  "title, description, notes, owner_note, timeline, is_archived";
 
 const TEAM_FIELDS = "id, name, slug, description, is_active, sort_order";
 
@@ -138,6 +138,7 @@ export async function createObjective(
     position?: number;
     title: string;
     description?: string | null;
+    notes?: string | null;
     owner_note?: string | null;
     timeline?: string | null;
     created_by?: string;
@@ -173,6 +174,23 @@ export async function nextObjectivePosition(
 }
 
 /* ── Key results ────────────────────────────────────── */
+
+/**
+ * Several key results at once, for the objective dialog's inline rows. One
+ * insert rather than a loop, so a failure is atomic across the batch and the
+ * caller only has the objective itself left to clean up.
+ */
+export async function createKeyResults(
+  supabase: Client,
+  rows: {
+    objective_id: string;
+    description: string;
+    position: number;
+    created_by?: string | null;
+  }[]
+) {
+  return supabase.from("okr_key_results").insert(rows).select("id");
+}
 
 export async function createKeyResult(
   supabase: Client,
@@ -217,6 +235,34 @@ export async function nextKeyResultPosition(
     .limit(1)
     .maybeSingle();
   return ((data as { position: number } | null)?.position ?? 0) + 1;
+}
+
+/* ── Edit history ───────────────────────────────────── */
+
+const EVENT_FIELDS =
+  "id, key_result_id, objective_id, action, field, old_value, new_value, actor_id, created_at";
+
+/**
+ * Edits recorded against one key result. Written only by the migration-197
+ * trigger, and RLS-scoped to the same audience as the key result itself.
+ */
+export async function listKeyResultEvents(supabase: Client, keyResultId: string, limit = 100) {
+  return supabase
+    .from("okr_events")
+    .select(EVENT_FIELDS)
+    .eq("key_result_id", keyResultId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+}
+
+/** Edits recorded against one objective — used for its notes provenance line. */
+export async function listObjectiveEvents(supabase: Client, objectiveId: string, limit = 100) {
+  return supabase
+    .from("okr_events")
+    .select(EVENT_FIELDS)
+    .eq("objective_id", objectiveId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
 }
 
 /* ── Check-ins ──────────────────────────────────────── */

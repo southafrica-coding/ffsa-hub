@@ -69,6 +69,9 @@ export interface OkrObjective {
   position: number;
   title: string;
   description: string | null;
+  /** Standing context for the objective as a whole (migration 197). */
+  notes: string | null;
+  /** Who is carrying it — a name or a team. Not the same thing as notes. */
   owner_note: string | null;
   timeline: string | null;
   is_archived: boolean;
@@ -105,3 +108,31 @@ export interface OkrOwnerSummary extends OkrOwner {
   keyResults: number;
   byStatus: Record<OkrStatus, number>;
 }
+
+/** One recorded edit. Written only by the triggers in migration 197. */
+export interface OkrEvent {
+  id: string;
+  key_result_id: string | null;
+  objective_id: string | null;
+  action: "created" | "updated" | "deleted";
+  field: string | null;
+  old_value: string | null;
+  new_value: string | null;
+  actor_id: string | null;
+  created_at: string;
+  /** Hydrated separately via the admin client — see the users-RLS note. */
+  actor_name?: string | null;
+}
+
+/**
+ * One key result's story: progress check-ins and edits in a single stream.
+ *
+ * They stay separate in the database — a check-in is a deliberate statement
+ * with a status and a date the author chose, an event is a fact the database
+ * observed — but they answer the same question, so the drawer interleaves
+ * them. Ordered by `at` (the row's created_at), which is also what
+ * refresh_okr_key_result_state() uses for last_checkin_at.
+ */
+export type OkrHistoryEntry =
+  | { kind: "checkin"; at: string; author: string | null; checkin: OkrCheckin }
+  | { kind: "event"; at: string; author: string | null; event: OkrEvent };

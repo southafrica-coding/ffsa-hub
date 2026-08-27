@@ -10,7 +10,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { krProgress, metricCaption, statusLabel, statusTone } from "@/lib/okrs/progress";
-import { OKR_STATUSES, type OkrCheckin, type OkrKeyResult, type OkrStatus } from "@/types/okrs";
+import { detail, lastNotesEdit, summarise } from "@/lib/okrs/events";
+import { formatRelativeTime } from "@/lib/users/lifecycle";
+import {
+  OKR_STATUSES,
+  type OkrEvent,
+  type OkrHistoryEntry,
+  type OkrKeyResult,
+  type OkrStatus,
+} from "@/types/okrs";
 
 const STATUS_OPTIONS = OKR_STATUSES.map((s) => ({ value: s, label: statusLabel(s) }));
 
@@ -33,35 +41,65 @@ export function CheckinPanel({
   onEditKeyResult?: () => void;
 }) {
   const router = useRouter();
-  const [checkins, setCheckins] = useState<OkrCheckin[] | null>(null);
+  const [entries, setEntries] = useState<OkrHistoryEntry[] | null>(null);
+  const [truncated, setTruncated] = useState(false);
   const [status, setStatus] = useState<OkrStatus>(kr.current_status);
   const [value, setValue] = useState("");
   const [comment, setComment] = useState("");
   const [saving, setSaving] = useState(false);
+  const [notes, setNotes] = useState(kr.notes ?? "");
+  const [savingNotes, setSavingNotes] = useState(false);
 
   const hasMetric = kr.metric_start !== null && kr.metric_target !== null;
   const progress = krProgress(kr);
 
   useEffect(() => {
     let cancelled = false;
-    setCheckins(null);
+    setEntries(null);
+    setTruncated(false);
     setStatus(kr.current_status);
     setValue("");
     setComment("");
+    setNotes(kr.notes ?? "");
 
-    fetch(`/api/okrs/key-results/${kr.id}/checkins`)
-      .then((r) => (r.ok ? r.json() : { checkins: [] }))
+    fetch(`/api/okrs/key-results/${kr.id}/history`)
+      .then((r) => (r.ok ? r.json() : { entries: [] }))
       .then((d) => {
-        if (!cancelled) setCheckins((d.checkins ?? []) as OkrCheckin[]);
+        if (cancelled) return;
+        setEntries((d.entries ?? []) as OkrHistoryEntry[]);
+        setTruncated(Boolean(d.truncated));
       })
       .catch(() => {
-        if (!cancelled) setCheckins([]);
+        if (!cancelled) setEntries([]);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [kr.id, kr.current_status]);
+  }, [kr.id, kr.current_status, kr.notes]);
+
+  // Who last touched the notes, read back out of the same history. Not from
+  // updated_at, which the check-in trigger stamps on every progress update and
+  // which would therefore date January's note to this morning.
+  const notesEdit = lastNotesEdit(
+    (entries ?? []).filter((e) => e.kind === "event").map((e) => (e as { event: OkrEvent }).event)
+  );
+
+  async function saveNotes() {
+    setSavingNotes(true);
+    const res = await fetch(`/api/okrs/key-results/${kr.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notes: notes.trim() || null }),
+    });
+    setSavingNotes(false);
+    if (!res.ok) {
+      toast.error((await res.json().catch(() => ({}))).error ?? "Could not save those notes");
+      return;
+    }
+    toast.success("Notes saved");
+    router.refresh();
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -94,6 +132,9 @@ export function CheckinPanel({
         <p className="text-[14px] leading-snug text-ink">{kr.description}</p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <StatusPill tone={statusTone(kr.current_status)}>{statusLabel(kr.current_status)}</StatusPill>
+          <span className="font-mono text-[10px] tracking-[0.08em] text-[#7C786C]">
+            {kr.last_checkin_at ? formatRelativeTime(kr.last_checkin_at) : "never updated"}
+          </span>
           {canEdit && onEditKeyResult && (
             <button
               type="button"
@@ -168,32 +209,105 @@ export function CheckinPanel({
         </form>
       )}
 
+      <div className="border-b border-rule px-6 py-5">
+        <p className="mono-label mb-3">Notes</p>
+        {canEdit ? (
+          <>
+            <Textarea
+              rows={3}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Standing context — the things a reader needs to understand this key result. Progress updates belong in a check-in."
+            />
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={saveNotes}
+                disabled={savingNotes || (notes.trim() || null) === (kr.notes ?? null)}
+                className="border border-ink bg-white px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-ink hover:bg-bone disabled:opacity-40"
+              >
+                {savingNotes ? "Saving…" : "Save notes"}
+              </button>
+              {notesEdit && (
+                <span className="font-mono text-[10px] tracking-[0.08em] text-[#7C786C]">
+                  edited {formatRelativeTime(notesEdit.at)}
+                  {notesEdit.actor ? ` · ${notesEdit.actor}` : ""}
+                </span>
+              )}
+            </div>
+          </>
+        ) : kr.notes ? (
+          <>
+            <p className="whitespace-pre-wrap text-[12.5px] leading-snug text-ink">{kr.notes}</p>
+            {notesEdit && (
+              <span className="mt-2 block font-mono text-[10px] tracking-[0.08em] text-[#7C786C]">
+                edited {formatRelativeTime(notesEdit.at)}
+                {notesEdit.actor ? ` · ${notesEdit.actor}` : ""}
+              </span>
+            )}
+          </>
+        ) : (
+          <p className="text-[12.5px] text-[color:var(--text-secondary)]">No notes yet.</p>
+        )}
+      </div>
+
       <div className="px-6 py-5">
         <p className="mono-label mb-3">History</p>
-        {checkins === null ? (
+        {entries === null ? (
           <p className="text-[12.5px] text-[color:var(--text-secondary)]">Loading…</p>
-        ) : checkins.length === 0 ? (
+        ) : entries.length === 0 ? (
           <p className="text-[12.5px] text-[color:var(--text-secondary)]">
-            No check-ins yet. The first one will set this key result&rsquo;s status.
+            Nothing yet. The first check-in will set this key result&rsquo;s status.
           </p>
         ) : (
-          <ol className="space-y-3.5">
-            {checkins.map((c) => (
-              <li key={c.id} className="border-l-2 border-rule-strong pl-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <StatusPill tone={statusTone(c.status)}>{statusLabel(c.status)}</StatusPill>
-                  <span className="font-mono text-[10px] tracking-[0.08em] text-[#7C786C]">
-                    {c.checkin_on}
-                    {c.author_name ? ` · ${c.author_name}` : ""}
-                    {c.value !== null && c.value !== undefined ? ` · ${c.value}` : ""}
-                  </span>
-                </div>
-                {c.comment && (
-                  <p className="mt-1 text-[12.5px] leading-snug text-ink">{c.comment}</p>
-                )}
-              </li>
-            ))}
-          </ol>
+          <>
+            <ol className="space-y-3.5">
+              {entries.map((entry) =>
+                entry.kind === "checkin" ? (
+                  <li key={`c-${entry.checkin.id}`} className="border-l-2 border-rule-strong pl-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <StatusPill tone={statusTone(entry.checkin.status)}>
+                        {statusLabel(entry.checkin.status)}
+                      </StatusPill>
+                      <span className="font-mono text-[10px] tracking-[0.08em] text-[#7C786C]">
+                        {/* checkin_on, not `at` — the date the author meant, not the row's. */}
+                        {entry.checkin.checkin_on}
+                        {entry.author ? ` · ${entry.author}` : ""}
+                        {entry.checkin.value !== null && entry.checkin.value !== undefined
+                          ? ` · ${entry.checkin.value}`
+                          : ""}
+                      </span>
+                    </div>
+                    {entry.checkin.comment && (
+                      <p className="mt-1 text-[12.5px] leading-snug text-ink">
+                        {entry.checkin.comment}
+                      </p>
+                    )}
+                  </li>
+                ) : (
+                  /* Edits sit on a lighter rule than check-ins: same stream, but a
+                     progress update is a statement and an edit is a footnote. */
+                  <li key={`e-${entry.event.id}`} className="border-l-2 border-rule pl-3">
+                    <p className="text-[12.5px] leading-snug text-ink">{summarise(entry.event)}</p>
+                    <span className="mt-0.5 block font-mono text-[10px] tracking-[0.08em] text-[#7C786C]">
+                      {formatRelativeTime(entry.at)}
+                      {entry.author ? ` · ${entry.author}` : ""}
+                    </span>
+                    {detail(entry.event) && (
+                      <p className="mt-1 whitespace-pre-wrap text-[12.5px] leading-snug text-[color:var(--text-secondary)]">
+                        {detail(entry.event)}
+                      </p>
+                    )}
+                  </li>
+                )
+              )}
+            </ol>
+            {truncated && (
+              <p className="mt-3 font-mono text-[10px] tracking-[0.08em] text-[#7C786C]">
+                Showing the most recent 100 entries.
+              </p>
+            )}
+          </>
         )}
       </div>
     </div>

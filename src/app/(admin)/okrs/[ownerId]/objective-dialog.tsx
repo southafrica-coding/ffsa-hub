@@ -33,6 +33,13 @@ export function ObjectiveDialog({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Key results written alongside a NEW objective. Editing an existing one
+  // does not offer these — its key results are already on the page, where
+  // adding and reordering them belongs.
+  const [keyResults, setKeyResults] = useState<string[]>(["", "", ""]);
+
+  const filledKeyResults = keyResults.filter((d) => d.trim() !== "").length;
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
@@ -48,6 +55,12 @@ export function ObjectiveDialog({
         : {
             cycle_id: cycleId,
             ...(teamId ? { okr_team_id: teamId } : { staff_ministry_id: ministryId }),
+            // Blank rows are dropped server-side too; sending only the filled
+            // ones keeps the request honest about what was asked for.
+            key_results: keyResults
+              .map((d) => d.trim())
+              .filter((d) => d !== "")
+              .map((description) => ({ description })),
           }),
     };
 
@@ -121,6 +134,36 @@ export function ObjectiveDialog({
             </div>
           </div>
 
+          {!objective && (
+            <div className="border-t border-rule pt-4">
+              <Label>Key results</Label>
+              <p className="mb-2 text-[12.5px] text-[color:var(--text-secondary)]">
+                Optional — you can add them here now, or on the page afterwards.
+              </p>
+              <div className="space-y-2">
+                {keyResults.map((kr, i) => (
+                  <Input
+                    key={i}
+                    value={kr}
+                    onChange={(e) =>
+                      setKeyResults((prev) => prev.map((v, j) => (j === i ? e.target.value : v)))
+                    }
+                    placeholder={
+                      i === 0 ? "Lead 12 base-wide moments of consecration" : "Another key result"
+                    }
+                  />
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => setKeyResults((prev) => [...prev, ""])}
+                className="mt-2 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-[#55524A] underline hover:text-ink"
+              >
+                + Add another
+              </button>
+            </div>
+          )}
+
           {error && <p className="text-sm text-destructive">{error}</p>}
 
           <div className="flex justify-end gap-2">
@@ -128,7 +171,13 @@ export function ObjectiveDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={saving || title.trim() === ""}>
-              {saving ? "Saving…" : objective ? "Save changes" : "Create objective"}
+              {saving
+                ? "Saving…"
+                : objective
+                  ? "Save changes"
+                  : filledKeyResults > 0
+                    ? `Create with ${filledKeyResults} key result${filledKeyResults === 1 ? "" : "s"}`
+                    : "Create objective"}
             </Button>
           </div>
         </form>

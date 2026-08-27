@@ -23,6 +23,7 @@ const EDITABLE = [
   "title",
   "description",
   "timeline",
+  "notes",
   "owner_note",
   "position",
   "subcategory_id",

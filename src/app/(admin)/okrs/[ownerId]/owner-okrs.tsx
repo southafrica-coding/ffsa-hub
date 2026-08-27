@@ -6,7 +6,9 @@ import { toast } from "sonner";
 
 import { Bar, Drawer, MastheadButton, SectionBar, StatusPill } from "@/components/ffsa";
 import { krProgress, metricCaption, statusLabel, statusTone } from "@/lib/okrs/progress";
+import { formatRelativeTime } from "@/lib/users/lifecycle";
 import type { OkrKeyResult, OkrObjective } from "@/types/okrs";
+import { Textarea } from "@/components/ui/textarea";
 import { CheckinPanel } from "./checkin-panel";
 import { ObjectiveDialog } from "./objective-dialog";
 import { KeyResultDialog } from "./key-result-dialog";
@@ -86,13 +88,16 @@ export function OwnerOkrs({
                   meta={`${krs.length} KR${krs.length === 1 ? "" : "s"}`}
                 />
 
-                {(o.description || o.timeline || o.owner_note) && (
+                {(o.description || o.timeline) && (
                   <p className="border-x border-rule bg-bone px-4 py-2.5 text-[12.5px] text-[color:var(--text-secondary)] md:px-5">
                     {o.description}
                     {o.timeline && <span className="ml-2 font-mono text-[10px]">{o.timeline}</span>}
-                    {o.owner_note && <span className="ml-2 font-mono text-[10px]">{o.owner_note}</span>}
                   </p>
                 )}
+
+                {/* Notes are their own thing, not a footnote on the description
+                    and not the same as owner_note ("who is carrying it"). */}
+                <ObjectiveNotes objective={o} canEdit={canEdit} />
 
                 <div className="border-x border-b border-rule">
                   {krs.length === 0 ? (
@@ -214,13 +219,119 @@ function KeyResultRow({ kr, onOpen }: { kr: OkrKeyResult; onOpen: () => void }) 
         </div>
       )}
 
-      {(kr.timeline || kr.notes) && (
-        <span className="font-mono text-[10px] tracking-[0.08em] text-[#7C786C]">
-          {kr.timeline}
-          {kr.timeline && kr.notes ? " · " : ""}
-          {kr.notes}
-        </span>
-      )}
+      {/* Recency is the point of the row: a key result nobody has touched for
+          six months should not look like one updated yesterday. Notes are no
+          longer crammed in here — they have their own box in the drawer. */}
+      <span className="font-mono text-[10px] tracking-[0.08em] text-[#7C786C]">
+        {kr.timeline && <>{kr.timeline} · </>}
+        {kr.last_checkin_at ? `updated ${formatRelativeTime(kr.last_checkin_at)}` : "never updated"}
+        {kr.notes ? " · has notes" : ""}
+      </span>
     </button>
+  );
+}
+
+/**
+ * An objective's standing notes — context for the whole group of key results,
+ * as opposed to a progress update on any one of them.
+ *
+ * Its own column, added in migration 197 — `description` is "why this
+ * matters" and `owner_note` is who is carrying it, both already surfaced and
+ * labelled, so neither could absorb this without losing its meaning.
+ *
+ * Collapsed by default when empty and not editable, so a ministry with no
+ * objective notes does not carry an empty box under every heading.
+ */
+function ObjectiveNotes({
+  objective,
+  canEdit,
+}: {
+  objective: OkrObjective;
+  canEdit: boolean;
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [notes, setNotes] = useState(objective.notes ?? "");
+  const [saving, setSaving] = useState(false);
+
+  const stored = objective.notes ?? null;
+  if (!stored && !canEdit) return null;
+
+  async function save() {
+    setSaving(true);
+    const res = await fetch(`/api/okrs/objectives/${objective.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notes: notes.trim() || null }),
+    });
+    setSaving(false);
+    if (!res.ok) {
+      toast.error((await res.json().catch(() => ({}))).error ?? "Could not save those notes");
+      return;
+    }
+    toast.success("Notes saved");
+    setOpen(false);
+    router.refresh();
+  }
+
+  if (!open) {
+    return (
+      <div className="border-x border-rule px-4 py-2 md:px-5">
+        {stored ? (
+          <p className="whitespace-pre-wrap text-[12.5px] leading-snug text-[color:var(--text-secondary)]">
+            {stored}
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => setOpen(true)}
+                className="ml-2 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-[#55524A] underline hover:text-ink"
+              >
+                Edit
+              </button>
+            )}
+          </p>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-[#55524A] underline hover:text-ink"
+          >
+            + Notes
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="border-x border-rule px-4 py-3 md:px-5">
+      <Textarea
+        rows={3}
+        value={notes}
+        autoFocus
+        onChange={(e) => setNotes(e.target.value)}
+        placeholder="Context for this objective as a whole."
+      />
+      <div className="mt-2 flex gap-3 font-mono text-[10px] font-bold uppercase tracking-[0.12em]">
+        <button
+          type="button"
+          onClick={save}
+          disabled={saving}
+          className="text-ink underline disabled:opacity-40"
+        >
+          {saving ? "Saving…" : "Save"}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setNotes(stored ?? "");
+            setOpen(false);
+          }}
+          className="text-[#55524A] underline hover:text-ink"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
   );
 }
