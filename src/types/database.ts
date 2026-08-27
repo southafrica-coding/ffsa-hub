@@ -1283,6 +1283,39 @@ export type Database = {
           },
         ]
       }
+      event_labels: {
+        Row: {
+          created_at: string
+          event_id: string
+          label_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          label_id: string
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          label_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_labels_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_labels_label_id_fkey"
+            columns: ["label_id"]
+            isOneToOne: false
+            referencedRelation: "labels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_outcomes: {
         Row: {
           created_at: string

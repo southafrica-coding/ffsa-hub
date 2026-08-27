@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { updateEvent } from "@/services/events";
 import { getAuthedUser, canManageEvents } from "@/lib/api-auth";
+import { setEventLabels } from "@/services/event-labels";
 
 // PATCH /api/events/[id] — update event-level CRM fields (base label, etc.)
 export async function PATCH(
@@ -18,6 +19,7 @@ export async function PATCH(
 
   let body: {
     base_label_id?: string | null;
+    base_label_ids?: string[];
     status?: string;
     title?: string;
     description?: string | null;
@@ -40,8 +42,31 @@ export async function PATCH(
 
   const patch: Record<string, unknown> = {};
 
-  // CRM label.
-  if ("base_label_id" in body) patch.base_label_id = body.base_label_id ?? null;
+  // CRM labels (migration 193). base_label_ids is the full set; the
+  // first entry becomes the primary base_label_id. base_label_id on its
+  // own is still accepted and means "a set of one".
+  if ("base_label_ids" in body) {
+    const ids = body.base_label_ids;
+    if (!Array.isArray(ids) || ids.some((id) => typeof id !== "string")) {
+      return NextResponse.json(
+        { error: "base_label_ids must be an array of label ids" },
+        { status: 400 }
+      );
+    }
+    const { error: labelErr } = await setEventLabels(supabase, id, ids);
+    if (labelErr) {
+      return NextResponse.json({ error: labelErr }, { status: 500 });
+    }
+  } else if ("base_label_id" in body) {
+    const { error: labelErr } = await setEventLabels(
+      supabase,
+      id,
+      body.base_label_id ? [body.base_label_id] : []
+    );
+    if (labelErr) {
+      return NextResponse.json({ error: labelErr }, { status: 500 });
+    }
+  }
 
   // Lifecycle status.
   if ("status" in body) {
@@ -124,6 +149,10 @@ export async function PATCH(
   }
 
   if (Object.keys(patch).length === 0) {
+    // A labels-only PATCH is complete once setEventLabels has run.
+    if ("base_label_ids" in body || "base_label_id" in body) {
+      return NextResponse.json({ ok: true });
+    }
     return NextResponse.json({ error: "No patchable fields provided" }, { status: 400 });
   }
 

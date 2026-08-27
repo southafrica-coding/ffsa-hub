@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getFormBySlug } from "@/services/forms";
 import { upsertContactWithDedup } from "@/services/contact-upsert";
 import { addLabelToContact } from "@/services/labels";
+import { applyEventLabelsToContact } from "@/services/event-labels";
 import { logActivity, logLabelAdded, logFormSubmitted } from "@/services/activity-events";
 import {
   getActiveWorkflowsForOutcomes,
@@ -110,6 +111,19 @@ export async function POST(
   // outcome responses get applied when staff resolves the conflict.
   if (!contactId) {
     return NextResponse.json({ ok: true, status: "queued_for_review" });
+  }
+
+  // 2b. The rest of the event's label set (migration 193). The form's
+  //     own label_id was applied by the dedup upsert; an event with
+  //     several base labels applies all of them to the respondent.
+  if (form.event_id) {
+    await applyEventLabelsToContact(supabase, {
+      eventId: form.event_id,
+      contactId,
+      addedVia: `form:${form.id}`,
+      userId: null,
+      skip: [form.label_id],
+    });
   }
 
   // 3. Outcome responses — for every checked outcome field.

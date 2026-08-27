@@ -28,6 +28,7 @@ import {
 import { OutcomesManager } from "./outcomes-manager";
 import { RolesRoster } from "./roles-roster";
 import { BaseLabelPicker } from "./base-label-picker";
+import { getEventLabelIds } from "@/services/event-labels";
 import { FormsTab } from "./forms-tab";
 import { WorkflowsManager } from "./workflows-manager";
 import { OutcomeFormLink } from "./outcome-form-link";
@@ -96,6 +97,7 @@ export default async function EventDetailPage({
     { data: identities },
     attendanceCounts,
     { data: feedbackForms },
+    eventLabelIds,
   ] = await Promise.all([
     getRegistrationsForEvent(supabase, id),
     getAttendanceForEvent(supabase, id),
@@ -126,7 +128,21 @@ export default async function EventDetailPage({
     // it rides along with everything else rather than costing a wave.
     getEventAttendanceCounts(supabase, [id]),
     listFeedbackFormsForEvent(supabase, id),
+    // Every CRM label this event applies (migration 193). Empty before
+    // the migration is applied — the picker then shows base_label_id only.
+    getEventLabelIds(supabase, id),
   ]);
+
+  // Primary first, so the picker can mark it as such.
+  const baseLabelIds = (
+    eventLabelIds.length > 0
+      ? eventLabelIds
+      : event.base_label_id
+        ? [event.base_label_id]
+        : []
+  ).sort((a: string, b: string) =>
+    a === event.base_label_id ? -1 : b === event.base_label_id ? 1 : 0
+  );
 
   // Response tallies for the Feedback tab. They depend on the form ids,
   // so they can't join the Promise.all above.
@@ -219,6 +235,7 @@ export default async function EventDetailPage({
             registrations={registrations ?? []}
             attendance={attendance ?? []}
             coming={coming}
+            baseLabelIds={baseLabelIds}
           />
         )}
 
@@ -299,7 +316,8 @@ function formatDayRange(start: string, end: string | null) {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function DetailsTab(props: any) {
-  const { event, eventId, roles, labels, users, registrations, attendance, coming } = props;
+  const { event, eventId, roles, labels, users, registrations, attendance, coming, baseLabelIds } =
+    props;
 
   // "1 140 / 2 000" won't fit at the strip's 54px, so a ratio drops to
   // the smaller numeral the way the money cells do. The bar only draws
@@ -355,7 +373,7 @@ function DetailsTab(props: any) {
 
       <BaseLabelPicker
         eventId={eventId}
-        currentLabelId={event.base_label_id}
+        currentLabelIds={baseLabelIds}
         labels={labels}
       />
 
