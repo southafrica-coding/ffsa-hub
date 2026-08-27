@@ -244,11 +244,32 @@ export function BrandEditor({
     }
     const data = (await res.json()) as { logoUrl: string };
     update("logo_url", data.logoUrl);
-    setMsg("Logo uploaded — remember to Save.");
+    // Persist immediately: an uploaded logo that only lives in form state is
+    // silently lost the moment the user navigates away.
+    await persistLogo(data.logoUrl, "Logo uploaded and saved.");
   }
 
-  function clearLogo() {
+  async function clearLogo() {
     update("logo_url", null);
+    await persistLogo(null, "Logo removed.");
+  }
+
+  // Writes just logo_url so the upload/remove sticks without a full Save.
+  async function persistLogo(logoUrl: string | null, okMsg: string) {
+    setBusy(true);
+    const res = await fetch(`/api/brand/${selectedIdentityId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ logo_url: logoUrl }),
+    });
+    setBusy(false);
+    if (!res.ok) {
+      const d = (await res.json().catch(() => ({}))) as { error?: string };
+      setErr(d.error ?? "Could not save the logo — press Save to retry.");
+      return;
+    }
+    setMsg(okMsg);
+    router.refresh();
   }
 
   async function save() {
