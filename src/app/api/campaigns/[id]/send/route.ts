@@ -4,6 +4,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendCampaignBatch, sendableThisRun } from "@/services/campaign-send";
 import { getAuthedUser, canManageComms, COMMS_SEND_PERMS } from "@/lib/api-auth";
 
+// node:dns is used by the sending-domain re-check inside sendCampaignBatch.
+export const runtime = "nodejs";
+
 // One batch may take ~25s of Mailtrap calls — allow headroom.
 export const maxDuration = 60;
 

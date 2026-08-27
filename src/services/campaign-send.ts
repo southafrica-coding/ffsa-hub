@@ -5,7 +5,7 @@ import {
 } from "@/lib/campaigns/blocks";
 import { sendViaMailtrap } from "@/lib/email/mailtrap";
 import { substituteFirstName, escapeHtml } from "@/lib/email/placeholders";
-import { sendingBlockedReason } from "@/lib/email/dns-checks";
+import { sendingBlockedReason, checkDomain } from "@/lib/email/dns-checks";
 import { signPrefsToken } from "@/lib/tokens/unsubscribe";
 import { getEffectiveBrand } from "@/services/brand";
 
@@ -195,7 +195,7 @@ export async function sendCampaignBatch(
   const { data: campaign, error: cErr } = await supabase
     .from("campaigns")
     .select(
-      "*, sending_identities(from_email, from_name, reply_to, sending_domains(domain, dkim_ok, last_checked_at)), campaign_labels(label_id)"
+      "*, sending_identities(from_email, from_name, reply_to, sending_domains(domain, dkim_ok, dkim_selector, last_checked_at)), campaign_labels(label_id)"
     )
     .eq("id", campaignId)
     .maybeSingle();
@@ -208,8 +208,34 @@ export async function sendCampaignBatch(
   // has not run yet.
   const sendingDomain = campaign.sending_identities?.sending_domains;
   if (sendingDomain) {
-    const blocked = sendingBlockedReason(sendingDomain);
-    if (blocked) return { ...base, ok: false, error: blocked };
+    let blocked = sendingBlockedReason(sendingDomain);
+    if (blocked) {
+      // The stored flag is a snapshot from the last check, which may be hours
+      // or days old and may predate the DNS record being added. Never refuse a
+      // send on stale information: re-read DNS now, and if the domain is in
+      // fact authenticated, save the corrected verdict and carry on.
+      const live = await checkDomain(
+        sendingDomain.domain,
+        sendingDomain.dkim_selector ?? null
+      );
+      if (!live.error) {
+        await supabase
+          .from("sending_domains")
+          .update({
+            spf_ok: live.spfOk,
+            dkim_ok: live.dkimOk,
+            dmarc_ok: live.dmarcOk,
+            dkim_selector: live.dkimSelector ?? sendingDomain.dkim_selector,
+            expected_records: live.expected,
+            last_checked_at: new Date().toISOString(),
+            last_error: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("domain", sendingDomain.domain);
+        blocked = live.dkimOk ? null : blocked;
+      }
+      if (blocked) return { ...base, ok: false, error: blocked };
+    }
   }
 
   if (campaign.status === "sent") return { ...base, done: true };

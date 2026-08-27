@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendCampaignBatch, sendableThisRun } from "@/services/campaign-send";
 
+// node:dns is used by the sending-domain re-check inside sendCampaignBatch.
+export const runtime = "nodejs";
+
+
 export const maxDuration = 60;
 
 // GET /api/cron/send-scheduled — runs on a Vercel cron schedule.
