@@ -6,6 +6,7 @@ import { Plus, X, GripVertical, Sparkles } from "lucide-react";
 import {
   DndContext,
   DragOverlay,
+  MeasuringStrategy,
   closestCenter,
   KeyboardSensor,
   MouseSensor,
@@ -1011,12 +1012,26 @@ export function CampaignComposer({
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
+        // Auto-scroll the PAGE, never the inner panes. The canvas wrapper is
+        // overflow-x-auto and the palette/inspector are their own scrollers, so
+        // dnd-kit would otherwise try to scroll the nearest one — which can't
+        // move vertically — and the drag would stall at the bottom of the
+        // viewport instead of carrying on down the email.
+        autoScroll={{ canScroll: isPageScroller, threshold: PAGE_SCROLL_EDGE }}
+        // Re-measure drop zones continuously; the page scrolls under the
+        // pointer mid-drag, so cached rects go stale.
+        measuring={{
+          droppable: { strategy: MeasuringStrategy.Always },
+        }}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
         <div className="grid gap-3 -mx-4 md:-mx-6 lg:grid-cols-[200px_minmax(0,1fr)_330px] lg:items-start">
           {/* Palette */}
-          <Card className="self-start lg:sticky lg:top-4 lg:max-h-[calc(100vh-1.5rem)] lg:overflow-y-auto">
+          <Card
+            data-dnd-no-autoscroll
+            className="self-start lg:sticky lg:top-4 lg:max-h-[calc(100vh-1.5rem)] lg:overflow-y-auto"
+          >
             <CardHeader className="pb-2 space-y-2">
               <div className="flex items-center justify-between gap-1">
                 <SegmentedPicker
@@ -1120,7 +1135,10 @@ export function CampaignComposer({
           </Card>
 
           {/* Inspector */}
-          <Card className="self-start lg:sticky lg:top-4 lg:max-h-[calc(100vh-1.5rem)] lg:overflow-y-auto">
+          <Card
+            data-dnd-no-autoscroll
+            className="self-start lg:sticky lg:top-4 lg:max-h-[calc(100vh-1.5rem)] lg:overflow-y-auto"
+          >
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">
                 {designOpen
@@ -1531,6 +1549,19 @@ function SectionPaletteItem({
       {label}
     </button>
   );
+}
+
+// Auto-scroll config. Scrolling starts well before the pointer reaches the
+// very edge, so a long email is reachable in a single gesture.
+const PAGE_SCROLL_EDGE = { x: 0.15, y: 0.25 };
+
+// The builder's three panes are their own scroll containers (the canvas
+// wrapper is overflow-x-auto, the palette and inspector are sticky and
+// overflow-y-auto). dnd-kit would scroll the nearest one, which can't move
+// vertically, and the drag would stall instead of carrying on down the email.
+// Skip anything tagged data-dnd-no-autoscroll so the page scroller wins.
+function isPageScroller(element: Element): boolean {
+  return !(element as HTMLElement).dataset?.dndNoAutoscroll;
 }
 
 // Global per-email design overrides (Template design). Writes body.design.

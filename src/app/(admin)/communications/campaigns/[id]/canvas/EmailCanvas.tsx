@@ -33,6 +33,7 @@ export function EmailCanvas({
 
   return (
     <div
+      data-dnd-no-autoscroll
       className="flex min-h-[70vh] items-start justify-center overflow-x-auto rounded p-6 md:p-10"
       style={{ background: theme.pageBg }}
     >
