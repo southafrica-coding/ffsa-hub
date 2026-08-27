@@ -104,8 +104,26 @@ export async function sendViaMailtrap(
     const data = (await res.json().catch(() => ({}))) as {
       message_ids?: string[];
       success?: boolean;
+      errors?: string[] | string;
     };
-    return { messageId: data.message_ids?.[0] ?? null, error: null };
+    // A 200 is not an acceptance. Mailtrap answers rejected sends (suppressed
+    // recipient, unverified sender, malformed payload) with HTTP 200 and
+    // `success: false`, so trusting res.ok alone reports "sent" for an email
+    // that was never queued — exactly what a silent delivery failure looks
+    // like from the outside.
+    if (data.success === false || !data.message_ids?.length) {
+      const detail = Array.isArray(data.errors)
+        ? data.errors.join("; ")
+        : typeof data.errors === "string"
+          ? data.errors
+          : "no message id returned";
+      return {
+        messageId: null,
+        error: `Mailtrap rejected the message: ${detail}`,
+        rateLimited: isRateLimit(res.status, detail),
+      };
+    }
+    return { messageId: data.message_ids[0], error: null };
   } catch (e) {
     return {
       messageId: null,

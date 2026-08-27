@@ -10,6 +10,8 @@ import {
 import { sendViaMailtrap } from "@/lib/email/mailtrap";
 import { substituteFirstName, escapeHtml } from "@/lib/email/placeholders";
 import { getAuthedUser, canManageComms, COMMS_SEND_PERMS } from "@/lib/api-auth";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { recordEmail, markSent, markFailed } from "@/lib/email/ledger";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://www.ffsahub.com";
 
@@ -135,6 +137,21 @@ export async function POST(
     "X-Entity-Ref-ID": `test:${id}:${Date.now()}`,
   };
 
+  // Log the test in the delivery ledger. It stays out of campaign analytics
+  // (no campaign_recipients row), but "the site said it sent and nothing
+  // arrived" is undiagnosable without the provider's message id on record.
+  const admin = createAdminClient();
+  const ledgerId = await recordEmail(admin, {
+    toEmail: to,
+    provider: "mailtrap",
+    category: "campaign_test",
+    subject,
+    sourceType: "campaign",
+    sourceId: id,
+    reason: `Test send of "${campaign.name}" requested by ${user.email ?? "a Hub user"}`,
+    fromIdentityId: campaign.sending_identity_id ?? null,
+  });
+
   const result = await sendViaMailtrap({
     fromEmail: identity.from_email,
     fromName: identity.from_name,
@@ -148,7 +165,9 @@ export async function POST(
   });
 
   if (result.error) {
+    await markFailed(admin, ledgerId, result.error);
     return NextResponse.json({ error: result.error }, { status: 502 });
   }
+  await markSent(admin, ledgerId, result.messageId);
   return NextResponse.json({ ok: true, messageId: result.messageId, to });
 }
