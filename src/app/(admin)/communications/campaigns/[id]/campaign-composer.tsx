@@ -91,9 +91,13 @@ type CampaignMeta = {
   scheduled_at: string | null;
 };
 
+// A preset is a palette entry that inserts an ordinary block pre-filled for a
+// job, rather than a new block type — nothing downstream needs to know.
+type PalettePreset = "subscribe";
+
 const ADD_GROUPS: {
   group: string;
-  items: { type: CampaignBlockType; label: string }[];
+  items: { type: CampaignBlockType; label: string; preset?: PalettePreset }[];
 }[] = [
   {
     group: "Layout",
@@ -118,6 +122,7 @@ const ADD_GROUPS: {
     items: [
       { type: "button", label: "Button" },
       { type: "cta", label: "CTA card" },
+      { type: "cta", label: "Subscribe", preset: "subscribe" },
       { type: "social", label: "Social links" },
     ],
   },
@@ -180,6 +185,7 @@ export function CampaignComposer({
   audienceCount,
   brand,
   currentUserEmail,
+  subscribeLink,
 }: {
   campaign: CampaignMeta;
   initialBody: CampaignBody;
@@ -188,6 +194,8 @@ export function CampaignComposer({
   audienceCount: number;
   brand: EffectiveBrand;
   currentUserEmail: string | null;
+  /** Public sign-up list (migration 196) the Subscribe module points at. */
+  subscribeLink: { name: string; url: string } | null;
 }) {
   const router = useRouter();
   const [name, setName] = useState(campaign.name);
@@ -327,14 +335,19 @@ export function CampaignComposer({
     const target = dropTarget(event);
     if (!target) return;
     const data = active.data.current as
-      | { kind?: string; blockType?: CampaignBlockType; layout?: SectionLayout }
+      | {
+          kind?: string;
+          blockType?: CampaignBlockType;
+          layout?: SectionLayout;
+          preset?: PalettePreset;
+        }
       | undefined;
 
     if (data?.kind === "palette" && data.blockType) {
       const blk =
         data.blockType === "section"
           ? newSection(data.layout ?? "1-1")
-          : newBlock(data.blockType);
+          : newBlock(data.blockType, data.preset);
       // Only leaf blocks may go inside a column (sections never nest).
       if (target.container !== "root" && !COLUMN_ALLOWED_TYPES.has(blk.type))
         return;
@@ -347,7 +360,22 @@ export function CampaignComposer({
     setBody((b) => treeMoveBlock(b, id, target.container, target.index));
   }
 
-  function newBlock(type: CampaignBlockType): CampaignBlock {
+  function newBlock(
+    type: CampaignBlockType,
+    preset?: PalettePreset
+  ): CampaignBlock {
+    // One-click Subscribe button: a normal CTA card, pre-filled to point at
+    // the public sign-up page so it can be dropped into any email as-is.
+    if (preset === "subscribe" && subscribeLink) {
+      return {
+        id: newBlockId(),
+        type: "cta",
+        heading: "Never miss what's next",
+        text: `Get our updates and newsletter straight to your inbox.`,
+        buttonText: "Sign me up",
+        buttonUrl: subscribeLink.url,
+      };
+    }
     switch (type) {
       case "heading":
         return { id: newBlockId(), type, text: "A confident headline" };
@@ -429,8 +457,8 @@ export function CampaignComposer({
     setSelectedBlockId(id);
     if (id) setDesignOpen(false);
   }
-  function addBlock(type: CampaignBlockType) {
-    const blk = newBlock(type);
+  function addBlock(type: CampaignBlockType, preset?: PalettePreset) {
+    const blk = newBlock(type, preset);
     setBody((b) => insertAt(b, "root", b.blocks.length, blk));
     selectBlock(blk.id);
   }
@@ -1098,14 +1126,22 @@ export function CampaignComposer({
                         {g.group}
                       </p>
                       <div className="flex flex-col gap-1">
-                        {g.items.map((t) => (
-                          <PaletteItem
-                            key={t.type}
-                            type={t.type}
-                            label={t.label}
-                            onClick={() => addBlock(t.type)}
-                          />
-                        ))}
+                        {g.items
+                          .filter((t) => t.preset !== "subscribe" || subscribeLink)
+                          .map((t) => (
+                            <PaletteItem
+                              key={t.preset ?? t.type}
+                              type={t.type}
+                              preset={t.preset}
+                              label={t.label}
+                              title={
+                                t.preset === "subscribe" && subscribeLink
+                                  ? `Signs people up to ${subscribeLink.name}`
+                                  : undefined
+                              }
+                              onClick={() => addBlock(t.type, t.preset)}
+                            />
+                          ))}
                       </div>
                     </div>
                   ))}
@@ -1512,22 +1548,27 @@ function BlockDragGhost({
 // drop-zone (including into a section column) to place precisely.
 function PaletteItem({
   type,
+  preset,
   label,
+  title,
   onClick,
 }: {
   type: CampaignBlockType;
+  preset?: PalettePreset;
   label: string;
+  title?: string;
   onClick: () => void;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: `palette:${type}`,
-    data: { kind: "palette", blockType: type },
+    id: `palette:${preset ?? type}`,
+    data: { kind: "palette", blockType: type, preset },
   });
   return (
     <button
       ref={setNodeRef}
       type="button"
       onClick={onClick}
+      title={title}
       {...attributes}
       {...listeners}
       className={`flex h-7 items-center gap-1 rounded border px-2 text-left text-xs hover:bg-muted cursor-grab active:cursor-grabbing ${

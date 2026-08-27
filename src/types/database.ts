@@ -2109,6 +2109,7 @@ export type Database = {
           id: string
           is_active: boolean
           is_preset: boolean
+          public_subscribe: boolean
           name: string
           sending_identity_id: string | null
           slug: string
@@ -2122,6 +2123,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_preset?: boolean
+          public_subscribe?: boolean
           name: string
           sending_identity_id?: string | null
           slug: string
@@ -2135,6 +2137,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_preset?: boolean
+          public_subscribe?: boolean
           name?: string
           sending_identity_id?: string | null
           slug?: string

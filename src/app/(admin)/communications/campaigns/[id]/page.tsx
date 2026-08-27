@@ -50,6 +50,28 @@ export default async function CampaignComposerPage({
       ? (campaign.body_source as unknown as CampaignBody)
       : emptyCampaignBody();
 
+  // The public sign-up list the Subscribe module points at (migration 196).
+  // If no label is opened up, the palette simply doesn't offer the module.
+  const { data: subscribeLabel } = await supabase
+    .from("labels")
+    .select("name, slug")
+    .eq("public_subscribe", true)
+    .eq("is_active", true)
+    .order("name")
+    .limit(1)
+    .maybeSingle();
+  const siteUrl = (
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    "https://ffsahub.com"
+  ).replace(/\/$/, "");
+  const subscribeLink = subscribeLabel
+    ? {
+        name: subscribeLabel.name as string,
+        url: `${siteUrl}/subscribe/${subscribeLabel.slug}`,
+      }
+    : null;
+
   const showStats =
     campaign.status === "sent" || campaign.status === "sending";
   const [stats, recipientsRes] = showStats
@@ -84,6 +106,7 @@ export default async function CampaignComposerPage({
           audienceCount={audienceCount}
           brand={brand}
           currentUserEmail={user.email ?? null}
+          subscribeLink={subscribeLink}
         />
       </div>
     </div>
