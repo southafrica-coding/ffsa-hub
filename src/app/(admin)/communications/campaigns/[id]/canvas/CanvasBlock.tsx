@@ -1,6 +1,6 @@
 "use client";
 
-import { useDraggable } from "@dnd-kit/core";
+import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { GripVertical, Copy, Trash2 } from "lucide-react";
 import {
   renderBlock,
@@ -19,8 +19,10 @@ export function CanvasBlock({
   block,
   theme,
   container,
+  index,
   selectedId,
   dragActive,
+  insertTarget,
   onSelect,
   onRemove,
   onDuplicate,
@@ -28,8 +30,11 @@ export function CanvasBlock({
   block: CampaignBlock;
   theme: Theme;
   container: string;
+  /** Position of this block in its container — the insertion index it maps to. */
+  index: number;
   selectedId: string | null;
   dragActive: boolean;
+  insertTarget: { container: string; index: number } | null;
   onSelect: (id: string) => void;
   onRemove: (id: string) => void;
   onDuplicate: (id: string) => void;
@@ -38,6 +43,17 @@ export function CanvasBlock({
     id: block.id,
     data: { kind: "block", container },
   });
+  // The block itself is also a drop target: hovering its top half inserts
+  // above, its bottom half below. Without this the only targets are the thin
+  // gaps between blocks, which is fiddly on a long email.
+  const { setNodeRef: setDropRef } = useDroppable({
+    id: `over:${block.id}`,
+    data: { kind: "block-target", container, index },
+  });
+  const setRefs = (el: HTMLElement | null) => {
+    setNodeRef(el);
+    setDropRef(el);
+  };
   const selected = selectedId === block.id;
   const isSection = block.type === "section";
 
@@ -81,7 +97,7 @@ export function CanvasBlock({
     // so nested column blocks drag independently.
     return (
       <div
-        ref={setNodeRef}
+        ref={setRefs}
         onClick={() => onSelect(block.id)}
         className={`group relative rounded ${outline} ${
           isDragging ? "opacity-40" : ""
@@ -107,6 +123,7 @@ export function CanvasBlock({
           theme={theme}
           selectedId={selectedId}
           dragActive={dragActive}
+          insertTarget={insertTarget}
           onSelect={onSelect}
           onRemove={onRemove}
           onDuplicate={onDuplicate}
@@ -123,7 +140,7 @@ export function CanvasBlock({
 
   return (
     <div
-      ref={setNodeRef}
+      ref={setRefs}
       {...attributes}
       {...listeners}
       onClick={(e) => {

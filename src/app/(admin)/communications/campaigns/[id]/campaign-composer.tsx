@@ -15,6 +15,7 @@ import {
   useSensors,
   useDraggable,
   type DragEndEvent,
+  type DragMoveEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
 import {
@@ -265,6 +266,10 @@ export function CampaignComposer({
   const [activeDrag, setActiveDrag] = useState<
     { kind: "palette"; label: string } | { kind: "block"; blockId: string } | null
   >(null);
+  const [insertTarget, setInsertAtTarget] = useState<{
+    container: ContainerId;
+    index: number;
+  } | null>(null);
 
   function handleDragStart(event: DragStartEvent) {
     const d = event.active.data.current as
@@ -281,9 +286,13 @@ export function CampaignComposer({
   }
 
   // Resolve the drop destination (container + insertion index) from `over`.
+  // Two kinds of target: the thin insertion zones between blocks, and the
+  // blocks themselves — hovering a block's top half inserts above it, the
+  // bottom half below, so anywhere on the email is a valid landing spot.
   function dropTarget(
-    over: DragEndEvent["over"]
+    event: DragMoveEvent | DragEndEvent
   ): { container: ContainerId; index: number } | null {
+    const { over } = event;
     if (!over) return null;
     const d = over.data.current as
       | { kind?: string; container?: ContainerId; index?: number }
@@ -291,16 +300,31 @@ export function CampaignComposer({
     if (d?.kind === "dropzone" && d.container != null && d.index != null) {
       return { container: d.container, index: d.index };
     }
-    // Dropped over a block → insert before it, within its container.
+    if (d?.kind === "block-target" && d.container != null && d.index != null) {
+      const rect = over.rect;
+      const y = pointerY(event);
+      const below = y != null && y > rect.top + rect.height / 2;
+      return { container: d.container, index: d.index + (below ? 1 : 0) };
+    }
+    // Fallback: dropped over something we can locate → insert before it.
     const l = findLocation(body, String(over.id));
     if (l) return { container: l.container, index: l.index };
     return null;
   }
 
+  // Live insertion marker, so you can see where the block will land.
+  function handleDragMove(event: DragMoveEvent) {
+    const t = dropTarget(event);
+    setInsertAtTarget((prev) =>
+      prev?.container === t?.container && prev?.index === t?.index ? prev : t
+    );
+  }
+
   function handleDragEnd(event: DragEndEvent) {
     setActiveDrag(null);
-    const { active, over } = event;
-    const target = dropTarget(over);
+    setInsertAtTarget(null);
+    const { active } = event;
+    const target = dropTarget(event);
     if (!target) return;
     const data = active.data.current as
       | { kind?: string; blockType?: CampaignBlockType; layout?: SectionLayout }
@@ -1024,6 +1048,11 @@ export function CampaignComposer({
           droppable: { strategy: MeasuringStrategy.Always },
         }}
         onDragStart={handleDragStart}
+        onDragMove={handleDragMove}
+        onDragCancel={() => {
+          setActiveDrag(null);
+          setInsertAtTarget(null);
+        }}
         onDragEnd={handleDragEnd}
       >
         <div className="grid gap-3 -mx-4 md:-mx-6 lg:grid-cols-[200px_minmax(0,1fr)_330px] lg:items-start">
@@ -1127,6 +1156,7 @@ export function CampaignComposer({
                 device={device}
                 selectedId={selectedBlockId}
                 dragActive={activeDrag !== null}
+                insertTarget={insertTarget}
                 onSelect={(id) => selectBlock(id)}
                 onRemove={removeBlock}
                 onDuplicate={duplicateBlock}
@@ -1560,6 +1590,20 @@ const PAGE_SCROLL_EDGE = { x: 0.15, y: 0.25 };
 // overflow-y-auto). dnd-kit would scroll the nearest one, which can't move
 // vertically, and the drag would stall instead of carrying on down the email.
 // Skip anything tagged data-dnd-no-autoscroll so the page scroller wins.
+// Live pointer Y during a drag: where the gesture started, plus how far it has
+// travelled. dnd-kit doesn't hand back the raw pointer, and the dragged rect's
+// own centre is a poor proxy for tall blocks.
+function pointerY(event: DragMoveEvent | DragEndEvent): number | null {
+  const start = event.activatorEvent as Partial<MouseEvent> & {
+    touches?: TouchList;
+  };
+  const base =
+    typeof start?.clientY === "number"
+      ? start.clientY
+      : start?.touches?.[0]?.clientY;
+  return typeof base === "number" ? base + event.delta.y : null;
+}
+
 function isPageScroller(element: Element): boolean {
   return !(element as HTMLElement).dataset?.dndNoAutoscroll;
 }

@@ -15,6 +15,7 @@ export function EmailCanvas({
   device,
   selectedId,
   dragActive,
+  insertTarget,
   onSelect,
   onRemove,
   onDuplicate,
@@ -24,6 +25,8 @@ export function EmailCanvas({
   device: "desktop" | "mobile";
   selectedId: string | null;
   dragActive: boolean;
+  /** Where the dragged block would land right now — drawn as a solid line. */
+  insertTarget: { container: string; index: number } | null;
   onSelect: (id: string) => void;
   onRemove: (id: string) => void;
   onDuplicate: (id: string) => void;
@@ -76,18 +79,31 @@ export function EmailCanvas({
           }}
         >
           {body.blocks.length === 0 ? (
-            <DropZone container="root" index={0} dragActive={dragActive} full />
+            <DropZone
+              container="root"
+              index={0}
+              dragActive={dragActive}
+              insertTarget={insertTarget}
+              full
+            />
           ) : (
             <>
-              <DropZone container="root" index={0} dragActive={dragActive} />
+              <DropZone
+                container="root"
+                index={0}
+                dragActive={dragActive}
+                insertTarget={insertTarget}
+              />
               {body.blocks.map((b, i) => (
                 <div key={b.id}>
                   <CanvasBlock
                     block={b}
                     theme={theme}
                     container="root"
+                    index={i}
                     selectedId={selectedId}
                     dragActive={dragActive}
+                    insertTarget={insertTarget}
                     onSelect={onSelect}
                     onRemove={onRemove}
                     onDuplicate={onDuplicate}
@@ -96,6 +112,7 @@ export function EmailCanvas({
                     container="root"
                     index={i + 1}
                     dragActive={dragActive}
+                    insertTarget={insertTarget}
                   />
                 </div>
               ))}

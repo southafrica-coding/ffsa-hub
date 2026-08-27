@@ -16,6 +16,7 @@ export function CanvasSection({
   theme,
   selectedId,
   dragActive,
+  insertTarget,
   onSelect,
   onRemove,
   onDuplicate,
@@ -24,6 +25,7 @@ export function CanvasSection({
   theme: Theme;
   selectedId: string | null;
   dragActive: boolean;
+  insertTarget: { container: string; index: number } | null;
   onSelect: (id: string) => void;
   onRemove: (id: string) => void;
   onDuplicate: (id: string) => void;
@@ -46,19 +48,27 @@ export function CanvasSection({
                 container={col.id}
                 index={0}
                 dragActive={dragActive}
+                insertTarget={insertTarget}
                 full
               />
             ) : (
               <>
-                <DropZone container={col.id} index={0} dragActive={dragActive} />
+                <DropZone
+                  container={col.id}
+                  index={0}
+                  dragActive={dragActive}
+                  insertTarget={insertTarget}
+                />
                 {col.blocks.map((b, idx) => (
                   <div key={b.id}>
                     <CanvasBlock
                       block={b}
                       theme={theme}
                       container={col.id}
+                      index={idx}
                       selectedId={selectedId}
                       dragActive={dragActive}
+                      insertTarget={insertTarget}
                       onSelect={onSelect}
                       onRemove={onRemove}
                       onDuplicate={onDuplicate}
@@ -67,6 +77,7 @@ export function CanvasSection({
                       container={col.id}
                       index={idx + 1}
                       dragActive={dragActive}
+                      insertTarget={insertTarget}
                     />
                   </div>
                 ))}

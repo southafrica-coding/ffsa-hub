@@ -10,18 +10,26 @@ export function DropZone({
   container,
   index,
   dragActive,
+  insertTarget,
   full,
 }: {
   container: string;
   index: number;
   dragActive: boolean;
+  /** Resolved landing spot for the current drag (may be a block's half). */
+  insertTarget?: { container: string; index: number } | null;
   /** Full-height variant for empty columns ("Drop content here"). */
   full?: boolean;
 }) {
-  const { setNodeRef, isOver } = useDroppable({
+  const { setNodeRef, isOver: hovered } = useDroppable({
     id: `drop:${container}:${index}`,
     data: { kind: "dropzone", container, index },
   });
+  // Also light up when the drag is over an adjacent block half that resolves
+  // to this same insertion point.
+  const isOver =
+    hovered ||
+    (insertTarget?.container === container && insertTarget?.index === index);
 
   if (full) {
     return (
