@@ -54,9 +54,25 @@ export function CampaignAnalytics({ stats }: { stats: CampaignStats }) {
           </div>
         ))}
       </div>
-      <p className="px-5 py-3 text-[11px] text-[color:var(--text-tertiary)]">
-        Open and click rates update as Mailtrap delivers webhook events.
-      </p>
+      {stats.sent > 0 &&
+      stats.delivered === 0 &&
+      stats.bounced === 0 &&
+      stats.opened === 0 ? (
+        // Every counter here comes from Mailtrap webhooks. Sent mail with no
+        // event of ANY kind means the webhook isn't reaching us — say so,
+        // rather than showing zeros that read as "nobody got it".
+        <p className="px-5 py-3 text-[11px] text-amber-600 dark:text-amber-400">
+          No delivery events have arrived for this send. The email was accepted
+          by Mailtrap, but these counters stay at zero until Mailtrap’s webhook
+          can reach the Hub — check the webhook URL in Mailtrap (it must
+          include the <span className="font-mono">?token=</span> query and
+          point at the www domain).
+        </p>
+      ) : (
+        <p className="px-5 py-3 text-[11px] text-[color:var(--text-tertiary)]">
+          Open and click rates update as Mailtrap delivers webhook events.
+        </p>
+      )}
     </div>
   );
 }

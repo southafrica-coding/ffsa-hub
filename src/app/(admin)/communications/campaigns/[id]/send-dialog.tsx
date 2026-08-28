@@ -60,6 +60,7 @@ export function SendDialog({
   onClose: () => void;
 }) {
   const [stats, setStats] = useState<Stats | null>(null);
+  const [pollDone, setPollDone] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Poll delivery counters once the send finishes. Mailtrap's delivery
@@ -69,6 +70,7 @@ export function SendDialog({
   useEffect(() => {
     if (!open || phase !== "done") return;
     let cancelled = false;
+    setPollDone(false);
     const startedAt = Date.now();
 
     async function poll() {
@@ -78,7 +80,10 @@ export function SendDialog({
         const s = (await res.json()) as Stats;
         setStats(s);
         const settled = s.delivered + s.bounced >= s.sent && s.sent > 0;
-        if (settled || Date.now() - startedAt > 180_000) return;
+        if (settled || Date.now() - startedAt > 180_000) {
+          setPollDone(true);
+          return;
+        }
       }
       timer.current = setTimeout(poll, 5000);
     }
@@ -89,6 +94,15 @@ export function SendDialog({
       if (timer.current) clearTimeout(timer.current);
     };
   }, [open, phase, campaignId]);
+
+  // No event of any kind after the poll window is a webhook problem, not a
+  // delivery problem — the numbers would otherwise sit at zero silently.
+  const stalled =
+    stats !== null &&
+    stats.sent > 0 &&
+    stats.delivered === 0 &&
+    stats.bounced === 0 &&
+    pollDone;
 
   const total = audienceCount || progress.sent;
   const pct = total > 0 ? Math.min(100, Math.round((progress.sent / total) * 100)) : 0;
@@ -215,6 +229,13 @@ export function SendDialog({
                   ? "Every email is accounted for."
                   : "Mailboxes confirm delivery over the next few minutes — these numbers keep climbing. The full breakdown is on this page after you close."}
               </p>
+              {stalled && (
+                <p className="mt-2 text-[11px] text-amber-600 dark:text-amber-400">
+                  Nothing has come back yet. The mail was accepted, but these
+                  counters only move when Mailtrap’s webhook reaches the Hub —
+                  worth checking that it’s still configured.
+                </p>
+              )}
             </div>
 
             <div className="flex justify-end">
