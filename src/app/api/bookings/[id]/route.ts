@@ -4,6 +4,7 @@ import { getAuthedUser } from "@/lib/api-auth";
 import {
   getBookingAccess,
   getBookingById,
+  getVenueApproval,
   updateBooking,
   updateSeries,
   updateSeriesOccurrences,
@@ -18,6 +19,31 @@ const EDITABLE_DATETIME = [
   "setup_time",
   "setdown_time",
 ] as const;
+
+// Fields that decide WHEN and WHERE a booking physically sits. Changing any of
+// them on an approved booking in an approval-required space sends it back to
+// the space's manager; renaming the event or swapping the point person doesn't.
+const SLOT_FIELDS = [
+  "venue_id",
+  "booking_date",
+  "end_date",
+  "start_time",
+  "end_time",
+  "setup_time",
+  "setdown_time",
+] as const;
+
+// Postgres hands back times as "09:00:00" while the form sends "09:00", so
+// compare on the hh:mm prefix rather than raw strings.
+function sameSlotValue(a: unknown, b: unknown): boolean {
+  const norm = (v: unknown) => {
+    if (v === null || v === undefined || v === "") return "";
+    const str = String(v);
+    const m = str.match(/^(\d{2}):(\d{2})/);
+    return m ? `${m[1]}:${m[2]}` : str;
+  };
+  return norm(a) === norm(b);
+}
 
 // PATCH /api/bookings/[id] — edit fields and/or cancel a booking.
 // Cancelling is a status change (we never hard-delete — keeps history visible).
@@ -86,6 +112,35 @@ export async function PATCH(
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
 
+  // Re-approval. An approved booking that moves in time or space has to be
+  // re-checked by whoever looks after that space — but only for spaces flagged
+  // requires_approval. Approvers and managers editing their own bookings stay
+  // approved, mirroring the auto-confirm rule on the create path.
+  const editorApproves = access.isAdmin || access.canApprove || access.canManage;
+  const movedFields = SLOT_FIELDS.filter(
+    (key) => key in patch && !sameSlotValue(patch[key], booking[key])
+  );
+  const movedSlot = body.cancel !== true && movedFields.length > 0;
+  // A date change belongs to this occurrence alone, so it never re-opens the
+  // rest of the series — only a shared move (venue or times) does.
+  const movedSharedSlot = movedFields.some(
+    (key) => key !== "booking_date" && key !== "end_date"
+  );
+  let reopened = false;
+
+  if (movedSlot && booking.status === "approved" && !editorApproves) {
+    const targetVenueId = (patch.venue_id as string | undefined) ?? booking.venue_id;
+    const { data: venue } = await getVenueApproval(supabase, targetVenueId);
+    if (venue?.requires_approval) {
+      patch.status = "pending";
+      patch.decided_by = null;
+      patch.decided_at = null;
+      patch.decision_note =
+        "Re-opened for approval — the date, time or space changed after it was approved.";
+      reopened = true;
+    }
+  }
+
   const { error: updErr } = await updateBooking(supabase, id, patch);
   if (updErr) {
     return NextResponse.json({ error: updErr.message }, { status: 500 });
@@ -96,8 +151,13 @@ export async function PATCH(
   // different day by definition), so they're excluded from the series patch.
   if (body.applyToSeries === true && booking.series_id && body.cancel !== true) {
     const seriesPatch: Record<string, unknown> = {};
+    const skip = new Set(["booking_date", "end_date"]);
+    if (reopened && !movedSharedSlot) {
+      // Only this date moved — the other occurrences keep their approval.
+      skip.add("status").add("decided_by").add("decided_at").add("decision_note");
+    }
     for (const key of Object.keys(patch)) {
-      if (key === "booking_date" || key === "end_date") continue;
+      if (skip.has(key)) continue;
       seriesPatch[key] = patch[key];
     }
     if (Object.keys(seriesPatch).length > 0) {
@@ -115,8 +175,8 @@ export async function PATCH(
       // the series show the same details.
       await updateSeries(supabase, booking.series_id, seriesPatch);
     }
-    return NextResponse.json({ ok: true, appliedToSeries: true });
+    return NextResponse.json({ ok: true, appliedToSeries: true, reopened });
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, reopened });
 }

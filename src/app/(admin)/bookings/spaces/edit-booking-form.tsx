@@ -103,11 +103,21 @@ export function EditBookingForm({
       setLoading(false);
       return;
     }
-    toast.success(
-      booking.series_id && applyToSeries
-        ? "All dates in this series updated."
-        : "Booking updated."
-    );
+    if (json.reopened) {
+      toast.success(
+        json.appliedToSeries
+          ? "Series updated — sent back for approval."
+          : "Booking updated — sent back for approval.",
+        {
+          description:
+            "This space needs approval, so the new date, time or venue has to be confirmed by its manager.",
+        }
+      );
+    } else {
+      toast.success(
+        json.appliedToSeries ? "All dates in this series updated." : "Booking updated."
+      );
+    }
     router.push(`/bookings/spaces/${booking.id}`);
     router.refresh();
   }
