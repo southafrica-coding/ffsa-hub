@@ -397,7 +397,7 @@ export function CampsStorefront({
     setSubmitting(provider);
     setErr(null);
 
-    const res = await fetch(`/api/events/${event.id}/checkout`, {
+    const res: Response | null = await fetch(`/api/events/${event.id}/checkout`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -421,14 +421,26 @@ export function CampsStorefront({
         waiver_signatures: waiverCollect.payload,
         payment_provider: provider,
       }),
-    });
+    }).catch(() => null);
     setSubmitting(null);
+    // A thrown fetch (dropped mobile connection, tab suspended mid-tap) used
+    // to reject out of submit() before setSubmitting(null) ran, leaving the
+    // pay button disabled until the buyer reloaded the page — the "I can't
+    // click pay" reports. Swallow it into a retryable error instead.
+    if (!res) {
+      setErr(
+        "We couldn't reach the payment server. Check your connection and try again."
+      );
+      return;
+    }
     if (!res.ok) {
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       setErr(data.error ?? "Couldn't start checkout. Please try again.");
       return;
     }
-    const result = (await res.json()) as { redirectUrl?: string };
+    const result = (await res.json().catch(() => ({}))) as {
+      redirectUrl?: string;
+    };
     if (result.redirectUrl) {
       window.location.href = result.redirectUrl;
       return;
@@ -847,6 +859,12 @@ export function CampsStorefront({
             {lineCount === 1 ? "" : "es"} held for you &#128153;
           </p>
           {err && <p className="cmp-error">{STAR} {err}</p>}
+          {!err && !buyerValid && (
+            <p className="cmp-error">
+              Enter your details above — a valid email address is needed before
+              the payment button turns on.
+            </p>
+          )}
           {isFreeOrder ? (
             <button
               type="button"
