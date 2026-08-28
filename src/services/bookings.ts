@@ -373,13 +373,17 @@ export async function updateSeriesOccurrences(
   supabase: Client,
   seriesId: string,
   data: Record<string, unknown>,
-  onlyPending = false
+  onlyPending = false,
+  opts: { excludeId?: string; skipClosed?: boolean } = {}
 ) {
   let query = supabase
     .from("venue_bookings")
     .update({ ...data, updated_at: new Date().toISOString() })
     .eq("series_id", seriesId);
   if (onlyPending) query = query.eq("status", "pending");
+  // Don't reach back into occurrences that are already cancelled or denied.
+  if (opts.skipClosed) query = query.not("status", "in", "(cancelled,denied)");
+  if (opts.excludeId) query = query.neq("id", opts.excludeId);
   return query;
 }
 

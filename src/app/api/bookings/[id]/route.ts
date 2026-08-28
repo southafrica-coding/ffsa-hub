@@ -91,5 +91,32 @@ export async function PATCH(
     return NextResponse.json({ error: updErr.message }, { status: 500 });
   }
 
+  // "Apply to all dates" — push the shared details onto every other occurrence
+  // in the series. The dates themselves stay per-occurrence (each one is a
+  // different day by definition), so they're excluded from the series patch.
+  if (body.applyToSeries === true && booking.series_id && body.cancel !== true) {
+    const seriesPatch: Record<string, unknown> = {};
+    for (const key of Object.keys(patch)) {
+      if (key === "booking_date" || key === "end_date") continue;
+      seriesPatch[key] = patch[key];
+    }
+    if (Object.keys(seriesPatch).length > 0) {
+      const { error: occErr } = await updateSeriesOccurrences(
+        supabase,
+        booking.series_id,
+        seriesPatch,
+        false,
+        { excludeId: id, skipClosed: true }
+      );
+      if (occErr) {
+        return NextResponse.json({ error: occErr.message }, { status: 500 });
+      }
+      // Keep the series definition itself in step, so future views/edits of
+      // the series show the same details.
+      await updateSeries(supabase, booking.series_id, seriesPatch);
+    }
+    return NextResponse.json({ ok: true, appliedToSeries: true });
+  }
+
   return NextResponse.json({ ok: true });
 }

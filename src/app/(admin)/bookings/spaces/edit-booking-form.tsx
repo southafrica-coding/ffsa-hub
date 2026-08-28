@@ -35,6 +35,9 @@ export function EditBookingForm({
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // For a weekly series, default to editing every date — that's almost always
+  // what people mean when they change a meeting's name, venue or time.
+  const [applyToSeries, setApplyToSeries] = useState(true);
 
   const [form, setForm] = useState({
     venue_id: booking.venue_id,
@@ -91,6 +94,7 @@ export function EditBookingForm({
         end_time: form.end_time || null,
         setup_time: form.setup_time || null,
         setdown_time: form.setdown_time || null,
+        applyToSeries: booking.series_id ? applyToSeries : false,
       }),
     });
     const json = await res.json().catch(() => ({}));
@@ -99,7 +103,11 @@ export function EditBookingForm({
       setLoading(false);
       return;
     }
-    toast.success("Booking updated.");
+    toast.success(
+      booking.series_id && applyToSeries
+        ? "All dates in this series updated."
+        : "Booking updated."
+    );
     router.push(`/bookings/spaces/${booking.id}`);
     router.refresh();
   }
@@ -110,9 +118,48 @@ export function EditBookingForm({
       <div className="p-6">
         <form onSubmit={submit} className="space-y-5">
           {booking.series_id && (
-            <p className="border border-rule bg-bone px-3 py-2 text-xs text-[color:var(--text-secondary)]">
-              This is one date in a weekly series — your edits apply to this date only.
-            </p>
+            <div className="space-y-2 border border-rule bg-bone px-3 py-2.5">
+              <p className="text-xs font-medium text-[color:var(--text-primary)]">
+                This is one date in a weekly series. Apply your changes to:
+              </p>
+              <div className="flex flex-col gap-1.5">
+                <label className="flex items-start gap-2 text-xs text-[color:var(--text-secondary)]">
+                  <input
+                    type="radio"
+                    name="edit-scope"
+                    className="mt-0.5"
+                    checked={applyToSeries}
+                    onChange={() => setApplyToSeries(true)}
+                  />
+                  <span>
+                    <span className="text-[color:var(--text-primary)]">
+                      All dates in this series
+                    </span>{" "}
+                    — name, description, venue, ministry, point person and times update on
+                    every occurrence.
+                  </span>
+                </label>
+                <label className="flex items-start gap-2 text-xs text-[color:var(--text-secondary)]">
+                  <input
+                    type="radio"
+                    name="edit-scope"
+                    className="mt-0.5"
+                    checked={!applyToSeries}
+                    onChange={() => setApplyToSeries(false)}
+                  />
+                  <span>
+                    <span className="text-[color:var(--text-primary)]">This date only</span> —
+                    leave the rest of the series as it is.
+                  </span>
+                </label>
+              </div>
+              {applyToSeries && (
+                <p className="text-[11px] text-[color:var(--text-secondary)]">
+                  The date fields below always apply to this occurrence only — each date in a
+                  series is its own day.
+                </p>
+              )}
+            </div>
           )}
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
