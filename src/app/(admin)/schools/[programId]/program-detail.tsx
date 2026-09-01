@@ -39,6 +39,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -744,42 +745,103 @@ function StaffAssignSelect({
 // graduated, decided_to_leave, removed) has already come and gone.
 const ARRIVAL_STATUSES = ["waiting_for_arrival", "arrived"];
 
-function ProfileBadge({ info }: { info: ArrivalInsuranceInfo | undefined }) {
+// The arrival-day helper standing in front of the student needs to know WHICH
+// fields are missing, not just how many. Incomplete / "No profile yet" badges
+// are therefore buttons that open a read-only breakdown; Complete / Inactive /
+// Unknown stay plain, non-clickable badges (nothing to drill into).
+//
+// Uses Dialog, not Popover — Radix popovers have silently failed to open in
+// Safari in this codebase before (see SearchableSelect / phone inputs).
+function ProfileBadge({
+  info,
+  studentName,
+  userId,
+}: {
+  info: ArrivalInsuranceInfo | undefined;
+  studentName: string;
+  userId: string;
+}) {
+  const [open, setOpen] = useState(false);
+
   if (!info) {
     return <Badge variant="secondary">Unknown</Badge>;
-  }
-  if (info.profileStage === "invited") {
-    return (
-      <Badge variant="destructive" title="Accepted but hasn't signed in or started a profile yet">
-        No profile yet
-      </Badge>
-    );
   }
   if (info.profileStage === "inactive") {
     return <Badge variant="secondary">Inactive</Badge>;
   }
-  if (info.profileStage === "profile_incomplete") {
+
+  const isInvited = info.profileStage === "invited";
+  const isIncomplete = info.profileStage === "profile_incomplete";
+
+  if (!isInvited && !isIncomplete) {
     return (
       <Badge
         variant="outline"
-        className="status-yellow"
-        title={
-          info.missingSections.length
-            ? `Missing: ${info.missingSections.join(", ")}`
-            : "Profile incomplete"
-        }
+        className="status-green"
       >
-        Incomplete ({info.completedRequired}/{info.totalRequired})
+        Complete
       </Badge>
     );
   }
+
   return (
-    <Badge
-      variant="outline"
-      className="status-green"
-    >
-      Complete
-    </Badge>
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="cursor-pointer"
+        title="See exactly what's missing"
+      >
+        {isInvited ? (
+          <Badge variant="destructive">No profile yet</Badge>
+        ) : (
+          <Badge
+            variant="outline"
+            className="status-yellow"
+          >
+            Incomplete ({info.completedRequired}/{info.totalRequired})
+          </Badge>
+        )}
+      </button>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{studentName}</DialogTitle>
+            <DialogDescription>
+              {isInvited
+                ? "Accepted, but hasn't signed in or started a profile yet — nothing has been filled in."
+                : `${info.completedRequired} of ${info.totalRequired} required fields complete.`}
+            </DialogDescription>
+          </DialogHeader>
+
+          {info.missingGroups.length > 0 && (
+            <div className="space-y-4">
+              <p className="text-sm font-medium">Still needed</p>
+              {info.missingGroups.map((group) => (
+                <div key={group.section} className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {group.section}
+                  </p>
+                  <ul className="list-disc pl-5 text-sm">
+                    {group.fields.map((label) => (
+                      <li key={label}>{label}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <a
+            href={`/users/${userId}`}
+            className="text-sm underline underline-offset-4"
+          >
+            Open full profile
+          </a>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -961,7 +1023,11 @@ function ArrivalTab({
                       </div>
                     </TableCell>
                     <TableCell>
-                      <ProfileBadge info={info} />
+                      <ProfileBadge
+                        info={info}
+                        studentName={userName(enrollment.users)}
+                        userId={enrollment.user_id}
+                      />
                     </TableCell>
                     <TableCell>
                       <Select

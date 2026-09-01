@@ -33,6 +33,10 @@ export type ArrivalInsuranceInfo = {
   totalRequired: number;
   // Human-readable missing sections, e.g. ["Personal (3)", "Health insurance (2)"].
   missingSections: string[];
+  // The same grouping, but naming each missing field so the arrival-day helper
+  // can read out exactly what to ask the student for. LABELS ONLY — never the
+  // stored values, so this stays as PII-safe as the section counts above.
+  missingGroups: { section: string; fields: string[] }[];
   // Auto-computed validity of the entered policy (ok / expiring / expired / missing).
   insurance: InsuranceStatus;
   provider: string | null;
@@ -76,14 +80,17 @@ export async function getArrivalInsuranceInfo(
       last_sign_in_at: signIns.get(u.id) ?? u.last_sign_in_at ?? null,
     };
     const lc = deriveUserLifecycle(row);
+    const groups = groupMissingFields(lc.missingFields);
     out[u.id] = {
       profileStage: lc.stage,
       profileLabel: lc.label,
       completedRequired: lc.completedRequired,
       totalRequired: lc.totalRequired,
-      missingSections: groupMissingFields(lc.missingFields).map(
-        (g) => `${g.section} (${g.fields.length})`
-      ),
+      missingSections: groups.map((g) => `${g.section} (${g.fields.length})`),
+      missingGroups: groups.map((g) => ({
+        section: g.section,
+        fields: g.fields.map((f) => f.label),
+      })),
       insurance: lc.insurance,
       provider: (u.health_insurance_provider as string | null) ?? null,
       policyNumber: (u.health_insurance_policy_number as string | null) ?? null,
