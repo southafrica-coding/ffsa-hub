@@ -75,6 +75,25 @@ export default async function UserProfilePage({
 
   if (!canManagePermissions) redirect("/dashboard");
 
+  // A schools manager who isn't an admin may only open the profiles of people
+  // attached to a school they manage — their applicants and students. Checked
+  // with the service-role client because the enrolment/application rows they
+  // need are the same ones RLS hides from them (see below).
+  const admin = createAdminClient();
+  if (!isAdmin) {
+    const managesTarget = await viewerManagesStudent(admin, manageScopes, id);
+    if (!managesTarget) notFound();
+  }
+
+  // `public.users` has exactly two SELECT policies (002_rls_policies.sql):
+  // "own record" and is_admin(). A program leader is neither, so the
+  // RLS-scoped read comes back empty and the page 404s on someone they are
+  // explicitly allowed to review. Read their profile through the service-role
+  // client instead — the same workaround the program page already uses for
+  // rosters (hydrateUserIdentities) — and trim what renders below to the
+  // school-leader view. Insurance/consent/security stay admin-only.
+  const profileClient = isAdmin ? supabase : admin;
+
   const [
     { data: targetUser, error },
     authLastSignInAt,
@@ -82,10 +101,12 @@ export default async function UserProfilePage({
     { data: insurancePolicies },
     { data: ministries },
   ] = await Promise.all([
-    getUserById(supabase, id),
-    getAuthSignIn(id),
-    getUserSecurityEvents(id),
-    getInsurancePolicies(supabase, id),
+    getUserById(profileClient, id),
+    isAdmin ? getAuthSignIn(id) : Promise.resolve(null),
+    isAdmin ? getUserSecurityEvents(id) : Promise.resolve([]),
+    isAdmin
+      ? getInsurancePolicies(supabase, id)
+      : Promise.resolve({ data: [] }),
     // Department options come from the Ministry tab (active ministries). The
     // dialog appends the user's current value if it's a since-retired one.
     listActiveMinistries(supabase),
@@ -143,16 +164,15 @@ export default async function UserProfilePage({
   if (membership === "staff") {
     // Service-role read: ministry RLS may hide rows from a non-super-admin
     // (e.g. schools-manager) viewer; the title should still resolve.
-    const adminClient = createAdminClient();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: ministryRows } = await (adminClient as any)
+    const { data: ministryRows } = await (admin as any)
       .from("staff_ministry_members")
       .select("member_role, is_point_leader, is_category_point_leader, status")
       .eq("user_id", id)
       .eq("status", "active");
     ministryRole = strongestMinistryRole(ministryRows ?? []);
   } else if (membership === "student") {
-    const { data: enrollments } = await getEnrollmentsByUser(supabase, id);
+    const { data: enrollments } = await getEnrollmentsByUser(profileClient, id);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const first = ((enrollments ?? []) as any[])[0];
     const program = Array.isArray(first?.programs)
@@ -213,10 +233,14 @@ export default async function UserProfilePage({
             label="Preferred name"
             value={targetUser.preferred_name ?? "—"}
           />
-          <InfoRow
-            label="Date of birth"
-            value={targetUser.date_of_birth ?? "—"}
-          />
+          {/* DOB is identity-document PII; a school leader reviewing an
+              applicant doesn't need it, admins running the school do. */}
+          {isAdmin && (
+            <InfoRow
+              label="Date of birth"
+              value={targetUser.date_of_birth ?? "—"}
+            />
+          )}
           <InfoRow
             label="Nationality"
             value={targetUser.nationality ?? "—"}
@@ -229,6 +253,7 @@ export default async function UserProfilePage({
           <InfoRow label="Job title" value={derivedTitle ?? "—"} />
         </InfoCard>
 
+        {isAdmin && (
         <InfoCard title="Address">
           {addressLines(targetUser).length > 0 ? (
             <div className="space-y-0.5 text-sm">
@@ -242,6 +267,7 @@ export default async function UserProfilePage({
             </p>
           )}
         </InfoCard>
+        )}
       </section>
 
       {isAdmin && (
@@ -283,12 +309,14 @@ export default async function UserProfilePage({
         </section>
       )}
 
-      <section>
-        <SecurityActivityCard
-          events={securityEvents}
-          lastSignInAt={authLastSignInAt}
-        />
-      </section>
+      {isAdmin && (
+        <section>
+          <SecurityActivityCard
+            events={securityEvents}
+            lastSignInAt={authLastSignInAt}
+          />
+        </section>
+      )}
 
       {isAdmin && (
         <section className=" border p-4 space-y-3">
@@ -304,6 +332,7 @@ export default async function UserProfilePage({
         </section>
       )}
 
+      {isAdmin && (
       <section className="space-y-3">
         <div className="flex items-end justify-between">
           <div>
@@ -316,9 +345,41 @@ export default async function UserProfilePage({
         </div>
         <ProfileRecords userId={id} canOpenLibrary={true} />
       </section>
+      )}
       </div>
     </div>
   );
+}
+
+/**
+ * True when a non-admin schools manager is allowed to open this person's
+ * profile: the person must have an application or an enrolment on a program
+ * the viewer manages (any program when their schools.manage is global).
+ *
+ * Runs on the service-role client — the rows it checks are exactly the ones
+ * RLS hides from a program leader, so an RLS-scoped read would answer "no"
+ * for every student they legitimately review.
+ */
+async function viewerManagesStudent(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- matches the `Client = any` convention in services
+  admin: any,
+  scopes: { hasGlobal: boolean; programIds: string[] },
+  targetUserId: string
+): Promise<boolean> {
+  for (const table of ["enrollments", "application_responses"]) {
+    let query = admin
+      .from(table)
+      .select("id")
+      .eq("user_id", targetUserId)
+      .limit(1);
+    if (!scopes.hasGlobal) {
+      if (scopes.programIds.length === 0) return false;
+      query = query.in("program_id", scopes.programIds);
+    }
+    const { data } = await query;
+    if ((data?.length ?? 0) > 0) return true;
+  }
+  return false;
 }
 
 function legalName(u: {
