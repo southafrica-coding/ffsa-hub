@@ -236,10 +236,12 @@ async function newStaffOnboardedNotifs(
     });
 }
 
-// Tell vehicle approvers/managers when a request arrives through the PUBLIC
-// link (people outside the Hub). Internal requesters can't see this feed, so
-// it's scoped to source='public' — the external requests that need a human's
-// eyes the most.
+// Tell vehicle approvers/managers that a request is waiting for a decision.
+//
+// This used to filter source='public' for the pasteable request link. That
+// link is gone, and its `source` column was never actually applied to the
+// database — so the filter matched nothing and approvers saw no vehicle
+// notifications at all. Every pending request now counts.
 async function vehicleRequestNotifs(supabase: Client, userId: string): Promise<AppNotification[]> {
   const access = await getVehicleAccess(supabase, userId);
   if (!(access.isAdmin || access.canApprove || access.canManage)) return [];
@@ -247,7 +249,6 @@ async function vehicleRequestNotifs(supabase: Client, userId: string): Promise<A
     .from("vehicle_bookings")
     .select("id, booking_name, requester_name, checkout_date, return_date, created_at")
     .eq("status", "pending")
-    .eq("source", "public")
     .order("created_at", { ascending: false })
     .limit(CAP);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -256,7 +257,7 @@ async function vehicleRequestNotifs(supabase: Client, userId: string): Promise<A
     return {
       key: `vehicle:${b.id}`,
       kind: "vehicle" as const,
-      title: "New vehicle request (public link)",
+      title: "Vehicle request awaiting approval",
       body: `${b.booking_name}${b.requester_name ? ` · ${b.requester_name}` : ""} · ${dateRangeLabel(b.checkout_date, b.return_date)}`,
       href: "/bookings/vehicles/requests",
       when: label,

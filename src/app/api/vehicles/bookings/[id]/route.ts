@@ -10,6 +10,7 @@ import {
   setBookingVehicles,
   setBookingDrivers,
 } from "@/services/vehicles";
+import { notifyVehicleManagers } from "@/lib/email/send-vehicle-request";
 
 type DriverInput = {
   id?: string | null;
@@ -184,6 +185,18 @@ export async function PATCH(
     const { data, error } = await setBookingDrivers(supabase, id, rows);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     drivers = data.map((d) => ({ id: d.id, name: d.name }));
+  }
+
+  // A cancellation frees the vehicle up — the managers need to know.
+  if (update.status === "cancelled" && booking.status !== "cancelled") {
+    await notifyVehicleManagers({
+      event: "cancelled",
+      bookingId: id,
+      bookingName: (update.booking_name as string) ?? booking.booking_name,
+      requesterName: booking.requester_name,
+      checkoutDate: effCheckout,
+      returnDate: effReturn,
+    });
   }
 
   return NextResponse.json({ ok: true, drivers });

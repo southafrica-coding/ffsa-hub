@@ -3,9 +3,13 @@ import { createClient } from "@/lib/supabase/server";
 import { getAuthedUser } from "@/lib/api-auth";
 import {
   getVehicleAccess,
+  getVehicleBookingById,
   getVehicleBookingOwner,
+  hasInspection,
   insertInspection,
+  type VehicleBookingWithRefs,
 } from "@/services/vehicles";
+import { notifyVehicleManagers } from "@/lib/email/send-vehicle-request";
 
 function nn(v: string | null | undefined): string | null {
   const t = (v ?? "").trim();
@@ -44,6 +48,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
+  // One inspection per kind. Without this a double-submit writes two rows and
+  // the booking page shows whichever comes back first.
+  if (await hasInspection(supabase, bookingId, kind)) {
+    return NextResponse.json(
+      {
+        error: `A ${kind} inspection is already recorded for this booking.`,
+      },
+      { status: 409 }
+    );
+  }
+
   const damagePanels = Array.isArray(body.damage_panels)
     ? body.damage_panels.filter((p: unknown): p is string => typeof p === "string")
     : [];
@@ -64,9 +79,40 @@ export async function POST(request: Request) {
     inventory,
     condition_notes: nn(body.condition_notes),
     declaration_agreed: body.declaration_agreed === true,
+    all_drivers_present: bool(body.all_drivers_present),
+    usage_purpose: nn(body.usage_purpose),
+    sa_license_confirmed: bool(body.sa_license_confirmed),
+    checkin_date: nn(body.checkin_date),
+    communicated_truthfully: bool(body.communicated_truthfully),
+    inspection_permission: bool(body.inspection_permission),
     performed_by: user.id,
   });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Tell the vehicle managers the form is in. Best-effort — a mail problem
+  // must not fail a submission the driver has already completed.
+  try {
+    const { data: full } = await getVehicleBookingById(supabase, bookingId);
+    const b = full as VehicleBookingWithRefs | null;
+    if (b) {
+      const vehicleLabel = (b.assignments ?? [])
+        .map((a) => a.vehicle?.name)
+        .filter(Boolean)
+        .join(", ");
+      await notifyVehicleManagers({
+        event: kind === "collection" ? "collected" : "returned",
+        bookingId,
+        bookingName: b.booking_name,
+        requesterName: b.requester_name,
+        checkoutDate: b.checkout_date,
+        returnDate: b.return_date,
+        vehicleLabel: vehicleLabel || null,
+      });
+    }
+  } catch {
+    console.error("[vehicles] inspection notification failed");
+  }
+
   return NextResponse.json({ ok: true, inspection: data });
 }

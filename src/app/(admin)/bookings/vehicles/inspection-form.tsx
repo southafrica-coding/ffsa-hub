@@ -15,24 +15,71 @@ import {
 } from "@/services/vehicles";
 import { SectionBar } from "@/components/ffsa";
 
+type FileKind = "damage_photo" | "license" | "carwash_receipt" | "fuel_gauge";
+
 type UploadedFile = {
   id: string;
-  kind: "damage_photo" | "license";
+  kind: FileKind;
   file_name: string | null;
   signed_url: string | null;
 };
+
+/** The rental terms every driver agrees to, linked from both forms. */
+const TERMS_URL =
+  "https://docs.google.com/document/d/1rQ8fL4dNhJflIevyMO9GDpsGUWmEtQDXGQTcA53BUQA/edit?usp=sharing";
+
+/** Tri-state yes/no. `null` means unanswered, so we can insist on a choice. */
+function YesNo({
+  id,
+  label,
+  hint,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  hint?: string;
+  value: boolean | null;
+  onChange: (v: boolean | null) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>{label} *</Label>
+      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+      <select
+        id={id}
+        value={value === null ? "" : value ? "yes" : "no"}
+        onChange={(e) =>
+          onChange(e.target.value === "" ? null : e.target.value === "yes")
+        }
+        className="h-10 w-full"
+      >
+        <option value="">— choose —</option>
+        <option value="yes">Yes</option>
+        <option value="no">No</option>
+      </select>
+    </div>
+  );
+}
 
 export function InspectionForm({
   bookingId,
   kind,
   vehicles,
   defaultDriverNames,
+  defaultUsagePurpose,
+  defaultCheckinDate,
   initialFiles,
 }: {
   bookingId: string;
   kind: InspectionKind;
+  /** Assigned vehicles, labelled with their registration plate. */
   vehicles: { id: string; name: string }[];
   defaultDriverNames: string;
+  /** Prefilled from the booking's purpose — collection only. */
+  defaultUsagePurpose: string;
+  /** Prefilled from the booking's return date — return only. */
+  defaultCheckinDate: string;
   initialFiles: UploadedFile[];
 }) {
   const router = useRouter();
@@ -51,6 +98,14 @@ export function InspectionForm({
   const [notes, setNotes] = useState("");
   const [agreed, setAgreed] = useState(false);
 
+  // Questions carried over from the Google Forms this replaced.
+  const [allDriversPresent, setAllDriversPresent] = useState<boolean | null>(null);
+  const [usagePurpose, setUsagePurpose] = useState(defaultUsagePurpose);
+  const [saLicenseConfirmed, setSaLicenseConfirmed] = useState<boolean | null>(null);
+  const [checkinDate, setCheckinDate] = useState(defaultCheckinDate);
+  const [communicatedTruthfully, setCommunicatedTruthfully] = useState(false);
+  const [inspectionPermission, setInspectionPermission] = useState(false);
+
   const [files, setFiles] = useState<UploadedFile[]>(initialFiles);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -62,7 +117,7 @@ export function InspectionForm({
     );
   }
 
-  async function uploadFiles(list: FileList | null, fileKind: "damage_photo" | "license") {
+  async function uploadFiles(list: FileList | null, fileKind: FileKind) {
     if (!list || list.length === 0) return;
     setUploading(true);
     for (const file of Array.from(list)) {
@@ -103,6 +158,39 @@ export function InspectionForm({
       setError("Please enter the vehicle mileage.");
       return;
     }
+    if (allDriversPresent === null) {
+      setError("Please confirm whether every driver is present.");
+      return;
+    }
+    if (isCollection) {
+      if (!usagePurpose.trim()) {
+        setError("Please say what the vehicle is being used for.");
+        return;
+      }
+      if (saLicenseConfirmed === null) {
+        setError("Please confirm whether the driver holds a valid SA licence.");
+        return;
+      }
+    } else {
+      if (!checkinDate) {
+        setError("Please enter the check-in date.");
+        return;
+      }
+      // The receipt and the gauge photo are the evidence for the claim — asked
+      // for only when the claim is actually made.
+      if (washed && receipts.length === 0) {
+        setError("Please attach the carwash receipt, or untick 'washed'.");
+        return;
+      }
+      if (fuelFull && fuelPhotos.length === 0) {
+        setError("Please attach a photo of the fuel gauge, or untick 'refuelled'.");
+        return;
+      }
+      if (!communicatedTruthfully || !inspectionPermission) {
+        setError("Please agree to both return declarations before submitting.");
+        return;
+      }
+    }
     if (!agreed) {
       setError("Please confirm the declaration before submitting.");
       return;
@@ -125,6 +213,12 @@ export function InspectionForm({
         damage_reported: isCollection ? null : damageReported,
         condition_notes: notes.trim() || null,
         declaration_agreed: agreed,
+        all_drivers_present: allDriversPresent,
+        usage_purpose: isCollection ? usagePurpose.trim() || null : null,
+        sa_license_confirmed: isCollection ? saLicenseConfirmed : null,
+        checkin_date: isCollection ? null : checkinDate || null,
+        communicated_truthfully: isCollection ? null : communicatedTruthfully,
+        inspection_permission: isCollection ? null : inspectionPermission,
       }),
     });
     const json = await res.json().catch(() => ({}));
@@ -140,6 +234,8 @@ export function InspectionForm({
 
   const photos = files.filter((f) => f.kind === "damage_photo");
   const licenses = files.filter((f) => f.kind === "license");
+  const receipts = files.filter((f) => f.kind === "carwash_receipt");
+  const fuelPhotos = files.filter((f) => f.kind === "fuel_gauge");
 
   return (
     <div className="border border-ink bg-white">
@@ -182,8 +278,38 @@ export function InspectionForm({
           </div>
         </div>
 
+        {/* Every driver present — asked on both forms */}
+        <div className="border border-rule bg-bone p-4">
+          <YesNo
+            id="all_drivers_present"
+            label="Are all the drivers present to complete this form?"
+            hint="It is your responsibility to make sure every driver is present while you fill this in."
+            value={allDriversPresent}
+            onChange={setAllDriversPresent}
+          />
+        </div>
+
         {isCollection ? (
           <>
+            {/* Purpose + licence confirmation */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="usage_purpose">What are you using it for? *</Label>
+                <Input
+                  id="usage_purpose"
+                  value={usagePurpose}
+                  onChange={(e) => setUsagePurpose(e.target.value)}
+                />
+              </div>
+              <YesNo
+                id="sa_license"
+                label="Valid SA driver's licence?"
+                hint="Please do not drive without it."
+                value={saLicenseConfirmed}
+                onChange={setSaLicenseConfirmed}
+              />
+            </div>
+
             {/* Walk-around damage map */}
             <div className="space-y-2 border border-rule bg-bone p-4">
               <Label>Walk-around — tick any panel that HAS damage</Label>
@@ -239,6 +365,17 @@ export function InspectionForm({
             />
           </>
         ) : (
+          <>
+          <div className="space-y-2">
+            <Label htmlFor="checkin_date">Check-in date *</Label>
+            <Input
+              id="checkin_date"
+              type="date"
+              value={checkinDate}
+              onChange={(e) => setCheckinDate(e.target.value)}
+            />
+          </div>
+
           <div className="space-y-2 border border-rule bg-bone p-4">
             <Label>Return condition</Label>
             <div className="flex flex-col gap-2 pt-1">
@@ -256,6 +393,53 @@ export function InspectionForm({
               </label>
             </div>
           </div>
+
+          {washed && (
+            <FileSection
+              label="Carwash receipt"
+              accept="image/*,application/pdf"
+              files={receipts}
+              uploading={uploading}
+              onUpload={(l) => uploadFiles(l, "carwash_receipt")}
+              onRemove={removeFile}
+            />
+          )}
+          {fuelFull && (
+            <FileSection
+              label="Photo of the fuel gauge"
+              accept="image/*"
+              files={fuelPhotos}
+              uploading={uploading}
+              onUpload={(l) => uploadFiles(l, "fuel_gauge")}
+              onRemove={removeFile}
+            />
+          )}
+
+          {/* The two sign-in declarations */}
+          <div className="space-y-2 border border-rule bg-bone p-4">
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={communicatedTruthfully}
+                onChange={(e) => setCommunicatedTruthfully(e.target.checked)}
+                className="mt-0.5 rounded border-input"
+              />
+              I (and every driver above) have communicated truthfully and openly
+              about our time with the vehicle, and are not withholding anything
+              from the Vehicle Coordinator.
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={inspectionPermission}
+                onChange={(e) => setInspectionPermission(e.target.checked)}
+                className="mt-0.5 rounded border-input"
+              />
+              I give FFSA permission to do a full vehicle inspection, and I will
+              be available for any questions that come up about the vehicle.
+            </label>
+          </div>
+          </>
         )}
 
         {/* Damage photos (both kinds) */}
@@ -281,6 +465,18 @@ export function InspectionForm({
         </div>
 
         {/* Declaration */}
+        <p className="text-xs text-muted-foreground">
+          By continuing you agree to the{" "}
+          <a
+            href={TERMS_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2"
+          >
+            vehicle rental terms and conditions
+          </a>
+          .
+        </p>
         <label className="flex items-start gap-2 text-sm">
           <input
             type="checkbox"

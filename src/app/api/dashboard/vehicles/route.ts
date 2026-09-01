@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getVehicleAccess, getPendingVehicleBookings } from "@/services/vehicles";
+import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  getVehicleAccess,
+  getPendingVehicleBookings,
+  getRecentVehicleActivity,
+} from "@/services/vehicles";
 
 // Pending vehicle requests awaiting approval. For vehicle managers/approvers
 // only — canView is near-universal (self_service floor), so we gate on
@@ -16,7 +21,7 @@ export async function GET() {
 
   const access = await getVehicleAccess(supabase, user.id);
   if (!(access.canApprove || access.canManage)) {
-    return NextResponse.json({ requests: [] });
+    return NextResponse.json({ requests: [], activity: [] });
   }
 
   const { data } = await getPendingVehicleBookings(supabase);
@@ -29,5 +34,10 @@ export async function GET() {
     returnDate: (b.return_date as string | null) ?? null,
   }));
 
-  return NextResponse.json({ requests });
+  // Recent fleet movement — the sign-outs, sign-ins and cancellations a
+  // manager would otherwise only learn about by email.
+  const since = new Date(Date.now() - 14 * 86400000).toISOString();
+  const activity = await getRecentVehicleActivity(createAdminClient(), since);
+
+  return NextResponse.json({ requests, activity });
 }

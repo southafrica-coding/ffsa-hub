@@ -6,6 +6,7 @@ import {
   getVehicleBookingById,
   getVehicleAccess,
   getInspectionFiles,
+  purposeLabel,
   type VehicleBookingWithRefs,
   type VehicleInspectionFile,
 } from "@/services/vehicles";
@@ -39,8 +40,18 @@ export default async function CollectInspectionPage({
   const vehicles = (b.assignments ?? [])
     .map((a) => a.vehicle)
     .filter(Boolean)
-    .map((v) => ({ id: v!.id, name: v!.name }));
+    .map((v) => ({
+      id: v!.id,
+      // The Google form asked for make and plate as two questions; one
+      // labelled option answers both and can't disagree with itself.
+      name: v!.registration_plate ? `${v!.name} — ${v!.registration_plate}` : v!.name,
+    }));
   const driverNames = (b.drivers ?? []).map((d) => d.name).join(", ") || (b.requester_name ?? "");
+
+  // "What are you using it for?" — the booking already answered this.
+  const usagePurpose = b.purpose === "other" && b.purpose_note
+    ? b.purpose_note
+    : purposeLabel(b.purpose);
 
   const { data: fileRows } = await getInspectionFiles(supabase, id);
   const admin = createAdminClient();
@@ -68,6 +79,8 @@ export default async function CollectInspectionPage({
           kind="collection"
           vehicles={vehicles}
           defaultDriverNames={driverNames}
+          defaultUsagePurpose={usagePurpose}
+          defaultCheckinDate={b.return_date}
           initialFiles={initialFiles}
         />
       </div>

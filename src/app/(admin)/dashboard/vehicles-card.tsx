@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowUpRight, Car } from "lucide-react";
+import { ArrowUpRight, Car, KeyRound, RotateCcw, XCircle } from "lucide-react";
 import { WidgetShell, WidgetEmpty } from "./widget-shell";
 
 type Request = {
@@ -14,6 +14,20 @@ type Request = {
   returnDate: string | null;
 };
 
+type Activity = {
+  id: string;
+  bookingId: string | null;
+  kind: "collected" | "returned" | "cancelled";
+  bookingName: string | null;
+  at: string;
+};
+
+const ACTIVITY_COPY: Record<Activity["kind"], { verb: string; Icon: typeof Car }> = {
+  collected: { verb: "signed out", Icon: KeyRound },
+  returned: { verb: "signed in", Icon: RotateCcw },
+  cancelled: { verb: "cancelled", Icon: XCircle },
+};
+
 function dateLabel(iso: string | null): string {
   if (!iso) return "";
   return new Date(iso).toLocaleDateString("en-ZA", { day: "numeric", month: "short" });
@@ -21,14 +35,19 @@ function dateLabel(iso: string | null): string {
 
 export function VehiclesCard() {
   const [requests, setRequests] = useState<Request[] | null>(null);
+  const [activity, setActivity] = useState<Activity[]>([]);
 
   useEffect(() => {
     (async () => {
       try {
         const res = await fetch("/api/dashboard/vehicles", { cache: "no-store" });
         if (res.ok) {
-          const json = (await res.json()) as { requests: Request[] };
+          const json = (await res.json()) as {
+            requests: Request[];
+            activity?: Activity[];
+          };
           setRequests(json.requests ?? []);
+          setActivity(json.activity ?? []);
         } else {
           setRequests([]);
         }
@@ -46,10 +65,18 @@ export function VehiclesCard() {
     );
   }
 
-  if (requests.length === 0) {
+  if (requests.length === 0 && activity.length === 0) {
     return (
       <WidgetShell title="Vehicle Requests" href="/bookings/vehicles" hrefLabel="Fleet">
         <WidgetEmpty>No pending vehicle requests.</WidgetEmpty>
+      </WidgetShell>
+    );
+  }
+
+  if (requests.length === 0) {
+    return (
+      <WidgetShell title="Vehicle Requests" href="/bookings/vehicles" hrefLabel="Fleet">
+        <ActivityList activity={activity} />
       </WidgetShell>
     );
   }
@@ -86,6 +113,46 @@ export function VehiclesCard() {
           );
         })}
       </div>
+      <ActivityList activity={activity} />
     </WidgetShell>
+  );
+}
+
+/** Recent sign-outs, sign-ins and cancellations across the fleet. */
+function ActivityList({ activity }: { activity: Activity[] }) {
+  if (activity.length === 0) return null;
+  return (
+    <div>
+      <p
+        className="mono-label"
+        style={{ padding: "0.75rem 1.5rem 0.25rem", color: "var(--text-tertiary)" }}
+      >
+        Recent activity
+      </p>
+      {activity.map((a) => {
+        const { verb, Icon } = ACTIVITY_COPY[a.kind];
+        return (
+          <Link
+            key={a.id}
+            href={a.bookingId ? `/bookings/vehicles/${a.bookingId}` : "/bookings/vehicles"}
+            className="flex items-center justify-between transition-colors duration-150"
+            style={{ padding: "0.5rem 1.5rem", borderBottom: "1px solid var(--surface-2)" }}
+          >
+            <div className="flex items-center gap-3" style={{ minWidth: 0 }}>
+              <Icon className="h-4 w-4" style={{ color: "var(--ink)", flexShrink: 0 }} />
+              <p
+                style={{ fontSize: "12px", color: "var(--text-secondary)" }}
+                className="truncate"
+              >
+                <span style={{ fontWeight: 500, color: "var(--text-primary)" }}>
+                  {a.bookingName ?? "Booking"}
+                </span>{" "}
+                {verb} · {dateLabel(a.at)}
+              </p>
+            </div>
+          </Link>
+        );
+      })}
+    </div>
   );
 }

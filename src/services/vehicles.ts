@@ -477,10 +477,137 @@ export function dayCount(checkout: string, ret: string): number {
   return Math.round((b - a) / 86_400_000) + 1;
 }
 
+/**
+ * Email addresses of everyone who manages vehicle bookings — the people who
+ * should hear about a new request, a completed sign-out/sign-in, or a
+ * cancellation.
+ *
+ * Resolves `vehicles.approve` / `vehicles.manage` held directly (user_permissions)
+ * OR through a role bundle (role_permissions → user_roles) — the reverse of the
+ * per-user getVehicleAccess, so the two always agree on who counts.
+ *
+ * Deliberately NOT every admin: super_admins hold every permission by virtue of
+ * being admin, and copying all of them on every vehicle event is noise. Someone
+ * who should get these gets the vehicle_manager role.
+ *
+ * Takes an ADMIN client — it reads other users' rows, which RLS would hide.
+ */
+export async function getVehicleManagerEmails(admin: Client): Promise<string[]> {
+  const { data: perms } = await admin
+    .from("permissions")
+    .select("id")
+    .eq("module", "vehicles")
+    .in("key", ["vehicles.approve", "vehicles.manage"]);
+  const permIds = (perms ?? []).map((p: { id: string }) => p.id);
+  if (permIds.length === 0) return [];
+
+  const userIds = new Set<string>();
+
+  const { data: direct } = await admin
+    .from("user_permissions")
+    .select("user_id")
+    .in("permission_id", permIds);
+  for (const row of direct ?? []) userIds.add(row.user_id as string);
+
+  const { data: rolePerms } = await admin
+    .from("role_permissions")
+    .select("role_id")
+    .in("permission_id", permIds);
+  const roleIds = Array.from(
+    new Set((rolePerms ?? []).map((r: { role_id: string }) => r.role_id))
+  );
+  if (roleIds.length > 0) {
+    const { data: holders } = await admin
+      .from("user_roles")
+      .select("user_id")
+      .in("role_id", roleIds);
+    for (const row of holders ?? []) userIds.add(row.user_id as string);
+  }
+
+  if (userIds.size === 0) return [];
+
+  const { data: users } = await admin
+    .from("users")
+    .select("email")
+    .in("id", Array.from(userIds));
+
+  const emails = new Set<string>();
+  for (const u of users ?? []) {
+    const e = (u.email as string | null)?.trim();
+    if (e) emails.add(e);
+  }
+  return Array.from(emails);
+}
+
+export type VehicleActivity = {
+  id: string;
+  bookingId: string | null;
+  kind: "collected" | "returned" | "cancelled";
+  bookingName: string | null;
+  at: string;
+};
+
+/**
+ * Recent fleet movement for the manager dashboard — sign-outs, sign-ins and
+ * cancellations, newest first. Takes an ADMIN client: it spans every booking,
+ * not just the caller's own. Callers must gate on canApprove/canManage first.
+ */
+export async function getRecentVehicleActivity(
+  admin: Client,
+  sinceIso: string,
+  limit = 6
+): Promise<VehicleActivity[]> {
+  const [inspections, cancelled] = await Promise.all([
+    admin
+      .from("vehicle_inspections")
+      .select("id, kind, created_at, booking:vehicle_bookings(id, booking_name)")
+      .gte("created_at", sinceIso)
+      .order("created_at", { ascending: false })
+      .limit(limit * 2),
+    admin
+      .from("vehicle_bookings")
+      .select("id, booking_name, updated_at")
+      .eq("status", "cancelled")
+      .gte("updated_at", sinceIso)
+      .order("updated_at", { ascending: false })
+      .limit(limit * 2),
+  ]);
+
+  const out: VehicleActivity[] = [];
+
+  for (const row of inspections.data ?? []) {
+    const booking = Array.isArray(row.booking) ? row.booking[0] : row.booking;
+    out.push({
+      id: row.id,
+      bookingId: booking?.id ?? null,
+      kind: row.kind === "collection" ? "collected" : "returned",
+      bookingName: booking?.booking_name ?? null,
+      at: row.created_at,
+    });
+  }
+
+  for (const row of cancelled.data ?? []) {
+    out.push({
+      id: `cancel-${row.id}`,
+      bookingId: row.id,
+      kind: "cancelled",
+      bookingName: row.booking_name ?? null,
+      at: row.updated_at,
+    });
+  }
+
+  out.sort((a, b) => (a.at < b.at ? 1 : -1));
+  return out.slice(0, limit);
+}
+
 // ── Inspections (v2) ───────────────────────────────────────
 
 export type InspectionKind = "collection" | "return";
-export type InspectionFileKind = "damage_photo" | "license";
+export type InspectionFileKind =
+  | "damage_photo"
+  | "license"
+  | "carwash_receipt"
+  | "fuel_gauge";
 
 export type VehicleInspection = {
   id: string;
@@ -496,6 +623,13 @@ export type VehicleInspection = {
   inventory: Record<string, boolean>;
   condition_notes: string | null;
   declaration_agreed: boolean;
+  // Added in 197 to match the Google Forms this replaced.
+  all_drivers_present: boolean | null;
+  usage_purpose: string | null;
+  sa_license_confirmed: boolean | null;
+  checkin_date: string | null;
+  communicated_truthfully: boolean | null;
+  inspection_permission: boolean | null;
   performed_by: string | null;
   performed_at: string;
   created_at: string;
@@ -552,6 +686,27 @@ export async function getInspectionsForBooking(supabase: Client, bookingId: stri
 
 export async function insertInspection(supabase: Client, row: Record<string, unknown>) {
   return supabase.from("vehicle_inspections").insert(row).select().single();
+}
+
+/**
+ * Does this booking already have an inspection of this kind?
+ *
+ * There is no unique constraint on (booking, kind), so a double-submit would
+ * otherwise write two rows and the booking page — which reads the first match
+ * per kind — would silently show whichever came back first.
+ */
+export async function hasInspection(
+  supabase: Client,
+  bookingId: string,
+  kind: InspectionKind
+): Promise<boolean> {
+  const { data } = await supabase
+    .from("vehicle_inspections")
+    .select("id")
+    .eq("vehicle_booking_id", bookingId)
+    .eq("kind", kind)
+    .limit(1);
+  return (data?.length ?? 0) > 0;
 }
 
 export async function getInspectionFiles(supabase: Client, bookingId: string) {

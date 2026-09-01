@@ -8,6 +8,7 @@ import {
   setBookingVehicles,
   setBookingDrivers,
 } from "@/services/vehicles";
+import { notifyVehicleManagers } from "@/lib/email/send-vehicle-request";
 
 type DriverInput = {
   name?: string;
@@ -178,6 +179,16 @@ export async function POST(request: Request) {
     const { data } = await setBookingDrivers(supabase, booking.id, drivers);
     created = data.map((d) => ({ id: d.id, name: d.name }));
   }
+
+  // Let the vehicle managers know something is waiting for a decision.
+  await notifyVehicleManagers({
+    event: "requested",
+    bookingId: booking.id,
+    bookingName: bookingName,
+    requesterName: requesterName,
+    checkoutDate: checkout,
+    returnDate: ret,
+  });
 
   return NextResponse.json({ ok: true, bookingId: booking.id, drivers: created });
 }
