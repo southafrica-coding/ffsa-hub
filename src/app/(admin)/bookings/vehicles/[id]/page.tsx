@@ -223,11 +223,6 @@ export default async function VehicleBookingDetail({
         title={b.booking_name}
         actions={
           <>
-            {b.source === "public" && (
-              <span className="inline-block border border-grass px-2 py-1 font-mono text-[9px] font-bold uppercase tracking-[0.12em] text-grass-text">
-                External · public link
-              </span>
-            )}
             <StatusPill status={b.status} />
           </>
         }
