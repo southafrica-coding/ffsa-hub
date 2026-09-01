@@ -31,6 +31,7 @@ import { Masthead, SectionBar } from "@/components/ffsa";
 import { dateRangeLabel } from "@/lib/bookings/dates";
 import { countries } from "@/lib/countries";
 import { VehicleBookingActions } from "./booking-actions";
+import { DriversPanel, type DriverPanelRow } from "./drivers-panel";
 
 function countryLabel(iso2: string | null): string {
   if (!iso2) return "—";
@@ -46,13 +47,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     </div>
   );
 }
-
-const TEST_LABEL: Record<string, string> = {
-  not_required: "No test needed",
-  pending: "Test pending",
-  passed: "Test passed",
-  failed: "Test failed",
-};
 
 function InspectionRow({
   kind,
@@ -188,9 +182,38 @@ export default async function VehicleBookingDetail({
   const photos = files.filter((f) => f.kind === "damage_photo");
   const licenses = files.filter((f) => f.kind === "license");
 
+  // Per-driver licences live on the driver row as an object path in the same
+  // private bucket — mint signed URLs so they render on first paint.
+  const driverRows: DriverPanelRow[] = await Promise.all(
+    drivers.map(async (d) => {
+      let signedUrl: string | null = null;
+      if (d.license_file_url) {
+        const { data: signed } = await admin.storage
+          .from("vehicle-inspections")
+          .createSignedUrl(d.license_file_url, 3600);
+        signedUrl = signed?.signedUrl ?? null;
+      }
+      return {
+        id: d.id,
+        name: d.name,
+        phone: d.phone ?? "",
+        has_sa_license: d.has_sa_license,
+        is_first_time: d.is_first_time,
+        driving_test_status: d.driving_test_status,
+        license: d.license_file_url
+          ? { file_name: d.license_file_name, signed_url: signedUrl }
+          : null,
+      };
+    })
+  );
+
   const isManager = access.isAdmin || access.canApprove || access.canManage;
   const isOwner = b.requested_by === user.id;
   const canInspect = isManager || isOwner;
+  // Drivers and licences stay editable after approval; the requester loses
+  // access once the booking is closed, managers never do.
+  const canEditDrivers =
+    isManager || (isOwner && b.status !== "completed" && b.status !== "cancelled");
   const days = dayCount(b.checkout_date, b.return_date);
 
   return (
@@ -249,30 +272,7 @@ export default async function VehicleBookingDetail({
       </div>
 
       {/* Drivers */}
-      {drivers.length > 0 && (
-        <div className="border border-ink bg-white">
-          <SectionBar title="Drivers" meta={`${drivers.length}`} />
-          <div className="p-6">
-            <div className="space-y-2">
-              {drivers.map((d) => (
-                <div
-                  key={d.id}
-                  className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-rule pb-2 text-sm last:border-b-0 last:pb-0"
-                >
-                  <span className="font-medium">{d.name}</span>
-                  {d.phone && <span className="text-[color:var(--text-secondary)]">{d.phone}</span>}
-                  <span className={d.has_sa_license ? "text-xs text-grass-text" : "text-xs text-destructive"}>
-                    {d.has_sa_license ? "SA licence ✓" : "No licence on file"}
-                  </span>
-                  <span className="text-xs text-[color:var(--text-tertiary)]">
-                    {TEST_LABEL[d.driving_test_status] ?? d.driving_test_status}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      <DriversPanel bookingId={b.id} initialDrivers={driverRows} canEdit={canEditDrivers} />
 
       {/* Payment summary (read-only mirror; managed below) */}
       {b.payment_required && (

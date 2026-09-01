@@ -17,6 +17,7 @@ import {
 import { Plus, Trash2 } from "lucide-react";
 import { PURPOSE_OPTIONS, dayCount, type Vehicle } from "@/services/vehicles";
 import { CountryPicker } from "./country-picker";
+import { DriverLicenseField, uploadDriverLicense } from "./driver-license-field";
 import { SectionBar } from "@/components/ffsa";
 
 type DriverRow = {
@@ -24,6 +25,8 @@ type DriverRow = {
   phone: string;
   has_sa_license: boolean;
   is_first_time: boolean;
+  /** Staged licence file — uploaded after the booking POST returns driver ids. */
+  license: File | null;
 };
 
 const EMPTY_DRIVER: DriverRow = {
@@ -31,6 +34,7 @@ const EMPTY_DRIVER: DriverRow = {
   phone: "",
   has_sa_license: false,
   is_first_time: false,
+  license: null,
 };
 
 export function VehicleBookingForm({
@@ -158,7 +162,14 @@ export function VehicleBookingForm({
         home_country: form.home_country || null,
         notes: form.notes.trim() || null,
         vehicle_ids: vehicleIds,
-        drivers: cleanDrivers,
+        // The staged licence File isn't part of the JSON payload — it uploads
+        // separately once the driver rows exist.
+        drivers: cleanDrivers.map((d) => ({
+          name: d.name,
+          phone: d.phone,
+          has_sa_license: d.has_sa_license,
+          is_first_time: d.is_first_time,
+        })),
       }),
     });
     const json = await res.json().catch(() => ({}));
@@ -167,6 +178,34 @@ export function VehicleBookingForm({
       setLoading(false);
       return;
     }
+    // Licences can only be attached once the driver rows exist, so upload them
+    // in a second pass. A failure here must not lose the booking — the driver
+    // list on the booking page can always take the licence later.
+    // The API returns the created drivers in the order they were submitted, so
+    // index i here is the same driver as cleanDrivers[i].
+    const createdDrivers: { id: string; name: string }[] = json.drivers ?? [];
+    const withLicense = cleanDrivers
+      .map((d, i) => ({ driver: d, created: createdDrivers[i] ?? null }))
+      .filter((x) => x.driver.license);
+    if (withLicense.length > 0) {
+      const failed: string[] = [];
+      await Promise.all(
+        withLicense.map(async ({ driver, created }) => {
+          if (!created) {
+            failed.push(driver.name);
+            return;
+          }
+          const result = await uploadDriverLicense(created.id, driver.license as File);
+          if ("error" in result) failed.push(driver.name);
+        })
+      );
+      if (failed.length > 0) {
+        toast.warning(
+          `Request submitted, but the licence for ${failed.join(", ")} did not upload. Add it from the booking page.`
+        );
+      }
+    }
+
     toast.success("Vehicle request submitted for approval.");
     router.push(json.bookingId ? `/bookings/vehicles/${json.bookingId}` : "/bookings/vehicles");
     router.refresh();
@@ -353,10 +392,12 @@ export function VehicleBookingForm({
             </div>
             <p className="text-xs text-muted-foreground">
               First-time base-vehicle drivers (and internationals) must pass a driving
-              test before approval.
+              test before approval. A photo of each driver&apos;s licence is optional
+              here — you can add drivers and licences later, including after approval.
             </p>
             {drivers.map((d, i) => (
-              <div key={i} className="flex flex-wrap items-center gap-2">
+              <div key={i} className="space-y-1.5 border-b border-rule pb-3 last:border-b-0 last:pb-0">
+              <div className="flex flex-wrap items-center gap-2">
                 <Input
                   value={d.name}
                   onChange={(e) => setDriver(i, { name: e.target.value })}
@@ -397,6 +438,11 @@ export function VehicleBookingForm({
                     <Trash2 className="h-4 w-4" />
                   </button>
                 )}
+              </div>
+              <DriverLicenseField
+                staged={d.license}
+                onStage={(file) => setDriver(i, { license: file })}
+              />
               </div>
             ))}
           </div>

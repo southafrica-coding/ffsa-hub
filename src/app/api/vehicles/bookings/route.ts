@@ -171,9 +171,13 @@ export async function POST(request: Request) {
       driving_test_status: d.is_first_time ? "pending" : "not_required",
     }))
     .filter((d) => d.name);
+  // The created driver rows go back to the client so it can upload each
+  // driver's licence against a real driver id in a follow-up request.
+  let created: { id: string; name: string }[] = [];
   if (drivers.length > 0) {
-    await setBookingDrivers(supabase, booking.id, drivers as Record<string, unknown>[]);
+    const { data } = await setBookingDrivers(supabase, booking.id, drivers);
+    created = data.map((d) => ({ id: d.id, name: d.name }));
   }
 
-  return NextResponse.json({ ok: true, bookingId: booking.id });
+  return NextResponse.json({ ok: true, bookingId: booking.id, drivers: created });
 }

@@ -80,6 +80,9 @@ export type VehicleDriver = {
   is_first_time: boolean;
   driving_test_status: "not_required" | "pending" | "passed" | "failed";
   license_file_url: string | null;
+  license_file_name: string | null;
+  license_uploaded_at: string | null;
+  license_uploaded_by: string | null;
   created_at: string;
 };
 
@@ -275,18 +278,129 @@ export async function getOverlappingAssignments(
 
 // ── Drivers ────────────────────────────────────────────────
 
+/**
+ * Reconcile a booking's drivers by id: rows carrying an `id` are updated in
+ * place, rows without one are inserted, and stored rows missing from the
+ * payload are deleted.
+ *
+ * This deliberately is NOT a delete-all-then-insert — driver rows own their
+ * licence upload (license_file_url), so recreating them on every edit would
+ * orphan the uploaded file and silently drop the licence from the booking.
+ *
+ * Returns the booking's drivers after the write, in creation order.
+ */
 export async function setBookingDrivers(
   supabase: Client,
   bookingId: string,
-  drivers: Record<string, unknown>[]
-) {
-  await supabase
+  drivers: (Record<string, unknown> & { id?: string | null })[]
+): Promise<{ data: VehicleDriver[]; error: { message: string } | null }> {
+  const { data: existing } = await supabase
     .from("vehicle_booking_drivers")
-    .delete()
+    .select("id")
     .eq("vehicle_booking_id", bookingId);
-  if (drivers.length === 0) return { error: null };
-  const rows = drivers.map((d) => ({ ...d, vehicle_booking_id: bookingId }));
-  return supabase.from("vehicle_booking_drivers").insert(rows);
+  const existingIds = new Set<string>((existing ?? []).map((r: { id: string }) => r.id));
+
+  const keptIds = new Set<string>();
+  const inserts: Record<string, unknown>[] = [];
+  // Slot per submitted driver: a kept id, or null awaiting the inserted row.
+  const slots: (string | null)[] = [];
+
+  for (const d of drivers) {
+    const { id: rawId, ...fields } = d;
+    const id = typeof rawId === "string" ? rawId : null;
+    if (id && existingIds.has(id)) {
+      keptIds.add(id);
+      // driving_test_status is only derived on insert — a recorded
+      // passed/failed result must survive later edits to the driver.
+      delete fields.driving_test_status;
+      const { error } = await supabase
+        .from("vehicle_booking_drivers")
+        .update(fields)
+        .eq("id", id)
+        .eq("vehicle_booking_id", bookingId);
+      if (error) return { data: [], error };
+      slots.push(id);
+    } else {
+      inserts.push({ ...fields, vehicle_booking_id: bookingId });
+      slots.push(null);
+    }
+  }
+
+  const removed = [...existingIds].filter((id) => !keptIds.has(id));
+  if (removed.length > 0) {
+    const { error } = await supabase
+      .from("vehicle_booking_drivers")
+      .delete()
+      .in("id", removed);
+    if (error) return { data: [], error };
+  }
+
+  if (inserts.length > 0) {
+    const { data, error } = await supabase
+      .from("vehicle_booking_drivers")
+      .insert(inserts)
+      .select("*");
+    if (error) return { data: [], error };
+    // Postgres returns inserted rows in input order, so they refill the empty
+    // slots in submission order — the caller pairs driver ids back to the rows
+    // it sent (needed to upload each driver's licence after create).
+    const fresh = (data ?? []) as VehicleDriver[];
+    let n = 0;
+    for (let i = 0; i < slots.length; i++) {
+      if (slots[i] === null) slots[i] = fresh[n++]?.id ?? null;
+    }
+  }
+
+  const { data: all, error } = await getBookingDrivers(supabase, bookingId);
+  if (error) return { data: [], error };
+  const byId = new Map(all.map((d) => [d.id, d]));
+  // Return in submission order so index i is the caller's driver i.
+  const ordered = slots
+    .map((id) => (id ? byId.get(id) : undefined))
+    .filter((d): d is VehicleDriver => !!d);
+  return { data: ordered, error: null };
+}
+
+/** A booking's drivers in creation order. */
+export async function getBookingDrivers(
+  supabase: Client,
+  bookingId: string
+): Promise<{ data: VehicleDriver[]; error: { message: string } | null }> {
+  const { data, error } = await supabase
+    .from("vehicle_booking_drivers")
+    .select("*")
+    .eq("vehicle_booking_id", bookingId)
+    .order("created_at", { ascending: true });
+  return { data: (data ?? []) as VehicleDriver[], error };
+}
+
+/** Set or clear a driver's licence file reference. */
+export async function setDriverLicense(
+  supabase: Client,
+  driverId: string,
+  patch: {
+    license_file_url: string | null;
+    license_file_name: string | null;
+    license_uploaded_at: string | null;
+    license_uploaded_by: string | null;
+  }
+): Promise<{ error: { message: string } | null }> {
+  const { error } = await supabase
+    .from("vehicle_booking_drivers")
+    .update(patch)
+    .eq("id", driverId);
+  return { error };
+}
+
+/** One driver plus the id/requester of the booking it belongs to (for authz). */
+export async function getDriverWithBooking(supabase: Client, driverId: string) {
+  return supabase
+    .from("vehicle_booking_drivers")
+    .select(
+      "id, vehicle_booking_id, license_file_url, booking:vehicle_bookings(id,status,requested_by)"
+    )
+    .eq("id", driverId)
+    .maybeSingle();
 }
 
 // ── Access ─────────────────────────────────────────────────

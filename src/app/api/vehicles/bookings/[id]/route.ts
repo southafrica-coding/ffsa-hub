@@ -12,6 +12,7 @@ import {
 } from "@/services/vehicles";
 
 type DriverInput = {
+  id?: string | null;
   name?: string;
   phone?: string;
   has_sa_license?: boolean;
@@ -159,9 +160,20 @@ export async function PATCH(
     await setBookingVehicles(supabase, id, vehicleIds);
   }
 
+  let drivers: { id: string; name: string }[] = [];
   if (body.drivers !== undefined) {
-    const drivers = (body.drivers ?? [])
+    // Managers may always fix the driver list; the requester loses that once
+    // the booking is closed. Mirrors canEditDrivers on the booking page.
+    const closed = booking.status === "completed" || booking.status === "cancelled";
+    if (!isManager && closed) {
+      return NextResponse.json(
+        { error: "This booking is closed — ask a vehicle manager to update the drivers." },
+        { status: 403 }
+      );
+    }
+    const rows = (body.drivers ?? [])
       .map((d) => ({
+        id: nn(d.id),
         name: nn(d.name),
         phone: nn(d.phone),
         has_sa_license: !!d.has_sa_license,
@@ -169,10 +181,12 @@ export async function PATCH(
         driving_test_status: d.is_first_time ? "pending" : "not_required",
       }))
       .filter((d) => d.name);
-    await setBookingDrivers(supabase, id, drivers as Record<string, unknown>[]);
+    const { data, error } = await setBookingDrivers(supabase, id, rows);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    drivers = data.map((d) => ({ id: d.id, name: d.name }));
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, drivers });
 }
 
 export async function DELETE(
