@@ -44,25 +44,12 @@ function RequestRow({ booking }: { booking: VehicleBookingWithRefs }) {
     }
   }
 
-  const contact =
-    booking.source === "public"
-      ? [booking.requester_email, booking.requester_phone].filter(Boolean).join(" · ")
-      : "";
-
   return (
     <TableRow>
       <TableCell>
         <Link href={`/bookings/vehicles/${booking.id}`} className="font-medium hover:underline">
           {booking.booking_name}
         </Link>
-        {booking.source === "public" && (
-          <span className="ml-1.5 inline-block border border-grass px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.12em] text-grass-text">
-            External
-          </span>
-        )}
-        {contact && (
-          <div className="mt-0.5 text-[11px] text-[color:var(--text-tertiary)]">{contact}</div>
-        )}
       </TableCell>
       <TableCell className="whitespace-nowrap">
         {dateRangeLabel(booking.checkout_date, booking.return_date)}
