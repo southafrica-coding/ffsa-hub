@@ -5,6 +5,7 @@ import { userCanManageProgram } from "@/lib/auth/check-schools-access";
 import { getEnrollmentsWithPiiByProgram } from "@/services/schools";
 import {
   ENROLLMENT_STATUS_LABELS,
+  ROSTER_STATUS_LABELS,
   STUDENT_EXPORT_COLUMN_LABELS,
   parseStudentExportColumns,
   type StudentExportColumnKey,
@@ -141,6 +142,30 @@ export async function GET(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // Why each off-roster student is off it. Cancelling or rejecting an
+  // application soft-removes the applicant's enrollment, so without this the
+  // CSV would either drop those people silently or list them as
+  // "Waiting for Arrival" — a student who cancelled reading as one still
+  // expected to arrive is the worse of the two failures.
+  const { data: applicationRows } = await admin
+    .from("application_responses")
+    .select("user_id, status")
+    .eq("program_id", programId)
+    .in("status", ["cancelled", "rejected"]);
+  const applicationStatusByUser = new Map<string, string>(
+    ((applicationRows ?? []) as Array<{ user_id: string | null; status: string }>)
+      .filter((r): r is { user_id: string; status: string } => !!r.user_id)
+      .map((r) => [r.user_id, r.status])
+  );
+
+  function rosterStatus(e: EnrollmentRow): string {
+    if (!e.removed_at) return ROSTER_STATUS_LABELS.on_roster;
+    const appStatus = applicationStatusByUser.get(e.user_id);
+    if (appStatus === "cancelled") return ROSTER_STATUS_LABELS.cancelled;
+    if (appStatus === "rejected") return ROSTER_STATUS_LABELS.rejected;
+    return ROSTER_STATUS_LABELS.removed;
+  }
+
   const rows = ((enrollments ?? []) as EnrollmentRow[]).filter((e) => {
     // An explicit ?students= list is authoritative — it may deliberately
     // include removed students (the picker's "Include removed" option), so we
@@ -163,7 +188,9 @@ export async function GET(
     emergency_contact_relationship: (e) =>
       e.users?.emergency_contact_relationship ?? "",
     status: (e) => ENROLLMENT_STATUS_LABELS[e.status] ?? e.status,
+    roster_status: (e) => rosterStatus(e),
     enrolled_at: (e) => formatDateTime(e.enrolled_at),
+    removed_at: (e) => formatDateTime(e.removed_at),
     assigned_staff: (e) => staffName(e.assigned_staff),
     notes: (e) => e.notes ?? "",
   };

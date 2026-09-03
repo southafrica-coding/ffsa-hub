@@ -70,14 +70,23 @@ export function StudentsExportPanel({
     () => activeStudents.map((e) => e.user_id),
     [activeStudents]
   );
+  // Off-roster students (cancelled applications and manual removals) are in
+  // the download by default: leaving them out silently is what made a
+  // cancelled student look like they were still coming. The CSV's "Roster
+  // Status" column says which rows are live, so the list stays honest without
+  // hiding anyone. Untick below for a live-roster-only export.
+  const allIds = useMemo(
+    () => enrollments.map((e) => e.user_id),
+    [enrollments]
+  );
 
   const [selectedColumns, setSelectedColumns] = useState<
     Set<StudentExportColumnKey>
   >(() => new Set(STUDENT_EXPORT_COLUMN_ORDER));
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(
-    () => new Set(activeIds)
+    () => new Set(allIds)
   );
-  const [includeRemoved, setIncludeRemoved] = useState(false);
+  const [includeRemoved, setIncludeRemoved] = useState(true);
   const [search, setSearch] = useState("");
 
   // Restore the saved column choice (client-only, after hydration).
@@ -99,8 +108,8 @@ export function StudentsExportPanel({
   // opens (e.g. after a student was added/removed and the page refreshed).
   useEffect(() => {
     if (open) {
-      setSelectedStudents(new Set(activeIds));
-      setIncludeRemoved(false);
+      setSelectedStudents(new Set(allIds));
+      setIncludeRemoved(true);
       setSearch("");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -150,6 +159,21 @@ export function StudentsExportPanel({
     return list.filter((e) => displayName(e.users).toLowerCase().includes(q));
   }, [includeRemoved, activeStudents, removedStudents, search]);
 
+  // Ticking the box brings the off-roster students back into the selection;
+  // unticking takes them out, rather than leaving them selected-but-hidden and
+  // silently in the download.
+  function toggleIncludeRemoved(on: boolean) {
+    setIncludeRemoved(on);
+    setSelectedStudents((prev) => {
+      const next = new Set(prev);
+      for (const e of removedStudents) {
+        if (on) next.add(e.user_id);
+        else next.delete(e.user_id);
+      }
+      return next;
+    });
+  }
+
   function setAllVisibleStudents(on: boolean) {
     setSelectedStudents((prev) => {
       const next = new Set(prev);
@@ -170,8 +194,9 @@ export function StudentsExportPanel({
     if (cols.length !== STUDENT_EXPORT_COLUMN_ORDER.length) {
       params.set("columns", cols.join(","));
     }
-    // Only send students when the selection differs from "all active" — the
-    // common case sends nothing and the route exports every active student.
+    // The route defaults to active students only, so any selection that isn't
+    // exactly that — including the default, which now also carries the
+    // off-roster students — is sent explicitly.
     const isAllActive =
       selectedStudents.size === activeIds.length &&
       activeIds.every((id) => selectedStudents.has(id));
@@ -306,7 +331,7 @@ export function StudentsExportPanel({
                       {displayName(e.users)}
                       {e.removed_at && (
                         <span className="ml-1 text-xs text-muted-foreground">
-                          (removed)
+                          (off roster)
                         </span>
                       )}
                     </span>
@@ -318,9 +343,11 @@ export function StudentsExportPanel({
               <label className="mt-2 flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
                 <Checkbox
                   checked={includeRemoved}
-                  onCheckedChange={(v) => setIncludeRemoved(v === true)}
+                  onCheckedChange={(v) => toggleIncludeRemoved(v === true)}
                 />
-                <span>Include removed ({removedStudents.length})</span>
+                <span>
+                  Include cancelled &amp; off-roster ({removedStudents.length})
+                </span>
               </label>
             )}
           </div>

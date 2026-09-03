@@ -15,7 +15,9 @@ export type StudentExportColumnKey =
   | "emergency_contact_phone"
   | "emergency_contact_relationship"
   | "status"
+  | "roster_status"
   | "enrolled_at"
+  | "removed_at"
   | "assigned_staff"
   | "notes";
 
@@ -34,7 +36,9 @@ export const STUDENT_EXPORT_COLUMN_ORDER: StudentExportColumnKey[] = [
   "emergency_contact_phone",
   "emergency_contact_relationship",
   "status",
+  "roster_status",
   "enrolled_at",
+  "removed_at",
   "assigned_staff",
   "notes",
 ];
@@ -55,7 +59,9 @@ export const STUDENT_EXPORT_COLUMN_LABELS: Record<
   emergency_contact_phone: "Emergency Contact Phone",
   emergency_contact_relationship: "Emergency Contact Relationship",
   status: "Status",
+  roster_status: "Roster Status",
   enrolled_at: "Enrolled Date",
+  removed_at: "Off-Roster Date",
   assigned_staff: "Assigned Staff",
   notes: "Notes",
 };
@@ -81,7 +87,14 @@ export const STUDENT_EXPORT_COLUMN_GROUPS: {
   },
   {
     group: "Enrollment",
-    keys: ["status", "enrolled_at", "assigned_staff", "notes"],
+    keys: [
+      "status",
+      "roster_status",
+      "enrolled_at",
+      "removed_at",
+      "assigned_staff",
+      "notes",
+    ],
   },
 ];
 
@@ -94,6 +107,21 @@ export const ENROLLMENT_STATUS_LABELS: Record<string, string> = {
   decided_to_leave: "Decided to Leave",
   graduated: "Graduated",
 };
+
+// Why someone is off the roster, for the CSV's "Roster Status" column. A
+// student is taken off either because their application was cancelled/rejected
+// (the API does this automatically — see removeEnrollmentForApplicant) or
+// because a staffer removed them by hand. Everyone still on the roster reads
+// "On roster", so the column is never blank and the CSV always says which
+// rows are live.
+export const ROSTER_STATUS_LABELS = {
+  on_roster: "On roster",
+  cancelled: "Cancelled — application cancelled",
+  rejected: "Cancelled — application rejected",
+  removed: "Removed from roster",
+} as const;
+
+export type RosterStatusKey = keyof typeof ROSTER_STATUS_LABELS;
 
 const KEY_SET = new Set<string>(STUDENT_EXPORT_COLUMN_ORDER);
 
