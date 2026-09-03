@@ -19,22 +19,36 @@ export default async function SetupPage({
   const result = await validateOnboardingInvite(admin, token);
 
   if (!result.ok) {
+    // Every one of these used to end at "ask an admin" plus a login link —
+    // and login is exactly where someone with no password can do nothing.
+    // Send them to /forgot-password instead, which now issues a fresh setup
+    // link for a passwordless account.
     const copy =
       result.reason === "expired"
         ? {
             heading: "Link expired",
-            body: "This account-setup link has expired. Ask a Fire & Fragrance admin to resend your invite and you'll get a fresh one.",
+            body: "This account-setup link has expired. Request a new one below and we'll email you a fresh link.",
+            showRecover: true,
           }
         : result.reason === "used"
         ? {
             heading: "Already set up",
             body: "This link has already been used to set up an account. Head to the login page and sign in.",
+            showRecover: false,
           }
         : {
             heading: "Invalid link",
-            body: "We couldn't find this account-setup link. Ask a Fire & Fragrance admin to resend your invite.",
+            body: "We couldn't find this account-setup link. Request a new one below and we'll email you a fresh link.",
+            showRecover: true,
           };
-    return <SetupShell heading={copy.heading} body={copy.body} showLogin />;
+    return (
+      <SetupShell
+        heading={copy.heading}
+        body={copy.body}
+        showLogin
+        showRecover={copy.showRecover}
+      />
+    );
   }
 
   // Already onboarded (password set + profile finished) — send them to log in.
@@ -73,10 +87,13 @@ function SetupShell({
   heading,
   body,
   showLogin,
+  showRecover,
 }: {
   heading: string;
   body: string;
   showLogin?: boolean;
+  /** Offer a self-serve way to get a fresh setup link. */
+  showRecover?: boolean;
 }) {
   return (
     <div
@@ -124,12 +141,27 @@ function SetupShell({
         <p style={{ fontSize: "13px", color: "hsl(30 8% 55%)", lineHeight: 1.6 }}>
           {body}
         </p>
-        {showLogin && (
+        {showRecover && (
           <div className="mt-6">
+            <Link
+              href="/forgot-password"
+              style={{
+                color: "hsl(42 95% 55%)",
+                textDecoration: "none",
+                fontWeight: 600,
+                fontSize: "13px",
+              }}
+            >
+              Email me a new setup link →
+            </Link>
+          </div>
+        )}
+        {showLogin && (
+          <div className={showRecover ? "mt-3" : "mt-6"}>
             <Link
               href="/login"
               style={{
-                color: "hsl(42 95% 55%)",
+                color: showRecover ? "hsl(30 8% 55%)" : "hsl(42 95% 55%)",
                 textDecoration: "none",
                 fontWeight: 600,
                 fontSize: "13px",

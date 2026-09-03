@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resetPasswordEmailHtml } from "@/lib/email/templates/reset-password";
 import { getResend } from "@/lib/email/resend";
+import { lookupAccountByEmail } from "@/lib/auth/account-state";
+import { sendSetupLink } from "@/lib/auth/send-setup-link";
 
 // Throttle: at most one email per minute, and 3 per hour, per account.
 // Backed by audit_logs so it survives across serverless invocations without
@@ -28,14 +30,12 @@ export async function POST(request: Request) {
 
   const admin = createAdminClient();
 
-  // Resolve the account (case-insensitive). first_name lets us greet them.
-  const { data: user } = await admin
-    .from("users")
-    .select("id, first_name")
-    .ilike("email", email)
-    .maybeSingle();
+  // Resolve the account and, crucially, whether it can be signed into at all.
+  const account = await lookupAccountByEmail(admin, email);
 
-  if (!user) return neutral;
+  if (account.state === "no_account" || !account.userId) return neutral;
+
+  const user = { id: account.userId, first_name: account.firstName };
 
   // Throttle from the request history we keep in audit_logs.
   const sinceHour = new Date(Date.now() - 60 * 60 * 1000).toISOString();
@@ -61,6 +61,46 @@ export async function POST(request: Request) {
     process.env.NEXT_PUBLIC_APP_URL ||
     "http://localhost:3000";
 
+  // Someone who has never set a password can't be sent a *reset* — Supabase
+  // refuses to issue a recovery link for an unconfirmed address, and this
+  // route used to swallow that error and return the same cheerful neutral
+  // response. That is the dead end accepted applicants kept hitting: the
+  // only visible recovery affordance did nothing, silently. Send them the
+  // setup link they actually need instead.
+  if (account.state === "needs_setup") {
+    const setupResult = await sendSetupLink(admin, {
+      userId: user.id,
+      email,
+      firstName: user.first_name,
+      reason:
+        "They asked to reset a password on an account that has never had one, so they were sent a setup link.",
+    });
+
+    await admin.from("audit_logs").insert({
+      user_id: user.id,
+      action: setupResult.ok
+        ? "setup_link_sent"
+        : "setup_link_failed",
+      resource_type: "auth",
+      resource_id: user.id,
+      changes: setupResult.ok
+        ? { via: "forgot_password" }
+        : { via: "forgot_password", error: setupResult.error },
+    });
+
+    // Count against the same throttle as a reset, so this branch can't be
+    // used to inbox-bomb someone either.
+    await admin.from("audit_logs").insert({
+      user_id: user.id,
+      action: "password_reset_requested",
+      resource_type: "auth",
+      resource_id: user.id,
+      changes: null,
+    });
+
+    return neutral;
+  }
+
   // Generate the recovery link ourselves and email it via Resend, exactly like
   // invites — so it's branded and reliably delivered, NOT sent through
   // Supabase's rate-limited default mailer.
@@ -72,6 +112,15 @@ export async function POST(request: Request) {
     });
 
   if (linkError || !linkData?.properties?.hashed_token) {
+    // Still neutral to the browser (no account enumeration), but no longer
+    // invisible to us — a failure here means a real person got nothing.
+    await admin.from("audit_logs").insert({
+      user_id: user.id,
+      action: "password_reset_failed",
+      resource_type: "auth",
+      resource_id: user.id,
+      changes: { error: linkError?.message ?? "no recovery token returned" },
+    });
     return neutral;
   }
 
@@ -96,9 +145,16 @@ export async function POST(request: Request) {
         resetUrl,
       }),
     });
-  } catch {
-    // Swallow send errors — still respond neutrally and still record the
-    // attempt so the throttle holds.
+  } catch (err) {
+    // Still neutral to the browser, but recorded: a swallowed send failure
+    // here is indistinguishable from success to the person waiting.
+    await admin.from("audit_logs").insert({
+      user_id: user.id,
+      action: "password_reset_failed",
+      resource_type: "auth",
+      resource_id: user.id,
+      changes: { error: err instanceof Error ? err.message : "send failed" },
+    });
   }
 
   await admin.from("audit_logs").insert({

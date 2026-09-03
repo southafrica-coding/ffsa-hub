@@ -3,7 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { applicationAcceptedEmailHtml } from "@/lib/email/templates/application-accepted";
 import { userCanManageProgram } from "@/lib/auth/check-schools-access";
-import { sendTransactional } from "@/lib/email/send-transactional";
+import { sendSetupLink } from "@/lib/auth/send-setup-link";
+import { userHasPassword } from "@/lib/auth/account-state";
 import {
   substitutePlaceholders,
   plainTextToEmailHtml,
@@ -119,38 +120,16 @@ export async function POST(request: Request) {
     );
   }
 
-  const isActive =
-    !!authData.user.email_confirmed_at || !!authData.user.last_sign_in_at;
+  // "Already activated" means they can SIGN IN, i.e. they have a password —
+  // not that their email is confirmed. accept-application creates the auth
+  // user with email_confirm: true and no password, so the old
+  // email_confirmed_at check matched every accepted applicant and refused to
+  // resend to exactly the people who needed it (migration 199).
+  const hasPassword = await userHasPassword(adminSupabase, userId);
 
-  if (isActive) {
-    // User has already confirmed their account - don't send a new invite
+  if (hasPassword) {
     return NextResponse.json({ alreadyActive: true });
   }
-
-  // Generate a fresh invite link
-  const siteUrl =
-    process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
-
-  const { data: linkData, error: linkError } =
-    await adminSupabase.auth.admin.generateLink({
-      type: "invite",
-      email: applicantEmail,
-      options: {
-        redirectTo: `${siteUrl}/auth/confirm`,
-      },
-    });
-
-  if (linkError || !linkData?.properties?.action_link) {
-    return NextResponse.json(
-      {
-        error:
-          linkError?.message || "Failed to generate invite link",
-      },
-      { status: 500 }
-    );
-  }
-
-  const inviteUrl = linkData.properties.action_link;
 
   // Send the acceptance email with the new invite URL. Honor the same
   // per-program subject/body overrides the accept route uses, so a
@@ -178,19 +157,27 @@ export async function POST(request: Request) {
       )
     : null;
 
-  const sendResult = await sendTransactional({
-    to: applicantEmail,
+  // Mint a fresh 30-day /setup token and email it. The old path generated a
+  // Supabase magic-link invite, which migration 158 replaced precisely
+  // because it expires in 24h and is burned by email scanners.
+  const sendResult = await sendSetupLink(adminSupabase, {
+    userId,
+    email: applicantEmail,
+    firstName,
+    createdBy: authUser.id,
     subject:
       customSubject ?? `You've been accepted to ${appResponse.programs.name}`,
-    html: applicationAcceptedEmailHtml({
-      firstName,
-      programName: appResponse.programs.name,
-      inviteUrl,
-      customBodyHtml,
-    }),
+    html: (setupUrl) =>
+      applicationAcceptedEmailHtml({
+        firstName,
+        programName: appResponse.programs.name,
+        inviteUrl: setupUrl,
+        customBodyHtml,
+      }),
     category: "application_accepted",
     sourceType: "school_application",
     sourceId: response_id,
+    reason: `An admin resent the acceptance email for ${appResponse.programs.name}.`,
   });
 
   if (!sendResult.ok) {

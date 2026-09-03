@@ -42,14 +42,17 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
-      // Supabase returns a generic "Invalid login credentials" for both a wrong
-      // password and an email that has no account yet. Applicants who haven't
-      // been accepted fall into the latter case and get confused, so give them
-      // a clearer, applicant-aware hint instead of the raw message.
+      // Supabase returns a generic "Invalid login credentials" for a wrong
+      // password, an email with no account, AND an accepted applicant who has
+      // never set a password. The old copy asserted the middle case ("you
+      // don't have an account here yet"), which was flatly untrue for that
+      // third group and steered them away from the one link that helps them.
+      // We can't tell the cases apart client-side without leaking which
+      // addresses have accounts, so name all three and point at the fix.
       const isInvalidCreds = /invalid login credentials/i.test(error.message);
       setError(
         isInvalidCreds
-          ? "We couldn't sign you in. If you've applied but haven't been accepted yet, you don't have an account here yet — you'll receive an email with setup instructions once your application is approved. Otherwise, check your email and password."
+          ? "We couldn't sign you in. If you've been accepted but never set a password — or you've forgotten it — use \u201cForgot your password?\u201d below and we'll email you a link to get in."
           : error.message
       );
       setLoading(false);
@@ -182,7 +185,7 @@ export default function LoginPage() {
               href="/forgot-password"
               className="font-mono text-[9.5px] font-bold uppercase tracking-[0.16em] text-[color:var(--text-secondary)] hover:text-ink"
             >
-              Forgot your password?
+              Forgot password / first-time setup
             </Link>
             {/* On phones the black panel is gone, so the tagline anchors here. */}
             <span className="mono-label hidden text-right sm:block lg:hidden">

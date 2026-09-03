@@ -34,10 +34,11 @@ export default function ForgotPasswordPage() {
       {submitted ? (
         <>
           <div className="masthead-context">Check your inbox</div>
-          <h1 className="page-title">Reset link sent</h1>
+          <h1 className="page-title">Link sent</h1>
           <p className="mt-5 text-[14px] leading-relaxed text-[color:var(--text-secondary)]">
-            If an account exists for that email, we&apos;ve sent a link to reset
-            your password. It expires in 1 hour.
+            If an account exists for that email, we&apos;ve sent a link to set
+            your password. A reset link expires in 1 hour; a first-time setup
+            link lasts 30 days.
           </p>
           <p className="mt-4 text-[13px] leading-relaxed text-[color:var(--text-tertiary)]">
             Didn&apos;t get it? Check spam, or{" "}
@@ -53,10 +54,12 @@ export default function ForgotPasswordPage() {
         </>
       ) : (
         <>
-          <div className="masthead-context">Reset your password</div>
+          <div className="masthead-context">Get into your account</div>
           <h1 className="page-title">Forgot password</h1>
           <p className="mt-4 text-[14px] leading-relaxed text-[color:var(--text-secondary)]">
-            Enter your email and we&apos;ll send you a link to set a new one.
+            Enter your email and we&apos;ll send you a link to set a password.
+            This works whether you&apos;ve forgotten yours or have never set
+            one up — including if your acceptance email went missing.
           </p>
 
           <form onSubmit={handleSubmit} className="mt-9 space-y-6">
@@ -75,7 +78,7 @@ export default function ForgotPasswordPage() {
             </div>
 
             <Button type="submit" className="h-12 w-full" disabled={loading}>
-              {loading ? "Sending..." : "Send Reset Link"}
+              {loading ? "Sending..." : "Email Me A Link"}
             </Button>
           </form>
         </>

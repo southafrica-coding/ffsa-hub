@@ -132,6 +132,10 @@ export async function POST(request: Request) {
 
   let userId = appResponse.user_id;
 
+  // Set when the acceptance email could not be delivered, so the caller is
+  // told rather than shown a clean success.
+  let emailWarning: string | null = null;
+
   // If this is a public application (no user_id), create the user account
   if (!userId) {
     const siteUrl =
@@ -314,7 +318,7 @@ export async function POST(request: Request) {
           )
         : null;
 
-      await sendTransactional({
+      const acceptSend = await sendTransactional({
         to: applicantEmail,
         subject:
           customSubject ?? `You've been accepted to ${appResponse.programs.name}`,
@@ -328,6 +332,16 @@ export async function POST(request: Request) {
         sourceType: "school_application",
         sourceId: response_id,
       });
+
+      // The setup token exists either way, but if the email never went out
+      // the applicant has no way to know that. Returning a bare success here
+      // is how people ended up accepted, account created, and locked out with
+      // nobody aware. Surface it so the admin can act.
+      if (!acceptSend.ok) {
+        emailWarning = acceptSend.suppressed
+          ? `${applicantEmail} is on the email suppression list (previous bounce or spam complaint), so the acceptance email was not sent. They can still get in via "Forgot password" on the login page.`
+          : `The acceptance email to ${applicantEmail} failed to send: ${acceptSend.error}. Use Resend Invite, or ask them to use "Forgot password" on the login page.`;
+      }
     }
   }
 
@@ -400,5 +414,9 @@ export async function POST(request: Request) {
     },
   });
 
-  return NextResponse.json({ success: true, user_id: userId });
+  return NextResponse.json({
+    success: true,
+    user_id: userId,
+    ...(emailWarning ? { emailWarning } : {}),
+  });
 }
