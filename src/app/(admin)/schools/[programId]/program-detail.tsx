@@ -885,6 +885,7 @@ function ArrivalTab({
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [attentionOnly, setAttentionOnly] = useState(false);
+  const [arrivalSearch, setArrivalSearch] = useState("");
 
   function userName(u: Enrollment["users"]) {
     const name = [u.first_name, u.last_name].filter(Boolean).join(" ");
@@ -910,7 +911,24 @@ function ArrivalTab({
     return s === "missing" || s === "expired";
   }).length;
 
-  const visible = attentionOnly ? roster.filter(needsAttention) : roster;
+  // Alphabetical by the name actually shown, so the order matches what the
+  // eye scans. localeCompare keeps accented names (de Lange, Grøteide) in
+  // their expected places rather than after Z.
+  const sortedRoster = [...roster].sort((a, b) =>
+    userName(a.users).localeCompare(userName(b.users), undefined, {
+      sensitivity: "base",
+    })
+  );
+
+  const query = arrivalSearch.trim().toLowerCase();
+  const visible = sortedRoster
+    .filter((e) => (attentionOnly ? needsAttention(e) : true))
+    .filter((e) => {
+      if (!query) return true;
+      const name = userName(e.users).toLowerCase();
+      const email = (e.users.email ?? "").toLowerCase();
+      return name.includes(query) || email.includes(query);
+    });
 
   const statusColors: Record<string, "default" | "secondary" | "destructive"> = {
     waiting_for_arrival: "secondary",
@@ -976,17 +994,27 @@ function ArrivalTab({
             </span>
           </span>
         </div>
-        <button
-          type="button"
-          onClick={() => setAttentionOnly((v) => !v)}
-          className={`flex items-center gap-1.5 border px-2.5 py-1 text-xs font-medium transition-colors ${
-            attentionOnly
-              ? "border-ink bg-ink text-white"
-              : "border-border text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          Needs attention only
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            type="search"
+            value={arrivalSearch}
+            onChange={(e) => setArrivalSearch(e.target.value)}
+            placeholder="Search name or email"
+            className="h-[30px] w-56 text-xs"
+            aria-label="Search students on arrival"
+          />
+          <button
+            type="button"
+            onClick={() => setAttentionOnly((v) => !v)}
+            className={`flex items-center gap-1.5 border px-2.5 py-1 text-xs font-medium transition-colors ${
+              attentionOnly
+                ? "border-ink bg-ink text-white"
+                : "border-border text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Needs attention only
+          </button>
+        </div>
       </div>
 
       <div className="border bg-card">
@@ -1007,6 +1035,8 @@ function ArrivalTab({
                 <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                   {roster.length === 0
                     ? "No students waiting for arrival or arrived yet."
+                    : query
+                    ? `No students match \u201c${arrivalSearch.trim()}\u201d.`
                     : "No students match the current filter."}
                 </TableCell>
               </TableRow>
