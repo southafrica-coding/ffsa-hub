@@ -98,6 +98,60 @@ export async function POST(request: Request) {
     .is("contact_id", null)
     .is("display_name", null);
 
+  // Applications outlive the account (migration 200 turned this FK from
+  // CASCADE into SET NULL). Stamp the identity onto them first, exactly as
+  // we do for consent_records above, so an orphaned application still shows
+  // who submitted it instead of becoming an anonymous row.
+  const { data: ownedApps } = await admin
+    .from("application_responses")
+    .select("id, program_id, applicant_email, applicant_info")
+    .eq("user_id", user_id);
+
+  const apps = (ownedApps ?? []) as {
+    id: string;
+    program_id: string;
+    applicant_email: string | null;
+    applicant_info: Record<string, unknown> | null;
+  }[];
+
+  for (const app of apps) {
+    const email = app.applicant_email ?? tu.email;
+
+    // uq_app_resp_email_program is unique on (applicant_email, program_id)
+    // WHERE user_id IS NULL. If an orphan already holds this address for
+    // this program, releasing ours into that space would violate it and
+    // fail the whole deletion. Archive ours instead — the Removed bin keeps
+    // it recoverable, which is the entire point of this change.
+    let collides = false;
+    if (email) {
+      const { data: clash } = await admin
+        .from("application_responses")
+        .select("id")
+        .eq("program_id", app.program_id)
+        .ilike("applicant_email", email)
+        .is("user_id", null)
+        .neq("id", app.id)
+        .maybeSingle();
+      collides = !!clash;
+    }
+
+    const info = {
+      ...(app.applicant_info ?? {}),
+      ...(tu.first_name ? { first_name: tu.first_name } : {}),
+      ...(tu.last_name ? { last_name: tu.last_name } : {}),
+      ...(email ? { email } : {}),
+    };
+
+    await admin
+      .from("application_responses")
+      .update({
+        ...(email ? { applicant_email: email } : {}),
+        applicant_info: info,
+        ...(collides ? { removed_at: new Date().toISOString() } : {}),
+      })
+      .eq("id", app.id);
+  }
+
   // 1. Delete user_roles
   await adminSupabase.from("user_roles").delete().eq("user_id", user_id);
 
@@ -131,7 +185,12 @@ export async function POST(request: Request) {
     action: "delete",
     resource_type: "users",
     resource_id: user_id,
-    changes: { deleted_user_id: user_id },
+    changes: {
+      deleted_user_id: user_id,
+      // Which applications survived the deletion, so this is traceable
+      // later without guessing from timestamps.
+      preserved_application_ids: apps.map((a) => a.id),
+    },
   });
 
   return NextResponse.json({ success: true });
