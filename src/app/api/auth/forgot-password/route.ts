@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resetPasswordEmailHtml } from "@/lib/email/templates/reset-password";
-import { getResend } from "@/lib/email/resend";
+import { sendTransactional } from "@/lib/email/send-transactional";
 import { lookupAccountByEmail } from "@/lib/auth/account-state";
 import { sendSetupLink } from "@/lib/auth/send-setup-link";
 
@@ -134,17 +134,35 @@ export async function POST(request: Request) {
     linkData.properties.hashed_token
   )}`;
 
-  const fromEmail = (process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com").trim();
+  // Send through sendTransactional, not raw Resend. The raw path wrote no
+  // ledger row (so a reset that never arrived was invisible — there was no
+  // record to check) and skipped the suppression list (so a previously
+  // bounced address was handed to Resend and silently dropped). Both are how
+  // "I clicked forgot password and got nothing" stayed unexplainable.
   try {
-    await getResend().emails.send({
-      from: `Fire & Fragrance SA <${fromEmail}>`,
+    const sendResult = await sendTransactional({
       to: email,
       subject: "Reset your FFSA Hub password",
       html: resetPasswordEmailHtml({
         firstName: user.first_name || undefined,
         resetUrl,
       }),
+      category: "password_reset",
+      reason: "They asked to reset their FFSA Hub password.",
     });
+
+    if (!sendResult.ok) {
+      await admin.from("audit_logs").insert({
+        user_id: user.id,
+        action: "password_reset_failed",
+        resource_type: "auth",
+        resource_id: user.id,
+        changes: {
+          error: sendResult.error,
+          suppressed: sendResult.suppressed,
+        },
+      });
+    }
   } catch (err) {
     // Still neutral to the browser, but recorded: a swallowed send failure
     // here is indistinguishable from success to the person waiting.

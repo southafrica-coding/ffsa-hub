@@ -27,12 +27,17 @@ export async function POST(request: Request) {
 
   const result = await validateOnboardingInvite(adminSupabase, token);
   if (!result.ok) {
+    // Every one of these used to end at "ask a super admin" or "try logging
+    // in" — useless to someone who has no password. Point at the self-serve
+    // recovery instead.
     const message =
       result.reason === "expired"
-        ? "This setup link has expired. Ask a super admin to resend your invite."
+        ? "This setup link has expired. Use \u201cForgot password\u201d on the login page and we'll email you a fresh one."
+        : result.reason === "superseded"
+        ? "A newer setup link was sent to you, so this one no longer works. Check your inbox for the most recent email, or use \u201cForgot password\u201d on the login page for a fresh one."
         : result.reason === "used"
-        ? "This setup link has already been used. Try logging in instead."
-        : "This setup link is no longer valid. Ask a super admin to resend your invite.";
+        ? "This setup link has already been used. Try logging in — or use \u201cForgot password\u201d if you don't know your password."
+        : "This setup link is no longer valid. Use \u201cForgot password\u201d on the login page and we'll email you a fresh one.";
     return NextResponse.json({ error: message }, { status: 410 });
   }
 

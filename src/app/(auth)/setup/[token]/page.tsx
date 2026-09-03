@@ -30,11 +30,21 @@ export default async function SetupPage({
             body: "This account-setup link has expired. Request a new one below and we'll email you a fresh link.",
             showRecover: true,
           }
+        : result.reason === "superseded"
+        ? {
+            // A newer link was issued (any resend does this). The person
+            // never set anything up, so "already set up, go and sign in" —
+            // what this used to say — was false and left them stranded on a
+            // login they have no password for.
+            heading: "Newer link available",
+            body: "A more recent setup link was sent to you, so this one no longer works. Check your inbox for the latest email, or request a fresh link below.",
+            showRecover: true,
+          }
         : result.reason === "used"
         ? {
             heading: "Already set up",
-            body: "This link has already been used to set up an account. Head to the login page and sign in.",
-            showRecover: false,
+            body: "This link has already been used to set up an account. Head to the login page and sign in — or request a new link below if you've forgotten your password.",
+            showRecover: true,
           }
         : {
             heading: "Invalid link",

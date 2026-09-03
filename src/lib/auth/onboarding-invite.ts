@@ -36,12 +36,16 @@ export async function createOnboardingInvite(
   }: { userId: string; email: string; siteUrl: string; createdBy?: string | null }
 ): Promise<{ ok: true; token: string; url: string } | { ok: false; error: string }> {
   // Supersede any still-open token for this user so a resend invalidates the
-  // previously emailed link.
+  // previously emailed link. This is NOT the same as the token being used:
+  // stamping used_at here made the setup page tell people who had never set
+  // anything up that they were "already set up", and send them to a login
+  // they had no password for (migration 201).
   await admin
     .from("onboarding_invites")
-    .update({ used_at: new Date().toISOString() })
+    .update({ superseded_at: new Date().toISOString() })
     .eq("user_id", userId)
-    .is("used_at", null);
+    .is("used_at", null)
+    .is("superseded_at", null);
 
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + ONBOARDING_INVITE_TTL_MS).toISOString();
@@ -68,10 +72,15 @@ export type OnboardingInviteRow = {
   token: string;
   expires_at: string;
   used_at: string | null;
+  superseded_at: string | null;
 };
 
 /** Why a token can't be used — drives the message on the setup page/route. */
-export type OnboardingInviteInvalidReason = "not_found" | "used" | "expired";
+export type OnboardingInviteInvalidReason =
+  | "not_found"
+  | "used"
+  | "superseded"
+  | "expired";
 
 /**
  * Validate a setup token with the service-role client. Returns the row when
@@ -88,7 +97,7 @@ export async function validateOnboardingInvite(
 > {
   const { data } = await admin
     .from("onboarding_invites")
-    .select("id, user_id, email, token, expires_at, used_at")
+    .select("id, user_id, email, token, expires_at, used_at, superseded_at")
     .eq("token", token)
     .maybeSingle();
 
@@ -96,6 +105,7 @@ export async function validateOnboardingInvite(
 
   if (!invite) return { ok: false, reason: "not_found" };
   if (invite.used_at) return { ok: false, reason: "used" };
+  if (invite.superseded_at) return { ok: false, reason: "superseded" };
   if (new Date(invite.expires_at).getTime() < Date.now()) {
     return { ok: false, reason: "expired" };
   }
