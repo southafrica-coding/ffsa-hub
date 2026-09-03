@@ -57,6 +57,26 @@ export function Metric({
   );
 }
 
+// One line under a widget header saying exactly which population the numbers
+// count. The demographics widgets count accepted applicants AND enrolled
+// students, which is deliberately a different (larger) set than a school
+// roster — without saying so, the bars read as a wrong headcount.
+export function WidgetCaption({ children }: { children: React.ReactNode }) {
+  return (
+    <p
+      style={{
+        padding: "0.5rem 1.5rem",
+        borderBottom: "1px solid var(--rule)",
+        fontSize: "10px",
+        letterSpacing: "0.05em",
+        color: "var(--text-tertiary)",
+      }}
+    >
+      {children}
+    </p>
+  );
+}
+
 export function WidgetEmpty({ children }: { children: React.ReactNode }) {
   return (
     <p className="px-6 py-8 text-center text-xs tracking-[0.05em] text-[color:var(--text-tertiary)]">

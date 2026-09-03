@@ -359,11 +359,21 @@ export async function POST(request: Request) {
   if (!enrollmentId) {
     const { data: existing } = await adminSupabase
       .from("enrollments")
-      .select("id")
+      .select("id, removed_at")
       .eq("user_id", userId)
       .eq("program_id", appResponse.program_id)
       .maybeSingle();
     enrollmentId = existing?.id ?? null;
+    // (user_id, program_id) is unique, so a re-accepted applicant reuses the
+    // enrollment they already had. If it was soft-removed — cancelled, then
+    // accepted again — accepting must put them back on the roster, otherwise
+    // they stay invisible everywhere.
+    if (enrollmentId && existing?.removed_at) {
+      await adminSupabase
+        .from("enrollments")
+        .update({ removed_at: null, removed_by: null })
+        .eq("id", enrollmentId);
+    }
   }
 
   // Auto-set up the full-program billing schedule and generate the deposit

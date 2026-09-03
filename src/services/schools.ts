@@ -257,6 +257,46 @@ export async function deleteEnrollment(supabase: Client, id: string) {
   return supabase.from("enrollments").delete().eq("id", id);
 }
 
+/**
+ * Soft-remove the enrollment a person holds on one program, if they have a
+ * live one. Used when their application is cancelled/rejected: the enrollment
+ * was created at accept-time and would otherwise linger on the roster and in
+ * every headcount (see the PUT handler in api/schools/applications/responses).
+ *
+ * Returns the enrollment id that was removed, or null if there was nothing
+ * live to remove. Call with the service-role client — the caller is updating
+ * an application, not necessarily holding enrollment-write RLS.
+ */
+export async function removeEnrollmentForApplicant(
+  supabase: Client,
+  userId: string,
+  programId: string,
+  removedBy: string
+): Promise<string | null> {
+  const { data: existing } = await supabase
+    .from("enrollments")
+    .select("id, removed_at, status")
+    .eq("user_id", userId)
+    .eq("program_id", programId)
+    .maybeSingle();
+
+  if (!existing || existing.removed_at) return null;
+  // Pre-arrival only. Someone who actually turned up has a real history on the
+  // roster — if they leave, that is `decided_to_leave` / `dismissed`, not a
+  // removal — so a late status change on their application never erases them.
+  if (existing.status !== "waiting_for_arrival") return null;
+
+  const { error } = await setEnrollmentRemoved(supabase, existing.id, removedBy);
+  if (error) {
+    console.error(
+      "[schools] failed to remove enrollment for cancelled applicant:",
+      error.message
+    );
+    return null;
+  }
+  return existing.id as string;
+}
+
 // ────────────────────────────────────────────────────────────
 // GRADES
 // ────────────────────────────────────────────────────────────
@@ -939,3 +979,4 @@ export async function seedDefaultReferenceQuestions(
     p_program_id: programId,
   });
 }
+

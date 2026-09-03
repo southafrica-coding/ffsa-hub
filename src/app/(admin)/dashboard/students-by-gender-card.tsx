@@ -1,7 +1,7 @@
 "use client";
 
 import { useStudentDemographics } from "./use-student-demographics";
-import { WidgetShell, WidgetEmpty } from "./widget-shell";
+import { WidgetShell, WidgetEmpty, WidgetCaption } from "./widget-shell";
 import {
   StackedBar,
   Legend,
@@ -35,6 +35,9 @@ export function StudentsByGenderCard() {
 
   return (
     <WidgetShell title="Gender Split by School" href="/schools">
+      <WidgetCaption>
+        {data.overall.total} accepted or enrolled &middot; not the same as a school roster
+      </WidgetCaption>
       <div
         className="flex items-center justify-between"
         style={{

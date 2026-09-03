@@ -8,6 +8,7 @@ import {
   getQuestionsByProgram,
   createReferenceRequest,
   setResponseRemoved,
+  removeEnrollmentForApplicant,
 } from "@/services/schools";
 import { userCanManageApplications } from "@/lib/auth/check-schools-access";
 import { normaliseGender } from "@/lib/schools/demographics";
@@ -308,6 +309,16 @@ export async function PUT(request: Request) {
         // account. Guarded in the helper so staff/admin are never touched.
         if ((status === "rejected" || status === "cancelled") && resp.user_id) {
           await deactivateMembershipProfile(adminSupabase, resp.user_id, `application_${status}`);
+          // …and takes them off the roster. An accepted applicant already has
+          // an enrollment row; left behind it keeps them in the student list
+          // and in every dashboard headcount. Soft-remove, so Restore still
+          // undoes it losslessly.
+          await removeEnrollmentForApplicant(
+            adminSupabase,
+            resp.user_id,
+            resp.program_id,
+            user.id
+          );
         }
 
         // Send notification email for bulk updates too
@@ -360,6 +371,13 @@ export async function PUT(request: Request) {
   // Guarded in the helper so staff/admin accounts are never touched.
   if ((status === "rejected" || status === "cancelled") && data?.user_id) {
     await deactivateMembershipProfile(adminSupabase, data.user_id, `application_${status}`);
+    // …and takes them off the roster — see the bulk path above.
+    await removeEnrollmentForApplicant(
+      adminSupabase,
+      data.user_id,
+      data.program_id,
+      user.id
+    );
   }
 
   // Send notification email if status actually changed
