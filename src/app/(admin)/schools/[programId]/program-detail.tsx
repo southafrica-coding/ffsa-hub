@@ -425,13 +425,23 @@ export function ProgramDetail({
     gradedCount: grades.filter((g) => g.enrollment_id === e.id && g.letter_grade).length,
     removed: !!e.removed_at,
   }));
-  const rosterStaffOptions = staffOptions.map((s) => ({ id: s.id, name: displayName(s) }));
+  const rosterStaffOptions = staffOptions
+    .map((s) => ({ id: s.id, name: displayName(s) }))
+    .sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+    );
   // A removed enrolment still holds the unique (user, program) slot, so a
   // removed student stays out of this list until restored or deleted.
   const enrolledUserIds = new Set(enrollments.map((e) => e.user_id));
+  // Sorted by the name the picker actually shows. The query orders by
+  // last_name, but displayName() leads with the preferred/first name, so the
+  // list looked unordered to anyone scanning it for a person.
   const enrollableUsers = allUsers
     .filter((u) => !enrolledUserIds.has(u.id))
-    .map((u) => ({ id: u.id, name: displayName(u), email: u.email }));
+    .map((u) => ({ id: u.id, name: displayName(u), email: u.email }))
+    .sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+    );
   // Everyone carrying this school: the named leaders plus anyone walking with a
   // student, counted once even when they are both.
   const staffOnSchool = new Set<string>([
