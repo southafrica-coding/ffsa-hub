@@ -16,6 +16,10 @@ export async function middleware(request: NextRequest) {
     "/api/auth/login-attempt", // public: records failed sign-in attempts (best-effort)
     "/auth/callback",
     "/auth/confirm",
+    // public: /setup/[token] — the 30-day onboarding invite lands here with NO
+    // session. The invitee has no account yet, which is the whole point, so
+    // bouncing them to /login made the invite impossible to complete.
+    "/setup",
     "/apply",
     "/reference",
     "/legal", // public privacy / consent agreement
@@ -24,15 +28,28 @@ export async function middleware(request: NextRequest) {
     "/join", // public signup link (/join/[code]) — anyone with the active code can self-onboard
     "/preferences", // public email preference / unsubscribe page
     "/subscribe", // public sign-up page for labels opened up with public_subscribe (196)
+    "/unsubscribe", // public one-click opt-out landing page from email footers
+    "/schedule", // public: /schedule/[token] — applicants pick an interview slot
+    "/fb", // public event-feedback runtime (/fb/[slug])
     "/api/upload/sign", // public applicants upload photos from /apply
     "/api/public", // public application submission + signup
     "/api/f", // public form submission (/api/f/[slug]/submit)
+    "/api/fb", // public feedback submission (/api/fb/[slug]/submit)
+    "/api/scheduling", // public interview-slot pick — authorised by the magic token
+    "/api/preferences", // public email preference save — authorised by the signed prefs token
     "/api/integrations", // payment webhooks (PayFast ITN, future Stripe, etc.) — must be reachable by external services with no auth cookies
     "/api/tickets", // public QR image endpoint (the code in the URL is the auth) — referenced from confirmation emails
     "/api/cron", // Vercel Cron endpoints — authenticated by CRON_SECRET bearer token in the route handler, not session cookies
     "/api/slack", // inbound Slack events (Q&A bot) — authenticated by Slack signing-secret HMAC in the route handler, not session cookies
   ];
-  const isPublicRoute = publicRoutes.some((route) => pathname.startsWith(route));
+  // Match on whole path SEGMENTS, not raw prefixes. A bare startsWith()
+  // let "/e" (public ticket storefront) swallow "/events" and "/f"
+  // swallow "/finance" — both admin sections — so they skipped the auth
+  // redirect below entirely. The admin layout does no auth check of its
+  // own, so middleware is the only gate.
+  const isPublicRoute = publicRoutes.some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`)
+  );
 
   // Public ticket checkout — the only public sub-route under
   // /api/events/. Everything else under /api/events/ is admin and
