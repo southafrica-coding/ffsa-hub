@@ -10,7 +10,7 @@ import { sendSetupLink } from "@/lib/auth/send-setup-link";
 // two reasons: it protects addresses that have no account, and — because the
 // limit no longer depends on whether an account exists — we can tell the
 // person they have been throttled instead of pretending we sent something.
-const MIN_GAP_MS = 60_000;
+const MIN_GAP_SECONDS = 60;
 const HOURLY_CAP = 3;
 
 export async function POST(request: Request) {
@@ -37,64 +37,44 @@ export async function POST(request: Request) {
   // makes it safe to report: "you asked a moment ago" reveals nothing about
   // whether the address is registered, because an unregistered one is told the
   // same thing at the same moment.
-  // password_reset_requests (migration 202) isn't in the generated Database
-  // types yet; the repo convention is to cast for not-yet-typed objects.
-  const throttleLog = () =>
-    (
-      admin as unknown as {
-        from: (table: string) => {
-          select: (cols: string) => {
-            eq: (
-              col: string,
-              val: string
-            ) => {
-              gte: (
-                col: string,
-                val: string
-              ) => {
-                order: (
-                  col: string,
-                  opts: { ascending: boolean }
-                ) => Promise<{ data: { created_at: string }[] | null }>;
-              };
-            };
-          };
-          insert: (row: Record<string, unknown>) => Promise<{ error: unknown }>;
-        };
-      }
-    ).from("password_reset_requests");
-
-  const sinceHour = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-  const { data: recent } = await throttleLog()
-    .select("created_at")
-    .eq("email_normalized", email)
-    .gte("created_at", sinceHour)
-    .order("created_at", { ascending: false });
-
-  const history = recent ?? [];
-
-  // Saying "Link sent" when the throttle stopped us is the bug this route kept
-  // producing: someone helping an applicant retries within the minute, is told
-  // it worked, and waits for an email that was never sent. Name the wait.
-  const throttled = (retryAfterSeconds: number) =>
-    NextResponse.json({ ok: true, throttled: true, retryAfterSeconds });
-
-  if (history.length >= HOURLY_CAP) {
-    const oldest = new Date(history[history.length - 1].created_at).getTime();
-    const freesAt = oldest + 60 * 60 * 1000;
-    return throttled(Math.max(1, Math.ceil((freesAt - Date.now()) / 1000)));
-  }
-
-  if (history.length > 0) {
-    const sinceLast = Date.now() - new Date(history[0].created_at).getTime();
-    if (sinceLast < MIN_GAP_MS) {
-      return throttled(Math.max(1, Math.ceil((MIN_GAP_MS - sinceLast) / 1000)));
+  //
+  // Deciding and recording happen in one statement (migration 204). Doing it
+  // as read-then-insert let two requests a few milliseconds apart both pass
+  // the check before either row was visible, and send twice.
+  //
+  // claim_password_reset_slot isn't in the generated Database types yet; the
+  // repo convention is to cast for not-yet-typed database objects.
+  const { data: slotData, error: slotError } = await (
+    admin as unknown as {
+      rpc: (
+        fn: string,
+        args: Record<string, unknown>
+      ) => Promise<{
+        data: { allowed: boolean; retry_after_seconds: number }[] | null;
+        error: unknown;
+      }>;
     }
-  }
+  ).rpc("claim_password_reset_slot", {
+    p_email: email,
+    p_min_gap_seconds: MIN_GAP_SECONDS,
+    p_hourly_cap: HOURLY_CAP,
+  });
 
-  // Count this attempt before doing any work, so a slow or failing send can't
-  // let a caller slip past the limit by retrying.
-  await throttleLog().insert({ email_normalized: email });
+  const slot = slotData?.[0];
+
+  // Fail open on an unreachable throttle: refusing to send would strand the
+  // very people this route exists for, and the cap is a courtesy, not a
+  // security control.
+  if (!slotError && slot && !slot.allowed) {
+    // Saying "Link sent" when the throttle stopped us is the bug this route
+    // kept producing: someone helping an applicant retries within the minute,
+    // is told it worked, and waits for an email that was never sent.
+    return NextResponse.json({
+      ok: true,
+      throttled: true,
+      retryAfterSeconds: slot.retry_after_seconds,
+    });
+  }
 
   // Resolve the account and, crucially, whether it can be signed into at all.
   const account = await lookupAccountByEmail(admin, email);
