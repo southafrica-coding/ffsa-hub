@@ -44,28 +44,47 @@ export async function POST(request: Request) {
   //
   // claim_password_reset_slot isn't in the generated Database types yet; the
   // repo convention is to cast for not-yet-typed database objects.
-  const { data: slotData, error: slotError } = await (
-    admin as unknown as {
-      rpc: (
-        fn: string,
-        args: Record<string, unknown>
-      ) => Promise<{
-        data: { allowed: boolean; retry_after_seconds: number }[] | null;
-        error: unknown;
-      }>;
-    }
-  ).rpc("claim_password_reset_slot", {
-    p_email: email,
-    p_min_gap_seconds: MIN_GAP_SECONDS,
-    p_hourly_cap: HOURLY_CAP,
-  });
+  const claimSlot = () =>
+    (
+      admin as unknown as {
+        rpc: (
+          fn: string,
+          args: Record<string, unknown>
+        ) => Promise<{
+          data: { allowed: boolean; retry_after_seconds: number }[] | null;
+          error: unknown;
+        }>;
+      }
+    ).rpc("claim_password_reset_slot", {
+      p_email: email,
+      p_min_gap_seconds: MIN_GAP_SECONDS,
+      p_hourly_cap: HOURLY_CAP,
+    });
+
+  // One retry. The failures worth surviving here are transient — a cold start
+  // establishing its first connection, a pool briefly exhausted — and they
+  // resolve in milliseconds. Retrying once turns most of them into a correct
+  // answer instead of a silent bypass; retrying more would just make a person
+  // wait on a database that is genuinely unwell.
+  let { data: slotData, error: slotError } = await claimSlot();
+  if (slotError) {
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    ({ data: slotData, error: slotError } = await claimSlot());
+  }
 
   const slot = slotData?.[0];
 
-  // Fail open on an unreachable throttle: refusing to send would strand the
-  // very people this route exists for, and the cap is a courtesy, not a
-  // security control.
-  if (!slotError && slot && !slot.allowed) {
+  // Fail open when the throttle cannot be reached: refusing to send would
+  // strand exactly the people this route exists for, and the cap is a
+  // courtesy, not a security control.
+  //
+  // But a bypass must never again be something we can only guess at after the
+  // fact. Record it — below, once an account is resolved, because a bypass
+  // only means anything if an email actually goes out, and nothing is sent to
+  // an address with no account.
+  const throttleDegraded = Boolean(slotError) || !slot;
+
+  if (!throttleDegraded && slot && !slot.allowed) {
     // Saying "Link sent" when the throttle stopped us is the bug this route
     // kept producing: someone helping an applicant retries within the minute,
     // is told it worked, and waits for an email that was never sent.
@@ -82,6 +101,27 @@ export async function POST(request: Request) {
   if (account.state === "no_account" || !account.userId) return neutral;
 
   const user = { id: account.userId, first_name: account.firstName };
+
+  // The throttle was unreachable and we are about to send anyway. This is the
+  // only path where failing open has a visible consequence, so it is the only
+  // one worth a row.
+  if (throttleDegraded) {
+    await admin.from("audit_logs").insert({
+      user_id: user.id,
+      action: "password_reset_throttle_unavailable",
+      resource_type: "auth",
+      resource_id: user.id,
+      changes: {
+        note: "Rate limit could not be checked; the email was sent anyway.",
+        error:
+          slotError instanceof Error
+            ? slotError.message
+            : slotError
+            ? String(slotError)
+            : "no slot returned",
+      },
+    });
+  }
 
   const siteUrl =
     process.env.NEXT_PUBLIC_SITE_URL ||
