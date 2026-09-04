@@ -51,8 +51,9 @@ export async function PATCH(
   return NextResponse.json({ success: true, subcategory: data });
 }
 
-// Delete a sub-category. Admins only. Its members fall back to Uncategorized
-// (ON DELETE SET NULL on staff_ministry_members.subcategory_id).
+// Delete a sub-category. Admins only. Its members stay in the ministry and
+// keep any other categories they're in — the cascade only removes this
+// category's staff_ministry_member_subcategories links (migration 205).
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string; subId: string }> }

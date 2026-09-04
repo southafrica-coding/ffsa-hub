@@ -43,8 +43,7 @@ import {
   DropdownMenuSub,
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
+  DropdownMenuCheckboxItem,
 } from "@/components/ui/dropdown-menu";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -55,7 +54,7 @@ type Membership = any;
 type Ministry = any;
 type Subcategory = { id: string; name: string; sort_order: number };
 
-// Select needs a non-empty string value; this stands in for "no sub-category".
+// Group key for people who are in no sub-category at all.
 const UNCATEGORIZED = "__none__";
 
 function nameOf(u: PickUser): string {
@@ -170,37 +169,51 @@ export function MinistryDetail({
   const base = `/api/ministries/${ministry.id}`;
 
   const hasCategories = subcategories.length > 0;
-  // Rank within a group: point leaders first (ministry, then category), then
-  // other leaders, then staff — so every group reads with its point leader on
-  // top, remaining leaders next, and members below, each tier A–Z by name.
-  const rankOf = (r: Membership) =>
+  const categoriesOf = (r: Membership): string[] => r.category_ids ?? [];
+  const leadsCategory = (r: Membership, categoryId: string) =>
+    (r.point_leader_category_ids ?? []).includes(categoryId);
+  // Rank within a group: point leaders first (ministry, then this category's
+  // category lead), then other leaders, then staff — so every group reads with
+  // its point leader on top, remaining leaders next, and members below, each
+  // tier A–Z by name. Ranking is per group because someone can be in several
+  // categories and lead only one of them.
+  const rankOf = (r: Membership, groupKey: string) =>
     r.is_point_leader
       ? 0
-      : r.is_category_point_leader
+      : leadsCategory(r, groupKey)
         ? 1
         : r.member_role === "leader"
           ? 2
           : 3;
-  const sortedRoster = [...roster].sort((a, b) => {
-    const rank = rankOf(a) - rankOf(b);
-    if (rank !== 0) return rank;
-    return nameOf(a.user).localeCompare(nameOf(b.user), undefined, {
-      sensitivity: "base",
+  const sortForGroup = (rows: Membership[], groupKey: string) =>
+    [...rows].sort((a, b) => {
+      const rank = rankOf(a, groupKey) - rankOf(b, groupKey);
+      if (rank !== 0) return rank;
+      return nameOf(a.user).localeCompare(nameOf(b.user), undefined, {
+        sensitivity: "base",
+      });
     });
-  });
   // Group the whole team (leaders + staff) by sub-category: one bucket per
   // category (in sort order), plus a trailing "Uncategorized" bucket.
   // Categories with no one still show, so admins see the empty group they made.
+  // Someone in several categories appears in each of them, so the group counts
+  // can add up to more than the roster size — that's expected.
   const groups: { key: string; label: string; rows: Membership[] }[] = [
     ...subcategories.map((c) => ({
       key: c.id,
       label: c.name,
-      rows: sortedRoster.filter((r) => r.subcategory_id === c.id),
+      rows: sortForGroup(
+        roster.filter((r) => categoriesOf(r).includes(c.id)),
+        c.id
+      ),
     })),
     {
       key: UNCATEGORIZED,
       label: hasCategories ? "Uncategorized" : "",
-      rows: sortedRoster.filter((r) => !r.subcategory_id),
+      rows: sortForGroup(
+        roster.filter((r) => categoriesOf(r).length === 0),
+        UNCATEGORIZED
+      ),
     },
   ];
 
@@ -254,45 +267,65 @@ export function MinistryDetail({
   function renderRow(r: Membership, groupKey: string) {
     const isLeader = r.member_role === "leader";
     const inCategory = groupKey !== UNCATEGORIZED;
-    // r.subcategory_id === groupKey here, so this flag is the point leader of
-    // THIS category. Only meaningful inside a real category group.
-    const isCategoryLead = inCategory && r.is_category_point_leader;
-    // "Move to category" submenu — same PATCH the old inline Select fired.
+    // Point leader of THIS category — someone can be in several categories and
+    // lead only one, so the badge and controls are scoped to the group.
+    const isCategoryLead = inCategory && leadsCategory(r, groupKey);
+    const current = categoriesOf(r);
+    // Categories submenu — a member can hold several, so each toggle sends the
+    // whole new set. The menu stays open so several can be ticked in a row.
     const categoryMenu = hasCategories ? (
       <DropdownMenuSub>
         <DropdownMenuSubTrigger>
-          <FolderInput className="mr-2 h-3.5 w-3.5" /> Move to category
+          <FolderInput className="mr-2 h-3.5 w-3.5" /> Categories
         </DropdownMenuSubTrigger>
         <DropdownMenuSubContent>
-          <DropdownMenuRadioGroup
-            value={r.subcategory_id ?? UNCATEGORIZED}
-            onValueChange={(v) =>
+          {subcategories.map((c) => {
+            const checked = current.includes(c.id);
+            return (
+              <DropdownMenuCheckboxItem
+                key={c.id}
+                checked={checked}
+                onSelect={(e) => e.preventDefault()}
+                onCheckedChange={() =>
+                  call(
+                    `${base}/members`,
+                    "PATCH",
+                    {
+                      membership_id: r.id,
+                      subcategory_ids: checked
+                        ? current.filter((x: string) => x !== c.id)
+                        : [...current, c.id],
+                    },
+                    checked ? "Removed from category" : "Added to category"
+                  )
+                }
+              >
+                {c.name}
+              </DropdownMenuCheckboxItem>
+            );
+          })}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            disabled={current.length === 0}
+            onClick={() =>
               call(
                 `${base}/members`,
                 "PATCH",
-                {
-                  membership_id: r.id,
-                  subcategory_id: v === UNCATEGORIZED ? null : v,
-                },
-                "Moved"
+                { membership_id: r.id, subcategory_ids: [] },
+                "Moved to Uncategorized"
               )
             }
           >
-            <DropdownMenuRadioItem value={UNCATEGORIZED}>
-              Uncategorized
-            </DropdownMenuRadioItem>
-            {subcategories.map((c) => (
-              <DropdownMenuRadioItem key={c.id} value={c.id}>
-                {c.name}
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
+            Uncategorized
+          </DropdownMenuItem>
         </DropdownMenuSubContent>
       </DropdownMenuSub>
     ) : null;
     return (
       <PersonRow
-        key={r.id}
+        // Someone in several categories renders once per group, so the key has
+        // to include the group or React sees duplicates.
+        key={`${groupKey}:${r.id}`}
         user={r.user}
         badge={
           <>

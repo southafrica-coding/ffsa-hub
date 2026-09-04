@@ -69,17 +69,40 @@ export async function getMinistry(supabase: Client, id: string) {
 /**
  * A ministry's roster: leaders first, then members. Joins users directly so
  * names/emails render for any authorized reader (no user_roles embed).
+ *
+ * Sub-categories come back as an embed of the join table (migration 205) — a
+ * member can be in several — normalised onto each row as:
+ *   category_ids               every category the person is in
+ *   point_leader_category_ids  the subset they are point leader of
+ * so the client component never touches the raw join rows.
  */
 export async function getMinistryRoster(supabase: Client, ministryId: string) {
-  return supabase
+  const result = await supabase
     .from("staff_ministry_members")
     .select(
-      `id, member_role, is_point_leader, is_category_point_leader, status, subcategory_id, created_at,
-       user:users!user_id(${MEMBER_USER_FIELDS})`
+      `id, member_role, is_point_leader, status, created_at,
+       user:users!user_id(${MEMBER_USER_FIELDS}),
+       categories:staff_ministry_member_subcategories!membership_id(subcategory_id, is_point_leader)`
     )
     .eq("staff_ministry_id", ministryId)
     .order("member_role", { ascending: true }) // 'leader' < 'member' alphabetically
     .order("created_at", { ascending: true });
+
+  if (result.error || !result.data) return result;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const data = (result.data as any[]).map((row) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const links = (row.categories ?? []) as any[];
+    return {
+      ...row,
+      category_ids: links.map((l) => l.subcategory_id),
+      point_leader_category_ids: links
+        .filter((l) => l.is_point_leader)
+        .map((l) => l.subcategory_id),
+    };
+  });
+  return { ...result, data };
 }
 
 /**
@@ -98,8 +121,9 @@ export async function listActiveMinistryMemberships(supabase: Client) {
 
 // ────────────────────────────────────────────────────────────
 // Sub-categories — named sub-groups within a single ministry.
-// The list is admin-managed (RLS: is_admin()); members are assigned to a
-// sub-category via the staff_ministry_members.subcategory_id column.
+// The list is admin-managed (RLS: is_admin()); members are assigned to
+// sub-categories through the staff_ministry_member_subcategories join table
+// (migration 205), so one person can be in several at once.
 // ────────────────────────────────────────────────────────────
 
 /** A ministry's sub-categories, ordered for display. */

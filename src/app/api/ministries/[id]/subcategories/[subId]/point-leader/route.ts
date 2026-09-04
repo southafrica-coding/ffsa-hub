@@ -25,28 +25,49 @@ export async function PATCH(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin: any = createAdminClient();
 
+  // The flag lives on the membership↔category link (migration 205), since a
+  // person can be in several categories and lead only one of them.
+
+  // Guard: the category must belong to THIS ministry — the join table is keyed
+  // on (membership_id, subcategory_id), so nothing else scopes the write.
+  const { data: sub } = await admin
+    .from("staff_ministry_subcategories")
+    .select("id")
+    .eq("id", subId)
+    .eq("staff_ministry_id", id)
+    .maybeSingle();
+  if (!sub)
+    return NextResponse.json({ error: "That category no longer exists" }, { status: 404 });
+
   // Clear this category's current point leader first (partial unique index
   // allows only one per subcategory_id).
   const { error: clearError } = await admin
-    .from("staff_ministry_members")
-    .update({ is_category_point_leader: false })
-    .eq("staff_ministry_id", id)
+    .from("staff_ministry_member_subcategories")
+    .update({ is_point_leader: false })
     .eq("subcategory_id", subId)
-    .eq("is_category_point_leader", true);
+    .eq("is_point_leader", true);
   if (clearError) return NextResponse.json({ error: clearError.message }, { status: 500 });
 
   // null user_id = just clear the point leader.
   if (!targetUserId) return NextResponse.json({ success: true });
 
   // Set the new one — must be a LEADER of this ministry who is IN this category.
-  const { data: updated, error } = await admin
+  const { data: membership } = await admin
     .from("staff_ministry_members")
-    .update({ is_category_point_leader: true })
+    .select("id")
     .eq("staff_ministry_id", id)
-    .eq("subcategory_id", subId)
     .eq("user_id", targetUserId)
     .eq("member_role", "leader")
-    .select("id");
+    .maybeSingle();
+
+  const { data: updated, error } = membership
+    ? await admin
+        .from("staff_ministry_member_subcategories")
+        .update({ is_point_leader: true })
+        .eq("subcategory_id", subId)
+        .eq("membership_id", membership.id)
+        .select("membership_id")
+    : { data: null, error: null };
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!updated || updated.length === 0)
     return NextResponse.json(
