@@ -5,6 +5,7 @@ import { listMinistries, listActiveMinistryMemberships } from "@/services/minist
 import { listActiveEnrollmentSchools } from "@/services/schools";
 import { strongestMinistryRole, type MinistryRole } from "@/lib/users/derive-title";
 import { getAuthSignIns } from "@/lib/users/auth-signins";
+import { getAccountFlags } from "@/lib/users/account-flags";
 import { UsersTable } from "./users-table";
 import { InviteUserForm } from "./invite-user-form";
 import { PublicSignupLinkCard } from "./public-signup-link-card";
@@ -87,10 +88,25 @@ export default async function UsersPage() {
   // The public.users.last_sign_in_at mirror is unmaintained (always null), so
   // overlay the authoritative value from Supabase Auth. This drives the status
   // badge: anyone who has actually signed in is past the "Invited" stage.
+  //
+  // Two blockers that public.users cannot show: never set a password, and an
+  // address that bounced so nothing we send arrives. Both are the difference
+  // between "chase them" and "copy them a link".
+  const accountFlags = await getAccountFlags(
+    new Map(
+      (users ?? []).map((u: { id: string; email: string | null }) => [
+        u.id,
+        u.email ?? null,
+      ])
+    )
+  );
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const usersWithSignIn = (users ?? []).map((u: any) => ({
     ...u,
     last_sign_in_at: authSignIns.get(u.id) ?? u.last_sign_in_at ?? null,
+    needs_setup: accountFlags.get(u.id)?.needsSetup ?? false,
+    email_suppressed: accountFlags.get(u.id)?.emailSuppressed ?? false,
   }));
 
   // Check if current user is super_admin

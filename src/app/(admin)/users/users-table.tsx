@@ -15,6 +15,8 @@ import {
   ShieldCheck,
   Search,
   X,
+  Link as LinkIcon,
+  MailWarning,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -72,6 +74,10 @@ type UserRow = {
   health_insurance_provider: string | null;
   health_insurance_expiry_date: string | null;
   last_sign_in_at: string | null;
+  /** No password has ever been set — they cannot sign in (migration 203). */
+  needs_setup?: boolean;
+  /** Their address has bounced, so any link we email is dropped unsent. */
+  email_suppressed?: boolean;
   user_roles: Array<{
     id: string;
     scope_type: string | null;
@@ -392,6 +398,39 @@ export function UsersTable({
     setBusy(null);
   }
 
+  // The escape hatch for the one case email can never fix: a suppressed
+  // address. Puts the link on the clipboard so it can be sent by hand, which
+  // is what deleting-and-recreating the account used to be for.
+  async function handleCopySetupLink(user: UserRow) {
+    setBusy(user.id);
+    try {
+      const res = await fetch("/api/admin/setup-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: user.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || "Could not create a setup link");
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(data.url);
+        alert(
+          `Setup link copied — valid 30 days. Send it to ${user.email} yourself.`
+        );
+      } catch {
+        // Clipboard access can be refused (insecure origin, permissions).
+        // Showing the link still beats failing: it can be copied by hand.
+        prompt("Copy this setup link (valid 30 days):", data.url);
+      }
+    } catch {
+      alert("Network error");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function handleSendReminder(user: UserRow) {
     setBusy(user.id);
     await callApi(
@@ -414,7 +453,10 @@ export function UsersTable({
   async function handleDelete(user: UserRow) {
     if (
       !confirm(
-        `Delete ${displayName(user)}? This permanently removes their account. Audit history is preserved.`
+        `Delete ${displayName(user)}? This permanently removes their account. ` +
+          `Their application is kept but is unlinked from the person, and their ` +
+          `roles and enrolments go with the account. ` +
+          `If they simply can't sign in, use "Copy setup link" instead.`
       )
     ) {
       return;
@@ -594,6 +636,29 @@ export function UsersTable({
                       {lifecycle.stage === "profile_incomplete" && (
                         <MissingFieldsPopover lifecycle={lifecycle} />
                       )}
+                      {/* "Invited" already implies no password, so only flag
+                          the surprising case: someone who looks joined but
+                          still cannot sign in. That mismatch is what used to
+                          get diagnosed by deleting the account. */}
+                      {user.needs_setup && lifecycle.stage !== "invited" && (
+                        <Badge
+                          variant="outline"
+                          className="text-amber-700 border-amber-300"
+                          title="This account has never had a password set, so they cannot sign in. Use Copy setup link."
+                        >
+                          No password yet
+                        </Badge>
+                      )}
+                      {user.email_suppressed && (
+                        <Badge
+                          variant="outline"
+                          className="text-red-700 border-red-300"
+                          title="This address has bounced before, so any link we email is dropped unsent. Use Copy setup link and send it another way."
+                        >
+                          <MailWarning className="h-3 w-3 mr-1" />
+                          Email bouncing
+                        </Badge>
+                      )}
                       {lifecycle.insurance.state === "expired" && (
                         <Badge
                           variant="outline"
@@ -651,6 +716,15 @@ export function UsersTable({
                             >
                               <Mail className="h-4 w-4 mr-2" />
                               Resend invite
+                            </DropdownMenuItem>
+                          )}
+
+                          {user.needs_setup && (
+                            <DropdownMenuItem
+                              onClick={() => handleCopySetupLink(user)}
+                            >
+                              <LinkIcon className="h-4 w-4 mr-2" />
+                              Copy setup link
                             </DropdownMenuItem>
                           )}
 

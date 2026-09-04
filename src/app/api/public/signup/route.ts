@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { lookupAccountByEmail } from "@/lib/auth/account-state";
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
@@ -64,13 +65,29 @@ export async function POST(request: Request) {
 
   const normalisedEmail = email.trim().toLowerCase();
 
-  const { data: existing } = await adminSupabase
-    .from("users")
-    .select("id")
-    .eq("email", normalisedEmail)
-    .maybeSingle();
+  // "Already exists — try logging in" was a locked door for the largest group
+  // who reach this page: accepted applicants whose account was created without
+  // a password. They cannot log in, so sending them to login is a dead end and
+  // the reason admins resorted to deleting the account so it could be remade.
+  // Ask what the account can actually do before answering.
+  const existingAccount = await lookupAccountByEmail(
+    adminSupabase,
+    normalisedEmail
+  );
 
-  if (existing) {
+  if (existingAccount.state === "needs_setup") {
+    return NextResponse.json(
+      {
+        error:
+          "You already have an account waiting — it just needs a password. " +
+          "Use \u201cForgot password / first-time setup\u201d to get your setup link.",
+        needsSetup: true,
+      },
+      { status: 409 }
+    );
+  }
+
+  if (existingAccount.state === "active") {
     return NextResponse.json(
       { error: "An account with this email already exists. Try logging in instead." },
       { status: 409 }

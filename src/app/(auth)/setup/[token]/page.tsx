@@ -76,8 +76,9 @@ export default async function SetupPage({
     return (
       <SetupShell
         heading="Already set up"
-        body="Your account is already active. Head to the login page and sign in."
+        body="Your account is already active. Head to the login page and sign in — or request a fresh link below if you've forgotten your password."
         showLogin
+        showRecover
       />
     );
   }

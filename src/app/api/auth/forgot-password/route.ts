@@ -5,9 +5,11 @@ import { sendTransactional } from "@/lib/email/send-transactional";
 import { lookupAccountByEmail } from "@/lib/auth/account-state";
 import { sendSetupLink } from "@/lib/auth/send-setup-link";
 
-// Throttle: at most one email per minute, and 3 per hour, per account.
-// Backed by audit_logs so it survives across serverless invocations without
-// a new table. This blunts inbox-bombing of a specific person.
+// Throttle: at most one email per minute, and 3 per hour, per ADDRESS.
+// Keyed on the normalized email (migration 202), not on a resolved user, for
+// two reasons: it protects addresses that have no account, and — because the
+// limit no longer depends on whether an account exists — we can tell the
+// person they have been throttled instead of pretending we sent something.
 const MIN_GAP_MS = 60_000;
 const HOURLY_CAP = 3;
 
@@ -30,31 +32,76 @@ export async function POST(request: Request) {
 
   const admin = createAdminClient();
 
+  // Throttle FIRST, before we know whether this address has an account, so the
+  // answer below depends only on what this address has just done. That is what
+  // makes it safe to report: "you asked a moment ago" reveals nothing about
+  // whether the address is registered, because an unregistered one is told the
+  // same thing at the same moment.
+  // password_reset_requests (migration 202) isn't in the generated Database
+  // types yet; the repo convention is to cast for not-yet-typed objects.
+  const throttleLog = () =>
+    (
+      admin as unknown as {
+        from: (table: string) => {
+          select: (cols: string) => {
+            eq: (
+              col: string,
+              val: string
+            ) => {
+              gte: (
+                col: string,
+                val: string
+              ) => {
+                order: (
+                  col: string,
+                  opts: { ascending: boolean }
+                ) => Promise<{ data: { created_at: string }[] | null }>;
+              };
+            };
+          };
+          insert: (row: Record<string, unknown>) => Promise<{ error: unknown }>;
+        };
+      }
+    ).from("password_reset_requests");
+
+  const sinceHour = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  const { data: recent } = await throttleLog()
+    .select("created_at")
+    .eq("email_normalized", email)
+    .gte("created_at", sinceHour)
+    .order("created_at", { ascending: false });
+
+  const history = recent ?? [];
+
+  // Saying "Link sent" when the throttle stopped us is the bug this route kept
+  // producing: someone helping an applicant retries within the minute, is told
+  // it worked, and waits for an email that was never sent. Name the wait.
+  const throttled = (retryAfterSeconds: number) =>
+    NextResponse.json({ ok: true, throttled: true, retryAfterSeconds });
+
+  if (history.length >= HOURLY_CAP) {
+    const oldest = new Date(history[history.length - 1].created_at).getTime();
+    const freesAt = oldest + 60 * 60 * 1000;
+    return throttled(Math.max(1, Math.ceil((freesAt - Date.now()) / 1000)));
+  }
+
+  if (history.length > 0) {
+    const sinceLast = Date.now() - new Date(history[0].created_at).getTime();
+    if (sinceLast < MIN_GAP_MS) {
+      return throttled(Math.max(1, Math.ceil((MIN_GAP_MS - sinceLast) / 1000)));
+    }
+  }
+
+  // Count this attempt before doing any work, so a slow or failing send can't
+  // let a caller slip past the limit by retrying.
+  await throttleLog().insert({ email_normalized: email });
+
   // Resolve the account and, crucially, whether it can be signed into at all.
   const account = await lookupAccountByEmail(admin, email);
 
   if (account.state === "no_account" || !account.userId) return neutral;
 
   const user = { id: account.userId, first_name: account.firstName };
-
-  // Throttle from the request history we keep in audit_logs.
-  const sinceHour = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-  const { data: recent } = await admin
-    .from("audit_logs")
-    .select("created_at")
-    .eq("user_id", user.id)
-    .eq("action", "password_reset_requested")
-    .gte("created_at", sinceHour)
-    .order("created_at", { ascending: false });
-
-  const history = recent ?? [];
-  if (history.length >= HOURLY_CAP) return neutral;
-  if (
-    history.length > 0 &&
-    Date.now() - new Date(history[0].created_at).getTime() < MIN_GAP_MS
-  ) {
-    return neutral;
-  }
 
   const siteUrl =
     process.env.NEXT_PUBLIC_SITE_URL ||
@@ -85,11 +132,19 @@ export async function POST(request: Request) {
       resource_id: user.id,
       changes: setupResult.ok
         ? { via: "forgot_password" }
-        : { via: "forgot_password", error: setupResult.error },
+        : {
+            via: "forgot_password",
+            error: setupResult.error,
+            // A suppressed address can never be reached by email again, so
+            // this is not a transient failure to retry — it is the case an
+            // admin has to resolve with a copied link. Flag it so the Users
+            // table can show it rather than leaving the person invisible.
+            suppressed: setupResult.suppressed ?? false,
+          },
     });
 
-    // Count against the same throttle as a reset, so this branch can't be
-    // used to inbox-bomb someone either.
+    // The throttle itself is now keyed on the address (migration 202); this
+    // row stays for the per-account audit trail admins read.
     await admin.from("audit_logs").insert({
       user_id: user.id,
       action: "password_reset_requested",

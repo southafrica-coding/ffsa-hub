@@ -1378,6 +1378,36 @@ function ApplicantsTab({
 
   // Resend invite state
   const [resendingInviteId, setResendingInviteId] = useState<string | null>(null);
+  const [copyingLinkId, setCopyingLinkId] = useState<string | null>(null);
+
+  // Emailing the link cannot help an applicant whose address has bounced —
+  // every send is dropped by the suppression list. Copying it is the way out
+  // that does not involve deleting and recreating their account.
+  async function handleCopySetupLink(responseId: string, userId: string) {
+    setCopyingLinkId(responseId);
+    try {
+      const res = await fetch("/api/admin/setup-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: userId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || "Could not create a setup link");
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(data.url);
+        alert(`Setup link copied — valid 30 days. Send it to ${data.email}.`);
+      } catch {
+        prompt("Copy this setup link (valid 30 days):", data.url);
+      }
+    } catch {
+      alert("Could not create a setup link");
+    } finally {
+      setCopyingLinkId(null);
+    }
+  }
 
   async function handleResendInvite(responseId: string) {
     setResendingInviteId(responseId);
@@ -2246,6 +2276,25 @@ function ApplicantsTab({
                               <Loader2 className="h-3.5 w-3.5 animate-spin" />
                             ) : (
                               <Send className="h-3.5 w-3.5" />
+                            )}
+                          </Button>
+                        )}
+                        {resp.status === "accepted" && resp.user_id && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground"
+                            title="Copy setup link (send it yourself)"
+                            aria-label="Copy setup link"
+                            disabled={copyingLinkId === resp.id}
+                            onClick={() =>
+                              handleCopySetupLink(resp.id, resp.user_id as string)
+                            }
+                          >
+                            {copyingLinkId === resp.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <LinkIcon className="h-3.5 w-3.5" />
                             )}
                           </Button>
                         )}

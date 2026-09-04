@@ -25,7 +25,11 @@ export function resolveSiteUrl(): string {
 
 export type SendSetupLinkResult =
   | { ok: true; url: string }
-  | { ok: false; error: string };
+  // `suppressed` distinguishes the one failure email can never recover from:
+  // the address has bounced before and is on the suppression list, so every
+  // future send is dropped. Callers surface that to an admin, who resolves it
+  // by copying a link instead of resending.
+  | { ok: false; error: string; suppressed?: boolean };
 
 /**
  * Issue a fresh setup link and email it. Supersedes any earlier unused token
@@ -90,7 +94,11 @@ export async function sendSetupLink(
   });
 
   if (!sendResult.ok) {
-    return { ok: false, error: sendResult.error };
+    return {
+      ok: false,
+      error: sendResult.error,
+      suppressed: sendResult.suppressed ?? false,
+    };
   }
 
   return { ok: true, url: invite.url };

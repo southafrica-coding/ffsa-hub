@@ -52,7 +52,7 @@ export default function LoginPage() {
       const isInvalidCreds = /invalid login credentials/i.test(error.message);
       setError(
         isInvalidCreds
-          ? "We couldn't sign you in. If you've been accepted but never set a password — or you've forgotten it — use \u201cForgot your password?\u201d below and we'll email you a link to get in."
+          ? "We couldn't sign you in. If you've been accepted but never set a password — or you've forgotten it — use \u201cForgot password / first-time setup\u201d below and we'll email you a link to get in."
           : error.message
       );
       setLoading(false);

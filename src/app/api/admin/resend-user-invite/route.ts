@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { inviteEmailHtml } from "@/lib/email/templates/invite";
-import { createOnboardingInvite } from "@/lib/auth/onboarding-invite";
-import { getResend } from "@/lib/email/resend";
+import { sendSetupLink } from "@/lib/auth/send-setup-link";
+import { userHasPassword } from "@/lib/auth/account-state";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
 
   const { data: targetUser, error: lookupError } = await adminSupabase
     .from("users")
-    .select("id, email, first_name, accepted_at")
+    .select("id, email, first_name")
     .eq("id", user_id)
     .single();
 
@@ -52,48 +52,51 @@ export async function POST(request: Request) {
     );
   }
 
-  if (targetUser.accepted_at) {
+  // accepted_at was the wrong question. It records that an invite was taken
+  // up, not that a password exists — so this refused to help people who had
+  // clicked through but never finished, and helped people who were already
+  // signed in. Ask the only thing that decides whether a setup link is useful.
+  if (await userHasPassword(adminSupabase, targetUser.id)) {
     return NextResponse.json(
       {
         error:
-          "This user has already accepted their invite. Use the profile reminder instead.",
+          "This user already has a password. Use the profile reminder instead, " +
+          "or they can reset it from the login page.",
       },
       { status: 400 }
     );
   }
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
-
-  // Fresh 30-day, single-use setup link (migration 158). Supersedes any
-  // previously emailed link for this user.
-  const invite = await createOnboardingInvite(adminSupabase, {
+  // Send through sendSetupLink, not raw Resend. The raw path wrote no ledger
+  // row and skipped the suppression list, so a reminder to a bounced address
+  // reported success and vanished — the admin-side twin of the silent failure
+  // on /forgot-password.
+  const sendResult = await sendSetupLink(adminSupabase, {
     userId: targetUser.id,
     email: targetUser.email,
-    siteUrl,
+    firstName: targetUser.first_name,
     createdBy: authUser.id,
-  });
-
-  if (!invite.ok) {
-    return NextResponse.json(
-      { error: `Failed to create onboarding link: ${invite.error}` },
-      { status: 500 }
-    );
-  }
-
-  const fromEmail = (process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com").trim();
-  const { error: sendError } = await getResend().emails.send({
-    from: `Fire & Fragrance SA <${fromEmail}>`,
-    to: targetUser.email,
     subject: "Reminder: You're invited to FFSA Hub",
-    html: inviteEmailHtml({
-      firstName: targetUser.first_name || undefined,
-      inviteUrl: invite.url,
-    }),
+    html: (setupUrl) =>
+      inviteEmailHtml({
+        firstName: targetUser.first_name || undefined,
+        inviteUrl: setupUrl,
+      }),
+    category: "account_setup_link",
+    sourceType: "users",
+    sourceId: targetUser.id,
+    reason: "An admin resent their FFSA Hub invite from the Users page.",
   });
 
-  if (sendError) {
+  if (!sendResult.ok) {
     return NextResponse.json(
-      { error: `Failed to send invite email: ${sendError.message}` },
+      {
+        error: sendResult.suppressed
+          ? "That email address has bounced before, so we can't send to it. " +
+            "Use \u201cCopy setup link\u201d and send it to them directly."
+          : `Failed to send invite email: ${sendResult.error}`,
+        suppressed: sendResult.suppressed ?? false,
+      },
       { status: 500 }
     );
   }
