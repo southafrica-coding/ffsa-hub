@@ -2,8 +2,17 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function middleware(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request });
   const { pathname } = request.nextUrl;
+
+  // Server Components can't read the current pathname, but the admin layout
+  // needs it to apply the module rollout gate (see src/lib/module-visibility).
+  // Forwarding it as a request header is the standard way to hand it over.
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-pathname", pathname);
+
+  let supabaseResponse = NextResponse.next({
+    request: { headers: requestHeaders },
+  });
 
   // Public routes that don't require auth
   const publicRoutes = [
@@ -90,7 +99,13 @@ export async function middleware(request: NextRequest) {
           cookiesToSet.forEach(({ name, value, options }) =>
             request.cookies.set(name, value)
           );
-          supabaseResponse = NextResponse.next({ request });
+          // Rebuild from `request` so the cookies just set above are carried
+          // through, then re-attach x-pathname.
+          const refreshedHeaders = new Headers(request.headers);
+          refreshedHeaders.set("x-pathname", pathname);
+          supabaseResponse = NextResponse.next({
+            request: { headers: refreshedHeaders },
+          });
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           );

@@ -27,6 +27,7 @@ import {
   PORTAL_TABS,
   getAccessibleModules,
 } from "@/config/modules";
+import type { ModuleVisibilityMap } from "@/lib/module-visibility";
 
 type AreaId = "operations" | "personal" | "system";
 
@@ -39,6 +40,8 @@ const AREAS: { id: AreaId; label: string; icon: React.ComponentType<{ className?
 interface AdminSidebarProps {
   userRoles: string[];
   permittedModules?: Set<string>;
+  /** Module rollout states — beta/hidden modules are filtered out of the nav. */
+  moduleVisibility?: ModuleVisibilityMap;
   menuLoadFailed?: boolean;
   /** Signed-in user's initials, shown on the rail avatar. */
   initials?: string;
@@ -201,14 +204,30 @@ function ModulePanel({
   );
 }
 
-export function AdminSidebar({ userRoles, permittedModules, menuLoadFailed, initials }: AdminSidebarProps) {
+export function AdminSidebar({
+  userRoles,
+  permittedModules,
+  menuLoadFailed,
+  initials,
+  moduleVisibility,
+}: AdminSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const visibleModules = getAccessibleModules(ADMIN_MODULES, userRoles, permittedModules);
-  const visibleSystem = getAccessibleModules(SYSTEM_MODULES, userRoles, permittedModules);
+  const visibleModules = getAccessibleModules(
+    ADMIN_MODULES,
+    userRoles,
+    permittedModules,
+    moduleVisibility
+  );
+  const visibleSystem = getAccessibleModules(
+    SYSTEM_MODULES,
+    userRoles,
+    permittedModules,
+    moduleVisibility
+  );
 
   // Area follows the URL so a deep link lands on the right panel.
   const initialArea: AreaId =
