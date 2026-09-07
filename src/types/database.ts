@@ -4807,6 +4807,11 @@ export type Database = {
           base_driving_test_status: string
           base_driving_test_passed_at: string | null
           base_driving_test_note: string | null
+          licence_kind: string | null
+          licence_no_expiry: boolean
+          has_international_permit: boolean
+          international_permit_expiry: string | null
+          licence_declared_at: string | null
         }
         Insert: {
           accepted_at?: string | null
@@ -4861,6 +4866,11 @@ export type Database = {
           base_driving_test_status?: string
           base_driving_test_passed_at?: string | null
           base_driving_test_note?: string | null
+          licence_kind?: string | null
+          licence_no_expiry?: boolean
+          has_international_permit?: boolean
+          international_permit_expiry?: string | null
+          licence_declared_at?: string | null
         }
         Update: {
           accepted_at?: string | null
@@ -4915,6 +4925,11 @@ export type Database = {
           base_driving_test_status?: string
           base_driving_test_passed_at?: string | null
           base_driving_test_note?: string | null
+          licence_kind?: string | null
+          licence_no_expiry?: boolean
+          has_international_permit?: boolean
+          international_permit_expiry?: string | null
+          licence_declared_at?: string | null
         }
         Relationships: [
           {

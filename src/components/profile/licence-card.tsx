@@ -24,6 +24,8 @@ import {
  */
 
 type Licence = {
+  licence_kind: string | null;
+  licence_no_expiry: boolean | null;
   drivers_licence_number: string | null;
   licence_country: string | null;
   licence_code: string | null;
@@ -54,6 +56,7 @@ export function LicenceCard() {
   const [country, setCountry] = useState("ZA");
   const [code, setCode] = useState("");
   const [expiry, setExpiry] = useState("");
+  const [noExpiry, setNoExpiry] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -66,6 +69,7 @@ export function LicenceCard() {
         setCountry(l.licence_country ?? "ZA");
         setCode(l.licence_code ?? "");
         setExpiry(l.licence_expiry_date ?? "");
+        setNoExpiry(!!l.licence_no_expiry);
       }
       setLoading(false);
     })();
@@ -83,6 +87,7 @@ export function LicenceCard() {
           licence_country: country,
           licence_code: code,
           licence_expiry_date: expiry,
+          licence_no_expiry: noExpiry,
         }),
       });
       const json = await res.json().catch(() => ({}));
@@ -97,7 +102,8 @@ export function LicenceCard() {
               drivers_licence_number: number,
               licence_country: country,
               licence_code: code,
-              licence_expiry_date: expiry,
+              licence_expiry_date: noExpiry ? null : expiry,
+              licence_no_expiry: noExpiry,
             }
           : p
       );
@@ -163,8 +169,25 @@ export function LicenceCard() {
   }
 
   const expired =
+    !licence?.licence_no_expiry &&
     !!licence?.licence_expiry_date &&
     licence.licence_expiry_date < new Date().toISOString().slice(0, 10);
+
+  // Someone who told the gate they don't drive gets a short card, not a form
+  // demanding a licence they've already said they don't have.
+  if (licence?.licence_kind === "none") {
+    return (
+      <div className="space-y-3 rounded-xl border p-4">
+        <p className="text-sm">
+          You&rsquo;ve told us you don&rsquo;t hold a driver&rsquo;s licence, so
+          you can&rsquo;t be added as a driver on a vehicle booking.
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Got one since? Ask the vehicles team to reopen this and you can add it.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 rounded-xl border p-4">
@@ -187,7 +210,18 @@ export function LicenceCard() {
         </div>
         <div className="space-y-2">
           <Label htmlFor="licence_expiry">Expiry date</Label>
-          <DateInput value={expiry} onChange={setExpiry} />
+          <DateInput value={expiry} onChange={setExpiry} disabled={noExpiry} />
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={noExpiry}
+              onChange={(e) => {
+                setNoExpiry(e.target.checked);
+                if (e.target.checked) setExpiry("");
+              }}
+            />
+            No expiry date printed on my licence
+          </label>
         </div>
         <div className="space-y-2">
           <Label htmlFor="licence_country">Issuing country</Label>

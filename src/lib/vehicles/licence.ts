@@ -11,6 +11,10 @@ export type DriverLicenceInfo = {
   licence_expiry_date: string | null;
   licence_file_url: string | null;
   base_driving_test_status: "not_required" | "pending" | "passed" | "failed";
+  /** They declared they hold no licence (209). Nothing else matters. */
+  licence_kind?: string | null;
+  /** Their licence carries no printed expiry — real in some countries (209). */
+  licence_no_expiry?: boolean | null;
 };
 
 export type DriverBlockReason =
@@ -51,12 +55,31 @@ export function checkDriverEligibility(
   returnDate: string | null,
   stage: EligibilityStage = "approval"
 ): DriverEligibility {
-  if (!driver.licence_file_url || !driver.licence_expiry_date) {
+  // Someone who told the licence gate they don't hold a licence is never a
+  // driver, whatever else is on the row.
+  if (driver.licence_kind === "none") {
+    return {
+      ok: false,
+      reason: "no_licence",
+      message: "They've told us they don't hold a driver's licence.",
+    };
+  }
+
+  // An expiry date is required UNLESS they declared their licence carries
+  // none — otherwise those holders could never drive.
+  const expiryKnown = !!driver.licence_expiry_date || !!driver.licence_no_expiry;
+  if (!driver.licence_file_url || !expiryKnown) {
     return {
       ok: false,
       reason: "no_licence",
       message: "No driver's licence on file. Ask them to add one to their profile.",
     };
+  }
+
+  // A licence with no printed expiry can't expire, so both date checks below
+  // are skipped rather than failing on a null.
+  if (driver.licence_no_expiry || !driver.licence_expiry_date) {
+    return stage === "request" ? { ok: true } : checkTest(driver);
   }
 
   const today = new Date().toISOString().slice(0, 10);
@@ -77,7 +100,11 @@ export function checkDriverEligibility(
 
   // Licence rules are absolute; the driving test only gates approval.
   if (stage === "request") return { ok: true };
+  return checkTest(driver);
+}
 
+/** The driving-test half of the rules — approval stage only. */
+function checkTest(driver: DriverLicenceInfo): DriverEligibility {
   if (driver.base_driving_test_status === "failed") {
     return {
       ok: false,
@@ -92,7 +119,6 @@ export function checkDriverEligibility(
       message: "Still needs to pass the base-vehicle driving test.",
     };
   }
-
   return { ok: true };
 }
 
@@ -104,7 +130,9 @@ export function licenceStatusLabel(
   const check = checkDriverEligibility(driver, returnDate, "approval");
   if (check.ok) {
     return {
-      label: `Licence valid to ${driver.licence_expiry_date}`,
+      label: driver.licence_no_expiry
+        ? "Licence on file (no expiry)"
+        : `Licence valid to ${driver.licence_expiry_date}`,
       tone: "ok",
     };
   }

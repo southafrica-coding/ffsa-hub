@@ -3,6 +3,7 @@ import { ProfileCompletionForm } from "./profile-completion-form";
 import { RequiredAgreementsForm } from "./required-agreements-form";
 import { InsuranceExpiryBanner } from "./insurance-expiry-banner";
 import { ChildrenGateForm } from "./profile/children-gate-form";
+import { LicenceGateForm } from "./profile/licence-gate-form";
 import { HouseholdLinkConfirmForm } from "./profile/household-link-confirm-form";
 import { GateOverlay } from "./profile/gate-overlay";
 import type { HouseholdMember } from "./profile/household-members";
@@ -18,6 +19,7 @@ import { listActiveMinistries } from "@/services/ministries";
 import { getHouseholdMembers, getHousehold } from "@/services/household";
 import { getHouseholdLinkState } from "@/services/household-link";
 import { getOutstandingConsents } from "@/services/consent";
+import { getLicenceBlock, type LicenceKind } from "@/lib/users/licence-gate";
 
 // True if the user counts as staff — either their self-signup type is
 // 'staff' or they hold the 'staff' role. Scopes the children gate to staff.
@@ -217,6 +219,27 @@ export async function ProfileCompletionGate({
         </BlockingOverlay>
       );
     }
+  }
+
+  // 1c) Licence gate — EVERYONE, staff or not. On next login each user says
+  //     whether they hold a driver's licence and, if so, gives its details
+  //     and a photo. "No licence" is a complete answer: it lifts the gate and
+  //     simply makes them ineligible to be added as a driver. Without that
+  //     option, anyone who doesn't drive could never get into the Hub again.
+  const licenceBlock = getLicenceBlock(row);
+  if (licenceBlock) {
+    return (
+      <BlockingOverlay
+        panel={
+          <LicenceGateForm
+            initialKind={(row.licence_kind ?? null) as LicenceKind | null}
+            missing={licenceBlock.missing}
+          />
+        }
+      >
+        {children}
+      </BlockingOverlay>
+    );
   }
 
   // 2) Required policy agreements must all be on record → blocking screen.

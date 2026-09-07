@@ -922,11 +922,13 @@ export type VehiclePerson = {
   licence_expiry_date: string | null;
   licence_file_url: string | null; // presence only — see toVehiclePerson
   base_driving_test_status: "not_required" | "pending" | "passed" | "failed";
+  licence_kind: string | null;
+  licence_no_expiry: boolean;
 };
 
 const PERSON_COLUMNS =
   "id, first_name, last_name, display_name, email, phone, nationality, country, is_active, " +
-  "licence_expiry_date, licence_file_url, base_driving_test_status";
+  "licence_expiry_date, licence_file_url, base_driving_test_status, licence_kind, licence_no_expiry";
 
 type PersonRow = {
   id: string;
@@ -940,6 +942,8 @@ type PersonRow = {
   licence_expiry_date: string | null;
   licence_file_url: string | null;
   base_driving_test_status: string | null;
+  licence_kind: string | null;
+  licence_no_expiry: boolean | null;
 };
 
 function toVehiclePerson(row: PersonRow): VehiclePerson {
@@ -960,6 +964,8 @@ function toVehiclePerson(row: PersonRow): VehiclePerson {
     base_driving_test_status:
       (row.base_driving_test_status as VehiclePerson["base_driving_test_status"]) ??
       "not_required",
+    licence_kind: row.licence_kind,
+    licence_no_expiry: !!row.licence_no_expiry,
   };
 }
 
@@ -985,15 +991,28 @@ export async function getVehiclePeople(admin: Client): Promise<VehiclePerson[]> 
  * The API re-reads these at submit and at approval rather than trusting what
  * the browser sent — a client can claim any expiry date it likes.
  */
+export type LicenceFacts = {
+  expiry: string | null;
+  hasFile: boolean;
+  test: string;
+  number: string | null;
+  /** 'none' means they declared they hold no licence (209). */
+  kind: string | null;
+  /** Their licence carries no printed expiry (209). */
+  noExpiry: boolean;
+};
+
 export async function getLicenceFactsFor(
   admin: Client,
   userIds: string[]
-): Promise<Map<string, { expiry: string | null; hasFile: boolean; test: string; number: string | null }>> {
-  const out = new Map<string, { expiry: string | null; hasFile: boolean; test: string; number: string | null }>();
+): Promise<Map<string, LicenceFacts>> {
+  const out = new Map<string, LicenceFacts>();
   if (userIds.length === 0) return out;
   const { data } = await admin
     .from("users")
-    .select("id, licence_expiry_date, licence_file_url, base_driving_test_status, drivers_licence_number")
+    .select(
+      "id, licence_expiry_date, licence_file_url, base_driving_test_status, drivers_licence_number, licence_kind, licence_no_expiry"
+    )
     .in("id", userIds);
   for (const r of (data ?? []) as {
     id: string;
@@ -1001,12 +1020,16 @@ export async function getLicenceFactsFor(
     licence_file_url: string | null;
     base_driving_test_status: string | null;
     drivers_licence_number: string | null;
+    licence_kind: string | null;
+    licence_no_expiry: boolean | null;
   }[]) {
     out.set(r.id, {
       expiry: r.licence_expiry_date,
       hasFile: !!r.licence_file_url,
       test: r.base_driving_test_status ?? "not_required",
       number: r.drivers_licence_number,
+      kind: r.licence_kind,
+      noExpiry: !!r.licence_no_expiry,
     });
   }
   return out;

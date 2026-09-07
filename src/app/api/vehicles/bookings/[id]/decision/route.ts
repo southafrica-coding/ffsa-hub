@@ -71,6 +71,8 @@ export async function POST(
                 licence_file_url: f.hasFile ? "on-file" : null,
                 base_driving_test_status:
                   f.test as "not_required" | "pending" | "passed" | "failed",
+                licence_kind: f.kind,
+                licence_no_expiry: f.noExpiry,
               },
               booking?.return_date ?? null,
               "approval"
