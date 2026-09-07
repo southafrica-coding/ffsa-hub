@@ -297,6 +297,104 @@ export async function removeEnrollmentForApplicant(
   return existing.id as string;
 }
 
+/**
+ * The mirror image of removeEnrollmentForApplicant: make sure an accepted
+ * applicant actually holds a live enrollment on the program.
+ *
+ * Accepting from the Applicants list only ever set the application status, so
+ * a student accepted that way never got an enrollment row — and the Arrival
+ * tab, the roster and every headcount are built from enrollments, not from
+ * applications. They were accepted and invisible. (The dedicated Accept route
+ * has always created the row; only this path was missing it.)
+ *
+ * A public application carries no user_id, so we resolve the account by email
+ * first — case-insensitively, because a self-registered address rarely matches
+ * the typed one exactly — and link the application to it. If there is still no
+ * account we stop: creating one means invites and acceptance emails, which is
+ * the Accept route's job, not a status change's.
+ *
+ * Returns { enrollmentId, outcome } so the caller can tell the difference
+ * between "already fine", "created", "restored" and "no account to enrol".
+ * Call with the service-role client.
+ */
+export async function ensureEnrollmentForApplicant(
+  supabase: Client,
+  response: { id: string; user_id: string | null; program_id: string; applicant_email: string | null },
+  actorId: string
+): Promise<{
+  enrollmentId: string | null;
+  outcome: "existing" | "created" | "restored" | "no_account";
+}> {
+  let userId = response.user_id;
+
+  if (!userId) {
+    const email = response.applicant_email?.trim();
+    if (!email) return { enrollmentId: null, outcome: "no_account" };
+
+    const { data: account } = await supabase
+      .from("users")
+      .select("id")
+      .ilike("email", email)
+      .maybeSingle();
+
+    if (!account) return { enrollmentId: null, outcome: "no_account" };
+    userId = account.id as string;
+
+    await supabase
+      .from("application_responses")
+      .update({ user_id: userId })
+      .eq("id", response.id);
+  }
+
+  const { data: existing } = await supabase
+    .from("enrollments")
+    .select("id, removed_at")
+    .eq("user_id", userId)
+    .eq("program_id", response.program_id)
+    .maybeSingle();
+
+  if (existing) {
+    // (user_id, program_id) is unique, so a re-accepted applicant reuses the
+    // enrollment they already had — restoring it if a previous
+    // cancellation soft-removed it, exactly as the Accept route does.
+    if (!existing.removed_at) {
+      return { enrollmentId: existing.id as string, outcome: "existing" };
+    }
+    const { error } = await supabase
+      .from("enrollments")
+      .update({ removed_at: null, removed_by: null })
+      .eq("id", existing.id);
+    if (error) {
+      console.error(
+        "[schools] failed to restore enrollment for accepted applicant:",
+        error.message
+      );
+      return { enrollmentId: null, outcome: "no_account" };
+    }
+    return { enrollmentId: existing.id as string, outcome: "restored" };
+  }
+
+  const { data: created, error } = await supabase
+    .from("enrollments")
+    .insert({
+      user_id: userId,
+      program_id: response.program_id,
+      status: "waiting_for_arrival",
+      enrolled_by: actorId,
+    })
+    .select("id")
+    .single();
+
+  if (error) {
+    console.error(
+      "[schools] failed to create enrollment for accepted applicant:",
+      error.message
+    );
+    return { enrollmentId: null, outcome: "no_account" };
+  }
+  return { enrollmentId: created.id as string, outcome: "created" };
+}
+
 // ────────────────────────────────────────────────────────────
 // GRADES
 // ────────────────────────────────────────────────────────────

@@ -9,6 +9,7 @@ import {
   createReferenceRequest,
   setResponseRemoved,
   removeEnrollmentForApplicant,
+  ensureEnrollmentForApplicant,
 } from "@/services/schools";
 import { userCanManageApplications } from "@/lib/auth/check-schools-access";
 import { normaliseGender } from "@/lib/schools/demographics";
@@ -293,6 +294,10 @@ export async function PUT(request: Request) {
   if (ids && Array.isArray(ids) && ids.length > 0 && status) {
     const adminSupabase = createAdminClient();
     let updated = 0;
+    // Accepted applicants we could not put on the roster because no account
+    // exists for their email yet. Reported back rather than swallowed — they
+    // need the Accept button, which invites them.
+    const notEnrolled: string[] = [];
 
     for (const responseId of ids) {
       const { data: resp, error } = await updateResponseStatus(
@@ -307,6 +312,19 @@ export async function PUT(request: Request) {
 
         // Leaving a school (rejected/cancelled) deactivates a student-level
         // account. Guarded in the helper so staff/admin are never touched.
+        // Accepting has to put them on the roster, or they are accepted and
+        // invisible: the Arrival tab and every headcount read enrollments, not
+        // application status. The dedicated Accept route already does this —
+        // this path used to change the status and stop there.
+        if (status === "accepted") {
+          const result = await ensureEnrollmentForApplicant(
+            adminSupabase,
+            resp,
+            user.id
+          );
+          if (result.outcome === "no_account") notEnrolled.push(responseId);
+        }
+
         if ((status === "rejected" || status === "cancelled") && resp.user_id) {
           await deactivateMembershipProfile(adminSupabase, resp.user_id, `application_${status}`);
           // …and takes them off the roster. An accepted applicant already has
@@ -340,7 +358,7 @@ export async function PUT(request: Request) {
       }
     }
 
-    return NextResponse.json({ success: true, updated });
+    return NextResponse.json({ success: true, updated, notEnrolled });
   }
 
   // ── Single status update ──
@@ -365,6 +383,13 @@ export async function PUT(request: Request) {
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // Accepting puts them on the roster — see the bulk path above.
+  let notEnrolled = false;
+  if (status === "accepted" && data) {
+    const result = await ensureEnrollmentForApplicant(adminSupabase, data, user.id);
+    notEnrolled = result.outcome === "no_account";
   }
 
   // Leaving a school (rejected/cancelled) deactivates a student-level account.
@@ -405,7 +430,7 @@ export async function PUT(request: Request) {
     }
   }
 
-  return NextResponse.json({ success: true, response: data });
+  return NextResponse.json({ success: true, response: data, notEnrolled });
 }
 
 async function sendStatusEmail(

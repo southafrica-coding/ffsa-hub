@@ -1658,6 +1658,18 @@ function ApplicantsTab({
         }),
       });
       if (res.ok) {
+        // Accepting now also puts people on the roster. Anyone we couldn't
+        // enrol has no account for their email yet and needs the Accept
+        // button, which invites them — say so rather than letting them look
+        // accepted while being absent from the Arrival tab.
+        const data = await res.json().catch(() => ({}));
+        const stranded = (data.notEnrolled ?? []).length;
+        if (stranded > 0) {
+          alert(
+            `${stranded} applicant${stranded === 1 ? " was" : "s were"} marked accepted but not added to the roster — ` +
+              `they have no account yet. Use Accept on each so they get an invite.`
+          );
+        }
         setSelectedIds(new Set());
         setBulkStatus("");
         router.refresh();
