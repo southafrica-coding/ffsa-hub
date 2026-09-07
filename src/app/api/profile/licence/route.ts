@@ -59,7 +59,7 @@ export async function GET(request: Request) {
   const { data } = await admin
     .from("users")
     .select(
-      "drivers_licence_number, licence_country, licence_code, licence_expiry_date, licence_file_name, licence_file_url, base_driving_test_status, base_driving_test_passed_at"
+      "drivers_licence_number, licence_country, licence_code, licence_expiry_date, licence_file_name, licence_file_url, base_driving_test_status, base_driving_test_passed_at, licence_kind, licence_no_expiry"
     )
     .eq("id", t.userId)
     .maybeSingle();
@@ -89,11 +89,14 @@ export async function PUT(request: Request) {
   const country = String(body.licence_country ?? "").trim();
   const code = String(body.licence_code ?? "").trim();
   const expiry = String(body.licence_expiry_date ?? "").trim();
+  const noExpiry = !!body.licence_no_expiry;
 
   if (!number) {
     return NextResponse.json({ error: "Please enter your licence number." }, { status: 400 });
   }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(expiry)) {
+  // A licence with no printed expiry (real in some countries) has nothing to
+  // enter here — demanding a date would leave those holders unable to save.
+  if (!noExpiry && !/^\d{4}-\d{2}-\d{2}$/.test(expiry)) {
     return NextResponse.json({ error: "Please enter the licence expiry date." }, { status: 400 });
   }
   // An already-expired licence is accepted and stored: refusing it would leave
@@ -107,7 +110,8 @@ export async function PUT(request: Request) {
       drivers_licence_number: number,
       licence_country: country || null,
       licence_code: code || null,
-      licence_expiry_date: expiry,
+      licence_expiry_date: noExpiry ? null : expiry,
+      licence_no_expiry: noExpiry,
     })
     .eq("id", t.userId);
 
