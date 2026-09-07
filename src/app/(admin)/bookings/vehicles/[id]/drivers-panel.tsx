@@ -22,6 +22,8 @@ const TEST_LABEL: Record<string, string> = {
 
 export type DriverPanelRow = {
   id: string | null;
+  /** Set when the driver is a Hub user — their licence lives on their profile. */
+  user_id?: string | null;
   name: string;
   phone: string;
   has_sa_license: boolean;
@@ -41,10 +43,13 @@ export function DriversPanel({
   bookingId,
   initialDrivers,
   canEdit,
+  canRecordTest = false,
 }: {
   bookingId: string;
   initialDrivers: DriverPanelRow[];
   canEdit: boolean;
+  /** Vehicle managers only: recording a pass is what lifts the approval block. */
+  canRecordTest?: boolean;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -120,6 +125,32 @@ export function DriversPanel({
     router.refresh();
   }
 
+  /**
+   * Record a driving-test result. For a Hub user it writes to their PROFILE,
+   * so passing here clears them for every future booking too — not just this
+   * one.
+   */
+  async function recordTest(driverId: string, result: "passed" | "failed") {
+    const res = await fetch(`/api/vehicles/drivers/${driverId}/driving-test`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ result }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast.error(json.error ?? "Could not record the driving test.");
+      return;
+    }
+    toast.success(
+      result === "passed"
+        ? json.appliedToProfile
+          ? "Driving test passed — saved to their profile."
+          : "Driving test passed."
+        : "Driving test marked as not passed."
+    );
+    router.refresh();
+  }
+
   if (!editing) {
     return (
       <div className="border border-ink bg-white">
@@ -162,6 +193,24 @@ export function DriversPanel({
                   ) : (
                     <span className="text-xs text-[color:var(--text-tertiary)]">
                       No licence photo
+                    </span>
+                  )}
+                  {canRecordTest && d.id && d.driving_test_status === "pending" && (
+                    <span className="ml-auto flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => recordTest(d.id as string, "passed")}
+                        className="text-xs underline underline-offset-2 hover:text-grass-text"
+                      >
+                        Mark test passed
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => recordTest(d.id as string, "failed")}
+                        className="text-xs text-muted-foreground underline underline-offset-2 hover:text-destructive"
+                      >
+                        Not passed
+                      </button>
                     </span>
                   )}
                 </div>

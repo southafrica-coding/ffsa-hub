@@ -4796,6 +4796,17 @@ export type Database = {
           visa_category: string | null
           visa_expiry_date: string | null
           visa_type: string | null
+          drivers_licence_number: string | null
+          licence_country: string | null
+          licence_code: string | null
+          licence_expiry_date: string | null
+          licence_file_url: string | null
+          licence_file_name: string | null
+          licence_uploaded_at: string | null
+          licence_uploaded_by: string | null
+          base_driving_test_status: string
+          base_driving_test_passed_at: string | null
+          base_driving_test_note: string | null
         }
         Insert: {
           accepted_at?: string | null
@@ -4839,6 +4850,17 @@ export type Database = {
           visa_category?: string | null
           visa_expiry_date?: string | null
           visa_type?: string | null
+          drivers_licence_number?: string | null
+          licence_country?: string | null
+          licence_code?: string | null
+          licence_expiry_date?: string | null
+          licence_file_url?: string | null
+          licence_file_name?: string | null
+          licence_uploaded_at?: string | null
+          licence_uploaded_by?: string | null
+          base_driving_test_status?: string
+          base_driving_test_passed_at?: string | null
+          base_driving_test_note?: string | null
         }
         Update: {
           accepted_at?: string | null
@@ -4882,6 +4904,17 @@ export type Database = {
           visa_category?: string | null
           visa_expiry_date?: string | null
           visa_type?: string | null
+          drivers_licence_number?: string | null
+          licence_country?: string | null
+          licence_code?: string | null
+          licence_expiry_date?: string | null
+          licence_file_url?: string | null
+          licence_file_name?: string | null
+          licence_uploaded_at?: string | null
+          licence_uploaded_by?: string | null
+          base_driving_test_status?: string
+          base_driving_test_passed_at?: string | null
+          base_driving_test_note?: string | null
         }
         Relationships: [
           {

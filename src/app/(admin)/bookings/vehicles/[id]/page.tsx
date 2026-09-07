@@ -195,6 +195,7 @@ export default async function VehicleBookingDetail({
       }
       return {
         id: d.id,
+        user_id: d.user_id,
         name: d.name,
         phone: d.phone ?? "",
         has_sa_license: d.has_sa_license,
@@ -267,7 +268,12 @@ export default async function VehicleBookingDetail({
       </div>
 
       {/* Drivers */}
-      <DriversPanel bookingId={b.id} initialDrivers={driverRows} canEdit={canEditDrivers} />
+      <DriversPanel
+        bookingId={b.id}
+        initialDrivers={driverRows}
+        canEdit={canEditDrivers}
+        canRecordTest={isManager}
+      />
 
       {/* Payment summary (read-only mirror; managed below) */}
       {b.payment_required && (

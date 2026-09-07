@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getAuthedUser } from "@/lib/api-auth";
 import {
   getVehicleAccess,
@@ -7,10 +8,13 @@ import {
   insertVehicleBooking,
   setBookingVehicles,
   setBookingDrivers,
+  getLicenceFactsFor,
 } from "@/services/vehicles";
+import { checkDriverEligibility } from "@/lib/vehicles/licence";
 import { notifyVehicleManagers } from "@/lib/email/send-vehicle-request";
 
 type DriverInput = {
+  user_id?: string | null;
   name?: string;
   phone?: string;
   has_sa_license?: boolean;
@@ -132,6 +136,67 @@ export async function POST(request: Request) {
     if (u) requesterName = [u.first_name, u.last_name].filter(Boolean).join(" ") || null;
   }
 
+  const drivers = (body.drivers ?? [])
+    .map((d) => ({
+      user_id: typeof d.user_id === "string" && d.user_id ? d.user_id : null,
+      name: nn(d.name),
+      phone: nn(d.phone),
+      has_sa_license: !!d.has_sa_license,
+      is_first_time: !!d.is_first_time,
+      driving_test_status: d.is_first_time ? "pending" : "not_required",
+      licence_expiry_snapshot: null as string | null,
+      licence_number_snapshot: null as string | null,
+    }))
+    .filter((d) => d.name);
+
+  // Hard block, server side. The form runs the same check, but a client can
+  // post whatever it likes — this is the one that decides. Licence facts come
+  // from the database, never from the request body.
+  //
+  // Runs BEFORE the booking row is inserted so a rejected request leaves
+  // nothing behind.
+  const driverUserIds = drivers
+    .map((d) => d.user_id)
+    .filter((id): id is string => !!id);
+  if (driverUserIds.length > 0) {
+    const facts = await getLicenceFactsFor(createAdminClient(), driverUserIds);
+    for (const d of drivers) {
+      if (!d.user_id) continue;
+      const f = facts.get(d.user_id);
+      if (!f) {
+        return NextResponse.json(
+          { error: `${d.name} is not an active Hub user.` },
+          { status: 400 }
+        );
+      }
+      const check = checkDriverEligibility(
+        {
+          licence_expiry_date: f.expiry,
+          licence_file_url: f.hasFile ? "on-file" : null,
+          base_driving_test_status:
+            f.test as "not_required" | "pending" | "passed" | "failed",
+        },
+        ret
+      );
+      if (!check.ok) {
+        return NextResponse.json(
+          {
+            error: `${d.name} cannot be added as a driver — ${check.message}`,
+            blockedDriver: d.user_id,
+            reason: check.reason,
+          },
+          { status: 400 }
+        );
+      }
+      // Freeze what was true today; a later renewal must not rewrite this
+      // booking's record.
+      d.licence_expiry_snapshot = f.expiry;
+      d.licence_number_snapshot = f.number;
+      // The person's own test result wins over whatever the form guessed.
+      d.driving_test_status = f.test;
+      d.is_first_time = f.test === "pending";
+    }
+  }
   const { data: booking, error } = await insertVehicleBooking(supabase, {
     booking_name: bookingName,
     point_person: nn(body.point_person),
@@ -148,6 +213,7 @@ export async function POST(request: Request) {
     return_date: ret,
     home_country: nn(body.home_country),
     status: "pending",
+    source: "internal",
     notes: nn(body.notes),
     requested_by: user.id,
   });
@@ -163,15 +229,6 @@ export async function POST(request: Request) {
     await setBookingVehicles(supabase, booking.id, requestedIds);
   }
 
-  const drivers = (body.drivers ?? [])
-    .map((d) => ({
-      name: nn(d.name),
-      phone: nn(d.phone),
-      has_sa_license: !!d.has_sa_license,
-      is_first_time: !!d.is_first_time,
-      driving_test_status: d.is_first_time ? "pending" : "not_required",
-    }))
-    .filter((d) => d.name);
   // The created driver rows go back to the client so it can upload each
   // driver's licence against a real driver id in a follow-up request.
   let created: { id: string; name: string }[] = [];

@@ -18,6 +18,7 @@ import {
 import { getHouseholdMembers } from "@/services/household";
 import { HouseholdLinkCard } from "@/components/profile/household-link-card";
 import { SlackLinkCard } from "@/components/profile/slack-link-card";
+import { LicenceCard } from "@/components/profile/licence-card";
 import { NotificationPrefsCard } from "@/components/profile/notification-prefs-card";
 import { getSlackLink } from "@/services/slack-links";
 import { activeBroadcastModules } from "@/lib/slack/broadcast-types";
@@ -315,6 +316,19 @@ export default async function ProfilePage() {
           mutedModules={mutedModules}
           slackConnected={!!slackLink.slackUserId}
         />
+      </section>
+
+      <section className="space-y-3 px-5 pb-6 md:px-8 md:pb-7">
+        <div>
+          <p className="page-eyebrow">DRIVING</p>
+          <h2 className="text-xl font-semibold">Driver&rsquo;s licence</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Add your licence once and every vehicle booking fills itself in —
+            no re-typing your details or photographing your card again. Only
+            needed if you drive a base vehicle.
+          </p>
+        </div>
+        <LicenceCard />
       </section>
 
       <section className="space-y-3 px-5 pb-6 md:px-8 md:pb-7">

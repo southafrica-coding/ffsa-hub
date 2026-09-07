@@ -72,6 +72,10 @@ export type VehicleBooking = {
 export type VehicleDriver = {
   id: string;
   vehicle_booking_id: string;
+  /** The Hub user this driver is. NULL for outsiders and public requests. */
+  user_id: string | null;
+  licence_expiry_snapshot: string | null;
+  licence_number_snapshot: string | null;
   name: string;
   phone: string | null;
   has_sa_license: boolean;
@@ -895,4 +899,139 @@ export async function getAgreementsForBooking(supabase: Client, bookingId: strin
 
 export async function insertAgreement(supabase: Client, row: Record<string, unknown>) {
   return supabase.from("vehicle_agreements").insert(row).select().single();
+}
+
+// ── People (renter + driver pickers) ───────────────────────
+
+/**
+ * A Hub user as the booking form's pickers see them.
+ *
+ * Deliberately narrow: enough to fill the form and judge eligibility, and
+ * nothing more. The licence NUMBER and the storage path never leave the
+ * server — the picker only needs to know whether a licence exists and when
+ * it expires.
+ */
+export type VehiclePerson = {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  country: string | null;
+  licence_expiry_date: string | null;
+  licence_file_url: string | null; // presence only — see toVehiclePerson
+  base_driving_test_status: "not_required" | "pending" | "passed" | "failed";
+};
+
+const PERSON_COLUMNS =
+  "id, first_name, last_name, display_name, email, phone, nationality, country, is_active, " +
+  "licence_expiry_date, licence_file_url, base_driving_test_status";
+
+type PersonRow = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  display_name: string | null;
+  email: string | null;
+  phone: string | null;
+  nationality: string | null;
+  country: string | null;
+  licence_expiry_date: string | null;
+  licence_file_url: string | null;
+  base_driving_test_status: string | null;
+};
+
+function toVehiclePerson(row: PersonRow): VehiclePerson {
+  const name =
+    [row.first_name, row.last_name].filter(Boolean).join(" ").trim() ||
+    row.display_name ||
+    row.email ||
+    "Unnamed";
+  return {
+    id: row.id,
+    name,
+    email: row.email,
+    phone: row.phone,
+    country: row.country ?? row.nationality,
+    licence_expiry_date: row.licence_expiry_date,
+    // Collapsed to a boolean-ish marker: the caller must not learn the path.
+    licence_file_url: row.licence_file_url ? "on-file" : null,
+    base_driving_test_status:
+      (row.base_driving_test_status as VehiclePerson["base_driving_test_status"]) ??
+      "not_required",
+  };
+}
+
+/**
+ * Active Hub users for the renter and driver pickers, alphabetical.
+ *
+ * Runs on the ADMIN client by design: RLS lets a non-admin read only their own
+ * user row, so a plain client would return a one-person list. The calling
+ * route is what enforces "you have vehicle permissions".
+ */
+export async function getVehiclePeople(admin: Client): Promise<VehiclePerson[]> {
+  const { data } = await admin
+    .from("users")
+    .select(PERSON_COLUMNS)
+    .eq("is_active", true)
+    .order("first_name", { ascending: true });
+  return ((data ?? []) as PersonRow[]).map(toVehiclePerson);
+}
+
+/**
+ * The licence facts for specific users, straight from the source.
+ *
+ * The API re-reads these at submit and at approval rather than trusting what
+ * the browser sent — a client can claim any expiry date it likes.
+ */
+export async function getLicenceFactsFor(
+  admin: Client,
+  userIds: string[]
+): Promise<Map<string, { expiry: string | null; hasFile: boolean; test: string; number: string | null }>> {
+  const out = new Map<string, { expiry: string | null; hasFile: boolean; test: string; number: string | null }>();
+  if (userIds.length === 0) return out;
+  const { data } = await admin
+    .from("users")
+    .select("id, licence_expiry_date, licence_file_url, base_driving_test_status, drivers_licence_number")
+    .in("id", userIds);
+  for (const r of (data ?? []) as {
+    id: string;
+    licence_expiry_date: string | null;
+    licence_file_url: string | null;
+    base_driving_test_status: string | null;
+    drivers_licence_number: string | null;
+  }[]) {
+    out.set(r.id, {
+      expiry: r.licence_expiry_date,
+      hasFile: !!r.licence_file_url,
+      test: r.base_driving_test_status ?? "not_required",
+      number: r.drivers_licence_number,
+    });
+  }
+  return out;
+}
+
+/** One driver row, by id, for the driving-test endpoint. */
+export async function getDriverForTest(
+  admin: Client,
+  driverId: string
+): Promise<{ id: string; user_id: string | null; name: string } | null> {
+  const { data } = await admin
+    .from("vehicle_booking_drivers")
+    .select("id, user_id, name")
+    .eq("id", driverId)
+    .maybeSingle();
+  return (data as { id: string; user_id: string | null; name: string } | null) ?? null;
+}
+
+/** Record a driving-test result on the driver row itself. */
+export async function setDriverTestStatus(
+  admin: Client,
+  driverId: string,
+  status: string
+): Promise<{ error: { message: string } | null }> {
+  const { error } = await admin
+    .from("vehicle_booking_drivers")
+    .update({ driving_test_status: status })
+    .eq("id", driverId);
+  return { error };
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getAuthedUser } from "@/lib/api-auth";
 import {
   getVehicleAccess,
@@ -9,10 +10,13 @@ import {
   deleteVehicleBooking,
   setBookingVehicles,
   setBookingDrivers,
+  getLicenceFactsFor,
 } from "@/services/vehicles";
+import { checkDriverEligibility } from "@/lib/vehicles/licence";
 import { notifyVehicleManagers } from "@/lib/email/send-vehicle-request";
 
 type DriverInput = {
+  user_id?: string | null;
   id?: string | null;
   name?: string;
   phone?: string;
@@ -175,13 +179,54 @@ export async function PATCH(
     const rows = (body.drivers ?? [])
       .map((d) => ({
         id: nn(d.id),
+        user_id: typeof d.user_id === "string" && d.user_id ? d.user_id : null,
         name: nn(d.name),
         phone: nn(d.phone),
         has_sa_license: !!d.has_sa_license,
         is_first_time: !!d.is_first_time,
         driving_test_status: d.is_first_time ? "pending" : "not_required",
+        licence_expiry_snapshot: null as string | null,
+        licence_number_snapshot: null as string | null,
       }))
       .filter((d) => d.name);
+
+    // The same hard block as create. Drivers can be added long after a booking
+    // is approved, which would otherwise walk straight past both the request
+    // check and the approval check.
+    const linkedIds = rows
+      .map((d) => d.user_id)
+      .filter((v): v is string => !!v);
+    if (linkedIds.length > 0) {
+      const returnDate =
+        (update.return_date as string | undefined) ?? booking.return_date ?? null;
+      const facts = await getLicenceFactsFor(createAdminClient(), linkedIds);
+      for (const d of rows) {
+        if (!d.user_id) continue;
+        const f = facts.get(d.user_id);
+        const check = f
+          ? checkDriverEligibility(
+              {
+                licence_expiry_date: f.expiry,
+                licence_file_url: f.hasFile ? "on-file" : null,
+                base_driving_test_status:
+                  f.test as "not_required" | "pending" | "passed" | "failed",
+              },
+              returnDate
+            )
+          : ({ ok: false, reason: "no_licence", message: "is not an active Hub user." } as const);
+        if (!check.ok) {
+          return NextResponse.json(
+            { error: `${d.name} cannot be added as a driver — ${check.message}`, reason: check.reason },
+            { status: 400 }
+          );
+        }
+        d.licence_expiry_snapshot = f?.expiry ?? null;
+        d.licence_number_snapshot = f?.number ?? null;
+        d.driving_test_status = f?.test ?? d.driving_test_status;
+        d.is_first_time = f?.test === "pending";
+      }
+    }
+
     const { data, error } = await setBookingDrivers(supabase, id, rows);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     drivers = data.map((d) => ({ id: d.id, name: d.name }));

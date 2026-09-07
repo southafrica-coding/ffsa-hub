@@ -19,17 +19,25 @@ import { PURPOSE_OPTIONS, dayCount, type Vehicle } from "@/services/vehicles";
 import { CountryPicker } from "./country-picker";
 import { DriverLicenseField, uploadDriverLicense } from "./driver-license-field";
 import { SectionBar } from "@/components/ffsa";
+import { PersonSelect, usePeople, toIso2 } from "./people-picker";
+import type { VehiclePerson } from "@/services/vehicles";
+import { checkDriverEligibility, licenceStatusLabel } from "@/lib/vehicles/licence";
 
 type DriverRow = {
+  /** The Hub user this driver is, or "" for someone outside the Hub. */
+  user_id: string;
   name: string;
   phone: string;
   has_sa_license: boolean;
   is_first_time: boolean;
-  /** Staged licence file — uploaded after the booking POST returns driver ids. */
+  /** Staged licence file — uploaded after the booking POST returns driver ids.
+   *  Only used for outsiders: a Hub user's licence already lives on their
+   *  profile and is never re-uploaded here. */
   license: File | null;
 };
 
 const EMPTY_DRIVER: DriverRow = {
+  user_id: "",
   name: "",
   phone: "",
   has_sa_license: false,
@@ -67,10 +75,59 @@ export function VehicleBookingForm({
   });
   const [vehicleIds, setVehicleIds] = useState<string[]>([]);
   const [drivers, setDrivers] = useState<DriverRow[]>([{ ...EMPTY_DRIVER }]);
+  const { people } = usePeople();
+  const [renterId, setRenterId] = useState("");
+
+  const peopleById = new Map(people.map((p) => [p.id, p]));
 
   function update(field: keyof typeof form, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
     if (error) setError(null);
+  }
+
+  /**
+   * Fill the requester block from a profile in one action.
+   *
+   * The fields stay editable afterwards — a profile seeds the form, it does
+   * not lock it. Someone whose WhatsApp differs from their profile number
+   * can still correct it for this trip without editing their profile.
+   */
+  function pickRenter(userId: string) {
+    setRenterId(userId);
+    if (error) setError(null);
+    const person = peopleById.get(userId);
+    if (!person) return;
+    setForm((prev) => ({
+      ...prev,
+      requester_name: person.name,
+      requester_email: person.email ?? "",
+      requester_phone: person.phone ?? prev.requester_phone,
+      home_country: toIso2(person.country) || prev.home_country,
+    }));
+  }
+
+  /**
+   * Attach a Hub user to a driver row, or clear it back to a free-text
+   * outsider. Their licence stays on their profile — the row only records
+   * WHO is driving, and the API re-reads the licence itself at submit.
+   */
+  function pickDriver(i: number, userId: string) {
+    if (error) setError(null);
+    const person = peopleById.get(userId);
+    if (!person) {
+      setDriver(i, { user_id: "", name: "", phone: "" });
+      return;
+    }
+    setDriver(i, {
+      user_id: userId,
+      name: person.name,
+      phone: person.phone ?? "",
+      // A licence already on file is the answer to both of these, so the
+      // requester never has to self-declare them for a known person.
+      has_sa_license: toIso2(person.country) === "ZA",
+      is_first_time: person.base_driving_test_status === "pending",
+      license: null,
+    });
   }
 
   const datesValid =
@@ -129,6 +186,16 @@ export function VehicleBookingForm({
       return "Please describe the purpose.";
     const clashing = vehicleIds.filter((id) => unavailableIds.includes(id));
     if (clashing.length > 0) return "One or more chosen vehicles is unavailable for those dates.";
+    // Hard block: a Hub driver must hold a licence that is valid for the whole
+    // trip. The API repeats this check against the database — this copy only
+    // exists so the requester finds out before submitting, not after.
+    for (const d of drivers) {
+      if (!d.user_id) continue;
+      const person = peopleById.get(d.user_id);
+      if (!person) continue;
+      const check = checkDriverEligibility(person, form.return_date || null);
+      if (!check.ok) return `${person.name} cannot be added as a driver — ${check.message}`;
+    }
     return null;
   }
 
@@ -165,6 +232,7 @@ export function VehicleBookingForm({
         // The staged licence File isn't part of the JSON payload — it uploads
         // separately once the driver rows exist.
         drivers: cleanDrivers.map((d) => ({
+          user_id: d.user_id || null,
           name: d.name,
           phone: d.phone,
           has_sa_license: d.has_sa_license,
@@ -261,6 +329,23 @@ export function VehicleBookingForm({
               />
             </div>
           )}
+
+          {/* Who this is for — fills the three fields below from a profile. */}
+          <div className="space-y-2 max-w-md">
+            <Label htmlFor="renter">Booking for</Label>
+            <PersonSelect
+              id="renter"
+              value={renterId}
+              onChange={pickRenter}
+              people={people}
+              outsiderLabel="Someone not in the Hub — type their details"
+              className="h-10 w-full border border-rule-strong bg-white px-3 text-sm"
+            />
+            <p className="text-xs text-muted-foreground">
+              Pick a person and their contact details fill in below. Everything
+              stays editable.
+            </p>
+          </div>
 
           {/* Requester */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -391,60 +476,102 @@ export function VehicleBookingForm({
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              First-time base-vehicle drivers (and internationals) must pass a driving
-              test before approval. A photo of each driver&apos;s licence is optional
-              here — you can add drivers and licences later, including after approval.
+              Pick each driver from the Hub and their licence comes with them.
+              A driver whose licence is missing or expires before the return
+              date can&apos;t be added — they need to update it on their profile
+              first. Drivers from outside the Hub are typed in by hand.
             </p>
-            {drivers.map((d, i) => (
+            {drivers.map((d, i) => {
+              const person = d.user_id ? peopleById.get(d.user_id) : undefined;
+              const status = person
+                ? licenceStatusLabel(person, form.return_date || null)
+                : null;
+              return (
               <div key={i} className="space-y-1.5 border-b border-rule pb-3 last:border-b-0 last:pb-0">
               <div className="flex flex-wrap items-center gap-2">
-                <Input
-                  value={d.name}
-                  onChange={(e) => setDriver(i, { name: e.target.value })}
-                  placeholder="Name & surname"
-                  className="h-9 w-48"
+                <PersonSelect
+                  value={d.user_id}
+                  onChange={(id) => pickDriver(i, id)}
+                  people={people}
+                  outsiderLabel="Not in the Hub…"
+                  className="h-9 w-56 border border-rule-strong bg-white px-2 text-sm"
                 />
-                <Input
-                  value={d.phone}
-                  onChange={(e) => setDriver(i, { phone: e.target.value })}
-                  placeholder="WhatsApp number"
-                  className="h-9 w-40"
-                />
-                <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <input
-                    type="checkbox"
-                    checked={d.has_sa_license}
-                    onChange={(e) => setDriver(i, { has_sa_license: e.target.checked })}
-                    className="rounded border-input"
-                  />
-                  SA licence
-                </label>
-                <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <input
-                    type="checkbox"
-                    checked={d.is_first_time}
-                    onChange={(e) => setDriver(i, { is_first_time: e.target.checked })}
-                    className="rounded border-input"
-                  />
-                  First time / international
-                </label>
+                {/* Outsiders keep the old free-text row: no profile to draw on. */}
+                {!d.user_id && (
+                  <>
+                    <Input
+                      value={d.name}
+                      onChange={(e) => setDriver(i, { name: e.target.value })}
+                      placeholder="Name & surname"
+                      className="h-9 w-48"
+                    />
+                    <Input
+                      value={d.phone}
+                      onChange={(e) => setDriver(i, { phone: e.target.value })}
+                      placeholder="WhatsApp number"
+                      className="h-9 w-40"
+                    />
+                    <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        checked={d.has_sa_license}
+                        onChange={(e) => setDriver(i, { has_sa_license: e.target.checked })}
+                        className="rounded border-input"
+                      />
+                      SA licence
+                    </label>
+                    <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        checked={d.is_first_time}
+                        onChange={(e) => setDriver(i, { is_first_time: e.target.checked })}
+                        className="rounded border-input"
+                      />
+                      First time / international
+                    </label>
+                  </>
+                )}
+                {person && d.phone && (
+                  <span className="text-xs text-muted-foreground">{d.phone}</span>
+                )}
                 {drivers.length > 1 && (
                   <button
                     type="button"
                     onClick={() => setDrivers((p) => p.filter((_, idx) => idx !== i))}
-                    className="text-muted-foreground hover:text-destructive"
+                    className="ml-auto text-muted-foreground hover:text-destructive"
                     aria-label="Remove driver"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
                 )}
               </div>
-              <DriverLicenseField
-                staged={d.license}
-                onStage={(file) => setDriver(i, { license: file })}
-              />
+
+              {status && (
+                <p
+                  className={
+                    "text-xs " +
+                    (status.tone === "ok"
+                      ? "text-muted-foreground"
+                      : status.tone === "warn"
+                        ? "text-foreground"
+                        : "text-destructive")
+                  }
+                >
+                  {status.label}
+                </p>
+              )}
+
+              {/* Only outsiders attach a licence here — a Hub user's licence
+                  is already on their profile. */}
+              {!d.user_id && (
+                <DriverLicenseField
+                  staged={d.license}
+                  onStage={(file) => setDriver(i, { license: file })}
+                />
+              )}
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Notes */}
