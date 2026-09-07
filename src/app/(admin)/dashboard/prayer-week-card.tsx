@@ -21,13 +21,12 @@ function ymd(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+// "09:30:00" is a wall-clock string, not an instant: read the hours and minutes
+// straight off it, so the viewer's UTC offset can't shift the time shown.
 function hhmm(s: string | null): string {
   if (!s) return "";
-  return new Date(`1970-01-01T${s}`).toLocaleTimeString("en-ZA", {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "UTC",
-  });
+  const m = s.match(/^(\d{1,2}):(\d{2})/);
+  return m ? `${m[1].padStart(2, "0")}:${m[2]}` : "";
 }
 
 export function PrayerWeekCard() {

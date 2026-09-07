@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { CalendarClock, ArrowUpRight, MapPin, Repeat } from "lucide-react";
+import { timeRangeLabel } from "@/lib/bookings/dates";
 
 type Ref = { name: string; color: string | null; building?: string | null };
 
@@ -17,8 +18,6 @@ type Booking = {
   venue: Ref | Ref[] | null;
   ministry: Ref | Ref[] | null;
 };
-
-const TZ = "Africa/Johannesburg";
 
 // A recurring booking shows up as several identical instances. Group by the
 // series id when present, otherwise by an identical-content signature (same
@@ -57,15 +56,12 @@ function one(r: Ref | Ref[] | null): Ref | null {
   return Array.isArray(r) ? r[0] ?? null : r;
 }
 
+// start_time / end_time are wall-clock strings ("09:30:00"), not instants —
+// read them as written rather than routing them through a Date, which would
+// shift them by the viewer's UTC offset.
 function timeLabel(b: Booking): string {
-  if (!b.start_time) return "All day";
-  const t = (s: string) =>
-    new Date(`1970-01-01T${s}`).toLocaleTimeString("en-ZA", {
-      hour: "2-digit",
-      minute: "2-digit",
-      timeZone: "UTC",
-    });
-  return b.end_time ? `${t(b.start_time)}–${t(b.end_time)}` : t(b.start_time);
+  if (!b.start_time && !b.end_time) return "All day";
+  return timeRangeLabel(b.start_time, b.end_time);
 }
 
 export function MyBookingsCard() {
@@ -131,8 +127,8 @@ export function MyBookingsCard() {
           <style>{".ffsa-bk-list{scrollbar-width:thin;scrollbar-color:var(--rule-strong) transparent}"}</style>
           {collapseRecurring(bookings).map((b) => {
             const venue = one(b.venue);
-            const start = new Date(b.booking_date + "T00:00:00");
-            const weekday = start.toLocaleDateString("en-ZA", { weekday: "short", timeZone: TZ });
+            const start = new Date(b.booking_date + "T00:00:00Z");
+            const weekday = start.toLocaleDateString("en-ZA", { weekday: "short", timeZone: "UTC" });
             const st = STATUS_STYLE[b.status] ?? STATUS_STYLE.pending;
             return (
               <Link
@@ -157,10 +153,10 @@ export function MyBookingsCard() {
                   }}
                 >
                   <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-                    {start.toLocaleDateString("en-ZA", { month: "short", timeZone: TZ })}
+                    {start.toLocaleDateString("en-ZA", { month: "short", timeZone: "UTC" })}
                   </span>
                   <span style={{ fontSize: 18, fontWeight: 700, marginTop: 2 }}>
-                    {start.toLocaleDateString("en-ZA", { day: "numeric", timeZone: TZ })}
+                    {start.toLocaleDateString("en-ZA", { day: "numeric", timeZone: "UTC" })}
                   </span>
                 </div>
 
@@ -183,7 +179,7 @@ export function MyBookingsCard() {
                       style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink)", marginTop: 2 }}
                     >
                       <Repeat className="h-3 w-3 shrink-0" />
-                      Weekly · {weekday} · next {start.toLocaleDateString("en-ZA", { day: "numeric", month: "short", timeZone: TZ })}
+                      Weekly · {weekday} · next {start.toLocaleDateString("en-ZA", { day: "numeric", month: "short", timeZone: "UTC" })}
                     </p>
                   )}
                 </div>
