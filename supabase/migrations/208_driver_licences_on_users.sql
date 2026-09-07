@@ -94,7 +94,9 @@ ALTER TABLE public.vehicle_request_links ENABLE ROW LEVEL SECURITY;
 
 -- No anon policy: the public form resolves its token through an API route on
 -- the service-role client, so the table is never readable from the browser.
--- Token guessing is the only attack surface, and the token is 32 random bytes.
+-- Token guessing is the only attack surface, and the token is 24 random bytes.
+DROP POLICY IF EXISTS "Vehicle managers manage request links"
+  ON public.vehicle_request_links;
 CREATE POLICY "Vehicle managers manage request links"
   ON public.vehicle_request_links FOR ALL
   USING (
