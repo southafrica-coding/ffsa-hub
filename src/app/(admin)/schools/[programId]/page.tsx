@@ -65,6 +65,32 @@ async function hydrateUserIdentities(
   });
 }
 
+/**
+ * An enrolment whose person was deleted has `user_id` NULL and no `users` row
+ * to join — migration 207 keeps the enrolment instead of cascading it away.
+ * Rebuild the identity from the snapshot delete-user wrote onto the row so the
+ * roster and the Arrival tab still show a named person rather than "Unknown",
+ * and so the record stays recognisable enough to re-link by hand.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- rows come from `any`-typed service queries
+function withDeletedPersonIdentity(rows: any[]): any[] {
+  return rows.map((row) => {
+    if (row.user_id || row.users) return row;
+    const info = (row.person_info ?? {}) as Record<string, string | null>;
+    return {
+      ...row,
+      users: {
+        id: null,
+        first_name: info.first_name ?? null,
+        last_name: info.last_name ?? null,
+        preferred_name: info.preferred_name ?? null,
+        email: row.person_email ?? null,
+        nationality: info.nationality ?? null,
+      },
+    };
+  });
+}
+
 export default async function ProgramDetailPage({
   params,
   searchParams,
@@ -94,10 +120,12 @@ export default async function ProgramDetailPage({
   }
 
   const { data: enrollmentsRaw } = await getEnrollmentsByProgram(supabase, programId);
-  const enrollments = await hydrateUserIdentities(admin, enrollmentsRaw ?? [], [
-    ["user_id", "users"],
-    ["assigned_staff_id", "assigned_staff"],
-  ]);
+  const enrollments = withDeletedPersonIdentity(
+    await hydrateUserIdentities(admin, enrollmentsRaw ?? [], [
+      ["user_id", "users"],
+      ["assigned_staff_id", "assigned_staff"],
+    ])
+  );
 
   // Arrival-day profile + health-insurance summary for the enrolled students.
   // Read via the service-role client (insurance/profile fields on `users` are

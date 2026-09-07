@@ -69,7 +69,12 @@ type StaffUser = {
 
 type Enrollment = {
   id: string;
-  user_id: string;
+  /**
+   * NULL once the person's account has been deleted. Migration 207 orphans the
+   * enrolment instead of destroying it; the server rebuilds `users` below from
+   * the identity snapshot on the row, so the name still renders.
+   */
+  user_id: string | null;
   status: string;
   enrolled_at: string;
   removed_at: string | null;
@@ -79,7 +84,7 @@ type Enrollment = {
   insurance_verified_at: string | null;
   insurance_verified_by: string | null;
   users: {
-    id: string;
+    id: string | null;
     first_name: string | null;
     last_name: string | null;
     preferred_name: string | null;
@@ -902,8 +907,14 @@ function ArrivalTab({
     return u.preferred_name || name || u.email || "Unknown";
   }
 
+  // An enrolment whose account was deleted (migration 207). It keeps its place
+  // on the roster so the student isn't silently lost, but there is no profile
+  // or insurance behind it to check — only a person to re-link.
+  const isOrphan = (e: Enrollment) => !e.user_id;
+
   const needsAttention = (e: Enrollment) => {
-    const info = arrivalInsurance[e.user_id];
+    if (isOrphan(e)) return true;
+    const info = arrivalInsurance[e.user_id!];
     const profileDone =
       info?.profileStage === "active" || info?.profileStage === "pending_approval";
     const insuranceOk = info?.insurance.state === "ok";
@@ -913,11 +924,14 @@ function ArrivalTab({
   const roster = enrollments.filter(
     (e) => !e.removed_at && ARRIVAL_STATUSES.includes(e.status)
   );
+  // Orphans are excluded from both counters: they aren't students who haven't
+  // filled a profile in, they're records with no account at all.
   const noProfileCount = roster.filter(
-    (e) => arrivalInsurance[e.user_id]?.profileStage === "invited"
+    (e) => !isOrphan(e) && arrivalInsurance[e.user_id!]?.profileStage === "invited"
   ).length;
   const insuranceProblemCount = roster.filter((e) => {
-    const s = arrivalInsurance[e.user_id]?.insurance.state;
+    if (isOrphan(e)) return false;
+    const s = arrivalInsurance[e.user_id!]?.insurance.state;
     return s === "missing" || s === "expired";
   }).length;
 
@@ -1052,7 +1066,10 @@ function ArrivalTab({
               </TableRow>
             ) : (
               visible.map((enrollment) => {
-                const info = arrivalInsurance[enrollment.user_id];
+                const orphaned = isOrphan(enrollment);
+                const info = orphaned
+                  ? undefined
+                  : arrivalInsurance[enrollment.user_id!];
                 const verified = !!enrollment.insurance_verified_at;
                 return (
                   <TableRow key={enrollment.id}>
@@ -1063,11 +1080,20 @@ function ArrivalTab({
                       </div>
                     </TableCell>
                     <TableCell>
-                      <ProfileBadge
-                        info={info}
-                        studentName={userName(enrollment.users)}
-                        userId={enrollment.user_id}
-                      />
+                      {orphaned ? (
+                        <Badge
+                          variant="secondary"
+                          title="This person's account was deleted. The enrolment was kept — re-invite them and link the new account to it."
+                        >
+                          Account deleted
+                        </Badge>
+                      ) : (
+                        <ProfileBadge
+                          info={info}
+                          studentName={userName(enrollment.users)}
+                          userId={enrollment.user_id!}
+                        />
+                      )}
                     </TableCell>
                     <TableCell>
                       <Select
@@ -1087,7 +1113,11 @@ function ArrivalTab({
                       </Select>
                     </TableCell>
                     <TableCell>
-                      <InsuranceBadge info={info} />
+                      {orphaned ? (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      ) : (
+                        <InsuranceBadge info={info} />
+                      )}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {info?.provider ? (

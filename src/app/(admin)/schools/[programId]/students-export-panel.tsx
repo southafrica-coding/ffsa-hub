@@ -23,7 +23,8 @@ import {
 const STORAGE_KEY = "schools-students-export-columns";
 
 type EnrollmentLike = {
-  user_id: string;
+  /** NULL when the person's account was deleted (migration 207). */
+  user_id: string | null;
   removed_at: string | null;
   users: {
     first_name: string | null;
@@ -58,13 +59,25 @@ export function StudentsExportPanel({
 }) {
   const [open, setOpen] = useState(false);
 
-  const activeStudents = useMemo(
-    () => enrollments.filter((e) => !e.removed_at),
+  // The export is keyed on the user id and reads its columns off `users`, so an
+  // enrolment whose account was deleted (migration 207) has nothing to export.
+  // It still holds its place on the roster and the Arrival tab — it just can't
+  // appear in a CSV of student PII that no longer exists.
+  const exportable = useMemo(
+    () =>
+      enrollments.filter(
+        (e): e is EnrollmentLike & { user_id: string } => !!e.user_id
+      ),
     [enrollments]
   );
+
+  const activeStudents = useMemo(
+    () => exportable.filter((e) => !e.removed_at),
+    [exportable]
+  );
   const removedStudents = useMemo(
-    () => enrollments.filter((e) => e.removed_at),
-    [enrollments]
+    () => exportable.filter((e) => e.removed_at),
+    [exportable]
   );
   const activeIds = useMemo(
     () => activeStudents.map((e) => e.user_id),
@@ -75,10 +88,7 @@ export function StudentsExportPanel({
   // cancelled student look like they were still coming. The CSV's "Roster
   // Status" column says which rows are live, so the list stays honest without
   // hiding anyone. Untick below for a live-roster-only export.
-  const allIds = useMemo(
-    () => enrollments.map((e) => e.user_id),
-    [enrollments]
-  );
+  const allIds = useMemo(() => exportable.map((e) => e.user_id), [exportable]);
 
   const [selectedColumns, setSelectedColumns] = useState<
     Set<StudentExportColumnKey>

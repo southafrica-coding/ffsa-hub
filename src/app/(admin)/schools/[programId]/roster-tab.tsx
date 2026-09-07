@@ -39,7 +39,8 @@ export type RosterFee = {
 
 export type RosterRow = {
   enrollmentId: string;
-  userId: string;
+  /** NULL when the person's account was deleted — the enrolment survives (migration 207). */
+  userId: string | null;
   name: string;
   from: string | null;
   status: string;
@@ -396,13 +397,25 @@ export function RosterTab({
               >
                 <div className="group/row relative flex min-w-0 items-center gap-3">
                   <Initials name={r.name} size={30} />
-                  <Link
-                    href={`/users/${r.userId}`}
-                    title={r.name}
-                    className="truncate text-[14.5px] font-bold text-ink hover:text-electric"
-                  >
-                    {r.name}
-                  </Link>
+                  {r.userId ? (
+                    <Link
+                      href={`/users/${r.userId}`}
+                      title={r.name}
+                      className="truncate text-[14.5px] font-bold text-ink hover:text-electric"
+                    >
+                      {r.name}
+                    </Link>
+                  ) : (
+                    // No account to link to: this enrolment outlived a deleted
+                    // profile (migration 207). Name only, so the student stays
+                    // on the roster instead of vanishing.
+                    <span
+                      title={`${r.name} — account deleted`}
+                      className="truncate text-[14.5px] font-bold text-muted-foreground"
+                    >
+                      {r.name}
+                    </span>
+                  )}
                   {/* Roll-off lives here rather than in a seventh column — the
                       frame's roster is six columns and stays six columns. */}
                   <button

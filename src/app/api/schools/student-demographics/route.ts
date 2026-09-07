@@ -180,7 +180,9 @@ export async function GET() {
       gender: genderFor(row.user_id),
     };
     addPerson(target, person, tierMap as Record<string, Tier>);
-    countedByProgram.get(row.program_id)?.add(row.user_id);
+    // An enrolment orphaned by a deleted account (migration 207) has no user to
+    // dedupe on — it still counts as a person, it just can't anchor the set.
+    if (row.user_id) countedByProgram.get(row.program_id)?.add(row.user_id);
   }
 
   // Accepted applicants, skipping anyone already counted as enrolled in the

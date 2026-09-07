@@ -48,7 +48,9 @@ export async function POST(request: Request) {
   // Verify user exists
   const { data: targetUser } = await adminSupabase
     .from("users")
-    .select("id, email, first_name, last_name, display_name")
+    .select(
+      "id, email, first_name, last_name, display_name, preferred_name, nationality"
+    )
     .eq("id", user_id)
     .single();
 
@@ -66,6 +68,8 @@ export async function POST(request: Request) {
     first_name: string | null;
     last_name: string | null;
     display_name: string | null;
+    preferred_name: string | null;
+    nationality: string | null;
   };
   const fallbackName =
     tu.display_name?.trim() ||
@@ -152,6 +156,36 @@ export async function POST(request: Request) {
       .eq("id", app.id);
   }
 
+  // Enrolments outlive the account too (migration 207 turned this FK from
+  // CASCADE into SET NULL — deleting a duplicate profile used to erase the
+  // student from their programme's Arrival tab, grades and all, with nothing
+  // left in the Removed bin to restore). Snapshot the identity onto the row
+  // first, exactly as we do for applications above, so an orphaned enrolment
+  // still shows who it belongs to and can be re-linked later.
+  const { data: ownedEnrollments } = await admin
+    .from("enrollments")
+    .select("id")
+    .eq("user_id", user_id);
+
+  const enrollmentIds = ((ownedEnrollments ?? []) as { id: string }[]).map(
+    (e) => e.id
+  );
+
+  if (enrollmentIds.length > 0) {
+    await admin
+      .from("enrollments")
+      .update({
+        person_email: tu.email,
+        person_info: {
+          first_name: tu.first_name,
+          last_name: tu.last_name,
+          preferred_name: tu.preferred_name,
+          nationality: tu.nationality,
+        },
+      })
+      .in("id", enrollmentIds);
+  }
+
   // 1. Delete user_roles
   await adminSupabase.from("user_roles").delete().eq("user_id", user_id);
 
@@ -190,6 +224,8 @@ export async function POST(request: Request) {
       // Which applications survived the deletion, so this is traceable
       // later without guessing from timestamps.
       preserved_application_ids: apps.map((a) => a.id),
+      // Same for enrolments — which rows are now orphaned but recoverable.
+      preserved_enrollment_ids: enrollmentIds,
     },
   });
 

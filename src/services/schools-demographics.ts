@@ -39,7 +39,12 @@ async function fetchAllPages<T>(
   }
 }
 
-export type EnrollmentPerson = { program_id: string; user_id: string; status: string };
+export type EnrollmentPerson = {
+  program_id: string;
+  /** NULL when the person's account was deleted — the enrolment survives (migration 207). */
+  user_id: string | null;
+  status: string;
+};
 
 export type ApplicantPerson = {
   program_id: string;

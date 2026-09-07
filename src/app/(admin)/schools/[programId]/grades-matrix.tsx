@@ -31,7 +31,8 @@ export type MatrixCourse = {
 
 export type MatrixStudent = {
   enrollmentId: string;
-  userId: string;
+  /** NULL when the person's account was deleted (migration 207). */
+  userId: string | null;
   name: string;
 };
 
@@ -291,17 +292,30 @@ export function GradesMatrix({
               <div className="mono-label border-b border-rule bg-bone px-3 py-2">
                 Transcript · pick a student
               </div>
-              {students.map((s) => (
-                <a
-                  key={s.enrollmentId}
-                  href={`/api/schools/transcript?userId=${s.userId}&programId=${programId}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="block border-b border-rule px-3 py-2 text-[13px] font-semibold text-ink hover:bg-[#F7F5EE]"
-                >
-                  {s.name}
-                </a>
-              ))}
+              {/* The transcript endpoint is keyed on the user, so a student
+                  whose account was deleted (migration 207) has nothing to
+                  render — list them greyed rather than linking to a 404. */}
+              {students.map((s) =>
+                s.userId ? (
+                  <a
+                    key={s.enrollmentId}
+                    href={`/api/schools/transcript?userId=${s.userId}&programId=${programId}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block border-b border-rule px-3 py-2 text-[13px] font-semibold text-ink hover:bg-[#F7F5EE]"
+                  >
+                    {s.name}
+                  </a>
+                ) : (
+                  <span
+                    key={s.enrollmentId}
+                    title="No account — transcript unavailable"
+                    className="block border-b border-rule px-3 py-2 text-[13px] font-semibold text-muted-foreground"
+                  >
+                    {s.name}
+                  </span>
+                )
+              )}
             </div>
           )}
         </div>
