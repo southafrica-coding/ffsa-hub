@@ -20,8 +20,13 @@ import {
   SlidersHorizontal,
   Scale,
   Target,
+  ToggleLeft,
   type LucideIcon,
 } from "lucide-react";
+import {
+  passesVisibilityGate,
+  type ModuleVisibilityMap,
+} from "@/lib/module-visibility";
 
 export interface ModuleDefinition {
   id: string;
@@ -199,6 +204,14 @@ export const SYSTEM_MODULES: ModuleDefinition[] = [
     requiredRoles: ["super_admin", "admin"],
   },
   {
+    id: "modules",
+    label: "Modules",
+    href: "/settings/modules",
+    icon: ToggleLeft,
+    description: "Switch modules on, off, or into super-admin-only beta",
+    requiredRoles: ["super_admin"],
+  },
+  {
     id: "slack",
     label: "Slack",
     href: "/settings/slack",
@@ -251,19 +264,36 @@ export const PORTAL_TABS: PortalTab[] = [
 /**
  * Returns modules the user can access.
  *
- * super_admin and admin see everything.
- * Everyone else sees only modules they have at least one permission for
- * (permittedModules is the set of module ids from user_permissions).
+ * Two independent gates, applied in this order:
+ *
+ *   1. Rollout (module_visibility, migration 207) — is this module switched on
+ *      for this person at all? A `beta` module is super-admin-only and a
+ *      `hidden` one is off for everybody. Absent a map, everything is `live`.
+ *   2. Access — the long-standing rule: super_admin and admin see everything,
+ *      everyone else sees modules they hold a permission for.
+ *
+ * The rollout gate runs FIRST and is not something admin status overrides,
+ * which is the whole point: a half-built module stays invisible even to the
+ * roles that normally see everything.
  */
 export function getAccessibleModules(
   modules: ModuleDefinition[],
   userRoles: string[],
-  permittedModules?: Set<string>
+  permittedModules?: Set<string>,
+  visibility?: ModuleVisibilityMap
 ): ModuleDefinition[] {
   const isAdmin =
     userRoles.includes("super_admin") || userRoles.includes("admin");
 
   return modules.filter((mod) => {
+    // 1. Rollout gate — applies to everyone, admins included.
+    if (
+      !UNGATEABLE_MODULE_IDS.has(mod.id) &&
+      !passesVisibilityGate(mod.id, userRoles, visibility)
+    ) {
+      return false;
+    }
+    // 2. Access gate (unchanged).
     // Always open (dashboard, prayer room)
     if (mod.requiredRoles.length === 0) return true;
     // Admins see everything
@@ -271,4 +301,36 @@ export function getAccessibleModules(
     // Otherwise check the permissions-based set
     return permittedModules?.has(mod.id) ?? false;
   });
+}
+
+/** Every module in one list — admin modules plus system modules. */
+export const ALL_MODULES: ModuleDefinition[] = [
+  ...ADMIN_MODULES,
+  ...SYSTEM_MODULES,
+];
+
+/**
+ * Which module does this pathname belong to?
+ *
+ * Longest href match wins, so /settings/slack resolves to the Slack module
+ * rather than to Settings. Returns null for paths that belong to no module
+ * (personal portal tabs, /profile, public pages) — those are never gated.
+ */
+/**
+ * The rollout control panel itself is never gateable. Switching it off would
+ * hide the only UI that can switch it back on — a self-inflicted lockout that
+ * would need a SQL console to undo.
+ */
+export const UNGATEABLE_MODULE_IDS = new Set(["modules"]);
+
+export function moduleForPathname(pathname: string): ModuleDefinition | null {
+  let best: ModuleDefinition | null = null;
+  for (const mod of ALL_MODULES) {
+    const matches =
+      pathname === mod.href || pathname.startsWith(`${mod.href}/`);
+    if (matches && (!best || mod.href.length > best.href.length)) {
+      best = mod;
+    }
+  }
+  return best;
 }
