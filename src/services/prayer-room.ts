@@ -105,6 +105,59 @@ export async function deleteSeries(supabase: Client, id: string) {
   return supabase.from("prayer_room_set_series").delete().eq("id", id);
 }
 
+/** The occurrences of one series, soonest first (optionally only from a date on). */
+export async function getSeriesSets(supabase: Client, seriesId: string, fromDate?: string) {
+  let query = supabase
+    .from("prayer_room_sets")
+    .select(SET_SELECT)
+    .eq("series_id", seriesId)
+    .neq("status", "cancelled");
+  if (fromDate) query = query.gte("set_date", fromDate);
+  return query.order("set_date", { ascending: true });
+}
+
+/**
+ * Delete a whole series in one go — the thing you could only do one set at a
+ * time before.
+ *
+ * The sets must go first and explicitly: series_id is ON DELETE SET NULL, so
+ * dropping the series row alone would ORPHAN every occurrence rather than
+ * remove it. The series row itself is only cleared once nothing points at it,
+ * which keeps a "delete the rest of the series" (fromDate) call from stranding
+ * the occurrences that already happened.
+ *
+ * RLS decides what actually goes: a non-owner's delete removes nothing.
+ */
+export async function deleteSeriesSets(supabase: Client, seriesId: string, fromDate?: string) {
+  let del = supabase.from("prayer_room_sets").delete().eq("series_id", seriesId);
+  if (fromDate) del = del.gte("set_date", fromDate);
+  const { data: deleted, error } = await del.select("id");
+  if (error) return { data: null, error };
+
+  const { data: remaining } = await supabase
+    .from("prayer_room_sets")
+    .select("id")
+    .eq("series_id", seriesId)
+    .limit(1);
+  if (!remaining || remaining.length === 0) await deleteSeries(supabase, seriesId);
+
+  return { data: { count: deleted?.length ?? 0 }, error: null };
+}
+
+/** Apply the same field changes to every (or every remaining) set in a series. */
+export async function updateSeriesSets(
+  supabase: Client,
+  seriesId: string,
+  fields: Record<string, unknown>,
+  fromDate?: string
+) {
+  let query = supabase.from("prayer_room_sets").update(fields).eq("series_id", seriesId);
+  if (fromDate) query = query.gte("set_date", fromDate);
+  const { data, error } = await query.select("id");
+  if (error) return { data: null, error };
+  return { data: { count: data?.length ?? 0 }, error: null };
+}
+
 export async function updateSet(supabase: Client, id: string, data: Record<string, unknown>) {
   return supabase.from("prayer_room_sets").update(data).eq("id", id).select().single();
 }
@@ -135,37 +188,55 @@ export async function deleteSet(supabase: Client, id: string) {
 // "MY" VIEWS
 // ────────────────────────────────────────────────────────────
 
-/** Sets the user owns (most recent first). */
+/**
+ * Sets the user owns, soonest first.
+ *
+ * Chronological ascending is the right default: "My sets" is a roster of what
+ * you are about to lead, not a history log. (It used to be descending, which
+ * showed December above September.) The caller splits upcoming from past.
+ */
 export async function getOwnedSets(supabase: Client, userId: string, options?: { upcoming?: boolean }) {
   let query = supabase
     .from("prayer_room_sets")
     .select(SET_SELECT)
     .eq("owner_id", userId)
-    .neq("status", "cancelled")
-    .order("set_date", { ascending: false });
+    .neq("status", "cancelled");
   if (options?.upcoming) {
-    query = supabase
-      .from("prayer_room_sets")
-      .select(SET_SELECT)
-      .eq("owner_id", userId)
-      .eq("status", "scheduled")
-      .gte("set_date", today())
-      .order("set_date", { ascending: true });
+    query = query.eq("status", "scheduled").gte("set_date", today());
   }
-  return query;
+  return query.order("set_date", { ascending: true }).order("start_time", { ascending: true });
 }
 
-/** Slots the user is rostered into (filled), with the parent set. */
+/**
+ * Slots the user is rostered into (filled), with the parent set — soonest first.
+ *
+ * The date lives on the embedded set, so the sort happens here rather than in
+ * PostgREST; ordering by the slot's own created_at (as this once did) put the
+ * list in invitation order, which reads as no order at all.
+ */
 export async function getMyRoster(supabase: Client, userId: string) {
-  return supabase
+  const result = await supabase
     .from("prayer_room_set_slots")
     .select(
       `id, role, status, set:set_id(id, set_date, start_time, end_time, title, theme, status,
         owner:owner_id(${NAME_FIELDS}))`
     )
-    .eq("filled_user_id", userId)
-    .order("created_at", { ascending: false });
+    .eq("filled_user_id", userId);
+
+  if (result.data) {
+    result.data.sort((a: RosterSortRow, b: RosterSortRow) => {
+      if (!a.set) return 1;
+      if (!b.set) return -1;
+      return (
+        a.set.set_date.localeCompare(b.set.set_date) ||
+        a.set.start_time.localeCompare(b.set.start_time)
+      );
+    });
+  }
+  return result;
 }
+
+type RosterSortRow = { set: { set_date: string; start_time: string } | null };
 
 /** Open invitations awaiting the user's response. */
 export async function getMyInvites(supabase: Client, userId: string) {

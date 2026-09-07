@@ -42,7 +42,16 @@ const TONE: Record<QualState, "good" | "warn" | "quiet"> = {
   not_evaluated: "quiet",
 };
 
-export default function MySeats() {
+/**
+ * `onSummary` lets the parent decide whether to show this section collapsed:
+ * it fires after each load with whether there is anything here at all and how
+ * much of it is waiting on the person.
+ */
+export default function MySeats({
+  onSummary,
+}: {
+  onSummary?: (s: { visible: boolean; feedback: number; pending: number }) => void;
+} = {}) {
   const [seats, setSeats] = useState<SeatType[]>([]);
   const [quals, setQuals] = useState<Qual[]>([]);
   const [feedback, setFeedback] = useState<Feedback[]>([]);
@@ -60,10 +69,17 @@ export default function MySeats() {
     const meta = metaRes.ok ? await metaRes.json() : { seatTypes: [] };
     setSeats(meta.seatTypes ?? []);
     setQuals(qualRes.ok ? await qualRes.json() : []);
-    setFeedback(fbRes.ok ? await fbRes.json() : []);
-    setAsks(askRes.ok ? await askRes.json() : []);
+    const fbList: Feedback[] = fbRes.ok ? await fbRes.json() : [];
+    setFeedback(fbList);
+    const askList: EvalRequest[] = askRes.ok ? await askRes.json() : [];
+    setAsks(askList);
     setReady(true);
-  }, []);
+    onSummary?.({
+      visible: (meta.seatTypes ?? []).length > 0,
+      feedback: fbList.length,
+      pending: askList.length,
+    });
+  }, [onSummary]);
 
   useEffect(() => {
     load();

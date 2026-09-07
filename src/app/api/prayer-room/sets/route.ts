@@ -10,6 +10,8 @@ import {
   createSet,
   createSeries,
   deleteSeries,
+  deleteSeriesSets,
+  updateSeriesSets,
   updateSet,
   completeSet,
   cancelSet,
@@ -19,6 +21,11 @@ import { weeklyOccurrenceDates } from "@/lib/bookings/recurrence";
 import { sendPrayerRoomInvite } from "@/lib/email/send-prayer-room";
 
 type TeamPick = { user_id: string; role: string };
+
+/** Today in the server's local date terms — the boundary for "remaining". */
+function todayISO(): string {
+  return new Date().toISOString().split("T")[0];
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyClient = any;
@@ -263,7 +270,34 @@ export async function PUT(request: Request) {
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const body = await request.json().catch(() => ({}));
-  const { id, action } = body as { id?: string; action?: string };
+  const { id, action, series_id, scope } = body as {
+    id?: string;
+    action?: string;
+    series_id?: string;
+    scope?: string;
+  };
+
+  // Edit a whole weekly series at once. "remaining" (the default) leaves
+  // occurrences that already happened alone so a mid-series retime doesn't
+  // rewrite history people were already rostered into.
+  if (series_id) {
+    const fields: Record<string, unknown> = {};
+    for (const k of ["title", "theme", "scripture", "prayer_focus", "setlist", "start_time", "end_time", "owner_id"]) {
+      if (k in body) fields[k] = body[k];
+    }
+    if (Object.keys(fields).length === 0) {
+      return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+    }
+    const result = await updateSeriesSets(
+      supabase,
+      series_id,
+      fields,
+      scope === "all" ? undefined : todayISO()
+    );
+    if (result.error) return NextResponse.json({ error: result.error.message }, { status: 403 });
+    return NextResponse.json(result.data);
+  }
+
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
 
   let result;
@@ -289,8 +323,25 @@ export async function DELETE(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-  const id = new URL(request.url).searchParams.get("id");
-  if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
+  const params = new URL(request.url).searchParams;
+
+  // Bulk delete a weekly series. Defaults to the remaining occurrences so
+  // clearing a series that is halfway through doesn't erase the sets that
+  // already ran; ?scope=all removes every occurrence.
+  const seriesId = params.get("seriesId");
+  if (seriesId) {
+    const scope = params.get("scope");
+    const { data, error } = await deleteSeriesSets(
+      supabase,
+      seriesId,
+      scope === "all" ? undefined : todayISO()
+    );
+    if (error) return NextResponse.json({ error: error.message }, { status: 403 });
+    return NextResponse.json({ ok: true, ...data });
+  }
+
+  const id = params.get("id");
+  if (!id) return NextResponse.json({ error: "id or seriesId is required" }, { status: 400 });
 
   const { error } = await deleteSet(supabase, id);
   if (error) return NextResponse.json({ error: error.message }, { status: 403 });
