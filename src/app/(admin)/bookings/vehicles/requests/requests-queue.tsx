@@ -62,6 +62,14 @@ function RequestRow({ booking }: { booking: VehicleBookingWithRefs }) {
       </TableCell>
       <TableCell className="whitespace-nowrap">
         {booking.requester_name || <span className="text-[color:var(--text-tertiary)]">—</span>}
+        {/* Nobody in the Hub vouched for this person — worth seeing before
+            approving, since their licence arrived as an upload rather than
+            from a profile. */}
+        {booking.source === "public" && (
+          <span className="ml-1.5 border border-rule-strong px-1 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[color:var(--text-secondary)]">
+            External
+          </span>
+        )}
         {booking.point_person && (
           <div className="mt-0.5 text-[11px] text-[color:var(--text-tertiary)]">
             Point person: {booking.point_person}

@@ -11,6 +11,7 @@ import {
   setBookingVehicles,
   setBookingDrivers,
   getLicenceFactsFor,
+  markDrivingTestPending,
 } from "@/services/vehicles";
 import { checkDriverEligibility } from "@/lib/vehicles/licence";
 import { notifyVehicleManagers } from "@/lib/email/send-vehicle-request";
@@ -196,6 +197,7 @@ export async function PATCH(
     const linkedIds = rows
       .map((d) => d.user_id)
       .filter((v): v is string => !!v);
+    const pendingTestUserIds: string[] = [];
     if (linkedIds.length > 0) {
       const returnDate =
         (update.return_date as string | undefined) ?? booking.return_date ?? null;
@@ -211,7 +213,10 @@ export async function PATCH(
                 base_driving_test_status:
                   f.test as "not_required" | "pending" | "passed" | "failed",
               },
-              returnDate
+              returnDate,
+              // Editing the driver list is still the request stage — the
+              // driving test is re-checked when the booking is approved.
+              "request"
             )
           : ({ ok: false, reason: "no_licence", message: "is not an active Hub user." } as const);
         if (!check.ok) {
@@ -222,10 +227,14 @@ export async function PATCH(
         }
         d.licence_expiry_snapshot = f?.expiry ?? null;
         d.licence_number_snapshot = f?.number ?? null;
-        d.driving_test_status = f?.test ?? d.driving_test_status;
-        d.is_first_time = f?.test === "pending";
+        const promote = d.is_first_time && f?.test === "not_required";
+        d.driving_test_status = promote ? "pending" : (f?.test ?? d.driving_test_status);
+        d.is_first_time = d.driving_test_status === "pending";
+        if (promote && d.user_id) pendingTestUserIds.push(d.user_id);
       }
     }
+
+    await markDrivingTestPending(createAdminClient(), pendingTestUserIds);
 
     const { data, error } = await setBookingDrivers(supabase, id, rows);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });

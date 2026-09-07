@@ -20,7 +20,6 @@ import { CountryPicker } from "./country-picker";
 import { DriverLicenseField, uploadDriverLicense } from "./driver-license-field";
 import { SectionBar } from "@/components/ffsa";
 import { PersonSelect, usePeople, toIso2 } from "./people-picker";
-import type { VehiclePerson } from "@/services/vehicles";
 import { checkDriverEligibility, licenceStatusLabel } from "@/lib/vehicles/licence";
 
 type DriverRow = {
@@ -193,7 +192,7 @@ export function VehicleBookingForm({
       if (!d.user_id) continue;
       const person = peopleById.get(d.user_id);
       if (!person) continue;
-      const check = checkDriverEligibility(person, form.return_date || null);
+      const check = checkDriverEligibility(person, form.return_date || null, "request");
       if (!check.ok) return `${person.name} cannot be added as a driver — ${check.message}`;
     }
     return null;
@@ -533,6 +532,20 @@ export function VehicleBookingForm({
                 )}
                 {person && d.phone && (
                   <span className="text-xs text-muted-foreground">{d.phone}</span>
+                )}
+                {/* A Hub user who has never driven a base vehicle still has to
+                    be flagged: their profile defaults to "not required", so
+                    without this nobody would ever be sent for a driving test. */}
+                {person && person.base_driving_test_status === "not_required" && (
+                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      checked={d.is_first_time}
+                      onChange={(e) => setDriver(i, { is_first_time: e.target.checked })}
+                      className="rounded border-input"
+                    />
+                    First time driving a base vehicle
+                  </label>
                 )}
                 {drivers.length > 1 && (
                   <button

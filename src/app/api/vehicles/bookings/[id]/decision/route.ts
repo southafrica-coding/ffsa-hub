@@ -72,7 +72,8 @@ export async function POST(
                 base_driving_test_status:
                   f.test as "not_required" | "pending" | "passed" | "failed",
               },
-              booking?.return_date ?? null
+              booking?.return_date ?? null,
+              "approval"
             )
           : ({ ok: false, reason: "no_licence", message: "No licence on file." } as const);
         if (!check.ok) {

@@ -9,6 +9,7 @@ import {
   setBookingVehicles,
   setBookingDrivers,
   getLicenceFactsFor,
+  markDrivingTestPending,
 } from "@/services/vehicles";
 import { checkDriverEligibility } from "@/lib/vehicles/licence";
 import { notifyVehicleManagers } from "@/lib/email/send-vehicle-request";
@@ -158,6 +159,7 @@ export async function POST(request: Request) {
   const driverUserIds = drivers
     .map((d) => d.user_id)
     .filter((id): id is string => !!id);
+  const pendingTestUserIds: string[] = [];
   if (driverUserIds.length > 0) {
     const facts = await getLicenceFactsFor(createAdminClient(), driverUserIds);
     for (const d of drivers) {
@@ -176,7 +178,8 @@ export async function POST(request: Request) {
           base_driving_test_status:
             f.test as "not_required" | "pending" | "passed" | "failed",
         },
-        ret
+        ret,
+        "request"
       );
       if (!check.ok) {
         return NextResponse.json(
@@ -192,11 +195,17 @@ export async function POST(request: Request) {
       // booking's record.
       d.licence_expiry_snapshot = f.expiry;
       d.licence_number_snapshot = f.number;
-      // The person's own test result wins over whatever the form guessed.
-      d.driving_test_status = f.test;
-      d.is_first_time = f.test === "pending";
+      // The person's recorded result wins — except that a requester flagging
+      // a first-timer must be able to START the test process, which is the
+      // one thing the profile's default "not_required" can't express.
+      const promote = d.is_first_time && f.test === "not_required";
+      d.driving_test_status = promote ? "pending" : f.test;
+      d.is_first_time = d.driving_test_status === "pending";
+      if (promote) pendingTestUserIds.push(d.user_id);
     }
   }
+  await markDrivingTestPending(createAdminClient(), pendingTestUserIds);
+
   const { data: booking, error } = await insertVehicleBooking(supabase, {
     booking_name: bookingName,
     point_person: nn(body.point_person),

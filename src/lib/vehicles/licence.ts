@@ -25,6 +25,20 @@ export type DriverEligibility =
   | { ok: false; reason: DriverBlockReason; message: string };
 
 /**
+ * When the check runs.
+ *
+ * "request" applies the LICENCE rules only. A first-time driver must be
+ * addable to a request — the driving test is arranged off the back of a
+ * booking, and the manager records the result from that booking's driver
+ * list. Blocking them at request time would deadlock: no booking, so no
+ * test, so no booking.
+ *
+ * "approval" adds the driving-test rule, which is where it always belonged
+ * ("first-time drivers must pass a driving test before approval").
+ */
+export type EligibilityStage = "request" | "approval";
+
+/**
  * Why a driver can't be added, or null if they're clear.
  *
  * `returnDate` is the booking's return date (YYYY-MM-DD). A licence that
@@ -34,7 +48,8 @@ export type DriverEligibility =
  */
 export function checkDriverEligibility(
   driver: DriverLicenceInfo,
-  returnDate: string | null
+  returnDate: string | null,
+  stage: EligibilityStage = "approval"
 ): DriverEligibility {
   if (!driver.licence_file_url || !driver.licence_expiry_date) {
     return {
@@ -60,6 +75,9 @@ export function checkDriverEligibility(
     };
   }
 
+  // Licence rules are absolute; the driving test only gates approval.
+  if (stage === "request") return { ok: true };
+
   if (driver.base_driving_test_status === "failed") {
     return {
       ok: false,
@@ -83,13 +101,15 @@ export function licenceStatusLabel(
   driver: DriverLicenceInfo,
   returnDate: string | null
 ): { label: string; tone: "ok" | "warn" | "bad" } {
-  const check = checkDriverEligibility(driver, returnDate);
+  const check = checkDriverEligibility(driver, returnDate, "approval");
   if (check.ok) {
     return {
       label: `Licence valid to ${driver.licence_expiry_date}`,
       tone: "ok",
     };
   }
+  // A pending driving test is shown as a warning, not an error: the request
+  // goes through, and approval is what waits on the result.
   return {
     label: check.message,
     tone: check.reason === "test_pending" ? "warn" : "bad",

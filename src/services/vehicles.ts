@@ -61,6 +61,8 @@ export type VehicleBooking = {
   payment_received: boolean;
   payment_received_at: string | null;
   home_country: string | null;
+  /** 'public' when the request came in through the shareable outside link. */
+  source: "internal" | "public";
   notes: string | null;
   requested_by: string | null;
   decided_by: string | null;
@@ -1034,4 +1036,103 @@ export async function setDriverTestStatus(
     .update({ driving_test_status: status })
     .eq("id", driverId);
   return { error };
+}
+
+// ── Public request link (outsiders) ────────────────────────
+
+export type VehicleRequestLink = {
+  id: string;
+  token: string;
+  is_active: boolean;
+  created_at: string;
+  rotated_at: string | null;
+};
+
+/**
+ * The current public request link, creating one on first use.
+ *
+ * One standing token rather than a link per person: an admin should be able
+ * to paste the same URL to whoever asks. Rotating it kills every copy at
+ * once, which is the trade — see rotateVehicleRequestLink.
+ */
+export async function getOrCreateVehicleRequestLink(
+  admin: Client,
+  userId: string
+): Promise<VehicleRequestLink | null> {
+  const { data: existing } = await admin
+    .from("vehicle_request_links")
+    .select("*")
+    .eq("is_active", true)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (existing) return existing as VehicleRequestLink;
+
+  const { data } = await admin
+    .from("vehicle_request_links")
+    .insert({ token: newRequestToken(), created_by: userId })
+    .select()
+    .single();
+  return (data as VehicleRequestLink) ?? null;
+}
+
+/** Retire the current link and mint a new one. Old URLs stop working at once. */
+export async function rotateVehicleRequestLink(
+  admin: Client,
+  userId: string
+): Promise<VehicleRequestLink | null> {
+  await admin
+    .from("vehicle_request_links")
+    .update({ is_active: false, rotated_at: new Date().toISOString() })
+    .eq("is_active", true);
+  const { data } = await admin
+    .from("vehicle_request_links")
+    .insert({ token: newRequestToken(), created_by: userId })
+    .select()
+    .single();
+  return (data as VehicleRequestLink) ?? null;
+}
+
+/** Is this token a live request link? Service-role only — never exposed to anon. */
+export async function resolveVehicleRequestLink(
+  admin: Client,
+  token: string
+): Promise<VehicleRequestLink | null> {
+  if (!token || token.length < 16) return null;
+  const { data } = await admin
+    .from("vehicle_request_links")
+    .select("*")
+    .eq("token", token)
+    .eq("is_active", true)
+    .maybeSingle();
+  return (data as VehicleRequestLink) ?? null;
+}
+
+/** 32 bytes of URL-safe randomness — the only thing guarding the public form. */
+function newRequestToken(): string {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * Mark people as needing the base-vehicle driving test.
+ *
+ * Written to the PROFILE, not just the booking: a first-timer flagged on one
+ * request is still a first-timer on the next one, and the whole point of
+ * moving this onto the person was that it stops resetting.
+ *
+ * Only ever promotes from 'not_required' — it must never overwrite a
+ * recorded pass or fail.
+ */
+export async function markDrivingTestPending(
+  admin: Client,
+  userIds: string[]
+): Promise<void> {
+  if (userIds.length === 0) return;
+  await admin
+    .from("users")
+    .update({ base_driving_test_status: "pending" })
+    .in("id", userIds)
+    .eq("base_driving_test_status", "not_required");
 }

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Plus, Inbox, ClipboardList, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Masthead, NeedsYou, SectionBar } from "@/components/ffsa";
+import { RequestLinkButton } from "./request-link-button";
 import {
   Table,
   TableBody,
@@ -63,6 +64,7 @@ export function VehiclesView({
                 </Button>
               </Link>
             )}
+            {(access.canApprove || access.canManage) && <RequestLinkButton />}
             {access.canManage && (
               <Link href="/bookings/vehicles/fleet">
                 <Button size="sm" variant="outline" className="gap-1.5">
