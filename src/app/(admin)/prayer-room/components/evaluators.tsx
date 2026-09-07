@@ -184,6 +184,7 @@ export default function EvaluatorsPortal({
           setSigningOff(null);
           load();
         }}
+        backLabel="Evaluators"
         canEvaluate
         isStaff={!!me?.staff}
         evaluatorName={myName}

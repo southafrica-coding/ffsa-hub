@@ -16,6 +16,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { SectionBar, KpiStrip, Kpi, StatusPill, MastheadButton, type Tone } from "@/components/ffsa";
 import { cn } from "@/lib/utils/cn";
@@ -73,6 +74,7 @@ const MEMBER_LABEL: Record<string, string> = {
 export default function PersonProfile({
   userId,
   onBack,
+  backLabel = "People",
   canEvaluate,
   isStaff,
   evaluatorName,
@@ -80,6 +82,10 @@ export default function PersonProfile({
 }: {
   userId: string;
   onBack: () => void;
+  /** Where onBack actually goes — this screen is opened from People AND from
+   *  Evaluators, and a breadcrumb that always said "People" pointed at the
+   *  wrong place for half its callers. */
+  backLabel?: string;
   canEvaluate: boolean;
   isStaff: boolean;
   /** Whose name the sign-off is recorded under — 11a prints it under the button. */
@@ -185,13 +191,23 @@ export default function PersonProfile({
 
   return (
     <div>
-      {/* breadcrumb — 11a's replacement for the tab strip */}
-      <div className="border-b border-surface-4 px-5 py-3.5 font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--text-tertiary)] md:px-8">
-        Prayer room /{" "}
-        <button type="button" onClick={onBack} className="hover:text-ink">
-          People
-        </button>{" "}
-        / <span className="font-bold text-ink">{name}</span>
+      {/* Breadcrumb — 11a's replacement for the tab strip, and so the ONLY way
+          off this screen. It needs to look like the exit it is: the back
+          segment used to be a bare <button> with the same grey mono styling as
+          the static text and a default cursor, which read as a dead end. */}
+      <div className="flex items-center gap-2 border-b border-surface-4 px-5 py-3.5 font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--text-tertiary)] md:px-8">
+        <button
+          type="button"
+          onClick={onBack}
+          className="inline-flex cursor-pointer items-center gap-1.5 font-bold text-ink underline decoration-dotted underline-offset-4 hover:decoration-solid"
+        >
+          <ArrowLeft className="h-3 w-3" aria-hidden />
+          Back to {backLabel}
+        </button>
+        <span aria-hidden>·</span>
+        <span className="truncate">
+          Prayer room / {backLabel} / <span className="font-bold text-ink">{name}</span>
+        </span>
       </div>
 
       {/* identity */}
