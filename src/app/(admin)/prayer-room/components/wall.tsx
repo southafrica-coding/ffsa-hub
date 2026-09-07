@@ -25,6 +25,7 @@
 
 import { useMemo } from "react";
 import { cn } from "@/lib/utils/cn";
+import { displayName, type Person } from "./helpers";
 import { weekDays } from "@/lib/bookings/dates";
 import {
   boWin,
@@ -51,7 +52,12 @@ export type Band = {
 // Omit rather than intersect: intersecting the two `slots` array types leaves
 // the element type as the calendar's narrower one, which has no seat.
 export type WallSet = Omit<CalendarSet, "slots"> & {
-  slots: { status: string; seat_type_id?: string | null; role?: string | null }[];
+  slots: {
+    status: string;
+    seat_type_id?: string | null;
+    role?: string | null;
+    filled?: Person;
+  }[];
 };
 
 /* ── axis ─────────────────────────────────────────────
@@ -119,6 +125,19 @@ export function isLive(set: WallSet, leadSeatIds: Set<string>): boolean {
     const seat = s.seat_type_id ?? s.role ?? "";
     return leadSeatIds.has(seat);
   });
+}
+
+/**
+ * Who is leading this set — the person in the first filled lead seat. Shown on
+ * the wall card after the title so the week reads without opening anything.
+ */
+export function leadName(set: WallSet, leadSeatIds: Set<string>): string | null {
+  for (const s of set.slots) {
+    if (s.status !== "filled" || !s.filled) continue;
+    const seat = s.seat_type_id ?? s.role ?? "";
+    if (leadSeatIds.has(seat)) return displayName(s.filled);
+  }
+  return null;
 }
 
 /**
@@ -333,6 +352,7 @@ export default function Wall({
                 const live = isLive(s, leadSeatIds);
                 const curated = bandMinutes(toMin(s.start_time), toMin(s.end_time));
                 const title = s.title || s.theme || "Devo set";
+                const lead = leadName(s, leadSeatIds);
 
                 // Card density by duration. Column is ~127px wide, so titles
                 // wrap easily — every layout constrains them.
@@ -343,7 +363,7 @@ export default function Wall({
                     key={s.id}
                     type="button"
                     onClick={onOpenSet ? () => onOpenSet(s.id) : undefined}
-                    title={`${hhmm(start)}–${hhmm(end)} · ${title}${live ? "" : " · needs a lead"}`}
+                    title={`${hhmm(start)}–${hhmm(end)} · ${title}${lead ? ` — ${lead}` : ""}${live ? "" : " · needs a lead"}`}
                     className={cn(
                       "absolute left-0 right-0 overflow-hidden px-1.5 text-left",
                       // inset so no two blocks ever touch
@@ -385,6 +405,16 @@ export default function Wall({
                       )}
                     >
                       {title}
+                      {/* The lead, inline after a dash — asked for 2026-09-07,
+                          so the week says who is leading each set without a
+                          click. Same weight as the title but quieter ink, so
+                          the set still reads first. */}
+                      {lead && (
+                        <span className="font-normal text-[color:var(--text-secondary)]">
+                          {" — "}
+                          {lead}
+                        </span>
+                      )}
                     </div>
 
                     {full && s.owner && (
