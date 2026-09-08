@@ -99,7 +99,14 @@ export default async function MyRequestsPage() {
                     <Link href={`/bookings/spaces/${b.id}`} className="font-medium hover:underline">
                       {b.title}
                     </Link>
-                    {b.series_id && <span className="mono-label ml-1.5">weekly</span>}
+                    {b.series_id && (
+                      <Link
+                        href={`/bookings/spaces/series/${b.series_id}/edit`}
+                        className="mono-label ml-1.5 hover:underline"
+                      >
+                        weekly
+                      </Link>
+                    )}
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
                     {dateRangeLabel(b.booking_date, b.end_date)}

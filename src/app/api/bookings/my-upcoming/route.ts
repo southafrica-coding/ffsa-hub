@@ -3,6 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import { getAuthedUser } from "@/lib/api-auth";
 import { getMyUpcomingBookings } from "@/services/bookings";
 
+// Always read live — this card is how people check what they cancelled.
+export const dynamic = "force-dynamic";
+
 // GET /api/bookings/my-upcoming — the current user's upcoming Space Bookings,
 // soonest first. Reads own rows via the user client (RLS allows requested_by = self).
 // Powers the dashboard "My Space Bookings" panel.

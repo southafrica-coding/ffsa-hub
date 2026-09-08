@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { DateInput } from "@/components/ui/date-input";
+import { DateField } from "@/components/ui/date-field";
 import {
   Select,
   SelectContent,
@@ -169,7 +170,23 @@ export function EditBookingForm({
                   series is its own day.
                 </p>
               )}
+              <p className="border-t border-rule pt-2 text-[11px] text-[color:var(--text-secondary)]">
+                Changing the day of the week, or when the run starts and ends?{" "}
+                <Link
+                  href={`/bookings/spaces/series/${booking.series_id}/edit`}
+                  className="font-medium text-[color:var(--text-primary)] hover:underline"
+                >
+                  Edit the whole series →
+                </Link>
+              </p>
             </div>
+          )}
+
+          {!booking.series_id && (
+            <p className="border border-rule bg-bone px-3 py-2.5 text-xs text-[color:var(--text-secondary)]">
+              This is a one-off booking — it isn&apos;t part of a weekly series, so these changes
+              apply to this date alone.
+            </p>
           )}
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -237,11 +254,11 @@ export function EditBookingForm({
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Date *</Label>
-              <DateInput value={form.booking_date} onChange={(v) => update("booking_date", v)} />
+              <DateField value={form.booking_date} onChange={(v) => update("booking_date", v)} />
             </div>
             <div className="space-y-2">
               <Label>End date (multi-day)</Label>
-              <DateInput value={form.end_date} onChange={(v) => update("end_date", v)} />
+              <DateField value={form.end_date} onChange={(v) => update("end_date", v)} />
             </div>
           </div>
 

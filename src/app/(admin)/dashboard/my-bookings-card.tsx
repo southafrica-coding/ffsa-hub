@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { CalendarClock, ArrowUpRight, MapPin, Repeat } from "lucide-react";
 import { timeRangeLabel } from "@/lib/bookings/dates";
+import { StatusPill } from "@/app/(admin)/bookings/spaces/ui";
 
 type Ref = { name: string; color: string | null; building?: string | null };
 
@@ -45,13 +47,6 @@ function collapseRecurring(bookings: Booking[]): Array<Booking & { recurring: bo
   return out;
 }
 
-// Outlined status pills — the system never fills a pill with colour.
-const STATUS_STYLE: Record<string, { border: string; fg: string; label: string }> = {
-  approved: { border: "var(--green)", fg: "var(--green-text)", label: "Approved" },
-  pending: { border: "var(--amber-border)", fg: "var(--amber)", label: "Pending" },
-  denied: { border: "hsl(var(--destructive))", fg: "hsl(var(--destructive))", label: "Denied" },
-};
-
 function one(r: Ref | Ref[] | null): Ref | null {
   return Array.isArray(r) ? r[0] ?? null : r;
 }
@@ -66,13 +61,18 @@ function timeLabel(b: Booking): string {
 
 export function MyBookingsCard() {
   const [bookings, setBookings] = useState<Booking[] | null>(null);
+  const pathname = usePathname();
 
-  useEffect(() => {
+  const load = useCallback(() => {
     let active = true;
     fetch("/api/bookings/my-upcoming", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : { bookings: [] }))
       .then((d: { bookings?: Booking[] }) => {
-        if (active) setBookings(d.bookings ?? []);
+        // Belt and braces: the API already excludes cancelled bookings, but a
+        // stale payload must never put one back on the dashboard.
+        if (active) {
+          setBookings((d.bookings ?? []).filter((b) => b.status !== "cancelled"));
+        }
       })
       .catch(() => {
         if (active) setBookings([]);
@@ -81,6 +81,18 @@ export function MyBookingsCard() {
       active = false;
     };
   }, []);
+
+  // Cancelling happens on another screen, so a card that only loads once shows
+  // the booking you just cancelled until a hard refresh. Reload when the user
+  // comes back to this tab or navigates here.
+  useEffect(() => load(), [load, pathname]);
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState === "visible") load();
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [load]);
 
   return (
     <div style={shell}>
@@ -129,7 +141,6 @@ export function MyBookingsCard() {
             const venue = one(b.venue);
             const start = new Date(b.booking_date + "T00:00:00Z");
             const weekday = start.toLocaleDateString("en-ZA", { weekday: "short", timeZone: "UTC" });
-            const st = STATUS_STYLE[b.status] ?? STATUS_STYLE.pending;
             return (
               <Link
                 key={b.id}
@@ -184,22 +195,7 @@ export function MyBookingsCard() {
                   )}
                 </div>
 
-                <span
-                  style={{
-                    flexShrink: 0,
-                    fontSize: 9,
-                    letterSpacing: "0.08em",
-                    fontWeight: 700,
-                    textTransform: "uppercase",
-                    padding: "3px 8px",
-                    borderRadius: 0,
-                    border: `1px solid ${st.border}`,
-                    color: st.fg,
-                    fontFamily: "var(--font-mono-brand)",
-                  }}
-                >
-                  {st.label}
-                </span>
+                <StatusPill status={b.status} className="shrink-0" />
               </Link>
             );
           })}

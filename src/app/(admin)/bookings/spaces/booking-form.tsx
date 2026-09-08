@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { DateInput } from "@/components/ui/date-input";
+import { DateField } from "@/components/ui/date-field";
 import {
   Select,
   SelectContent,
@@ -34,12 +34,19 @@ export function BookingForm({
   ministries,
   defaultRequesterName,
   defaultDate = "",
+  defaultVenueId = "",
+  defaultStart = "",
+  defaultEnd = "",
   canApprove = false,
 }: {
   venues: Venue[];
   ministries: Ministry[];
   defaultRequesterName: string;
+  /** Seeded from a click on the calendar — the day, lane and slot you clicked. */
   defaultDate?: string;
+  defaultVenueId?: string;
+  defaultStart?: string;
+  defaultEnd?: string;
   canApprove?: boolean;
 }) {
   const router = useRouter();
@@ -50,7 +57,7 @@ export function BookingForm({
   const [blocked, setBlocked] = useState(false);
 
   const [form, setForm] = useState({
-    venue_id: venues[0]?.id ?? "",
+    venue_id: defaultVenueId || venues[0]?.id || "",
     ministry_id: "none",
     title: "",
     description: "",
@@ -62,8 +69,8 @@ export function BookingForm({
     weekday: "",
     series_start: "",
     series_end: "",
-    start_time: "",
-    end_time: "",
+    start_time: defaultStart,
+    end_time: defaultEnd,
     setup_time: "",
     setdown_time: "",
   });
@@ -326,14 +333,14 @@ export function BookingForm({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Date *</Label>
-                  <DateInput
+                  <DateField
                     value={form.booking_date}
                     onChange={(v) => update("booking_date", v)}
                   />
                 </div>
                 <div className="space-y-2">
                   <Label>End date (multi-day)</Label>
-                  <DateInput
+                  <DateField
                     value={form.end_date}
                     onChange={(v) => update("end_date", v)}
                   />
@@ -361,14 +368,14 @@ export function BookingForm({
                 </div>
                 <div className="space-y-2">
                   <Label>Runs from *</Label>
-                  <DateInput
+                  <DateField
                     value={form.series_start}
                     onChange={(v) => update("series_start", v)}
                   />
                 </div>
                 <div className="space-y-2">
                   <Label>Runs until *</Label>
-                  <DateInput
+                  <DateField
                     value={form.series_end}
                     onChange={(v) => update("series_end", v)}
                   />

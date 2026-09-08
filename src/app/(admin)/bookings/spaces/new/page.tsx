@@ -14,10 +14,21 @@ import { BookingForm } from "../booking-form";
 export default async function NewBookingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string }>;
+  searchParams: Promise<{
+    date?: string;
+    venue?: string;
+    start?: string;
+    end?: string;
+  }>;
 }) {
-  const { date } = await searchParams;
-  const defaultDate = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : "";
+  // Everything here arrives from a click on the calendar, so it's validated
+  // rather than trusted — a bad param just means an empty field.
+  const { date, venue, start, end } = await searchParams;
+  const isoDate = (v?: string) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : "");
+  const clock = (v?: string) => (v && /^\d{2}:\d{2}$/.test(v) ? v : "");
+  const defaultDate = isoDate(date);
+  const defaultStart = clock(start);
+  const defaultEnd = clock(end);
   const supabase = await createClient();
   const {
     data: { session },
@@ -41,6 +52,8 @@ export default async function NewBookingPage({
   ]);
 
   const venues = (venuesRes.data ?? []) as Venue[];
+  // Only honour a venue the viewer can actually book into.
+  const defaultVenueId = venues.some((v) => v.id === venue) ? (venue as string) : "";
   const ministries = (ministriesRes.data ?? []) as Ministry[];
   const u = userRes.data as { first_name: string | null; last_name: string | null } | null;
   const defaultRequesterName = u
@@ -56,6 +69,9 @@ export default async function NewBookingPage({
           ministries={ministries}
           defaultRequesterName={defaultRequesterName}
           defaultDate={defaultDate}
+          defaultVenueId={defaultVenueId}
+          defaultStart={defaultStart}
+          defaultEnd={defaultEnd}
           canApprove={access.canApprove}
         />
       </div>

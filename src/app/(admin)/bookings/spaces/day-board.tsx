@@ -19,6 +19,14 @@ const LIVE_STATUSES = new Set(["pending", "approved"]);
 
 const FALLBACK_COLOR = "#64748b";
 
+/** Minutes-of-day → "HH:MM", the shape the booking form's time inputs take. */
+function hhmm(min: number): string {
+  const clamped = Math.max(0, Math.min(23 * 60 + 59, min));
+  const h = String(Math.floor(clamped / 60)).padStart(2, "0");
+  const m = String(clamped % 60).padStart(2, "0");
+  return `${h}:${m}`;
+}
+
 /**
  * No clock window ⇒ the timeline draws a full-width lane block instead of a
  * zero-width sliver. Two cases: a booking with no times at all (the form's
@@ -68,6 +76,7 @@ export function DayBoard({
     if (!rows.has(key)) {
       rows.set(key, {
         key,
+        venueId: id,
         name,
         meta: building,
         color: color || FALLBACK_COLOR,
@@ -139,6 +148,12 @@ export function DayBoard({
             endHour={endHour}
             isToday={date === today}
             canRequest={canCreate}
+            slotHref={
+              canCreate
+                ? (venueId, startMin, endMin) =>
+                    `/bookings/spaces/new?date=${date}&venue=${venueId}&start=${hhmm(startMin)}&end=${hhmm(endMin)}`
+                : undefined
+            }
           />
         ) : (
           <p className="px-6 py-10 text-center text-[13px] text-[color:var(--text-secondary)]">

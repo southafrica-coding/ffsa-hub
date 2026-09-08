@@ -48,6 +48,8 @@ export type TimelineItem = {
  *  name where the column is wide enough to carry it. */
 export type TimelineResource = {
   key: string;
+  /** The venue this lane is, so a click on empty time can prefill a booking. */
+  venueId?: string;
   name: string;
   meta?: string | null;
   color: string;
@@ -89,6 +91,7 @@ export function DayTimeline({
   endHour,
   isToday,
   canRequest = false,
+  slotHref,
 }: {
   resources: TimelineResource[];
   startHour: number;
@@ -100,6 +103,9 @@ export function DayTimeline({
    *  just reads "Free" — inviting them to request something they can't is
    *  worse than saying nothing. */
   canRequest?: boolean;
+  /** Where a click on empty time in a lane goes. Omitted for a viewer who
+   *  can't book — empty time is then just empty, not a broken invitation. */
+  slotHref?: (venueId: string, startMin: number, endMin: number) => string;
 }) {
   // The marker is read after mount only: the server renders in the deploy
   // region's clock and the browser in the user's, and a day timeline is the one
@@ -114,6 +120,11 @@ export function DayTimeline({
   for (let h = startHour; h < endHour; h++) hours.push(h);
 
   const pct = (min: number) => ((clamp(min, minOf, maxOf) - minOf) / span) * 100;
+
+  // Half-hour targets across the visible day. A booking started this way
+  // defaults to an hour — long enough to be a real slot, short enough to edit.
+  const slots: number[] = [];
+  for (let m = minOf; m < maxOf; m += 30) slots.push(m);
 
   return (
     // Wider than a narrow viewport by design; it scrolls inside itself rather
@@ -268,9 +279,29 @@ export function DayTimeline({
                   );
                 })}
 
+                {/* Empty time is bookable: each half hour is its own target,
+                    sitting behind the blocks above. */}
+                {slotHref && res.venueId &&
+                  slots.map((m, i) => (
+                    <Link
+                      key={m}
+                      href={slotHref(res.venueId!, m, m + 60)}
+                      aria-label={`Book ${res.name} from ${String(Math.floor(m / 60)).padStart(2, "0")}:${m % 60 === 0 ? "00" : "30"}`}
+                      className="absolute inset-y-0 z-0 hover:bg-bone"
+                      style={{
+                        left: `${(i / slots.length) * 100}%`,
+                        width: `${100 / slots.length}%`,
+                      }}
+                    />
+                  ))}
+
                 {res.items.length === 0 && (
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 font-mono text-[9px] uppercase tracking-[0.14em] text-[color:var(--text-quiet)]">
-                    {res.byApproval && canRequest ? "Free — request to book" : "Free"}
+                  <span className="pointer-events-none absolute left-3 top-1/2 z-0 -translate-y-1/2 font-mono text-[9px] uppercase tracking-[0.14em] text-[color:var(--text-quiet)]">
+                    {slotHref
+                      ? "Free — click a time to book"
+                      : res.byApproval && canRequest
+                        ? "Free — request to book"
+                        : "Free"}
                   </span>
                 )}
               </div>

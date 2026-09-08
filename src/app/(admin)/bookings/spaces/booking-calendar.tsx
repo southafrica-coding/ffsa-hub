@@ -77,7 +77,7 @@ export function BookingCalendar({
             <div
               key={d}
               className={cn(
-                "group min-h-[7rem] border-b border-r border-rule p-1.5 transition-colors",
+                "group relative min-h-[7rem] border-b border-r border-rule p-1.5 transition-colors",
                 "[&:nth-child(7n)]:border-r-0",
                 i >= 35 && "border-b-0",
                 // Out-of-month and weekend cells sit back on bone; today is the
@@ -86,7 +86,7 @@ export function BookingCalendar({
                 isToday && "ring-1 ring-inset ring-ink"
               )}
             >
-              <div className="mb-1 flex items-center justify-between px-0.5">
+              <div className="relative z-10 mb-1 flex items-center justify-between px-0.5">
                 <Link
                   href={`/bookings/spaces?view=day&date=${d}`}
                   title="Open day view"
@@ -117,7 +117,18 @@ export function BookingCalendar({
                 </span>
               </div>
 
-              <div className="space-y-0.5">
+              {/* The empty part of a day is itself the "book this day" target —
+                  the hover "+" alone was a very small thing to find. It sits
+                  behind the chips, which are raised above it. */}
+              {canCreate && (
+                <Link
+                  href={`/bookings/spaces/new?date=${d}`}
+                  aria-label={`New booking on ${d}`}
+                  className="absolute inset-0 z-0"
+                />
+              )}
+
+              <div className="relative z-10 space-y-0.5">
                 {shown.map((b) => {
                   const clash = clashIds.has(b.id);
                   const color = venueColor.get(b.venue_id) ?? "#64748b";

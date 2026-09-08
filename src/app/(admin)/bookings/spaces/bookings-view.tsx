@@ -305,7 +305,13 @@ export function BookingsView({
           canCreate={canCreate}
         />
       ) : view === "week" ? (
-        <WeekView bookings={bookings} venues={venues} date={date} clashIds={clashIds} />
+        <WeekView
+          bookings={bookings}
+          venues={venues}
+          date={date}
+          clashIds={clashIds}
+          canCreate={canCreate}
+        />
       ) : view === "day" ? (
         <DayBoard
           bookings={bookings}

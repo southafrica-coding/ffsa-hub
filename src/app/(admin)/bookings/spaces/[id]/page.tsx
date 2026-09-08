@@ -9,7 +9,7 @@ import {
   getVenueBookingsBetween,
   getBookingAccess,
 } from "@/services/bookings";
-import { AlertTriangle, Pencil } from "lucide-react";
+import { AlertTriangle, Pencil, Repeat } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Masthead, SectionBar } from "@/components/ffsa";
 import { ColorDot } from "../ui";
@@ -103,6 +103,15 @@ export default async function BookingDetailPage({
   const canEdit =
     canCancel && (booking.status === "pending" || booking.status === "approved");
   const isClosed = booking.status === "cancelled";
+  // Reaching the series is about permission, not about this one date's status —
+  // a cancelled date is often exactly where you go looking for the series.
+  const canEditSeries =
+    !!series &&
+    (access.isAdmin ||
+      access.canManage ||
+      access.canApprove ||
+      series.created_by === user.id);
+  const seriesHref = series ? `/bookings/spaces/series/${series.id}/edit` : "";
 
   return (
     <BookingStatusProvider initialStatus={booking.status}>
@@ -117,7 +126,15 @@ export default async function BookingDetailPage({
               <Link href={`/bookings/spaces/${booking.id}/edit`}>
                 <Button variant="outline" size="sm" className="gap-1">
                   <Pencil className="h-3.5 w-3.5" />
-                  Edit
+                  Edit this date
+                </Button>
+              </Link>
+            )}
+            {canEditSeries && (
+              <Link href={seriesHref}>
+                <Button variant="outline" size="sm" className="gap-1">
+                  <Repeat className="h-3.5 w-3.5" />
+                  Edit series
                 </Button>
               </Link>
             )}
@@ -183,6 +200,11 @@ export default async function BookingDetailPage({
               <Field label="Recurring series">
                 Every {weekdayLabel(series.weekday)} · {dateRangeLabel(series.series_start, series.series_end)}
                 <span className="text-[color:var(--text-tertiary)]"> · {seriesCount} date{seriesCount === 1 ? "" : "s"} in this series</span>
+                {canEditSeries && (
+                  <Link href={seriesHref} className="mt-1 block font-medium hover:underline">
+                    Change the day or the run of dates →
+                  </Link>
+                )}
               </Field>
             </div>
           )}

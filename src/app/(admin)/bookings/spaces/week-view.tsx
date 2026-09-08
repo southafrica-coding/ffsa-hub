@@ -11,6 +11,13 @@ import {
 } from "@/lib/bookings/dates";
 import type { BookingWithRefs, Venue } from "@/services/bookings";
 
+/** Minutes-of-day → "HH:MM", the shape the booking form's time inputs take. */
+function hhmm(min: number): string {
+  const h = String(Math.floor(min / 60)).padStart(2, "0");
+  const m = String(min % 60).padStart(2, "0");
+  return `${h}:${m}`;
+}
+
 function windowOf(b: BookingWithRefs) {
   if (b.end_date && b.end_date > b.booking_date) return null;
   return blockWindow(b);
@@ -22,11 +29,14 @@ export function WeekView({
   venues,
   date,
   clashIds,
+  canCreate = false,
 }: {
   bookings: BookingWithRefs[];
   venues: Venue[];
   date: string;
   clashIds: Set<string>;
+  /** Whether the viewer may create a booking — turns empty time into a target. */
+  canCreate?: boolean;
 }) {
   const days = weekDays(date);
   const today = todayISO();
@@ -57,6 +67,12 @@ export function WeekView({
       clashIds={clashIds}
       colorOf={(b) => venueColor.get(b.venue_id) ?? "#64748b"}
       nowMin={nowMinutes()}
+      slotHref={
+        canCreate
+          ? (day, startMin, endMin) =>
+              `/bookings/spaces/new?date=${day}&start=${hhmm(startMin)}&end=${hhmm(endMin)}`
+          : undefined
+      }
     />
   );
 }

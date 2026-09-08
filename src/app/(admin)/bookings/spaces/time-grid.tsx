@@ -29,6 +29,7 @@ export function TimeGrid({
   clashIds,
   colorOf,
   nowMin,
+  slotHref,
 }: {
   columns: GridColumn[];
   bookingsByColumn: Map<string, BookingWithRefs[]>;
@@ -38,11 +39,16 @@ export function TimeGrid({
   clashIds: Set<string>;
   colorOf: (b: BookingWithRefs) => string;
   nowMin?: number | null;
+  /** Where a click on empty time goes. Omitted for a viewer who can't book. */
+  slotHref?: (columnKey: string, startMin: number, endMin: number) => string;
 }) {
   const hours: number[] = [];
   for (let h = startHour; h <= endHour; h++) hours.push(h);
   const gridHeight = (endHour - startHour) * HOUR_H;
   const minOf = startHour * 60;
+  // Half-hour targets; a booking started from the grid defaults to an hour.
+  const slots: number[] = [];
+  for (let m = minOf; m < endHour * 60; m += 30) slots.push(m);
 
   return (
     <div className="border border-ink bg-white">
@@ -145,6 +151,18 @@ export function TimeGrid({
                     <span className="absolute -left-0.5 -top-[3px] h-1.5 w-1.5 bg-destructive" />
                   </div>
                 )}
+
+              {/* Empty time is bookable — half-hour targets behind the blocks. */}
+              {slotHref &&
+                slots.map((m) => (
+                  <Link
+                    key={m}
+                    href={slotHref(col.key, m, m + 60)}
+                    aria-label={`Book ${col.label} at ${String(Math.floor(m / 60)).padStart(2, "0")}:${m % 60 === 0 ? "00" : "30"}`}
+                    className="absolute inset-x-0 z-0 hover:bg-[color:var(--surface-2)]"
+                    style={{ top: ((m - minOf) / 60) * HOUR_H, height: HOUR_H / 2 }}
+                  />
+                ))}
 
               {/* All-day / untimed bookings */}
               {allDay.length > 0 && (

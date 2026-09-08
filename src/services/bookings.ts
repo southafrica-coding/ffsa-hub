@@ -231,7 +231,7 @@ export async function getVenueBookingsBetween(
   return supabase
     .from("venue_bookings")
     .select(
-      "id,venue_id,title,booking_date,end_date,setup_time,start_time,end_time,setdown_time,status,requester_name"
+      "id,venue_id,series_id,title,booking_date,end_date,setup_time,start_time,end_time,setdown_time,status,requester_name"
     )
     .eq("venue_id", venueId)
     .lte("booking_date", to)
@@ -320,6 +320,15 @@ export async function countBookingsInSeries(
   return count ?? 0;
 }
 
+/** Every occurrence of a series, oldest first. */
+export async function getSeriesOccurrences(supabase: Client, seriesId: string) {
+  return supabase
+    .from("venue_bookings")
+    .select("*")
+    .eq("series_id", seriesId)
+    .order("booking_date", { ascending: true });
+}
+
 // ── Mutations (kept here so routes/components never call .from() on the
 //    typed client for tables that aren't in the generated database.ts) ──
 
@@ -332,6 +341,20 @@ export async function insertBookings(
   rows: Record<string, unknown>[]
 ) {
   return supabase.from("venue_bookings").insert(rows);
+}
+
+/** Hard-delete occurrences. Returns the ids actually removed — RLS can filter
+ *  rows away silently, so callers check the result rather than assume. */
+export async function deleteBookings(supabase: Client, ids: string[]) {
+  return supabase.from("venue_bookings").delete().in("id", ids).select("id");
+}
+
+/** Cancel a set of occurrences by id — the fallback when a delete is blocked. */
+export async function cancelBookings(supabase: Client, ids: string[]) {
+  return supabase
+    .from("venue_bookings")
+    .update({ status: "cancelled", updated_at: new Date().toISOString() })
+    .in("id", ids);
 }
 
 export async function updateBooking(
@@ -374,7 +397,15 @@ export async function updateSeriesOccurrences(
   seriesId: string,
   data: Record<string, unknown>,
   onlyPending = false,
-  opts: { excludeId?: string; skipClosed?: boolean } = {}
+  opts: {
+    excludeId?: string;
+    skipClosed?: boolean;
+    /** Only occurrences after this ISO date — used to leave the past alone. */
+    afterDate?: string;
+    /** Only occurrences that still hold a given value, so per-occurrence
+     *  overrides survive a series-wide change. */
+    matchField?: { key: string; value: unknown };
+  } = {}
 ) {
   let query = supabase
     .from("venue_bookings")
@@ -384,6 +415,11 @@ export async function updateSeriesOccurrences(
   // Don't reach back into occurrences that are already cancelled or denied.
   if (opts.skipClosed) query = query.not("status", "in", "(cancelled,denied)");
   if (opts.excludeId) query = query.neq("id", opts.excludeId);
+  if (opts.afterDate) query = query.gt("booking_date", opts.afterDate);
+  if (opts.matchField) {
+    const { key, value } = opts.matchField;
+    query = value === null ? query.is(key, null) : query.eq(key, value);
+  }
   return query;
 }
 
