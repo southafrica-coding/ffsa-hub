@@ -901,6 +901,8 @@ function ArrivalTab({
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [attentionOnly, setAttentionOnly] = useState(false);
   const [arrivalSearch, setArrivalSearch] = useState("");
+  const [menuFor, setMenuFor] = useState<string | null>(null);
+  const [removingId, setRemovingId] = useState<string | null>(null);
 
   function userName(u: Enrollment["users"]) {
     const name = [u.first_name, u.last_name].filter(Boolean).join(" ");
@@ -977,6 +979,59 @@ function ArrivalTab({
       alert("Failed to update status");
     } finally {
       setUpdatingStatus(null);
+    }
+  }
+
+  /**
+   * Takes a student off the arrival list.
+   *
+   * Reuses the roster tab's soft removal rather than adding anything new: it
+   * sets removed_at, so the row drops off Arrival (the roster filter excludes
+   * removed enrolments) and reappears under the Removed chip on Students,
+   * where it can be restored. Nothing is deleted here.
+   */
+  async function removeFromArrival(enrollment: Enrollment) {
+    const orphan = isOrphan(enrollment);
+    const name = userName(enrollment.users);
+    const ok = confirm(
+      orphan
+        ? "Remove this leftover enrolment from the school?\n\n" +
+            "The Hub account behind it no longer exists. The enrolment is kept " +
+            "under Removed on the Students tab, so it can be put back if you " +
+            "re-link them to a new account."
+        : `Remove ${name} from this school?\n\n` +
+            "They come off the arrival list and the active roster. Nothing is " +
+            "deleted — you can put them back from the Students tab under Removed."
+    );
+    if (!ok) return;
+
+    setMenuFor(null);
+    setRemovingId(enrollment.id);
+    try {
+      const res = await fetch("/api/schools/enrollments", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: enrollment.id, removed: true }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        // Arrival's status and insurance actions only need a login, but
+        // removing needs schools-admin or program-leader rights. Say who can
+        // do it rather than "not authorized".
+        alert(
+          res.status === 403
+            ? "You can update arrival status, but taking a student off the " +
+                "roster needs a schools admin or program leader. Ask one of " +
+                "them to remove this student."
+            : data.error || "That didn't work"
+        );
+        return;
+      }
+      router.refresh();
+    } catch {
+      alert("That didn't work — check your connection");
+    } finally {
+      setRemovingId(null);
     }
   }
 
@@ -1074,9 +1129,37 @@ function ArrivalTab({
                 return (
                   <TableRow key={enrollment.id}>
                     <TableCell className="font-medium">
-                      {userName(enrollment.users)}
-                      <div className="text-xs text-muted-foreground">
-                        {enrollment.users.email ?? "—"}
+                      {/* Roll-off lives here rather than in a seventh column —
+                          the arrival table is six columns and stays six. */}
+                      <div className="group/row relative flex items-start gap-2">
+                        <div className="min-w-0 flex-1">
+                          {userName(enrollment.users)}
+                          <div className="text-xs text-muted-foreground">
+                            {enrollment.users.email ?? "—"}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={removingId === enrollment.id}
+                          onClick={() =>
+                            setMenuFor(menuFor === enrollment.id ? null : enrollment.id)
+                          }
+                          aria-label={`Actions for ${userName(enrollment.users)}`}
+                          className="shrink-0 px-1 font-mono text-[13px] leading-none text-[color:var(--text-tertiary)] opacity-0 hover:text-ink focus:opacity-100 group-hover/row:opacity-100"
+                        >
+                          ⋯
+                        </button>
+                        {menuFor === enrollment.id && (
+                          <div className="absolute right-0 top-full z-20 w-[210px] border border-ink bg-white">
+                            <button
+                              type="button"
+                              onClick={() => removeFromArrival(enrollment)}
+                              className="block w-full px-3 py-2 !font-sans text-left text-[13px] !font-semibold normal-case tracking-normal text-ink hover:bg-[#F7F5EE]"
+                            >
+                              Remove from school
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -1099,7 +1182,9 @@ function ArrivalTab({
                       <Select
                         value={enrollment.status}
                         onValueChange={(val) => handleStatusChange(enrollment.id, val)}
-                        disabled={updatingStatus === enrollment.id}
+                        disabled={
+                          updatingStatus === enrollment.id || removingId === enrollment.id
+                        }
                       >
                         <SelectTrigger className="w-[160px]">
                           <Badge variant={statusColors[enrollment.status] ?? "secondary"}>
