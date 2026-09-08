@@ -3,8 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { callerIsSuperAdmin } from "@/lib/auth/check-role-grant";
 
-// Converts a person to a plain community member — the "they've left staff"
-// action.
+// Converts a person to a community member — the "they've left staff" action.
 //
 // This is deliberately NOT what the Role dropdown on /users does. That control
 // (/api/admin/set-membership-role) only swaps the membership role and leaves
@@ -12,37 +11,36 @@ import { callerIsSuperAdmin } from "@/lib/auth/check-role-grant";
 // permission grants, and staff ministry membership. Someone shown as
 // "Community" there can still hold real staff access.
 //
-// This endpoint strips all of it:
-//   * every role except community_member / self_service
-//   * every user_permissions grant
-//   * every staff_ministry_members row (incl. leader/point-leader rows and the
-//     No Ministry placeholder)
-//   * users.department and users.job_title
+// The conversion is ITEMISED, not all-or-nothing: community members do serve
+// in ministries, so the caller chooses what survives. Anything not explicitly
+// kept is removed. The default in the UI is "remove everything", but each
+// role, permission grant, ministry membership, the department and the job
+// title can be kept individually.
 //
 // It does NOT touch sign-in. Community members are meant to keep portal
 // access, and middleware only checks for a session anyway. Use "Mark inactive"
 // or "Delete user" for the harsher cases. Profile, household, enrolments,
 // applications, agreements and history are all left alone.
 //
-// GET  ?user_id=…  → preview of exactly what a POST would remove.
-// POST { user_id } → performs the conversion and audit-logs a full snapshot.
+// GET  ?user_id=…  → everything that COULD be removed, for the picker.
+// POST { user_id, keep } → removes everything not in `keep`, audit-logging
+//                          both sides of the decision.
 
+/** Always kept — this is what being a community member means. */
 const KEEP_ROLES = new Set(["community_member", "self_service"]);
-
-type RoleJoin = { name: string; display_name: string } | { name: string; display_name: string }[];
 
 function unwrap<T>(v: T | T[] | null): T | null {
   return Array.isArray(v) ? v[0] ?? null : v;
 }
 
 /**
- * Everything the conversion would remove, read through the admin client.
+ * Everything the conversion COULD remove, read through the admin client.
  *
  * `admin` is untyped: staff_ministry_members is missing from the (stale)
  * generated types, so this follows the cast pattern used by the ministries
  * routes.
  */
-async function collectRemovals(
+async function collectRemovable(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   admin: any,
   userId: string
@@ -54,7 +52,9 @@ async function collectRemovals(
       .eq("user_id", userId),
     admin
       .from("user_permissions")
-      .select("id, permission_id, scope_type, scope_id, permissions!inner(key)")
+      .select(
+        "id, permission_id, scope_type, scope_id, permissions!inner(key, display_name, module)"
+      )
       .eq("user_id", userId),
     admin
       .from("staff_ministry_members")
@@ -69,16 +69,16 @@ async function collectRemovals(
       .maybeSingle(),
   ]);
 
+  type NameRow = { name: string; display_name: string };
   type RoleRow = {
     id: string;
     role_id: string;
     scope_type: string | null;
     scope_id: string | null;
-    roles: RoleJoin;
+    roles: NameRow | NameRow[];
   };
 
-  const allRoles = (rolesRes.data ?? []) as unknown as RoleRow[];
-  const roles = allRoles
+  const roles = ((rolesRes.data ?? []) as unknown as RoleRow[])
     .map((r) => ({
       id: r.id,
       role_id: r.role_id,
@@ -89,12 +89,13 @@ async function collectRemovals(
     }))
     .filter((r) => r.name && !KEEP_ROLES.has(r.name));
 
+  type PermJoin = { key: string; display_name: string; module: string };
   type PermRow = {
     id: string;
     permission_id: string;
     scope_type: string | null;
     scope_id: string | null;
-    permissions: { key: string } | { key: string }[];
+    permissions: PermJoin | PermJoin[];
   };
   const permissions = ((permsRes.data ?? []) as unknown as PermRow[]).map((p) => ({
     id: p.id,
@@ -102,15 +103,18 @@ async function collectRemovals(
     scope_type: p.scope_type,
     scope_id: p.scope_id,
     key: unwrap(p.permissions)?.key ?? "",
+    display_name: unwrap(p.permissions)?.display_name ?? "",
+    module: unwrap(p.permissions)?.module ?? "",
   }));
 
+  type MinJoin = { name: string; slug: string };
   type MinRow = {
     id: string;
     staff_ministry_id: string;
     member_role: string;
     is_point_leader: boolean;
     status: string;
-    staff_ministries: { name: string; slug: string } | { name: string; slug: string }[];
+    staff_ministries: MinJoin | MinJoin[];
   };
   const ministries = ((ministriesRes.data ?? []) as unknown as MinRow[]).map((m) => ({
     id: m.id,
@@ -134,8 +138,7 @@ async function collectRemovals(
     ministries,
     department: target?.department ?? null,
     job_title: target?.job_title ?? null,
-    is_super_admin: roles.some((r) => r.name === "super_admin"),
-    /** Already community-only — nothing to strip. */
+    /** Nothing beyond the community floor — already converted. */
     nothing_to_do:
       roles.length === 0 &&
       permissions.length === 0 &&
@@ -178,13 +181,21 @@ export async function GET(request: Request) {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin: any = createAdminClient();
-  const removals = await collectRemovals(admin, userId!);
-  return NextResponse.json({ preview: removals });
+  const removable = await collectRemovable(admin, userId!);
+  return NextResponse.json({ removable });
 }
+
+type KeepInput = {
+  role_ids?: string[];
+  permission_ids?: string[];
+  membership_ids?: string[];
+  department?: boolean;
+  job_title?: boolean;
+};
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
-  const { user_id } = body as { user_id?: string };
+  const { user_id, keep } = body as { user_id?: string; keep?: KeepInput };
   const auth = await authorize(user_id ?? null);
   if (auth.error) return auth.error;
   const authUser = auth.authUser!;
@@ -192,10 +203,25 @@ export async function POST(request: Request) {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin: any = createAdminClient();
-  const removals = await collectRemovals(admin, userId);
+  const removable = await collectRemovable(admin, userId);
 
-  // Never leave the org without a super admin.
-  if (removals.is_super_admin) {
+  // The client only says what to KEEP. What exists is re-read here, so a stale
+  // or hostile payload can never remove something the caller never saw.
+  const keepRoles = new Set(keep?.role_ids ?? []);
+  const keepPerms = new Set(keep?.permission_ids ?? []);
+  const keepMinistries = new Set(keep?.membership_ids ?? []);
+
+  const removeRoles = removable.roles.filter((r) => !keepRoles.has(r.id));
+  const removePerms = removable.permissions.filter((p) => !keepPerms.has(p.id));
+  const removeMinistries = removable.ministries.filter(
+    (m) => !keepMinistries.has(m.id)
+  );
+  const clearDepartment = !!removable.department && keep?.department !== true;
+  const clearJobTitle = !!removable.job_title && keep?.job_title !== true;
+
+  // Never leave the org without a super admin — only relevant if we are
+  // actually taking super_admin away.
+  if (removeRoles.some((r) => r.name === "super_admin")) {
     const { data: supers } = await admin
       .from("user_roles")
       .select("user_id, roles!inner(name)")
@@ -213,24 +239,27 @@ export async function POST(request: Request) {
     }
   }
 
-  // 1. Roles: everything except the community floor.
-  if (removals.roles.length > 0) {
+  // 1. Roles.
+  if (removeRoles.length > 0) {
     const { error } = await admin
       .from("user_roles")
       .delete()
       .in(
         "id",
-        removals.roles.map((r) => r.id)
+        removeRoles.map((r) => r.id)
       );
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
   // 2. Per-person permission grants.
-  if (removals.permissions.length > 0) {
+  if (removePerms.length > 0) {
     const { error } = await admin
       .from("user_permissions")
       .delete()
-      .eq("user_id", userId);
+      .in(
+        "id",
+        removePerms.map((p) => p.id)
+      );
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
@@ -255,30 +284,57 @@ export async function POST(request: Request) {
   }
 
   // 4. Ministry rosters — after the role delete, so the migration-206 trigger
-  //    no longer sees the `staff` role and does not re-add No Ministry.
-  //    Sub-category rows cascade (migration 205).
-  if (removals.ministries.length > 0) {
+  //    no longer sees the `staff` role and does not re-add the No Ministry
+  //    placeholder to someone who is no longer staff. Sub-category rows
+  //    cascade (migration 205). A kept membership is left exactly as it is,
+  //    leader flag included: serving in a ministry is not a staff-only thing.
+  if (removeMinistries.length > 0) {
     const { error } = await admin
       .from("staff_ministry_members")
       .delete()
-      .eq("user_id", userId);
+      .in(
+        "id",
+        removeMinistries.map((m) => m.id)
+      );
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // 5. Staff-only profile fields.
-  await admin
-    .from("users")
-    .update({ department: null, job_title: null })
-    .eq("id", userId);
+  // 5. Staff-only profile fields. Department is the ministry slug shown in the
+  //    Users list, so it is kept or cleared as its own decision — someone who
+  //    keeps a ministry usually wants to keep showing under it.
+  const patch: Record<string, null> = {};
+  if (clearDepartment) patch.department = null;
+  if (clearJobTitle) patch.job_title = null;
+  if (Object.keys(patch).length > 0) {
+    await admin.from("users").update(patch).eq("id", userId);
+  }
 
-  // 6. Full snapshot, so this is reversible by hand.
+  // 6. Both sides of the decision, so this is reversible by hand and it is
+  //    clear what was deliberately left in place.
+  const summary = {
+    removed: {
+      roles: removeRoles,
+      permissions: removePerms,
+      ministries: removeMinistries,
+      department: clearDepartment ? removable.department : null,
+      job_title: clearJobTitle ? removable.job_title : null,
+    },
+    kept: {
+      roles: removable.roles.filter((r) => keepRoles.has(r.id)),
+      permissions: removable.permissions.filter((p) => keepPerms.has(p.id)),
+      ministries: removable.ministries.filter((m) => keepMinistries.has(m.id)),
+      department: clearDepartment ? null : removable.department,
+      job_title: clearJobTitle ? null : removable.job_title,
+    },
+  };
+
   await admin.from("audit_logs").insert({
     user_id: authUser.id,
     action: "update",
     resource_type: "user_roles",
     resource_id: userId,
-    changes: { converted_to_community: removals },
+    changes: { converted_to_community: summary },
   });
 
-  return NextResponse.json({ success: true, removed: removals });
+  return NextResponse.json({ success: true, ...summary });
 }

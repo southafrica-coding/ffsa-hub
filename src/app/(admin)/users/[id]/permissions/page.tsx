@@ -159,6 +159,11 @@ export default async function UserPermissionsPage({
         programOptions={programOptions}
         canManage={isSuperAdmin || canManageRoles}
         canConvertToCommunity={isSuperAdmin && !isSelf}
+        personName={
+          targetUser.display_name ??
+          [targetUser.first_name, targetUser.last_name].filter(Boolean).join(" ") ??
+          "this person"
+        }
       />
 
       <AdvancedAccess>

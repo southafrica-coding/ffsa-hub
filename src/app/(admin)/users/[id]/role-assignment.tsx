@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { X, Plus, UserMinus } from "lucide-react";
+import { ConvertToCommunityDialog } from "../convert-to-community-dialog";
 
 export type AssignedRole = {
   id: string;
@@ -27,6 +28,7 @@ export function RoleAssignment({
   programOptions = [],
   canManage,
   canConvertToCommunity = false,
+  personName = "this person",
 }: {
   userId: string;
   assigned: AssignedRole[];
@@ -37,12 +39,14 @@ export function RoleAssignment({
   // Super admins only, and never on your own account — the endpoint enforces
   // both, this just hides a button that would always fail.
   canConvertToCommunity?: boolean;
+  personName?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   // The scope-capable role awaiting a program pick (2nd menu level), or null.
   const [scopingRole, setScopingRole] = useState<AssignableRole | null>(null);
+  const [converting, setConverting] = useState(false);
 
   const assignedIds = new Set(assigned.map((a) => a.role_id));
   // Scope-capable roles stay available even once assigned, so a leader can be
@@ -101,73 +105,6 @@ export function RoleAssignment({
     }
     toast.success("Title removed");
     router.refresh();
-  }
-
-  // Removing every title one at a time still leaves permission grants and
-  // ministry rosters behind. This is the whole-person version — see
-  // /api/admin/convert-to-community.
-  async function convertToCommunity() {
-    setBusy(true);
-    try {
-      const res = await fetch(`/api/admin/convert-to-community?user_id=${userId}`);
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        toast.error(data.error ?? "Could not check this person's access");
-        return;
-      }
-      const p = data.preview as {
-        roles: { display_name: string }[];
-        permissions: { key: string }[];
-        ministries: { name: string }[];
-        department: string | null;
-        job_title: string | null;
-        nothing_to_do: boolean;
-      };
-      if (p.nothing_to_do) {
-        toast.info("No staff access left to remove.");
-        return;
-      }
-
-      const parts = [
-        p.roles.length > 0 &&
-          `${p.roles.length} role${p.roles.length === 1 ? "" : "s"} (${p.roles
-            .map((r) => r.display_name)
-            .join(", ")})`,
-        p.permissions.length > 0 &&
-          `${p.permissions.length} direct permission${p.permissions.length === 1 ? "" : "s"}`,
-        p.ministries.length > 0 &&
-          `${p.ministries.length} ministry membership${p.ministries.length === 1 ? "" : "s"} (${p.ministries
-            .map((m) => m.name)
-            .join(", ")})`,
-        p.department && `their department`,
-        p.job_title && `their job title`,
-      ].filter(Boolean) as string[];
-
-      const ok = confirm(
-        `Convert this person to a community member?\n\n` +
-          `This removes ${parts.join(", ")}.\n\n` +
-          `They keep their login, profile, family and history, and can still ` +
-          `sign in to the portal.`
-      );
-      if (!ok) return;
-
-      const post = await fetch("/api/admin/convert-to-community", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: userId }),
-      });
-      if (!post.ok) {
-        const b = await post.json().catch(() => ({}));
-        toast.error(b.error ?? "Could not convert this person");
-        return;
-      }
-      toast.success("Converted to community member");
-      router.refresh();
-    } catch {
-      toast.error("Network error");
-    } finally {
-      setBusy(false);
-    }
   }
 
   return (
@@ -354,7 +291,7 @@ export function RoleAssignment({
           }}
         >
           <button
-            onClick={convertToCommunity}
+            onClick={() => setConverting(true)}
             disabled={busy}
             style={{
               display: "inline-flex",
@@ -371,9 +308,16 @@ export function RoleAssignment({
             <UserMinus className="h-3.5 w-3.5" /> Convert to community member
           </button>
           <p style={{ fontSize: "12px", color: "#55524A", marginTop: "8px" }}>
-            They&rsquo;ve left staff. Removes every title, permission and ministry
-            membership at once — they keep their login, profile and history.
+            They&rsquo;ve left staff. Clears their titles, permissions and ministry
+            memberships in one go — pick anything they should keep (community
+            members do serve in ministries). Their login, profile and history stay.
           </p>
+          <ConvertToCommunityDialog
+            userId={userId}
+            personName={personName}
+            open={converting}
+            onOpenChange={setConverting}
+          />
         </div>
       )}
     </div>

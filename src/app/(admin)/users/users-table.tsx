@@ -52,6 +52,7 @@ import {
 } from "@/lib/users/lifecycle";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { deriveJobTitle, type MinistryRole } from "@/lib/users/derive-title";
+import { ConvertToCommunityDialog } from "./convert-to-community-dialog";
 
 type UserRow = {
   id: string;
@@ -242,6 +243,11 @@ export function UsersTable({
   const [busy, setBusy] = useState<string | null>(null);
   // Person quick-view side panel (opens on a row click).
   const [quickPerson, setQuickPerson] = useState<PersonRef | null>(null);
+  // The "they've left staff" picker — see convert-to-community-dialog.
+  const [converting, setConverting] = useState<{
+    userId: string;
+    name: string;
+  } | null>(null);
 
   async function handleSetMembership(userId: string, role: string) {
     // This control only swaps the membership role — it leaves job titles,
@@ -492,81 +498,6 @@ export function UsersTable({
       is_active,
     });
     setBusy(null);
-  }
-
-  // The "they've left staff" action. Fetches a preview first so the confirm
-  // names the real roles, permissions and ministries being removed rather than
-  // warning in the abstract.
-  async function handleConvertToCommunity(user: UserRow) {
-    setBusy(user.id);
-    try {
-      const res = await fetch(
-        `/api/admin/convert-to-community?user_id=${user.id}`
-      );
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        alert(data.error || "Could not check this person's access");
-        return;
-      }
-      const p = data.preview as {
-        roles: { display_name: string }[];
-        permissions: { key: string }[];
-        ministries: { name: string; member_role: string; is_point_leader: boolean }[];
-        department: string | null;
-        job_title: string | null;
-        nothing_to_do: boolean;
-      };
-
-      if (p.nothing_to_do) {
-        alert(`${displayName(user)} already has no staff access to remove.`);
-        return;
-      }
-
-      const lines: string[] = [];
-      if (p.roles.length > 0) {
-        lines.push(
-          `Roles (${p.roles.length}): ${p.roles.map((r) => r.display_name).join(", ")}`
-        );
-      }
-      if (p.permissions.length > 0) {
-        lines.push(
-          `Direct permissions (${p.permissions.length}): ` +
-            p.permissions.map((x) => x.key).join(", ")
-        );
-      }
-      if (p.ministries.length > 0) {
-        lines.push(
-          `Ministries (${p.ministries.length}): ` +
-            p.ministries
-              .map(
-                (m) =>
-                  m.name +
-                  (m.is_point_leader
-                    ? " (point leader)"
-                    : m.member_role === "leader"
-                      ? " (leader)"
-                      : "")
-              )
-              .join(", ")
-        );
-      }
-      if (p.department) lines.push(`Department: ${p.department}`);
-      if (p.job_title) lines.push(`Job title: ${p.job_title}`);
-
-      const ok = confirm(
-        `Convert ${displayName(user)} to a community member?\n\n` +
-          `This removes:\n${lines.map((l) => `  • ${l}`).join("\n")}\n\n` +
-          `They keep their login, profile, family and history, and can still ` +
-          `sign in to the portal.`
-      );
-      if (!ok) return;
-
-      await callApi("/api/admin/convert-to-community", { user_id: user.id });
-    } catch {
-      alert("Network error");
-    } finally {
-      setBusy(null);
-    }
   }
 
   async function handleDelete(user: UserRow) {
@@ -887,7 +818,12 @@ export function UsersTable({
 
                           {!isSelf && isSuperAdmin && !isCommunityOnly(user) && (
                             <DropdownMenuItem
-                              onClick={() => handleConvertToCommunity(user)}
+                              onClick={() =>
+                                setConverting({
+                                  userId: user.id,
+                                  name: displayName(user),
+                                })
+                              }
                             >
                               <UserMinus className="h-4 w-4 mr-2" />
                               Convert to community member
@@ -922,6 +858,17 @@ export function UsersTable({
         personRef={quickPerson}
         onClose={() => setQuickPerson(null)}
       />
+
+      {converting && (
+        <ConvertToCommunityDialog
+          userId={converting.userId}
+          personName={converting.name}
+          open
+          onOpenChange={(o) => {
+            if (!o) setConverting(null);
+          }}
+        />
+      )}
     </div>
   );
 }
