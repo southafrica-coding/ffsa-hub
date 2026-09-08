@@ -3,7 +3,7 @@
 -- ============================================================
 -- A student can end up with two Hub accounts. They apply publicly with one
 -- email while a profile already exists under another, and accept-application
--- matches on a case-sensitive `.eq` against users.email, so the match misses
+-- matches on a case-sensitive .eq against users.email, so the match misses
 -- and a second auth user + users row is created. Both halves then collect
 -- real data and both get enrolled, so the student appears twice on the
 -- Arrival roster and neither account is complete.
@@ -347,7 +347,7 @@ BEGIN
 
   -- Written inside the transaction, so it can never disagree with what
   -- actually happened — including not existing at all after a dry run.
-  INSERT INTO public.audit_logs (user_id, action, resource_type, resource_id, metadata)
+  INSERT INTO public.audit_logs (user_id, action, resource_type, resource_id, changes)
   VALUES (p_actor, 'merge_users', 'users', p_winner, v_report);
 
   IF p_dry_run THEN
@@ -359,7 +359,7 @@ BEGIN
 END;
 $$;
 
--- Service-role only. A SECURITY DEFINER function callable by `authenticated`
+-- Service-role only. A SECURITY DEFINER function callable by authenticated
 -- would be a privilege-escalation hole.
 REVOKE ALL ON FUNCTION public.merge_users(uuid, uuid, uuid, boolean, boolean)
   FROM public, anon, authenticated;
