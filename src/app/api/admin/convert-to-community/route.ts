@@ -239,7 +239,40 @@ export async function POST(request: Request) {
     }
   }
 
-  // 1. Roles.
+  // 1. Grant the community floor FIRST. None of the deletions below are
+  //    transactional, so if this fails it must fail before anything has been
+  //    stripped — otherwise a failure here leaves a half-converted account
+  //    with no roles at all. Only inserts what's missing: self_service is
+  //    normally kept, and re-inserting it would duplicate the row (NULL scope
+  //    columns never match a conflict target — see migration 209).
+  const { data: floorRoleRows } = await admin
+    .from("roles")
+    .select("id, name")
+    .in("name", ["community_member", "self_service"]);
+  const { data: heldRows } = await admin
+    .from("user_roles")
+    .select("role_id")
+    .eq("user_id", userId)
+    .is("scope_type", null)
+    .is("scope_id", null);
+  const held = new Set(
+    ((heldRows ?? []) as { role_id: string }[]).map((r) => r.role_id)
+  );
+  const toGrant = ((floorRoleRows ?? []) as { id: string; name: string }[])
+    .filter((r) => !held.has(r.id))
+    .map((r) => ({
+      user_id: userId,
+      role_id: r.id,
+      scope_type: null,
+      scope_id: null,
+      assigned_by: authUser.id,
+    }));
+  if (toGrant.length > 0) {
+    const { error } = await admin.from("user_roles").insert(toGrant);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // 2. Roles.
   if (removeRoles.length > 0) {
     const { error } = await admin
       .from("user_roles")
@@ -251,7 +284,7 @@ export async function POST(request: Request) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // 2. Per-person permission grants.
+  // 3. Per-person permission grants.
   if (removePerms.length > 0) {
     const { error } = await admin
       .from("user_permissions")
@@ -260,26 +293,6 @@ export async function POST(request: Request) {
         "id",
         removePerms.map((p) => p.id)
       );
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  // 3. Grant the community floor. Same upsert shape as set-membership-role.
-  const { data: roleRows } = await admin
-    .from("roles")
-    .select("id, name")
-    .in("name", ["community_member", "self_service"]);
-  const toGrant = ((roleRows ?? []) as { id: string; name: string }[]).map((r) => ({
-    user_id: userId,
-    role_id: r.id,
-    scope_type: null,
-    scope_id: null,
-    assigned_by: authUser.id,
-  }));
-  if (toGrant.length > 0) {
-    const { error } = await admin.from("user_roles").upsert(toGrant, {
-      onConflict: "user_id,role_id,scope_type,scope_id",
-      ignoreDuplicates: true,
-    });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

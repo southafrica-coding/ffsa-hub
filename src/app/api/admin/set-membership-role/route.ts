@@ -65,20 +65,40 @@ export async function POST(request: Request) {
       .in("role_id", membershipIds);
   }
 
+  // Only insert what they don't already hold. The delete above clears the
+  // three membership roles, but NOT self_service — nearly everyone already has
+  // an unscoped self_service row, so re-inserting it blindly duplicated it
+  // (NULL scope columns never match a conflict target, so the upsert's
+  // ON CONFLICT never fired). Migration 209 makes that a hard error, and a
+  // multi-row insert aborts as a unit — which would silently drop the
+  // membership change too.
   const targetName = role === "none" ? null : ROLE_BY_KEY[role];
-  const toGrant = [targetName, "self_service"].filter(
+  const wanted = [targetName, "self_service"].filter(
     (n): n is string => !!n && !!idByName[n]
   );
+
+  const { data: heldRows } = await admin
+    .from("user_roles")
+    .select("role_id")
+    .eq("user_id", user_id)
+    .is("scope_type", null)
+    .is("scope_id", null);
+  const held = new Set(
+    ((heldRows ?? []) as { role_id: string }[]).map((r) => r.role_id)
+  );
+
+  const toGrant = wanted
+    .map((n) => idByName[n])
+    .filter((roleId) => !held.has(roleId));
   if (toGrant.length > 0) {
-    await admin.from("user_roles").upsert(
-      toGrant.map((n) => ({
+    await admin.from("user_roles").insert(
+      toGrant.map((roleId) => ({
         user_id,
-        role_id: idByName[n],
+        role_id: roleId,
         scope_type: null,
         scope_id: null,
         assigned_by: authUser.id,
-      })),
-      { onConflict: "user_id,role_id,scope_type,scope_id", ignoreDuplicates: true }
+      }))
     );
   }
 

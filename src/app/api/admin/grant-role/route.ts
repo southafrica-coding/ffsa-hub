@@ -77,18 +77,32 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  const { error: insertError } = await adminSupabase.from("user_roles").upsert(
-    {
+  // Re-granting a role someone already holds is a no-op, not an error — an
+  // admin can click Grant twice, or grant a role that signup automation
+  // already gave them. ON CONFLICT can't be relied on here: the unscoped case
+  // has NULL scope columns, and NULLs never match a conflict target, so the
+  // check has to be explicit (see migration 209).
+  const existingQuery = adminSupabase
+    .from("user_roles")
+    .select("id")
+    .eq("user_id", user_id)
+    .eq("role_id", role.id)
+    .limit(1);
+  const { data: existing } = scope_id
+    ? await existingQuery.eq("scope_type", scope_type ?? null).eq("scope_id", scope_id)
+    : await existingQuery.is("scope_type", null).is("scope_id", null);
+
+  if (!existing || existing.length === 0) {
+    const { error: insertError } = await adminSupabase.from("user_roles").insert({
       user_id,
       role_id: role.id,
       scope_type: scope_type ?? null,
       scope_id: scope_id ?? null,
       assigned_by: authUser.id,
-    },
-    { onConflict: "user_id,role_id,scope_type,scope_id", ignoreDuplicates: true }
-  );
-  if (insertError) {
-    return NextResponse.json({ error: insertError.message }, { status: 500 });
+    });
+    if (insertError) {
+      return NextResponse.json({ error: insertError.message }, { status: 500 });
+    }
   }
 
   await adminSupabase.from("audit_logs").insert({
