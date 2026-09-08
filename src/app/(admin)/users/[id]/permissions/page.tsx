@@ -158,6 +158,7 @@ export default async function UserPermissionsPage({
         scopeLabels={scopeLabels}
         programOptions={programOptions}
         canManage={isSuperAdmin || canManageRoles}
+        canConvertToCommunity={isSuperAdmin && !isSelf}
       />
 
       <AdvancedAccess>

@@ -17,6 +17,7 @@ import {
   X,
   Link as LinkIcon,
   MailWarning,
+  UserMinus,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -102,6 +103,28 @@ function currentMembership(user: UserRow): "staff" | "student" | "community" | "
   if (names.has("student")) return "student";
   if (names.has("community_member")) return "community";
   return "none";
+}
+
+// The two roles a community member is allowed to keep. Anything else is
+// elevated access that the Role dropdown does NOT remove — see
+// /api/admin/convert-to-community.
+const COMMUNITY_FLOOR_ROLES = new Set(["community_member", "self_service"]);
+
+/** Roles beyond the community floor — job titles, admin, super_admin, … */
+function elevatedRoleCount(user: UserRow): number {
+  return user.user_roles.filter(
+    (ur) => ur.roles?.name && !COMMUNITY_FLOOR_ROLES.has(ur.roles.name)
+  ).length;
+}
+
+/** Already a plain community member as far as the list can tell. */
+function isCommunityOnly(user: UserRow): boolean {
+  return (
+    currentMembership(user) === "community" &&
+    elevatedRoleCount(user) === 0 &&
+    !user.department &&
+    !user.job_title
+  );
 }
 
 // Fallback only — real labels come from staff_ministries (departmentLabels
@@ -221,6 +244,27 @@ export function UsersTable({
   const [quickPerson, setQuickPerson] = useState<PersonRef | null>(null);
 
   async function handleSetMembership(userId: string, role: string) {
+    // This control only swaps the membership role — it leaves job titles,
+    // permission grants and ministry rosters untouched. Say so rather than
+    // letting "Community" look like a demotion it isn't.
+    if (role === "community") {
+      const user = users.find((u) => u.id === userId);
+      const elevated = user ? elevatedRoleCount(user) : 0;
+      if (elevated > 0) {
+        const ok = confirm(
+          `This only changes the membership label. ${displayName(user!)} still ` +
+            `holds ${elevated} other role${elevated === 1 ? "" : "s"}, plus any ` +
+            `permissions and ministry memberships — all of which keep working.\n\n` +
+            `To actually remove staff access, cancel and use ` +
+            `"Convert to community member" in the ⋯ menu.\n\n` +
+            `Change the label anyway?`
+        );
+        if (!ok) {
+          router.refresh(); // put the select back where it was
+          return;
+        }
+      }
+    }
     setBusy(userId);
     try {
       const res = await fetch("/api/admin/set-membership-role", {
@@ -448,6 +492,81 @@ export function UsersTable({
       is_active,
     });
     setBusy(null);
+  }
+
+  // The "they've left staff" action. Fetches a preview first so the confirm
+  // names the real roles, permissions and ministries being removed rather than
+  // warning in the abstract.
+  async function handleConvertToCommunity(user: UserRow) {
+    setBusy(user.id);
+    try {
+      const res = await fetch(
+        `/api/admin/convert-to-community?user_id=${user.id}`
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || "Could not check this person's access");
+        return;
+      }
+      const p = data.preview as {
+        roles: { display_name: string }[];
+        permissions: { key: string }[];
+        ministries: { name: string; member_role: string; is_point_leader: boolean }[];
+        department: string | null;
+        job_title: string | null;
+        nothing_to_do: boolean;
+      };
+
+      if (p.nothing_to_do) {
+        alert(`${displayName(user)} already has no staff access to remove.`);
+        return;
+      }
+
+      const lines: string[] = [];
+      if (p.roles.length > 0) {
+        lines.push(
+          `Roles (${p.roles.length}): ${p.roles.map((r) => r.display_name).join(", ")}`
+        );
+      }
+      if (p.permissions.length > 0) {
+        lines.push(
+          `Direct permissions (${p.permissions.length}): ` +
+            p.permissions.map((x) => x.key).join(", ")
+        );
+      }
+      if (p.ministries.length > 0) {
+        lines.push(
+          `Ministries (${p.ministries.length}): ` +
+            p.ministries
+              .map(
+                (m) =>
+                  m.name +
+                  (m.is_point_leader
+                    ? " (point leader)"
+                    : m.member_role === "leader"
+                      ? " (leader)"
+                      : "")
+              )
+              .join(", ")
+        );
+      }
+      if (p.department) lines.push(`Department: ${p.department}`);
+      if (p.job_title) lines.push(`Job title: ${p.job_title}`);
+
+      const ok = confirm(
+        `Convert ${displayName(user)} to a community member?\n\n` +
+          `This removes:\n${lines.map((l) => `  • ${l}`).join("\n")}\n\n` +
+          `They keep their login, profile, family and history, and can still ` +
+          `sign in to the portal.`
+      );
+      if (!ok) return;
+
+      await callApi("/api/admin/convert-to-community", { user_id: user.id });
+    } catch {
+      alert("Network error");
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function handleDelete(user: UserRow) {
@@ -763,6 +882,15 @@ export function UsersTable({
                             >
                               <Power className="h-4 w-4 mr-2" />
                               Reactivate
+                            </DropdownMenuItem>
+                          )}
+
+                          {!isSelf && isSuperAdmin && !isCommunityOnly(user) && (
+                            <DropdownMenuItem
+                              onClick={() => handleConvertToCommunity(user)}
+                            >
+                              <UserMinus className="h-4 w-4 mr-2" />
+                              Convert to community member
                             </DropdownMenuItem>
                           )}
 
