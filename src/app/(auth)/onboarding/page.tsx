@@ -45,7 +45,6 @@ const STEP_DEFS: { num: number; key: StepKey; label: string }[] = [
 interface FormData {
   first_name: string;
   last_name: string;
-  preferred_name: string;
   date_of_birth: string;
   gender: string;
   marital_status: string;
@@ -74,7 +73,7 @@ interface FormData {
 }
 
 const EMPTY_FORM: FormData = {
-  first_name: "", last_name: "", preferred_name: "",
+  first_name: "", last_name: "",
   date_of_birth: "", gender: "", marital_status: "",
   nationality: "", phone: "",
   address_line_1: "", address_line_2: "", city: "",
@@ -187,7 +186,7 @@ export default function OnboardingPage() {
 
       setForm({
         first_name: appUser.first_name ?? "", last_name: appUser.last_name ?? "",
-        preferred_name: appUser.preferred_name ?? "", date_of_birth: appUser.date_of_birth ?? "",
+        date_of_birth: appUser.date_of_birth ?? "",
         gender: appUser.gender ?? "", marital_status: appUser.marital_status ?? "",
         nationality: appUser.nationality ?? "", phone: appUser.phone ?? "",
         address_line_1: appUser.address_line_1 ?? "", address_line_2: appUser.address_line_2 ?? "",
@@ -351,7 +350,7 @@ export default function OnboardingPage() {
       // elsewhere for not-yet-generated columns.
       const { error: profileError } = await updateUserProfile(supabase, userId, {
         first_name: form.first_name.trim(), last_name: form.last_name.trim(),
-        preferred_name: nullify(form.preferred_name), date_of_birth: nullify(form.date_of_birth),
+        date_of_birth: nullify(form.date_of_birth),
         gender: nullify(form.gender), marital_status: nullify(form.marital_status),
         nationality: nullify(form.nationality), phone: nullify(form.phone),
         address_line_1: nullify(form.address_line_1), address_line_2: nullify(form.address_line_2),
@@ -620,10 +619,6 @@ export default function OnboardingPage() {
                       <Label htmlFor="last_name">Last Name *</Label>
                       <Input id="last_name" value={form.last_name} onChange={(e) => set("last_name", e.target.value)} required />
                     </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="preferred_name">Preferred Name</Label>
-                    <Input id="preferred_name" placeholder="What you like to be called" value={form.preferred_name} onChange={(e) => set("preferred_name", e.target.value)} />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">

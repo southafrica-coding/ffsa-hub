@@ -12,7 +12,7 @@ const ADMIN_ROLES = ["super_admin", "admin"];
 // user themselves cannot set). Email is handled separately below because it
 // is the auth identity, not just a column.
 const ALLOWED_FIELDS = [
-  "first_name", "last_name", "preferred_name", "date_of_birth",
+  "first_name", "last_name", "date_of_birth",
   "gender", "marital_status", "nationality", "phone",
   "department", "job_title",
   "address_line_1", "address_line_2", "city", "province",

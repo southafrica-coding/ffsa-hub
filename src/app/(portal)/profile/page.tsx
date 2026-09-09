@@ -165,12 +165,12 @@ export default async function ProfilePage() {
     .map((o) => o.value);
 
   const fullName =
-    [user.preferred_name ?? user.first_name, user.last_name]
+    [user.first_name, user.last_name]
       .filter(Boolean)
       .join(" ") || user.email || "Profile";
 
   const avatarName =
-    user.preferred_name ?? user.first_name ?? user.email ?? "?";
+    user.first_name ?? user.email ?? "?";
 
   // Email is auth-managed, so it rides along as a read-only row in the
   // Contact card rather than as an editable field.
@@ -204,14 +204,6 @@ export default async function ProfilePage() {
           <h1 className="masthead-title truncate">{fullName}</h1>
           <div className="mt-2 text-sm text-[color:var(--text-secondary)]">
             {user.email ?? "—"}
-            {user.preferred_name &&
-              user.first_name &&
-              user.preferred_name !== user.first_name && (
-                <>
-                  <span className="opacity-50"> · </span>
-                  legal name {user.first_name} {user.last_name}
-                </>
-              )}
           </div>
           {roles.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mt-3">

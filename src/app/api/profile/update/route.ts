@@ -19,7 +19,7 @@ export async function PUT(request: Request) {
 
   // Only allow safe profile fields to be updated
   const allowedFields = [
-    "first_name", "last_name", "preferred_name", "date_of_birth",
+    "first_name", "last_name", "date_of_birth",
     "gender", "marital_status", "nationality", "phone",
     "department",
     "address_line_1", "address_line_2", "city", "province",
