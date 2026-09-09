@@ -3,7 +3,7 @@
  * Renders the uploaded image when `src` is set; otherwise falls back
  * to the gold-circle-with-initial that was used everywhere before.
  *
- * Pass the most-display-worthy name available (preferred_name → first_name
+ * Pass the most-display-worthy name available (first_name
  * → email) — the first non-whitespace character becomes the initial.
  */
 export function UserAvatar({

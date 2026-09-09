@@ -556,7 +556,7 @@ async function safeRead<T>(
 
 function personName(user: EmbeddedUser): string | null {
   if (!user) return null;
-  const first = user.preferred_name || user.first_name || "";
+  const first = user.first_name || "";
   const name = `${first} ${user.last_name ?? ""}`.trim();
   return name || null;
 }

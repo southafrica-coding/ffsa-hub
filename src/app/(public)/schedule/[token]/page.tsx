@@ -26,7 +26,7 @@ function fullName(p: {
   last_name: string | null;
   preferred_name: string | null;
 }): string {
-  const first = p.preferred_name || p.first_name || "";
+  const first = p.first_name || "";
   const last = p.last_name || "";
   return `${first} ${last}`.trim();
 }

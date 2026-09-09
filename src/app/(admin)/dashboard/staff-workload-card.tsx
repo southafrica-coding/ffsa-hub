@@ -15,7 +15,7 @@ type WorkloadRow = {
 };
 
 function staffLabel(u: WorkloadRow["user"]) {
-  const f = u.preferred_name || u.first_name || "";
+  const f = u.first_name || "";
   const l = u.last_name || "";
   const n = `${f} ${l}`.trim();
   return n || u.email || "Unknown";

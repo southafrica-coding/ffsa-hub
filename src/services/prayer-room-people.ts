@@ -250,7 +250,7 @@ export async function getPersonProfile(
     ? await safe<NamedUser[]>(() => admin.from("users").select(NAME_FIELDS).in("id", evaluatorIds))
     : [];
   const evaluatorName = new Map(
-    (evaluators ?? []).map((e) => [e.id, [e.preferred_name || e.first_name, e.last_name].filter(Boolean).join(" ")])
+    (evaluators ?? []).map((e) => [e.id, [e.first_name, e.last_name].filter(Boolean).join(" ")])
   );
 
   type EvalRow = { seat_type_id: string | null; feedback: string | null; created_at: string; evaluator_id: string | null };

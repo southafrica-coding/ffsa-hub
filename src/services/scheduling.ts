@@ -336,8 +336,7 @@ async function sendSlotsSubmittedNotification(
       to: requester.email,
       subject: `${fullName(contact ?? {}) || "Someone"} sent you times`,
       html: schedulingSlotsSubmittedEmailHtml({
-        staffFirstName:
-          requester.preferred_name || requester.first_name || "there",
+        staffFirstName: requester.first_name || "there",
         recipientName: fullName(contact ?? {}) || "Your contact",
         slotCount: slots.length,
         firstSlotsPreview: slots.map((s) => formatSlotForRecipient(s.starts_at)),

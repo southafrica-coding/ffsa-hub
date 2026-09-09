@@ -17,7 +17,7 @@ import { sendBroadcast } from "@/lib/slack/broadcast";
 type OwnerName = { first_name: string | null; last_name: string | null; preferred_name: string | null } | null;
 function ownerName(o: OwnerName): string | null {
   if (!o) return null;
-  const name = `${o.preferred_name || o.first_name || ""} ${o.last_name || ""}`.trim();
+  const name = `${o.first_name || ""} ${o.last_name || ""}`.trim();
   return name || null;
 }
 function todayISO(): string {

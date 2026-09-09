@@ -20,7 +20,7 @@ type AssignedStaff = {
 
 function staffLabel(s: AssignedStaff) {
   if (!s) return null;
-  const f = s.preferred_name || s.first_name || "";
+  const f = s.first_name || "";
   const l = s.last_name || "";
   const n = `${f} ${l}`.trim();
   return n || s.email;

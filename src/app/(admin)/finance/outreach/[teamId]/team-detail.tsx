@@ -729,7 +729,7 @@ function MembersTab({
 
   function userName(u: { first_name: string | null; last_name: string | null; preferred_name: string | null; email: string | null }) {
     if (u.first_name) {
-      return `${u.preferred_name ?? u.first_name} ${u.last_name ?? ""}`.trim();
+      return `${u.first_name} ${u.last_name ?? ""}`.trim();
     }
     return u.email ?? "Unknown";
   }

@@ -96,13 +96,10 @@ export async function POST(
   if (!firstName) {
     const { data: me } = await supabase
       .from("users")
-      .select("first_name, preferred_name")
+      .select("first_name")
       .eq("id", user.id)
       .maybeSingle();
-    firstName =
-      (me?.preferred_name as string | null)?.trim() ||
-      (me?.first_name as string | null)?.trim() ||
-      "there";
+    firstName = (me?.first_name as string | null)?.trim() || "there";
   }
 
   const html = substituteFirstName(

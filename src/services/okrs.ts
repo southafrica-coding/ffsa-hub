@@ -332,7 +332,7 @@ export async function hydrateUserNames(userIds: string[]): Promise<Record<string
 
   const names: Record<string, string> = {};
   for (const u of (data ?? []) as Record<string, string | null>[]) {
-    const full = [u.preferred_name || u.first_name, u.last_name].filter(Boolean).join(" ").trim();
+    const full = [u.first_name, u.last_name].filter(Boolean).join(" ").trim();
     names[u.id as string] = u.display_name || full || "Unknown";
   }
   return names;

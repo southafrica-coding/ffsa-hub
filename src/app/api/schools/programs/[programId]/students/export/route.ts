@@ -75,7 +75,7 @@ function formatDateOnly(value: string | null): string {
 
 function staffName(staff: StaffUser): string {
   if (!staff) return "";
-  const first = staff.preferred_name ?? staff.first_name ?? "";
+  const first = staff.first_name ?? "";
   return `${first} ${staff.last_name ?? ""}`.trim();
 }
 

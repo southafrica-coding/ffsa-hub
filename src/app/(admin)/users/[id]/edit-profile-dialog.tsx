@@ -50,7 +50,6 @@ const FIELDS: {
     rows: [
       { key: "first_name", label: "Legal first name" },
       { key: "last_name", label: "Legal last name" },
-      { key: "preferred_name", label: "Preferred name" },
       { key: "date_of_birth", label: "Date of birth", type: "date" },
       { key: "nationality", label: "Nationality" },
       { key: "gender", label: "Gender" },

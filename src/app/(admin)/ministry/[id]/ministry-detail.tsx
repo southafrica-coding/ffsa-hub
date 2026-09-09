@@ -59,7 +59,6 @@ const UNCATEGORIZED = "__none__";
 
 function nameOf(u: PickUser): string {
   return (
-    u?.preferred_name ||
     [u?.first_name, u?.last_name].filter(Boolean).join(" ") ||
     u?.display_name ||
     u?.email ||

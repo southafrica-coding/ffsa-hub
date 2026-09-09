@@ -240,7 +240,7 @@ function applicantName(r: {
   // dashboard's registrations card normalises the same way.
   const u = Array.isArray(r.users) ? r.users[0] : r.users;
   if (u) {
-    const name = `${u.preferred_name ?? u.first_name ?? ""} ${u.last_name ?? ""}`.trim();
+    const name = `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim();
     if (name) return name;
   }
   if (r.applicant_info) {

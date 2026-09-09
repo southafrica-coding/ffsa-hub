@@ -76,7 +76,7 @@ type Plan = {
 type Preference = "standard" | "quarter_prepay" | "full_prepay";
 
 const studentName = (u: Student["users"]) =>
-  `${u.preferred_name || u.first_name || ""} ${u.last_name || ""}`.trim() ||
+  `${u.first_name || ""} ${u.last_name || ""}`.trim() ||
   "Unknown";
 
 const fmtDate = (d: string) =>

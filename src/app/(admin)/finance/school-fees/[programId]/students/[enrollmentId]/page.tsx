@@ -12,7 +12,7 @@ const studentName = (u: {
   last_name: string | null;
   preferred_name: string | null;
 }) =>
-  `${u.preferred_name || u.first_name || ""} ${u.last_name || ""}`.trim() ||
+  `${u.first_name || ""} ${u.last_name || ""}`.trim() ||
   "Unknown";
 
 export default async function StudentBillingPage({

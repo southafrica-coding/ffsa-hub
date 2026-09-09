@@ -42,7 +42,7 @@ type Payload = {
 
 function studentName(s: StudentLite | null, fallback: { first_name?: string; last_name?: string } | null, email: string | null) {
   if (s) {
-    const f = s.preferred_name || s.first_name || "";
+    const f = s.first_name || "";
     const l = s.last_name || "";
     const n = `${f} ${l}`.trim();
     if (n) return n;

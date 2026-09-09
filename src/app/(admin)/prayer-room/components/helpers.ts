@@ -23,12 +23,12 @@ export function roleLabel(role: string): string {
 
 export function displayName(u: Person): string {
   if (!u) return "Unknown";
-  return u.preferred_name || u.first_name || "Unknown";
+  return u.first_name || "Unknown";
 }
 
 export function fullName(u: Person): string {
   if (!u) return "Unknown";
-  const first = u.preferred_name || u.first_name || "";
+  const first = u.first_name || "";
   return `${first} ${u.last_name || ""}`.trim() || "Unknown";
 }
 

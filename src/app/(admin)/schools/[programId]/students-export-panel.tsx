@@ -36,7 +36,7 @@ type EnrollmentLike = {
 
 function displayName(u: EnrollmentLike["users"]): string {
   if (u.first_name) {
-    return `${u.preferred_name ?? u.first_name} ${u.last_name ?? ""}`.trim();
+    return `${u.first_name} ${u.last_name ?? ""}`.trim();
   }
   return u.email ?? "Unknown";
 }

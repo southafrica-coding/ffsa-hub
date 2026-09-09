@@ -42,7 +42,7 @@ type Staff = {
 type RosterEntry = { name: string; tier: string; scheduled: number };
 
 const staffName = (s: Staff) =>
-  `${s.preferred_name || s.first_name || ""} ${s.last_name || ""}`.trim() ||
+  `${s.first_name || ""} ${s.last_name || ""}`.trim() ||
   "Unknown";
 
 const STATUS_COLORS: Record<string, "default" | "secondary" | "outline"> = {

@@ -71,7 +71,7 @@ const day = (iso: string) =>
 function personName(r: HeldRow): string {
   const u = r.plan?.enrollment?.user;
   if (!u) return "Unknown student";
-  return [u.preferred_name || u.first_name, u.last_name].filter(Boolean).join(" ") || "Unknown student";
+  return [u.first_name, u.last_name].filter(Boolean).join(" ") || "Unknown student";
 }
 
 export default function NeedsDecisionQueue({ programId }: { programId?: string }) {

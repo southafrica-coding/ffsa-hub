@@ -49,7 +49,7 @@ export async function getHouseholdLinkState(
       .eq("id", household.created_by)
       .maybeSingle();
     if (owner) {
-      displayName = [owner.preferred_name || owner.first_name, owner.last_name]
+      displayName = [owner.first_name, owner.last_name]
         .filter(Boolean)
         .join(" ")
         .trim();

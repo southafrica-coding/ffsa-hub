@@ -5,7 +5,7 @@ import { getResend } from "@/lib/email/resend";
 type Stage = "application" | "enrollment";
 
 function fullName(parts: { first_name?: string | null; last_name?: string | null; preferred_name?: string | null }) {
-  const first = parts.preferred_name || parts.first_name || "";
+  const first = parts.first_name || "";
   const last = parts.last_name || "";
   return `${first} ${last}`.trim();
 }
@@ -44,7 +44,7 @@ export async function sendStaffAssignmentEmails(opts: {
 
   try {
     if (opts.student.email) {
-      const firstName = opts.student.preferred_name || opts.student.first_name || "there";
+      const firstName = opts.student.first_name || "there";
       await getResend().emails.send({
         from: fromHeader,
         to: opts.student.email,
@@ -66,7 +66,7 @@ export async function sendStaffAssignmentEmails(opts: {
 
   try {
     if (opts.staff.email) {
-      const staffFirstName = opts.staff.preferred_name || opts.staff.first_name || "there";
+      const staffFirstName = opts.staff.first_name || "there";
       const assignedByName = opts.assignedBy ? fullName(opts.assignedBy) || null : null;
       await getResend().emails.send({
         from: fromHeader,

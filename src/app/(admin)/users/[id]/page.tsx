@@ -238,10 +238,6 @@ export default async function UserProfilePage({
       <section className="grid gap-4 lg:grid-cols-3">
         <InfoCard title="Personal">
           <InfoRow label="Legal name" value={legalName(targetUser)} />
-          <InfoRow
-            label="Preferred name"
-            value={targetUser.preferred_name ?? "—"}
-          />
           {/* DOB is identity-document PII; a school leader reviewing an
               applicant doesn't need it, admins running the school do. */}
           {isAdmin && (

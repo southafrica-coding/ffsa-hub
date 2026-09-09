@@ -32,7 +32,7 @@ export default async function PrayerRoomPage() {
 
   const me = meRes.data as { first_name: string | null; last_name: string | null; preferred_name: string | null } | null;
   const userName =
-    [me?.preferred_name || me?.first_name, me?.last_name].filter(Boolean).join(" ") || "You";
+    [me?.first_name, me?.last_name].filter(Boolean).join(" ") || "You";
 
   const member = memberRes.data as { status: string } | null;
   const isMember = member?.status === "active";

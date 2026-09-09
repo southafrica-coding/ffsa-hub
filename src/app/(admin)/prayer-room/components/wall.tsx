@@ -419,7 +419,7 @@ export default function Wall({
 
                     {full && s.owner && (
                       <div className="truncate font-mono text-[8px] tracking-[0.06em] text-[color:var(--text-secondary)]">
-                        {s.owner.preferred_name || s.owner.first_name}
+                        {s.owner.first_name}
                       </div>
                     )}
                   </button>

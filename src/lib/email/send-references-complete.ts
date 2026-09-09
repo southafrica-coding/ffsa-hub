@@ -24,7 +24,7 @@ export async function sendReferencesCompleteEmail(opts: {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://ffsahub.com";
   const fromHeader = `Fire & Fragrance SA <${fromEmail}>`;
 
-  const staffFirstName = opts.staff.preferred_name || opts.staff.first_name || "there";
+  const staffFirstName = opts.staff.first_name || "there";
   const subject = opts.unassigned
     ? `References complete — needs assigning — ${opts.applicantName} · ${opts.programName}`
     : `References complete — ${opts.applicantName} · ${opts.programName}`;

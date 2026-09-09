@@ -324,7 +324,7 @@ function displayName(u: {
   preferred_name: string | null;
   email: string | null;
 }): string {
-  const first = u.preferred_name || u.first_name || "";
+  const first = u.first_name || "";
   const name = `${first} ${u.last_name ?? ""}`.trim();
   return name || u.email || "Unknown";
 }
@@ -692,7 +692,7 @@ export function ProgramDetail({
 
 function staffLabel(u: StaffUser | null | undefined) {
   if (!u) return "";
-  const first = u.preferred_name || u.first_name || "";
+  const first = u.first_name || "";
   const last = u.last_name || "";
   const name = `${first} ${last}`.trim();
   return name || u.email || "Unknown";
@@ -914,7 +914,7 @@ function ArrivalTab({
 
   function userName(u: Enrollment["users"]) {
     const name = [u.first_name, u.last_name].filter(Boolean).join(" ");
-    return u.preferred_name || name || u.email || "Unknown";
+    return name || u.email || "Unknown";
   }
 
   // An enrolment whose account was deleted (migration 207). It keeps its place

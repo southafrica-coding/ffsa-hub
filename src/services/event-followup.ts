@@ -873,7 +873,7 @@ export async function getEventFollowupExport(
 
     const staff = r.assigned_staff;
     const staffName = staff
-      ? `${staff.preferred_name || staff.first_name || ""} ${staff.last_name || ""}`.trim() ||
+      ? `${staff.first_name || ""} ${staff.last_name || ""}`.trim() ||
         staff.email ||
         null
       : null;

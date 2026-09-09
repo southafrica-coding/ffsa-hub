@@ -15,7 +15,7 @@ export async function getUserInitials(supabase: any): Promise<string> {
       .eq("id", user.id)
       .maybeSingle();
 
-    const first = (row?.preferred_name || row?.first_name || "").trim();
+    const first = (row?.first_name || "").trim();
     const last = (row?.last_name || "").trim();
     const initials = `${first.charAt(0)}${last.charAt(0)}`.toUpperCase();
     if (initials) return initials;

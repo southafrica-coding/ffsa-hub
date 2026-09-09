@@ -35,12 +35,12 @@ export function formatSetWhen(setDate: string, startTime: string, endTime: strin
 }
 
 function firstNameOf(p?: { first_name?: string | null; preferred_name?: string | null } | null): string {
-  return p?.preferred_name || p?.first_name || "there";
+  return p?.first_name || "there";
 }
 
 function fullName(p?: { first_name?: string | null; last_name?: string | null; preferred_name?: string | null } | null): string {
   if (!p) return "Someone";
-  const first = p.preferred_name || p.first_name || "";
+  const first = p.first_name || "";
   return `${first} ${p.last_name || ""}`.trim() || "Someone";
 }
 

@@ -241,7 +241,7 @@ async function fetchContactName(
     last_name: string | null;
     preferred_name: string | null;
   };
-  const first = row.preferred_name ?? row.first_name ?? "";
+  const first = row.first_name ?? "";
   const last = row.last_name ?? "";
   const joined = `${first} ${last}`.trim();
   return joined.length > 0 ? joined : null;

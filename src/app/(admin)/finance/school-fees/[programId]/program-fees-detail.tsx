@@ -166,7 +166,7 @@ const studentName = (u: {
   last_name: string | null;
   preferred_name: string | null;
 }) => {
-  const first = u.preferred_name || u.first_name || "";
+  const first = u.first_name || "";
   return `${first} ${u.last_name || ""}`.trim() || "Unknown";
 };
 

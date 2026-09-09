@@ -170,7 +170,7 @@ export async function POST(request: Request) {
 
     if (studentData?.email) {
       const sName =
-        (studentData.preferred_name || studentData.first_name || "") +
+        (studentData.first_name || "") +
         " " +
         (studentData.last_name || "");
 
@@ -302,7 +302,7 @@ export async function PUT(request: Request) {
         .single();
 
       const sName =
-        (studentUser.preferred_name || studentUser.first_name || "") +
+        (studentUser.first_name || "") +
         " " +
         (studentUser.last_name || "");
 
