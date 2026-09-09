@@ -11,6 +11,7 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { type FieldConfig, isExpiryDatePast } from "@/lib/users/profile-fields";
+import { providerAllowsNoExpiry } from "@/lib/profile/options";
 import {
   FieldControl,
   OTHER_SENTINEL,
@@ -23,7 +24,8 @@ import {
 export type ProfileFormReason =
   | "incomplete"
   | "insurance_expired"
-  | "insurance_expiring";
+  | "insurance_expiring"
+  | "insurance_unconfirmed";
 
 const COPY: Record<ProfileFormReason, { title: string; description: string }> = {
   incomplete: {
@@ -39,6 +41,11 @@ const COPY: Record<ProfileFormReason, { title: string; description: string }> = 
     title: "Update Your Health Insurance",
     description:
       "Your health insurance is about to expire. Update your current policy details below.",
+  },
+  insurance_unconfirmed: {
+    title: "Confirm Your Health Insurance",
+    description:
+      "Your medical scheme membership doesn't expire, but we need you to confirm once a year that it's still active. Check the details below and save.",
   },
 };
 
@@ -66,10 +73,32 @@ export function ProfileCompletionForm({
   const [otherActive, setOtherActive] = useState<Record<string, boolean>>(
     () => seedOtherActive(fields, defaults ?? {})
   );
+  // Open-ended (no-expiry) policy flag. Separate from `values` because it
+  // is a boolean the API takes alongside the string fields.
+  const [noExpiry, setNoExpiry] = useState(
+    () => defaults?.health_insurance_no_expiry === "true"
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const copy = COPY[reason];
+
+  // Only a provider on the curated list may be open-ended. `field.options`
+  // is already the live admin-edited list (applyListOptions ran upstream),
+  // so this tests membership of what the user is actually looking at.
+  const providerField = fields.find(
+    (f) => f.field === "health_insurance_provider"
+  );
+  const noExpiryAllowed =
+    !!providerField &&
+    !otherActive["health_insurance_provider"] &&
+    providerAllowsNoExpiry(
+      values["health_insurance_provider"],
+      providerField.options
+    );
+  // Switching to an ineligible provider (or "Other") silently retires the
+  // flag, so the date field comes back and stays required.
+  const effectiveNoExpiry = noExpiry && noExpiryAllowed;
 
   function setValue(field: string, value: string) {
     setValues((prev) => ({ ...prev, [field]: value }));
@@ -82,6 +111,8 @@ export function ProfileCompletionForm({
     // Validate all fields are filled — but for select-with-other we
     // need the follow-up text, not the sentinel.
     for (const f of fields) {
+      // An open-ended policy has no expiry date to give.
+      if (f.field === "health_insurance_expiry_date" && effectiveNoExpiry) continue;
       const v = values[f.field]?.trim();
       if (!v || v === OTHER_SENTINEL) {
         setError(`Please fill in: ${f.label}`);
@@ -103,7 +134,17 @@ export function ProfileCompletionForm({
       const res = await fetch("/api/profile/update", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
+        body: JSON.stringify(
+          providerField
+            ? {
+                ...values,
+                health_insurance_expiry_date: effectiveNoExpiry
+                  ? null
+                  : values["health_insurance_expiry_date"] ?? "",
+                health_insurance_no_expiry: effectiveNoExpiry,
+              }
+            : values
+        ),
       });
 
       const data = await res.json();
@@ -142,6 +183,9 @@ export function ProfileCompletionForm({
               onOtherActiveChange={(active) =>
                 setOtherActive((prev) => ({ ...prev, [f.field]: active }))
               }
+              noExpiry={effectiveNoExpiry}
+              noExpiryAllowed={noExpiryAllowed}
+              onNoExpiryChange={setNoExpiry}
             />
           ))}
 

@@ -100,6 +100,10 @@ export function deriveUserLifecycle(user: UserLifecycleInput): LifecycleInfo {
 // Mirrors the conditional getMissingVisaFields encodes so the two never drift.
 function countApplicableFields(row: Record<string, unknown>): number {
   let total = REQUIRED_PROFILE_FIELDS.length + PASSPORT_FIELDS.length;
+  // An open-ended medical scheme is never asked for an expiry date, so it
+  // must not count towards the denominator either — otherwise these users
+  // read "23 of 24 fields" forever.
+  if (row.health_insurance_no_expiry === true) total -= 1;
   if (row.is_international) {
     total += VISA_BASE_FIELDS.length;
     if (row.visa_category === "long_term") {

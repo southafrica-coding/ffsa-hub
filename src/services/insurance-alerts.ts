@@ -69,7 +69,7 @@ export async function getStaffInsuranceAlerts(
     .select(
       `user_id, staff_ministry_id,
        ministry:staff_ministries!staff_ministry_id(id, name),
-       user:users!user_id(id, first_name, last_name, display_name, email, health_insurance_expiry_date, status, next_health_insurance_provider, next_health_insurance_expiry_date)`
+       user:users!user_id(id, first_name, last_name, display_name, email, health_insurance_expiry_date, health_insurance_no_expiry, status, next_health_insurance_provider, next_health_insurance_expiry_date, next_health_insurance_no_expiry)`
     )
     .eq("status", "active");
 
@@ -91,13 +91,18 @@ export async function getStaffInsuranceAlerts(
       hasValidQueuedPolicy({
         next_health_insurance_provider: r.user?.next_health_insurance_provider,
         next_health_insurance_expiry_date: r.user?.next_health_insurance_expiry_date,
+        next_health_insurance_no_expiry: r.user?.next_health_insurance_no_expiry,
       })
     ) {
       continue;
     }
 
+    // The no-expiry flag MUST travel with the date: without it an
+    // open-ended policy reads as "missing" and every member on an SA
+    // medical scheme gets flagged — the opposite of the intent.
     const status = getInsuranceStatus({
       health_insurance_expiry_date: r.user?.health_insurance_expiry_date,
+      health_insurance_no_expiry: r.user?.health_insurance_no_expiry,
     });
 
     const include =

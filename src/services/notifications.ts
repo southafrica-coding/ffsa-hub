@@ -20,6 +20,7 @@ import { callerIsAdmin } from "@/lib/auth/check-ministry-access";
 import { staffSignupNotifyEmails } from "@/lib/email/send-new-staff-notice";
 import {
   getInsuranceStatus,
+  getInsuranceConfirmation,
   hasValidQueuedPolicy,
   INSURANCE_LEADER_ALERT_DAYS,
   INSURANCE_DEV_TEAM_ALERT_DAYS,
@@ -317,6 +318,11 @@ function personName(u: any): string {
 // ("0028" for "2028") is the common one. Ten years is far past any real lapse.
 const IMPLAUSIBLE_DAYS = 3650;
 
+// How long an annual insurance re-confirmation may sit overdue before the
+// dev team is told. The member sees a banner from 14 days BEFORE it's due,
+// so this only fires on someone who has ignored it repeatedly.
+const CONFIRM_NOTIFY_AFTER_DAYS = 30;
+
 function expiryPhrase(daysLeft: number, date: string): string {
   if (daysLeft < 0) {
     const ago = Math.abs(daysLeft);
@@ -352,7 +358,7 @@ async function insuranceExpiryNotifs(supabase: Client, userId: string): Promise<
     .select(
       `user_id, member_role, is_point_leader, staff_ministry_id,
        ministry:staff_ministries!staff_ministry_id(id, name, slug),
-       user:users!user_id(id, first_name, last_name, display_name, email, health_insurance_expiry_date, next_health_insurance_provider, next_health_insurance_expiry_date)`
+       user:users!user_id(id, first_name, last_name, display_name, email, health_insurance_expiry_date, health_insurance_no_expiry, health_insurance_confirmed_at, next_health_insurance_provider, next_health_insurance_expiry_date, next_health_insurance_no_expiry)`
     )
     .eq("status", "active");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -370,6 +376,11 @@ async function insuranceExpiryNotifs(supabase: Client, userId: string): Promise<
   const byPerson = new Map<string, AppNotification & { _days: number; _tier: EscalationTier }>();
   const tierRank: Record<EscalationTier, number> = { dev_team: 3, point_leader: 2, leader: 1 };
 
+  // Open-ended policies that are badly overdue for their annual
+  // re-confirmation. Dev team only, and only once someone has ignored the
+  // banner for a month — nudging on every anniversary would drown the feed.
+  const confirmOverdue = new Map<string, AppNotification>();
+
   for (const r of all) {
     const personId: string = r.user_id;
     if (personId === userId) continue; // never notify someone about themselves
@@ -380,6 +391,7 @@ async function insuranceExpiryNotifs(supabase: Client, userId: string): Promise<
       hasValidQueuedPolicy({
         next_health_insurance_provider: r.user?.next_health_insurance_provider,
         next_health_insurance_expiry_date: r.user?.next_health_insurance_expiry_date,
+        next_health_insurance_no_expiry: r.user?.next_health_insurance_no_expiry,
       })
     ) {
       continue;
@@ -387,7 +399,31 @@ async function insuranceExpiryNotifs(supabase: Client, userId: string): Promise<
 
     const status = getInsuranceStatus({
       health_insurance_expiry_date: r.user?.health_insurance_expiry_date,
+      health_insurance_no_expiry: r.user?.health_insurance_no_expiry,
     });
+
+    if (status.state === "no_expiry" && isDevTeam) {
+      const confirmation = getInsuranceConfirmation({
+        health_insurance_no_expiry: true,
+        health_insurance_confirmed_at: r.user?.health_insurance_confirmed_at,
+      });
+      const overdueBy = -(confirmation.daysUntilDue ?? 0);
+      if (confirmation.dueOn && overdueBy >= CONFIRM_NOTIFY_AFTER_DAYS) {
+        confirmOverdue.set(personId, {
+          key: `insurance-confirm:${personId}:${confirmation.dueOn}`,
+          kind: "insurance",
+          title: "Insurance confirmation overdue",
+          body: `${personName(r.user)} · ${
+            r.ministry?.name ?? "their ministry"
+          } — hasn't confirmed their medical scheme is still active (due ${confirmation.dueOn})`,
+          href: `/users/${personId}`,
+          when: "",
+          ts: Date.now() - overdueBy * 86_400_000,
+          read: false,
+        });
+      }
+    }
+
     const daysLeft = status.daysLeft;
     if (status.expiryDate === null || daysLeft === null) continue; // missing → own block handles it
     if (daysLeft > INSURANCE_LEADER_ALERT_DAYS) continue; // outside the 4-week window
@@ -441,11 +477,14 @@ async function insuranceExpiryNotifs(supabase: Client, userId: string): Promise<
     }
   }
 
-  return Array.from(byPerson.values())
+  const expiryNotifs = Array.from(byPerson.values())
     .sort((a, b) => a._days - b._days)
-    .slice(0, CAP)
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     .map(({ _days, _tier, ...n }) => n);
+
+  // Expiry first (someone is or is about to be uninsured), then the slower
+  // confirmation chase.
+  return [...expiryNotifs, ...confirmOverdue.values()].slice(0, CAP);
 }
 
 const PROVIDERS = [bookingNotifs, bookingDecisionNotifs, staffApprovalNotifs, newStaffOnboardedNotifs, vehicleRequestNotifs, recordsMatchNotifs, insuranceExpiryNotifs];

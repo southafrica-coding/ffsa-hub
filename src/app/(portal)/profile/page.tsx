@@ -129,6 +129,7 @@ export default async function ProfilePage() {
     provider: row.health_insurance_provider as string | null | undefined,
     policy_number: row.health_insurance_policy_number as string | null | undefined,
     expiry_date: row.health_insurance_expiry_date as string | null | undefined,
+    no_expiry: row.health_insurance_no_expiry as boolean | null | undefined,
   });
 
   // Queued successor policy (migration 151), if one is lined up.
@@ -137,16 +138,31 @@ export default async function ProfilePage() {
         provider: String(row.next_health_insurance_provider),
         policy_number:
           (row.next_health_insurance_policy_number as string | null) ?? null,
-        expiry_date: String(row.next_health_insurance_expiry_date ?? "").slice(0, 10),
+        expiry_date:
+          row.next_health_insurance_no_expiry === true
+            ? null
+            : String(row.next_health_insurance_expiry_date ?? "").slice(0, 10),
+        no_expiry: row.next_health_insurance_no_expiry === true,
       }
     : null;
   const currentInsuranceExpiry = row.health_insurance_expiry_date
     ? String(row.health_insurance_expiry_date).slice(0, 10)
     : null;
+  const currentInsuranceNoExpiry = row.health_insurance_no_expiry === true;
   // Provider suggestions for the "add next policy" dialog (skip the "none" sentinel).
-  const insuranceProviderOptions = (sets.insurance_provider ?? INSURANCE_PROVIDERS)
+  const insuranceListOptions = sets.insurance_provider ?? INSURANCE_PROVIDERS;
+  const insuranceProviderOptions = insuranceListOptions
     .filter((o) => o.value.toLowerCase() !== "none")
     .map((o) => o.label);
+  // …and the subset that may be recorded as never-expiring: every listed
+  // scheme except the free-text "Other" sentinel. Stored VALUES, since that
+  // is what the API validates against.
+  const eligibleNoExpiryProviders = insuranceListOptions
+    .filter(
+      (o) =>
+        o.value.toLowerCase() !== "none" && o.value.toLowerCase() !== "other"
+    )
+    .map((o) => o.value);
 
   const fullName =
     [user.preferred_name ?? user.first_name, user.last_name]
@@ -244,7 +260,18 @@ export default async function ProfilePage() {
             <EditableProfileSection
               key={section.id}
               section={section}
-              values={sectionValues(row, section.fields)}
+              values={{
+                ...sectionValues(row, section.fields),
+                // Not a rendered field — it rides along so the insurance
+                // card knows the policy is open-ended (and when it was
+                // last confirmed).
+                health_insurance_no_expiry: currentInsuranceNoExpiry
+                  ? "true"
+                  : "",
+                health_insurance_confirmed_at: String(
+                  row.health_insurance_confirmed_at ?? ""
+                ).slice(0, 10),
+              }}
               readOnlyRows={readOnlyRowsById[section.id]}
               footer={
                 section.id === "insurance" ? (
@@ -255,7 +282,9 @@ export default async function ProfilePage() {
                     manageable
                     pending={pendingInsurance}
                     currentExpiry={currentInsuranceExpiry}
+                    currentNoExpiry={currentInsuranceNoExpiry}
                     providerOptions={insuranceProviderOptions}
+                    eligibleProviders={eligibleNoExpiryProviders}
                   />
                 ) : undefined
               }
@@ -291,6 +320,7 @@ export default async function ProfilePage() {
               health_insurance_provider: row.health_insurance_provider as string | null | undefined,
               health_insurance_policy_number: row.health_insurance_policy_number as string | null | undefined,
               health_insurance_expiry_date: row.health_insurance_expiry_date as string | null | undefined,
+              health_insurance_no_expiry: row.health_insurance_no_expiry as boolean | null | undefined,
             }}
           />
         </div>

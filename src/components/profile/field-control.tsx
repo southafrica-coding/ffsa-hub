@@ -28,6 +28,9 @@ export function FieldControl({
   onOtherActiveChange,
   required = true,
   idPrefix = "field",
+  noExpiry = false,
+  noExpiryAllowed = false,
+  onNoExpiryChange,
 }: {
   field: FieldConfig;
   value: string;
@@ -36,6 +39,13 @@ export function FieldControl({
   onOtherActiveChange: (active: boolean) => void;
   required?: boolean;
   idPrefix?: string;
+  // Open-ended-policy support for a `date` field. Passing
+  // `onNoExpiryChange` is what opts a field in — the parent owns the flag
+  // (it has to send it to the API) and owns `noExpiryAllowed`, which
+  // depends on a *different* field's value (the insurance provider).
+  noExpiry?: boolean;
+  noExpiryAllowed?: boolean;
+  onNoExpiryChange?: (v: boolean) => void;
 }) {
   const id = `${idPrefix}-${field.field}`;
 
@@ -141,15 +151,59 @@ export function FieldControl({
   if (field.type === "date") {
     // Day-first (DD/MM/YYYY) input; stores ISO yyyy-mm-dd. onChange yields the
     // ISO string directly, not a DOM event.
+    const canBeOpenEnded = field.allowNoExpiry && onNoExpiryChange;
     return (
       <div className="space-y-2">
         <Label htmlFor={id}>{field.label}</Label>
-        <DateInput
-          id={id}
-          value={value}
-          onChange={onValueChange}
-          required={required}
-        />
+        {canBeOpenEnded && (
+          <label
+            className={`flex items-start gap-2 text-sm ${
+              noExpiryAllowed ? "" : "text-muted-foreground"
+            }`}
+          >
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 shrink-0"
+              checked={noExpiry}
+              disabled={!noExpiryAllowed}
+              onChange={(e) => {
+                const on = e.target.checked;
+                // The two are mutually exclusive in the database, so
+                // ticking clears whatever date was typed.
+                if (on) onValueChange("");
+                onNoExpiryChange?.(on);
+              }}
+            />
+            <span>
+              This policy doesn&apos;t expire
+              {noExpiryAllowed ? (
+                <span className="text-muted-foreground">
+                  {" "}
+                  (open-ended medical scheme membership)
+                </span>
+              ) : (
+                <span className="block text-xs">
+                  Available for listed medical schemes only
+                </span>
+              )}
+            </span>
+          </label>
+        )}
+        {/* Removed, not disabled: a greyed-out date box reads as broken
+            and would keep a stale value in the DOM. */}
+        {noExpiry && canBeOpenEnded ? (
+          <p className="text-sm text-muted-foreground">
+            No expiry date — you&apos;ll be asked once a year to confirm it&apos;s
+            still active.
+          </p>
+        ) : (
+          <DateInput
+            id={id}
+            value={value}
+            onChange={onValueChange}
+            required={required}
+          />
+        )}
       </div>
     );
   }

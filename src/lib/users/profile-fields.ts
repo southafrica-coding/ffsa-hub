@@ -37,6 +37,12 @@ export type FieldConfig = {
   // preferred_name, address_line_2 and the passport/visa fields are
   // optional for non-international staff.
   optional?: boolean;
+  // `date` fields only. Marks an expiry date that may legitimately be
+  // absent because the policy is open-ended — the form renders a
+  // "this policy doesn't expire" checkbox alongside it. Purely
+  // declarative; the wiring is prop-driven in FieldControl so the
+  // household/child variants can opt out.
+  allowNoExpiry?: boolean;
 };
 
 export const REQUIRED_PROFILE_FIELDS: FieldConfig[] = [
@@ -101,7 +107,7 @@ export const REQUIRED_PROFILE_FIELDS: FieldConfig[] = [
   // ── Health insurance ─────────────────────────────────────
   { field: "health_insurance_provider", label: "Health Insurance Provider", type: "select-with-other", options: INSURANCE_PROVIDERS },
   { field: "health_insurance_policy_number", label: "Health Insurance Policy Number", type: "text", placeholder: "e.g. 123456789" },
-  { field: "health_insurance_expiry_date", label: "Health Insurance Expiry Date", type: "date" },
+  { field: "health_insurance_expiry_date", label: "Health Insurance Expiry Date", type: "date", allowNoExpiry: true },
 ];
 
 // Which required-field maps to which editable list_options key.
@@ -152,6 +158,11 @@ export function getMissingProfileFields(
   profile: Record<string, unknown>
 ): FieldConfig[] {
   const excluded = excludedProfileFields(profile.signup_type as string | null | undefined);
+  // An open-ended medical scheme has no expiry date to give. The annual
+  // re-confirmation (getInsuranceConfirmation) takes its place.
+  if (profile["health_insurance_no_expiry"] === true) {
+    excluded.add("health_insurance_expiry_date");
+  }
   return REQUIRED_PROFILE_FIELDS.filter((f) => {
     if (excluded.has(f.field)) return false;
     const value = profile[f.field];
@@ -183,7 +194,12 @@ export const INSURANCE_WARNING_DAYS = 60;
 export const INSURANCE_LEADER_ALERT_DAYS = 28; // 4 weeks → the person's leader
 export const INSURANCE_DEV_TEAM_ALERT_DAYS = 7; // 1 week  → development team
 
-export type InsuranceState = "ok" | "expiring" | "expired" | "missing";
+// "no_expiry" is an open-ended SA medical scheme: permanently valid, so
+// it never earns an expiry badge or an expiry alert. Its own annual
+// health check is getInsuranceConfirmation() below — deliberately a
+// separate axis, since "does it expire?" and "have you confirmed it
+// lately?" are orthogonal questions.
+export type InsuranceState = "ok" | "no_expiry" | "expiring" | "expired" | "missing";
 
 export type InsuranceStatus = {
   state: InsuranceState;
@@ -227,6 +243,10 @@ export function getInsuranceStatus(
   profile: Record<string, unknown>,
   today: string = todayInSA()
 ): InsuranceStatus {
+  // Open-ended scheme: valid forever, no date to reason about.
+  if (profile["health_insurance_no_expiry"] === true) {
+    return { state: "no_expiry", expiryDate: null, daysLeft: null };
+  }
   const raw = profile["health_insurance_expiry_date"];
   if (typeof raw !== "string" || raw.trim() === "") {
     return { state: "missing", expiryDate: null, daysLeft: null };
@@ -265,11 +285,83 @@ export function hasValidQueuedPolicy(
     .trim()
     .toLowerCase();
   if (provider === "" || provider === "none") return false;
+  // A queued open-ended policy is valid by definition — no date to check.
+  if (profile["next_health_insurance_no_expiry"] === true) return true;
   const raw = profile["next_health_insurance_expiry_date"];
   if (typeof raw !== "string") return false;
   const expiry = raw.slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(expiry)) return false; // must be a real date
   return !isExpiryDatePast(expiry, today); // …and not already past
+}
+
+// ────────────────────────────────────────────────────────────
+// ANNUAL RE-CONFIRMATION (open-ended policies only)
+// ────────────────────────────────────────────────────────────
+// A no-expiry policy never lapses on its own, so nothing would ever
+// prompt the member to tell us they'd switched schemes. Once a year they
+// confirm it's still active (users.health_insurance_confirmed_at) — a
+// banner first, and only after a long grace period does the gate step in.
+//
+// This is deliberately NOT another InsuranceState: a policy is
+// simultaneously "no_expiry" and possibly "due", and folding the two
+// together would force every badge and alert to re-reason about validity.
+export const INSURANCE_CONFIRM_INTERVAL_DAYS = 365;
+export const INSURANCE_CONFIRM_NUDGE_DAYS = 14; // banner opens this early
+export const INSURANCE_CONFIRM_GRACE_DAYS = 60; // …and blocks this late
+
+export type InsuranceConfirmLevel = "current" | "due_soon" | "due" | "blocking";
+
+export type InsuranceConfirmation = {
+  level: InsuranceConfirmLevel;
+  confirmedAt: string | null; // YYYY-MM-DD
+  dueOn: string | null; // YYYY-MM-DD
+  daysUntilDue: number | null; // negative once overdue
+};
+
+// Add days to a YYYY-MM-DD calendar date, returning YYYY-MM-DD.
+function addDays(ymd: string, days: number): string {
+  const ms = Date.parse(`${ymd}T00:00:00Z`);
+  if (Number.isNaN(ms)) return ymd;
+  return new Date(ms + days * 86_400_000).toISOString().slice(0, 10);
+}
+
+// Only meaningful for an open-ended policy; everyone else is "current"
+// so callers never have to branch on the flag themselves.
+export function getInsuranceConfirmation(
+  profile: Record<string, unknown>,
+  today: string = todayInSA()
+): InsuranceConfirmation {
+  const none: InsuranceConfirmation = {
+    level: "current",
+    confirmedAt: null,
+    dueOn: null,
+    daysUntilDue: null,
+  };
+  if (profile["health_insurance_no_expiry"] !== true) return none;
+
+  const raw = profile["health_insurance_confirmed_at"];
+  const confirmedAt =
+    typeof raw === "string" && /^\d{4}-\d{2}-\d{2}/.test(raw.slice(0, 10))
+      ? raw.slice(0, 10)
+      : null;
+
+  // No confirmation on record (a legacy row, or a write path that missed
+  // the column) is "due" but NEVER blocking — a data gap must not lock
+  // anyone out of the Hub.
+  if (!confirmedAt) {
+    return { level: "due", confirmedAt: null, dueOn: null, daysUntilDue: null };
+  }
+
+  const dueOn = addDays(confirmedAt, INSURANCE_CONFIRM_INTERVAL_DAYS);
+  const daysUntilDue = daysBetween(today, dueOn);
+
+  let level: InsuranceConfirmLevel;
+  if (daysUntilDue > INSURANCE_CONFIRM_NUDGE_DAYS) level = "current";
+  else if (daysUntilDue > 0) level = "due_soon";
+  else if (daysUntilDue >= -INSURANCE_CONFIRM_GRACE_DAYS) level = "due";
+  else level = "blocking";
+
+  return { level, confirmedAt, dueOn, daysUntilDue };
 }
 
 // ────────────────────────────────────────────────────────────
@@ -388,6 +480,7 @@ export const HOUSEHOLD_WRITABLE_FIELDS: string[] = [
   "health_insurance_provider",
   "health_insurance_policy_number",
   "health_insurance_expiry_date",
+  "health_insurance_no_expiry",
 ];
 
 // ────────────────────────────────────────────────────────────
@@ -413,7 +506,9 @@ export const CHILD_REQUIRED_FIELDS: string[] = [
   "passport_expiry_date",
   "health_insurance_provider",
   "health_insurance_policy_number",
-  "health_insurance_expiry_date",
+  // health_insurance_expiry_date is required too, but conditionally —
+  // a child on an open-ended scheme has no date to give. See
+  // missingChildFields.
 ];
 
 // A "member" here is a household_members row (or the in-progress form
@@ -438,6 +533,13 @@ export function missingChildFields(member: Record<string, unknown>): string[] {
     HOUSEHOLD_MEMBER_FIELDS.find((f) => f.field === key)?.label ?? key;
 
   const missing = CHILD_REQUIRED_FIELDS.filter(empty).map(labelFor);
+
+  // The expiry date is required unless the child's policy is open-ended.
+  // Getting this wrong locks the PARENT out behind the full-screen
+  // children gate, so it is checked explicitly rather than by omission.
+  if (member["health_insurance_no_expiry"] !== true && empty("health_insurance_expiry_date")) {
+    missing.push(labelFor("health_insurance_expiry_date"));
+  }
 
   // "None" is a real option on the provider dropdown but not an acceptable
   // answer for a child, so it counts as missing rather than filled in.
@@ -508,9 +610,14 @@ export function getMissingVisaFields(
 //   - "incomplete":        one or more required fields are empty
 //   - "insurance_expired": fields are filled but the policy has lapsed
 //                          (or a legacy "none" provider is on file)
+//   - "insurance_unconfirmed": an open-ended policy is long past its
+//                          annual re-confirmation
 // Completeness wins so we collect everything in one pass; only once the
 // profile is otherwise whole do we enforce a current insurance policy.
-export type ProfileBlockReason = "incomplete" | "insurance_expired";
+export type ProfileBlockReason =
+  | "incomplete"
+  | "insurance_expired"
+  | "insurance_unconfirmed";
 
 export type ProfileBlock = {
   reason: ProfileBlockReason;
@@ -528,7 +635,8 @@ export function getProfileBlock(
   if (missing.length > 0) return { reason: "incomplete", fields: missing };
 
   const noProvider = hasNoValidProvider(profile);
-  const currentExpired = getInsuranceStatus(profile).state === "expired";
+  const status = getInsuranceStatus(profile);
+  const currentExpired = status.state === "expired";
   if (noProvider || currentExpired) {
     // A lapsed current policy doesn't block the Hub if a valid successor is
     // already queued — the daily promotion cron switches it over the day after
@@ -538,6 +646,16 @@ export function getProfileBlock(
       return null;
     }
     return { reason: "insurance_expired", fields: HEALTH_INSURANCE_FIELDS };
+  }
+
+  // An open-ended policy can never read as "expired", so it reaches the
+  // Hub through its own check: confirmed within the last year (plus a
+  // generous grace period on top of the banner nudges).
+  if (
+    status.state === "no_expiry" &&
+    getInsuranceConfirmation(profile).level === "blocking"
+  ) {
+    return { reason: "insurance_unconfirmed", fields: HEALTH_INSURANCE_FIELDS };
   }
   return null;
 }

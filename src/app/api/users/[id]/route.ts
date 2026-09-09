@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAuthedUser, hasAnyRole } from "@/lib/api-auth";
 import { getMinistryBySlug } from "@/services/ministries";
+import { normalizeInsuranceWrite } from "@/lib/users/insurance-write";
 
 const ADMIN_ROLES = ["super_admin", "admin"];
 
@@ -19,7 +20,7 @@ const ALLOWED_FIELDS = [
   "emergency_contact_name", "emergency_contact_phone",
   "emergency_contact_relationship",
   "health_insurance_provider", "health_insurance_policy_number",
-  "health_insurance_expiry_date",
+  "health_insurance_expiry_date", "health_insurance_no_expiry",
   "passport_country", "passport_number", "passport_expiry_date",
   "visa_category", "visa_type", "visa_expiry_date",
 ];
@@ -56,6 +57,18 @@ export async function PATCH(
       { error: "No valid fields to update" },
       { status: 400 }
     );
+  }
+
+  // Same open-ended-policy rules as the self-service route: listed schemes
+  // only, expiry cleared, annual confirmation clock stamped.
+  const insuranceError = await normalizeInsuranceWrite(supabase, updateData, {
+    provider: "health_insurance_provider",
+    expiry: "health_insurance_expiry_date",
+    flag: "health_insurance_no_expiry",
+    confirmedAt: "health_insurance_confirmed_at",
+  });
+  if (insuranceError) {
+    return NextResponse.json({ error: insuranceError }, { status: 400 });
   }
 
   // Department must be a real ministry slug (staff_ministries is the source of

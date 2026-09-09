@@ -49,6 +49,17 @@ export function sanitizeHouseholdInput(
     input.is_international = Boolean(body.is_international);
   }
 
+  // An open-ended medical scheme carries no expiry date — the two are
+  // mutually exclusive in the database, so the date is cleared here rather
+  // than letting a stale value trip the CHECK constraint.
+  if ("health_insurance_no_expiry" in body) {
+    const noExpiry = Boolean(body.health_insurance_no_expiry);
+    (input as Record<string, unknown>).health_insurance_no_expiry = noExpiry;
+    if (noExpiry) {
+      (input as Record<string, unknown>).health_insurance_expiry_date = null;
+    }
+  }
+
   // Relationship, when provided, must be one of the allowed values.
   if (input.relationship != null && !RELATIONSHIPS.has(String(input.relationship))) {
     return { input, error: "Please choose a valid relationship." };

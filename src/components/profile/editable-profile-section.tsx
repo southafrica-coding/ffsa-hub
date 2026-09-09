@@ -17,6 +17,7 @@ import {
   seedOtherActive,
 } from "@/components/profile/field-control";
 import { isExpiryDatePast } from "@/lib/users/profile-fields";
+import { providerAllowsNoExpiry } from "@/lib/profile/options";
 import { formatDateDMY } from "@/lib/utils/date";
 import { type ProfileSectionDef } from "@/lib/users/profile-sections";
 
@@ -59,6 +60,25 @@ export function EditableProfileSection({
   // while the current one is still valid — replacing now would drop still-valid
   // cover. Detect that so the confirm step can nudge them to "Add next policy"
   // instead (which keeps the current active until it expires, then auto-switches).
+  // Open-ended policy. It rides inside the values/draft maps as "true"/""
+  // so startEdit, cancel and the post-save commit all carry it for free;
+  // it is converted to a real boolean on the way to the API.
+  const NO_EXPIRY = "health_insurance_no_expiry";
+  const providerField = section.fields.find(
+    (f) => f.field === "health_insurance_provider"
+  );
+  const noExpiryAllowed =
+    !!providerField &&
+    !otherActive["health_insurance_provider"] &&
+    providerAllowsNoExpiry(
+      draft["health_insurance_provider"],
+      providerField.options
+    );
+  // Switching to an ineligible provider retires the flag, so the date
+  // field comes back and stays required.
+  const draftNoExpiry = draft[NO_EXPIRY] === "true" && noExpiryAllowed;
+  const savedNoExpiry = values[NO_EXPIRY] === "true";
+
   const YMD = /^\d{4}-\d{2}-\d{2}$/;
   const curPolicyNo = (values["health_insurance_policy_number"] ?? "").trim();
   const draftPolicyNo = (draft["health_insurance_policy_number"] ?? "").trim();
@@ -66,6 +86,10 @@ export function EditableProfileSection({
   const draftExpiry = (draft["health_insurance_expiry_date"] ?? "").slice(0, 10);
   const looksLikeSuccessor =
     requiresConfirm &&
+    // An open-ended policy on either side has no dates to compare, so the
+    // successor heuristic can't apply.
+    !savedNoExpiry &&
+    !draftNoExpiry &&
     YMD.test(curExpiry) &&
     !isExpiryDatePast(curExpiry) && // current cover still valid
     !!draftPolicyNo &&
@@ -91,6 +115,8 @@ export function EditableProfileSection({
 
     // Required fields must be filled; optional ones may be left blank.
     for (const f of section.fields) {
+      // An open-ended policy has no expiry date to give.
+      if (f.field === "health_insurance_expiry_date" && draftNoExpiry) continue;
       const v = draft[f.field]?.trim() ?? "";
       if (!f.optional && (!v || v === OTHER_SENTINEL)) {
         setError(`Please fill in: ${f.label}`);
@@ -115,8 +141,14 @@ export function EditableProfileSection({
   async function persist() {
     setError(null);
     // Only this section's fields go up.
-    const payload: Record<string, string> = {};
+    const payload: Record<string, unknown> = {};
     for (const f of section.fields) payload[f.field] = draft[f.field] ?? "";
+    // The flag must travel with the section's insurance fields — a date
+    // arriving beside a stale flag is rejected by the DB constraint.
+    if (providerField) {
+      payload[NO_EXPIRY] = draftNoExpiry;
+      if (draftNoExpiry) payload["health_insurance_expiry_date"] = null;
+    }
 
     setLoading(true);
     try {
@@ -130,7 +162,11 @@ export function EditableProfileSection({
         setError(data.error || "Failed to save changes");
         return;
       }
-      setValues(draft);
+      setValues({
+        ...draft,
+        [NO_EXPIRY]: draftNoExpiry ? "true" : "",
+        ...(draftNoExpiry ? { health_insurance_expiry_date: "" } : {}),
+      });
       setEditing(false);
       // Pull fresh server state so derived surfaces (header name, insurance
       // banner, completion badge) update too.
@@ -182,6 +218,11 @@ export function EditableProfileSection({
               onOtherActiveChange={(active) =>
                 setOtherActive((prev) => ({ ...prev, [f.field]: active }))
               }
+              noExpiry={draftNoExpiry}
+              noExpiryAllowed={noExpiryAllowed}
+              onNoExpiryChange={(v) =>
+                setDraft((prev) => ({ ...prev, [NO_EXPIRY]: v ? "true" : "" }))
+              }
             />
           ))}
 
@@ -211,7 +252,16 @@ export function EditableProfileSection({
             <ViewRow
               key={f.field}
               label={f.label}
-              value={displayValue(f, values[f.field])}
+              value={
+                f.field === "health_insurance_expiry_date" && savedNoExpiry
+                  ? "No expiry"
+                  : displayValue(f, values[f.field])
+              }
+              hint={
+                f.field === "health_insurance_expiry_date" && savedNoExpiry
+                  ? confirmedHint(values["health_insurance_confirmed_at"])
+                  : undefined
+              }
             />
           ))}
           {footer && <div className="pt-1">{footer}</div>}
@@ -271,6 +321,15 @@ export function EditableProfileSection({
       )}
     </div>
   );
+}
+
+// When the policy is open-ended, the expiry row carries the annual
+// re-confirmation date instead of a date that doesn't exist.
+function confirmedHint(confirmedAt: string | undefined): string {
+  const ymd = (confirmedAt ?? "").slice(0, 10);
+  return ymd
+    ? `Confirmed ${formatDateDMY(ymd)} — we'll ask again in a year`
+    : "We'll ask you once a year to confirm it's still active";
 }
 
 // Map a stored value to its human label (e.g. "media" → "Media"). For

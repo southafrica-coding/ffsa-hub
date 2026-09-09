@@ -19,7 +19,8 @@ export type InsurancePolicyRow = {
   id: string;
   provider: string;
   policy_number: string | null;
-  expiry_date: string; // YYYY-MM-DD
+  expiry_date: string | null; // YYYY-MM-DD, null for an open-ended policy
+  no_expiry: boolean;
   recorded_at: string; // ISO timestamp
 };
 
@@ -43,7 +44,9 @@ export function InsuranceHistory({
   canDelete = false,
   pending = null,
   currentExpiry = null,
+  currentNoExpiry = false,
   providerOptions = [],
+  eligibleProviders = [],
   manageable = false,
 }: {
   policies: InsurancePolicyRow[];
@@ -53,8 +56,12 @@ export function InsuranceHistory({
   pending?: PendingPolicy | null;
   // The current policy's expiry (YYYY-MM-DD) — drives "Becomes active after …".
   currentExpiry?: string | null;
+  // The current policy is open-ended, so no successor can be queued.
+  currentNoExpiry?: boolean;
   // Provider suggestions for the add/replace dialog.
   providerOptions?: string[];
+  // Provider values eligible to be recorded as never-expiring.
+  eligibleProviders?: string[];
   // Own profile → allow add/replace/remove of the queued policy.
   manageable?: boolean;
 }) {
@@ -76,7 +83,10 @@ export function InsuranceHistory({
         <ul className="space-y-2">
           {policies.map((p, i) => {
             const isCurrent = i === 0; // most recently recorded = the active policy
-            const status = getInsuranceStatus({ health_insurance_expiry_date: p.expiry_date });
+            const status = getInsuranceStatus({
+              health_insurance_expiry_date: p.expiry_date,
+              health_insurance_no_expiry: p.no_expiry,
+            });
             const expired = status.state === "expired";
             return (
               <li key={p.id} className="rounded-lg border px-3 py-2 text-sm">
@@ -102,7 +112,9 @@ export function InsuranceHistory({
                     (expired ? "text-destructive" : "text-muted-foreground")
                   }
                 >
-                  {expired ? "Expired" : "Expires"} {fmt(p.expiry_date)}
+                  {p.no_expiry || !p.expiry_date
+                    ? "No expiry date"
+                    : `${expired ? "Expired" : "Expires"} ${fmt(p.expiry_date)}`}
                   <span className="opacity-50"> · </span>
                   added {fmt(p.recorded_at)}
                 </div>
@@ -116,7 +128,9 @@ export function InsuranceHistory({
         <NextPolicyManager
           pending={pending}
           currentExpiry={currentExpiry}
+          currentNoExpiry={currentNoExpiry}
           providerOptions={providerOptions}
+          eligibleProviders={eligibleProviders}
         />
       ) : pending ? (
         // Read-only queued policy (e.g. admin user detail page).
@@ -133,7 +147,9 @@ export function InsuranceHistory({
             </div>
           )}
           <div className="text-xs text-muted-foreground mt-0.5">
-            Expires {fmt(pending.expiry_date)}
+            {pending.no_expiry || !pending.expiry_date
+              ? "No expiry date"
+              : `Expires ${fmt(pending.expiry_date)}`}
             {currentExpiry ? ` · becomes active after ${fmt(currentExpiry)}` : ""}
           </div>
         </div>

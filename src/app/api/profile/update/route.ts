@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isExpiryDatePast } from "@/lib/users/profile-fields";
+import { normalizeInsuranceWrite } from "@/lib/users/insurance-write";
 import { getMinistryBySlug } from "@/services/ministries";
 import { setHouseholdHasChildren } from "@/services/household";
 
@@ -26,7 +27,7 @@ export async function PUT(request: Request) {
     "emergency_contact_name", "emergency_contact_phone",
     "emergency_contact_relationship",
     "health_insurance_provider", "health_insurance_policy_number",
-    "health_insurance_expiry_date",
+    "health_insurance_expiry_date", "health_insurance_no_expiry",
     "passport_country", "passport_number", "passport_expiry_date",
     "visa_category", "visa_type", "visa_expiry_date",
   ];
@@ -62,6 +63,17 @@ export async function PUT(request: Request) {
         { status: 400 }
       );
     }
+  }
+  // Open-ended scheme handling: validates the provider is a listed one,
+  // clears the expiry date, and stamps the annual confirmation clock.
+  const insuranceError = await normalizeInsuranceWrite(supabase, updateData, {
+    provider: "health_insurance_provider",
+    expiry: "health_insurance_expiry_date",
+    flag: "health_insurance_no_expiry",
+    confirmedAt: "health_insurance_confirmed_at",
+  });
+  if (insuranceError) {
+    return NextResponse.json({ error: insuranceError }, { status: 400 });
   }
   if (
     "health_insurance_expiry_date" in updateData &&

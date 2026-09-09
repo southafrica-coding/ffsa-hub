@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ProfileCompletionForm } from "./profile-completion-form";
 import { RequiredAgreementsForm } from "./required-agreements-form";
 import { InsuranceExpiryBanner } from "./insurance-expiry-banner";
+import { InsuranceConfirmBanner } from "./insurance-confirm-banner";
 import { ChildrenGateForm } from "./profile/children-gate-form";
 import { HouseholdLinkConfirmForm } from "./profile/household-link-confirm-form";
 import { GateOverlay } from "./profile/gate-overlay";
@@ -9,6 +10,7 @@ import type { HouseholdMember } from "./profile/household-members";
 import {
   getProfileBlock,
   getInsuranceStatus,
+  getInsuranceConfirmation,
   hasValidQueuedPolicy,
   getChildrenBlock,
   applyListOptions,
@@ -112,6 +114,17 @@ export async function ProfileCompletionGate({
           row.health_insurance_policy_number ?? ""
         ),
       };
+    } else if (block.reason === "insurance_unconfirmed") {
+      // Nothing has changed for most people — pre-fill the whole policy so
+      // "Continue" is a one-click re-confirmation, and carry the flag
+      // through so the form doesn't demand an expiry date they don't have.
+      defaults = {
+        health_insurance_provider: provider,
+        health_insurance_policy_number: String(
+          row.health_insurance_policy_number ?? ""
+        ),
+        health_insurance_no_expiry: "true",
+      };
     } else if (
       // Passport is now required for everyone. A South African being asked
       // for it for the first time shouldn't have to hunt for their country —
@@ -209,6 +222,7 @@ export async function ProfileCompletionGate({
                 health_insurance_provider: row.health_insurance_provider as string | null | undefined,
                 health_insurance_policy_number: row.health_insurance_policy_number as string | null | undefined,
                 health_insurance_expiry_date: row.health_insurance_expiry_date as string | null | undefined,
+                health_insurance_no_expiry: row.health_insurance_no_expiry as boolean | null | undefined,
               }}
             />
           }
@@ -262,6 +276,32 @@ export async function ProfileCompletionGate({
             health_insurance_expiry_date: String(
               row.health_insurance_expiry_date ?? ""
             ).slice(0, 10),
+          }}
+        />
+        {children}
+      </>
+    );
+  }
+
+  // 3a) …and the equivalent nudge for an OPEN-ENDED policy, which has no
+  //     expiry date to count down to: confirm once a year that it's still
+  //     active. Blocking only much later, via getProfileBlock above.
+  const confirmation = getInsuranceConfirmation(row);
+  if (confirmation.level === "due_soon" || confirmation.level === "due") {
+    return (
+      <>
+        <InsuranceConfirmBanner
+          provider={String(row.health_insurance_provider ?? "")}
+          dueOn={confirmation.dueOn}
+          daysUntilDue={confirmation.daysUntilDue}
+          defaults={{
+            health_insurance_provider: String(
+              row.health_insurance_provider ?? ""
+            ),
+            health_insurance_policy_number: String(
+              row.health_insurance_policy_number ?? ""
+            ),
+            health_insurance_no_expiry: "true",
           }}
         />
         {children}

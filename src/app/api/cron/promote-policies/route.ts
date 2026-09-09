@@ -32,7 +32,7 @@ export async function GET(request: Request) {
   const { data: due, error } = await db
     .from("users")
     .select(
-      "id, next_health_insurance_provider, next_health_insurance_policy_number, next_health_insurance_expiry_date"
+      "id, next_health_insurance_provider, next_health_insurance_policy_number, next_health_insurance_expiry_date, next_health_insurance_no_expiry"
     )
     .not("next_health_insurance_provider", "is", null)
     .lt("health_insurance_expiry_date", today)
@@ -50,16 +50,26 @@ export async function GET(request: Request) {
     next_health_insurance_provider: string | null;
     next_health_insurance_policy_number: string | null;
     next_health_insurance_expiry_date: string | null;
+    next_health_insurance_no_expiry: boolean | null;
   }>) {
+    // A promoted open-ended policy carries no date and starts its annual
+    // re-confirmation clock today; the two are mutually exclusive in the
+    // database, so the flag has to travel with the write.
+    const noExpiry = u.next_health_insurance_no_expiry === true;
     const { error: updErr } = await db
       .from("users")
       .update({
         health_insurance_provider: u.next_health_insurance_provider,
         health_insurance_policy_number: u.next_health_insurance_policy_number,
-        health_insurance_expiry_date: u.next_health_insurance_expiry_date,
+        health_insurance_expiry_date: noExpiry
+          ? null
+          : u.next_health_insurance_expiry_date,
+        health_insurance_no_expiry: noExpiry,
+        health_insurance_confirmed_at: noExpiry ? today : null,
         next_health_insurance_provider: null,
         next_health_insurance_policy_number: null,
         next_health_insurance_expiry_date: null,
+        next_health_insurance_no_expiry: false,
       })
       .eq("id", u.id);
     if (updErr) failed += 1;

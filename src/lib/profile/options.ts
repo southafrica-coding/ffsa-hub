@@ -283,6 +283,31 @@ export const INSURANCE_PROVIDERS: Option[] = [
   { value: "other", label: "Other (specify)" },
 ];
 
+// ────────────────────────────────────────────────────────────
+// "This policy doesn't expire" eligibility
+// ────────────────────────────────────────────────────────────
+// SA medical schemes are open-ended memberships, so a policy on a LISTED
+// scheme may be recorded with no expiry date. A free-text "Other
+// (specify)" provider never can — we have no idea what it is, and the
+// annual re-confirmation only makes sense for a scheme we recognise.
+//
+// The list is admin-editable at runtime (public.list_options, key
+// `insurance_provider`), so callers pass whichever list they are actually
+// rendering; INSURANCE_PROVIDERS is the fallback, mirroring
+// applyListOptions. Server-side write paths MUST re-check against the
+// live list — the checkbox is only a UI affordance.
+export function providerAllowsNoExpiry(
+  provider: string | null | undefined,
+  options: { value: string }[] = INSURANCE_PROVIDERS
+): boolean {
+  const v = String(provider ?? "").trim().toLowerCase();
+  if (v === "" || v === "other" || v === "none") return false;
+  return options.some((o) => {
+    const ov = String(o.value ?? "").trim().toLowerCase();
+    return ov === v && ov !== "other" && ov !== "none";
+  });
+}
+
 // Helper: find a country record by stored name.
 export function findCountryByName(name: string | null | undefined): Country | undefined {
   if (!name) return undefined;

@@ -9,7 +9,8 @@ export type PolicyRow = {
   id: string;
   provider: string;
   policy_number: string | null;
-  expiry_date: string; // YYYY-MM-DD
+  expiry_date: string | null; // YYYY-MM-DD, null for an open-ended policy
+  no_expiry?: boolean;
   recorded_at: string; // ISO timestamp
 };
 
@@ -17,6 +18,7 @@ export type CurrentInsurance = {
   provider?: string | null;
   policy_number?: string | null;
   expiry_date?: string | null;
+  no_expiry?: boolean | null;
 };
 
 const norm = (v: string | null | undefined) => (v ?? "").trim();
@@ -38,7 +40,11 @@ export function currentPolicyId(
     (p) =>
       norm(p.provider) === norm(current.provider) &&
       norm(p.policy_number) === norm(current.policy_number) &&
-      day(p.expiry_date) === day(current.expiry_date)
+      day(p.expiry_date) === day(current.expiry_date) &&
+      // An open-ended row and a dated one are different policies even when
+      // everything else lines up — otherwise the wrong row is protected
+      // from deletion after a switch.
+      (p.no_expiry ?? false) === (current.no_expiry ?? false)
   );
   return (match ?? policies[0]).id;
 }

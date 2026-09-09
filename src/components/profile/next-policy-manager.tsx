@@ -18,7 +18,8 @@ import {
 export type PendingPolicy = {
   provider: string;
   policy_number: string | null;
-  expiry_date: string; // YYYY-MM-DD
+  expiry_date: string | null; // YYYY-MM-DD, null for an open-ended policy
+  no_expiry: boolean;
 };
 
 // Format a YYYY-MM-DD value as "7 Aug 2026" (UTC so a date-only value doesn't
@@ -42,11 +43,20 @@ function fmt(value: string): string {
 export function NextPolicyManager({
   pending,
   currentExpiry,
+  currentNoExpiry = false,
   providerOptions,
+  eligibleProviders = [],
 }: {
   pending: PendingPolicy | null;
   currentExpiry: string | null; // YYYY-MM-DD of the current policy
+  // The CURRENT policy is open-ended — there's no handover date, so
+  // nothing can be queued behind it.
+  currentNoExpiry?: boolean;
   providerOptions: string[];
+  // Provider values that may be recorded as never-expiring (the curated
+  // list minus "other"). Matched case-insensitively against the typed
+  // provider, since this dialog is a free-text input with a datalist.
+  eligibleProviders?: string[];
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -57,11 +67,19 @@ export function NextPolicyManager({
   const [provider, setProvider] = useState(pending?.provider ?? "");
   const [policyNumber, setPolicyNumber] = useState(pending?.policy_number ?? "");
   const [expiry, setExpiry] = useState(pending?.expiry_date ?? "");
+  const [noExpiry, setNoExpiry] = useState(pending?.no_expiry ?? false);
+
+  const eligible = new Set(
+    eligibleProviders.map((p) => p.trim().toLowerCase())
+  );
+  const noExpiryAllowed = eligible.has(provider.trim().toLowerCase());
+  const effectiveNoExpiry = noExpiry && noExpiryAllowed;
 
   function openDialog() {
     setProvider(pending?.provider ?? "");
     setPolicyNumber(pending?.policy_number ?? "");
     setExpiry(pending?.expiry_date ?? "");
+    setNoExpiry(pending?.no_expiry ?? false);
     setError(null);
     setOpen(true);
   }
@@ -77,7 +95,8 @@ export function NextPolicyManager({
         body: JSON.stringify({
           provider,
           policy_number: policyNumber || null,
-          expiry_date: expiry,
+          expiry_date: effectiveNoExpiry ? null : expiry,
+          no_expiry: effectiveNoExpiry,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -128,7 +147,9 @@ export function NextPolicyManager({
             </div>
           )}
           <div className="text-xs text-muted-foreground mt-0.5">
-            Expires {fmt(pending.expiry_date)}
+            {pending.no_expiry || !pending.expiry_date
+              ? "No expiry date"
+              : `Expires ${fmt(pending.expiry_date)}`}
           </div>
           <div className="mt-1 flex items-center gap-1.5 text-xs text-primary">
             <CalendarClock className="h-3.5 w-3.5 shrink-0" />
@@ -152,6 +173,15 @@ export function NextPolicyManager({
             </Button>
           </div>
         </div>
+      ) : currentNoExpiry ? (
+        // Nothing to queue behind: an open-ended policy has no end date for
+        // a successor to take over on. Editing the current policy is the
+        // right move instead.
+        <p className="text-xs text-muted-foreground">
+          Your current policy doesn&rsquo;t expire, so there&rsquo;s nothing for
+          a next policy to take over from. If you change schemes, update your
+          current policy details above.
+        </p>
       ) : (
         <Button type="button" variant="outline" size="sm" className="h-8" onClick={openDialog}>
           <Plus className="mr-1.5 h-3.5 w-3.5" />
@@ -196,16 +226,49 @@ export function NextPolicyManager({
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="next-expiry">Expiry date</Label>
-              <DateInput
-                id="next-expiry"
-                required
-                value={expiry}
-                onChange={setExpiry}
-              />
-              <p className="text-xs text-muted-foreground">
-                Must be after your current policy&rsquo;s expiry
-                {currentExpiry ? ` (${fmt(currentExpiry)})` : ""}.
-              </p>
+              <label
+                className={`flex items-start gap-2 text-sm ${
+                  noExpiryAllowed ? "" : "text-muted-foreground"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 shrink-0"
+                  checked={effectiveNoExpiry}
+                  disabled={!noExpiryAllowed}
+                  onChange={(e) => {
+                    if (e.target.checked) setExpiry("");
+                    setNoExpiry(e.target.checked);
+                  }}
+                />
+                <span>
+                  This policy doesn&apos;t expire
+                  {!noExpiryAllowed && (
+                    <span className="block text-xs">
+                      Available for listed medical schemes only
+                    </span>
+                  )}
+                </span>
+              </label>
+              {effectiveNoExpiry ? (
+                <p className="text-xs text-muted-foreground">
+                  No expiry date — you&rsquo;ll be asked once a year to confirm
+                  it&rsquo;s still active.
+                </p>
+              ) : (
+                <>
+                  <DateInput
+                    id="next-expiry"
+                    required
+                    value={expiry}
+                    onChange={setExpiry}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Must be after your current policy&rsquo;s expiry
+                    {currentExpiry ? ` (${fmt(currentExpiry)})` : ""}.
+                  </p>
+                </>
+              )}
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
             <DialogFooter>

@@ -38,6 +38,7 @@ export type HouseholdMemberInput = {
   health_insurance_provider?: string | null;
   health_insurance_policy_number?: string | null;
   health_insurance_expiry_date?: string | null;
+  health_insurance_no_expiry?: boolean | null;
 };
 
 // The caller's household id, or null if they have none yet. Read-only —

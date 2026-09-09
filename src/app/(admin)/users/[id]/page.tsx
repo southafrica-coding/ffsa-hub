@@ -289,10 +289,17 @@ export default async function UserProfilePage({
                       ((targetUser as any).next_health_insurance_policy_number as
                         | string
                         | null) ?? null,
-                    expiry_date: String(
+                    expiry_date:
                       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      (targetUser as any).next_health_insurance_expiry_date ?? ""
-                    ).slice(0, 10),
+                      (targetUser as any).next_health_insurance_no_expiry === true
+                        ? null
+                        : String(
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            (targetUser as any).next_health_insurance_expiry_date ?? ""
+                          ).slice(0, 10),
+                    no_expiry:
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      (targetUser as any).next_health_insurance_no_expiry === true,
                   }
                 : null
             }

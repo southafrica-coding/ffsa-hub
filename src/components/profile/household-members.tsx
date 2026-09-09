@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { FieldControl, seedOtherActive } from "@/components/profile/field-control";
+import { providerAllowsNoExpiry } from "@/lib/profile/options";
 import {
   HOUSEHOLD_CORE_FIELDS,
   HOUSEHOLD_SPOUSE_FIELDS,
@@ -36,6 +37,7 @@ export type HouseholdMember = {
   health_insurance_provider: string | null;
   health_insurance_policy_number: string | null;
   health_insurance_expiry_date: string | null;
+  health_insurance_no_expiry: boolean;
 };
 
 // The primary user's own visa + insurance, used by the "same as me" shortcut
@@ -48,6 +50,7 @@ export type SelfDefaults = {
   health_insurance_provider?: string | null;
   health_insurance_policy_number?: string | null;
   health_insurance_expiry_date?: string | null;
+  health_insurance_no_expiry?: boolean | null;
 };
 
 // The visa + insurance fields the "same as me" checkbox copies.
@@ -142,6 +145,9 @@ export function HouseholdMembers({
   const [editing, setEditing] = useState<string | null>(null);
   const [values, setValues] = useState<Record<string, string>>(EMPTY_VALUES);
   const [isInternational, setIsInternational] = useState(false);
+  // Open-ended medical scheme for this family member. A parallel boolean
+  // (like isInternational) rather than a key in the string-map `values`.
+  const [noExpiry, setNoExpiry] = useState(false);
   const [otherActive, setOtherActive] = useState<Record<string, boolean>>({});
   const [sameAsMe, setSameAsMe] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -152,6 +158,7 @@ export function HouseholdMembers({
     setEditing("new");
     setValues(start);
     setIsInternational(false);
+    setNoExpiry(false);
     setSameAsMe(false);
     setOtherActive(seedOtherActive(HOUSEHOLD_INSURANCE_FIELDS, start));
     setError(null);
@@ -162,6 +169,7 @@ export function HouseholdMembers({
     setEditing(m.id);
     setValues(v);
     setIsInternational(Boolean(m.is_international));
+    setNoExpiry(Boolean(m.health_insurance_no_expiry));
     setSameAsMe(false);
     setOtherActive(seedOtherActive(HOUSEHOLD_INSURANCE_FIELDS, v));
     setError(null);
@@ -179,6 +187,7 @@ export function HouseholdMembers({
       }
       setValues((prev) => ({ ...prev, ...copied }));
       setIsInternational(Boolean(selfDefaults.is_international));
+      setNoExpiry(Boolean(selfDefaults.health_insurance_no_expiry));
       setOtherActive((prev) => ({
         ...prev,
         ...seedOtherActive(HOUSEHOLD_INSURANCE_FIELDS, copied),
@@ -188,6 +197,7 @@ export function HouseholdMembers({
       for (const key of COPYABLE_FIELDS) cleared[key] = "";
       setValues((prev) => ({ ...prev, ...cleared }));
       setIsInternational(false);
+      setNoExpiry(false);
     }
   };
 
@@ -200,6 +210,18 @@ export function HouseholdMembers({
     setValues((prev) => ({ ...prev, [field]: v }));
 
   const isSpouse = values.relationship === "spouse";
+
+  // Only a listed medical scheme may be open-ended; switching to "Other"
+  // (or an off-list value) retires the flag so the date is asked for again.
+  const noExpiryAllowed =
+    !otherActive["health_insurance_provider"] &&
+    providerAllowsNoExpiry(
+      values.health_insurance_provider,
+      HOUSEHOLD_INSURANCE_FIELDS.find(
+        (f) => f.field === "health_insurance_provider"
+      )?.options
+    );
+  const effectiveNoExpiry = noExpiry && noExpiryAllowed;
 
   const visaFields: FieldConfig[] = isInternational
     ? [
@@ -222,6 +244,9 @@ export function HouseholdMembers({
       }
       required={false}
       idPrefix="household"
+      noExpiry={effectiveNoExpiry}
+      noExpiryAllowed={noExpiryAllowed}
+      onNoExpiryChange={setNoExpiry}
     />
   );
 
@@ -260,6 +285,7 @@ export function HouseholdMembers({
         const missing = missingChildFields({
           ...values,
           is_international: isInternational,
+          health_insurance_no_expiry: effectiveNoExpiry,
         });
         if (missing.length > 0) {
           setError(
@@ -281,6 +307,8 @@ export function HouseholdMembers({
     const payload: Record<string, unknown> = {
       ...values,
       is_international: isSpouse ? false : isInternational,
+      health_insurance_no_expiry: effectiveNoExpiry,
+      ...(effectiveNoExpiry ? { health_insurance_expiry_date: "" } : {}),
     };
     if (isSpouse) {
       // Server composes full_name from first/last; don't ship child-only fields.
