@@ -4,8 +4,8 @@
 // The /profile page renders every user-editable field, grouped into
 // cards. Field configs are reused verbatim from profile-fields.ts so the
 // page, the onboarding flow and the blocking gate can never disagree on
-// how a field is collected. We add only the two fields the gate doesn't
-// enforce (preferred_name, address_line_2). Passport is required for
+// how a field is collected. We add only address_line_2, which the gate
+// doesn't enforce. Passport is required for
 // everyone; the visa fields stay optional unless the user is flagged
 // international elsewhere. Every field listed here is on the
 // /api/profile/update safelist.
@@ -39,14 +39,6 @@ const pick = (name: string): FieldConfig => {
 const optional = (f: FieldConfig): FieldConfig => ({ ...f, optional: true });
 
 // Fields the gate never collects, so they have no config of their own.
-const PREFERRED_NAME: FieldConfig = {
-  field: "preferred_name",
-  label: "Preferred Name",
-  type: "text",
-  placeholder: "What you'd like to be called",
-  optional: true,
-};
-
 const ADDRESS_LINE_2: FieldConfig = {
   field: "address_line_2",
   label: "Address Line 2",
@@ -69,7 +61,6 @@ export const PROFILE_SECTIONS: ProfileSectionDef[] = [
     fields: [
       pick("first_name"),
       pick("last_name"),
-      PREFERRED_NAME,
       pick("date_of_birth"),
       pick("gender"),
       pick("marital_status"),
