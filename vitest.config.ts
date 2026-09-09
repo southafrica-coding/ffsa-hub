@@ -1,0 +1,11 @@
+import { defineConfig } from "vitest/config";
+import path from "node:path";
+
+// Vitest doesn't read tsconfig paths, so the "@/…" alias the app uses has to
+// be declared here too — without it any test whose import chain reaches an
+// "@/" import fails to resolve.
+export default defineConfig({
+  resolve: {
+    alias: { "@": path.resolve(__dirname, "src") },
+  },
+});

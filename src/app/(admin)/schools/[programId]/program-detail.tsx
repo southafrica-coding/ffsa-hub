@@ -873,6 +873,14 @@ function InsuranceBadge({ info }: { info: ArrivalInsuranceInfo | undefined }) {
       </Badge>
     );
   }
+  // An open-ended SA medical scheme: valid, with no date to count down to.
+  if (state === "no_expiry") {
+    return (
+      <Badge variant="outline" className="status-green">
+        Valid · no expiry
+      </Badge>
+    );
+  }
   if (state === "expiring") {
     return (
       <Badge
@@ -919,7 +927,8 @@ function ArrivalTab({
     const info = arrivalInsurance[e.user_id!];
     const profileDone =
       info?.profileStage === "active" || info?.profileStage === "pending_approval";
-    const insuranceOk = info?.insurance.state === "ok";
+    const insuranceOk =
+      info?.insurance.state === "ok" || info?.insurance.state === "no_expiry";
     return !profileDone || !insuranceOk;
   };
 

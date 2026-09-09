@@ -30,6 +30,10 @@ import {
   deriveUserLifecycle,
   groupMissingFields,
 } from "@/lib/users/lifecycle";
+import {
+  getInsuranceConfirmation,
+  type InsuranceConfirmation,
+} from "@/lib/users/profile-fields";
 import { listActiveMinistries } from "@/services/ministries";
 import { UserHeader } from "./user-header";
 import { UserTabs } from "./user-tabs";
@@ -214,7 +218,12 @@ export default async function UserProfilePage({
       />
 
       <div className="space-y-6 px-5 py-6 md:px-8 md:py-7">
-      <ProfileCompletenessCard lifecycle={lifecycle} />
+      <ProfileCompletenessCard
+        lifecycle={lifecycle}
+        confirmation={getInsuranceConfirmation(
+          targetUser as unknown as Record<string, unknown>
+        )}
+      />
 
       {isAdmin && (
         <div className="flex justify-end">
@@ -302,6 +311,10 @@ export default async function UserProfilePage({
                       (targetUser as any).next_health_insurance_no_expiry === true,
                   }
                 : null
+            }
+            currentNoExpiry={
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (targetUser as any).health_insurance_no_expiry === true
             }
             currentExpiry={
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -416,8 +429,10 @@ function addressLines(u: {
 
 function ProfileCompletenessCard({
   lifecycle,
+  confirmation,
 }: {
   lifecycle: ReturnType<typeof deriveUserLifecycle>;
+  confirmation: InsuranceConfirmation;
 }) {
   const groups = groupMissingFields(lifecycle.missingFields);
   const missingCount = lifecycle.missingFields.length;
@@ -478,6 +493,29 @@ function ProfileCompletenessCard({
           Health insurance expires in {insurance.daysLeft ?? 0} day
           {insurance.daysLeft === 1 ? "" : "s"}
           {insurance.expiryDate ? ` (${insurance.expiryDate})` : ""}.
+        </p>
+      )}
+      {/* An open-ended policy can never read as expired or expiring — its
+          only health check is the annual re-confirmation. */}
+      {insurance.state === "no_expiry" && (
+        <p
+          className={
+            confirmation.level === "blocking"
+              ? "text-sm text-destructive"
+              : confirmation.level === "due" || confirmation.level === "due_soon"
+                ? "text-sm text-amber"
+                : "text-sm text-muted-foreground"
+          }
+        >
+          Health insurance doesn&rsquo;t expire (open-ended medical scheme).
+          {confirmation.confirmedAt
+            ? ` Last confirmed ${confirmation.confirmedAt}`
+            : " Never confirmed"}
+          {confirmation.level === "blocking"
+            ? " — overdue, and the Hub is blocked until they confirm."
+            : confirmation.level === "due" || confirmation.level === "due_soon"
+              ? `${confirmation.dueOn ? `, due ${confirmation.dueOn}` : ""}.`
+              : `${confirmation.dueOn ? `, next due ${confirmation.dueOn}` : ""}.`}
         </p>
       )}
     </section>

@@ -50,6 +50,7 @@ import {
   type LifecycleInfo,
   type UserLifecycleStage,
 } from "@/lib/users/lifecycle";
+import { getInsuranceConfirmation } from "@/lib/users/profile-fields";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { deriveJobTitle, type MinistryRole } from "@/lib/users/derive-title";
 import { ConvertToCommunityDialog } from "./convert-to-community-dialog";
@@ -75,6 +76,9 @@ type UserRow = {
   nationality: string | null;
   health_insurance_provider: string | null;
   health_insurance_expiry_date: string | null;
+  /** Open-ended medical scheme: no expiry, re-confirmed yearly (migration 211). */
+  health_insurance_no_expiry?: boolean | null;
+  health_insurance_confirmed_at?: string | null;
   last_sign_in_at: string | null;
   /** No password has ever been set — they cannot sign in (migration 203). */
   needs_setup?: boolean;
@@ -292,6 +296,7 @@ export function UsersTable({
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
   const [insuranceExpiredOnly, setInsuranceExpiredOnly] = useState(false);
   const [insuranceExpiringOnly, setInsuranceExpiringOnly] = useState(false);
+  const [insuranceConfirmDueOnly, setInsuranceConfirmDueOnly] = useState(false);
   const [profileIncompleteOnly, setProfileIncompleteOnly] = useState(false);
 
   const deptLabels = useMemo(
@@ -349,6 +354,13 @@ export function UsersTable({
       if (insuranceExpiringOnly && lifecycle.insurance.state !== "expiring") {
         return false;
       }
+      // Open-ended policy overdue its annual re-confirmation. Deliberately
+      // separate from the two expiry facets — a no-expiry policy matches
+      // neither of those, by design.
+      if (insuranceConfirmDueOnly) {
+        const level = getInsuranceConfirmation(user).level;
+        if (level !== "due" && level !== "blocking") return false;
+      }
       // Profile-incomplete facet.
       if (profileIncompleteOnly && lifecycle.stage !== "profile_incomplete") {
         return false;
@@ -403,6 +415,7 @@ export function UsersTable({
     (departmentFilter !== "all" ? 1 : 0) +
     (insuranceExpiredOnly ? 1 : 0) +
     (insuranceExpiringOnly ? 1 : 0) +
+    (insuranceConfirmDueOnly ? 1 : 0) +
     (profileIncompleteOnly ? 1 : 0);
 
   function clearFilters() {
@@ -410,6 +423,7 @@ export function UsersTable({
     setDepartmentFilter("all");
     setInsuranceExpiredOnly(false);
     setInsuranceExpiringOnly(false);
+    setInsuranceConfirmDueOnly(false);
     setProfileIncompleteOnly(false);
   }
 
@@ -583,6 +597,12 @@ export function UsersTable({
             Insurance expiring soon
           </FilterChip>
           <FilterChip
+            active={insuranceConfirmDueOnly}
+            onClick={() => setInsuranceConfirmDueOnly((v) => !v)}
+          >
+            Insurance confirm due
+          </FilterChip>
+          <FilterChip
             active={profileIncompleteOnly}
             onClick={() => setProfileIncompleteOnly((v) => !v)}
           >
@@ -722,6 +742,32 @@ export function UsersTable({
                           Insurance expired
                         </Badge>
                       )}
+                      {(() => {
+                        // An open-ended policy never expires, so it earns no
+                        // expiry badge — only this one, once its annual
+                        // re-confirmation is overdue.
+                        const confirm = getInsuranceConfirmation(user);
+                        if (confirm.level !== "due" && confirm.level !== "blocking") {
+                          return null;
+                        }
+                        return (
+                          <Badge
+                            variant="outline"
+                            style={{
+                              borderColor: "var(--amber-border)",
+                              color: "var(--amber)",
+                              background: "var(--yellow-dim)",
+                            }}
+                            title={
+                              confirm.dueOn
+                                ? `Annual health-insurance confirmation was due ${confirm.dueOn}`
+                                : "Health insurance has never been confirmed"
+                            }
+                          >
+                            Insurance confirm due
+                          </Badge>
+                        );
+                      })()}
                       {lifecycle.insurance.state === "expiring" && (
                         <Badge
                           variant="outline"

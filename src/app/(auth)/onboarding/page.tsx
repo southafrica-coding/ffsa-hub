@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { updateUserProfile } from "@/services/users";
-import { isExpiryDatePast } from "@/lib/users/profile-fields";
+import { isExpiryDatePast, todayInSA } from "@/lib/users/profile-fields";
+import { providerAllowsNoExpiry } from "@/lib/profile/options";
 import { validatePassword } from "@/lib/auth/password";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,6 +70,7 @@ interface FormData {
   health_insurance_provider: string;
   health_insurance_policy_number: string;
   health_insurance_expiry_date: string;
+  health_insurance_no_expiry: boolean;
 }
 
 const EMPTY_FORM: FormData = {
@@ -82,6 +84,7 @@ const EMPTY_FORM: FormData = {
   emergency_contact_name: "", emergency_contact_phone: "",
   emergency_contact_relationship: "", health_insurance_provider: "",
   health_insurance_policy_number: "", health_insurance_expiry_date: "",
+  health_insurance_no_expiry: false,
 };
 
 export default function OnboardingPage() {
@@ -118,6 +121,16 @@ export default function OnboardingPage() {
   const [genderOpts, setGenderOpts] = useState(GENDER_OPTIONS);
   const [relationshipOpts, setRelationshipOpts] = useState(RELATIONSHIP_OPTIONS);
   const [insuranceOpts, setInsuranceOpts] = useState(INSURANCE_PROVIDERS);
+
+  // SA medical schemes are open-ended memberships, so a policy on a LISTED
+  // scheme may be recorded with no expiry date. A free-text "Other" provider
+  // always needs one. Derived rather than stored, so switching to an
+  // ineligible provider retires the flag without a render-time write.
+  const noExpiryAllowed = providerAllowsNoExpiry(
+    form.health_insurance_provider,
+    insuranceOpts
+  );
+  const noExpirySelected = form.health_insurance_no_expiry && noExpiryAllowed;
 
   useEffect(() => {
     let cancelled = false;
@@ -191,6 +204,7 @@ export default function OnboardingPage() {
         health_insurance_provider: appUser.health_insurance_provider ?? "",
         health_insurance_policy_number: appUser.health_insurance_policy_number ?? "",
         health_insurance_expiry_date: appUser.health_insurance_expiry_date ?? "",
+        health_insurance_no_expiry: appUser.health_insurance_no_expiry === true,
       });
       setSignupType(appUser.signup_type ?? null);
 
@@ -292,9 +306,12 @@ export default function OnboardingPage() {
       if (signupType !== "community") {
         if (blank(form.health_insurance_provider)) return "Health insurance provider is required.";
         if (blank(form.health_insurance_policy_number)) return "Health insurance policy number is required.";
-        if (blank(form.health_insurance_expiry_date)) return "Health insurance expiry date is required.";
-        if (isExpiryDatePast(form.health_insurance_expiry_date))
-          return "Your health insurance has expired. Please enter the date your current policy expires.";
+        // An open-ended medical scheme has no expiry date to give.
+        if (!noExpirySelected) {
+          if (blank(form.health_insurance_expiry_date)) return "Health insurance expiry date is required.";
+          if (isExpiryDatePast(form.health_insurance_expiry_date))
+            return "Your health insurance has expired. Please enter the date your current policy expires.";
+        }
       }
       return null;
     }
@@ -329,6 +346,9 @@ export default function OnboardingPage() {
         }
       }
 
+      // health_insurance_no_expiry / _confirmed_at (migration 211) aren't in
+      // the generated DB types yet — same loose-cast convention used
+      // elsewhere for not-yet-generated columns.
       const { error: profileError } = await updateUserProfile(supabase, userId, {
         first_name: form.first_name.trim(), last_name: form.last_name.trim(),
         preferred_name: nullify(form.preferred_name), date_of_birth: nullify(form.date_of_birth),
@@ -349,8 +369,17 @@ export default function OnboardingPage() {
         emergency_contact_relationship: nullify(form.emergency_contact_relationship),
         health_insurance_provider: nullify(form.health_insurance_provider),
         health_insurance_policy_number: nullify(form.health_insurance_policy_number),
-        health_insurance_expiry_date: nullify(form.health_insurance_expiry_date),
-      });
+        health_insurance_expiry_date: noExpirySelected
+          ? null
+          : nullify(form.health_insurance_expiry_date),
+        health_insurance_no_expiry: noExpirySelected,
+        // Starts the annual re-confirmation clock (see
+        // getInsuranceConfirmation) — the flag's stand-in for an expiry date.
+        health_insurance_confirmed_at: noExpirySelected
+          ? todayInSA()
+          : null,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
       if (profileError) throw new Error(profileError.message);
       // Completion runs server-side so it can also notify the people admins.
       const res = await fetch("/api/onboarding/complete", { method: "POST" });
@@ -850,7 +879,48 @@ export default function OnboardingPage() {
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="health_insurance_expiry_date">Expiry Date *</Label>
-                        <DateInput id="health_insurance_expiry_date" value={form.health_insurance_expiry_date} onChange={(v) => set("health_insurance_expiry_date", v)} />
+                        {(() => {
+                          const allowed = noExpiryAllowed;
+                          return (
+                            <>
+                              <label
+                                className={`flex items-start gap-2 text-sm ${allowed ? "" : "text-muted-foreground"}`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  className="mt-0.5 h-4 w-4 shrink-0"
+                                  checked={noExpirySelected}
+                                  disabled={!allowed}
+                                  onChange={(e) => {
+                                    const on = e.target.checked;
+                                    setForm((prev) => ({
+                                      ...prev,
+                                      health_insurance_no_expiry: on,
+                                      // Mutually exclusive with a date.
+                                      ...(on && { health_insurance_expiry_date: "" }),
+                                    }));
+                                  }}
+                                />
+                                <span>
+                                  This policy doesn&apos;t expire
+                                  {!allowed && (
+                                    <span className="block text-xs">
+                                      Available for listed medical schemes only
+                                    </span>
+                                  )}
+                                </span>
+                              </label>
+                              {noExpirySelected ? (
+                                <p className="text-sm text-muted-foreground">
+                                  No expiry date — you&apos;ll be asked once a year to
+                                  confirm it&apos;s still active.
+                                </p>
+                              ) : (
+                                <DateInput id="health_insurance_expiry_date" value={form.health_insurance_expiry_date} onChange={(v) => set("health_insurance_expiry_date", v)} />
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -883,6 +953,7 @@ export default function OnboardingPage() {
                       health_insurance_provider: form.health_insurance_provider,
                       health_insurance_policy_number: form.health_insurance_policy_number,
                       health_insurance_expiry_date: form.health_insurance_expiry_date,
+                      health_insurance_no_expiry: noExpirySelected,
                     }}
                   />
                 </>
