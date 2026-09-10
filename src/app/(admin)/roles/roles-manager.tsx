@@ -452,9 +452,9 @@ export function RolesManager({
                       by {m.scopeType}
                     </Badge>
                   )}
-                  {m.status && m.status !== "active" && (
+                  {m.neverSignedIn && (
                     <Badge variant="outline" className="text-[10px]">
-                      {m.status}
+                      Never signed in
                     </Badge>
                   )}
                 </div>

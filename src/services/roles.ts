@@ -1,4 +1,5 @@
 import type { Database, TablesInsert } from "@/types/database";
+import { getAuthSignIns } from "@/lib/users/auth-signins";
 type UserRoleInsert = TablesInsert<"user_roles">;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -118,7 +119,13 @@ export type RoleMember = {
   id: string;
   name: string;
   email: string | null;
-  status: string | null;
+  /**
+   * True only when Supabase Auth has no sign-in on record. NOT users.status —
+   * that column is stale for people who joined long ago (it still reads
+   * "invited" for accounts signing in daily), so it would brand active staff
+   * as pending. See lib/users/auth-signins.ts.
+   */
+  neverSignedIn: boolean;
   /** Set when the assignment is scoped (e.g. program_leader on one program). */
   scopeType: string | null;
 };
@@ -151,10 +158,13 @@ export async function getRoleMembers(
   if (rows.length === 0) return {};
 
   const userIds = Array.from(new Set(rows.map((r) => r.user_id)));
-  const { data: people } = await adminClient
-    .from("users")
-    .select("id, first_name, last_name, display_name, email, status")
-    .in("id", userIds);
+  const [{ data: people }, signIns] = await Promise.all([
+    adminClient
+      .from("users")
+      .select("id, first_name, last_name, display_name, email")
+      .in("id", userIds),
+    getAuthSignIns(),
+  ]);
 
   const byId = new Map<string, RoleMember>();
   for (const p of (people ?? []) as {
@@ -163,7 +173,6 @@ export async function getRoleMembers(
     last_name: string | null;
     display_name: string | null;
     email: string | null;
-    status: string | null;
   }[]) {
     const name =
       p.display_name ||
@@ -174,7 +183,7 @@ export async function getRoleMembers(
       id: p.id,
       name,
       email: p.email,
-      status: p.status,
+      neverSignedIn: !signIns.get(p.id),
       scopeType: null,
     });
   }
