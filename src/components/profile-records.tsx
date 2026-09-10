@@ -29,14 +29,24 @@ import { bestPersonName } from "@/lib/person-name";
  *
  * `canOpenLibrary` controls whether the linked-source-records list shows
  * "Open record" / "Print sheet" deep-links to the records-library. Self-view
- * sets this false; admin view sets it true.
+ * sets this false; the admin view sets it from the viewer's Records Library
+ * access.
+ *
+ * `showLibrarySources` controls whether the linked CSV rows are listed at all.
+ * It defaults to true for the self-view — that is the user's own data. The
+ * admin view passes the viewer's Records Library access, because a general
+ * `admin` is carved out of that module (see SUPER_ADMIN_ONLY_MODULES) and this
+ * component reads library_persons with the service-role client, so RLS does
+ * not gate it here.
  */
 export async function ProfileRecords({
   userId,
   canOpenLibrary,
+  showLibrarySources = true,
 }: {
   userId: string;
   canOpenLibrary: boolean;
+  showLibrarySources?: boolean;
 }) {
   const admin = createAdminClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -52,7 +62,9 @@ export async function ProfileRecords({
       .order("linked_at", { ascending: false }),
     getProfileAttachments(admin, userId),
   ]);
-  const linkedPersons: LinkedPerson[] = linkedPersonsRes.data ?? [];
+  const linkedPersons: LinkedPerson[] = showLibrarySources
+    ? (linkedPersonsRes.data ?? [])
+    : [];
 
   const total =
     attachments.applications.length +
@@ -165,48 +177,56 @@ export async function ProfileRecords({
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Section
+          canOpenLibrary={canOpenLibrary}
           title="Applications"
           empty="No applications on file."
           rows={attachments.applications}
           icon={FileText}
         />
         <Section
+          canOpenLibrary={canOpenLibrary}
           title="Enrollments"
           empty="No enrollments on file."
           rows={attachments.enrollments}
           icon={GraduationCap}
         />
         <Section
+          canOpenLibrary={canOpenLibrary}
           title="Payments"
           empty="No payments on file."
           rows={attachments.payments}
           icon={Receipt}
         />
         <Section
+          canOpenLibrary={canOpenLibrary}
           title="Event tickets"
           empty="No event tickets on file."
           rows={attachments.tickets}
           icon={Ticket}
         />
         <Section
+          canOpenLibrary={canOpenLibrary}
           title="Documents"
           empty="No documents on file."
           rows={attachments.documents}
           icon={FileBadge}
         />
         <Section
+          canOpenLibrary={canOpenLibrary}
           title="References"
           empty="No references requested or submitted."
           rows={attachments.references}
           icon={UserCheck}
         />
         <Section
+          canOpenLibrary={canOpenLibrary}
           title="Consents"
           empty="No agreements accepted yet."
           rows={attachments.consents}
           icon={ShieldCheck}
         />
         <Section
+          canOpenLibrary={canOpenLibrary}
           title="Prayer room"
           empty="No prayer-room slots signed up to."
           rows={attachments.prayerRoom}
@@ -222,11 +242,13 @@ function Section({
   empty,
   rows,
   icon: Icon,
+  canOpenLibrary,
 }: {
   title: string;
   empty: string;
   rows: AttachmentRow[];
   icon: React.ComponentType<{ className?: string }>;
+  canOpenLibrary: boolean;
 }) {
   // Distinct rows count (after CSV dedup) shown in the header; the total
   // underlying record count (sum of `count` for collapsed groups) renders
@@ -256,7 +278,7 @@ function Section({
           <ul className="divide-y">
             {rows.map((r) => (
               <li key={r.id} className="border-t first:border-t-0">
-                <Row r={r} />
+                <Row r={r} canOpenLibrary={canOpenLibrary} />
               </li>
             ))}
           </ul>
@@ -266,7 +288,13 @@ function Section({
   );
 }
 
-function Row({ r }: { r: AttachmentRow }) {
+function Row({
+  r,
+  canOpenLibrary,
+}: {
+  r: AttachmentRow;
+  canOpenLibrary: boolean;
+}) {
   const body = (
     <div className="flex items-start justify-between gap-2 py-2.5 px-1 -mx-1 rounded-md">
       <div className="min-w-0 flex-1">
@@ -303,10 +331,11 @@ function Row({ r }: { r: AttachmentRow }) {
     </div>
   );
 
-  // CSV rows deep-link to the library_person record. In-app rows stay
-  // un-linked here (each in-app domain has its own detail page; we keep
-  // the routing decision out of this shared component for now).
-  if (r.source === "csv" && r.libraryPersonId) {
+  // CSV rows deep-link to the library_person record — but only for a viewer
+  // who can actually open the Records Library. In-app rows stay un-linked
+  // here (each in-app domain has its own detail page; we keep the routing
+  // decision out of this shared component for now).
+  if (canOpenLibrary && r.source === "csv" && r.libraryPersonId) {
     return (
       <Link
         href={`/records-library/persons/${r.libraryPersonId}`}

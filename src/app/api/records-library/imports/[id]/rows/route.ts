@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
+import { canAccessRecordsLibrary } from "@/lib/auth/records-library-access";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   findPersonByEmail,
@@ -113,7 +114,7 @@ export async function POST(
   }
 
   // Authz — same gate as the create endpoint.
-  const allowed = await canManageLibrary(adminSupabase, user.id);
+  const allowed = await canAccessRecordsLibrary(adminSupabase, user.id);
   if (!allowed) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
@@ -484,23 +485,4 @@ function parseAmount(v: unknown): number | null {
   if (!s) return null;
   const n = parseFloat(s);
   return isNaN(n) ? null : n;
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function canManageLibrary(supabase: any, userId: string): Promise<boolean> {
-  const { data: rolesData } = await supabase
-    .from("user_roles")
-    .select("roles!inner(name)")
-    .eq("user_id", userId)
-    .in("roles.name", ["super_admin", "admin"])
-    .limit(1);
-  if (rolesData && rolesData.length > 0) return true;
-
-  const { data: permData } = await supabase
-    .from("user_permissions")
-    .select("permissions!inner(key)")
-    .eq("user_id", userId)
-    .eq("permissions.key", "records_library.manage")
-    .limit(1);
-  return !!permData && permData.length > 0;
 }

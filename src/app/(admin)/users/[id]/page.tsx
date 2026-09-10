@@ -38,6 +38,7 @@ import { listActiveMinistries } from "@/services/ministries";
 import { UserHeader } from "./user-header";
 import { UserTabs } from "./user-tabs";
 import { EditProfileDialog } from "./edit-profile-dialog";
+import { hasModuleAccess } from "@/lib/require-permission";
 
 export default async function UserProfilePage({
   params,
@@ -69,6 +70,11 @@ export default async function UserProfilePage({
     .in("roles.name", ["super_admin", "admin"])
     .limit(1);
   const isAdmin = (superCheck?.length ?? 0) > 0;
+
+  // The Records Library is carved out of the admin bypass, so the linked CSV
+  // source records below need their own check — a general `admin` without
+  // records_library.manage must not see them. See SUPER_ADMIN_ONLY_MODULES.
+  const canSeeLibrary = await hasModuleAccess(supabase, authUser.id, "records-library");
 
   const manageScopes = isAdmin
     ? { hasGlobal: true, programIds: [] }
@@ -359,7 +365,7 @@ export default async function UserProfilePage({
             Auto-linked from CSV imports via the Records Library matching engine.
           </p>
         </div>
-        <ProfileRecords userId={id} canOpenLibrary={true} />
+        <ProfileRecords userId={id} canOpenLibrary={canSeeLibrary} showLibrarySources={canSeeLibrary} />
       </section>
       )}
       </div>

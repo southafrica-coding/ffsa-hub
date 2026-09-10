@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { canAccessRecordsLibrary } from "@/lib/auth/records-library-access";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createImport, type ColumnMapping, type RecordType } from "@/services/records-library";
 
@@ -12,7 +13,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const allowed = await canManageLibrary(supabase, user.id);
+  const allowed = await canAccessRecordsLibrary(supabase, user.id);
   if (!allowed) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
@@ -70,23 +71,4 @@ export async function POST(request: Request) {
     .eq("id", created.data.id);
 
   return NextResponse.json({ import: created.data });
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function canManageLibrary(supabase: any, userId: string): Promise<boolean> {
-  const { data: rolesData } = await supabase
-    .from("user_roles")
-    .select("roles!inner(name)")
-    .eq("user_id", userId)
-    .in("roles.name", ["super_admin", "admin"])
-    .limit(1);
-  if (rolesData && rolesData.length > 0) return true;
-
-  const { data: permData } = await supabase
-    .from("user_permissions")
-    .select("permissions!inner(key)")
-    .eq("user_id", userId)
-    .eq("permissions.key", "records_library.manage")
-    .limit(1);
-  return !!permData && permData.length > 0;
 }

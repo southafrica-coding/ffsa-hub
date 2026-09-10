@@ -159,8 +159,9 @@ export const ADMIN_MODULES: ModuleDefinition[] = [
     label: "Records Library",
     href: "/records-library",
     icon: Archive,
-    description: "Historical CSVs of staff/student data — auto-linked to user profiles",
-    requiredRoles: ["super_admin", "admin"],
+    description:
+      "Historical CSVs of staff/student data — auto-linked to user profiles. Super admin only (or a records_library.manage grant)",
+    requiredRoles: ["super_admin"],
   },
 ];
 
@@ -249,9 +250,22 @@ export const PORTAL_TABS: PortalTab[] = [
 ];
 
 /**
+ * Modules the blanket super_admin/admin bypass does NOT cover.
+ *
+ * The `admin` role ("general admin") is otherwise identical to super_admin.
+ * The Records Library is the one carve-out: it holds historical CSVs of
+ * personal data, so it takes super_admin or an explicit
+ * `records_library.manage` grant (direct or via a job title's bundle).
+ *
+ * Mirrors public.can_access_records_library() in migration 212.
+ */
+export const SUPER_ADMIN_ONLY_MODULES = new Set(["records-library"]);
+
+/**
  * Returns modules the user can access.
  *
- * super_admin and admin see everything.
+ * super_admin sees everything. `admin` sees everything except the modules in
+ * SUPER_ADMIN_ONLY_MODULES, which fall through to the permission check.
  * Everyone else sees only modules they have at least one permission for
  * (permittedModules is the set of module ids from user_permissions).
  */
@@ -260,14 +274,16 @@ export function getAccessibleModules(
   userRoles: string[],
   permittedModules?: Set<string>
 ): ModuleDefinition[] {
-  const isAdmin =
-    userRoles.includes("super_admin") || userRoles.includes("admin");
+  const isSuperAdmin = userRoles.includes("super_admin");
+  const isAdmin = isSuperAdmin || userRoles.includes("admin");
 
   return modules.filter((mod) => {
     // Always open (dashboard, prayer room)
     if (mod.requiredRoles.length === 0) return true;
-    // Admins see everything
-    if (isAdmin) return true;
+    // Admins see everything — except the super-admin-only carve-outs
+    if (isAdmin && !(!isSuperAdmin && SUPER_ADMIN_ONLY_MODULES.has(mod.id))) {
+      return true;
+    }
     // Otherwise check the permissions-based set
     return permittedModules?.has(mod.id) ?? false;
   });

@@ -6,6 +6,11 @@
 --   * users with manage_records_library perm    → full access
 --   * regular users                             → read only the records
 --                                                 linked to their own user_id
+--
+-- SUPERSEDED IN PART BY MIGRATION 212: the `admin` role no longer gets
+-- Records Library access. The policies/guards below now read
+-- public.can_access_records_library() (super_admin OR records_library.manage)
+-- instead of public.is_admin() OR has_permission(...).
 -- ============================================================
 
 ALTER TABLE public.library_imports        ENABLE ROW LEVEL SECURITY;

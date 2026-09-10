@@ -1,11 +1,27 @@
 import { redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { SUPER_ADMIN_ONLY_MODULES } from "@/config/modules";
+
+/**
+ * The role names that get the blanket bypass for a given module.
+ *
+ * Normally super_admin and admin both pass. For a SUPER_ADMIN_ONLY_MODULES
+ * carve-out (the Records Library) only super_admin does — a plain `admin`
+ * falls through to the direct / role-bundle permission checks below, and so
+ * needs an explicit `records_library.manage` grant. Mirrors
+ * public.can_access_records_library() in migration 212.
+ */
+function bypassRoles(modules: string[]): string[] {
+  const carvedOut = modules.some((m) => SUPER_ADMIN_ONLY_MODULES.has(m));
+  return carvedOut ? ["super_admin"] : ["super_admin", "admin"];
+}
 
 /**
  * Call at the top of any admin server page to enforce access.
  *
- * super_admin and admin always pass through.
- * Everyone else must have at least one user_permission row for the given module.
+ * super_admin always passes; `admin` passes for every module except the
+ * SUPER_ADMIN_ONLY_MODULES carve-outs. Everyone else must have at least one
+ * user_permission row (direct or via a role bundle) for the given module.
  *
  * Usage:
  *   await requireModuleAccess(supabase, userId, "finance");
@@ -16,12 +32,12 @@ export async function requireModuleAccess(
   userId: string,
   module: string
 ) {
-  // Check super_admin / admin first — always allowed
+  // Blanket role bypass first (see bypassRoles)
   const { data: adminCheck } = await supabase
     .from("user_roles")
     .select("roles!inner(name)")
     .eq("user_id", userId)
-    .in("roles.name", ["super_admin", "admin"])
+    .in("roles.name", bypassRoles([module]))
     .limit(1);
 
   if ((adminCheck?.length ?? 0) > 0) return;
@@ -61,8 +77,9 @@ export async function requireModuleAccess(
 /**
  * Non-redirecting boolean version of requireModuleAccess. Use to conditionally
  * render UI (e.g. hide a hub card the user can't open) rather than to guard a
- * page. Same rule: super_admin/admin always true; else a direct or role-bundle
- * permission for the module.
+ * page. Same rule as requireModuleAccess: super_admin always true, `admin`
+ * true outside the SUPER_ADMIN_ONLY_MODULES carve-outs, else a direct or
+ * role-bundle permission for the module.
  */
 export async function hasModuleAccess(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -74,7 +91,7 @@ export async function hasModuleAccess(
     .from("user_roles")
     .select("roles!inner(name)")
     .eq("user_id", userId)
-    .in("roles.name", ["super_admin", "admin"])
+    .in("roles.name", bypassRoles([module]))
     .limit(1);
 
   if ((adminCheck?.length ?? 0) > 0) return true;
@@ -123,7 +140,7 @@ export async function requireAnyModuleAccess(
     .from("user_roles")
     .select("roles!inner(name)")
     .eq("user_id", userId)
-    .in("roles.name", ["super_admin", "admin"])
+    .in("roles.name", bypassRoles(modules))
     .limit(1);
 
   if ((adminCheck?.length ?? 0) > 0) return;

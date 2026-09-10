@@ -90,11 +90,13 @@ export async function getSidebarAccess(
       })
       .filter(Boolean) as string[];
 
-    const isAdmin =
-      result.userRoles.includes("super_admin") || result.userRoles.includes("admin");
+    // Only super_admin can skip the per-permission lookup. A plain `admin`
+    // sees every module except the SUPER_ADMIN_ONLY_MODULES carve-outs
+    // (Records Library), so we still need their permitted set to decide
+    // those — getAccessibleModules does the filtering.
+    const isSuperAdmin = result.userRoles.includes("super_admin");
 
-    // Admins see every module regardless, so skip the per-permission lookup.
-    if (!isAdmin) {
+    if (!isSuperAdmin) {
       const permRows = await readOrThrow<
         Array<{
           permissions:
