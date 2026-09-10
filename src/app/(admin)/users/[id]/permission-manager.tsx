@@ -704,7 +704,7 @@ export function PermissionManager({
                 : "General Admin (no records library)"
             }
             active={isTargetGeneralAdmin}
-            description="Everything a Super Admin can reach, except the Records Library. Grant the Records Library permission separately if they need it."
+            description="Everything a Super Admin can reach, except the Records Library."
             isSelf={isSelf}
             busy={togglingTier === "admin" || isPending}
             actionLabel={
