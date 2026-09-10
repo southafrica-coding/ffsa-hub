@@ -2,11 +2,13 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { ChevronDown, ChevronRight, Check, Minus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { Permission, UserPermission, ScopeOption, PermissionsByModule } from "@/services/permissions";
+import { SuperAdminConfirmDialog } from "./super-admin-confirm-dialog";
 
 // Module display labels matching modules.ts ids
 const MODULE_LABELS: Record<string, string> = {
@@ -368,6 +370,76 @@ function ModuleSection({
   );
 }
 
+/**
+ * One admin-tier row: heading, what it grants, and the grant/remove button.
+ *
+ * Shared by General Admin and Super Admin so the two read as one scale rather
+ * than two unrelated switches. Active state is the yellow-dim treatment the
+ * Super Admin card has always used.
+ */
+function TierPanel({
+  heading,
+  active,
+  description,
+  isSelf,
+  busy,
+  actionLabel,
+  onAction,
+}: {
+  heading: string;
+  active: boolean;
+  description: string;
+  isSelf: boolean;
+  busy: boolean;
+  actionLabel: string;
+  onAction: () => void;
+}) {
+  return (
+    <div
+      style={{
+        background: active ? "var(--yellow-dim)" : "#FFFFFF",
+        border: active ? "1px solid #FFF4D9" : "1px solid var(--rule)",
+        padding: "1.25rem 1.5rem",
+      }}
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1">
+          <div
+            style={{
+              fontSize: "9px",
+              letterSpacing: "0.2em",
+              color: active ? "#0A0A0A" : "#45423B",
+              textTransform: "uppercase",
+              fontWeight: 700,
+              marginBottom: "6px",
+            }}
+          >
+            {heading}
+          </div>
+          <p className="text-sm text-muted-foreground">{description}</p>
+          {isSelf && (
+            <p className="text-xs mt-2" style={{ color: "#7C786C" }}>
+              You cannot change your own admin status.
+            </p>
+          )}
+        </div>
+        <Button
+          onClick={onAction}
+          disabled={busy || isSelf}
+          variant={active ? "outline" : "default"}
+          style={
+            active
+              ? { borderColor: "#FFF4D9", color: "#0A0A0A" }
+              : { background: "#FFB801", color: "#0A0A0A", fontWeight: 700 }
+          }
+        >
+          {busy ? "Saving…" : actionLabel}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function PermissionManager({
   userId,
   currentStatus,
@@ -381,7 +453,9 @@ export function PermissionManager({
   //   array → can manage only these specific program ids
   managedProgramIds = null,
   isTargetSuperAdmin = false,
+  isTargetGeneralAdmin = false,
   isSelf = false,
+  personName = "This person",
 }: {
   userId: string;
   currentStatus: string;
@@ -392,50 +466,54 @@ export function PermissionManager({
   isSuperAdmin?: boolean;
   managedProgramIds?: string[] | null;
   isTargetSuperAdmin?: boolean;
+  isTargetGeneralAdmin?: boolean;
   isSelf?: boolean;
+  personName?: string;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [saving, setSaving] = useState(false);
   const [jobTitle, setJobTitle] = useState(currentJobTitle);
   const [status, setStatus] = useState(currentStatus);
-  const [togglingSuperAdmin, setTogglingSuperAdmin] = useState(false);
+  // Which tier row is mid-request ("admin"), and whether the Super Admin
+  // confirmation is open (and in which direction).
+  const [togglingTier, setTogglingTier] = useState<string | null>(null);
+  const [superAdminPrompt, setSuperAdminPrompt] = useState<
+    "grant" | "remove" | null
+  >(null);
 
-  async function handleToggleSuperAdmin() {
+  // General Admin toggles straight from the panel. Super Admin routes through
+  // SuperAdminConfirmDialog instead — see the tier rows below.
+  async function handleToggleTier(roleName: string) {
     if (isSelf) {
-      alert("You cannot change your own super_admin status.");
+      toast.error("You cannot change your own admin status.");
       return;
     }
 
-    const grant = !isTargetSuperAdmin;
-    const confirmMsg = grant
-      ? "Grant Super Admin? This bypasses ALL roles and permission checks — the user will have unrestricted access to every module and every record in the system."
-      : "Remove Super Admin? The user will lose unrestricted access and fall back to their other roles and permissions.";
-
-    if (!confirm(confirmMsg)) return;
-
-    setTogglingSuperAdmin(true);
+    const grant = roleName === "super_admin" ? !isTargetSuperAdmin : !isTargetGeneralAdmin;
+    setTogglingTier(roleName);
     try {
-      const endpoint = grant
-        ? "/api/admin/grant-role"
-        : "/api/admin/revoke-role";
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: userId, role_name: "super_admin" }),
-      });
+      const res = await fetch(
+        grant ? "/api/admin/grant-role" : "/api/admin/revoke-role",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user_id: userId, role_name: roleName }),
+        }
+      );
 
       if (!res.ok) {
-        const data = await res.json();
-        alert(data.error || "Failed to update super_admin role.");
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error || "Could not update this role.");
         return;
       }
 
+      toast.success(grant ? "General Admin granted" : "General Admin removed");
       startTransition(() => router.refresh());
     } catch {
-      alert("Failed to update super_admin role.");
+      toast.error("Could not update this role.");
     } finally {
-      setTogglingSuperAdmin(false);
+      setTogglingTier(null);
     }
   }
 
@@ -613,75 +691,54 @@ export function PermissionManager({
 
   return (
     <div className="space-y-6">
-      {/* Super Admin toggle — super_admin only */}
+      {/* The two admin tiers, most-restricted first — super_admin only.
+          They differ in exactly one thing (the Records Library), so they are
+          shown together and say so. Granting either is super-admin-only in the
+          API too: SUPER_ADMIN_ONLY_ROLES in lib/auth/check-role-grant.ts. */}
       {isSuperAdmin && (
-        <div
-          style={{
-            background: isTargetSuperAdmin
-              ? "var(--yellow-dim)"
-              : "#FFFFFF",
-            border: isTargetSuperAdmin
-              ? "1px solid #FFF4D9"
-              : "1px solid var(--rule)",
-            padding: "1.25rem 1.5rem",
-          }}
-        >
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1">
-              <div
-                style={{
-                  fontSize: "9px",
-                  letterSpacing: "0.2em",
-                  color: isTargetSuperAdmin
-                    ? "#0A0A0A"
-                    : "#45423B",
-                  textTransform: "uppercase",
-                  fontWeight: 700,
-                  marginBottom: "6px",
-                }}
-              >
-                {isTargetSuperAdmin
-                  ? "Super Admin — Active"
-                  : "Super Admin"}
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Bypasses all roles and permission checks. The user has
-                unrestricted access to every module and every record.
-              </p>
-              {isSelf && (
-                <p
-                  className="text-xs mt-2"
-                  style={{ color: "#7C786C" }}
-                >
-                  You cannot change your own super_admin status.
-                </p>
-              )}
-            </div>
-            <Button
-              onClick={handleToggleSuperAdmin}
-              disabled={togglingSuperAdmin || isPending || isSelf}
-              variant={isTargetSuperAdmin ? "outline" : "default"}
-              style={
-                isTargetSuperAdmin
-                  ? {
-                      borderColor: "#FFF4D9",
-                      color: "#0A0A0A",
-                    }
-                  : {
-                      background: "#FFB801",
-                      color: "#0A0A0A",
-                      fontWeight: 700,
-                    }
-              }
-            >
-              {togglingSuperAdmin
-                ? "Saving…"
-                : isTargetSuperAdmin
-                ? "Remove Super Admin"
-                : "Make Super Admin"}
-            </Button>
-          </div>
-        </div>
+        <>
+          <TierPanel
+            heading={
+              isTargetGeneralAdmin
+                ? "General Admin — Active"
+                : "General Admin (no records library)"
+            }
+            active={isTargetGeneralAdmin}
+            description="Everything a Super Admin can reach, except the Records Library. Grant the Records Library permission separately if they need it."
+            isSelf={isSelf}
+            busy={togglingTier === "admin" || isPending}
+            actionLabel={
+              isTargetGeneralAdmin ? "Remove General Admin" : "Make General Admin"
+            }
+            onAction={() => handleToggleTier("admin")}
+          />
+
+          <TierPanel
+            heading={
+              isTargetSuperAdmin
+                ? "Super Admin — Active"
+                : "Super Admin (including records library)"
+            }
+            active={isTargetSuperAdmin}
+            description="Bypasses all roles and permission checks — unrestricted access to every module and every record, the Records Library included."
+            isSelf={isSelf}
+            busy={isPending}
+            actionLabel={
+              isTargetSuperAdmin ? "Remove Super Admin" : "Make Super Admin"
+            }
+            onAction={() =>
+              setSuperAdminPrompt(isTargetSuperAdmin ? "remove" : "grant")
+            }
+          />
+
+          <SuperAdminConfirmDialog
+            userId={userId}
+            personName={personName}
+            mode={superAdminPrompt ?? "grant"}
+            open={superAdminPrompt !== null}
+            onOpenChange={(o) => !o && setSuperAdminPrompt(null)}
+          />
+        </>
       )}
 
       {/* Job title + approve section — super_admin only */}

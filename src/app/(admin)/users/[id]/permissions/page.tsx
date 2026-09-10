@@ -66,12 +66,12 @@ export default async function UserPermissionsPage({
     getPermissions(supabase),
     getUserPermissions(supabase, id),
     getScopeOptions(supabase),
+    // Both admin tiers in one read — the Advanced panel shows a row for each.
     supabase
       .from("user_roles")
       .select("roles!inner(name)")
       .eq("user_id", id)
-      .eq("roles.name", "super_admin")
-      .limit(1),
+      .in("roles.name", ["super_admin", "admin"]),
     supabase
       .from("user_roles")
       .select("id, role_id, scope_type, scope_id, roles!inner(name, display_name, is_system)")
@@ -80,21 +80,23 @@ export default async function UserPermissionsPage({
     // system role but is assignable here (scoped to a program) — allow it
     // through explicitly. The membership roles (staff/student/community_member)
     // are system roles too, but a super admin sets them by hand here.
-    // `admin` (General Admin) is top-tier and offered to super admins only —
-    // grant-role rejects everyone else, so showing it more widely would only
-    // produce a button that always fails.
+    // The admin tiers (super_admin / admin) are NOT job titles — they have
+    // their own rows in the Advanced panel below.
     supabase
       .from("roles")
       .select("id, name, display_name")
-      .or(
-        isSuperAdmin
-          ? "is_system.eq.false,name.eq.program_leader,name.in.(staff,student,community_member,admin)"
-          : "is_system.eq.false,name.eq.program_leader,name.in.(staff,student,community_member)"
-      )
+      .or("is_system.eq.false,name.eq.program_leader,name.in.(staff,student,community_member)")
       .order("display_name", { ascending: true }),
   ]);
 
-  const isTargetSuperAdmin = (targetSuperCheck.data?.length ?? 0) > 0;
+  const targetTierRoles = new Set(
+    (targetSuperCheck.data ?? []).map((r) => {
+      const role = Array.isArray(r.roles) ? r.roles[0] : r.roles;
+      return (role?.name as string) ?? "";
+    })
+  );
+  const isTargetSuperAdmin = targetTierRoles.has("super_admin");
+  const isTargetGeneralAdmin = targetTierRoles.has("admin");
   const isSelf = authUser.id === id;
 
   // Granular grid uses the curated catalog (legacy duplicates hidden).
@@ -123,10 +125,7 @@ export default async function UserPermissionsPage({
         r.name === "program_leader" ||
         r.name === "staff" ||
         r.name === "student" ||
-        r.name === "community_member" ||
-        // General Admin is a system role, but it is granted here, so it needs
-        // a chip a super admin can see and remove.
-        r.name === "admin"
+        r.name === "community_member"
     )
     .map((r) => ({
       id: r.id,
@@ -141,13 +140,12 @@ export default async function UserPermissionsPage({
     id: r.id as string,
     display_name: r.display_name as string,
     scope_type: (r.name as string) === "program_leader" ? "program" : null,
-    // General Admin is the one title that hands over near-total access, so it
-    // says what it does in the menu rather than reading as another job title.
-    note:
-      (r.name as string) === "admin"
-        ? "everything except the Records Library"
-        : null,
   }));
+
+  const personName =
+    targetUser.display_name ??
+    [targetUser.first_name, targetUser.last_name].filter(Boolean).join(" ") ??
+    "this person";
 
   const scopeLabels: Record<string, string> = {};
   for (const s of scopeOptions) scopeLabels[s.id] = s.label;
@@ -175,11 +173,7 @@ export default async function UserPermissionsPage({
         programOptions={programOptions}
         canManage={isSuperAdmin || canManageRoles}
         canConvertToCommunity={isSuperAdmin && !isSelf}
-        personName={
-          targetUser.display_name ??
-          [targetUser.first_name, targetUser.last_name].filter(Boolean).join(" ") ??
-          "this person"
-        }
+        personName={personName}
       />
 
       <AdvancedAccess>
@@ -193,7 +187,9 @@ export default async function UserPermissionsPage({
           isSuperAdmin={isSuperAdmin}
           managedProgramIds={manageScopes.hasGlobal ? null : manageScopes.programIds}
           isTargetSuperAdmin={isTargetSuperAdmin}
+          isTargetGeneralAdmin={isTargetGeneralAdmin}
           isSelf={isSelf}
+          personName={personName}
         />
       </AdvancedAccess>
       </div>
