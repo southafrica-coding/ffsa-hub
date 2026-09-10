@@ -48,12 +48,14 @@ export async function listActiveMinistries(supabase: Client) {
 /**
  * The matching ministry row (or null) for a slug — active or retired. Used to
  * validate a department value on profile writes now that the static DB CHECK
- * is gone.
+ * is gone. Returns ministry_type so callers can reject part-time: a department
+ * is the MAIN ministry someone serves in, and the pickers never offer a
+ * part-time one (see listActiveMinistries).
  */
 export async function getMinistryBySlug(supabase: Client, slug: string) {
   return supabase
     .from("staff_ministries")
-    .select("slug")
+    .select("slug, ministry_type")
     .eq("slug", slug)
     .maybeSingle();
 }

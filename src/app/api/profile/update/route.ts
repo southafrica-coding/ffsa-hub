@@ -88,10 +88,12 @@ export async function PUT(request: Request) {
     );
   }
 
-  // Department must be a real ministry slug (staff_ministries is the source of
-  // truth). Validated here rather than a static DB CHECK so admin-added
-  // ministries save without a migration. Any existing slug is accepted —
-  // active or retired — so a user on a since-retired ministry isn't locked out.
+  // Department must be a real MAIN ministry slug (staff_ministries is the
+  // source of truth, validated here rather than a static DB CHECK so
+  // admin-added ministries save without a migration). Retired ministries are
+  // still accepted so a user on a since-retired one isn't locked out;
+  // part-time ministries are not — people join those through the roster, and
+  // no picker offers them as a department.
   if ("department" in updateData && String(updateData.department ?? "").trim() !== "") {
     const { data: ministry } = await getMinistryBySlug(
       supabase,
@@ -100,6 +102,15 @@ export async function PUT(request: Request) {
     if (!ministry) {
       return NextResponse.json(
         { error: "Please select a valid department." },
+        { status: 400 }
+      );
+    }
+    if ((ministry as { ministry_type?: string }).ministry_type === "part_time") {
+      return NextResponse.json(
+        {
+          error:
+            "That's a part-time ministry, so it can't be a department. Pick the main ministry they serve in — part-time ministries are joined from the Ministry tab.",
+        },
         { status: 400 }
       );
     }

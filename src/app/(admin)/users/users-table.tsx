@@ -304,17 +304,23 @@ export function UsersTable({
     [departmentLabels]
   );
 
-  // Department options for the filter — live labels first, then any built-in
-  // fallback not already present. Sorted by label.
+  // Department options for the filter — only departments people actually hold,
+  // labelled from the Ministry tab. Listing every known slug offered choices
+  // that always return nothing: part-time ministries (never selectable as a
+  // department) and retired fallback slugs. Driving the list off the data also
+  // means a since-retired ministry stays filterable while anyone is still on
+  // it. Sorted by label.
   const departmentOptions = useMemo(() => {
     const bySlug = new Map<string, string>();
-    for (const [slug, label] of Object.entries(deptLabels)) {
-      bySlug.set(slug, label);
+    for (const user of users) {
+      const slug = user.department;
+      if (!slug) continue;
+      bySlug.set(slug, deptLabels[slug] ?? slug);
     }
     return [...bySlug.entries()]
       .map(([slug, label]) => ({ slug, label }))
       .sort((a, b) => a.label.localeCompare(b.label));
-  }, [deptLabels]);
+  }, [deptLabels, users]);
 
   // Annotate each user once with the values every downstream step needs:
   // membership, derived lifecycle (insurance + stage), and the derived title.

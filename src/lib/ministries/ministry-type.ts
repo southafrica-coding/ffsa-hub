@@ -1,8 +1,10 @@
 // How a staff ministry is classified on the Ministry tab (migration 195).
 //
-// Grouping and labelling only: part-time ministries keep rosters, leaders,
-// point leaders, sub-categories and OKRs, and stay in the profile Department
-// picker. Nothing about access keys off this value.
+// Part-time ministries keep rosters, leaders, point leaders, sub-categories
+// and OKRs. What they are NOT is a department: a department is the main
+// ministry someone serves in, so no picker offers a part-time one and both
+// profile write paths reject it. People join part-time ministries through the
+// Ministry tab roster instead. Nothing about access keys off this value.
 
 export const MINISTRY_TYPES = ["main", "part_time"] as const;
 
