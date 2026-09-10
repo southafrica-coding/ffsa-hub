@@ -18,6 +18,9 @@ export type AssignableRole = {
   display_name: string;
   // When set (e.g. "program"), adding the role prompts for a scope first.
   scope_type?: string | null;
+  // Short line under the option, for a title whose reach isn't obvious from
+  // its name (General Admin).
+  note?: string | null;
 };
 
 export function RoleAssignment({
@@ -272,6 +275,18 @@ export function RoleAssignment({
                       {r.display_name}
                       {r.scope_type === "program" && (
                         <span style={{ color: "#45423B", fontSize: "11px" }}> · by program</span>
+                      )}
+                      {r.note && (
+                        <span
+                          style={{
+                            display: "block",
+                            color: "#7C786C",
+                            fontSize: "11px",
+                            marginTop: "1px",
+                          }}
+                        >
+                          {r.note}
+                        </span>
                       )}
                     </button>
                   ))

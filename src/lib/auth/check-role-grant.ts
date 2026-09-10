@@ -16,6 +16,17 @@ function keyOf(row: KeyRow): string | undefined {
   return Array.isArray(row.permissions) ? row.permissions[0]?.key : row.permissions?.key;
 }
 
+/**
+ * Roles that only a super_admin may grant or revoke.
+ *
+ * `admin` (General Admin) belongs here for two reasons: it carries
+ * super-admin-equivalent access through the hardcoded is_admin() bypass, and
+ * it has NO role_permissions rows — so the "can only grant what you hold"
+ * guardrail below would see an empty key list and pass vacuously, letting any
+ * administration.manage_roles holder mint a full admin.
+ */
+export const SUPER_ADMIN_ONLY_ROLES = ["super_admin", "admin"];
+
 export async function callerIsSuperAdmin(
   supabase: Client,
   userId: string

@@ -5,6 +5,7 @@ import {
   callerIsSuperAdmin,
   callerCanManageRoles,
   callerCanGrantPermissionKeys,
+  SUPER_ADMIN_ONLY_ROLES,
 } from "@/lib/auth/check-role-grant";
 
 export async function POST(request: Request) {
@@ -41,7 +42,10 @@ export async function POST(request: Request) {
 
   // Authorize
   const isSuper = await callerIsSuperAdmin(supabase, authUser.id);
-  if (role.name === "super_admin") {
+  if (SUPER_ADMIN_ONLY_ROLES.includes(role.name)) {
+    // super_admin and admin (General Admin) are top-tier: only a super admin
+    // hands them out. The subset guardrail below cannot police them — neither
+    // role has any role_permissions rows, so it would pass vacuously.
     if (!isSuper) {
       return NextResponse.json({ error: "Not authorized" }, { status: 403 });
     }

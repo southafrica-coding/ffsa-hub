@@ -80,10 +80,17 @@ export default async function UserPermissionsPage({
     // system role but is assignable here (scoped to a program) — allow it
     // through explicitly. The membership roles (staff/student/community_member)
     // are system roles too, but a super admin sets them by hand here.
+    // `admin` (General Admin) is top-tier and offered to super admins only —
+    // grant-role rejects everyone else, so showing it more widely would only
+    // produce a button that always fails.
     supabase
       .from("roles")
       .select("id, name, display_name")
-      .or("is_system.eq.false,name.eq.program_leader,name.in.(staff,student,community_member)")
+      .or(
+        isSuperAdmin
+          ? "is_system.eq.false,name.eq.program_leader,name.in.(staff,student,community_member,admin)"
+          : "is_system.eq.false,name.eq.program_leader,name.in.(staff,student,community_member)"
+      )
       .order("display_name", { ascending: true }),
   ]);
 
@@ -116,7 +123,10 @@ export default async function UserPermissionsPage({
         r.name === "program_leader" ||
         r.name === "staff" ||
         r.name === "student" ||
-        r.name === "community_member"
+        r.name === "community_member" ||
+        // General Admin is a system role, but it is granted here, so it needs
+        // a chip a super admin can see and remove.
+        r.name === "admin"
     )
     .map((r) => ({
       id: r.id,
@@ -131,6 +141,12 @@ export default async function UserPermissionsPage({
     id: r.id as string,
     display_name: r.display_name as string,
     scope_type: (r.name as string) === "program_leader" ? "program" : null,
+    // General Admin is the one title that hands over near-total access, so it
+    // says what it does in the menu rather than reading as another job title.
+    note:
+      (r.name as string) === "admin"
+        ? "everything except the Records Library"
+        : null,
   }));
 
   const scopeLabels: Record<string, string> = {};

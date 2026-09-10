@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   callerIsSuperAdmin,
   callerCanManageRoles,
+  SUPER_ADMIN_ONLY_ROLES,
 } from "@/lib/auth/check-role-grant";
 
 export async function POST(request: Request) {
@@ -37,10 +38,14 @@ export async function POST(request: Request) {
   // need manage-roles. (Removing a role only ever reduces access, so the
   // subset guardrail isn't needed here.)
   const isSuper = await callerIsSuperAdmin(supabase, authUser.id);
-  if (role.name === "super_admin") {
+  if (SUPER_ADMIN_ONLY_ROLES.includes(role.name)) {
+    // Top-tier roles are a super admin's call in both directions — a
+    // manage_roles holder should not be able to strip a General Admin either.
     if (!isSuper) {
       return NextResponse.json({ error: "Not authorized" }, { status: 403 });
     }
+  }
+  if (role.name === "super_admin") {
     if (user_id === authUser.id) {
       return NextResponse.json(
         { error: "You cannot remove your own super_admin role" },
