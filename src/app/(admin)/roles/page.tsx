@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getPermissions, curatePermissions } from "@/services/permissions";
-import { getRoleMemberCounts } from "@/services/roles";
+import { getRoleMemberCounts, getRoleMembers } from "@/services/roles";
+import { createAdminClient } from "@/lib/supabase/admin";
 import {
   callerIsSuperAdmin,
   callerCanManageRoles,
@@ -44,11 +45,20 @@ export default async function RolesPage() {
     (bundles[rp.role_id] ||= []).push(rp.permission_id);
   }
 
+  // Who holds each role. Super admins only — this is the one list that answers
+  // "who can see everything?", and it carries staff names and emails, so a
+  // manage_roles holder (who may have no other access to user identities)
+  // keeps the plain counts.
+  const roleMembers = isSuperAdmin
+    ? await getRoleMembers(supabase, createAdminClient())
+    : {};
+
   return (
     <RolesManager
       roles={rolesRes.data ?? []}
       permissionsByModule={curatePermissions(permissionsByModule)}
       memberCounts={memberCounts}
+      roleMembers={roleMembers}
       bundles={bundles}
       callerKeys={callerKeys}
       isSuperAdmin={isSuperAdmin}

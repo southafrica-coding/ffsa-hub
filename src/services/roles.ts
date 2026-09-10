@@ -113,3 +113,80 @@ export async function getRoleMemberCounts(
   }
   return counts;
 }
+
+export type RoleMember = {
+  id: string;
+  name: string;
+  email: string | null;
+  status: string | null;
+  /** Set when the assignment is scoped (e.g. program_leader on one program). */
+  scopeType: string | null;
+};
+
+/**
+ * Map of role_id -> the people holding it, for the "who has this role?" list
+ * on /roles.
+ *
+ * Identity fields are read with the SERVICE-ROLE client on purpose. RLS on
+ * `users` nulls out embedded joins for anyone who is not an admin, which would
+ * render a list of "Unknown" names for a manage_roles holder. The fix is to
+ * hydrate the few identity fields here — never to widen the users policy,
+ * which guards personal data.
+ *
+ * Callers must gate this themselves: /roles only calls it for super admins.
+ */
+export async function getRoleMembers(
+  supabase: Client,
+  adminClient: Client
+): Promise<Record<string, RoleMember[]>> {
+  const { data: assignments } = await supabase
+    .from("user_roles")
+    .select("role_id, user_id, scope_type");
+
+  const rows = (assignments ?? []) as {
+    role_id: string;
+    user_id: string;
+    scope_type: string | null;
+  }[];
+  if (rows.length === 0) return {};
+
+  const userIds = Array.from(new Set(rows.map((r) => r.user_id)));
+  const { data: people } = await adminClient
+    .from("users")
+    .select("id, first_name, last_name, display_name, email, status")
+    .in("id", userIds);
+
+  const byId = new Map<string, RoleMember>();
+  for (const p of (people ?? []) as {
+    id: string;
+    first_name: string | null;
+    last_name: string | null;
+    display_name: string | null;
+    email: string | null;
+    status: string | null;
+  }[]) {
+    const name =
+      p.display_name ||
+      [p.first_name, p.last_name].filter(Boolean).join(" ") ||
+      p.email ||
+      "Unnamed";
+    byId.set(p.id, {
+      id: p.id,
+      name,
+      email: p.email,
+      status: p.status,
+      scopeType: null,
+    });
+  }
+
+  const out: Record<string, RoleMember[]> = {};
+  for (const r of rows) {
+    const person = byId.get(r.user_id);
+    if (!person) continue; // deleted profile whose assignment outlived it
+    (out[r.role_id] ||= []).push({ ...person, scopeType: r.scope_type });
+  }
+  for (const list of Object.values(out)) {
+    list.sort((a, b) => a.name.localeCompare(b.name));
+  }
+  return out;
+}

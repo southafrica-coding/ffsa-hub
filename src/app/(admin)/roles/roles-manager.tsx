@@ -18,7 +18,16 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import Link from "next/link";
 import type { Permission, PermissionsByModule } from "@/services/permissions";
+import type { RoleMember } from "@/services/roles";
 
 type Role = {
   id: string;
@@ -56,6 +65,7 @@ export function RolesManager({
   roles,
   permissionsByModule,
   memberCounts,
+  roleMembers,
   bundles,
   callerKeys,
   isSuperAdmin,
@@ -63,6 +73,8 @@ export function RolesManager({
   roles: Role[];
   permissionsByModule: PermissionsByModule;
   memberCounts: Record<string, number>;
+  /** role_id -> holders. Empty for non-super-admins, who see plain counts. */
+  roleMembers: Record<string, RoleMember[]>;
   bundles: Record<string, string[]>;
   callerKeys: string[];
   isSuperAdmin: boolean;
@@ -76,6 +88,8 @@ export function RolesManager({
   const [description, setDescription] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showBuiltIns, setShowBuiltIns] = useState(false);
+  // The role whose holder list is open, or null.
+  const [viewingMembers, setViewingMembers] = useState<Role | null>(null);
 
   const callerKeySet = useMemo(() => new Set(callerKeys), [callerKeys]);
 
@@ -281,6 +295,7 @@ export function RolesManager({
       new Set(bundle.map((id) => permById.get(id)?.module).filter(Boolean))
     ) as string[];
     const count = memberCounts[role.id] ?? 0;
+    const members = roleMembers[role.id] ?? [];
     return (
       <div
         key={role.id}
@@ -294,10 +309,24 @@ export function RolesManager({
                 System
               </Badge>
             )}
-            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-              <Users className="h-3 w-3" />
-              {count}
-            </span>
+            {members.length > 0 ? (
+              // Super admins can open the list — "who can see everything?"
+              // should be one click, not a database query.
+              <button
+                type="button"
+                onClick={() => setViewingMembers(role)}
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                title={`See who holds ${role.display_name}`}
+              >
+                <Users className="h-3 w-3" />
+                {count}
+              </button>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                <Users className="h-3 w-3" />
+                {count}
+              </span>
+            )}
           </div>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {modules.length === 0 ? (
@@ -386,6 +415,54 @@ export function RolesManager({
           )}
         </div>
       )}
+
+      <Dialog
+        open={viewingMembers !== null}
+        onOpenChange={(o) => !o && setViewingMembers(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Who holds {viewingMembers?.display_name}
+            </DialogTitle>
+            <DialogDescription>
+              {(roleMembers[viewingMembers?.id ?? ""] ?? []).length} person
+              {(roleMembers[viewingMembers?.id ?? ""] ?? []).length === 1 ? "" : "s"}
+              . Open a name to manage their access.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[50vh] divide-y overflow-y-auto">
+            {(roleMembers[viewingMembers?.id ?? ""] ?? []).map((m) => (
+              <Link
+                key={`${m.id}-${m.scopeType ?? "global"}`}
+                href={`/users/${m.id}/permissions`}
+                className="flex items-center justify-between gap-3 px-1 py-2.5 hover:bg-muted/40"
+              >
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium">{m.name}</div>
+                  {m.email && (
+                    <div className="truncate text-xs text-muted-foreground">
+                      {m.email}
+                    </div>
+                  )}
+                </div>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  {m.scopeType && (
+                    <Badge variant="outline" className="text-[10px]">
+                      by {m.scopeType}
+                    </Badge>
+                  )}
+                  {m.status && m.status !== "active" && (
+                    <Badge variant="outline" className="text-[10px]">
+                      {m.status}
+                    </Badge>
+                  )}
+                </div>
+              </Link>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
