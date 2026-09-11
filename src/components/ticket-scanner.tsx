@@ -35,6 +35,14 @@ type GuestMatch = {
   checkedInAt: string | null;
 };
 
+/** A camera failure a volunteer can actually act on, not a browser string. */
+type CameraProblem = {
+  heading: string;
+  body: string;
+  /** Shown as a copyable line when the fix is "open it somewhere else". */
+  showUrl?: boolean;
+};
+
 type BarcodeDetectorCtor = new (opts?: { formats?: string[] }) => {
   detect: (source: CanvasImageSource) => Promise<Array<{ rawValue: string }>>;
 };
@@ -71,7 +79,7 @@ export function Scanner({
   const [manualOpen, setManualOpen] = useState(false);
   const [manual, setManual] = useState("");
   const [items, setItems] = useState<DisplayItem[]>([]);
-  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [cameraError, setCameraError] = useState<CameraProblem | null>(null);
   const [busy, setBusy] = useState(false);
   const [stats, setStats] = useState<{ checkedIn: number; total: number } | null>(
     null
@@ -81,6 +89,24 @@ export function Scanner({
   const [guests, setGuests] = useState<GuestMatch[] | null>(null);
   const [searching, setSearching] = useState(false);
   const [undoing, setUndoing] = useState<string | null>(null);
+  const [urlCopied, setUrlCopied] = useState(false);
+
+  // Read in an effect: this page is server-rendered and window.location
+  // would mismatch on hydration.
+  const [pageUrl, setPageUrl] = useState("");
+  useEffect(() => {
+    setPageUrl(window.location.href);
+  }, []);
+
+  async function copyPageUrl() {
+    try {
+      await navigator.clipboard.writeText(pageUrl);
+      setUrlCopied(true);
+      setTimeout(() => setUrlCopied(false), 2000);
+    } catch {
+      /* Clipboard is blocked in some webviews too — the field is selectable. */
+    }
+  }
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -113,9 +139,10 @@ export function Scanner({
     setCameraError(null);
     if (typeof navigator === "undefined" || !navigator.mediaDevices) {
       // getUserMedia only exists on secure origins (https / localhost).
-      setCameraError(
-        "This browser won't give the page camera access. Open the Hub over https, or type the code by hand."
-      );
+      setCameraError({
+        heading: "This browser won't allow the camera",
+        body: "Open this page in Safari or Chrome, or type ticket codes by hand below.",
+      });
       setManualOpen(true);
       return;
     }
@@ -130,11 +157,7 @@ export function Scanner({
       }
       setScanning(true);
     } catch (e) {
-      setCameraError(
-        e instanceof Error
-          ? e.message
-          : "Couldn't open the camera. Check the site has camera permission."
-      );
+      setCameraError(explainCameraFailure(e));
       setManualOpen(true);
     }
   }
@@ -217,7 +240,10 @@ export function Scanner({
         });
         if (!res.ok) {
           const data = (await res.json().catch(() => ({}))) as { error?: string };
-          setCameraError(data.error ?? "Could not undo that check-in.");
+          setCameraError({
+            heading: "Couldn't undo that",
+            body: data.error ?? "Could not undo that check-in.",
+          });
           return;
         }
         // Drop it from the list rather than marking it: the row is a record of
@@ -495,7 +521,31 @@ export function Scanner({
       </div>
 
       {cameraError && (
-        <p className="mt-2 text-xs text-destructive">{cameraError}</p>
+        <div className="mt-2 border border-destructive/40 bg-destructive/5 px-3 py-3">
+          <p className="font-mono text-[10px] font-bold uppercase tracking-chip text-destructive">
+            {cameraError.heading}
+          </p>
+          <p className="mt-1.5 text-sm leading-snug text-ink">
+            {cameraError.body}
+          </p>
+          {cameraError.showUrl && (
+            <div className="mt-2.5 flex gap-2">
+              <input
+                readOnly
+                value={pageUrl}
+                onFocus={(e) => e.currentTarget.select()}
+                className="min-w-0 flex-1 border border-rule-strong bg-white px-2 py-2 font-mono text-[11px] text-ink"
+              />
+              <button
+                type="button"
+                onClick={copyPageUrl}
+                className="shrink-0 border border-ink bg-white px-3 py-2 font-mono text-[10px] font-bold uppercase tracking-chip text-ink transition-colors hover:bg-bone"
+              >
+                {urlCopied ? "Copied" : "Copy"}
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
       {manualOpen && (
@@ -653,6 +703,73 @@ export function Scanner({
       </div>
     </div>
   );
+}
+
+/**
+ * Chat apps open links in their own embedded browser, and on iOS those
+ * webviews refuse camera access outright — the volunteer can tap Allow all
+ * day and getUserMedia still rejects. Since this whole feature is "paste the
+ * link into the door team's group chat", that is the single most likely way
+ * a scanner fails, so it gets named rather than guessed at.
+ */
+export function isInAppBrowser(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  // FBAN/FBAV = Facebook, Instagram, Line, Slack, WhatsApp (GSA = Google app).
+  if (/FBAN|FBAV|Instagram|Line\/|Slack|WhatsApp|Twitter|MicroMessenger|GSA\//i.test(ua)) {
+    return true;
+  }
+  // iOS webviews are Safari-like but lack Safari's own UA token.
+  const isIOS = /iPhone|iPad|iPod/i.test(ua);
+  return isIOS && !/Safari/i.test(ua) && !/CriOS|FxiOS|EdgiOS/i.test(ua);
+}
+
+/**
+ * Turn a getUserMedia rejection into something a person on a door can fix.
+ *
+ * The browser's own message ("The request is not allowed by the user agent
+ * or the platform in the current context…") is accurate and useless: it does
+ * not say the link needs opening in Safari, and it does not say where the
+ * permission toggle lives.
+ */
+function explainCameraFailure(e: unknown): CameraProblem {
+  const name = e instanceof Error ? e.name : "";
+
+  if (name === "NotAllowedError" || name === "SecurityError") {
+    if (isInAppBrowser()) {
+      return {
+        heading: "Open this link in your browser",
+        body: "Chat apps block the camera in their built-in browser. Tap the ••• or share button at the top of this screen and choose \u201cOpen in Safari\u201d (or Chrome), then start the scanner again.",
+        showUrl: true,
+      };
+    }
+    return {
+      heading: "The camera is blocked for this site",
+      body: "Tap the \u201cAA\u201d or lock icon in the address bar \u2192 Website Settings \u2192 Camera \u2192 Allow, then reload. On iPhone you may also need Settings \u203a Apps \u203a Safari \u203a Camera \u203a Allow. You can keep checking people in by typing codes below.",
+    };
+  }
+
+  if (name === "NotFoundError" || name === "OverconstrainedError") {
+    return {
+      heading: "No camera found",
+      body: "This device has no camera the page can use. Type ticket codes below instead.",
+    };
+  }
+
+  if (name === "NotReadableError" || name === "AbortError") {
+    return {
+      heading: "The camera is busy",
+      body: "Another app is using it. Close anything else that has the camera open \u2014 or lock and unlock the phone \u2014 then start the scanner again.",
+    };
+  }
+
+  return {
+    heading: "Couldn't open the camera",
+    body:
+      e instanceof Error && e.message
+        ? e.message
+        : "Type ticket codes below instead.",
+  };
 }
 
 function TallyCell({

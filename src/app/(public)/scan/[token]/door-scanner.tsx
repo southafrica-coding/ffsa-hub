@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Scanner } from "@/components/ticket-scanner";
+import { Scanner, isInAppBrowser } from "@/components/ticket-scanner";
 
 const NAME_KEY = "ffsa.door-scanner.name";
 
@@ -24,6 +24,7 @@ export function PublicDoorScanner({
   const [name, setName] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [ready, setReady] = useState(false);
+  const [inApp, setInApp] = useState(false);
 
   // localStorage is read in an effect, not during render: this page is
   // server-rendered and the stored name would mismatch on hydration.
@@ -34,6 +35,10 @@ export function PublicDoorScanner({
     } catch {
       /* Private browsing — just ask for the name again. */
     }
+    // Warn BEFORE they tap Start scanning: in a chat app's built-in browser
+    // the camera never opens, and a volunteer who has already hit a blocked
+    // prompt assumes the scanner is broken.
+    setInApp(isInAppBrowser());
     setReady(true);
   }, []);
 
@@ -114,6 +119,19 @@ export function PublicDoorScanner({
                 Not you?
               </button>
             </div>
+            {inApp && (
+              <div className="mb-3 border border-amber/50 bg-yellow/15 px-3 py-3">
+                <p className="font-mono text-[10px] font-bold uppercase tracking-chip text-amber">
+                  Open this in Safari first
+                </p>
+                <p className="mt-1.5 text-sm leading-snug text-ink">
+                  You&apos;ve opened this link inside a chat app, and chat apps
+                  block the camera. Tap the ••• or share button at the top of
+                  this screen and choose &ldquo;Open in Safari&rdquo; (or
+                  Chrome). Typing ticket codes works fine either way.
+                </p>
+              </div>
+            )}
             <Scanner endpoint={`/api/scan/${token}`} scannerName={name} />
           </>
         )}
