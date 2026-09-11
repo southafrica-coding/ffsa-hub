@@ -351,7 +351,7 @@ export async function listAttendanceTicketsByEvent(
   return supabase
     .from("tickets")
     .select(
-      "id, status, code, checked_in_at, checked_in_by, created_at, ticket_types(name), orders!inner(id, status, buyer_first_name, buyer_last_name, buyer_email), users:checked_in_by(first_name, last_name)"
+      "id, status, code, checked_in_at, checked_in_by, checked_in_by_name, created_at, ticket_types(name), orders!inner(id, status, buyer_first_name, buyer_last_name, buyer_email), users:checked_in_by(first_name, last_name)"
     )
     .eq("event_id", eventId)
     .in("status", ["valid", "checked_in"])

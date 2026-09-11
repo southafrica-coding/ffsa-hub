@@ -13,6 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { ScanLinkCard } from "./scan-link-card";
 
 type AttendanceTicket = {
   id: string;
@@ -20,6 +21,7 @@ type AttendanceTicket = {
   code: string;
   checked_in_at: string | null;
   checked_in_by: string | null;
+  checked_in_by_name: string | null;
   created_at: string;
   ticket_types: { name: string } | null;
   orders: {
@@ -103,6 +105,8 @@ export function CheckInTab({
           </div>
         </CardContent>
       </Card>
+
+      <ScanLinkCard eventId={eventId} />
 
       {/* Live attendance stats */}
       <div className="grid gap-4 sm:grid-cols-4">
@@ -200,7 +204,9 @@ export function CheckInTab({
                     <TableCell className="text-xs text-muted-foreground">
                       {t.users
                         ? `${t.users.first_name} ${t.users.last_name}`
-                        : "—"}
+                        : t.checked_in_by_name
+                          ? `${t.checked_in_by_name} (door link)`
+                          : "—"}
                     </TableCell>
                     <TableCell className="text-right font-mono text-xs text-muted-foreground">
                       {t.code}

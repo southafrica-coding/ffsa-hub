@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils/cn";
 
 type OkResult = {
   result: "ok";
+  ticketId: string;
   ticketTypeName: string;
   buyerName: string;
 };
@@ -25,6 +26,15 @@ type DisplayItem = {
   at: number;
 };
 
+type GuestMatch = {
+  ticketId: string;
+  code: string;
+  name: string;
+  ticketTypeName: string;
+  status: "valid" | "checked_in";
+  checkedInAt: string | null;
+};
+
 type BarcodeDetectorCtor = new (opts?: { formats?: string[] }) => {
   detect: (source: CanvasImageSource) => Promise<Array<{ rawValue: string }>>;
 };
@@ -39,13 +49,38 @@ const DECODE_MAX_EDGE = 640;
 // scan is never read as the last person's.
 const VERDICT_MS = 4000;
 
-export function Scanner({ eventId }: { eventId: string; eventTitle?: string }) {
+/**
+ * The door scanner, shared by the two ways a door gets run.
+ *
+ * Staff open it inside the Hub at /events/[id]/check-in; a welcome-team
+ * volunteer opens it at the public /scan/[token] with no account at all.
+ * The only difference between them is `endpoint` — every capability below is
+ * driven by the same two verbs on either route, so the two doors behave
+ * identically and there is one scanner to maintain.
+ */
+export function Scanner({
+  endpoint,
+  scannerName = null,
+}: {
+  /** Route handling both GET (stats / guest search) and POST (scan / undo). */
+  endpoint: string;
+  /** Self-declared name of a non-Hub volunteer, recorded against each scan. */
+  scannerName?: string | null;
+}) {
   const [scanning, setScanning] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [manual, setManual] = useState("");
   const [items, setItems] = useState<DisplayItem[]>([]);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [stats, setStats] = useState<{ checkedIn: number; total: number } | null>(
+    null
+  );
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [guests, setGuests] = useState<GuestMatch[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [undoing, setUndoing] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -110,16 +145,32 @@ export function Scanner({ eventId }: { eventId: string; eventTitle?: string }) {
     setScanning(false);
   }
 
+  /** Door tally. Refreshed after every scan rather than polled — the number
+   *  only moves when this door or another one moves it. */
+  const refreshStats = useCallback(async () => {
+    try {
+      const res = await fetch(endpoint);
+      if (!res.ok) return;
+      setStats((await res.json()) as { checkedIn: number; total: number });
+    } catch {
+      /* The tally is a nicety; never let it break scanning. */
+    }
+  }, [endpoint]);
+
+  useEffect(() => {
+    void refreshStats();
+  }, [refreshStats]);
+
   const processScan = useCallback(
     async (code: string) => {
       const id = ++itemIdRef.current;
       setBusy(true);
       let result: ScanResult;
       try {
-        const res = await fetch(`/api/events/${eventId}/check-in`, {
+        const res = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ code }),
+          body: JSON.stringify({ code, scannerName }),
         });
         if (!res.ok) {
           const data = (await res.json().catch(() => ({}))) as {
@@ -147,9 +198,81 @@ export function Scanner({ eventId }: { eventId: string; eventTitle?: string }) {
       if (result.result !== "ok" && typeof navigator !== "undefined") {
         navigator.vibrate?.(180);
       }
+      if (result.result === "ok" || result.result === "already_checked_in") {
+        void refreshStats();
+      }
     },
-    [eventId]
+    [endpoint, scannerName, refreshStats]
   );
+
+  /** Reverse a check-in — the "sorry, wrong person" case at a busy door. */
+  const undoScan = useCallback(
+    async (ticketId: string) => {
+      setUndoing(ticketId);
+      try {
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ undo: ticketId }),
+        });
+        if (!res.ok) {
+          const data = (await res.json().catch(() => ({}))) as { error?: string };
+          setCameraError(data.error ?? "Could not undo that check-in.");
+          return;
+        }
+        // Drop it from the list rather than marking it: the row is a record of
+        // what this door did, and undoing means the door did nothing.
+        setItems((prev) =>
+          prev.filter(
+            (it) => !(it.result.result === "ok" && it.result.ticketId === ticketId)
+          )
+        );
+        setGuests((prev) =>
+          prev?.map((g) =>
+            g.ticketId === ticketId
+              ? { ...g, status: "valid", checkedInAt: null }
+              : g
+          ) ?? null
+        );
+        void refreshStats();
+      } finally {
+        setUndoing(null);
+      }
+    },
+    [endpoint, refreshStats]
+  );
+
+  /** Find a guest whose QR won't scan or was never opened. Names only. */
+  const runSearch = useCallback(
+    async (q: string) => {
+      if (q.trim().length < 2) {
+        setGuests(null);
+        return;
+      }
+      setSearching(true);
+      try {
+        const res = await fetch(`${endpoint}?q=${encodeURIComponent(q.trim())}`);
+        if (!res.ok) {
+          setGuests([]);
+          return;
+        }
+        const data = (await res.json()) as { guests: GuestMatch[] };
+        setGuests(data.guests ?? []);
+      } catch {
+        setGuests([]);
+      } finally {
+        setSearching(false);
+      }
+    },
+    [endpoint]
+  );
+
+  // Debounced so typing a name is one request, not one per keystroke.
+  useEffect(() => {
+    if (!searchOpen) return;
+    const t = setTimeout(() => void runSearch(query), 300);
+    return () => clearTimeout(t);
+  }, [query, searchOpen, runSearch]);
 
   // Scan loop — runs while `scanning` is true.
   //
@@ -235,6 +358,20 @@ export function Scanner({ eventId }: { eventId: string; eventTitle?: string }) {
 
   return (
     <div>
+      {/* ── Door tally ─────────────────────────────────────────
+          Counts only, never the list. At a door the useful question is
+          "how many are in", and that answer leaks nothing. */}
+      {stats && (
+        <div className="mb-3 flex items-stretch border border-rule bg-white">
+          <TallyCell label="In" value={stats.checkedIn.toString()} />
+          <TallyCell
+            label="To come"
+            value={Math.max(0, stats.total - stats.checkedIn).toString()}
+          />
+          <TallyCell label="Tickets" value={stats.total.toString()} last />
+        </div>
+      )}
+
       {/* ── Viewfinder ──────────────────────────────────────────
           Sized off the viewport, not a fixed 16:9 box. A phone camera
           is portrait and a door is scanned at arm's length, so the
@@ -295,6 +432,19 @@ export function Scanner({ eventId }: { eventId: string; eventTitle?: string }) {
             <p className="mt-1.5 text-sm font-semibold">
               {verdictDetail(latest.result)}
             </p>
+            {latest.result.result === "ok" && (
+              <button
+                type="button"
+                onClick={() => {
+                  const r = latest.result;
+                  if (r.result === "ok") void undoScan(r.ticketId);
+                }}
+                disabled={undoing !== null}
+                className="mt-2 border border-white/60 px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-chip text-white transition-colors hover:bg-white/15 disabled:opacity-50"
+              >
+                {undoing ? "Undoing…" : "Undo"}
+              </button>
+            )}
           </div>
         )}
 
@@ -334,6 +484,14 @@ export function Scanner({ eventId }: { eventId: string; eventTitle?: string }) {
         >
           Type code
         </button>
+        <button
+          type="button"
+          onClick={() => setSearchOpen((v) => !v)}
+          aria-expanded={searchOpen}
+          className="border border-rule-strong bg-white px-4 py-3.5 font-mono text-[11px] font-bold uppercase tracking-chip text-ink transition-colors hover:bg-bone"
+        >
+          Find name
+        </button>
       </div>
 
       {cameraError && (
@@ -359,6 +517,75 @@ export function Scanner({ eventId }: { eventId: string; eventTitle?: string }) {
             Check in
           </button>
         </form>
+      )}
+
+      {searchOpen && (
+        <div className="mt-2 border border-rule-strong bg-white">
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Guest name"
+            autoCapitalize="words"
+            autoCorrect="off"
+            spellCheck={false}
+            className="w-full border-b border-rule bg-white px-3 py-3 text-sm text-ink placeholder:text-[var(--text-tertiary)] focus:outline-none"
+          />
+          {searching && (
+            <p className="px-3 py-3 text-xs text-[var(--text-secondary)]">
+              Searching…
+            </p>
+          )}
+          {!searching && guests !== null && guests.length === 0 && (
+            <p className="px-3 py-3 text-xs text-[var(--text-secondary)]">
+              {query.trim().length < 2
+                ? "Type at least two letters."
+                : "Nobody on the list matches that."}
+            </p>
+          )}
+          {!searching && guests && guests.length > 0 && (
+            <ul>
+              {guests.map((g) => (
+                <li
+                  key={g.ticketId}
+                  className="flex items-center justify-between gap-3 border-b border-rule px-3 py-2.5 last:border-b-0"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm text-ink">{g.name || "—"}</p>
+                    <p className="mt-0.5 truncate font-mono text-[10px] uppercase tracking-chip text-[var(--text-tertiary)]">
+                      {g.ticketTypeName}
+                      {g.status === "checked_in" && g.checkedInAt
+                        ? ` · in ${new Date(g.checkedInAt).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}`
+                        : ""}
+                    </p>
+                  </div>
+                  {g.status === "checked_in" ? (
+                    <button
+                      type="button"
+                      onClick={() => void undoScan(g.ticketId)}
+                      disabled={undoing !== null}
+                      className="shrink-0 border border-rule-strong bg-white px-2.5 py-1.5 font-mono text-[10px] font-bold uppercase tracking-chip text-[var(--text-secondary)] transition-colors hover:bg-bone disabled:opacity-50"
+                    >
+                      Undo
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void processScan(g.code)}
+                      disabled={busy}
+                      className="shrink-0 border border-ink bg-ink px-2.5 py-1.5 font-mono text-[10px] font-bold uppercase tracking-chip text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                    >
+                      Check in
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
 
       {/* ── Recent scans ───────────────────────────────────── */}
@@ -398,17 +625,58 @@ export function Scanner({ eventId }: { eventId: string; eventTitle?: string }) {
                     {it.code}
                   </p>
                 </div>
-                <p className="shrink-0 font-mono text-[10px] tabular text-[var(--text-tertiary)]">
-                  {new Date(it.at).toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </p>
+                <div className="flex shrink-0 items-center gap-2">
+                  {it.result.result === "ok" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const r = it.result;
+                        if (r.result === "ok") void undoScan(r.ticketId);
+                      }}
+                      disabled={undoing !== null}
+                      className="border border-rule-strong bg-white px-2 py-1 font-mono text-[9px] font-bold uppercase tracking-chip text-[var(--text-secondary)] transition-colors hover:bg-bone disabled:opacity-50"
+                    >
+                      Undo
+                    </button>
+                  )}
+                  <p className="font-mono text-[10px] tabular text-[var(--text-tertiary)]">
+                    {new Date(it.at).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </p>
+                </div>
               </li>
             ))}
           </ul>
         )}
       </div>
+    </div>
+  );
+}
+
+function TallyCell({
+  label,
+  value,
+  last,
+}: {
+  label: string;
+  value: string;
+  last?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex-1 px-3 py-2.5 text-center",
+        !last && "border-r border-rule"
+      )}
+    >
+      <p className="font-mono text-[9px] font-bold uppercase tracking-chip text-[var(--text-tertiary)]">
+        {label}
+      </p>
+      <p className="mt-0.5 font-display text-[22px] leading-none tabular text-ink">
+        {value}
+      </p>
     </div>
   );
 }

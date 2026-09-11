@@ -1780,6 +1780,47 @@ export type Database = {
           },
         ]
       }
+      event_scan_links: {
+        Row: {
+          id: string
+          event_id: string
+          token: string
+          is_active: boolean
+          created_by: string | null
+          created_at: string
+          rotated_at: string | null
+          expires_at: string | null
+        }
+        Insert: {
+          id?: string
+          event_id: string
+          token: string
+          is_active?: boolean
+          created_by?: string | null
+          created_at?: string
+          rotated_at?: string | null
+          expires_at?: string | null
+        }
+        Update: {
+          id?: string
+          event_id?: string
+          token?: string
+          is_active?: boolean
+          created_by?: string | null
+          created_at?: string
+          rotated_at?: string | null
+          expires_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_scan_links_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       events: {
         Row: {
           base_label_id: string | null
@@ -4459,6 +4500,8 @@ export type Database = {
         Row: {
           checked_in_at: string | null
           checked_in_by: string | null
+          checked_in_by_name: string | null
+          checked_in_via_link: string | null
           code: string
           created_at: string
           custom_answers: Json
@@ -4472,6 +4515,8 @@ export type Database = {
         Insert: {
           checked_in_at?: string | null
           checked_in_by?: string | null
+          checked_in_by_name?: string | null
+          checked_in_via_link?: string | null
           code: string
           created_at?: string
           custom_answers?: Json
@@ -4485,6 +4530,8 @@ export type Database = {
         Update: {
           checked_in_at?: string | null
           checked_in_by?: string | null
+          checked_in_by_name?: string | null
+          checked_in_via_link?: string | null
           code?: string
           created_at?: string
           custom_answers?: Json

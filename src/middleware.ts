@@ -31,6 +31,9 @@ export async function middleware(request: NextRequest) {
     "/unsubscribe", // public one-click opt-out landing page from email footers
     "/schedule", // public: /schedule/[token] — applicants pick an interview slot
     "/fb", // public event-feedback runtime (/fb/[slug])
+    "/scan", // public door scanner (/scan/[token]) — the welcome team has no Hub account, which is the point
+    "/vr", // public vehicle request form (/vr/[token]) — shipped in 342 but never listed here, so every outsider was bounced to /login
+    "/api/scan", // public door scanner actions — authorised by the token in the path, not session cookies
     "/api/upload/sign", // public applicants upload photos from /apply
     "/api/public", // public application submission + signup
     "/api/f", // public form submission (/api/f/[slug]/submit)
