@@ -1,9 +1,11 @@
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { callerIsAdmin } from "@/lib/auth/check-ministry-access";
 import { getAllListOptions } from "@/services/list-options";
 import { SettingsLists } from "./settings-lists";
+import { GoogleCalendarConnection } from "./google-calendar-connection";
 import { Masthead } from "@/components/ffsa";
 
 export default async function SettingsPage() {
@@ -25,7 +27,11 @@ export default async function SettingsPage() {
         deactivate options — changes take effect everywhere immediately.
       </p>
 
-      <div className="px-5 py-6 md:px-8 md:py-7">
+      <div className="space-y-8 px-5 py-6 md:px-8 md:py-7">
+        <Suspense>
+          <GoogleCalendarConnection />
+        </Suspense>
+
         <SettingsLists lists={lists ?? {}} />
       </div>
     </div>
