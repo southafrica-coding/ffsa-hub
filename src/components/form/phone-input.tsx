@@ -9,6 +9,38 @@ import type { FormQuestion } from "@/lib/form-types";
 
 const DEFAULT_COUNTRY = countries.find((c) => c.iso2 === "ZA")!;
 
+// Countries sorted longest dial-code first, so e.g. "+1684" (American Samoa)
+// matches before the shorter "+1" (US/Canada) does.
+const COUNTRIES_BY_DIAL_CODE_LENGTH = [...countries].sort(
+  (a, b) => b.dialCode.length - a.dialCode.length
+);
+
+// People very commonly type their whole international number (e.g. "+47 912 34 567")
+// into what looks like a single phone field, without noticing the separate country
+// dropdown is still on its default. That doubled the dial code (e.g. "+27" + "4791234567")
+// and failed validation with no explanation. Detect an explicit "+" or "00" prefix and
+// switch the selected country + strip it instead of concatenating it again.
+function detectExplicitCountryCode(
+  rawInput: string
+): { country: Country; rest: string } | null {
+  const trimmed = rawInput.trim();
+  let digitsAfterPrefix: string | null = null;
+  if (trimmed.startsWith("+")) {
+    digitsAfterPrefix = trimmed.slice(1).replace(/\D/g, "");
+  } else if (trimmed.replace(/\s/g, "").startsWith("00")) {
+    digitsAfterPrefix = trimmed.replace(/\s/g, "").slice(2);
+  }
+  if (!digitsAfterPrefix) return null;
+
+  for (const country of COUNTRIES_BY_DIAL_CODE_LENGTH) {
+    const code = country.dialCode.slice(1);
+    if (digitsAfterPrefix.startsWith(code)) {
+      return { country, rest: digitsAfterPrefix.slice(code.length) };
+    }
+  }
+  return null;
+}
+
 export function PhoneInput({
   question,
   control,
@@ -42,6 +74,14 @@ export function PhoneInput({
   }
 
   function handleNumberChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const detected = detectExplicitCountryCode(e.target.value);
+    if (detected) {
+      setSelectedCountry(detected.country);
+      setLocalNumber(detected.rest);
+      field.onChange(detected.rest ? `${detected.country.dialCode}${detected.rest}` : "");
+      return;
+    }
+
     const raw = e.target.value.replace(/[^\d\s-]/g, "");
     setLocalNumber(raw);
     const digits = raw.replace(/\D/g, "");
