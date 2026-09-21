@@ -137,7 +137,7 @@ export async function PATCH(
       (v): v is string => typeof v === "string"
     );
     const overlapping = await getOverlappingAssignments(
-      supabase,
+      createAdminClient(),
       effCheckout,
       effReturn,
       id

@@ -96,7 +96,11 @@ export async function POST(request: Request) {
   }
 
   // Availability over the requested window (live bookings only).
-  const overlapping = await getOverlappingAssignments(supabase, checkout, ret);
+  const overlapping = await getOverlappingAssignments(
+    createAdminClient(),
+    checkout,
+    ret
+  );
   const unavailableIds = Array.from(new Set(overlapping.map((a) => a.vehicle_id)));
 
   const requestedIds = Array.isArray(body.vehicle_ids)

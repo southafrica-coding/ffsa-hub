@@ -48,10 +48,13 @@ export function VehicleBookingForm({
   vehicles,
   defaultRequesterName,
   defaultRequesterEmail,
+  defaultCheckoutDate = "",
 }: {
   vehicles: Vehicle[];
   defaultRequesterName: string;
   defaultRequesterEmail: string;
+  /** Pre-filled when arriving from a day on the availability calendar. */
+  defaultCheckoutDate?: string;
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -68,8 +71,8 @@ export function VehicleBookingForm({
     requester_phone: "",
     home_country: "ZA",
     num_people: "",
-    checkout_date: "",
-    return_date: "",
+    checkout_date: defaultCheckoutDate,
+    return_date: defaultCheckoutDate,
     notes: "",
   });
   const [vehicleIds, setVehicleIds] = useState<string[]>([]);

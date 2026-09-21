@@ -5,7 +5,12 @@ import { getVehicles, getVehicleAccess, type Vehicle } from "@/services/vehicles
 import { Masthead } from "@/components/ffsa";
 import { VehicleBookingForm } from "../vehicle-booking-form";
 
-export default async function NewVehicleBookingPage() {
+export default async function NewVehicleBookingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ date?: string }>;
+}) {
+  const params = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -39,6 +44,9 @@ export default async function NewVehicleBookingPage() {
           vehicles={vehicles}
           defaultRequesterName={defaultName}
           defaultRequesterEmail={user.email ?? ""}
+          defaultCheckoutDate={
+            /^\d{4}-\d{2}-\d{2}$/.test(params.date ?? "") ? params.date! : ""
+          }
         />
       </div>
     </div>

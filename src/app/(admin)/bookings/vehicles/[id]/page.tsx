@@ -149,7 +149,12 @@ export default async function VehicleBookingDetail({
   const [vehiclesRes, overlapping, inspectionsRes, filesRes, paymentsRes, agreementsRes] =
     await Promise.all([
       getVehicles(supabase, { activeOnly: true }),
-      getOverlappingAssignments(supabase, b.checkout_date, b.return_date, b.id),
+      getOverlappingAssignments(
+        createAdminClient(),
+        b.checkout_date,
+        b.return_date,
+        b.id
+      ),
       getInspectionsForBooking(supabase, b.id),
       getInspectionFiles(supabase, b.id),
       getVehiclePaymentsForBooking(supabase, b.id),

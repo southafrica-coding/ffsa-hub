@@ -1,5 +1,11 @@
 import Link from "next/link";
-import { Plus, Inbox, ClipboardList, Settings2 } from "lucide-react";
+import {
+  Plus,
+  Inbox,
+  ClipboardList,
+  Settings2,
+  CalendarRange,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Masthead, NeedsYou, SectionBar } from "@/components/ffsa";
 import { RequestLinkButton } from "./request-link-button";
@@ -29,7 +35,11 @@ const FILTERS = [
   { key: "cancelled", label: "Cancelled" },
 ];
 
-export function VehiclesView({
+/**
+ * Admin-only booking board. Reached from the availability calendar, and gated
+ * on vehicles.approve / vehicles.manage by the route that renders it.
+ */
+export function VehiclesBoard({
   bookings,
   vehicles,
   access,
@@ -47,10 +57,16 @@ export function VehiclesView({
   return (
     <div className="ffsa-screen">
       <Masthead
-        context="Reservations"
-        title="Rent a Vehicle"
+        context="Rent a Vehicle"
+        title="Booking board"
         actions={
           <>
+            <Link href="/bookings/vehicles">
+              <Button size="sm" variant="outline" className="gap-1.5">
+                <CalendarRange className="h-4 w-4" />
+                Calendar
+              </Button>
+            </Link>
             {(access.canApprove || access.canManage) && (
               <Link href="/bookings/vehicles/requests">
                 <Button size="sm" variant="outline" className="gap-1.5">
@@ -109,7 +125,11 @@ export function VehiclesView({
         {FILTERS.map((f) => (
           <Link
             key={f.key}
-            href={f.key === "all" ? "/bookings/vehicles" : `/bookings/vehicles?status=${f.key}`}
+            href={
+              f.key === "all"
+                ? "/bookings/vehicles/board"
+                : `/bookings/vehicles/board?status=${f.key}`
+            }
             className="chip -ml-px bg-white"
             data-active={statusFilter === f.key ? "true" : undefined}
           >

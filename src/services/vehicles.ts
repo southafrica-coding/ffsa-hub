@@ -144,6 +144,78 @@ export async function updateVehicle(
     .single();
 }
 
+// ── Availability ───────────────────────────────────────────
+
+export type DayAvailability = {
+  day: string;
+  /** Free right now — total fleet less what approved bookings hold. */
+  vans: number;
+  cars: number;
+  vanTotal: number;
+  carTotal: number;
+  /** Held by unapproved requests. Shown as a hint, never subtracted. */
+  vansRequested: number;
+  carsRequested: number;
+};
+
+type AvailabilityRow = {
+  day: string;
+  vehicle_type: "van" | "car";
+  total: number;
+  confirmed_used: number;
+  pending_used: number;
+};
+
+/**
+ * Per-day free-vehicle counts over an inclusive date range, keyed by ISO day.
+ *
+ * Goes through the `vehicle_availability` SQL function rather than reading
+ * bookings, because a normal user can no longer see booking rows at all (see
+ * migration 222) — and shouldn't: the calendar's whole point is that it gives
+ * away counts and nothing else.
+ */
+export async function getVehicleAvailability(
+  supabase: Client,
+  from: string,
+  to: string
+): Promise<Map<string, DayAvailability>> {
+  const { data } = await supabase.rpc("vehicle_availability", {
+    p_from: from,
+    p_to: to,
+  });
+
+  const byDay = new Map<string, DayAvailability>();
+  for (const row of (data ?? []) as AvailabilityRow[]) {
+    const entry =
+      byDay.get(row.day) ??
+      {
+        day: row.day,
+        vans: 0,
+        cars: 0,
+        vanTotal: 0,
+        carTotal: 0,
+        vansRequested: 0,
+        carsRequested: 0,
+      };
+
+    // Clamp: a manager can assign a vehicle from the booking screen, which
+    // doesn't run the request form's clash check, so used can in principle
+    // exceed the active fleet. Never render a negative count.
+    const free = Math.max(0, row.total - row.confirmed_used);
+    if (row.vehicle_type === "van") {
+      entry.vans = free;
+      entry.vanTotal = row.total;
+      entry.vansRequested = row.pending_used;
+    } else {
+      entry.cars = free;
+      entry.carTotal = row.total;
+      entry.carsRequested = row.pending_used;
+    }
+    byDay.set(row.day, entry);
+  }
+  return byDay;
+}
+
 // ── Bookings ───────────────────────────────────────────────
 
 export async function getVehicleBookings(
@@ -254,6 +326,15 @@ export async function setBookingVehicles(
  * Vehicle assignments that overlap a [from, to] window on still-live bookings
  * (pending or approved), optionally excluding one booking (when editing it).
  * Two-step to avoid embedded-filter pitfalls. Drives availability + clash math.
+ */
+/**
+ * Which vehicles are already held over [from, to] — by PENDING or APPROVED
+ * bookings both, because a specific vehicle can't be promised twice.
+ *
+ * Must be given an ADMIN client. Since migration 222 a requester can only read
+ * their own bookings, so a session client would report the fleet as wide open
+ * and the clash check would wave through a double-booking. Only vehicle ids
+ * leave this function, never anything about the booking holding them.
  */
 export async function getOverlappingAssignments(
   supabase: Client,
