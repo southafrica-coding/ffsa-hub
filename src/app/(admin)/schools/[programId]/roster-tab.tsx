@@ -49,6 +49,8 @@ export type RosterRow = {
   fee: RosterFee;
   gradedCount: number;
   removed: boolean;
+  /** Track of record (migration 221) — "Whole Program", "Q1, Q3", or null for every ordinary school. */
+  track: string | null;
 };
 
 export type StaffOption = { id: string; name: string };
@@ -228,6 +230,18 @@ export function RosterTab({
   const removed = useMemo(() => rows.filter((r) => r.removed), [rows]);
   const unassignedCount = active.filter((r) => !r.staffId).length;
 
+  // Headcount per track (migration 221) — only a school actually split into
+  // segments (FFX) carries a track on any row, so this stays invisible for
+  // every ordinary program.
+  const trackCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of active) {
+      if (!r.track) continue;
+      counts.set(r.track, (counts.get(r.track) ?? 0) + 1);
+    }
+    return counts;
+  }, [active]);
+
   const statusCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const r of active) counts.set(r.status, (counts.get(r.status) ?? 0) + 1);
@@ -329,6 +343,21 @@ export function RosterTab({
             <div className="mono-label mt-0.5">Staff on school</div>
           </div>
         </div>
+        {trackCounts.size > 0 && (
+          <div className="border-t border-rule px-5 py-4">
+            <div className="mono-label mb-2">By track</div>
+            <div className="flex flex-col gap-1.5">
+              {[...trackCounts.entries()]
+                .sort((a, b) => b[1] - a[1])
+                .map(([track, n]) => (
+                  <div key={track} className="flex items-baseline justify-between gap-3">
+                    <span className="truncate text-[13px] font-semibold text-ink">{track}</span>
+                    <span className="numeral shrink-0 text-[17px]">{n}</span>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Roster ── */}
@@ -414,6 +443,15 @@ export function RosterTab({
                       className="truncate text-[14.5px] font-bold text-muted-foreground"
                     >
                       {r.name}
+                    </span>
+                  )}
+                  {/* Track of record (migration 221) — a tag on the name rather
+                      than a seventh column, for the same reason roll-off lives
+                      in a menu below: the frame's roster is six columns and
+                      stays six columns. Invisible for every ordinary school. */}
+                  {r.track && (
+                    <span className="shrink-0 border border-rule px-1.5 py-0.5 font-mono text-[8.5px] font-bold uppercase tracking-[0.08em] text-[color:var(--text-secondary)]">
+                      {r.track}
                     </span>
                   )}
                   {/* Roll-off lives here rather than in a seventh column — the

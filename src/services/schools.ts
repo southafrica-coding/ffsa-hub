@@ -134,7 +134,11 @@ export async function getEnrollmentsByProgram(supabase: Client, programId: strin
     .select(
       // `nationality` feeds the roster’s FROM column (frame 14a). It is the
       // country-name dropdown value, not an adjective — see migration 115.
-      "*, users!enrollments_user_id_fkey(id, first_name, last_name, preferred_name, email, nationality), assigned_staff:users!enrollments_assigned_staff_id_fkey(id, first_name, last_name, preferred_name, email)"
+      // `enrollment_segments` is the track-of-record (migration 221):
+      // empty for every ordinary program, one-or-more rows for a school
+      // split into segments (FFX) — a null billing_course_id means
+      // whole-program.
+      "*, users!enrollments_user_id_fkey(id, first_name, last_name, preferred_name, email, nationality), assigned_staff:users!enrollments_assigned_staff_id_fkey(id, first_name, last_name, preferred_name, email), enrollment_segments(billing_course_id, billing_courses(code, name))"
     )
     .eq("program_id", programId)
     .order("enrolled_at", { ascending: false });

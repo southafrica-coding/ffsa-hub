@@ -1,18 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { canManageFinance } from "@/lib/api-auth";
-import {
-  upsertBillingPlan,
-  replaceScheduledRows,
-  deleteBillingPlanForEnrollmentCourse,
-  setWholeProgramPlan,
-  deleteWholeProgramPlan,
-  deleteAllCoursePlans,
-  getCountryTierMap,
-  type Tier,
-} from "@/services/school-billing";
+import { getCountryTierMap, type Tier } from "@/services/school-billing";
 import { getXeroRegionForStudent } from "@/services/xero";
 import { billingBlockedReason } from "@/services/school-billing";
+import { commitWholeProgramPlan, commitSegmentPlans } from "@/services/billing-plan-builder";
 import {
   buildSchedule,
   scheduleTotal,
@@ -118,41 +110,23 @@ export async function POST(request: Request) {
       });
     }
 
-    const { data: plan, error: planErr } = await setWholeProgramPlan(supabase, {
-      enrollment_id: enrollmentId,
-      user_id: enrollment.user_id,
-      program_id: enrollment.program_id,
+    const committed = await commitWholeProgramPlan(supabase, {
+      enrollmentId,
+      userId: enrollment.user_id,
+      programId: enrollment.program_id,
       tier,
-      tier_override: !!tierOverride,
-      payment_preference: preference,
-      xero_region: region,
-      created_by: user.id,
+      tierOverride: !!tierOverride,
+      preference,
+      region,
+      createdBy: user.id,
+      acceptanceDate,
     });
-    if (planErr || !plan) {
+    if (!committed.ok) {
       return NextResponse.json(
-        { error: planErr?.message ?? "Failed to save plan" },
+        { error: committed.error ?? "Failed to save plan" },
         { status: 500 }
       );
     }
-    await replaceScheduledRows(
-      supabase,
-      plan.id,
-      rows.map((r) => ({
-        charge_item_id: r.charge_item_id ?? null,
-        charge_type: r.charge_type,
-        label: r.label,
-        sequence: r.sequence,
-        amount_zar: r.amount_zar,
-        xero_item_code: r.xero_item_code,
-        scheduled_generation_date: r.scheduled_generation_date,
-        due_date: r.due_date,
-        combined_group_key: r.combined_group_key,
-        // The builder owns this — hardcoding it discarded the generation guard.
-        status: r.status,
-      }))
-    );
-    // Trim any individual-course plans (student is now whole-program).
-    await deleteAllCoursePlans(supabase, enrollmentId);
 
     return NextResponse.json({
       success: true,
@@ -224,65 +198,32 @@ export async function POST(request: Request) {
     });
   }
 
-  let created = 0;
-  let trimmed = 0;
-  for (const course of allCourses) {
-    if (selectedSet.has(course.id)) {
-      const phase = perPhase.find((p) => p.course.id === course.id);
-      if (!phase) continue;
-      const { data: plan, error: planErr } = await upsertBillingPlan(supabase, {
-        enrollment_id: enrollmentId,
-        user_id: enrollment.user_id,
-        program_id: enrollment.program_id,
-        course_id: course.id,
-        tier,
-        tier_override: !!tierOverride,
-        payment_preference: preference,
-        xero_region: region,
-        created_by: user.id,
-      });
-      if (planErr || !plan) {
-        return NextResponse.json(
-          { error: planErr?.message ?? "Failed to save plan" },
-          { status: 500 }
-        );
-      }
-      const { error: rowsErr } = await replaceScheduledRows(
-        supabase,
-        plan.id,
-        phase.rows.map((r) => ({
-          charge_item_id: r.charge_item_id ?? null,
-          charge_type: r.charge_type,
-          label: r.label,
-          sequence: r.sequence,
-          amount_zar: r.amount_zar,
-          xero_item_code: r.xero_item_code,
-          scheduled_generation_date: r.scheduled_generation_date,
-          due_date: r.due_date,
-          combined_group_key: r.combined_group_key,
-          // The builder owns this — hardcoding it discarded the generation guard.
-          status: r.status,
-        }))
-      );
-      if (rowsErr) {
-        return NextResponse.json({ error: rowsErr.message }, { status: 500 });
-      }
-      created++;
-    } else {
-      await deleteBillingPlanForEnrollmentCourse(supabase, enrollmentId, course.id);
-      trimmed++;
-    }
+  const committed = await commitSegmentPlans(supabase, {
+    enrollmentId,
+    userId: enrollment.user_id,
+    programId: enrollment.program_id,
+    courseIds: selected,
+    tier,
+    tierOverride: !!tierOverride,
+    preference,
+    region,
+    createdBy: user.id,
+    acceptanceDate,
+  });
+  if (!committed.ok) {
+    return NextResponse.json(
+      { error: committed.error ?? "Failed to save plan" },
+      { status: 500 }
+    );
   }
-  // Trim the whole-program plan (student is now on individual courses).
-  await deleteWholeProgramPlan(supabase, enrollmentId);
 
   return NextResponse.json({
     success: true,
     tier,
     region,
     grandTotal,
-    phasesBilled: created,
-    phasesTrimmed: trimmed,
+    phasesBilled: selectedSet.size,
+    phasesTrimmed: allCourses.length - selectedSet.size,
     warnings,
   });
 }

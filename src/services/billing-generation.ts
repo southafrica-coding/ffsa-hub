@@ -9,16 +9,8 @@
 // ────────────────────────────────────────────────────────────
 
 import { createScheduledInvoice, getXeroRegionForStudent } from "@/services/xero";
-import {
-  setWholeProgramPlan,
-  replaceScheduledRows,
-  getCountryTierMap,
-  type Tier,
-} from "@/services/school-billing";
-import {
-  buildSchedule,
-  type BuilderChargeItem,
-} from "@/lib/finance/schedule-builder";
+import { getCountryTierMap, billingBlockedReason, type Tier } from "@/services/school-billing";
+import { commitWholeProgramPlan, commitSegmentPlans } from "@/services/billing-plan-builder";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
@@ -184,6 +176,15 @@ export async function setupProgramBillingOnAcceptance(
       .single();
     if (!enrollment) return { ok: false, plansCreated: 0, generated: 0, note: "no enrollment" };
 
+    // A school billed outside the Hub must never have charges scheduled
+    // against it (docs/redesign/09-going-live.md) — the database refuses
+    // this too (migration 172's trigger), but checking here avoids ever
+    // hitting that as a raw constraint error mid-acceptance.
+    const blocked = await billingBlockedReason(supabase, enrollment.program_id);
+    if (blocked) {
+      return { ok: true, plansCreated: 0, generated: 0, note: blocked };
+    }
+
     const tierMap = await getCountryTierMap(supabase);
     const nat = (enrollment.users?.nationality ?? "").toLowerCase().trim();
     const tier: Tier = tierMap[nat] ?? "A";
@@ -192,53 +193,55 @@ export async function setupProgramBillingOnAcceptance(
       enrollment.enrolled_at ?? new Date().toISOString()
     ).split("T")[0];
 
-    // Default a new student to the WHOLE PROGRAM pricing (program-level).
-    const { data: items } = await supabase
-      .from("program_charge_items")
-      .select("*")
-      .eq("program_id", enrollment.program_id)
-      .eq("tier", tier)
-      .eq("active", true);
-    if (!items || items.length === 0) {
-      return { ok: true, plansCreated: 0, generated: 0, note: "no whole-program pricing configured" };
+    // The student's track of record (migration 221) — which segment(s) they
+    // applied for, or whole-program, copied onto the enrollment at
+    // acceptance. No rows means either a program with no segments configured
+    // (every program before this feature) or an application that predates
+    // it — both fall back to the historical default of whole-program.
+    const { data: segmentRows } = await supabase
+      .from("enrollment_segments")
+      .select("billing_course_id")
+      .eq("enrollment_id", enrollmentId);
+    const courseIds = (segmentRows ?? [])
+      .map((r: { billing_course_id: string | null }) => r.billing_course_id)
+      .filter((id: string | null): id is string => !!id);
+
+    const committed =
+      courseIds.length > 0
+        ? await commitSegmentPlans(supabase, {
+            enrollmentId,
+            userId: enrollment.user_id,
+            programId: enrollment.program_id,
+            courseIds,
+            tier,
+            preference: "standard",
+            region,
+            createdBy,
+            acceptanceDate,
+          })
+        : await commitWholeProgramPlan(supabase, {
+            enrollmentId,
+            userId: enrollment.user_id,
+            programId: enrollment.program_id,
+            tier,
+            preference: "standard",
+            region,
+            createdBy,
+            acceptanceDate,
+          });
+
+    if (!committed.ok) {
+      return { ok: false, plansCreated: 0, generated: 0, note: committed.error ?? "failed to create plan" };
     }
 
-    const { rows } = buildSchedule(items as BuilderChargeItem[], {
-      acceptanceDate,
-      arrivalDate: null,
-      groupYear: null,
-      paymentPreference: "standard",
-    });
-
-    const { data: plan } = await setWholeProgramPlan(supabase, {
-      enrollment_id: enrollmentId,
-      user_id: enrollment.user_id,
-      program_id: enrollment.program_id,
-      tier,
-      payment_preference: "standard",
-      xero_region: region,
-      created_by: createdBy,
-    });
-    if (!plan) {
-      return { ok: false, plansCreated: 0, generated: 0, note: "failed to create plan" };
+    const { data: plans } = await supabase
+      .from("student_billing_plans")
+      .select("id")
+      .eq("enrollment_id", enrollmentId);
+    const planIds: string[] = (plans ?? []).map((p: { id: string }) => p.id);
+    if (planIds.length === 0) {
+      return { ok: true, plansCreated: 0, generated: 0, note: "no pricing configured" };
     }
-    await replaceScheduledRows(
-      supabase,
-      plan.id,
-      rows.map((r) => ({
-        charge_item_id: r.charge_item_id ?? null,
-        charge_type: r.charge_type,
-        label: r.label,
-        sequence: r.sequence,
-        amount_zar: r.amount_zar,
-        xero_item_code: r.xero_item_code,
-        scheduled_generation_date: r.scheduled_generation_date,
-        due_date: r.due_date,
-        combined_group_key: r.combined_group_key,
-        status: "scheduled",
-      }))
-    );
-    const planIds: string[] = [plan.id];
 
     // Generate any invoices already due to generate (the deposit).
     const gen = await generateDueInvoices(supabase, {

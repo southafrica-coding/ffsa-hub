@@ -151,6 +151,8 @@ function SuccessScreen({
   );
 }
 
+type Segment = { id: string; code: string; name: string; sequence: number };
+
 export function PublicApplicationForm({
   programId,
   programName,
@@ -158,6 +160,8 @@ export function PublicApplicationForm({
   referenceSlots = [],
   countries = [],
   consentAgreementVersion,
+  segments = [],
+  hasWholeProgramOption = false,
 }: {
   programId: string;
   programName: string;
@@ -165,6 +169,10 @@ export function PublicApplicationForm({
   referenceSlots?: ReferenceSlot[];
   countries?: string[];
   consentAgreementVersion: string | null;
+  /** Standalone segments (e.g. FFX's Q1/Q2/Q3) this program is split into. Empty for every ordinary program — the picker below then doesn't render. */
+  segments?: Segment[];
+  /** Whether whole-program pricing is configured, i.e. "the whole thing" is a real option alongside the segments. */
+  hasWholeProgramOption?: boolean;
 }) {
   const [submitted, setSubmitted] = useState(false);
   const [applicationId, setApplicationId] = useState("");
@@ -180,6 +188,15 @@ export function PublicApplicationForm({
   const [homeCountryError, setHomeCountryError] = useState<string | null>(null);
   const [nationality, setNationality] = useState("");
   const [nationalityError, setNationalityError] = useState<string | null>(null);
+  // Track selection (migration 221) — which segment(s), or the whole
+  // program. Defaults to whole-program when that's on offer, otherwise to
+  // no selection (a segment-only school must have the applicant choose).
+  const [trackMode, setTrackMode] = useState<"whole_program" | "segments">(
+    hasWholeProgramOption ? "whole_program" : "segments"
+  );
+  const [selectedSegmentIds, setSelectedSegmentIds] = useState<string[]>([]);
+  const [trackError, setTrackError] = useState<string | null>(null);
+  const showTrackPicker = segments.length > 0;
 
   const requiredReferenceCount = referenceSlots.filter(
     (slot) => slot.is_required
@@ -294,6 +311,13 @@ export function PublicApplicationForm({
     }
     setHomeCountryError(null);
 
+    if (showTrackPicker && trackMode === "segments" && selectedSegmentIds.length === 0) {
+      setTrackError("Please choose at least one option.");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    setTrackError(null);
+
     const answers: Array<{
       question_id: string;
       question_label: string;
@@ -388,6 +412,11 @@ export function PublicApplicationForm({
           references,
           nationality,
           home_country: homeCountry,
+          track_choice: showTrackPicker
+            ? trackMode === "whole_program"
+              ? { whole_program: true, segment_ids: [] }
+              : { whole_program: false, segment_ids: selectedSegmentIds }
+            : undefined,
           files: files.length > 0 ? files : undefined,
           consent_version: consentAgreementVersion,
         }),
@@ -505,6 +534,67 @@ export function PublicApplicationForm({
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Track selection (migration 221) — only for a school split into
+          standalone segments, e.g. FFX's Q1/Q2/Q3. */}
+      {showTrackPicker && (
+        <div className="rounded-lg border bg-card p-6 space-y-4">
+          <h2 className="font-semibold text-foreground">Which part are you applying for?</h2>
+          <div className="space-y-2">
+            {hasWholeProgramOption && (
+              <label className="flex items-start gap-2.5 text-sm">
+                <input
+                  type="radio"
+                  name="track_mode"
+                  checked={trackMode === "whole_program"}
+                  onChange={() => {
+                    setTrackMode("whole_program");
+                    setTrackError(null);
+                  }}
+                  className="mt-0.5"
+                />
+                <span>The whole programme</span>
+              </label>
+            )}
+            <label className="flex items-start gap-2.5 text-sm">
+              <input
+                type="radio"
+                name="track_mode"
+                checked={trackMode === "segments"}
+                onChange={() => {
+                  setTrackMode("segments");
+                  setTrackError(null);
+                }}
+                className="mt-0.5"
+              />
+              <span>One or more individual sections</span>
+            </label>
+          </div>
+          {trackMode === "segments" && (
+            <div className="ml-6 space-y-2 border-l pl-4">
+              {segments.map((s) => (
+                <label key={s.id} className="flex items-start gap-2.5 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={selectedSegmentIds.includes(s.id)}
+                    onChange={(e) => {
+                      setSelectedSegmentIds((prev) =>
+                        e.target.checked
+                          ? [...prev, s.id]
+                          : prev.filter((id) => id !== s.id)
+                      );
+                      setTrackError(null);
+                    }}
+                    className="mt-0.5"
+                  />
+                  <span>{s.name}</span>
+                </label>
+              ))}
+            </div>
+          )}
+          {trackError && <p className="text-sm text-destructive">{trackError}</p>}
         </div>
       )}
 

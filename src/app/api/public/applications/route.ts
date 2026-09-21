@@ -54,6 +54,11 @@ export async function POST(request: Request) {
     typeof body.home_country === "string" ? body.home_country.trim() : "";
   const nationality =
     typeof body.nationality === "string" ? body.nationality.trim() : "";
+  // Track selection (migration 221) — which segment(s) of a split school
+  // (e.g. FFX's Q1/Q2/Q3), or the whole programme. Absent for every ordinary
+  // program, since the form only sends it when the school has segments.
+  const trackChoice: { whole_program?: boolean; segment_ids?: unknown } | null =
+    body.track_choice && typeof body.track_choice === "object" ? body.track_choice : null;
 
   if (!program_id || !answers) {
     return NextResponse.json(
@@ -101,6 +106,46 @@ export async function POST(request: Request) {
       { error: "This program is not currently accepting applications" },
       { status: 400 }
     );
+  }
+
+  // Track selection (migration 221) — fetch this program's segments so we
+  // can validate the submission and build a readable label. Every ordinary
+  // program has none, so this is a no-op for them. The generated Supabase
+  // types predate billing_courses (095/098), so this reads via an `any`
+  // cast the same way the admin billing surfaces already do.
+  const segmentDb = supabase as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  const { data: segmentRows } = await segmentDb
+    .from("billing_courses")
+    .select("id, code, name")
+    .eq("program_id", program_id)
+    .eq("scope", "segment");
+  const segmentById = new Map<string, { id: string; code: string; name: string }>();
+  for (const s of (segmentRows ?? []) as Array<{ id: string; code: string; name: string }>) {
+    segmentById.set(s.id, s);
+  }
+
+  let trackSegmentIds: string[] = [];
+  let trackIsWholeProgram = false;
+  if (segmentById.size > 0) {
+    if (!trackChoice) {
+      return NextResponse.json(
+        { error: "Please choose which part of the programme you're applying for." },
+        { status: 400 }
+      );
+    }
+    trackIsWholeProgram = trackChoice.whole_program === true;
+    if (!trackIsWholeProgram) {
+      const requested = Array.isArray(trackChoice.segment_ids) ? trackChoice.segment_ids : [];
+      trackSegmentIds = requested.filter(
+        (id: unknown): id is string => typeof id === "string" && segmentById.has(id)
+      );
+      if (trackSegmentIds.length === 0) {
+        return NextResponse.json(
+          { error: "Please choose at least one section, or the whole programme." },
+          { status: 400 }
+        );
+      }
+    }
   }
 
   // Validate required questions
@@ -227,6 +272,22 @@ export async function POST(request: Request) {
     ...answers,
   ];
 
+  // Same treatment for the track choice, when this program has segments —
+  // reviewers see it in the answers list for free, same as country.
+  if (segmentById.size > 0) {
+    const label = trackIsWholeProgram
+      ? "Whole programme"
+      : trackSegmentIds
+          .map((id) => segmentById.get(id)?.name ?? segmentById.get(id)?.code)
+          .filter(Boolean)
+          .join(", ");
+    answersWithCountry.push({
+      question_id: "program_track",
+      question_label: "Which part are you applying for?",
+      answer: label,
+    });
+  }
+
   const { data: response, error: insertError } = await createPublicResponse(
     supabase,
     {
@@ -242,6 +303,23 @@ export async function POST(request: Request) {
       { error: "Failed to submit application. Please try again." },
       { status: 500 }
     );
+  }
+
+  // Persist the track choice (migration 221) — best-effort, never blocks
+  // the submission the applicant is waiting on.
+  if (segmentById.size > 0) {
+    const rows = trackIsWholeProgram
+      ? [{ application_response_id: response.id, billing_course_id: null }]
+      : trackSegmentIds.map((id) => ({
+          application_response_id: response.id,
+          billing_course_id: id,
+        }));
+    const { error: segmentInsertError } = await segmentDb
+      .from("application_segment_choices")
+      .insert(rows);
+    if (segmentInsertError) {
+      console.error("[applications] segment choice insert failed", segmentInsertError);
+    }
   }
 
   // Fire-and-forget Slack notification — never blocks the applicant's

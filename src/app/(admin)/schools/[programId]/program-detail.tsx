@@ -83,6 +83,11 @@ type Enrollment = {
   assigned_staff: StaffUser | null;
   insurance_verified_at: string | null;
   insurance_verified_by: string | null;
+  /** Track of record (migration 221) — empty for every ordinary program. */
+  enrollment_segments: Array<{
+    billing_course_id: string | null;
+    billing_courses: { code: string; name: string } | null;
+  }>;
   users: {
     id: string | null;
     first_name: string | null;
@@ -329,6 +334,18 @@ function displayName(u: {
   return name || u.email || "Unknown";
 }
 
+/** Track of record (migration 221) → the roster's small track tag. Empty for every ordinary program. */
+function trackLabel(
+  segments: Array<{ billing_course_id: string | null; billing_courses: { code: string; name: string } | null }>
+): string | null {
+  if (segments.length === 0) return null;
+  if (segments.some((s) => s.billing_course_id === null)) return "Whole Program";
+  return segments
+    .map((s) => s.billing_courses?.code)
+    .filter((code): code is string => !!code)
+    .join(", ");
+}
+
 export function ProgramDetail({
   program,
   initialTab,
@@ -429,6 +446,7 @@ export function ProgramDetail({
     // A grade row with no letter is a placeholder, not a grade.
     gradedCount: grades.filter((g) => g.enrollment_id === e.id && g.letter_grade).length,
     removed: !!e.removed_at,
+    track: trackLabel(e.enrollment_segments),
   }));
   const rosterStaffOptions = staffOptions
     .map((s) => ({ id: s.id, name: displayName(s) }))

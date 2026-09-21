@@ -390,6 +390,35 @@ export async function POST(request: Request) {
     }
   }
 
+  // Carry the applicant's chosen track (migration 221) onto the new
+  // enrolment before billing runs, so setupProgramBillingOnAcceptance bills
+  // the segment(s) they actually applied for instead of always defaulting
+  // to whole-program. No rows here (a program with no segments configured,
+  // or an application that predates this feature) falls back to that
+  // historical default, unchanged.
+  if (enrollmentId) {
+    // The generated Supabase types predate these tables (migration 221),
+    // same as the billing_courses reads elsewhere in this module.
+    const segmentDb = adminSupabase as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const { data: choices } = await segmentDb
+      .from("application_segment_choices")
+      .select("billing_course_id")
+      .eq("application_response_id", response_id);
+    if (choices && choices.length > 0) {
+      await segmentDb
+        .from("enrollment_segments")
+        .delete()
+        .eq("enrollment_id", enrollmentId);
+      await segmentDb.from("enrollment_segments").insert(
+        choices.map((c: { billing_course_id: string | null }) => ({
+          enrollment_id: enrollmentId,
+          billing_course_id: c.billing_course_id,
+          created_by: authUser.id,
+        }))
+      );
+    }
+  }
+
   // Auto-set up the full-program billing schedule and generate the deposit
   // invoice. Non-throwing — never blocks acceptance if billing isn't configured.
   if (enrollmentId) {
