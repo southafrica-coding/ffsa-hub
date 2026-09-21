@@ -13,7 +13,7 @@ import type { CvEntryCategory } from "@/lib/users/cv-entry-types";
 import type { CvEntryScope } from "@/lib/auth/check-cv-access";
 
 const CARD_USER_FIELDS =
-  "id, first_name, last_name, display_name, preferred_name, email, avatar_url, essence_statement";
+  "id, first_name, last_name, display_name, preferred_name, email, avatar_url, essence_statement, job_description";
 
 export async function getCardOwner(supabase: Client, userId: string) {
   return supabase.from("users").select(CARD_USER_FIELDS).eq("id", userId).maybeSingle();
@@ -28,6 +28,44 @@ export async function updateEssenceStatement(
     .from("users")
     .update({ essence_statement: essenceStatement || null })
     .eq("id", userId);
+}
+
+/** Written only by a ministry leader of one of the target's ministries, or admin. */
+export async function updateJobDescription(
+  supabase: Client,
+  userId: string,
+  jobDescription: string
+) {
+  return supabase
+    .from("users")
+    .update({ job_description: jobDescription || null })
+    .eq("id", userId);
+}
+
+/**
+ * The ministries a user actively belongs to (id + name) — used to pick which
+ * ministry a personal OKR objective hangs off of when they're in more than
+ * one. Reads via the admin client are expected here (see callers): a
+ * ministry_leader or leadership_team viewer isn't necessarily covered by
+ * staff_ministry_members' own RLS for a ministry they don't lead, and "which
+ * ministry someone belongs to" is the same non-sensitive fact already shown
+ * on the Ministry tab roster.
+ */
+export async function listUserMinistries(supabase: Client, userId: string) {
+  const { data, error } = await supabase
+    .from("staff_ministry_members")
+    .select("staff_ministry_id, staff_ministries(id, name)")
+    .eq("user_id", userId)
+    .eq("status", "active");
+  if (error) return { data: null, error };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows = (data ?? []) as any[];
+  return {
+    data: rows
+      .map((r) => r.staff_ministries)
+      .filter(Boolean) as { id: string; name: string }[],
+    error: null,
+  };
 }
 
 const ENTRY_FIELDS =

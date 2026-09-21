@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { createClient } from "@/lib/supabase/server";
 import { getAuthedUser } from "@/lib/api-auth";
-import { callerCanEditMinistryOkrs } from "@/lib/auth/check-okr-access";
+import { callerCanCreateOkr } from "@/lib/auth/check-okr-access";
 import {
   createKeyResults,
   createObjective,
@@ -41,39 +41,52 @@ export async function POST(request: Request) {
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const body = await request.json();
-  const { cycle_id, staff_ministry_id, okr_team_id, title, scope } = body;
+  const { cycle_id, staff_ministry_id, okr_team_id, title } = body;
+  const scope: "ministry" | "individual" = body.scope === "individual" ? "individual" : "ministry";
+  const ownerUserId = scope === "individual" ? (body.owner_user_id ?? null) : null;
 
   if (!cycle_id || !title?.trim()) {
     return NextResponse.json({ error: "cycle_id and title are required" }, { status: 400 });
   }
 
-  // Exactly one owning group, matching okr_objectives_owner_group_ck. Caught
-  // here so the caller gets a sentence rather than a constraint name.
-  if (!staff_ministry_id === !okr_team_id) {
+  if (scope === "individual") {
+    // Individual objectives always hang off a ministry (never an OKR team —
+    // okr_objectives_individual_needs_ministry_ck) and always have an owner.
+    if (!staff_ministry_id || okr_team_id) {
+      return NextResponse.json(
+        { error: "A personal objective needs a ministry and no OKR team" },
+        { status: 400 }
+      );
+    }
+    if (!ownerUserId) {
+      return NextResponse.json({ error: "owner_user_id is required" }, { status: 400 });
+    }
+  } else if (!staff_ministry_id === !okr_team_id) {
+    // Exactly one owning group, matching okr_objectives_owner_group_ck. Caught
+    // here so the caller gets a sentence rather than a constraint name.
     return NextResponse.json(
       { error: "An objective needs exactly one owner — a ministry or an OKR team" },
       { status: 400 }
     );
   }
 
-  // Individual OKRs are a later build. Until the portal ships, refusing here
-  // keeps half-owned rows out of the table rather than letting an API caller
-  // create objectives nothing can display.
-  if (scope && scope !== "ministry") {
-    return NextResponse.json(
-      { error: "Only ministry objectives can be created yet" },
-      { status: 400 }
-    );
-  }
-
   // A team has no roster, so passing null asks the leadership/admin question —
   // the same answer the RLS policy gives via leads_staff_ministry(NULL).
-  if (!(await callerCanEditMinistryOkrs(supabase, user.id, staff_ministry_id ?? null))) {
+  if (
+    !(await callerCanCreateOkr(supabase, user.id, {
+      scope,
+      ministryId: staff_ministry_id ?? null,
+      ownerUserId,
+    }))
+  ) {
     return NextResponse.json(
       {
-        error: okr_team_id
-          ? "Only leadership can add objectives for an OKR team"
-          : "You can only add objectives to a ministry you lead",
+        error:
+          scope === "individual"
+            ? "You can only add personal objectives for yourself, or for staff in a ministry you lead"
+            : okr_team_id
+              ? "Only leadership can add objectives for an OKR team"
+              : "You can only add objectives to a ministry you lead",
       },
       { status: 403 }
     );
@@ -83,7 +96,8 @@ export async function POST(request: Request) {
     cycle_id,
     staff_ministry_id: staff_ministry_id ?? null,
     okr_team_id: okr_team_id ?? null,
-    scope: "ministry",
+    scope,
+    owner_user_id: ownerUserId,
     title: title.trim(),
     description: body.description ?? null,
     timeline: body.timeline ?? null,

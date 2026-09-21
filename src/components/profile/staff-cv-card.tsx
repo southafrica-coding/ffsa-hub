@@ -51,12 +51,19 @@ function formatEntryDates(entry: CvEntry): string | null {
 export function StaffCvCard({
   targetUserId,
   viewer,
+  canEditJobDescription,
   initialEssenceStatement,
+  initialJobDescription,
   initialEntries,
 }: {
   targetUserId: string;
   viewer: CvViewer;
+  // Computed server-side (src/lib/auth/check-cv-access.ts canEditJobDescription):
+  // a ministry leader of one of targetUserId's ministries, or admin. Never the
+  // target themselves.
+  canEditJobDescription: boolean;
   initialEssenceStatement: string;
+  initialJobDescription: string;
   initialEntries: CvEntry[];
 }) {
   const router = useRouter();
@@ -64,6 +71,10 @@ export function StaffCvCard({
   const [savedEssence, setSavedEssence] = useState(initialEssenceStatement);
   const [savingEssence, setSavingEssence] = useState(false);
   const [essenceError, setEssenceError] = useState<string | null>(null);
+  const [jobDescription, setJobDescription] = useState(initialJobDescription);
+  const [savedJobDescription, setSavedJobDescription] = useState(initialJobDescription);
+  const [savingJobDescription, setSavingJobDescription] = useState(false);
+  const [jobDescriptionError, setJobDescriptionError] = useState<string | null>(null);
   const [entries, setEntries] = useState<CvEntry[]>(initialEntries);
   const [adding, setAdding] = useState<{ category: CvEntryCategory; scope: "self" | "leadership" } | null>(
     null
@@ -95,6 +106,24 @@ export function StaffCvCard({
       return;
     }
     setSavedEssence(essence);
+    router.refresh();
+  }
+
+  async function saveJobDescription() {
+    setSavingJobDescription(true);
+    setJobDescriptionError(null);
+    const res = await fetch("/api/profile/job-description", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: targetUserId, job_description: jobDescription }),
+    });
+    setSavingJobDescription(false);
+    if (!res.ok) {
+      const b = await res.json().catch(() => ({}));
+      setJobDescriptionError(b.error ?? "Could not save.");
+      return;
+    }
+    setSavedJobDescription(jobDescription);
     router.refresh();
   }
 
@@ -284,6 +313,40 @@ export function StaffCvCard({
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">{savedEssence || "No essence statement yet."}</p>
+        )}
+      </section>
+
+      <section className="space-y-2 rounded-xl border p-4">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          Job description
+        </h3>
+        <p className="text-xs text-muted-foreground">
+          Set by your ministry leader — not something you edit yourself.
+        </p>
+        {canEditJobDescription ? (
+          <div className="space-y-2">
+            <Textarea
+              placeholder="What this person's role actually involves…"
+              value={jobDescription}
+              onChange={(e) => setJobDescription(e.target.value)}
+              rows={3}
+            />
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                disabled={savingJobDescription || jobDescription === savedJobDescription}
+                onClick={saveJobDescription}
+              >
+                {savingJobDescription ? "Saving…" : "Save"}
+              </Button>
+            </div>
+            {jobDescriptionError && <p className="text-sm text-destructive">{jobDescriptionError}</p>}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            {savedJobDescription || "No job description yet."}
+          </p>
         )}
       </section>
 

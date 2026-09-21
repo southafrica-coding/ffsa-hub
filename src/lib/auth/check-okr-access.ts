@@ -50,6 +50,21 @@ export async function callerCanEditMinistryOkrs(
 }
 
 /**
+ * Mirrors the SQL can_create_okr(scope, ministry_id, owner_user_id): the
+ * INSERT-time question, before a row exists to look up. Individual OKRs
+ * (migration 218's CV-card "Personal OKRs" section) are the "once individual
+ * OKRs ship" case noted above — the owner may always create their own.
+ */
+export async function callerCanCreateOkr(
+  supabase: Client,
+  userId: string,
+  input: { scope: "ministry" | "individual"; ministryId: string | null; ownerUserId: string | null }
+): Promise<boolean> {
+  if (input.scope === "individual" && input.ownerUserId === userId) return true;
+  return callerCanEditMinistryOkrs(supabase, userId, input.ministryId);
+}
+
+/**
  * The same question, asked about an existing objective. Reads the objective
  * with the caller's client, so an objective they cannot even see comes back
  * null and is refused — a leader must not learn that a hidden individual

@@ -42,6 +42,10 @@ import { StaffCvCard, type CvEntry } from "@/components/profile/staff-cv-card";
 import { listCvEntries } from "@/services/staff-cv";
 import { callerIsAdmin } from "@/lib/auth/check-ministry-access";
 import { isLeadershipTeam } from "@/lib/auth/check-okr-access";
+import { canEditJobDescription } from "@/lib/auth/check-cv-access";
+import { PersonalOkrs } from "@/components/profile/personal-okrs";
+import { getCurrentCycle, listObjectives } from "@/services/okrs";
+import { listUserMinistries } from "@/services/staff-cv";
 
 export default async function ProfilePage() {
   const supabase = await createClient();
@@ -94,6 +98,20 @@ export default async function ProfilePage() {
   const { data: cvEntries } = await listCvEntries(supabase, user.id);
   const isAdmin = await callerIsAdmin(supabase, user.id);
   const isLeadership = await isLeadershipTeam(supabase, user.id);
+  const canEditOwnJobDescription = await canEditJobDescription(supabase, user.id, user.id);
+
+  // Personal OKRs (migration 182's individual scope) — RLS on okr_objectives
+  // already decides what comes back, so the caller's own client is correct
+  // here, not the admin client.
+  const { data: currentCycle } = await getCurrentCycle(supabase);
+  const { data: okrObjectives } = currentCycle
+    ? await listObjectives(supabase, {
+        cycleId: currentCycle.id,
+        scope: "individual",
+        ownerUserId: user.id,
+      })
+    : { data: [] };
+  const { data: ownMinistries } = await listUserMinistries(createAdminClient(), user.id);
 
   const { data: consentRows } = await getConsentRecordsForUser(supabase, user.id);
   const titleByVersion = new Map<string, string>();
@@ -301,14 +319,35 @@ export default async function ProfilePage() {
           <p className="text-sm text-muted-foreground mt-1">
             An essence statement, past involvement, training and skills — visible to
             the Leadership Team and to your ministry leader. Anything added by
-            leadership shows up here too, but only they can change it.
+            leadership shows up here too, but only they can change it. Your job
+            description is set by your ministry leader.
           </p>
         </div>
         <StaffCvCard
           targetUserId={user.id}
           viewer={{ id: user.id, isAdmin, isLeadership }}
+          canEditJobDescription={canEditOwnJobDescription}
           initialEssenceStatement={String(row.essence_statement ?? "")}
+          initialJobDescription={String(row.job_description ?? "")}
           initialEntries={(cvEntries ?? []) as CvEntry[]}
+        />
+      </section>
+
+      <section className="space-y-3 px-5 pb-6 md:px-8 md:pb-7">
+        <div>
+          <p className="page-eyebrow">GOALS</p>
+          <h2 className="text-xl font-semibold">Personal OKRs</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Your own objectives for the current cycle — visible to the same
+            people as your CV. You can add and edit your own.
+          </p>
+        </div>
+        <PersonalOkrs
+          targetUserId={user.id}
+          cycle={currentCycle ?? null}
+          canManage={Boolean(currentCycle)}
+          ministries={(ownMinistries ?? []) as { id: string; name: string }[]}
+          initialObjectives={okrObjectives ?? []}
         />
       </section>
 

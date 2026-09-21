@@ -30,7 +30,7 @@ export type CvEntry = {
 };
 
 /** True if `targetUserId` is an active member of any ministry `viewerId` leads. */
-async function viewerLeadsTargetsMinistry(
+export async function viewerLeadsTargetsMinistry(
   supabase: Client,
   viewerId: string,
   targetUserId: string
@@ -93,4 +93,20 @@ export async function canEditEssenceStatement(
 ): Promise<boolean> {
   if (viewerId === targetUserId) return true;
   return callerIsAdmin(supabase, viewerId);
+}
+
+/**
+ * May the viewer write targetUserId's job description? A ministry leader of
+ * one of the target's ministries, or admin — deliberately NOT the target
+ * themselves (their leader writes it, not them) and NOT a blanket
+ * Leadership Team grant (unlike CV entries, this is specifically "your own
+ * ministry leader's" call, not the whole team's).
+ */
+export async function canEditJobDescription(
+  supabase: Client,
+  viewerId: string,
+  targetUserId: string
+): Promise<boolean> {
+  if (await callerIsAdmin(supabase, viewerId)) return true;
+  return viewerLeadsTargetsMinistry(supabase, viewerId, targetUserId);
 }

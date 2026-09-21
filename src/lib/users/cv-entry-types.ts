@@ -5,8 +5,9 @@
 // renders. 'other' already covers anything unanticipated, so most future
 // requests won't need a new category at all.
 
-export type CvEntryCategory = "involvement" | "training" | "skill" | "other";
+export type CvEntryCategory = "involvement" | "training" | "workshop" | "skill" | "other";
 
+// Display order on the card: involvement, training, workshop, skill, other.
 export const CV_ENTRY_CATEGORIES: {
   value: CvEntryCategory;
   label: string;
@@ -21,8 +22,8 @@ export const CV_ENTRY_CATEGORIES: {
     value: "involvement",
     label: "Past involvement",
     addLabel: "Add involvement",
-    placeholder: "e.g. YWAM Cape Town, DTS staff",
-    description: "Schools or ministry you did with us or another YWAM / FF base.",
+    placeholder: "e.g. Fire & Fragrance Kona DTS Staff",
+    description: "Staffing opportunities — roles you've served in with us or another YWAM / FF base.",
     hasDate: true,
   },
   {
@@ -31,6 +32,14 @@ export const CV_ENTRY_CATEGORIES: {
     addLabel: "Add training",
     placeholder: "e.g. ICI",
     description: "Schools within YWAM / FF you've done — which school, and when.",
+    hasDate: true,
+  },
+  {
+    value: "workshop",
+    label: "Workshops & Seminars",
+    addLabel: "Add workshop/seminar",
+    placeholder: "e.g. Conflict resolution workshop",
+    description: "Workshops, seminars and short courses — not a full school (that's Training).",
     hasDate: true,
   },
   {
