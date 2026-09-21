@@ -38,6 +38,10 @@ import { INSURANCE_PROVIDERS } from "@/lib/profile/options";
 import { getAllListOptions, activeSets } from "@/services/list-options";
 import { listActiveMinistries } from "@/services/ministries";
 import { SectionBar, Chip } from "@/components/ffsa";
+import { StaffCvCard, type CvEntry } from "@/components/profile/staff-cv-card";
+import { listCvEntries } from "@/services/staff-cv";
+import { callerIsAdmin } from "@/lib/auth/check-ministry-access";
+import { isLeadershipTeam } from "@/lib/auth/check-okr-access";
 
 export default async function ProfilePage() {
   const supabase = await createClient();
@@ -87,6 +91,10 @@ export default async function ProfilePage() {
   // Policies this user has personally signed (RLS: own records only). Resolve
   // each record's agreement title from the exact version they accepted; cache
   // lookups so repeat versions aren't re-fetched.
+  const { data: cvEntries } = await listCvEntries(supabase, user.id);
+  const isAdmin = await callerIsAdmin(supabase, user.id);
+  const isLeadership = await isLeadershipTeam(supabase, user.id);
+
   const { data: consentRows } = await getConsentRecordsForUser(supabase, user.id);
   const titleByVersion = new Map<string, string>();
   const signedAgreements: SignedAgreement[] = [];
@@ -284,6 +292,24 @@ export default async function ProfilePage() {
             );
           })}
         </div>
+      </section>
+
+      <section className="space-y-3 px-5 pb-6 md:px-8 md:pb-7">
+        <div>
+          <p className="page-eyebrow">STAFF CV</p>
+          <h2 className="text-xl font-semibold">Your CV</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            An essence statement, past involvement, training and skills — visible to
+            the Leadership Team and to your ministry leader. Anything added by
+            leadership shows up here too, but only they can change it.
+          </p>
+        </div>
+        <StaffCvCard
+          targetUserId={user.id}
+          viewer={{ id: user.id, isAdmin, isLeadership }}
+          initialEssenceStatement={String(row.essence_statement ?? "")}
+          initialEntries={(cvEntries ?? []) as CvEntry[]}
+        />
       </section>
 
       <section className="space-y-3 px-5 pb-6 md:px-8 md:pb-7">

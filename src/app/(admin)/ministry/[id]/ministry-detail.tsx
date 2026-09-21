@@ -2,6 +2,7 @@
 import { Masthead } from "@/components/ffsa";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Star, UserPlus, X, Check, Plus, Trash2, ChevronUp, ChevronDown, Pencil, MoreHorizontal, FolderInput } from "lucide-react";
@@ -127,11 +128,11 @@ function PersonRow({
 }) {
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-2.5">
-      <div className="flex min-w-0 items-center gap-3">
+      <Link href={`/ministry/staff/${user?.id}`} className="group flex min-w-0 items-center gap-3">
         <UserAvatar src={user?.avatar_url} name={nameOf(user)} size={32} />
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-medium text-foreground">
+            <span className="truncate text-sm font-medium text-foreground group-hover:underline">
               {nameOf(user)}
             </span>
             {badge}
@@ -140,7 +141,7 @@ function PersonRow({
             <p className="truncate text-xs text-muted-foreground">{user.email}</p>
           )}
         </div>
-      </div>
+      </Link>
       <div className="flex shrink-0 items-center gap-1">{children}</div>
     </div>
   );
@@ -152,12 +153,19 @@ export function MinistryDetail({
   pickable,
   subcategories,
   isAdmin,
+  canManage,
 }: {
   ministry: Ministry;
   roster: Membership[];
   pickable: PickUser[];
   subcategories: Subcategory[];
   isAdmin: boolean;
+  // Admin, or an active leader of THIS ministry. Leadership Team can view
+  // this page (blanket visibility) without being able to manage a roster
+  // they don't lead — every mutating control is gated on this, not isAdmin,
+  // since a plain leader could already do most of these before isAdmin
+  // existed as a prop.
+  canManage: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -346,7 +354,11 @@ export function MinistryDetail({
         }
       >
         {/* All row actions live behind a single overflow menu so the roster
-            reads clean; every item calls the same endpoints as before. */}
+            reads clean; every item calls the same endpoints as before.
+            Hidden entirely for a read-only viewer (e.g. Leadership Team
+            looking at a ministry they don't lead) — every action here needs
+            canManage server-side anyway, so there's nothing to offer them. */}
+        {canManage && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -465,6 +477,7 @@ export function MinistryDetail({
             )}
           </DropdownMenuContent>
         </DropdownMenu>
+        )}
       </PersonRow>
     );
   }
@@ -521,12 +534,14 @@ export function MinistryDetail({
                 disabled={busy}
               />
             )}
-            <PersonPicker
-              label="Add staff"
-              options={pickable.filter((u) => !inMinistry.has(u.id))}
-              onPick={(uid) => call(`${base}/members`, "POST", { user_id: uid }, "Staff added")}
-              disabled={busy}
-            />
+            {canManage && (
+              <PersonPicker
+                label="Add staff"
+                options={pickable.filter((u) => !inMinistry.has(u.id))}
+                onPick={(uid) => call(`${base}/members`, "POST", { user_id: uid }, "Staff added")}
+                disabled={busy}
+              />
+            )}
           </div>
         </div>
         {roster.length === 0 ? (

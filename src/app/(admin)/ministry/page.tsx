@@ -4,7 +4,10 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { listMinistries } from "@/services/ministries";
 import { callerIsAdmin, getLedMinistryIds } from "@/lib/auth/check-ministry-access";
+import { isLeadershipTeam } from "@/lib/auth/check-okr-access";
+import { listStaffForSearch } from "@/services/staff-cv";
 import { NewMinistryButton } from "./new-ministry-button";
+import { StaffSearch, type Staff } from "@/components/ministry/staff-search";
 import { Masthead, StatusPill } from "@/components/ffsa";
 import {
   MINISTRY_TYPES,
@@ -20,14 +23,23 @@ export default async function MinistryPage() {
   if (!user) redirect("/login");
 
   const isAdmin = await callerIsAdmin(supabase, user.id);
-  const ledIds = isAdmin ? [] : await getLedMinistryIds(supabase, user.id);
-  if (!isAdmin && ledIds.length === 0) redirect("/dashboard");
+  // Leadership Team sees every ministry, same as admin — it's the one role
+  // meant to have blanket visibility across the whole staff team.
+  const isLeadership = !isAdmin && (await isLeadershipTeam(supabase, user.id));
+  const seesEverything = isAdmin || isLeadership;
+  const ledIds = seesEverything ? [] : await getLedMinistryIds(supabase, user.id);
+  if (!seesEverything && ledIds.length === 0) redirect("/dashboard");
 
   const admin = createAdminClient();
   const { data: ministries } = await listMinistries(admin);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const visible = ((ministries ?? []) as any[]).filter(
-    (m) => isAdmin || ledIds.includes(m.id)
+    (m) => seesEverything || ledIds.includes(m.id)
+  );
+
+  const { data: searchableStaff } = await listStaffForSearch(
+    admin,
+    seesEverything ? {} : { ministryIds: ledIds }
   );
 
   // Split into Main / Part-time sections, keeping each section in the order
@@ -42,10 +54,12 @@ export default async function MinistryPage() {
   return (
     <div className="ffsa-screen">
       <Masthead
-        context={`People · ${visible.length} ministr${visible.length === 1 ? "y" : "ies"}${!isAdmin ? " you lead" : ""}`}
+        context={`People · ${visible.length} ministr${visible.length === 1 ? "y" : "ies"}${!seesEverything ? " you lead" : ""}`}
         title="Ministries"
         actions={isAdmin ? <NewMinistryButton /> : undefined}
       />
+
+      <StaffSearch staff={(searchableStaff ?? []) as Staff[]} />
 
       {visible.length === 0 ? (
         <div className="px-5 py-12 text-center md:px-8">

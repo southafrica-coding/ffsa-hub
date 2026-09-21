@@ -9,6 +9,7 @@ import {
 } from "@/services/ministries";
 import { deriveUserLifecycle } from "@/lib/users/lifecycle";
 import { callerIsAdmin, callerLeadsMinistry } from "@/lib/auth/check-ministry-access";
+import { isLeadershipTeam } from "@/lib/auth/check-okr-access";
 import { MinistryDetail } from "./ministry-detail";
 
 export default async function MinistryDetailPage({
@@ -24,7 +25,13 @@ export default async function MinistryDetailPage({
   if (!user) redirect("/login");
 
   const isAdmin = await callerIsAdmin(supabase, user.id);
-  if (!isAdmin && !(await callerLeadsMinistry(supabase, user.id, id))) redirect("/dashboard");
+  const leadsThisMinistry = await callerLeadsMinistry(supabase, user.id, id);
+  // Leadership Team can VIEW any ministry's roster — same blanket visibility
+  // they get elsewhere (OKRs, the Ministry list page) — but management stays
+  // limited to admins and that specific ministry's own leaders.
+  const canView = isAdmin || leadsThisMinistry || (await isLeadershipTeam(supabase, user.id));
+  if (!canView) redirect("/dashboard");
+  const canManage = isAdmin || leadsThisMinistry;
 
   const admin = createAdminClient();
   const [
@@ -63,6 +70,7 @@ export default async function MinistryDetailPage({
         pickable={eligiblePickable}
         subcategories={subcategories ?? []}
         isAdmin={isAdmin}
+        canManage={canManage}
       />
     </div>
   );
