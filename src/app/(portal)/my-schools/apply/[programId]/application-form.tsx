@@ -51,18 +51,26 @@ type ReferenceSlot = {
   is_required: boolean;
 };
 
+type Segment = { id: string; code: string; name: string; sequence: number };
+
 export function ApplicationForm({
   programId,
   questions,
   referenceSlots = [],
   countries = [],
   initialNationality = "",
+  segments = [],
+  hasWholeProgramOption = false,
 }: {
   programId: string;
   questions: Question[];
   referenceSlots?: ReferenceSlot[];
   countries?: string[];
   initialNationality?: string;
+  /** Standalone segments (e.g. FFX's Q1/Q2/Q3) this program is split into. Empty for every ordinary program — the picker below then doesn't render. */
+  segments?: Segment[];
+  /** Whether whole-program pricing is configured, i.e. "the whole thing" is a real option alongside the segments. */
+  hasWholeProgramOption?: boolean;
 }) {
   const router = useRouter();
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -83,6 +91,15 @@ export function ApplicationForm({
       : ""
   );
   const [homeCountry, setHomeCountry] = useState("");
+  // Track selection (migration 221) — which segment(s), or the whole
+  // program. Defaults to whole-program when that's on offer, otherwise to
+  // no selection (a segment-only school must have the applicant choose).
+  const [trackMode, setTrackMode] = useState<"whole_program" | "segments">(
+    hasWholeProgramOption ? "whole_program" : "segments"
+  );
+  const [selectedSegmentIds, setSelectedSegmentIds] = useState<string[]>([]);
+  const [trackError, setTrackError] = useState<string | null>(null);
+  const showTrackPicker = segments.length > 0;
   const requiredReferenceCount = referenceSlots.filter(
     (slot) => slot.is_required
   ).length;
@@ -156,6 +173,12 @@ export function ApplicationForm({
       }
     }
 
+    if (showTrackPicker && trackMode === "segments" && selectedSegmentIds.length === 0) {
+      setTrackError("Please choose at least one option.");
+      return;
+    }
+    setTrackError(null);
+
     setLoading(true);
 
     const formattedAnswers = questions
@@ -184,6 +207,11 @@ export function ApplicationForm({
           nationality: nationality.trim(),
           home_country: homeCountry.trim(),
           references,
+          track_choice: showTrackPicker
+            ? trackMode === "whole_program"
+              ? { whole_program: true, segment_ids: [] }
+              : { whole_program: false, segment_ids: selectedSegmentIds }
+            : undefined,
         }),
       });
 
@@ -343,6 +371,67 @@ export function ApplicationForm({
           </div>
         );
       })}
+
+      {/* Track selection (migration 221) — only for a school split into
+          standalone segments, e.g. FFX's Q1/Q2/Q3. */}
+      {showTrackPicker && (
+        <div className="space-y-4 rounded-lg border bg-card p-5">
+          <h3 className="text-sm font-semibold">Which part are you applying for?</h3>
+          <div className="space-y-2">
+            {hasWholeProgramOption && (
+              <label className="flex items-start gap-2.5 text-sm">
+                <input
+                  type="radio"
+                  name="track_mode"
+                  checked={trackMode === "whole_program"}
+                  onChange={() => {
+                    setTrackMode("whole_program");
+                    setTrackError(null);
+                  }}
+                  className="mt-0.5"
+                />
+                <span>The whole programme</span>
+              </label>
+            )}
+            <label className="flex items-start gap-2.5 text-sm">
+              <input
+                type="radio"
+                name="track_mode"
+                checked={trackMode === "segments"}
+                onChange={() => {
+                  setTrackMode("segments");
+                  setTrackError(null);
+                }}
+                className="mt-0.5"
+              />
+              <span>One or more individual sections</span>
+            </label>
+          </div>
+          {trackMode === "segments" && (
+            <div className="ml-6 space-y-2 border-l pl-4">
+              {segments.map((s) => (
+                <label key={s.id} className="flex items-start gap-2.5 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={selectedSegmentIds.includes(s.id)}
+                    onChange={(e) => {
+                      setSelectedSegmentIds((prev) =>
+                        e.target.checked
+                          ? [...prev, s.id]
+                          : prev.filter((id) => id !== s.id)
+                      );
+                      setTrackError(null);
+                    }}
+                    className="mt-0.5"
+                  />
+                  <span>{s.name}</span>
+                </label>
+              ))}
+            </div>
+          )}
+          {trackError && <p className="text-sm text-destructive">{trackError}</p>}
+        </div>
+      )}
 
       {/* References */}
       {referenceSlots.length > 0 && (
