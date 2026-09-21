@@ -23,6 +23,8 @@ export async function POST(request: Request) {
   const category = body.category as CvEntryCategory;
   const title = typeof body.title === "string" ? body.title.trim() : "";
   const description = typeof body.description === "string" ? body.description.trim() : "";
+  const startDate = typeof body.startDate === "string" ? body.startDate.trim() : "";
+  const endDate = typeof body.endDate === "string" ? body.endDate.trim() : "";
   const scope = body.scope === "leadership" ? "leadership" : "self";
 
   if (!VALID_CATEGORIES.has(category)) {
@@ -30,6 +32,9 @@ export async function POST(request: Request) {
   }
   if (!title) {
     return NextResponse.json({ error: "Please enter a title" }, { status: 400 });
+  }
+  if (startDate && endDate && endDate < startDate) {
+    return NextResponse.json({ error: "The end date can't be before the start date" }, { status: 400 });
   }
 
   if (!(await canAddCvEntry(supabase, user.id, targetUserId, scope))) {
@@ -45,6 +50,8 @@ export async function POST(request: Request) {
     category,
     title,
     description,
+    startDate,
+    endDate,
     scope,
     createdBy: user.id,
   });

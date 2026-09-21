@@ -30,10 +30,13 @@ export async function updateEssenceStatement(
     .eq("id", userId);
 }
 
+const ENTRY_FIELDS =
+  "id, user_id, category, title, description, start_date, end_date, added_by_role, created_by, sort_order, created_at";
+
 export async function listCvEntries(supabase: Client, userId: string) {
   return supabase
     .from("staff_cv_entries")
-    .select("id, user_id, category, title, description, added_by_role, created_by, sort_order, created_at")
+    .select(ENTRY_FIELDS)
     .eq("user_id", userId)
     .order("category", { ascending: true })
     .order("sort_order", { ascending: true })
@@ -47,6 +50,8 @@ export async function createCvEntry(
     category: CvEntryCategory;
     title: string;
     description?: string | null;
+    startDate?: string | null;
+    endDate?: string | null;
     scope: CvEntryScope;
     createdBy: string;
   }
@@ -58,6 +63,8 @@ export async function createCvEntry(
       category: input.category,
       title: input.title,
       description: input.description || null,
+      start_date: input.startDate || null,
+      end_date: input.endDate || null,
       added_by_role: input.scope,
       created_by: input.createdBy,
     })
@@ -68,7 +75,7 @@ export async function createCvEntry(
 export async function getCvEntry(supabase: Client, entryId: string) {
   return supabase
     .from("staff_cv_entries")
-    .select("id, user_id, category, title, description, added_by_role, created_by")
+    .select("id, user_id, category, title, description, start_date, end_date, added_by_role, created_by")
     .eq("id", entryId)
     .maybeSingle();
 }
@@ -76,11 +83,13 @@ export async function getCvEntry(supabase: Client, entryId: string) {
 export async function updateCvEntry(
   supabase: Client,
   entryId: string,
-  input: { title?: string; description?: string | null }
+  input: { title?: string; description?: string | null; startDate?: string | null; endDate?: string | null }
 ) {
   const updateData: Record<string, unknown> = {};
   if (input.title !== undefined) updateData.title = input.title;
   if (input.description !== undefined) updateData.description = input.description || null;
+  if (input.startDate !== undefined) updateData.start_date = input.startDate || null;
+  if (input.endDate !== undefined) updateData.end_date = input.endDate || null;
   return supabase.from("staff_cv_entries").update(updateData).eq("id", entryId).select().single();
 }
 

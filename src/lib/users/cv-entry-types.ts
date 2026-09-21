@@ -13,6 +13,9 @@ export const CV_ENTRY_CATEGORIES: {
   addLabel: string;
   placeholder: string;
   description: string;
+  // Whether entries in this category may carry a start/end date — schools
+  // and training have a "when", a skill or a one-off "other" note doesn't.
+  hasDate: boolean;
 }[] = [
   {
     value: "involvement",
@@ -20,13 +23,15 @@ export const CV_ENTRY_CATEGORIES: {
     addLabel: "Add involvement",
     placeholder: "e.g. YWAM Cape Town, DTS staff",
     description: "Schools or ministry you did with us or another YWAM / FF base.",
+    hasDate: true,
   },
   {
     value: "training",
     label: "Training",
     addLabel: "Add training",
-    placeholder: "e.g. First Aid Certification",
-    description: "Training you've received with us.",
+    placeholder: "e.g. ICI",
+    description: "Schools within YWAM / FF you've done — which school, and when.",
+    hasDate: true,
   },
   {
     value: "skill",
@@ -34,6 +39,7 @@ export const CV_ENTRY_CATEGORIES: {
     addLabel: "Add skill",
     placeholder: "e.g. Worship leading",
     description: "Anything specific you're skilled at.",
+    hasDate: false,
   },
   {
     value: "other",
@@ -41,6 +47,7 @@ export const CV_ENTRY_CATEGORIES: {
     addLabel: "Add something else",
     placeholder: "e.g. Fluent in Portuguese",
     description: "Anything else worth adding to your CV.",
+    hasDate: false,
   },
 ];
 

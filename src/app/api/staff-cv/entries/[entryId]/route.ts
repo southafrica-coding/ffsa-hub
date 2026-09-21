@@ -28,12 +28,17 @@ export async function PATCH(
   const body = await request.json();
   const title = typeof body.title === "string" ? body.title.trim() : undefined;
   const description = typeof body.description === "string" ? body.description.trim() : undefined;
+  const startDate = typeof body.startDate === "string" ? body.startDate.trim() : undefined;
+  const endDate = typeof body.endDate === "string" ? body.endDate.trim() : undefined;
   if (title !== undefined && !title) {
     return NextResponse.json({ error: "Please enter a title" }, { status: 400 });
   }
+  if (startDate && endDate && endDate < startDate) {
+    return NextResponse.json({ error: "The end date can't be before the start date" }, { status: 400 });
+  }
 
   const client = entry.added_by_role === "self" && entry.user_id === user.id ? supabase : createAdminClient();
-  const { data, error } = await updateCvEntry(client, entryId, { title, description });
+  const { data, error } = await updateCvEntry(client, entryId, { title, description, startDate, endDate });
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

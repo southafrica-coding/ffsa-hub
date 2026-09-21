@@ -15,6 +15,8 @@ export type CvEntry = {
   category: CvEntryCategory;
   title: string;
   description: string | null;
+  start_date: string | null;
+  end_date: string | null;
   added_by_role: "self" | "leadership";
 };
 
@@ -30,6 +32,20 @@ export type CvViewer = {
 function canManageEntry(entry: CvEntry, viewer: CvViewer): boolean {
   if (viewer.isAdmin) return true;
   return entry.added_by_role === "self" ? entry.user_id === viewer.id : viewer.isLeadership;
+}
+
+function formatMonthYear(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00`);
+  return d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+}
+
+function formatEntryDates(entry: CvEntry): string | null {
+  if (entry.start_date && entry.end_date) {
+    return `${formatMonthYear(entry.start_date)} – ${formatMonthYear(entry.end_date)}`;
+  }
+  if (entry.start_date) return `${formatMonthYear(entry.start_date)} – present`;
+  if (entry.end_date) return formatMonthYear(entry.end_date);
+  return null;
 }
 
 export function StaffCvCard({
@@ -55,6 +71,8 @@ export function StaffCvCard({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftDescription, setDraftDescription] = useState("");
+  const [draftStartDate, setDraftStartDate] = useState("");
+  const [draftEndDate, setDraftEndDate] = useState("");
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -85,6 +103,8 @@ export function StaffCvCard({
     setEditingId(null);
     setDraftTitle("");
     setDraftDescription("");
+    setDraftStartDate("");
+    setDraftEndDate("");
     setFormError(null);
   }
 
@@ -93,6 +113,8 @@ export function StaffCvCard({
     setAdding(null);
     setDraftTitle(entry.title);
     setDraftDescription(entry.description ?? "");
+    setDraftStartDate(entry.start_date ?? "");
+    setDraftEndDate(entry.end_date ?? "");
     setFormError(null);
   }
 
@@ -108,6 +130,10 @@ export function StaffCvCard({
       setFormError("Please enter a title.");
       return;
     }
+    if (draftStartDate && draftEndDate && draftEndDate < draftStartDate) {
+      setFormError("The end date can't be before the start date.");
+      return;
+    }
     setBusy(true);
     setFormError(null);
     const res = await fetch("/api/staff-cv/entries", {
@@ -118,6 +144,8 @@ export function StaffCvCard({
         category: adding.category,
         title: draftTitle.trim(),
         description: draftDescription.trim(),
+        startDate: draftStartDate,
+        endDate: draftEndDate,
         scope: adding.scope,
       }),
     });
@@ -137,12 +165,21 @@ export function StaffCvCard({
       setFormError("Please enter a title.");
       return;
     }
+    if (draftStartDate && draftEndDate && draftEndDate < draftStartDate) {
+      setFormError("The end date can't be before the start date.");
+      return;
+    }
     setBusy(true);
     setFormError(null);
     const res = await fetch(`/api/staff-cv/entries/${editingId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: draftTitle.trim(), description: draftDescription.trim() }),
+      body: JSON.stringify({
+        title: draftTitle.trim(),
+        description: draftDescription.trim(),
+        startDate: draftStartDate,
+        endDate: draftEndDate,
+      }),
     });
     const json = await res.json().catch(() => ({}));
     setBusy(false);
@@ -167,7 +204,7 @@ export function StaffCvCard({
     setEntries((prev) => prev.filter((e) => e.id !== id));
   }
 
-  function renderForm(placeholder: string) {
+  function renderForm(placeholder: string, hasDate: boolean) {
     return (
       <div className="mt-2 space-y-2 rounded-lg border p-3">
         <Input
@@ -181,6 +218,26 @@ export function StaffCvCard({
           value={draftDescription}
           onChange={(e) => setDraftDescription(e.target.value)}
         />
+        {hasDate && (
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Start date</label>
+              <Input
+                type="date"
+                value={draftStartDate}
+                onChange={(e) => setDraftStartDate(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">End date (optional)</label>
+              <Input
+                type="date"
+                value={draftEndDate}
+                onChange={(e) => setDraftEndDate(e.target.value)}
+              />
+            </div>
+          </div>
+        )}
         {formError && <p className="text-sm text-destructive">{formError}</p>}
         <div className="flex items-center gap-2">
           <Button
@@ -272,7 +329,7 @@ export function StaffCvCard({
               <ul className="space-y-2">
                 {rows.map((entry) =>
                   editingId === entry.id ? (
-                    <li key={entry.id}>{renderForm(cat.placeholder)}</li>
+                    <li key={entry.id}>{renderForm(cat.placeholder, cat.hasDate)}</li>
                   ) : (
                     <li
                       key={entry.id}
@@ -285,6 +342,9 @@ export function StaffCvCard({
                             <Badge variant="secondary">Added by leadership</Badge>
                           )}
                         </div>
+                        {formatEntryDates(entry) && (
+                          <p className="mt-0.5 text-xs text-muted-foreground">{formatEntryDates(entry)}</p>
+                        )}
                         {entry.description && (
                           <p className="mt-0.5 text-sm text-muted-foreground">{entry.description}</p>
                         )}
@@ -318,7 +378,7 @@ export function StaffCvCard({
               </ul>
             )}
 
-            {isAddingHere && renderForm(cat.placeholder)}
+            {isAddingHere && renderForm(cat.placeholder, cat.hasDate)}
           </section>
         );
       })}
