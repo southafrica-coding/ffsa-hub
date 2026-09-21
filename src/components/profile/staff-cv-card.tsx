@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { DateInput } from "@/components/ui/date-input";
 import { CV_ENTRY_CATEGORIES, type CvEntryCategory } from "@/lib/users/cv-entry-types";
 
 export type CvEntry = {
@@ -251,19 +252,11 @@ export function StaffCvCard({
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <label className="text-xs text-muted-foreground">Start date</label>
-              <Input
-                type="date"
-                value={draftStartDate}
-                onChange={(e) => setDraftStartDate(e.target.value)}
-              />
+              <DateInput value={draftStartDate} onChange={setDraftStartDate} />
             </div>
             <div className="space-y-1">
               <label className="text-xs text-muted-foreground">End date (optional)</label>
-              <Input
-                type="date"
-                value={draftEndDate}
-                onChange={(e) => setDraftEndDate(e.target.value)}
-              />
+              <DateInput value={draftEndDate} onChange={setDraftEndDate} />
             </div>
           </div>
         )}
