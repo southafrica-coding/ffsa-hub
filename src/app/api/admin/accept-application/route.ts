@@ -8,6 +8,7 @@ import { sendTransactional } from "@/lib/email/send-transactional";
 import { applicationAcceptedEmailHtml } from "@/lib/email/templates/application-accepted";
 import { enrollmentConfirmationEmailHtml } from "@/lib/email/templates/enrollment-confirmation";
 import { userCanManageProgram } from "@/lib/auth/check-schools-access";
+import { userCanReadApplication, APPLICATIONS_EXPIRED_MESSAGE } from "@/lib/auth/application-expiry";
 import {
   substitutePlaceholders,
   plainTextToEmailHtml,
@@ -73,6 +74,10 @@ export async function POST(request: Request) {
     !(await userCanManageProgram(supabase, authUser.id, appResponse.programs.id))
   ) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  }
+  // RLS-backed: the 6-month expiry lock (migration 223).
+  if (!(await userCanReadApplication(supabase, response_id))) {
+    return NextResponse.json({ error: APPLICATIONS_EXPIRED_MESSAGE }, { status: 403 });
   }
 
   if (appResponse.status === "accepted") {

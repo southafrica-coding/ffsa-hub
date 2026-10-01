@@ -12,6 +12,7 @@ import {
   ensureEnrollmentForApplicant,
 } from "@/services/schools";
 import { userCanManageApplications } from "@/lib/auth/check-schools-access";
+import { userCanReadApplication, APPLICATIONS_EXPIRED_MESSAGE } from "@/lib/auth/application-expiry";
 import { normaliseGender } from "@/lib/schools/demographics";
 import { ensureStudentRole, deactivateMembershipProfile } from "@/lib/auth/membership-roles";
 import { sendTransactional } from "@/lib/email/send-transactional";
@@ -608,6 +609,10 @@ export async function PATCH(request: Request) {
     if (!(await userCanManageApplications(supabase, user.id))) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
+    // RLS-backed: the 6-month expiry lock (migration 223) applies here too.
+    if (!(await userCanReadApplication(supabase, id))) {
+      return NextResponse.json({ error: APPLICATIONS_EXPIRED_MESSAGE }, { status: 403 });
+    }
 
     // Gate is the permission check above; write with the admin client so the
     // broader set of application managers isn't blocked by the narrower
@@ -651,6 +656,9 @@ export async function PATCH(request: Request) {
     }
 
     const app = refReq.application_responses;
+    if (!app?.id || !(await userCanReadApplication(supabase, app.id))) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     const applicantName = app?.users
       ? [app.users.first_name, app.users.last_name].filter(Boolean).join(" ")
       : [app?.applicant_info?.first_name, app?.applicant_info?.last_name].filter(Boolean).join(" ") || "An applicant";
@@ -738,6 +746,10 @@ export async function DELETE(request: Request) {
   const { id } = body;
   if (!id) {
     return NextResponse.json({ error: "id is required" }, { status: 400 });
+  }
+
+  if (!(await userCanReadApplication(supabase, id))) {
+    return NextResponse.json({ error: APPLICATIONS_EXPIRED_MESSAGE }, { status: 403 });
   }
 
   const adminSupabase = createAdminClient();

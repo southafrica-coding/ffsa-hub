@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { userCanManageProgram } from "@/lib/auth/check-schools-access";
+import { userCanReadApplication, APPLICATIONS_EXPIRED_MESSAGE } from "@/lib/auth/application-expiry";
 import { sendStaffAssignmentEmails } from "@/lib/email/send-staff-assignment";
 
 // Assigns (or clears) the point-of-contact staff member for an application
@@ -47,6 +48,10 @@ export async function PUT(request: Request) {
   const responseProgramId = (existing as unknown as { program_id: string }).program_id;
   if (!(await userCanManageProgram(supabase, authUser.id, responseProgramId))) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  }
+  // RLS-backed: the 6-month expiry lock (migration 223).
+  if (!(await userCanReadApplication(supabase, response_id))) {
+    return NextResponse.json({ error: APPLICATIONS_EXPIRED_MESSAGE }, { status: 403 });
   }
 
   const previousStaffId = (existing as unknown as { assigned_staff_id: string | null }).assigned_staff_id;

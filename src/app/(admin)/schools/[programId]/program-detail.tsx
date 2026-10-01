@@ -1,5 +1,6 @@
 "use client";
 
+import type { ApplicationExpiry } from "@/lib/auth/application-expiry";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { type TreeQuestion } from "@/components/admin/question-tree";
@@ -215,7 +216,22 @@ type AppResponse = {
 // STORAGE IMAGE COMPONENT
 // ────────────────────────────────────────────────────────────
 
-function StorageImage({ storagePath }: { storagePath: string }) {
+function formatExpiryDate(iso: string | null): string {
+  if (!iso) return "—";
+  return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-ZA", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function StorageImage({
+  storagePath,
+  applicationId,
+}: {
+  storagePath: string;
+  applicationId: string;
+}) {
   const [url, setUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
@@ -226,7 +242,7 @@ function StorageImage({ storagePath }: { storagePath: string }) {
     async function fetchUrl() {
       try {
         const res = await fetch(
-          `/api/upload/view?path=${encodeURIComponent(storagePath)}`
+          `/api/upload/view?path=${encodeURIComponent(storagePath)}&applicationId=${encodeURIComponent(applicationId)}`
         );
         if (!res.ok) throw new Error("Failed");
         const data = await res.json();
@@ -239,7 +255,7 @@ function StorageImage({ storagePath }: { storagePath: string }) {
       }
     }
     fetchUrl();
-  }, [storagePath]);
+  }, [storagePath, applicationId]);
 
   if (loading) {
     return (
@@ -366,6 +382,7 @@ export function ProgramDetail({
   referenceSlots,
   referenceQuestions,
   refRequestSummaries,
+  applicationExpiry,
 }: {
   program: Program;
   initialTab?: string;
@@ -392,6 +409,7 @@ export function ProgramDetail({
   referenceSlots: ReferenceSlot[];
   referenceQuestions: TreeQuestion[];
   refRequestSummaries: RefRequestSummary[];
+  applicationExpiry: ApplicationExpiry;
 }) {
   const router = useRouter();
   const [editingProgram, setEditingProgram] = useState(false);
@@ -644,6 +662,14 @@ export function ProgramDetail({
         </TabsContent>
 
         <TabsContent value="applicants" className="mt-0 px-5 py-6 md:px-8">
+          {applicationExpiry.expired && (
+            <p className="mb-4 border border-ink bg-muted px-4 py-3 text-[13px]">
+              {applicationExpiry.canAccess
+                ? `Archived on ${formatExpiryDate(applicationExpiry.expiresOn)} — only super admins and the Training team can see these applications.`
+                : `Applications for this school were archived on ${formatExpiryDate(applicationExpiry.expiresOn)}. Contact the Training team for access.`}
+            </p>
+          )}
+          {(!applicationExpiry.expired || applicationExpiry.canAccess) && (
           <ApplicantsTab
             programId={program.id}
             programCode={program.code}
@@ -653,6 +679,7 @@ export function ProgramDetail({
             refRequestSummaries={refRequestSummaries}
             staffOptions={staffOptions}
           />
+          )}
         </TabsContent>
 
         <TabsContent value="application" className="mt-0">
@@ -2514,7 +2541,14 @@ function ApplicantsTab({
           }
           busy={reviewLoading}
           renderAnswer={(answer) =>
-            isStoragePath(answer) ? <StorageImage storagePath={answer} /> : answer
+            isStoragePath(answer) ? (
+              <StorageImage
+                storagePath={answer}
+                applicationId={reviewingResponse.id}
+              />
+            ) : (
+              answer
+            )
           }
           onNoteChange={setReviewNotes}
           onDecision={(status) => handleReviewSave(status)}

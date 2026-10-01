@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getProgramById, getEnrollmentsByProgram, getGradesByProgram, getQuestionsByProgram, getResponsesByProgram, getRemovedResponsesByProgram, getReferenceSlotsByProgram, getReferenceRequestSummaries, getReferenceQuestionsByProgram } from "@/services/schools";
@@ -7,6 +8,8 @@ import { listProgramEmailTemplates } from "@/services/program-email-templates";
 import { getArrivalInsuranceInfo } from "@/lib/schools/arrival-insurance";
 import { ProgramDetail } from "./program-detail";
 import { Masthead } from "@/components/ffsa";
+import { requireModuleAccess } from "@/lib/require-permission";
+import { getApplicationExpiry } from "@/lib/auth/application-expiry";
 
 type UserIdentity = {
   id: string;
@@ -107,6 +110,16 @@ export default async function ProgramDetailPage({
   // reviewer every embedded users join comes back null → "Unknown / —".
   // See hydrateUserIdentities below.
   const admin = createAdminClient();
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session?.user) redirect("/login");
+  await requireModuleAccess(supabase, session.user.id, "schools");
+
+  // 6-month expiry lock (migration 223). RLS already hides an expired
+  // school's applications from this user client; this only explains why.
+  const applicationExpiry = await getApplicationExpiry(supabase, programId);
 
   const { data: program, error: programError } = await getProgramById(supabase, programId);
 
@@ -313,6 +326,7 @@ export default async function ProgramDetailPage({
         referenceSlots={referenceSlots ?? []}
         referenceQuestions={referenceQuestions ?? []}
         refRequestSummaries={refRequests ?? []}
+        applicationExpiry={applicationExpiry}
       />
     </>
   );

@@ -7,6 +7,7 @@ import {
   editReferenceContact,
   REFERENCE_EDIT_SELECT,
 } from "@/lib/references/edit-reference-contact";
+import { userCanReadApplication, APPLICATIONS_EXPIRED_MESSAGE } from "@/lib/auth/application-expiry";
 
 export async function GET(request: Request) {
   const supabase = await createClient();
@@ -26,6 +27,10 @@ export async function GET(request: Request) {
       { error: "application_id is required" },
       { status: 400 }
     );
+  }
+
+  if (!(await userCanReadApplication(supabase, applicationId))) {
+    return NextResponse.json({ error: APPLICATIONS_EXPIRED_MESSAGE }, { status: 403 });
   }
 
   const { data, error } = await getReferenceRequestsByApplication(
@@ -78,6 +83,10 @@ export async function PATCH(request: Request) {
       { error: "Reference request not found" },
       { status: 404 }
     );
+  }
+
+  if (!(await userCanReadApplication(supabase, ref.application_id))) {
+    return NextResponse.json({ error: APPLICATIONS_EXPIRED_MESSAGE }, { status: 403 });
   }
 
   const result = await editReferenceContact(adminSupabase, ref, {

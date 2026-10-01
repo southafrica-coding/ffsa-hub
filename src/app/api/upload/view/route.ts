@@ -16,8 +16,25 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const path = searchParams.get("path");
 
-  if (!path || !path.startsWith("applications/")) {
+  const applicationId = searchParams.get("applicationId");
+
+  if (!path || !path.startsWith("applications/") || !applicationId) {
     return NextResponse.json({ error: "Invalid path" }, { status: 400 });
+  }
+
+  // Authorise through the USER client: RLS on application_responses decides
+  // who may read the application (school scope, applicant self, and the
+  // 6-month expiry lock from migration 223). The file must also be one of
+  // that application's answers, so a readable application can't be used to
+  // sign someone else's upload.
+  const { data: application } = await supabase
+    .from("application_responses")
+    .select("id, answers")
+    .eq("id", applicationId)
+    .maybeSingle();
+
+  if (!application || !JSON.stringify(application.answers ?? null).includes(path)) {
+    return NextResponse.json({ error: "Not allowed" }, { status: 403 });
   }
 
   const adminSupabase = createAdminClient();

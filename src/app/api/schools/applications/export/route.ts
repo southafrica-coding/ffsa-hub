@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { passesApplicationExpiry, APPLICATIONS_EXPIRED_MESSAGE } from "@/lib/auth/application-expiry";
 
 function escapeCsvValue(value: string): string {
   if (
@@ -31,6 +32,10 @@ export async function GET(request: Request) {
       { error: "program_id is required" },
       { status: 400 }
     );
+  }
+
+  if (!(await passesApplicationExpiry(supabase, programId))) {
+    return NextResponse.json({ error: APPLICATIONS_EXPIRED_MESSAGE }, { status: 403 });
   }
 
   // Fetch program info

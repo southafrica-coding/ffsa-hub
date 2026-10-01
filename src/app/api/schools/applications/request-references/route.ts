@@ -3,6 +3,12 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getReferenceSlotsByProgram } from "@/services/schools";
 import { sendApplicantReferenceRequest } from "@/lib/email/send-applicant-reference-request";
+import {
+  passesApplicationExpiry,
+  userCanReadApplication,
+  APPLICATIONS_EXPIRED_MESSAGE,
+} from "@/lib/auth/application-expiry";
+import { userCanManageProgram } from "@/lib/auth/check-schools-access";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
@@ -83,6 +89,11 @@ export async function POST(request: Request) {
 
   // ── Single applicant ──
   if (applicationId) {
+    // RLS-backed: school scope + the 6-month expiry lock (migration 223).
+    if (!(await userCanReadApplication(supabase, applicationId))) {
+      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+    }
+
     const { data: application } = await adminSupabase
       .from("application_responses")
       .select(APPLICATION_SELECT)
@@ -121,6 +132,13 @@ export async function POST(request: Request) {
 
   // ── Bulk: every applicant for a program that is missing a required reference ──
   if (programId && all) {
+    if (!(await userCanManageProgram(supabase, user.id, programId))) {
+      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+    }
+    if (!(await passesApplicationExpiry(supabase, programId))) {
+      return NextResponse.json({ error: APPLICATIONS_EXPIRED_MESSAGE }, { status: 403 });
+    }
+
     const { data: slots } = await getReferenceSlotsByProgram(adminSupabase, programId);
     const requiredSlots = (slots ?? [])
       .filter((s: { is_required: boolean }) => s.is_required)
