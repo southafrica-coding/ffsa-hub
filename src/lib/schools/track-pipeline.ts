@@ -267,6 +267,54 @@ export function summariseTrack(people: PipelinePerson[], segments: TrackSegment[
   };
 }
 
+export type AcceptedTrackSummary = {
+  accepted: number;
+  /** Accepted people doing the whole programme. */
+  whole: number;
+  /** Accepted people doing only some sections. */
+  partYear: number;
+  /** Accepted people who haven't told us (or whom we couldn't ask). */
+  unknown: number;
+  /** Accepted people expected in each section (whole-programme counts in all). */
+  bySegment: Array<{ code: string; name: string; expected: number }>;
+  /** Part-year people by the exact sections they chose, biggest first. */
+  combos: Array<{ label: string; count: number }>;
+  /** Still applying, and how many of those have already said what they plan. */
+  applying: number;
+  applyingTold: number;
+};
+
+/** The leaders' view: accepted students and what each plans to do, so a leader can staff each part. */
+export function summariseAcceptedTrack(
+  people: PipelinePerson[],
+  segments: TrackSegment[]
+): AcceptedTrackSummary {
+  const accepted = people.filter((p) => p.accepted);
+  const applying = people.filter((p) => !p.accepted);
+  const order = new Map(segments.map((s, i) => [s.code, i]));
+
+  const combos = new Map<string, number>();
+  for (const p of accepted.filter((x) => x.track.kind === "segments")) {
+    const label = [...p.track.codes].sort((a, b) => (order.get(a) ?? 99) - (order.get(b) ?? 99)).join(" + ");
+    combos.set(label, (combos.get(label) ?? 0) + 1);
+  }
+
+  return {
+    accepted: accepted.length,
+    whole: accepted.filter((p) => p.track.kind === "whole").length,
+    partYear: accepted.filter((p) => p.track.kind === "segments").length,
+    unknown: accepted.filter((p) => p.track.kind === "unknown").length,
+    bySegment: segments.map((s) => ({
+      code: s.code,
+      name: s.name,
+      expected: accepted.filter((p) => p.track.kind === "whole" || p.track.codes.includes(s.code)).length,
+    })),
+    combos: [...combos.entries()].map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count),
+    applying: applying.length,
+    applyingTold: applying.filter((p) => p.track.kind !== "unknown").length,
+  };
+}
+
 /**
  * The one place a person's track is written after they've told us. Records it
  * on the application, and — when they're already accepted and enrolled — on

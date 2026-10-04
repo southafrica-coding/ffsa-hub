@@ -161,6 +161,17 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
     defaultEnabled: (c) => c.isAdmin || c.hasSchoolsAccess,
   },
   {
+    key: "schools-track",
+    title: "Who's doing which part",
+    description:
+      "For schools split into sections (like FFX): how many accepted students are doing the whole programme versus which sections, so you can plan each part.",
+    category: "Schools",
+    defaultOrder: 65,
+    fullWidth: true,
+    gate: (c) => c.hasSchoolsAccess,
+    defaultEnabled: (c) => c.isAdmin || c.hasSchoolsAccess,
+  },
+  {
     key: "schools-pipeline",
     title: "Application pipeline & conversion",
     description:

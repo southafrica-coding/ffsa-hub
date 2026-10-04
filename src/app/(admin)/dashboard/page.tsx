@@ -21,6 +21,7 @@ import { VehiclesCard } from "./vehicles-card";
 import { PrayerWeekCard } from "./prayer-week-card";
 import { SchoolsCountsCard } from "./schools-counts-card";
 import { SchoolsPipelineCard } from "./schools-pipeline-card";
+import { SchoolsTrackCard } from "./schools-track-card";
 import { StudentsByTierCard } from "./students-by-tier-card";
 import { StudentsByNationalityCard } from "./students-by-nationality-card";
 import { StudentsByGenderCard } from "./students-by-gender-card";
@@ -118,6 +119,7 @@ export default async function DashboardPage() {
       />
     ),
     "schools-counts": <SchoolsCountsCard />,
+    "schools-track": <SchoolsTrackCard />,
     "schools-pipeline": <SchoolsPipelineCard />,
     "students-by-tier": <StudentsByTierCard />,
     "students-by-nationality": <StudentsByNationalityCard />,
