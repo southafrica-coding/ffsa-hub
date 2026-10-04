@@ -13,6 +13,8 @@ import { ENROLLMENT_STATUS_LABELS } from "@/lib/schools/student-export-columns";
 import type { ArrivalInsuranceInfo } from "@/lib/schools/arrival-insurance";
 import { Badge } from "@/components/ui/badge";
 import { Masthead, StatusPill } from "@/components/ffsa";
+import { TrackTab } from "./track-tab";
+import type { PipelinePerson, TrackSummary } from "@/lib/schools/track-pipeline";
 import { RosterTab, AddStudentButton, type RosterRow, type PhaseCourseRow } from "./roster-tab";
 import { GradesMatrix } from "./grades-matrix";
 import { ApplicantReview, type PipelineStage, type ReviewCheck } from "./applicant-review";
@@ -333,7 +335,7 @@ type RefRequestSummary = {
 /** Tabs this screen knows. `enrollments` is the pre-14a name for Students and
  *  is still in the wild as ?tab=enrollments, so it maps rather than 404s. */
 const TAB_KEYS = [
-  "students", "courses", "grades", "applicants", "application", "arrival", "leaders", "emails",
+  "students", "courses", "track", "grades", "applicants", "application", "arrival", "leaders", "emails",
 ];
 function normaliseTab(tab: string): string {
   return tab === "enrollments" ? "students" : tab;
@@ -366,6 +368,9 @@ export function ProgramDetail({
   program,
   initialTab,
   enrollments,
+  trackSegments,
+  trackPeople,
+  trackSummary,
   arrivalInsurance,
   leaders,
   emailTemplates,
@@ -386,6 +391,10 @@ export function ProgramDetail({
 }: {
   program: Program;
   initialTab?: string;
+  /** Segments + who is doing which (empty unless the school is split into segments). */
+  trackSegments: Array<{ code: string; name: string }>;
+  trackPeople: PipelinePerson[];
+  trackSummary: TrackSummary;
   enrollments: Enrollment[];
   arrivalInsurance: Record<string, ArrivalInsuranceInfo>;
   leaders: ProgramLeaderRow[];
@@ -605,6 +614,9 @@ export function ProgramDetail({
           <TabsList>
             <TabsTrigger value="students">Students ({activeEnrollments.length})</TabsTrigger>
             <TabsTrigger value="courses">Courses ({billingCourses.length})</TabsTrigger>
+            {trackSegments.length > 0 && (
+              <TabsTrigger value="track">Track ({trackSummary.confirmed}/{trackSummary.total})</TabsTrigger>
+            )}
             <TabsTrigger value="grades">Grades</TabsTrigger>
             <TabsTrigger value="applicants">Applicants ({responses.length})</TabsTrigger>
             <TabsTrigger value="application">Application form</TabsTrigger>
@@ -637,6 +649,17 @@ export function ProgramDetail({
         </TabsContent>
 
         {/* Frame 14b */}
+        {trackSegments.length > 0 && (
+          <TabsContent value="track" className="mt-0">
+            <TrackTab
+              programId={program.id}
+              segments={trackSegments}
+              summary={trackSummary}
+              people={trackPeople}
+            />
+          </TabsContent>
+        )}
+
         <TabsContent value="grades" className="mt-0 px-5 py-6 md:px-8">
           <GradesMatrix
             programId={program.id}

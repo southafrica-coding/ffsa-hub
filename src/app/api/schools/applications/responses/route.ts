@@ -64,11 +64,14 @@ export async function POST(request: Request) {
     .from("billing_courses")
     .select("id, code, name")
     .eq("program_id", program_id)
-    .eq("scope", "segment");
+    .in("status", ["active", "upcoming"]);
   const segmentById = new Map<string, { id: string; code: string; name: string }>();
   for (const s of (segmentRows ?? []) as Array<{ id: string; code: string; name: string }>) {
     segmentById.set(s.id, s);
   }
+  // A school is split into segments only with two or more live courses
+  // (matches getTrackSegments); a lone course is just the school itself.
+  if (segmentById.size < 2) segmentById.clear();
 
   let trackSegmentIds: string[] = [];
   let trackIsWholeProgram = false;

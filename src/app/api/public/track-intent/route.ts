@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-// One-off FFX track-intent survey (migration 222) — see that migration's
-// comment for why this doesn't reuse the migration-221 segment picker.
-const FFX_PROGRAM_ID = "f839fd44-0051-4d47-ab8d-b548c5d32648";
+import { getTrackSegments } from "@/lib/schools/track-segments";
+import { recordTrackChoice } from "@/lib/schools/track-pipeline";
 
 export async function POST(request: Request) {
   const body = await request.json();
@@ -21,7 +20,7 @@ export async function POST(request: Request) {
 
   const { data: survey } = await supabase
     .from("ffx_track_intent_surveys")
-    .select("id")
+    .select("id, application_response_id, application_responses(program_id)")
     .eq("token", token)
     .maybeSingle();
 
@@ -29,13 +28,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "This link isn't valid." }, { status: 404 });
   }
 
-  const { data: courseRows } = await supabase
-    .from("billing_courses")
-    .select("code")
-    .eq("program_id", FFX_PROGRAM_ID);
-  const validCodes = new Set(
-    (courseRows ?? []).map((c: { code: string }) => c.code)
+  const segments = await getTrackSegments(
+    supabase,
+    survey.application_responses?.program_id,
+    ["active", "upcoming", "completed"]
   );
+  const validCodes = new Set(segments.map((c) => c.code));
 
   let segmentCodes: string[] = [];
   if (!wholeProgram) {
@@ -65,6 +63,18 @@ export async function POST(request: Request) {
       { error: "Failed to save your answer. Please try again." },
       { status: 500 }
     );
+  }
+
+  // Land the answer where the school can see it: the application's track,
+  // and the enrolment's too once they're accepted. Never touches billing.
+  try {
+    await recordTrackChoice(supabase, {
+      applicationId: survey.application_response_id,
+      wholeProgram,
+      courseIds: segments.filter((c) => segmentCodes.includes(c.code)).map((c) => c.id),
+    });
+  } catch (err) {
+    console.error("[track-intent] recordTrackChoice failed", err);
   }
 
   return NextResponse.json({ success: true });

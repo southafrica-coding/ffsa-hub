@@ -6,7 +6,7 @@ import {
   getReferenceSlotsByProgram,
 } from "@/services/schools";
 import { getCountryTiers } from "@/services/school-fees";
-import { getBillingCoursesByProgram, getProgramChargeItems } from "@/services/school-billing";
+import { getTrackSegments } from "@/lib/schools/track-segments";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { ApplicationForm } from "./application-form";
@@ -108,21 +108,15 @@ export default async function ApplyPage({
   // Track selection (migration 221) — only offered for a school actually
   // split into segments (FFX: FFX/FFBX/FFWV). Mirrors the public apply page;
   // everything else keeps the form exactly as it was.
-  const { data: billingCoursesRaw } = await getBillingCoursesByProgram(supabase, programId);
-  const segments = (billingCoursesRaw ?? [])
-    .filter(
-      (c: { scope: string; status: string }) =>
-        c.scope === "segment" && (c.status === "active" || c.status === "upcoming")
-    )
-    .map((c: { id: string; code: string; name: string; sequence: number }) => ({
-      id: c.id,
-      code: c.code,
-      name: c.name,
-      sequence: c.sequence,
-    }))
-    .sort((a: { sequence: number }, b: { sequence: number }) => a.sequence - b.sequence);
-  const { data: programChargeItems } = await getProgramChargeItems(supabase, programId);
-  const hasWholeProgramOption = (programChargeItems ?? []).length > 0;
+  const segments = (await getTrackSegments(supabase, programId)).map((c) => ({
+    id: c.id,
+    code: c.code,
+    name: c.name,
+    sequence: c.sequence,
+  }));
+  // The whole programme is always on offer alongside the segments — whether
+  // finance has priced it yet is a billing question, not an availability one.
+  const hasWholeProgramOption = segments.length > 0;
 
   if (!questions || questions.length === 0) {
     return (

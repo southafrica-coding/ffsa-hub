@@ -7,6 +7,7 @@ import { listProgramLeaders } from "@/services/program-leaders";
 import { listProgramEmailTemplates } from "@/services/program-email-templates";
 import { getArrivalInsuranceInfo } from "@/lib/schools/arrival-insurance";
 import { ProgramDetail } from "./program-detail";
+import { loadTrackPipeline, summariseTrack } from "@/lib/schools/track-pipeline";
 import { Masthead } from "@/components/ffsa";
 import { requireModuleAccess } from "@/lib/require-permission";
 import { getApplicationExpiry } from "@/lib/auth/application-expiry";
@@ -301,6 +302,11 @@ export default async function ProgramDetailPage({
     programId
   );
 
+  // Track tab data — empty (and the tab hidden) unless the school is split into
+  // segments. Read via the service-role client for the same reason as above.
+  const trackPipeline = await loadTrackPipeline(admin, programId);
+  const trackSummary = summariseTrack(trackPipeline.people, trackPipeline.segments);
+
   // ProgramDetail carries its own `.ffsa-screen` root + Masthead, so this
   // route adds no wrapper of its own — an extra div here would put the
   // edge-to-edge screen back inside the old centred page box.
@@ -310,6 +316,9 @@ export default async function ProgramDetailPage({
         program={program}
         initialTab={tab}
         enrollments={enrollments ?? []}
+        trackSegments={trackPipeline.segments.map((c) => ({ code: c.code, name: c.name }))}
+        trackPeople={trackPipeline.people}
+        trackSummary={trackSummary}
         arrivalInsurance={arrivalInsurance}
         leaders={leaders ?? []}
         emailTemplates={emailTemplates ?? []}
