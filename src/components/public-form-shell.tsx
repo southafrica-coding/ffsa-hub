@@ -783,6 +783,16 @@ function adminChromeReclaim(
   .ffsa-public textarea::placeholder {
     color: ${tk.textDimmer} !important;
   }
+  /* The "phone" question renders a country-code <select> beside the
+     number <input> in one flex row. Every brand's blanket rule above sets
+     select { width: 100% } at .ffsa-public specificity, which outranks the
+     component's w-[140px] utility and pushes the number box down to a
+     ~30px sliver — applicants could not see what they typed. Pin the
+     picker's width here, once for all brands. */
+  .ffsa-public select[data-slot="phone-country"] {
+    width: 140px !important;
+    flex: 0 0 140px !important;
+  }
   .ffsa-public label,
   .ffsa-public .ffsa-public-label {
     font-family: ${fonts.label} !important;

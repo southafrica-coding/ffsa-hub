@@ -120,6 +120,7 @@ export function PhoneInput({
             doesn't open in Safari (see PR #193), which left the country code
             stuck on the default. Public sign-up forms must work in Safari. */}
         <select
+          data-slot="phone-country"
           aria-label="Country code"
           value={selectedCountry.iso2}
           onChange={(e) => {
