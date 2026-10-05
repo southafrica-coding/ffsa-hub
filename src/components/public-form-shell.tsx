@@ -793,6 +793,16 @@ function adminChromeReclaim(
     width: 140px !important;
     flex: 0 0 140px !important;
   }
+  /* On a phone the card leaves ~240px for the row, so 140px for the picker
+     starves the number box (95px shows eight digits). Narrow the picker to
+     flag + dial code there; the full country name still shows in the
+     native dropdown list. */
+  @media (max-width: 480px) {
+    .ffsa-public select[data-slot="phone-country"] {
+      width: 104px !important;
+      flex: 0 0 104px !important;
+    }
+  }
   .ffsa-public label,
   .ffsa-public .ffsa-public-label {
     font-family: ${fonts.label} !important;
