@@ -76,3 +76,30 @@ export async function setInboundStatus(
     .select("id, status, handled_at")
     .single();
 }
+
+export type InboxReply = {
+  id: string;
+  inbound_email_id: string;
+  from_email: string;
+  from_name: string;
+  to_email: string;
+  body_text: string;
+  status: "sent" | "failed";
+  error: string | null;
+  sent_at: string;
+};
+
+/** Hub replies sent to the given inbound emails, oldest first (migration 229). */
+export async function listInboxReplies(
+  supabase: Client,
+  inboundIds: string[]
+): Promise<InboxReply[]> {
+  if (inboundIds.length === 0) return [];
+  const { data } = await supabase
+    .from("inbound_email_replies")
+    .select("id, inbound_email_id, from_email, from_name, to_email, body_text, status, error, sent_at")
+    .in("inbound_email_id", inboundIds)
+    .order("sent_at", { ascending: true })
+    .limit(1000);
+  return (data ?? []) as InboxReply[];
+}

@@ -28,6 +28,7 @@ type EditState = {
   reply_to: string;
   /** Comma-separated in the form; sent as a list. */
   forward_to: string;
+  reply_from_email: string;
 };
 
 type NewState = {
@@ -36,6 +37,7 @@ type NewState = {
   from_name: string;
   reply_to: string;
   forward_to: string;
+  reply_from_email: string;
 };
 
 // Reply-to is left blank by default: replies then go to the identity's own
@@ -46,6 +48,7 @@ const EMPTY_NEW: NewState = {
   from_name: "",
   reply_to: "",
   forward_to: "",
+  reply_from_email: "",
 };
 
 function splitList(s: string): string[] {
@@ -80,6 +83,7 @@ export function IdentitiesAdmin({
       from_name: i.from_name,
       reply_to: i.reply_to ?? "",
       forward_to: (i.forward_to ?? []).join(", "),
+      reply_from_email: i.reply_from_email ?? "",
     });
     setErr(null);
     setMsg(null);
@@ -104,6 +108,7 @@ export function IdentitiesAdmin({
         from_name: editing.from_name,
         reply_to: editing.reply_to,
         forward_to: splitList(editing.forward_to),
+        reply_from_email: editing.reply_from_email,
       }),
     });
     setBusy(false);
@@ -247,6 +252,16 @@ export function IdentitiesAdmin({
                   placeholder="e.g. name@ffsouthafrica.com, team@ffsouthafrica.com"
                 />
               </Field>
+              <Field label="Reply from (work address for replies sent from the Hub Inbox)">
+                <Input
+                  type="email"
+                  value={newRow.reply_from_email}
+                  onChange={(e) =>
+                    setNewRow({ ...newRow, reply_from_email: e.target.value })
+                  }
+                  placeholder="e.g. camps@ffsouthafrica.com"
+                />
+              </Field>
               <Field label="Reply-to override (leave blank — replies come to the Hub)">
                 <Input
                   type="email"
@@ -283,7 +298,7 @@ export function IdentitiesAdmin({
               <TableRow>
                 <TableHead>Identity</TableHead>
                 <TableHead>From email</TableHead>
-                <TableHead>Replies forwarded to</TableHead>
+                <TableHead>Replies</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -349,7 +364,19 @@ export function IdentitiesAdmin({
                                 })
                               }
                               className="text-xs"
-                              placeholder="name@ffsouthafrica.com, …"
+                              placeholder="Forward to: name@ffsouthafrica.com, …"
+                            />
+                            <Input
+                              type="email"
+                              value={editing.reply_from_email}
+                              onChange={(e) =>
+                                setEditing({
+                                  ...editing,
+                                  reply_from_email: e.target.value,
+                                })
+                              }
+                              className="text-xs"
+                              placeholder="Reply from: team@ffsouthafrica.com"
                             />
                             <Input
                               type="email"
@@ -405,6 +432,9 @@ export function IdentitiesAdmin({
                           <DomainWarning email={i.from_email} />
                         </TableCell>
                         <TableCell className="font-mono text-xs">
+                          <div className="text-[10px] uppercase tracking-wide text-[color:var(--text-tertiary)]">
+                            Forwarded to
+                          </div>
                           {(i.forward_to ?? []).length > 0 ? (
                             (i.forward_to ?? []).map((a) => <div key={a}>{a}</div>)
                           ) : (
@@ -412,6 +442,16 @@ export function IdentitiesAdmin({
                               Hub Inbox only
                             </span>
                           )}
+                          <div className="mt-1 text-[10px] uppercase tracking-wide text-[color:var(--text-tertiary)]">
+                            Hub replies sent from
+                          </div>
+                          <div
+                            className={
+                              i.reply_from_email ? "" : "text-[color:var(--text-tertiary)]"
+                            }
+                          >
+                            {i.reply_from_email || i.from_email}
+                          </div>
                           {i.reply_to && (
                             <div
                               className="mt-0.5 text-[color:var(--amber)]"

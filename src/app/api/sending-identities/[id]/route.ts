@@ -66,6 +66,17 @@ export async function PATCH(
     );
   }
 
+  if (
+    body.reply_from_email !== undefined &&
+    body.reply_from_email !== null &&
+    body.reply_from_email !== "" &&
+    !EMAIL_RE.test(body.reply_from_email)
+  ) {
+    return NextResponse.json(
+      { error: "Reply-from must be a valid email or blank" },
+      { status: 400 }
+    );
+  }
   if (body.forward_to !== undefined) {
     if (!Array.isArray(body.forward_to)) {
       return NextResponse.json(

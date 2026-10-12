@@ -3,10 +3,28 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Paperclip, Reply, Check, Archive, Mail } from "lucide-react";
+import { Paperclip, Reply, Check, Archive, Mail, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SectionBar, StatusPill, type Tone } from "@/components/ffsa";
-import type { InboundEmail, InboundStatus } from "@/services/inbound-emails";
+import type {
+  InboundEmail,
+  InboundStatus,
+  InboxReply,
+} from "@/services/inbound-emails";
+import { replySender } from "@/lib/email/reply-sender";
+
+type IdentityOption = {
+  id: string;
+  slug: string;
+  display_name: string;
+  from_email: string;
+  from_name: string;
+  reply_from_email: string | null;
+};
+
+// Mail to an address no identity owns is replied to as the default identity —
+// the same fallback the server uses (src/lib/email/inbox-reply.ts).
+const DEFAULT_IDENTITY_SLUG = "default-marketing";
 
 type Filter = "open" | "handled" | "archived" | "all";
 
@@ -40,15 +58,20 @@ function when(iso: string): string {
 
 export function InboxView({
   emails: initial,
+  replies: initialReplies,
   identities,
+  staffFirstName,
   initialOpenId,
 }: {
   emails: InboundEmail[];
-  identities: { id: string; display_name: string }[];
+  replies: InboxReply[];
+  identities: IdentityOption[];
+  staffFirstName: string | null;
   initialOpenId: string | null;
 }) {
   const router = useRouter();
   const [emails, setEmails] = useState(initial);
+  const [replies, setReplies] = useState(initialReplies);
   const [filter, setFilter] = useState<Filter>(() => {
     const opened = initial.find((e) => e.id === initialOpenId);
     return opened && (opened.status === "handled" || opened.status === "archived")
@@ -180,7 +203,26 @@ export function InboxView({
               Select a reply to read it.
             </p>
           ) : (
-            <ReplyDetail email={open} onStatus={(s) => setStatus(open.id, s)} />
+            <ReplyDetail
+              key={open.id}
+              email={open}
+              thread={replies.filter((r) => r.inbound_email_id === open.id)}
+              sender={(() => {
+                const identity =
+                  identities.find((i) => i.id === open.identity_id) ??
+                  identities.find((i) => i.slug === DEFAULT_IDENTITY_SLUG) ??
+                  null;
+                return identity ? replySender(identity, staffFirstName) : null;
+              })()}
+              onStatus={(s) => setStatus(open.id, s)}
+              onSent={(reply) => {
+                setReplies((list) => [...list, reply]);
+                setEmails((list) =>
+                  list.map((e) => (e.id === open.id ? { ...e, status: "handled" } : e))
+                );
+                router.refresh();
+              }}
+            />
           )}
         </div>
       </div>
@@ -190,15 +232,54 @@ export function InboxView({
 
 function ReplyDetail({
   email: e,
+  thread,
+  sender,
   onStatus,
+  onSent,
 }: {
   email: InboundEmail;
+  thread: InboxReply[];
+  sender: { email: string; name: string } | null;
   onStatus: (s: InboundStatus) => void;
+  onSent: (reply: InboxReply) => void;
 }) {
-  const replySubject = /^re:/i.test(e.subject ?? "") ? e.subject : `Re: ${e.subject ?? ""}`;
-  const mailto = `mailto:${encodeURIComponent(e.from_email)}?subject=${encodeURIComponent(
-    replySubject ?? ""
-  )}`;
+  const [composing, setComposing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sendErr, setSendErr] = useState<string | null>(null);
+
+  async function send() {
+    setSending(true);
+    setSendErr(null);
+    const res = await fetch(`/api/inbound-emails/${e.id}/reply`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ body: draft }),
+    });
+    setSending(false);
+    const d = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      replyId?: string | null;
+      from?: string;
+    };
+    if (!res.ok) {
+      setSendErr(d.error ?? "Couldn't send the reply");
+      return;
+    }
+    onSent({
+      id: d.replyId ?? `local-${Date.now()}`,
+      inbound_email_id: e.id,
+      from_email: d.from ?? sender?.email ?? "",
+      from_name: sender?.name ?? "",
+      to_email: e.from_email,
+      body_text: draft.trim(),
+      status: "sent",
+      error: null,
+      sent_at: new Date().toISOString(),
+    });
+    setDraft("");
+    setComposing(false);
+  }
 
   return (
     <div>
@@ -249,12 +330,15 @@ function ReplyDetail({
 
       <div className="flex flex-wrap items-center gap-2 border-b border-rule px-5 py-2.5">
         <StatusPill tone={STATUS_TONE[e.status]}>{e.status}</StatusPill>
-        <a href={mailto} className="ml-auto">
-          <Button size="sm" variant="ghost" className="h-7 gap-1.5 px-2 text-xs">
-            <Reply className="h-3.5 w-3.5" />
-            Reply
-          </Button>
-        </a>
+        <Button
+          size="sm"
+          className="ml-auto h-7 gap-1.5 px-2 text-xs"
+          onClick={() => setComposing(true)}
+          disabled={composing}
+        >
+          <Reply className="h-3.5 w-3.5" />
+          Reply
+        </Button>
         {e.status !== "handled" && (
           <Button
             size="sm"
@@ -315,6 +399,85 @@ function ReplyDetail({
           ))}
           <div className="mt-1 text-[color:var(--text-tertiary)]">
             Attachments arrive with the forwarded copy in the team&rsquo;s inbox.
+          </div>
+        </div>
+      )}
+
+      {thread.length > 0 && (
+        <div className="border-t border-rule">
+          <div className="mono-label px-5 pt-3">Replies from the Hub</div>
+          <ul className="divide-y divide-[color:var(--rule)]">
+            {thread.map((r) => (
+              <li key={r.id} className="px-5 py-3">
+                <div className="flex items-baseline justify-between gap-2 text-xs">
+                  <span>
+                    <span className="font-medium">{r.from_name}</span>{" "}
+                    <span className="font-mono text-[color:var(--text-tertiary)]">
+                      &lt;{r.from_email}&gt;
+                    </span>
+                  </span>
+                  <span className="tabular shrink-0 text-[color:var(--text-tertiary)]">
+                    {new Date(r.sent_at).toLocaleString()}
+                  </span>
+                </div>
+                {r.status === "failed" && (
+                  <div className="text-xs text-destructive">Not sent: {r.error}</div>
+                )}
+                <p className="mt-1 whitespace-pre-wrap text-sm">{r.body_text}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {composing && (
+        <div className="space-y-2 border-t border-ink bg-[color:var(--surface-2)] px-5 py-4">
+          <div className="flex items-center justify-between gap-2 text-xs text-[color:var(--text-secondary)]">
+            <span>
+              To <span className="font-medium">{senderName(e)}</span>{" "}
+              <span className="font-mono">&lt;{e.from_email}&gt;</span>
+            </span>
+            <button
+              onClick={() => {
+                setComposing(false);
+                setSendErr(null);
+              }}
+              className="text-[color:var(--text-tertiary)] hover:text-ink"
+              aria-label="Close reply"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <textarea
+            value={draft}
+            onChange={(ev) => setDraft(ev.target.value)}
+            rows={7}
+            autoFocus
+            placeholder={`Hi ${e.from_name?.split(" ")[0] ?? "there"},`}
+            className="w-full resize-y border border-rule bg-white p-3 text-sm focus:border-ink focus:outline-none"
+          />
+          {sendErr && <p className="text-xs text-destructive">{sendErr}</p>}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-[11px] text-[color:var(--text-tertiary)]">
+              {sender ? (
+                <>
+                  Sending as {sender.name}{" "}
+                  <span className="font-mono">&lt;{sender.email}&gt;</span>. Their
+                  answer comes back here and to the team&rsquo;s inboxes.
+                </>
+              ) : (
+                "No identity to send from."
+              )}
+            </span>
+            <Button
+              size="sm"
+              className="h-8 gap-1.5"
+              onClick={send}
+              disabled={sending || !draft.trim() || !sender}
+            >
+              <Send className="h-3.5 w-3.5" />
+              {sending ? "Sending…" : "Send reply"}
+            </Button>
           </div>
         </div>
       )}

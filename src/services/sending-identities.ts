@@ -14,6 +14,8 @@ export type SendingIdentity = {
   reply_to: string | null;
   /** Staff inboxes this team's replies are forwarded to (migration 228). */
   forward_to: string[];
+  /** Work address Hub Inbox replies are sent From (migration 229). */
+  reply_from_email: string | null;
   provider: "mailtrap" | "resend";
   is_active: boolean;
   created_at: string;
@@ -26,6 +28,7 @@ export type SendingIdentityInsert = {
   from_name: string;
   reply_to?: string | null;
   forward_to?: string[];
+  reply_from_email?: string | null;
   provider?: "mailtrap" | "resend";
   is_active?: boolean;
 };
@@ -38,6 +41,7 @@ export type SendingIdentityPatch = Partial<
     | "from_name"
     | "reply_to"
     | "forward_to"
+    | "reply_from_email"
     | "is_active"
   >
 >;
@@ -137,6 +141,7 @@ export async function createSendingIdentity(
     from_name: input.from_name.trim(),
     reply_to: input.reply_to?.trim() || null,
     forward_to: normalizeForwardList(input.forward_to ?? []),
+    reply_from_email: input.reply_from_email?.trim().toLowerCase() || null,
     provider: input.provider ?? "resend",
     is_active: input.is_active ?? true,
   };
@@ -157,6 +162,8 @@ export async function updateSendingIdentity(
     normalized.from_name = patch.from_name.trim();
   if (patch.reply_to !== undefined)
     normalized.reply_to = patch.reply_to?.trim() || null;
+  if (patch.reply_from_email !== undefined)
+    normalized.reply_from_email = patch.reply_from_email?.trim().toLowerCase() || null;
   if (patch.forward_to !== undefined)
     normalized.forward_to = normalizeForwardList(patch.forward_to);
   if (patch.is_active !== undefined) normalized.is_active = patch.is_active;

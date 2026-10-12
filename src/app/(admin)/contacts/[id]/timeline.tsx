@@ -222,7 +222,12 @@ function EventDetails({ ev }: { ev: ActivityEvent }) {
     return (
       <>
         <p className="text-sm text-ink">
-          {ev.campaigns?.subject ?? ev.campaigns?.name ?? "Campaign"}
+          {ev.campaigns?.subject ??
+            ev.campaigns?.name ??
+            // Hub Inbox replies (migration 229) carry their own subject.
+            (ev.payload?.source === "inbox_reply" && ev.payload?.subject
+              ? `Reply: ${String(ev.payload.subject)}`
+              : "Campaign")}
         </p>
         {url && (
           <p className="truncate text-xs text-[color:var(--text-tertiary)]">

@@ -55,6 +55,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid provider" }, { status: 400 });
   }
 
+  if (body.reply_from_email && !EMAIL_RE.test(body.reply_from_email)) {
+    return NextResponse.json(
+      { error: "Reply-from must be a valid email or blank" },
+      { status: 400 }
+    );
+  }
   if (body.forward_to !== undefined) {
     if (!Array.isArray(body.forward_to)) {
       return NextResponse.json(
@@ -72,6 +78,7 @@ export async function POST(request: Request) {
     from_name: body.from_name,
     reply_to: body.reply_to ?? null,
     forward_to: body.forward_to ?? [],
+    reply_from_email: body.reply_from_email ?? null,
     slug: body.slug,
     provider: "resend",
     is_active: body.is_active ?? true,

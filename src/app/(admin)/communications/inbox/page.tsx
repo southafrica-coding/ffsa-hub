@@ -3,7 +3,11 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireModuleAccess } from "@/lib/require-permission";
 import { listAllSendingIdentities } from "@/services/sending-identities";
-import { listInboundEmails, type InboundEmail } from "@/services/inbound-emails";
+import {
+  listInboundEmails,
+  listInboxReplies,
+  type InboundEmail,
+} from "@/services/inbound-emails";
 import { Masthead } from "@/components/ffsa";
 import { InboxView } from "./inbox-view";
 
@@ -22,10 +26,20 @@ export default async function InboxPage({
   await requireModuleAccess(supabase, user.id, "communications");
 
   const { open } = await searchParams;
-  const [{ data: emails }, { data: identities }] = await Promise.all([
+  const [{ data: emails }, { data: identities }, { data: me }] = await Promise.all([
     listInboundEmails(supabase, { limit: 300 }),
     listAllSendingIdentities(supabase),
+    supabase
+      .from("users")
+      .select("first_name, preferred_name")
+      .eq("id", user.id)
+      .maybeSingle(),
   ]);
+  const rows = (emails ?? []) as InboundEmail[];
+  const replies = await listInboxReplies(
+    supabase,
+    rows.map((e) => e.id)
+  );
 
   return (
     <div className="ffsa-screen">
@@ -41,10 +55,26 @@ export default async function InboxPage({
           ), where pressing Reply answers the person directly.
         </p>
         <InboxView
-          emails={(emails ?? []) as InboundEmail[]}
-          identities={((identities ?? []) as { id: string; display_name: string }[]).map(
-            (i) => ({ id: i.id, display_name: i.display_name })
-          )}
+          emails={rows}
+          replies={replies}
+          identities={(
+            (identities ?? []) as {
+              id: string;
+              slug: string;
+              display_name: string;
+              from_email: string;
+              from_name: string;
+              reply_from_email: string | null;
+            }[]
+          ).map((i) => ({
+            id: i.id,
+            slug: i.slug,
+            display_name: i.display_name,
+            from_email: i.from_email,
+            from_name: i.from_name,
+            reply_from_email: i.reply_from_email ?? null,
+          }))}
+          staffFirstName={me?.preferred_name?.trim() || me?.first_name?.trim() || null}
           initialOpenId={open ?? null}
         />
       </div>
