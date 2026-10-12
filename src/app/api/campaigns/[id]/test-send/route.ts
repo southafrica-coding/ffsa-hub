@@ -7,7 +7,7 @@ import {
   renderCampaignText,
   type CampaignBody,
 } from "@/lib/campaigns/blocks";
-import { sendViaMailtrap } from "@/lib/email/mailtrap";
+import { sendViaResend } from "@/lib/email/resend-send";
 import { substituteFirstName, escapeHtml } from "@/lib/email/placeholders";
 import { getAuthedUser, canManageComms, COMMS_SEND_PERMS } from "@/lib/api-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -140,7 +140,7 @@ export async function POST(
   const admin = createAdminClient();
   const ledgerId = await recordEmail(admin, {
     toEmail: to,
-    provider: "mailtrap",
+    provider: "resend",
     category: "campaign_test",
     subject,
     sourceType: "campaign",
@@ -149,7 +149,7 @@ export async function POST(
     fromIdentityId: campaign.sending_identity_id ?? null,
   });
 
-  const result = await sendViaMailtrap({
+  const result = await sendViaResend({
     fromEmail: identity.from_email,
     fromName: identity.from_name,
     replyTo: identity.reply_to,

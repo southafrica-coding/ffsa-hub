@@ -190,10 +190,22 @@ function EventDetails({ ev }: { ev: ActivityEvent }) {
     ev.event_type === "email_clicked" ||
     ev.event_type === "email_bounced"
   ) {
+    // Clicks recorded since the Resend switch carry the link (migration 227).
+    const url =
+      ev.event_type === "email_clicked" && typeof ev.payload?.url === "string"
+        ? ev.payload.url
+        : null;
     return (
-      <p className="text-sm text-ink">
-        {ev.campaigns?.subject ?? ev.campaigns?.name ?? "Campaign"}
-      </p>
+      <>
+        <p className="text-sm text-ink">
+          {ev.campaigns?.subject ?? ev.campaigns?.name ?? "Campaign"}
+        </p>
+        {url && (
+          <p className="truncate text-xs text-[color:var(--text-tertiary)]">
+            Clicked {url}
+          </p>
+        )}
+      </>
     );
   }
   return null;

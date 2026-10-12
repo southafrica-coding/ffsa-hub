@@ -783,9 +783,8 @@ export function CampaignComposer({
       totalFailed += r.failed;
       setSendProgress({ sent: totalSent, failed: totalFailed });
       if (r.done) break;
-      // Hourly send budget spent — the rest drips out automatically via the
-      // cron over the coming hours. Stop looping; the send continues server-side
-      // whether or not this tab stays open.
+      // Resend said "try later" (plan quota or rate limit). Stop looping; the
+      // cron resumes the rest server-side whether or not this tab stays open.
       if (r.throttled) {
         handedOff = true;
         break;
@@ -797,7 +796,7 @@ export function CampaignComposer({
     if (handedOff) {
       setMsg(
         `Sending has started — ${totalSent} sent so far. The rest will send ` +
-          `automatically over the next while (to stay within sending limits). ` +
+          `automatically shortly (the mail provider asked us to slow down). ` +
           `You can safely close this tab.`
       );
     }

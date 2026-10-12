@@ -1,12 +1,12 @@
 // FFSA Hub — Refund notification email.
 //
 // Mirrors fulfillment.ts's send path: same sending_identities lookup
-// keyed by event brand, same Mailtrap transport, same never-throw
+// keyed by event brand, same Resend transport, same never-throw
 // contract. A refund that moved real money must not be rolled back
 // because an email bounced, so every failure here is logged and
 // swallowed — the caller records the refund either way.
 
-import { sendViaMailtrap } from "@/lib/email/mailtrap";
+import { sendViaResend, isEmailConfigured } from "@/lib/email/resend-send";
 import { refundConfirmationEmailHtml } from "@/lib/email/templates/refund-confirmation";
 import { resolveEventBrand, identitySlugForBrand } from "./fulfillment";
 
@@ -34,9 +34,9 @@ export async function sendRefundEmail(
     cancellationMessage?: string | null;
   }
 ): Promise<{ sent: boolean; error?: string }> {
-  if (!process.env.MAILTRAP_API_TOKEN) {
+  if (!isEmailConfigured()) {
     console.warn(
-      "[refund-email] MAILTRAP_API_TOKEN not set; refund recorded without emailing the buyer"
+      "[refund-email] RESEND_API_KEY not set; refund recorded without emailing the buyer"
     );
     return { sent: false, error: "Email is not configured." };
   }
@@ -51,12 +51,11 @@ export async function sendRefundEmail(
 
   const fromEmail = (
     identity?.from_email ||
-    process.env.MAILTRAP_FROM_EMAIL ||
     process.env.RESEND_FROM_EMAIL ||
     "noreply@ffsahub.com"
   ).trim();
 
-  const result = await sendViaMailtrap({
+  const result = await sendViaResend({
     fromEmail,
     fromName: identity?.from_name || "Fire & Fragrance SA",
     replyTo: identity?.reply_to ?? null,

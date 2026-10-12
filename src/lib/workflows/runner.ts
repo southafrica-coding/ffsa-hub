@@ -24,7 +24,7 @@ import {
   updateEnrollment,
   recordStepRun,
 } from "@/services/workflows";
-import { sendViaMailtrap } from "@/lib/email/mailtrap";
+import { sendViaResend } from "@/lib/email/resend-send";
 import { renderCampaignText, type CampaignBody } from "@/lib/campaigns/blocks";
 import { renderWorkflowEmail, type WorkflowEmailBrand } from "@/lib/email/workflow-template";
 import { signPrefsToken } from "@/lib/tokens/unsubscribe";
@@ -453,7 +453,7 @@ async function runEmailStep(
     escapeHtml(firstName)
   );
 
-  const res = await sendViaMailtrap({
+  const res = await sendViaResend({
     fromEmail: identity.from_email,
     fromName: identity.from_name,
     replyTo: identity.reply_to,
@@ -490,7 +490,7 @@ async function runEmailStep(
     payload: { workflow_id: workflowId, step_id: step.id, subject },
   });
 
-  // Record the send for delivery/open/click analytics. The Mailtrap webhook
+  // Record the send for delivery/open/click analytics. The Resend webhook
   // reconciles by provider_message_id, mirroring campaign_recipients.
   await supabase.from("workflow_email_sends").insert({
     enrollment_id: enrollmentId,

@@ -49,7 +49,8 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
-  if (body.provider && body.provider !== "mailtrap" && body.provider !== "resend") {
+  // Resend is the only live transport; "mailtrap" survives only on old rows.
+  if (body.provider && body.provider !== "resend") {
     return NextResponse.json({ error: "Invalid provider" }, { status: 400 });
   }
 
@@ -59,7 +60,7 @@ export async function POST(request: Request) {
     from_name: body.from_name,
     reply_to: body.reply_to ?? null,
     slug: body.slug,
-    provider: body.provider ?? "mailtrap",
+    provider: "resend",
     is_active: body.is_active ?? true,
   });
   if (error)

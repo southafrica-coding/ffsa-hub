@@ -1,4 +1,5 @@
 import type { TablesInsert, TablesUpdate } from "@/types/database";
+import { isPreferencesLink } from "@/lib/campaigns/link-labels";
 
 type CampaignInsert = TablesInsert<"campaigns">;
 type CampaignUpdate = TablesUpdate<"campaigns">;
@@ -136,6 +137,96 @@ export async function getCampaignRecipients(supabase: Client, campaignId: string
     .eq("campaign_id", campaignId)
     .order("bounced_at", { ascending: false, nullsFirst: false })
     .order("sent_at", { ascending: true });
+}
+
+// ────────────────────────────────────────────────────────────
+// Per-link clicks (migration 227)
+// ────────────────────────────────────────────────────────────
+
+export type LinkClicker = {
+  contactId: string | null;
+  name: string;
+  email: string | null;
+  clicks: number;
+  lastClickedAt: string;
+};
+
+export type CampaignLinkStat = {
+  /** Destination URL, or "preferences" for the folded per-recipient link. */
+  url: string;
+  clicks: number;
+  uniqueClickers: number;
+  lastClickedAt: string;
+  clickers: LinkClicker[];
+};
+
+type ClickRow = {
+  url: string;
+  contact_id: string | null;
+  clicked_at: string;
+  contacts: { first_name: string | null; last_name: string | null; email: string | null } | null;
+};
+
+/**
+ * Every link clicked in a campaign: total clicks, distinct people, and who.
+ * Paged past PostgREST's 1000-row cap so a big send's report is complete.
+ * Sorted most-clicked first.
+ */
+export async function getCampaignLinkClicks(
+  supabase: Client,
+  campaignId: string
+): Promise<CampaignLinkStat[]> {
+  const rows: ClickRow[] = [];
+  const page = 1000;
+  for (let from = 0; ; from += page) {
+    const { data } = await supabase
+      .from("email_link_clicks")
+      .select("url, contact_id, clicked_at, contacts(first_name, last_name, email)")
+      .eq("campaign_id", campaignId)
+      .order("id", { ascending: true })
+      .range(from, from + page - 1);
+    const batch = (data ?? []) as ClickRow[];
+    rows.push(...batch);
+    if (batch.length < page) break;
+  }
+
+  const byUrl = new Map<string, { stat: CampaignLinkStat; people: Map<string, LinkClicker> }>();
+  for (const r of rows) {
+    const key = isPreferencesLink(r.url) ? "preferences" : r.url;
+    let entry = byUrl.get(key);
+    if (!entry) {
+      entry = {
+        stat: { url: key, clicks: 0, uniqueClickers: 0, lastClickedAt: r.clicked_at, clickers: [] },
+        people: new Map(),
+      };
+      byUrl.set(key, entry);
+    }
+    entry.stat.clicks++;
+    if (r.clicked_at > entry.stat.lastClickedAt) entry.stat.lastClickedAt = r.clicked_at;
+
+    const personKey = r.contact_id ?? "unknown";
+    const person = entry.people.get(personKey) ?? {
+      contactId: r.contact_id,
+      name:
+        [r.contacts?.first_name, r.contacts?.last_name].filter(Boolean).join(" ") ||
+        r.contacts?.email ||
+        "Unknown contact",
+      email: r.contacts?.email ?? null,
+      clicks: 0,
+      lastClickedAt: r.clicked_at,
+    };
+    person.clicks++;
+    if (r.clicked_at > person.lastClickedAt) person.lastClickedAt = r.clicked_at;
+    entry.people.set(personKey, person);
+  }
+
+  return [...byUrl.values()]
+    .map(({ stat, people }) => ({
+      ...stat,
+      uniqueClickers: people.size,
+      clickers: [...people.values()].sort((a, b) => b.clicks - a.clicks),
+    }))
+    .sort((a, b) => b.clicks - a.clicks);
 }
 
 export type CampaignStats = {

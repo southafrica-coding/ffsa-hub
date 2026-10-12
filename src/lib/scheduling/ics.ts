@@ -79,8 +79,8 @@ export function buildIcsInvite(input: IcsEventInput): string {
 }
 
 /**
- * Encode an ICS string into a base64 payload suitable for the Mailtrap
- * attachments[*].content field.
+ * Encode an ICS string into a base64 payload suitable for an email
+ * attachment's content field.
  */
 export function icsToBase64(ics: string): string {
   return Buffer.from(ics, "utf-8").toString("base64");

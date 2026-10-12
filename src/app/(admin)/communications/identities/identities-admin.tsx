@@ -443,7 +443,7 @@ function DomainWarning({ email }: { email: string }) {
   return (
     <p className="mt-1 flex items-center gap-1 text-[11px] text-[color:var(--amber)]">
       <AlertTriangle className="h-3 w-3 flex-shrink-0" />
-      Domain not auto-verified — confirm DNS in Mailtrap before sending.
+      Domain not auto-verified — confirm the domain is verified in Resend before sending.
     </p>
   );
 }

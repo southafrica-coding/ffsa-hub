@@ -6,14 +6,21 @@ import {
   getCampaignStats,
   getCampaignLabelIds,
   getCampaignRecipients,
+  getCampaignLinkClicks,
   listSendingIdentities,
 } from "@/services/campaigns";
 import { getCachedActiveLabels } from "@/lib/cached-reads";
-import { emptyCampaignBody, type CampaignBody } from "@/lib/campaigns/blocks";
+import {
+  emptyCampaignBody,
+  renderCampaignHtml,
+  type CampaignBody,
+} from "@/lib/campaigns/blocks";
+import { extractLinkLabels } from "@/lib/campaigns/link-labels";
 import { getEffectiveBrand } from "@/services/brand";
 import { Masthead } from "@/components/ffsa";
 import { CampaignComposer } from "./campaign-composer";
 import { CampaignAnalytics } from "./campaign-analytics";
+import { CampaignLinkClicks } from "./link-clicks";
 import {
   CampaignRecipientsTable,
   type RecipientRow,
@@ -74,13 +81,18 @@ export default async function CampaignComposerPage({
 
   const showStats =
     campaign.status === "sent" || campaign.status === "sending";
-  const [stats, recipientsRes] = showStats
+  const [stats, recipientsRes, linkClicks] = showStats
     ? await Promise.all([
         getCampaignStats(supabase, id),
         getCampaignRecipients(supabase, id),
+        getCampaignLinkClicks(supabase, id),
       ])
-    : [null, null];
+    : [null, null, null];
   const recipients = (recipientsRes?.data ?? []) as RecipientRow[];
+  // Name each clicked URL by the button / link text the reader saw.
+  const linkLabels = linkClicks
+    ? Object.fromEntries(extractLinkLabels(renderCampaignHtml(body, { brand })))
+    : {};
 
   return (
     <div className="ffsa-screen">
@@ -88,6 +100,9 @@ export default async function CampaignComposerPage({
 
       <div className="space-y-4 px-8 py-7">
         {stats && <CampaignAnalytics stats={stats} />}
+        {linkClicks && (
+          <CampaignLinkClicks links={linkClicks} labels={linkLabels} />
+        )}
         {showStats && <CampaignRecipientsTable recipients={recipients} />}
         <CampaignComposer
           campaign={{

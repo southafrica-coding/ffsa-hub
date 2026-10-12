@@ -55,7 +55,7 @@ export function CampaignAnalytics({ stats }: { stats: CampaignStats }) {
         ))}
       </div>
       <p className="px-5 py-3 text-[11px] text-[color:var(--text-tertiary)]">
-        Open and click rates update as Mailtrap delivers webhook events.
+        Open and click rates update as Resend delivers webhook events.
       </p>
     </div>
   );

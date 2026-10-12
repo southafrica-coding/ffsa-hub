@@ -15,7 +15,7 @@ export type SendPhase = "confirm" | "sending" | "done" | "error";
 export type SendProgress = {
   sent: number;
   failed: number;
-  /** Hourly budget spent — the cron drains the rest server-side. */
+  /** Resend said "try later" — the cron sends the rest server-side. */
   handedOff: boolean;
 };
 
@@ -62,7 +62,7 @@ export function SendDialog({
   const [stats, setStats] = useState<Stats | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Poll delivery counters once the send finishes. Mailtrap's delivery
+  // Poll delivery counters once the send finishes. Resend's delivery
   // webhooks arrive over seconds-to-minutes, so the numbers climb after the
   // send itself is done; we stop once everything is accounted for or after
   // three minutes, whichever comes first.
@@ -192,8 +192,8 @@ export function SendDialog({
             {progress.handedOff && (
               <p className="flex items-start gap-2 rounded border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-600 dark:text-amber-400">
                 <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                The hourly sending limit was reached, so the rest goes out
-                automatically over the next few hours. You can close this tab.
+                The mail provider asked us to slow down, so the rest goes out
+                automatically shortly. You can close this tab.
               </p>
             )}
 

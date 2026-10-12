@@ -8,7 +8,7 @@ import { fulfillOrder } from "@/lib/ticketing/fulfillment";
 // Manually re-trigger fulfilment for a paid order. fulfillOrder
 // is idempotent — when tickets already exist it short-circuits
 // issuance and just re-sends the confirmation email through
-// Mailtrap. Use cases:
+// Resend. Use cases:
 //   - Buyer reports "never got my email" / "lost the QR".
 //   - Email template changed and staff want to re-email existing
 //     orders without burning another payment.

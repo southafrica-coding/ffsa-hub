@@ -4,13 +4,13 @@
 // cancelled (the refund email tells them the money is coming back; this
 // tells them the reason). Uses the event's stored cancellation_message
 // so there is a single source of truth, and the same brand-keyed sending
-// identity + Mailtrap transport as the refund email.
+// identity + Resend transport as the refund email.
 //
 // Scope: buyers who have already had money refunded (refund_cents > 0),
 // deduplicated by email — those are the people who got a reason-less
 // refund email. Never throws; returns a per-recipient summary.
 
-import { sendViaMailtrap } from "@/lib/email/mailtrap";
+import { sendViaResend, isEmailConfigured } from "@/lib/email/resend-send";
 import { eventCancellationNoticeEmailHtml } from "@/lib/email/templates/event-cancellation-notice";
 import { resolveEventBrand, identitySlugForBrand } from "@/lib/ticketing/fulfillment";
 
@@ -107,10 +107,10 @@ export async function sendCancellationNotice(
     return { ok: true, dryRun: true, recipients, previewHtml: html };
   }
 
-  if (!process.env.MAILTRAP_API_TOKEN) {
+  if (!isEmailConfigured()) {
     return {
       ok: false,
-      error: "Email is not configured (MAILTRAP_API_TOKEN missing).",
+      error: "Email is not configured (RESEND_API_KEY missing).",
       httpStatus: 500,
     };
   }
@@ -125,7 +125,6 @@ export async function sendCancellationNotice(
 
   const fromEmail = (
     identity?.from_email ||
-    process.env.MAILTRAP_FROM_EMAIL ||
     process.env.RESEND_FROM_EMAIL ||
     "noreply@ffsahub.com"
   ).trim();
@@ -134,7 +133,7 @@ export async function sendCancellationNotice(
   let sent = 0;
   const failures: Array<{ email: string; error: string }> = [];
   for (const r of recipients) {
-    const result = await sendViaMailtrap({
+    const result = await sendViaResend({
       fromEmail,
       fromName: identity?.from_name || "Fire & Fragrance SA",
       replyTo: identity?.reply_to ?? null,

@@ -67,14 +67,18 @@ export function parseDkim(records: string[][]): boolean {
 }
 
 /**
- * Selectors to probe when none is recorded.
+ * The selector to probe when none is recorded.
  *
- * Providers publish DKIM under a fixed selector — Mailtrap delegates rwmt1 and
- * rwmt2 as CNAMEs, Resend uses `resend` — and resolveTxt follows the CNAME to
- * the real key. Probing these is exactly the lookup a receiving mail server
- * does, so it establishes DKIM as genuinely present rather than assuming it.
+ * Resend publishes DKIM under the fixed selector `resend`. Probing it is
+ * exactly the lookup a receiving mail server does, so it establishes DKIM as
+ * genuinely present rather than assuming it.
+ *
+ * Mailtrap's selectors (rwmt1/rwmt2) may still be stored on domains checked
+ * before the switch. They are ignored: a Mailtrap key in DNS says nothing about
+ * whether Resend — the only provider that now sends — can sign for the domain.
  */
-const KNOWN_DKIM_SELECTORS = ["rwmt1", "rwmt2", "resend"] as const;
+const RESEND_DKIM_SELECTOR = "resend";
+const RETIRED_DKIM_SELECTORS = new Set(["rwmt1", "rwmt2"]);
 
 async function txt(host: string): Promise<string[][]> {
   try {
@@ -97,13 +101,19 @@ export async function checkDomain(
   const expected: DomainCheck["expected"] = [];
 
   try {
-    // With no stored selector, probe the ones our providers publish under
-    // rather than reporting a configured domain as unauthenticated — which
-    // blocked sending on a domain whose DKIM was in DNS all along.
-    const candidates = dkimSelector ? [dkimSelector] : [...KNOWN_DKIM_SELECTORS];
+    // With no usable stored selector, probe Resend's rather than reporting a
+    // configured domain as unauthenticated — which once blocked sending on a
+    // domain whose DKIM was in DNS all along.
+    const stored =
+      dkimSelector && !RETIRED_DKIM_SELECTORS.has(dkimSelector) ? dkimSelector : null;
+    const candidates = stored ? [stored] : [RESEND_DKIM_SELECTOR];
 
-    const [spfRecords, dmarcRecords, dkimResults] = await Promise.all([
+    // Resend publishes SPF on its bounce subdomain, send.<domain> (that is the
+    // envelope sender receivers check SPF against), not on the root. Accept
+    // either, so a root-only setup from before Resend still reads as OK.
+    const [spfRecords, sendSpfRecords, dmarcRecords, dkimResults] = await Promise.all([
       txt(d),
+      txt(`send.${d}`),
       txt(`_dmarc.${d}`),
       Promise.all(
         candidates.map(async (sel) => ({
@@ -113,30 +123,26 @@ export async function checkDomain(
       ),
     ]);
 
-    const spfOk = parseSpf(spfRecords);
+    const spfOk = parseSpf(sendSpfRecords) || parseSpf(spfRecords);
     const dmarcOk = parseDmarc(dmarcRecords);
     const found = dkimResults.find((r) => r.ok) ?? null;
     const dkimOk = found !== null;
-    const foundSelector = found?.selector ?? dkimSelector ?? null;
+    const foundSelector = found?.selector ?? stored ?? null;
 
     if (!spfOk) {
       expected.push({
         kind: "SPF",
-        host: d,
-        // Mailtrap's SPF include is _spf.smtp.mailtrap.live — spf.mailtrap.io
-        // does not resolve, so copying that value produced an SPF record
-        // that authorised nothing.
-        value:
-          "v=spf1 include:_spf.resend.com include:_spf.smtp.mailtrap.live ~all",
+        host: `send.${d}`,
+        // Resend sends through Amazon SES. Resend's domain page shows this
+        // same record (plus an MX on send.<domain>) — copy from there.
+        value: "v=spf1 include:amazonses.com ~all",
       });
     }
     if (!dkimOk) {
       expected.push({
         kind: "DKIM",
-        host: dkimSelector
-          ? `${dkimSelector}._domainkey.${d}`
-          : `<selector>._domainkey.${d}`,
-        value: "(copy the value your provider shows for this domain)",
+        host: `${stored ?? RESEND_DKIM_SELECTOR}._domainkey.${d}`,
+        value: "(copy the value Resend shows for this domain)",
       });
     }
     if (!dmarcOk) {

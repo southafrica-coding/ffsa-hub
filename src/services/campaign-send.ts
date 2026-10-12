@@ -3,7 +3,8 @@ import {
   renderCampaignText,
   type CampaignBody,
 } from "@/lib/campaigns/blocks";
-import { sendViaMailtrap } from "@/lib/email/mailtrap";
+import { createHash } from "node:crypto";
+import { sendBatchViaResend } from "@/lib/email/resend-send";
 import { substituteFirstName, escapeHtml } from "@/lib/email/placeholders";
 import { sendingBlockedReason, checkDomain } from "@/lib/email/dns-checks";
 import { signPrefsToken } from "@/lib/tokens/unsubscribe";
@@ -14,15 +15,17 @@ type Client = any;
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://www.ffsahub.com";
 
-// ── Throttle configuration ──────────────────────────────────
-// Mailtrap's live bulk stream enforces an hourly sending quota. We stay under
-// it by capping how many recipients go out per rolling hour (across ALL
-// campaigns, since the quota is account-wide) and per single run. The cron
-// runs every few minutes and drains large audiences gradually. Both values are
-// env-tunable so the rate can be raised after a Mailtrap plan upgrade without a
-// code change.
-export const HOURLY_SEND_LIMIT = Number(process.env.MAILTRAP_HOURLY_LIMIT) || 300;
-export const PER_RUN_CAP = Number(process.env.CAMPAIGN_SEND_PER_RUN) || 50;
+// ── Send pacing ─────────────────────────────────────────────
+// Resend has no hourly quota, so a campaign goes out as fast as the batch
+// endpoint allows: 100 recipients per request. One run (a composer call or a
+// cron tick) sends up to MAX_PER_RUN, stopping early when it nears the
+// function's time limit; the composer keeps calling until the audience is
+// drained, and the cron resumes anything left over.
+const RESEND_BATCH_SIZE = 100;
+// Deliberately not read from CAMPAIGN_SEND_PER_RUN: prod may still carry the old
+// Mailtrap-era value (50), which would quietly re-impose the drip.
+export const MAX_PER_RUN = 2000;
+const RUN_TIME_BUDGET_MS = 40_000;
 
 export type BatchResult = {
   ok: boolean;
@@ -31,29 +34,23 @@ export type BatchResult = {
   failed: number;
   remaining: number;
   done: boolean;
-  /** Set when the batch stopped early because Mailtrap's hourly quota was hit. */
+  /** Set when the run stopped early because Resend said "try again later". */
   rateLimited?: boolean;
 };
 
-/**
- * How many recipients may still be sent this run without breaching the hourly
- * quota — the account-wide budget (min of the per-run cap and the remaining
- * hourly allowance). Counts rows actually sent in the trailing 60 minutes, so
- * it self-corrects as sends accumulate. Returns 0 when the hour is spent.
- */
-export async function sendableThisRun(
-  supabase: Client,
-  perRunCap = PER_RUN_CAP
-): Promise<number> {
-  const since = new Date(Date.now() - 3600_000).toISOString();
-  const { count } = await supabase
-    .from("campaign_recipients")
-    .select("id", { count: "exact", head: true })
-    .not("sent_at", "is", null)
-    .gte("sent_at", since);
-  const remainingHour = HOURLY_SEND_LIMIT - (count ?? 0);
-  return Math.max(0, Math.min(perRunCap, remainingHour));
-}
+type LedgerMirror = {
+  legacyId: string;
+  toEmail: string;
+  contactId: string;
+  campaignId: string;
+  campaignName: string;
+  subject: string;
+  identityId: string | null;
+  status: "sent" | "failed";
+  providerMessageId?: string | null;
+  error?: string | null;
+  sentAt: string | null;
+};
 
 /**
  * Mirror a campaign send into email_messages (migration 185).
@@ -73,41 +70,31 @@ export async function sendableThisRun(
 async function mirrorToLedger(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
-  m: {
-    legacyId: string | null;
-    toEmail: string;
-    contactId: string;
-    campaignId: string;
-    campaignName: string;
-    subject: string;
-    identityId: string | null;
-    status: "sent" | "failed";
-    providerMessageId?: string | null;
-    error?: string | null;
-    sentAt: string | null;
-  }
+  rows: LedgerMirror[]
 ) {
-  if (!m.legacyId) return; // no id to key on — skip rather than risk a duplicate
+  if (rows.length === 0) return;
   try {
-    await supabase.from("email_messages").insert({
-      to_email: m.toEmail,
-      contact_id: m.contactId,
-      provider: "mailtrap",
-      provider_message_id: m.providerMessageId ?? null,
-      category: "campaign",
-      subject: m.subject,
-      source_type: "campaign",
-      source_id: m.campaignId,
-      status: m.status,
-      error: m.error ?? null,
-      sent_at: m.sentAt,
-      from_identity_id: m.identityId,
-      // Plain words, naming the campaign — still legible on her record a
-      // year from now, when the campaign itself may be long deleted.
-      reason: `Campaign: ${m.campaignName}`,
-      legacy_table: "campaign_recipients",
-      legacy_id: m.legacyId,
-    });
+    await supabase.from("email_messages").insert(
+      rows.map((m) => ({
+        to_email: m.toEmail,
+        contact_id: m.contactId,
+        provider: "resend",
+        provider_message_id: m.providerMessageId ?? null,
+        category: "campaign",
+        subject: m.subject,
+        source_type: "campaign",
+        source_id: m.campaignId,
+        status: m.status,
+        error: m.error ?? null,
+        sent_at: m.sentAt,
+        from_identity_id: m.identityId,
+        // Plain words, naming the campaign — still legible on her record a
+        // year from now, when the campaign itself may be long deleted.
+        reason: `Campaign: ${m.campaignName}`,
+        legacy_table: "campaign_recipients",
+        legacy_id: m.legacyId,
+      }))
+    );
   } catch {
     // Deliberately silent: see the doc comment.
   }
@@ -182,7 +169,7 @@ function deliverabilityHeaders(args: {
 export async function sendCampaignBatch(
   supabase: Client,
   campaignId: string,
-  batchSize = 100
+  maxRecipients = MAX_PER_RUN
 ): Promise<BatchResult> {
   const base: BatchResult = {
     ok: true,
@@ -292,131 +279,154 @@ export async function sendCampaignBatch(
     return { ...base, done: true };
   }
 
-  const batch = pending.slice(0, batchSize);
   const body = campaign.body_source as unknown as CampaignBody;
   const fromEmail = campaign.sending_identities.from_email;
   const fromName = campaign.sending_identities.from_name;
   const replyTo = campaign.sending_identities.reply_to;
   const brand = await getEffectiveBrand(supabase, campaign.sending_identity_id);
 
+  type Recipient = { contact_id: string; email: string; first_name: string | null };
+  const toSend = (pending as Recipient[]).slice(0, maxRecipients);
+  const startedAt = Date.now();
+
   let sent = 0;
   let failed = 0;
   let processed = 0;
   let rateLimited = false;
 
-  for (const recipient of batch as {
-    contact_id: string;
-    email: string;
-    first_name: string | null;
-  }[]) {
-    const prefsUrl = prefsUrlFor(recipient.contact_id, campaignId);
-    // Personalise [First Name] / {{first_name}} tokens the user dropped into
-    // any block or the subject. Fall back to "there" when a contact has no
-    // first name. The name is HTML-escaped before it lands in HTML so an odd
-    // name can't break the markup (mirrors the workflow email path).
-    const firstName = recipient.first_name?.trim() || "there";
-    const html = substituteFirstName(
-      renderCampaignHtml(body, {
-        previewText: campaign.preview_text ?? undefined,
-        brand,
-        footerHtml: footerHtml(prefsUrl),
-      }),
-      escapeHtml(firstName)
-    );
-    const text = substituteFirstName(
-      renderCampaignText(body, { brand }),
-      firstName
-    );
-    const subject = substituteFirstName(campaign.subject, firstName);
+  for (let i = 0; i < toSend.length; i += RESEND_BATCH_SIZE) {
+    // Leave room inside the function's 60s limit to record the last chunk.
+    if (i > 0 && Date.now() - startedAt > RUN_TIME_BUDGET_MS) break;
+    const chunk = toSend.slice(i, i + RESEND_BATCH_SIZE);
 
-    const result = await sendViaMailtrap({
-      fromEmail,
-      fromName,
-      replyTo,
-      to: recipient.email,
-      subject,
-      html,
-      text: `${text}\n\n———\nManage email preferences: ${prefsUrl}`,
-      category: `campaign:${campaignId}`,
-      headers: deliverabilityHeaders({
-        prefsUrl,
-        campaignId,
+    const emails = chunk.map((recipient) => {
+      const prefsUrl = prefsUrlFor(recipient.contact_id, campaignId);
+      // Personalise [First Name] / {{first_name}} tokens the user dropped into
+      // any block or the subject. Fall back to "there" when a contact has no
+      // first name. The name is HTML-escaped before it lands in HTML so an odd
+      // name can't break the markup (mirrors the workflow email path).
+      const firstName = recipient.first_name?.trim() || "there";
+      const html = substituteFirstName(
+        renderCampaignHtml(body, {
+          previewText: campaign.preview_text ?? undefined,
+          brand,
+          footerHtml: footerHtml(prefsUrl),
+        }),
+        escapeHtml(firstName)
+      );
+      const text = substituteFirstName(
+        renderCampaignText(body, { brand }),
+        firstName
+      );
+      return {
         fromEmail,
-        contactId: recipient.contact_id,
-      }),
+        fromName,
+        replyTo,
+        to: recipient.email,
+        subject: substituteFirstName(campaign.subject, firstName),
+        html,
+        text: `${text}\n\n———\nManage email preferences: ${prefsUrl}`,
+        category: `campaign:${campaignId}`,
+        headers: deliverabilityHeaders({
+          prefsUrl,
+          campaignId,
+          fromEmail,
+          contactId: recipient.contact_id,
+        }),
+      };
     });
 
-    // Hourly quota hit: stop immediately and leave this recipient UNprocessed
-    // (no row inserted) so a later run retries them. Recording it would burn
-    // the contact — the bug that turned a throttle into 600+ fake "bounces".
-    if (result.rateLimited) {
+    // Same campaign + same recipients → same key. A run that died after
+    // Resend accepted this chunk but before we recorded it rebuilds the
+    // identical chunk on resume, and Resend returns the original ids rather
+    // than emailing these people a second time.
+    const idempotencyKey = createHash("sha256")
+      .update(`campaign:${campaignId}:${chunk.map((r) => r.contact_id).join(",")}`)
+      .digest("hex");
+
+    const batch = await sendBatchViaResend(emails, idempotencyKey);
+
+    // Plan quota / rate limit: stop and record NOTHING for this chunk, so a
+    // later run retries them. Recording it would burn the contacts — the bug
+    // that once turned a throttle into 600+ fake "bounces".
+    if (batch.rateLimited) {
       rateLimited = true;
       break;
     }
 
     const nowIso = new Date().toISOString();
-    processed++;
-    if (result.error) {
-      failed++;
-      const { data: crRow } = await supabase
-        .from("campaign_recipients")
-        .insert({
-          campaign_id: campaignId,
-          contact_id: recipient.contact_id,
-          bounce_reason: result.error.slice(0, 300),
-        })
-        .select("id")
-        .single();
-      await mirrorToLedger(supabase, {
-        legacyId: crRow?.id ?? null,
+    const rows = chunk.map((recipient, j) => {
+      const r = batch.results[j];
+      return r.error
+        ? {
+            campaign_id: campaignId,
+            contact_id: recipient.contact_id,
+            bounce_reason: r.error.slice(0, 300),
+          }
+        : {
+            campaign_id: campaignId,
+            contact_id: recipient.contact_id,
+            provider_message_id: r.messageId,
+            sent_at: nowIso,
+          };
+    });
+
+    // ignoreDuplicates: if a concurrent run (the composer loop and the cron
+    // overlapping) already recorded a contact, keep its row; Resend's
+    // idempotency key already stopped the duplicate email itself.
+    const { data: inserted } = await supabase
+      .from("campaign_recipients")
+      .upsert(rows, { onConflict: "campaign_id,contact_id", ignoreDuplicates: true })
+      .select("id, contact_id");
+    const idByContact = new Map<string, string>(
+      ((inserted ?? []) as { id: string; contact_id: string }[]).map((r) => [
+        r.contact_id,
+        r.id,
+      ])
+    );
+
+    const ledgerRows: LedgerMirror[] = [];
+    const activityRows: Record<string, unknown>[] = [];
+    chunk.forEach((recipient, j) => {
+      const r = batch.results[j];
+      processed++;
+      if (r.error) failed++;
+      else sent++;
+      const legacyId = idByContact.get(recipient.contact_id);
+      if (!legacyId) return; // recorded by another run — it owns the ledger row
+      ledgerRows.push({
+        legacyId,
         toEmail: recipient.email,
         contactId: recipient.contact_id,
         campaignId,
         campaignName: campaign.name,
         subject: campaign.subject,
         identityId: campaign.sending_identity_id,
-        status: "failed",
-        error: result.error.slice(0, 300),
-        sentAt: null,
+        status: r.error ? "failed" : "sent",
+        providerMessageId: r.messageId,
+        error: r.error?.slice(0, 300) ?? null,
+        sentAt: r.error ? null : nowIso,
       });
-    } else {
-      sent++;
-      const { data: crRow } = await supabase
-        .from("campaign_recipients")
-        .insert({
-          campaign_id: campaignId,
+      if (!r.error) {
+        activityRows.push({
           contact_id: recipient.contact_id,
-          provider_message_id: result.messageId,
-          sent_at: nowIso,
-        })
-        .select("id")
-        .single();
-      await mirrorToLedger(supabase, {
-        legacyId: crRow?.id ?? null,
-        toEmail: recipient.email,
-        contactId: recipient.contact_id,
-        campaignId,
-        campaignName: campaign.name,
-        subject: campaign.subject,
-        identityId: campaign.sending_identity_id,
-        status: "sent",
-        providerMessageId: result.messageId,
-        sentAt: nowIso,
-      });
-      await supabase.from("activity_events").insert({
-        contact_id: recipient.contact_id,
-        event_type: "email_sent",
-        related_campaign_id: campaignId,
-        occurred_at: nowIso,
-      });
+          event_type: "email_sent",
+          related_campaign_id: campaignId,
+          occurred_at: nowIso,
+        });
+      }
+    });
+    await mirrorToLedger(supabase, ledgerRows);
+    if (activityRows.length > 0) {
+      await supabase.from("activity_events").insert(activityRows);
     }
   }
 
   // Recipients still awaiting a send after this run. Uses `processed` (rather
-  // than the batch length) so an early rate-limit stop is reflected correctly.
+  // than the slice length) so an early stop is reflected correctly.
   const remaining = pending.length - processed;
   // Only flip to "sent" when the whole audience is drained AND we didn't stop
-  // on a rate limit — otherwise the cron resumes the remainder on a later run.
+  // on a rate limit — otherwise a later run resumes the remainder.
   if (remaining === 0 && !rateLimited) {
     await supabase
       .from("campaigns")

@@ -16,7 +16,7 @@
 // email re-sends (acceptable for retries).
 
 import { randomBytes } from "node:crypto";
-import { sendViaMailtrap } from "@/lib/email/mailtrap";
+import { sendViaResend, isEmailConfigured } from "@/lib/email/resend-send";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { recordEmail, markSent, markFailed } from "@/lib/email/ledger";
 import { ticketConfirmationEmailHtml } from "@/lib/email/templates/ticket-confirmation";
@@ -248,12 +248,12 @@ export async function fulfillOrder(
   const siteUrl =
     process.env.NEXT_PUBLIC_SITE_URL || "https://www.ffsahub.com";
 
-  // 4. Send confirmation email via Mailtrap.
-  // sendViaMailtrap doesn't throw — returns { messageId, error } so we
+  // 4. Send confirmation email via Resend.
+  // sendViaResend doesn't throw — returns { messageId, error } so we
   // just check error and log; tickets are already issued either way.
-  if (!process.env.MAILTRAP_API_TOKEN) {
+  if (!isEmailConfigured()) {
     console.warn(
-      "[fulfillment] MAILTRAP_API_TOKEN not set; tickets issued without sending email"
+      "[fulfillment] RESEND_API_KEY not set; tickets issued without sending email"
     );
     return { ok: true };
   }
@@ -271,7 +271,6 @@ export async function fulfillOrder(
     .maybeSingle();
   const fromEmail = (
     identity?.from_email ||
-    process.env.MAILTRAP_FROM_EMAIL ||
     process.env.RESEND_FROM_EMAIL ||
     "noreply@ffsahub.com"
   ).trim();
@@ -313,7 +312,7 @@ export async function fulfillOrder(
   const admin = createAdminClient();
   const ledgerId = await recordEmail(admin, {
     toEmail: order.buyer_email,
-    provider: "mailtrap",
+    provider: "resend",
     category: "ticket_confirmation",
     subject,
     contactId: order.buyer_contact_id ?? null,
@@ -324,7 +323,7 @@ export async function fulfillOrder(
     reason: `Her ticket order for ${order.events.title} was paid`,
   });
 
-  const sendResult = await sendViaMailtrap({
+  const sendResult = await sendViaResend({
     fromEmail,
     fromName,
     replyTo,

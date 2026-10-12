@@ -101,7 +101,7 @@ export async function createSendingIdentity(
     from_email: input.from_email.trim().toLowerCase(),
     from_name: input.from_name.trim(),
     reply_to: input.reply_to?.trim() || null,
-    provider: input.provider ?? "mailtrap",
+    provider: input.provider ?? "resend",
     is_active: input.is_active ?? true,
   };
   return supabase.from("sending_identities").insert(row).select().single();
@@ -131,7 +131,7 @@ export async function updateSendingIdentity(
 }
 
 // ────────────────────────────────────────────────────────────
-// Domain verification helper (UI-side hint only — Mailtrap is the
+// Domain verification helper (UI-side hint only — Resend is the
 // source of truth for which domains can actually send).
 // ────────────────────────────────────────────────────────────
 
