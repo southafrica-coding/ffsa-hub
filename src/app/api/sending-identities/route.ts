@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import {
   createSendingIdentity,
+  forwardListError,
   type SendingIdentityInsert,
 } from "@/services/sending-identities";
 import { getAuthedUser, canManageComms } from "@/lib/api-auth";
@@ -54,11 +55,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid provider" }, { status: 400 });
   }
 
+  if (body.forward_to !== undefined) {
+    if (!Array.isArray(body.forward_to)) {
+      return NextResponse.json(
+        { error: "Forward list must be a list of emails" },
+        { status: 400 }
+      );
+    }
+    const fwdErr = forwardListError(body.forward_to);
+    if (fwdErr) return NextResponse.json({ error: fwdErr }, { status: 400 });
+  }
+
   const { data, error } = await createSendingIdentity(supabase, {
     display_name: body.display_name,
     from_email: body.from_email,
     from_name: body.from_name,
     reply_to: body.reply_to ?? null,
+    forward_to: body.forward_to ?? [],
     slug: body.slug,
     provider: "resend",
     is_active: body.is_active ?? true,

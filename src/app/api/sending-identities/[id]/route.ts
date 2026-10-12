@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   getSendingIdentity,
   updateSendingIdentity,
+  forwardListError,
   type SendingIdentityPatch,
 } from "@/services/sending-identities";
 import { getAuthedUser, canManageComms } from "@/lib/api-auth";
@@ -63,6 +64,17 @@ export async function PATCH(
       { error: "Reply-to must be a valid email or blank" },
       { status: 400 }
     );
+  }
+
+  if (body.forward_to !== undefined) {
+    if (!Array.isArray(body.forward_to)) {
+      return NextResponse.json(
+        { error: "Forward list must be a list of emails" },
+        { status: 400 }
+      );
+    }
+    const fwdErr = forwardListError(body.forward_to);
+    if (fwdErr) return NextResponse.json({ error: fwdErr }, { status: 400 });
   }
 
   // Don't let the last active identity be deactivated — that would lock out

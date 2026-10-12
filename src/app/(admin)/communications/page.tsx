@@ -8,6 +8,7 @@ import {
   getCampaignStatsBulk,
 } from "@/services/campaigns";
 import { getCachedActiveLabels } from "@/lib/cached-reads";
+import { countNewInbound } from "@/services/inbound-emails";
 import { Masthead, NeedsYou } from "@/components/ffsa";
 import { CampaignsList } from "./campaigns-list";
 
@@ -22,7 +23,7 @@ export default async function CommunicationsPage() {
   // The stats read has to know which campaigns it is counting, so it is
   // chained onto the list fetch INSIDE the Promise.all — it overlaps with
   // the labels and identities reads instead of waiting for the whole batch.
-  const [{ rows, stats }, { data: labels }, { data: identities }] =
+  const [{ rows, stats }, { data: labels }, { data: identities }, newReplies] =
     await Promise.all([
       (async () => {
         const { data } = await listCampaigns(supabase, { limit: 100 });
@@ -37,6 +38,7 @@ export default async function CommunicationsPage() {
       })(),
       getCachedActiveLabels(),
       listSendingIdentities(supabase),
+      countNewInbound(supabase),
     ]);
 
   // Drives the page's one yellow band — read off the campaigns already
@@ -52,6 +54,9 @@ export default async function CommunicationsPage() {
         title="Communications"
         actions={
           <>
+            <SubNav href="/communications/inbox">
+              Inbox{newReplies > 0 ? ` · ${newReplies}` : ""}
+            </SubNav>
             <SubNav href="/communications/automations">Automations</SubNav>
             <SubNav href="/communications/labels">Labels</SubNav>
             <SubNav href="/communications/identities">Identities</SubNav>

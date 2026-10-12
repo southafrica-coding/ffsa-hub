@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -39,6 +40,7 @@ const EVENT_LABEL: Record<string, string> = {
   email_bounced: "Email bounced",
   email_complained: "Email complained",
   email_unsubscribed: "Unsubscribed",
+  email_replied: "Replied",
   note_added: "Note added",
   manual_interaction: "Manual interaction",
 };
@@ -54,6 +56,7 @@ const EVENT_COLOR: Record<string, string> = {
   email_clicked: "bg-cyan-100 text-cyan-800",
   email_bounced: "bg-white text-destructive",
   email_unsubscribed: "bg-white text-destructive",
+  email_replied: "bg-blue-100 text-electric",
   note_added: "bg-yellow-dim text-amber",
 };
 
@@ -159,6 +162,27 @@ function EventDetails({ ev }: { ev: ActivityEvent }) {
         {ev.payload?.added_via ? (
           <span className="text-xs text-[color:var(--text-tertiary)]"> · via {String(ev.payload.added_via)}</span>
         ) : null}
+      </p>
+    );
+  }
+  if (ev.event_type === "email_replied") {
+    // Written by the inbound webhook (migration 228).
+    const inboundId =
+      typeof ev.payload?.inbound_email_id === "string" ? ev.payload.inbound_email_id : null;
+    return (
+      <p className="text-sm text-ink">
+        {String(ev.payload?.subject ?? "(no subject)")}
+        {ev.payload?.to ? (
+          <span className="text-xs text-[color:var(--text-tertiary)]"> · to {String(ev.payload.to)}</span>
+        ) : null}
+        {inboundId && (
+          <Link
+            href={`/communications/inbox?open=${inboundId}`}
+            className="ml-2 text-xs underline"
+          >
+            Read reply
+          </Link>
+        )}
       </p>
     );
   }

@@ -26,6 +26,8 @@ type EditState = {
   from_email: string;
   from_name: string;
   reply_to: string;
+  /** Comma-separated in the form; sent as a list. */
+  forward_to: string;
 };
 
 type NewState = {
@@ -33,14 +35,25 @@ type NewState = {
   from_email: string;
   from_name: string;
   reply_to: string;
+  forward_to: string;
 };
 
+// Reply-to is left blank by default: replies then go to the identity's own
+// From address, which the Hub receives and forwards (migration 228).
 const EMPTY_NEW: NewState = {
   display_name: "",
   from_email: "",
   from_name: "",
-  reply_to: "hello@ffsahub.com",
+  reply_to: "",
+  forward_to: "",
 };
+
+function splitList(s: string): string[] {
+  return s
+    .split(/[,;\s]+/)
+    .map((a) => a.trim())
+    .filter(Boolean);
+}
 
 export function IdentitiesAdmin({
   initialIdentities,
@@ -66,6 +79,7 @@ export function IdentitiesAdmin({
       from_email: i.from_email,
       from_name: i.from_name,
       reply_to: i.reply_to ?? "",
+      forward_to: (i.forward_to ?? []).join(", "),
     });
     setErr(null);
     setMsg(null);
@@ -89,6 +103,7 @@ export function IdentitiesAdmin({
         from_email: editing.from_email,
         from_name: editing.from_name,
         reply_to: editing.reply_to,
+        forward_to: splitList(editing.forward_to),
       }),
     });
     setBusy(false);
@@ -140,7 +155,10 @@ export function IdentitiesAdmin({
     const res = await fetch("/api/sending-identities", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(newRow),
+      body: JSON.stringify({
+        ...newRow,
+        forward_to: splitList(newRow.forward_to),
+      }),
     });
     setBusy(false);
     if (!res.ok) {
@@ -220,14 +238,23 @@ export function IdentitiesAdmin({
                 />
                 <DomainWarning email={newRow.from_email} />
               </Field>
-              <Field label="Reply-to (where replies go)">
+              <Field label="Forward replies to (staff inboxes, comma-separated)">
+                <Input
+                  value={newRow.forward_to}
+                  onChange={(e) =>
+                    setNewRow({ ...newRow, forward_to: e.target.value })
+                  }
+                  placeholder="e.g. name@ffsouthafrica.com, team@ffsouthafrica.com"
+                />
+              </Field>
+              <Field label="Reply-to override (leave blank — replies come to the Hub)">
                 <Input
                   type="email"
                   value={newRow.reply_to}
                   onChange={(e) =>
                     setNewRow({ ...newRow, reply_to: e.target.value })
                   }
-                  placeholder="hello@ffsahub.com"
+                  placeholder="(blank)"
                 />
               </Field>
             </div>
@@ -256,7 +283,7 @@ export function IdentitiesAdmin({
               <TableRow>
                 <TableHead>Identity</TableHead>
                 <TableHead>From email</TableHead>
-                <TableHead>Reply-to</TableHead>
+                <TableHead>Replies forwarded to</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -312,18 +339,31 @@ export function IdentitiesAdmin({
                           <DomainWarning email={editing.from_email} />
                         </TableCell>
                         <TableCell>
-                          <Input
-                            type="email"
-                            value={editing.reply_to}
-                            onChange={(e) =>
-                              setEditing({
-                                ...editing,
-                                reply_to: e.target.value,
-                              })
-                            }
-                            className="text-xs"
-                            placeholder="(none)"
-                          />
+                          <div className="space-y-1.5">
+                            <Input
+                              value={editing.forward_to}
+                              onChange={(e) =>
+                                setEditing({
+                                  ...editing,
+                                  forward_to: e.target.value,
+                                })
+                              }
+                              className="text-xs"
+                              placeholder="name@ffsouthafrica.com, …"
+                            />
+                            <Input
+                              type="email"
+                              value={editing.reply_to}
+                              onChange={(e) =>
+                                setEditing({
+                                  ...editing,
+                                  reply_to: e.target.value,
+                                })
+                              }
+                              className="text-xs"
+                              placeholder="Reply-to override (blank = Hub)"
+                            />
+                          </div>
                         </TableCell>
                         <TableCell>
                           <StatusPill tone={i.is_active ? "good" : "quiet"}>
@@ -364,8 +404,22 @@ export function IdentitiesAdmin({
                           {i.from_email}
                           <DomainWarning email={i.from_email} />
                         </TableCell>
-                        <TableCell className="font-mono text-xs text-[color:var(--text-tertiary)]">
-                          {i.reply_to || "—"}
+                        <TableCell className="font-mono text-xs">
+                          {(i.forward_to ?? []).length > 0 ? (
+                            (i.forward_to ?? []).map((a) => <div key={a}>{a}</div>)
+                          ) : (
+                            <span className="text-[color:var(--text-tertiary)]">
+                              Hub Inbox only
+                            </span>
+                          )}
+                          {i.reply_to && (
+                            <div
+                              className="mt-0.5 text-[color:var(--amber)]"
+                              title="Replies go to this address instead of the Hub, so they won't appear in the Inbox or be forwarded"
+                            >
+                              reply-to override: {i.reply_to}
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell>
                           <StatusPill tone={i.is_active ? "good" : "quiet"}>

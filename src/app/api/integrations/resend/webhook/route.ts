@@ -6,10 +6,13 @@ import {
   type NormalizedDeliveryEvent,
 } from "@/lib/email/ledger";
 import { recordConsentEvent } from "@/lib/consent/record";
+import { handleInboundEmail } from "@/lib/email/inbound";
 
 // POST /api/integrations/resend/webhook
 //
-// Resend posts delivery events here (configure at resend.com → Webhooks,
+// Resend posts delivery events — and, since migration 228, email.received for
+// replies arriving at ffsahub.com (see src/lib/email/inbound.ts) — here
+// (configure at resend.com → Webhooks,
 // pointed at https://<site>/api/integrations/resend/webhook, with the
 // delivered / opened / clicked / bounced / complained events). Each event
 // carries data.email_id — the id we stored at send time — and is reconciled
@@ -33,6 +36,8 @@ import { recordConsentEvent } from "@/lib/consent/record";
 // but set it: an unsigned public endpoint is spoofable.
 
 export const runtime = "nodejs";
+// Inbound replies fetch the full email and may forward it with attachments.
+export const maxDuration = 60;
 
 // Verify a Svix-style signature. signedContent = `${id}.${ts}.${body}`;
 // the secret is base64 after the `whsec_` prefix; the header is a
@@ -130,10 +135,22 @@ export async function POST(request: Request) {
     return new NextResponse("bad json", { status: 400 });
   }
 
+  const admin = createAdminClient();
+
+  // A reply (or any mail) arriving at an ffsahub.com address — migration 228.
+  if (payload.type === "email.received") {
+    const emailId = payload.data?.email_id;
+    if (typeof emailId !== "string") {
+      return NextResponse.json({ ok: true, ignored: true });
+    }
+    const result = await handleInboundEmail(admin, emailId);
+    // A 500 makes Resend retry later — wanted when the email couldn't be
+    // fetched or stored, so a reply is never silently lost.
+    return NextResponse.json(result, { status: result.ok ? 200 : 500 });
+  }
+
   const ev = normalize(payload);
   if (!ev) return NextResponse.json({ ok: true, ignored: true });
-
-  const admin = createAdminClient();
 
   // 1. Unified ledger.
   const matched = await applyProviderEvent(admin, "resend", ev);

@@ -12,6 +12,8 @@ export type SendingIdentity = {
   from_email: string;
   from_name: string;
   reply_to: string | null;
+  /** Staff inboxes this team's replies are forwarded to (migration 228). */
+  forward_to: string[];
   provider: "mailtrap" | "resend";
   is_active: boolean;
   created_at: string;
@@ -23,6 +25,7 @@ export type SendingIdentityInsert = {
   from_email: string;
   from_name: string;
   reply_to?: string | null;
+  forward_to?: string[];
   provider?: "mailtrap" | "resend";
   is_active?: boolean;
 };
@@ -30,7 +33,12 @@ export type SendingIdentityInsert = {
 export type SendingIdentityPatch = Partial<
   Pick<
     SendingIdentity,
-    "display_name" | "from_email" | "from_name" | "reply_to" | "is_active"
+    | "display_name"
+    | "from_email"
+    | "from_name"
+    | "reply_to"
+    | "forward_to"
+    | "is_active"
   >
 >;
 
@@ -71,6 +79,33 @@ export async function ensureUniqueSlug(
 }
 
 // ────────────────────────────────────────────────────────────
+// Reply forwarding (migration 228)
+// ────────────────────────────────────────────────────────────
+
+/** Trim, lowercase, dedupe. */
+export function normalizeForwardList(list: string[]): string[] {
+  return Array.from(
+    new Set(list.map((a) => a.trim().toLowerCase()).filter(Boolean))
+  );
+}
+
+/**
+ * Why a forward list is unusable, or null when it's fine. An ffsahub.com
+ * address is refused: Resend receives that domain, so forwarding into it
+ * would deliver the reply straight back to the Hub — a loop.
+ */
+export function forwardListError(list: string[]): string | null {
+  const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  for (const a of normalizeForwardList(list)) {
+    if (!re.test(a)) return `"${a}" isn't a valid email address`;
+    if (a.endsWith("@ffsahub.com")) {
+      return `Replies can't be forwarded to ${a} — ffsahub.com addresses are the Hub's own inboxes. Use the staff member's ffsouthafrica.com (or other) address.`;
+    }
+  }
+  return null;
+}
+
+// ────────────────────────────────────────────────────────────
 // CRUD
 // ────────────────────────────────────────────────────────────
 
@@ -101,6 +136,7 @@ export async function createSendingIdentity(
     from_email: input.from_email.trim().toLowerCase(),
     from_name: input.from_name.trim(),
     reply_to: input.reply_to?.trim() || null,
+    forward_to: normalizeForwardList(input.forward_to ?? []),
     provider: input.provider ?? "resend",
     is_active: input.is_active ?? true,
   };
@@ -121,6 +157,8 @@ export async function updateSendingIdentity(
     normalized.from_name = patch.from_name.trim();
   if (patch.reply_to !== undefined)
     normalized.reply_to = patch.reply_to?.trim() || null;
+  if (patch.forward_to !== undefined)
+    normalized.forward_to = normalizeForwardList(patch.forward_to);
   if (patch.is_active !== undefined) normalized.is_active = patch.is_active;
   return supabase
     .from("sending_identities")
