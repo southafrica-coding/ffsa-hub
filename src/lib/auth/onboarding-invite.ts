@@ -62,6 +62,16 @@ export async function createOnboardingInvite(
     return { ok: false, error: error.message };
   }
 
+  // Any fresh link — the scheduled send, Resend, or Copy setup link — means a
+  // held-back invite (migration 230) is no longer pending. Clearing it here
+  // also stops the cron later minting a newer link that would supersede one
+  // an admin already handed over.
+  await admin
+    .from("users")
+    .update({ setup_invite_due_on: null })
+    .eq("id", userId)
+    .not("setup_invite_due_on", "is", null);
+
   return { ok: true, token, url: onboardingSetupUrl(siteUrl, token) };
 }
 

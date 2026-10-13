@@ -136,6 +136,8 @@ type Program = {
   application_deadline: string | null;
   acceptance_email_subject: string | null;
   acceptance_email_body: string | null;
+  /** Override for when accepted applicants get their HUB setup link (migration 230). */
+  setup_invite_date?: string | null;
   courses: Course[];
 };
 
@@ -739,6 +741,8 @@ export function ProgramDetail({
             templates={emailTemplates}
             acceptanceSubject={program.acceptance_email_subject}
             acceptanceBody={program.acceptance_email_body}
+            setupInviteDate={program.setup_invite_date ?? null}
+            schoolStartDate={runStart}
           />
         </TabsContent>
       </Tabs>
@@ -853,7 +857,9 @@ function ProfileBadge({
     return <Badge variant="secondary">Inactive</Badge>;
   }
 
-  const isInvited = info.profileStage === "invited";
+  // A held-back setup link (migration 230) is the same "no profile yet" state.
+  const isInvited =
+    info.profileStage === "invited" || info.profileStage === "invite_scheduled";
   const isIncomplete = info.profileStage === "profile_incomplete";
 
   if (!isInvited && !isIncomplete) {
@@ -1006,7 +1012,9 @@ function ArrivalTab({
   // Orphans are excluded from both counters: they aren't students who haven't
   // filled a profile in, they're records with no account at all.
   const noProfileCount = roster.filter(
-    (e) => !isOrphan(e) && arrivalInsurance[e.user_id!]?.profileStage === "invited"
+    (e) => !isOrphan(e) && ["invited", "invite_scheduled"].includes(
+        arrivalInsurance[e.user_id!]?.profileStage ?? ""
+      )
   ).length;
   const insuranceProblemCount = roster.filter((e) => {
     if (isOrphan(e)) return false;

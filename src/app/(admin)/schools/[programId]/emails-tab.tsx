@@ -9,6 +9,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Check } from "lucide-react";
 import {
+  oneMonthBefore,
+  formatInviteDate,
+} from "@/lib/schools/setup-invite-schedule";
+import {
   PROGRAM_EMAIL_TYPES,
   type ProgramEmailType,
 } from "@/lib/email/program-email-types";
@@ -26,9 +30,15 @@ export function EmailsTab({
   templates,
   acceptanceSubject,
   acceptanceBody,
+  setupInviteDate,
+  schoolStartDate,
 }: {
   programId: string;
   templates: TemplateRow[];
+  /** programs.setup_invite_date — null means "a month before the start". */
+  setupInviteDate: string | null;
+  /** Earliest course start, which the default is counted back from. */
+  schoolStartDate: string | null;
   /** Acceptance wording. Stored on `programs`, not `program_email_templates` —
    *  see <AcceptanceEmailEditor> for why it is special-cased rather than moved. */
   acceptanceSubject: string | null;
@@ -54,11 +64,18 @@ export function EmailsTab({
           {/* Accepted sits with the other two decision outcomes, so the three
               things you can tell an applicant read together. */}
           {type.key === "application_rejected" && (
-            <AcceptanceEmailEditor
-              programId={programId}
-              initialSubject={acceptanceSubject}
-              initialBody={acceptanceBody}
-            />
+            <>
+              <AcceptanceEmailEditor
+                programId={programId}
+                initialSubject={acceptanceSubject}
+                initialBody={acceptanceBody}
+              />
+              <SetupInviteDateEditor
+                programId={programId}
+                initialDate={setupInviteDate}
+                schoolStartDate={schoolStartDate}
+              />
+            </>
           )}
           <EmailTypeEditor
             programId={programId}
@@ -380,6 +397,118 @@ function AcceptanceEmailEditor({
               }}
             >
               Clear to FFSA default
+            </Button>
+          )}
+          {error && <span className="text-xs text-destructive">{error}</span>}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * When accepted applicants get their HUB setup link (migration 230).
+ *
+ * New accounts no longer get the link in the acceptance email; it's held until
+ * a month before the school starts, or the date set here. Accounts that
+ * already exist are unaffected — those people can already sign in.
+ */
+function SetupInviteDateEditor({
+  programId,
+  initialDate,
+  schoolStartDate,
+}: {
+  programId: string;
+  initialDate: string | null;
+  schoolStartDate: string | null;
+}) {
+  const router = useRouter();
+  const [date, setDate] = useState(initialDate ?? "");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const dirty = date !== (initialDate ?? "");
+  const defaultDate = schoolStartDate ? oneMonthBefore(schoolStartDate) : null;
+  const effective = date || defaultDate;
+
+  async function save() {
+    setSaving(true);
+    setError(null);
+    const res = await fetch("/api/schools/programs", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: programId, setup_invite_date: date || null }),
+    });
+    setSaving(false);
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      setError(data.error ?? "Could not save");
+      return;
+    }
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+    router.refresh();
+  }
+
+  return (
+    <Card>
+      <CardHeader className="space-y-0">
+        <CardTitle className="text-base flex items-center gap-2">
+          HUB setup link
+          <Badge variant="outline" className="font-normal capitalize">
+            to new students
+          </Badge>
+        </CardTitle>
+        <p className="text-sm text-muted-foreground mt-1">
+          Accepted students without a HUB account get their account setup link
+          on this date, not with the acceptance email — which tells them when to
+          expect it. Leave blank for one month before the school starts.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-muted-foreground">
+            Send setup links on
+          </label>
+          <Input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="w-[200px]"
+          />
+          <p className="text-xs text-muted-foreground">
+            {effective
+              ? `Setup links go out on ${formatInviteDate(effective)}${
+                  date ? "" : " (one month before the start)"
+                }. If that date has passed, they're sent straight away.`
+              : "This school has no start date yet, so setup links are sent straight away with the acceptance email."}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <Button type="button" onClick={save} disabled={!dirty || saving} size="sm">
+            {saving ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" /> Saving…
+              </>
+            ) : saved ? (
+              <>
+                <Check className="h-4 w-4 mr-1" /> Saved
+              </>
+            ) : (
+              "Save"
+            )}
+          </Button>
+          {date && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={saving}
+              onClick={() => setDate("")}
+            >
+              Use one month before start
             </Button>
           )}
           {error && <span className="text-xs text-destructive">{error}</span>}

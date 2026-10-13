@@ -62,6 +62,7 @@ export async function updateProgram(
     application_deadline?: string | null;
     acceptance_email_subject?: string | null;
     acceptance_email_body?: string | null;
+    setup_invite_date?: string | null;
   }
 ) {
   return supabase.from("programs").update(data).eq("id", id).select().single();
@@ -187,6 +188,24 @@ export async function listActiveEnrollmentSchools(supabase: Client) {
     .select("user_id, programs(name), enrolled_at")
     .is("removed_at", null)
     .order("enrolled_at", { ascending: false });
+}
+
+/** Roster enrolments that are either waiting to arrive or arrived — the
+ *  Users page derives "Not arrived yet" from these. */
+export async function listArrivalEnrollments(supabase: Client) {
+  return supabase
+    .from("enrollments")
+    .select("user_id, status, program_id, programs(name)")
+    .is("removed_at", null)
+    .in("status", ["waiting_for_arrival", "arrived"]);
+}
+
+/** Every dated course run, for working out when each program starts. */
+export async function listCourseStartDates(supabase: Client) {
+  return supabase
+    .from("billing_courses")
+    .select("program_id, start_date")
+    .not("start_date", "is", null);
 }
 
 export async function getEnrollmentById(supabase: Client, id: string) {

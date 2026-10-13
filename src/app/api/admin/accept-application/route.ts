@@ -3,6 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ensureStudentRole } from "@/lib/auth/membership-roles";
 import { createOnboardingInvite } from "@/lib/auth/onboarding-invite";
+import {
+  resolveSetupInviteDueDate,
+  formatInviteDate,
+} from "@/lib/schools/setup-invite-schedule";
 import { setupProgramBillingOnAcceptance } from "@/services/billing-generation";
 import { sendTransactional } from "@/lib/email/send-transactional";
 import { applicationAcceptedEmailHtml } from "@/lib/email/templates/application-accepted";
@@ -226,6 +230,13 @@ export async function POST(request: Request) {
 
       userId = created.user.id;
 
+      // Hold the setup link back until a month before the school starts (or
+      // the school's own date) — migration 230. null = send it now.
+      const setupInviteDueOn = await resolveSetupInviteDueDate(
+        adminSupabase,
+        appResponse.program_id
+      );
+
       // Create app-level user record with applicant info
       const { error: userError } = await adminSupabase.from("users").insert({
         id: userId,
@@ -238,7 +249,8 @@ export async function POST(request: Request) {
         nationality: applicantInfo?.nationality || null,
         country: applicantInfo?.country || null,
         city: applicantInfo?.city || null,
-        invited_at: new Date().toISOString(),
+        invited_at: setupInviteDueOn ? null : new Date().toISOString(),
+        setup_invite_due_on: setupInviteDueOn,
         status: "active",
       });
 
@@ -285,22 +297,27 @@ export async function POST(request: Request) {
         });
       }
 
-      // Mint the 30-day, single-use onboarding setup link (migration 158).
-      const invite = await createOnboardingInvite(adminSupabase, {
-        userId,
-        email: applicantEmail,
-        siteUrl,
-        createdBy: authUser.id,
-      });
+      // Mint the 30-day, single-use onboarding setup link (migration 158) —
+      // unless it's scheduled for later, in which case the cron
+      // send-setup-invites mints and sends it on the due date.
+      let inviteUrl: string | null = null;
+      if (!setupInviteDueOn) {
+        const invite = await createOnboardingInvite(adminSupabase, {
+          userId,
+          email: applicantEmail,
+          siteUrl,
+          createdBy: authUser.id,
+        });
 
-      if (!invite.ok) {
-        return NextResponse.json(
-          { error: `Failed to create onboarding link: ${invite.error}` },
-          { status: 500 }
-        );
+        if (!invite.ok) {
+          return NextResponse.json(
+            { error: `Failed to create onboarding link: ${invite.error}` },
+            { status: 500 }
+          );
+        }
+
+        inviteUrl = invite.url;
       }
-
-      const inviteUrl = invite.url;
 
       // Send acceptance email with invite link
       const newApplicantFirstName = applicantInfo?.first_name || "there";
@@ -331,6 +348,9 @@ export async function POST(request: Request) {
           firstName: newApplicantFirstName,
           programName: appResponse.programs.name,
           inviteUrl,
+          setupInviteOn: setupInviteDueOn
+            ? formatInviteDate(setupInviteDueOn)
+            : null,
           customBodyHtml,
         }),
         category: "application_accepted",

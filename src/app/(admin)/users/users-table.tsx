@@ -54,6 +54,7 @@ import { getInsuranceConfirmation } from "@/lib/users/profile-fields";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { deriveJobTitle, type MinistryRole } from "@/lib/users/derive-title";
 import { ConvertToCommunityDialog } from "./convert-to-community-dialog";
+import { formatInviteDate } from "@/lib/schools/setup-invite-schedule";
 
 type UserRow = {
   id: string;
@@ -65,6 +66,8 @@ type UserRow = {
   avatar_url: string | null;
   is_active: boolean;
   invited_at: string | null;
+  /** Setup link held until this date (migration 230). */
+  setup_invite_due_on?: string | null;
   accepted_at: string | null;
   status: string | null;
   job_title: string | null;
@@ -161,6 +164,15 @@ const STAGE_STYLES: Record<
       background: "transparent",
     },
   },
+  invite_scheduled: {
+    className: "",
+    style: {
+      borderColor: "hsl(210 90% 60% / 0.4)",
+      borderStyle: "dashed",
+      color: "var(--electric)",
+      background: "transparent",
+    },
+  },
   profile_incomplete: {
     className: "",
     style: {
@@ -229,6 +241,7 @@ export function UsersTable({
   departmentLabels,
   ministryRoleByUser,
   schoolByUser,
+  awaitingArrivalByUser,
   isSuperAdmin = false,
 }: {
   users: UserRow[];
@@ -240,6 +253,8 @@ export function UsersTable({
   ministryRoleByUser?: Record<string, MinistryRole>;
   // user_id → current school name, for a student's derived job title.
   schoolByUser?: Record<string, string>;
+  // user_id → upcoming school they're accepted to but haven't arrived at.
+  awaitingArrivalByUser?: Record<string, { school: string; startsOn: string | null }>;
   // Super admins get the inline membership-role picker in the Role column.
   isSuperAdmin?: boolean;
 }) {
@@ -298,6 +313,9 @@ export function UsersTable({
   const [insuranceExpiringOnly, setInsuranceExpiringOnly] = useState(false);
   const [insuranceConfirmDueOnly, setInsuranceConfirmDueOnly] = useState(false);
   const [profileIncompleteOnly, setProfileIncompleteOnly] = useState(false);
+  // Accepted students who haven't arrived yet: show only them, hide them, or
+  // (both off) no constraint.
+  const [arrivalFilter, setArrivalFilter] = useState<"all" | "only" | "hide">("all");
 
   const deptLabels = useMemo(
     () => ({ ...DEPARTMENT_LABELS, ...(departmentLabels ?? {}) }),
@@ -371,6 +389,11 @@ export function UsersTable({
       if (profileIncompleteOnly && lifecycle.stage !== "profile_incomplete") {
         return false;
       }
+      // Not-arrived-yet facet.
+      if (arrivalFilter !== "all") {
+        const awaiting = !!awaitingArrivalByUser?.[user.id];
+        if (arrivalFilter === "only" ? !awaiting : awaiting) return false;
+      }
       // Free-text search over the visible fields (incl. the derived title).
       if (q) {
         const departmentLabel = user.department
@@ -404,6 +427,8 @@ export function UsersTable({
     insuranceExpiredOnly,
     insuranceExpiringOnly,
     profileIncompleteOnly,
+    arrivalFilter,
+    awaitingArrivalByUser,
     deptLabels,
   ]);
 
@@ -422,7 +447,8 @@ export function UsersTable({
     (insuranceExpiredOnly ? 1 : 0) +
     (insuranceExpiringOnly ? 1 : 0) +
     (insuranceConfirmDueOnly ? 1 : 0) +
-    (profileIncompleteOnly ? 1 : 0);
+    (profileIncompleteOnly ? 1 : 0) +
+    (arrivalFilter !== "all" ? 1 : 0);
 
   function clearFilters() {
     setMembershipFilter(new Set());
@@ -431,6 +457,7 @@ export function UsersTable({
     setInsuranceExpiringOnly(false);
     setInsuranceConfirmDueOnly(false);
     setProfileIncompleteOnly(false);
+    setArrivalFilter("all");
   }
 
   async function callApi(
@@ -614,6 +641,19 @@ export function UsersTable({
           >
             Profile incomplete
           </FilterChip>
+          <span className="mx-1 h-4 w-px bg-border" aria-hidden />
+          <FilterChip
+            active={arrivalFilter === "only"}
+            onClick={() => setArrivalFilter((v) => (v === "only" ? "all" : "only"))}
+          >
+            Not arrived yet
+          </FilterChip>
+          <FilterChip
+            active={arrivalFilter === "hide"}
+            onClick={() => setArrivalFilter((v) => (v === "hide" ? "all" : "hide"))}
+          >
+            Hide not arrived
+          </FilterChip>
         </div>
 
         <p className="text-xs text-muted-foreground">
@@ -711,6 +751,19 @@ export function UsersTable({
                       </Badge>
                       {lifecycle.stage === "profile_incomplete" && (
                         <MissingFieldsPopover lifecycle={lifecycle} />
+                      )}
+                      {awaitingArrivalByUser?.[user.id] && (
+                        <Badge
+                          variant="outline"
+                          className="text-muted-foreground"
+                          title={`Accepted to ${awaitingArrivalByUser[user.id].school}${
+                            awaitingArrivalByUser[user.id].startsOn
+                              ? `, which starts ${formatInviteDate(awaitingArrivalByUser[user.id].startsOn!)}`
+                              : ""
+                          } — not marked arrived yet.`}
+                        >
+                          Not arrived yet
+                        </Badge>
                       )}
                       {/* "Invited" already implies no password, so only flag
                           the surprising case: someone who looks joined but
@@ -818,6 +871,15 @@ export function UsersTable({
                             >
                               <Mail className="h-4 w-4 mr-2" />
                               Resend invite
+                            </DropdownMenuItem>
+                          )}
+
+                          {lifecycle.stage === "invite_scheduled" && (
+                            <DropdownMenuItem
+                              onClick={() => handleResendInvite(user)}
+                            >
+                              <Mail className="h-4 w-4 mr-2" />
+                              Send setup link now
                             </DropdownMenuItem>
                           )}
 
@@ -991,6 +1053,10 @@ function ActivityCell({
         <span>Invited {formatRelativeTime(user.invited_at)}</span>
       </div>
     );
+  }
+
+  if (stage === "invite_scheduled" && user.setup_invite_due_on) {
+    return <span>Setup link on {formatInviteDate(user.setup_invite_due_on)}</span>;
   }
 
   if (user.last_sign_in_at) {

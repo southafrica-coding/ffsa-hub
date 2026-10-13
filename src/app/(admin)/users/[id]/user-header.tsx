@@ -58,6 +58,7 @@ export function UserHeader({
     profile_incomplete: "warn",
     pending_approval: "warn",
     invited: "quiet",
+    invite_scheduled: "quiet",
     inactive: "bad",
   };
 

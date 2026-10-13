@@ -2,7 +2,11 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getUsers } from "@/services/users";
 import { listMinistries, listActiveMinistryMemberships } from "@/services/ministries";
-import { listActiveEnrollmentSchools } from "@/services/schools";
+import {
+  listActiveEnrollmentSchools,
+  listArrivalEnrollments,
+  listCourseStartDates,
+} from "@/services/schools";
 import { strongestMinistryRole, type MinistryRole } from "@/lib/users/derive-title";
 import { getAuthSignIns } from "@/lib/users/auth-signins";
 import { getAccountFlags } from "@/lib/users/account-flags";
@@ -41,11 +45,50 @@ export default async function UsersPage() {
   // service-role client — this is a cross-user admin report, and the ministry /
   // enrollment RLS would otherwise hide rows for non-super-admin readers.
   const adminClientForTitles = createAdminClient();
-  const [{ data: ministryMemberships }, { data: enrollmentSchools }] =
-    await Promise.all([
-      listActiveMinistryMemberships(adminClientForTitles),
-      listActiveEnrollmentSchools(adminClientForTitles),
-    ]);
+  const [
+    { data: ministryMemberships },
+    { data: enrollmentSchools },
+    { data: arrivalEnrollments },
+    { data: courseStarts },
+  ] = await Promise.all([
+    listActiveMinistryMemberships(adminClientForTitles),
+    listActiveEnrollmentSchools(adminClientForTitles),
+    listArrivalEnrollments(adminClientForTitles),
+    listCourseStartDates(adminClientForTitles),
+  ]);
+
+  // "Not arrived yet": accepted onto a school roster but not marked arrived
+  // anywhere. Anyone arrived on some school is on base, so they don't count.
+  const programStart = new Map<string, string>();
+  for (const c of (courseStarts ?? []) as Array<{ program_id: string; start_date: string }>) {
+    const prev = programStart.get(c.program_id);
+    if (!prev || c.start_date < prev) programStart.set(c.program_id, c.start_date);
+  }
+  const arrivedUsers = new Set<string>();
+  const awaitingArrivalByUser: Record<string, { school: string; startsOn: string | null }> = {};
+  for (const e of (arrivalEnrollments ?? []) as Array<{
+    user_id: string | null;
+    status: string;
+    program_id: string;
+    programs: { name?: string | null } | { name?: string | null }[] | null;
+  }>) {
+    if (!e.user_id) continue;
+    if (e.status === "arrived") {
+      arrivedUsers.add(e.user_id);
+      continue;
+    }
+    const program = Array.isArray(e.programs) ? e.programs[0] : e.programs;
+    const startsOn = programStart.get(e.program_id) ?? null;
+    const current = awaitingArrivalByUser[e.user_id];
+    // Several upcoming schools → show the soonest.
+    if (!current || (startsOn && (!current.startsOn || startsOn < current.startsOn))) {
+      awaitingArrivalByUser[e.user_id] = {
+        school: program?.name?.trim() || "a school",
+        startsOn,
+      };
+    }
+  }
+  for (const id of arrivedUsers) delete awaitingArrivalByUser[id];
 
   // user_id → strongest ministry role (point_leader > leader > member).
   const membershipsByUser = new Map<
@@ -200,6 +243,7 @@ export default async function UsersPage() {
         departmentLabels={departmentLabels}
         ministryRoleByUser={ministryRoleByUser}
         schoolByUser={schoolByUser}
+        awaitingArrivalByUser={awaitingArrivalByUser}
         isSuperAdmin={isSuperAdmin}
       />
       </div>

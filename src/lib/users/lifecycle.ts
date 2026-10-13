@@ -1,3 +1,4 @@
+import { formatInviteDate } from "@/lib/schools/setup-invite-schedule";
 import {
   getMissingProfileFields,
   getMissingPassportFields,
@@ -13,6 +14,7 @@ import {
 
 export type UserLifecycleStage =
   | "invited"
+  | "invite_scheduled"
   | "profile_incomplete"
   | "pending_approval"
   | "active"
@@ -36,6 +38,7 @@ export type UserLifecycleInput = {
   is_active?: boolean | null;
   accepted_at?: string | null;
   invited_at?: string | null;
+  setup_invite_due_on?: string | null;
   status?: string | null;
   last_sign_in_at?: string | null;
   [field: string]: unknown;
@@ -45,6 +48,10 @@ const STAGE_LABELS: Record<UserLifecycleStage, { label: string; description: str
   invited: {
     label: "Invited",
     description: "Invite sent — hasn't accepted yet",
+  },
+  invite_scheduled: {
+    label: "Invite scheduled",
+    description: "Accepted to a school — their setup link goes out a month before it starts",
   },
   profile_incomplete: {
     label: "Profile Incomplete",
@@ -81,7 +88,11 @@ export function deriveUserLifecycle(user: UserLifecycleInput): LifecycleInfo {
   const insurance = getInsuranceStatus(row);
 
   const stage: UserLifecycleStage = computeStage(user, missingFields.length);
-  const { label, description } = STAGE_LABELS[stage];
+  const { label } = STAGE_LABELS[stage];
+  const description =
+    stage === "invite_scheduled" && user.setup_invite_due_on
+      ? `Accepted to a school — their setup link is emailed on ${formatInviteDate(user.setup_invite_due_on)}`
+      : STAGE_LABELS[stage].description;
 
   return {
     stage,
@@ -162,7 +173,11 @@ function computeStage(
   // last_sign_in_at from Supabase Auth (the app's accepted_at / last_sign_in_at
   // columns were historically left unset for founder/seed accounts, which made
   // active users — including super admins — wrongly read as "Invited").
-  if (!user.accepted_at && !user.last_sign_in_at) return "invited";
+  if (!user.accepted_at && !user.last_sign_in_at) {
+    // Accepted applicant whose setup link is held until nearer the start
+    // (migration 230) — they haven't been sent anything to accept yet.
+    return user.setup_invite_due_on ? "invite_scheduled" : "invited";
+  }
 
   // Accepted but the profile-completion-gate would still block them.
   if (missingCount > 0) return "profile_incomplete";
