@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ffsa";
+import { formatInviteDate } from "@/lib/schools/setup-invite-schedule";
 
 export type SlackLinkRow = {
   id: string;
@@ -12,7 +13,20 @@ export type SlackLinkRow = {
   slackUserId: string | null;
   linkedAt: string | null;
   source: "self" | "admin" | "email_match" | null;
+  isStaff: boolean;
+  /** Accepted to a school but not arrived yet — see lib/schools/awaiting-arrival. */
+  awaitingArrival: { school: string; startsOn: string | null } | null;
+  /** HUB setup link still held back (migration 230). */
+  setupInviteDueOn: string | null;
 };
+
+/** Not worth linking yet: a student who isn't on base. Their Slack account
+ *  usually doesn't exist yet either. Staff are never skipped. */
+function skipForNow(row: SlackLinkRow): boolean {
+  return !row.isStaff && (!!row.awaitingArrival || !!row.setupInviteDueOn);
+}
+
+type View = "needs" | "skip" | "linked" | "all";
 
 // Slack error codes → what to actually do about them. Without this the
 // page can only say "N failed", which looks like a data problem when
@@ -64,6 +78,23 @@ export function SlackLinksTable({
   const [draft, setDraft] = useState("");
 
   const unlinked = rows.length - linkedCount;
+  const needsRows = useMemo(
+    () => rows.filter((r) => !r.slackUserId && !skipForNow(r)),
+    [rows]
+  );
+  const skipRows = useMemo(
+    () => rows.filter((r) => !r.slackUserId && skipForNow(r)),
+    [rows]
+  );
+  const [view, setView] = useState<View>("needs");
+  const visibleRows =
+    view === "needs"
+      ? needsRows
+      : view === "skip"
+        ? skipRows
+        : view === "linked"
+          ? rows.filter((r) => r.slackUserId)
+          : rows;
 
   async function post(body: Record<string, unknown>) {
     const res = await fetch("/api/admin/slack-links", {
@@ -147,7 +178,12 @@ export function SlackLinksTable({
           {unlinked > 0 && (
             <p className="mt-0.5 text-muted-foreground">
               {unlinked} {unlinked === 1 ? "person is" : "people are"} not
-              linked and will be skipped by every notification.
+              linked: {needsRows.length} need connecting
+              {skipRows.length > 0 &&
+                `, ${skipRows.length} ${
+                  skipRows.length === 1 ? "is a student" : "are students"
+                } who haven't arrived yet (skip for now)`}
+              .
             </p>
           )}
         </div>
@@ -187,11 +223,32 @@ export function SlackLinksTable({
         </div>
       )}
 
+      <div className="flex flex-wrap gap-2">
+        {(
+          [
+            ["needs", `Needs connecting (${needsRows.length})`],
+            ["skip", `Not arrived yet — skip for now (${skipRows.length})`],
+            ["linked", `Linked (${linkedCount})`],
+            ["all", `Everyone (${rows.length})`],
+          ] as Array<[View, string]>
+        ).map(([key, label]) => (
+          <Button
+            key={key}
+            size="sm"
+            variant={view === key ? "default" : "outline"}
+            onClick={() => setView(key)}
+          >
+            {label}
+          </Button>
+        ))}
+      </div>
+
       <div className="overflow-x-auto rounded-xl border">
         <table className="w-full text-sm">
           <thead className="border-b bg-muted/40 text-left">
             <tr>
               <th className="px-3 py-2 font-medium">Name</th>
+              <th className="px-3 py-2 font-medium">Who</th>
               <th className="px-3 py-2 font-medium">Hub email</th>
               <th className="px-3 py-2 font-medium">Slack</th>
               <th className="px-3 py-2 font-medium">Linked via</th>
@@ -199,15 +256,46 @@ export function SlackLinksTable({
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
+            {visibleRows.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-3 py-6 text-center text-muted-foreground">
+                  {view === "needs" ? "Nobody left to connect." : "Nobody here."}
+                </td>
+              </tr>
+            )}
+            {visibleRows.map((row) => (
               <tr key={row.id} className="border-b last:border-0">
                 <td className="px-3 py-2">{row.name}</td>
+                <td className="px-3 py-2">
+                  <div className="flex flex-col items-start gap-1">
+                    <span className="text-muted-foreground">
+                      {row.isStaff ? "Staff" : "Student / community"}
+                    </span>
+                    {!row.isStaff && row.awaitingArrival && (
+                      <span
+                        className="text-xs text-muted-foreground"
+                        title={`Accepted to ${row.awaitingArrival.school} — not marked arrived yet.`}
+                      >
+                        Not arrived yet
+                        {row.awaitingArrival.startsOn &&
+                          ` · starts ${formatInviteDate(row.awaitingArrival.startsOn)}`}
+                      </span>
+                    )}
+                    {!row.isStaff && row.setupInviteDueOn && (
+                      <span className="text-xs text-muted-foreground">
+                        HUB setup link on {formatInviteDate(row.setupInviteDueOn)}
+                      </span>
+                    )}
+                  </div>
+                </td>
                 <td className="px-3 py-2 text-muted-foreground">
                   {row.email ?? "—"}
                 </td>
                 <td className="px-3 py-2">
                   {row.slackUserId ? (
                     <code className="text-xs">{row.slackUserId}</code>
+                  ) : skipForNow(row) ? (
+                    <StatusPill tone="quiet">Skip for now</StatusPill>
                   ) : (
                     <StatusPill tone="warn">Not linked</StatusPill>
                   )}
