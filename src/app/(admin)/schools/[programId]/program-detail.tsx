@@ -337,7 +337,7 @@ type RefRequestSummary = {
 /** Tabs this screen knows. `enrollments` is the pre-14a name for Students and
  *  is still in the wild as ?tab=enrollments, so it maps rather than 404s. */
 const TAB_KEYS = [
-  "students", "courses", "track", "grades", "applicants", "application", "arrival", "leaders", "emails",
+  "students", "courses", "track", "grades", "applicants", "application", "arrival", "leaders", "emails", "fees",
 ];
 function normaliseTab(tab: string): string {
   return tab === "enrollments" ? "students" : tab;
@@ -378,6 +378,7 @@ export function ProgramDetail({
   emailTemplates,
   grades,
   feesByEnrollment,
+  feesPanel,
   gradesLastEdit,
   allUsers,
   staffOptions,
@@ -409,6 +410,9 @@ export function ProgramDetail({
   }[];
   grades: GradeRow[];
   feesByEnrollment: Record<string, { label: string; owed: boolean }>;
+  /** The school's fee settings (server-rendered SchoolFeesPanel), shown as
+   *  the Fees tab so they can be managed without leaving Training. */
+  feesPanel: React.ReactNode;
   gradesLastEdit: { at: string; by: string } | null;
   allUsers: UserOption[];
   staffOptions: StaffUser[];
@@ -625,6 +629,7 @@ export function ProgramDetail({
             <TabsTrigger value="arrival">Arrival</TabsTrigger>
             <TabsTrigger value="leaders">Leaders ({leaders.length})</TabsTrigger>
             <TabsTrigger value="emails">Emails</TabsTrigger>
+            <TabsTrigger value="fees">Fees</TabsTrigger>
           </TabsList>
         </div>
 
@@ -640,6 +645,10 @@ export function ProgramDetail({
               <StudentsExportPanel programId={program.id} enrollments={enrollments} />
             }
           />
+        </TabsContent>
+
+        <TabsContent value="fees" className="mt-0 px-5 py-6 md:px-8">
+          {feesPanel}
         </TabsContent>
 
         <TabsContent value="courses" className="mt-0 px-5 py-6 md:px-8">

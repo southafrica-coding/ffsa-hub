@@ -14,7 +14,9 @@ export type ChargeType =
   | "monthly_tuition"
   | "outreach"
   | "quarter_first"
-  | "quarter_final";
+  | "quarter_final"
+  // A payment made by the schedule builder that isn't a monthly run (236).
+  | "instalment";
 
 export type Cadence = "once" | "monthly";
 
@@ -39,6 +41,8 @@ export interface ChargeItemInput {
   xero_item_code?: string | null;
   /** Option name in Xero's "Schools" tracking category (migration 235). */
   xero_tracking_option?: string | null;
+  acceptance_offset_days?: number | null;
+  schedule_payment_key?: string | null;
   cadence?: Cadence;
   quantity?: number;
   due_anchor?: DueAnchor;
@@ -204,15 +208,40 @@ export async function getChargeItemsByProgram(
     .eq("billing_courses.program_id", programId);
 }
 
+/**
+ * Hand-made charges stay one-per-type per tier. Migration 236 turned that
+ * rule into a partial unique index (builder rows are exempt), which ON
+ * CONFLICT can't target, so this finds the hand-made row itself.
+ */
+async function upsertManualCharge(
+  supabase: Client,
+  table: "fee_charge_items" | "program_charge_items",
+  target: { column: "course_id" | "program_id"; id: string },
+  data: Record<string, unknown> & { tier: Tier; charge_type: ChargeType }
+) {
+  const row = { cadence: "once", quantity: 1, active: true, sort_order: 0, ...data };
+  const { data: existing, error } = await supabase
+    .from(table)
+    .select("id")
+    .eq(target.column, target.id)
+    .eq("tier", data.tier)
+    .eq("charge_type", data.charge_type)
+    .is("schedule_payment_key", null)
+    .maybeSingle();
+  if (error) return { data: null, error };
+  if (existing) {
+    return supabase.from(table).update(row).eq("id", existing.id).select().single();
+  }
+  return supabase.from(table).insert(row).select().single();
+}
+
 export async function upsertChargeItem(supabase: Client, data: ChargeItemInput) {
-  return supabase
-    .from("fee_charge_items")
-    .upsert(
-      { cadence: "once", quantity: 1, active: true, sort_order: 0, ...data },
-      { onConflict: "course_id,tier,charge_type" }
-    )
-    .select()
-    .single();
+  return upsertManualCharge(
+    supabase,
+    "fee_charge_items",
+    { column: "course_id", id: data.course_id },
+    data as unknown as Record<string, unknown> & { tier: Tier; charge_type: ChargeType }
+  );
 }
 
 export async function deleteChargeItem(supabase: Client, id: string) {
@@ -243,14 +272,12 @@ export async function upsertProgramChargeItem(
   supabase: Client,
   data: ProgramChargeItemInput
 ) {
-  return supabase
-    .from("program_charge_items")
-    .upsert(
-      { cadence: "once", quantity: 1, active: true, sort_order: 0, ...data },
-      { onConflict: "program_id,tier,charge_type" }
-    )
-    .select()
-    .single();
+  return upsertManualCharge(
+    supabase,
+    "program_charge_items",
+    { column: "program_id", id: data.program_id },
+    data as unknown as Record<string, unknown> & { tier: Tier; charge_type: ChargeType }
+  );
 }
 
 export async function deleteProgramChargeItem(supabase: Client, id: string) {

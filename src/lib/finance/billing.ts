@@ -40,6 +40,11 @@ export const CHARGE_TYPE_META: Record<
     blurb: "50% — due on arrival (standalone quarter).",
     sort: 4,
   },
+  instalment: {
+    label: "Payment",
+    blurb: "A payment from the school's payment schedule.",
+    sort: 5,
+  },
 };
 
 export const DUE_ANCHOR_LABELS: Record<string, string> = {

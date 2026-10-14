@@ -24,6 +24,8 @@ export interface BuilderChargeItem {
   amount_zar: number;
   xero_item_code: string | null;
   xero_tracking_option?: string | null;
+  /** due_anchor 'acceptance' only: days after acceptance (migration 236). */
+  acceptance_offset_days?: number | null;
   cadence: Cadence;
   quantity: number;
   due_anchor: DueAnchor;
@@ -239,7 +241,7 @@ function expandItem(
   let due: string | null = null;
   switch (item.due_anchor) {
     case "acceptance":
-      due = ctx.acceptanceDate;
+      due = addDays(ctx.acceptanceDate, item.acceptance_offset_days ?? 0);
       break;
     case "fixed_date":
       due = item.fixed_due_date ?? null;
@@ -385,9 +387,13 @@ function applyGenerationGuard(
     );
   }
 
+  // Held only when the generation date has already PASSED. A charge that
+  // generates today — every "invoice as soon as she's accepted" deposit — is
+  // on time: holding it (as `<=` used to) meant no deposit ever invoiced on
+  // acceptance.
   const guarded = kept.map<ScheduleRow>((r) => ({
     ...r,
-    status: r.scheduled_generation_date <= today ? "needs_decision" : "scheduled",
+    status: r.scheduled_generation_date < today ? "needs_decision" : "scheduled",
   }));
 
   const stuck = guarded.filter((r) => r.status === "needs_decision").length;

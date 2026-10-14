@@ -9,6 +9,7 @@ import { getArrivalInsuranceInfo } from "@/lib/schools/arrival-insurance";
 import { ProgramDetail } from "./program-detail";
 import { loadTrackPipeline, summariseTrack } from "@/lib/schools/track-pipeline";
 import { Masthead } from "@/components/ffsa";
+import { SchoolFeesPanel } from "@/components/finance/school-fees-panel";
 import { requireModuleAccess } from "@/lib/require-permission";
 import { getApplicationExpiry } from "@/lib/auth/application-expiry";
 
@@ -324,6 +325,7 @@ export default async function ProgramDetailPage({
         emailTemplates={emailTemplates ?? []}
         grades={grades ?? []}
         feesByEnrollment={feesByEnrollment}
+        feesPanel={<SchoolFeesPanel programId={programId} />}
         gradesLastEdit={gradesLastEdit}
         allUsers={allUsers ?? []}
         staffOptions={staffOptions}

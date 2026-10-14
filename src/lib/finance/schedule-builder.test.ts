@@ -88,7 +88,7 @@ describe("generation guard", () => {
     // Every row whose generation date has passed is held for a decision, and
     // NOTHING is left in a state that would generate with a past date.
     for (const r of rows) {
-      if (r.scheduled_generation_date <= "2027-05-01") {
+      if (r.scheduled_generation_date < "2027-05-01") {
         expect(r.status).toBe("needs_decision");
       } else {
         expect(r.status).toBe("scheduled");
@@ -138,6 +138,27 @@ describe("generation guard", () => {
 
     expect(needsDecisionCount).toBe(0);
     expect(rows.every((r) => r.status === "scheduled")).toBe(true);
+  });
+});
+
+describe("generation guard — on-time charges", () => {
+  it("invoices a deposit on the day she is accepted instead of holding it", () => {
+    const { rows, needsDecisionCount } = buildSchedule([deposit], {
+      ...base,
+      acceptanceDate: "2026-11-01",
+      today: "2026-11-01",
+    });
+    expect(needsDecisionCount).toBe(0);
+    expect(rows[0]).toMatchObject({ status: "scheduled", scheduled_generation_date: "2026-11-01" });
+  });
+
+  it("still holds a deposit when her schedule is built after the acceptance day", () => {
+    const { rows } = buildSchedule([deposit], {
+      ...base,
+      acceptanceDate: "2026-11-01",
+      today: "2026-11-05",
+    });
+    expect(rows[0].status).toBe("needs_decision");
   });
 });
 

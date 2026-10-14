@@ -3,9 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getProgramById } from "@/services/schools";
 import { getBillingCoursesByProgram } from "@/services/school-billing";
 import { Masthead } from "@/components/ffsa";
-import { canManageFinance } from "@/lib/api-auth";
 import { ProgramBillingClient } from "./program-billing-client";
-import { SchoolBillingSettings } from "./school-billing-settings";
+import { SchoolFeesPanel } from "@/components/finance/school-fees-panel";
 
 export default async function ProgramBillingPage({
   params,
@@ -51,22 +50,11 @@ export default async function ProgramBillingPage({
     .order("sort_order", { ascending: true });
 
   // Per-school billing switches + how many charges are still waiting on a run.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const canEdit = user ? await canManageFinance(supabase, user.id) : false;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { count: pendingCharges } = await (supabase as any)
-    .from("student_billing_schedule")
-    .select("id, student_billing_plans!inner(program_id)", { count: "exact", head: true })
-    .eq("student_billing_plans.program_id", programId)
-    .eq("status", "scheduled");
-
   return (
     <div className="ffsa-screen">
       <Masthead
         context={`School fees · ${program.name}`}
-        title="Courses"
+        title="Fees & billing"
         actions={
           <Link
             href={`/finance/school-fees/${programId}/students`}
@@ -78,26 +66,19 @@ export default async function ProgramBillingPage({
       />
 
       <div className="space-y-6 px-4 py-7 md:px-8">
-        <SchoolBillingSettings
-          programId={programId}
-          schoolName={program.name}
-          canEdit={canEdit}
-          pendingCharges={pendingCharges ?? 0}
-          initial={{
-            // Columns absent (172 unapplied) read as external — the safe side.
-            billing_mode: program.billing_mode === "hub_scheduled" ? "hub_scheduled" : "external",
-            billing_emails_enabled: program.billing_emails_enabled === true,
-            schedule_start_date: program.schedule_start_date ?? null,
-          }}
-        />
+        <SchoolFeesPanel programId={programId} showFinanceLinks={false} />
 
-        <p className="max-w-3xl text-[13px] text-[color:var(--text-secondary)]">
-          The phases (courses) within this program, each with its own timeframe
-          and per-tier charges. The phases together make up the full program;
-          students are billed the whole program and auto-trimmed to the phases
-          they&apos;re doing.
-        </p>
-
+        {/* The raw per-charge editor. Saving a payment schedule above
+            replaces these for that pricing, so it's tucked away. */}
+        <details className="border border-rule-strong bg-white">
+          <summary className="cursor-pointer px-4 py-3 font-mono text-[11px] font-bold uppercase tracking-[0.14em]">
+            Advanced: individual charges
+          </summary>
+          <div className="space-y-3 border-t border-rule px-4 py-4">
+            <p className="max-w-3xl text-[13px] text-[color:var(--text-secondary)]">
+              The charges the payment schedules above compile into, editable one by one. A change
+              here is overwritten the next time that schedule is saved.
+            </p>
         <ProgramBillingClient
           programId={programId}
           courses={
@@ -112,6 +93,8 @@ export default async function ProgramBillingPage({
             >[0]["programItems"]
           }
         />
+          </div>
+        </details>
       </div>
     </div>
   );
