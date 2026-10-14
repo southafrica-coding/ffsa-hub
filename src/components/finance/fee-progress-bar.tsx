@@ -23,11 +23,15 @@ const fmtDate = (iso: string) =>
 export function FeeProgressBar({
   balance,
   size = "full",
+  audience = "staff",
 }: {
   balance: StudentBalance;
   /** "full" = bar + figures + legend; "compact" = bar + one line (rosters). */
   size?: "full" | "compact";
+  /** "student" hides staff-only notes (charges held for a staff decision). */
+  audience?: "staff" | "student";
 }) {
+  const showHeld = audience === "staff" && balance.heldCount > 0;
   const b = balance;
   if (b.total <= 0) {
     return <span className="font-mono text-[10px] text-[color:var(--text-secondary)]">NOTHING SCHEDULED</span>;
@@ -68,14 +72,14 @@ export function FeeProgressBar({
               </li>
             ))}
           </ul>
-          {(b.next || b.heldCount > 0) && (
+          {(b.next || showHeld) && (
             <p className="text-xs text-[color:var(--text-secondary)]">
               {b.next && (
                 <>
                   Next: {formatZAR(b.next.amount)} due {fmtDate(b.next.dueDate)}
                 </>
               )}
-              {b.heldCount > 0 && (
+              {showHeld && (
                 <span className="text-amber">
                   {b.next ? " · " : ""}
                   {b.heldCount} charge{b.heldCount === 1 ? "" : "s"} held for a decision

@@ -12,6 +12,8 @@ import {
   type Tone,
 } from "@/components/ffsa";
 import { SchoolFeesCard } from "./school-fees-card";
+import { MyFeeAccountCard } from "./my-fee-account-card";
+import { getMyFeeAccounts } from "@/services/my-school-fees";
 
 // Frame 4d — one big numeral per screen. On this screen the numeral is what
 // the student still owes, because that is the only figure they open the page
@@ -84,20 +86,31 @@ export default async function MyFinancePage() {
     );
   }
 
-  const [{ data: teamMemberships }, { data: studentFees }] = await Promise.all([
+  const [{ data: teamMemberships }, { data: studentFees }, { accounts }] = await Promise.all([
     getMyOutreachTeams(supabase, user.id),
     getMyStudentFees(supabase, user.id),
+    // The Hub's school billing (payment schedules + payments read back from
+    // Xero). student_fees above is the older system, kept for any history.
+    getMyFeeAccounts(supabase, user.id).catch(() => ({ today: "", accounts: [] })),
   ]);
 
   const fees = (studentFees ?? []) as StudentFee[];
   const teams = (teamMemberships ?? []) as TeamMembership[];
+  const hasFees = fees.length > 0 || accounts.length > 0;
 
-  // The screen's one figure. Summed across every enrolment, because a
-  // student with two schools owes one amount, not two.
-  const totalDue = fees.reduce((s, f) => s + (f.final_amount_zar ?? 0), 0);
-  const totalPaid = fees.reduce((s, f) => s + (f.amount_paid_zar ?? 0), 0);
+  // The screen's one figure. Summed across every enrolment and both billing
+  // systems, because a student with two schools owes one amount, not two.
+  const totalDue =
+    fees.reduce((s, f) => s + (f.final_amount_zar ?? 0), 0) +
+    accounts.reduce((s, a) => s + a.balance.total, 0);
+  const totalPaid =
+    fees.reduce((s, f) => s + (f.amount_paid_zar ?? 0), 0) +
+    accounts.reduce((s, a) => s + a.balance.paid, 0);
+  const overdue = accounts.reduce((s, a) => s + a.balance.overdue, 0);
   const outstanding = Math.max(0, totalDue - totalPaid);
-  const paidPct = totalDue > 0 ? Math.round((totalPaid / totalDue) * 100) : null;
+  // One decimal, rounded down — the same rule as the fee bar, so the two
+  // never disagree and nobody reads 100% before the last cent is in.
+  const paidPct = totalDue > 0 ? Math.floor((totalPaid / totalDue) * 1000) / 10 : null;
 
   return (
     <div className="ffsa-screen">
@@ -107,17 +120,19 @@ export default async function MyFinancePage() {
       {outstanding > 0 && (
         <NeedsYou
           action={
-            fees.length === 1 ? (
+            fees.length + accounts.length === 1 ? (
               <NeedsYouAction href={`/my-schools`}>View school</NeedsYouAction>
             ) : undefined
           }
         >
-          {rands(outstanding)} outstanding on your school fees
+          {overdue > 0
+            ? `${rands(overdue)} of your school fees is overdue`
+            : `${rands(outstanding)} outstanding on your school fees`}
         </NeedsYou>
       )}
 
       {/* One big numeral. Only drawn when there are fees to have a figure. */}
-      {fees.length > 0 && (
+      {hasFees && (
         <div className="border-b border-ink px-5 py-6 md:px-8 md:py-7">
           <div className="mono-label mb-3">
             {outstanding > 0 ? "Still to pay" : "Fees settled"}
@@ -143,11 +158,28 @@ export default async function MyFinancePage() {
         </div>
       )}
 
-      {/* School fees, one card per enrolment. */}
-      {fees.length > 0 && (
+      {/* School fees on the Hub's billing — one account per school. */}
+      {accounts.length > 0 && (
         <section>
           <SectionBar
             title="School fees"
+            meta={`${accounts.length} ${accounts.length === 1 ? "school" : "schools"}`}
+          />
+          {/* minmax(0,1fr): without it the column sizes to its widest row
+              and the card runs off a phone screen. */}
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-px bg-rule">
+            {accounts.map((a) => (
+              <MyFeeAccountCard key={a.programId} account={a} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Older fee records, one card per enrolment. */}
+      {fees.length > 0 && (
+        <section>
+          <SectionBar
+            title={accounts.length > 0 ? "Earlier school fees" : "School fees"}
             meta={`${fees.length} ${fees.length === 1 ? "enrolment" : "enrolments"}`}
           />
           <div className="grid gap-px bg-rule md:grid-cols-2">
@@ -198,7 +230,7 @@ export default async function MyFinancePage() {
         </section>
       )}
 
-      {fees.length === 0 && teams.length === 0 && (
+      {!hasFees && teams.length === 0 && (
         <div className="px-5 py-12 text-center md:px-8">
           <p className="mono-label">
             Nothing to pay and no outreach team yet — this page fills up when
