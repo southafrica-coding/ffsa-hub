@@ -63,26 +63,35 @@ export function SendDialog({
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Poll delivery counters once the send finishes. Resend's delivery
-  // webhooks arrive over seconds-to-minutes, so the numbers climb after the
-  // send itself is done; we stop once everything is accounted for or after
-  // three minutes, whichever comes first.
+  // webhooks usually land within a couple of seconds but can take minutes,
+  // so the numbers climb after the send itself is done. Poll quickly at first
+  // (the first check runs the instant the send ends — typically BEFORE any
+  // confirmation has arrived, which is how "0 delivered" used to sit on screen
+  // for a send that had in fact delivered), then back off; stop once
+  // everything is accounted for or after three minutes.
   useEffect(() => {
     if (!open || phase !== "done") return;
     let cancelled = false;
     const startedAt = Date.now();
 
     async function poll() {
-      const res = await fetch(`/api/campaigns/${campaignId}/stats`);
+      // no-store: a cached first answer ("0 so far") must never be reused.
+      const res = await fetch(`/api/campaigns/${campaignId}/stats`, {
+        cache: "no-store",
+      }).catch(() => null);
       if (cancelled) return;
-      if (res.ok) {
+      if (res?.ok) {
         const s = (await res.json()) as Stats;
         setStats(s);
         const settled = s.delivered + s.bounced >= s.sent && s.sent > 0;
-        if (settled || Date.now() - startedAt > 180_000) return;
+        if (settled) return;
       }
-      timer.current = setTimeout(poll, 5000);
+      const elapsed = Date.now() - startedAt;
+      if (elapsed > 180_000) return;
+      timer.current = setTimeout(poll, elapsed < 30_000 ? 1500 : 5000);
     }
-    poll();
+    // Give the first webhooks a moment rather than reading an empty count.
+    timer.current = setTimeout(poll, 1500);
 
     return () => {
       cancelled = true;
@@ -201,6 +210,17 @@ export function SendDialog({
               <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Delivery confirmations
               </p>
+              {stats && stats.sent > 0 && (
+                <p className="mb-2 text-xs">
+                  <span className="font-medium">
+                    {stats.delivered} of {stats.sent}
+                  </span>{" "}
+                  confirmed delivered
+                  {stats.delivered + stats.bounced < stats.sent && (
+                    <span className="text-muted-foreground"> · waiting on the rest…</span>
+                  )}
+                </p>
+              )}
               {stats ? (
                 <div className="grid grid-cols-3 gap-2 text-center">
                   <Stat label="Delivered" value={stats.delivered} tone="good" />

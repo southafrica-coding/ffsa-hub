@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getCampaignById, getCampaignStats } from "@/services/campaigns";
 import { getAuthedUser, canManageComms, COMMS_SEND_PERMS } from "@/lib/api-auth";
 
+export const dynamic = "force-dynamic";
+
 // GET /api/campaigns/[id]/stats — live delivery counters for one campaign.
 // The send dialog polls this after a send so "it went out" can be followed by
 // "and the provider says it arrived", which only webhooks can tell us.
@@ -25,5 +27,9 @@ export async function GET(
   }
 
   const stats = await getCampaignStats(supabase, id);
-  return NextResponse.json({ ...stats, status: campaign.status });
+  // Live counters: never cache, or a poll can be handed an earlier "0".
+  return NextResponse.json(
+    { ...stats, status: campaign.status },
+    { headers: { "Cache-Control": "no-store" } }
+  );
 }
