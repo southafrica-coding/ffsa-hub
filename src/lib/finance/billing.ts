@@ -73,6 +73,24 @@ export const formatZAR = (amount: number) =>
 
 type TemplateItem = Omit<ChargeItemInput, "course_id">;
 
+/** Name of the Xero tracking category school charges are tagged under. It
+ * exists, with this name, in both the SA and US organisations. */
+export const XERO_SCHOOLS_TRACKING_CATEGORY = "Schools";
+
+/**
+ * The "Schools" tracking option for an FFX 2027 item code, per FFSA's
+ * item-code sheet: whole-year and outreach charges are "Gap Year 2027";
+ * a standalone quarter is tagged as that quarter. The four option names are
+ * identical in the SA and US organisations.
+ */
+export function ffx2027TrackingOption(code: string): string | null {
+  if (code.startsWith("FFXYL2027") || code === "FFXOR2027") return "Gap Year 2027";
+  if (code.startsWith("FFXQ2027")) return "FFX 27";
+  if (code.startsWith("FFBXQ2027")) return "FFBX 2027";
+  if (code.startsWith("FFWVQ2027")) return "FFWV 2027";
+  return null;
+}
+
 export type CourseTemplate = {
   code: string;
   name: string;
@@ -95,6 +113,7 @@ const deposit = (
   label: "Deposit",
   amount_zar: amount,
   xero_item_code: code,
+  xero_tracking_option: ffx2027TrackingOption(code),
   cadence: "once",
   quantity: 1,
   due_anchor: opts.fixedDate ? "fixed_date" : "acceptance",
@@ -115,6 +134,7 @@ const monthly = (
   label: "Monthly Tuition",
   amount_zar: amount,
   xero_item_code: code,
+  xero_tracking_option: ffx2027TrackingOption(code),
   cadence: "monthly",
   quantity: count,
   due_anchor: "month_day",
@@ -131,6 +151,7 @@ const outreach = (tier: Tier): TemplateItem => ({
   label: "Outreach",
   amount_zar: 45000,
   xero_item_code: "FFXOR2027",
+  xero_tracking_option: ffx2027TrackingOption("FFXOR2027"),
   cadence: "once",
   quantity: 1,
   due_anchor: "fixed_date",
@@ -145,6 +166,7 @@ const quarterFirst = (tier: Tier, amount: number, code: string): TemplateItem =>
   label: "First Payment (50%)",
   amount_zar: amount,
   xero_item_code: code,
+  xero_tracking_option: ffx2027TrackingOption(code),
   cadence: "once",
   quantity: 1,
   due_anchor: "relative_to_arrival",
@@ -159,6 +181,7 @@ const quarterFinal = (tier: Tier, amount: number, code: string): TemplateItem =>
   label: "Final Payment (50%)",
   amount_zar: amount,
   xero_item_code: code,
+  xero_tracking_option: ffx2027TrackingOption(code),
   cadence: "once",
   quantity: 1,
   due_anchor: "relative_to_arrival",

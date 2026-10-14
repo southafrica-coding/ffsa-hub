@@ -79,3 +79,43 @@ export function decideInvoiceGroup<R extends RunRow>(
     send: allowSend && school.billing_emails_enabled === true,
   };
 }
+
+// ────────────────────────────────────────────────────────────
+// Xero "Schools" tracking on invoice lines (migration 235)
+// ────────────────────────────────────────────────────────────
+
+export interface TrackingLookup {
+  /** The category's exact name in this organisation. */
+  category: string;
+  /** Its active option names. */
+  options: string[];
+}
+
+/**
+ * Match a charge's tracking option against what the student's Xero
+ * organisation actually has. Case-insensitive, returning Xero's own spelling.
+ *
+ * Xero rejects a whole invoice for an option it doesn't know, so an unknown
+ * name — or an organisation we couldn't read — leaves the line untagged with
+ * a warning instead. The invoice still goes out; the warning says why it
+ * isn't tagged.
+ */
+export function resolveTracking(
+  wanted: string | null | undefined,
+  lookup: TrackingLookup | null,
+  regionLabel: string
+): { tracking: { category: string; option: string } | null; warning: string | null } {
+  const name = wanted?.trim();
+  if (!name) return { tracking: null, warning: null };
+  if (!lookup) {
+    return { tracking: null, warning: `Couldn't read ${regionLabel} Xero tracking — "${name}" not applied` };
+  }
+  const match = lookup.options.find((o) => o.trim().toLowerCase() === name.toLowerCase());
+  if (!match) {
+    return {
+      tracking: null,
+      warning: `${regionLabel} Xero has no "${lookup.category}" option "${name}" — line left untagged`,
+    };
+  }
+  return { tracking: { category: lookup.category, option: match }, warning: null };
+}

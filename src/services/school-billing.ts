@@ -37,6 +37,8 @@ export interface ChargeItemInput {
   label: string;
   amount_zar: number;
   xero_item_code?: string | null;
+  /** Option name in Xero's "Schools" tracking category (migration 235). */
+  xero_tracking_option?: string | null;
   cadence?: Cadence;
   quantity?: number;
   due_anchor?: DueAnchor;

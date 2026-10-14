@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -76,6 +76,7 @@ type ChargeItem = {
   label: string;
   amount_zar: number;
   xero_item_code: string | null;
+  xero_tracking_option?: string | null;
   cadence: "once" | "monthly";
   quantity: number;
   due_anchor: DueAnchor;
@@ -693,6 +694,11 @@ function ChargeItemRow({
               {item.xero_item_code}
             </span>
           )}
+          {item.xero_tracking_option && (
+            <span className="text-[10px] text-muted-foreground" title="Xero Schools tracking">
+              · {item.xero_tracking_option}
+            </span>
+          )}
         </div>
         <p className="text-xs text-muted-foreground">{dueSummary(item)}</p>
       </div>
@@ -759,6 +765,7 @@ function ChargeItemDialog({
     label: item?.label ?? "",
     amount_zar: item ? String(item.amount_zar) : "0",
     xero_item_code: item?.xero_item_code ?? "",
+    xero_tracking_option: item?.xero_tracking_option ?? "",
     cadence: item?.cadence ?? ("once" as "once" | "monthly"),
     quantity: item ? String(item.quantity) : "1",
     due_anchor: item?.due_anchor ?? ("month_day" as DueAnchor),
@@ -800,6 +807,7 @@ function ChargeItemDialog({
           label: form.label,
           amount_zar: Number(form.amount_zar) || 0,
           xero_item_code: form.xero_item_code || null,
+          xero_tracking_option: form.xero_tracking_option.trim() || null,
           cadence: form.cadence,
           quantity: Number(form.quantity) || 1,
           due_anchor: form.due_anchor,
@@ -902,6 +910,11 @@ function ChargeItemDialog({
               />
             </div>
           </div>
+
+          <TrackingOptionField
+            value={form.xero_tracking_option}
+            onChange={(v) => set({ xero_tracking_option: v })}
+          />
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -1081,5 +1094,66 @@ function ChargeItemDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Xero "Schools" tracking option for a charge (migration 235). Suggestions
+// come live from both organisations; the note underneath says where the
+// chosen name exists, because the SA and US lists differ and an organisation
+// without it leaves the invoice line untagged.
+type TrackingLists = { za: string[] | null; us: string[] | null };
+
+function TrackingOptionField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [lists, setLists] = useState<TrackingLists | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    fetch("/api/integrations/xero/tracking-options")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => live && setLists(j ? { za: j.za, us: j.us } : { za: null, us: null }))
+      .catch(() => live && setLists({ za: null, us: null }));
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const all = [...new Set([...(lists?.za ?? []), ...(lists?.us ?? [])])].sort((a, b) =>
+    a.localeCompare(b)
+  );
+  const has = (list: string[] | null) =>
+    list === null ? null : list.some((o) => o.toLowerCase() === value.trim().toLowerCase());
+
+  const name = value.trim();
+  const za = has(lists?.za ?? null);
+  const us = has(lists?.us ?? null);
+  const status = (label: string, ok: boolean | null) =>
+    ok === null ? `${label}: couldn't check` : ok ? `${label} ✓` : `${label}: not in Xero (line won't be tagged)`;
+
+  return (
+    <div>
+      <Label>Xero &ldquo;Schools&rdquo; tracking</Label>
+      <Input
+        value={value}
+        list="xero-schools-tracking-options"
+        placeholder={lists ? "e.g. Gap Year 2027" : "Loading Xero options…"}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <datalist id="xero-schools-tracking-options">
+        {all.map((o) => (
+          <option key={o} value={o} />
+        ))}
+      </datalist>
+      <p className="mt-1 text-xs text-muted-foreground">
+        {name && lists
+          ? `${status("SA", za)} · ${status("US", us)}`
+          : "Tags this charge's invoice lines in Xero. Leave empty for no tag."}
+      </p>
+    </div>
   );
 }

@@ -23,6 +23,7 @@ export interface BuilderChargeItem {
   label: string;
   amount_zar: number;
   xero_item_code: string | null;
+  xero_tracking_option?: string | null;
   cadence: Cadence;
   quantity: number;
   due_anchor: DueAnchor;
@@ -63,6 +64,7 @@ export interface ScheduleRow {
   sequence: number;
   amount_zar: number;
   xero_item_code: string | null;
+  xero_tracking_option: string | null;
   scheduled_generation_date: string;
   due_date: string;
   combined_group_key: string | null;
@@ -206,6 +208,7 @@ function expandItem(
     sequence,
     amount_zar: Number(item.amount_zar),
     xero_item_code: item.xero_item_code,
+    xero_tracking_option: item.xero_tracking_option ?? null,
     // Provisional. applyGenerationGuard() decides the real value once every
     // row exists, so no expansion path can forget to set it.
     status: "scheduled",

@@ -23,6 +23,7 @@ type Invoice = {
   invoiceNumber?: string;
   error?: string;
   reason?: string;
+  warnings?: string[];
 };
 
 // What each line means for the student, in words. Each school's own billing
@@ -135,6 +136,11 @@ export function GenerateInvoicesButton() {
                     {inv.invoiceNumber ? ` · ${inv.invoiceNumber}` : ""}
                     {inv.reason ? ` · ${inv.reason}` : ""}
                   </p>
+                  {inv.warnings?.map((w) => (
+                    <p key={w} className="text-xs text-amber">
+                      {w}
+                    </p>
+                  ))}
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="font-mono text-xs">{formatZAR(inv.total)}</span>

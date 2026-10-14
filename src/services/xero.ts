@@ -245,6 +245,42 @@ async function xeroPost(
 }
 
 // ────────────────────────────────────────────────────────────
+// TRACKING CATEGORIES (read-only)
+// ────────────────────────────────────────────────────────────
+
+/**
+ * Active option names in one of the organisation's tracking categories,
+ * e.g. "Schools". Names, not ids: the SA and US organisations hold the same
+ * option under different ids, so the Hub stores and matches by name.
+ * Returns null when the organisation isn't connected or Xero can't be read.
+ */
+export async function getXeroTrackingOptions(
+  supabase: Client,
+  region: XeroRegion,
+  categoryName: string
+): Promise<{ category: string; options: string[] } | null> {
+  const auth = await getValidAccessToken(supabase, region);
+  if (!auth) return null;
+  try {
+    const res = await xeroGet(auth.accessToken, auth.tenantId, "TrackingCategories");
+    const cat = (res.TrackingCategories ?? []).find(
+      (c: { Name: string; Status: string }) =>
+        c.Status === "ACTIVE" && c.Name.trim().toLowerCase() === categoryName.trim().toLowerCase()
+    );
+    if (!cat) return { category: categoryName, options: [] };
+    return {
+      category: cat.Name,
+      options: (cat.Options ?? [])
+        .filter((o: { Status: string }) => o.Status === "ACTIVE")
+        .map((o: { Name: string }) => o.Name),
+    };
+  } catch (err) {
+    console.error(`Xero (${region}): could not read tracking categories`, err);
+    return null;
+  }
+}
+
+// ────────────────────────────────────────────────────────────
 // INVOICE CREATION
 // ────────────────────────────────────────────────────────────
 
@@ -466,6 +502,9 @@ export async function createScheduledInvoice(
       itemCode: string | null;
       description: string;
       amount: number;
+      /** Already resolved against this organisation's tracking categories —
+       * Xero rejects the whole invoice for an option it doesn't have. */
+      tracking?: { category: string; option: string } | null;
     }>;
     autoSend: boolean;
   }
@@ -549,6 +588,9 @@ export async function createScheduledInvoice(
         item.ItemCode = li.itemCode;
       } else if (fallbackAccount) {
         item.AccountCode = fallbackAccount;
+      }
+      if (li.tracking) {
+        item.Tracking = [{ Name: li.tracking.category, Option: li.tracking.option }];
       }
       return item;
     });

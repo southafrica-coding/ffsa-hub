@@ -9,15 +9,23 @@
 // and flips them to 'generated'/'sent' so the cron never double-creates.
 // ────────────────────────────────────────────────────────────
 
-import { createScheduledInvoice, getXeroRegionForStudent } from "@/services/xero";
+import {
+  createScheduledInvoice,
+  getXeroRegionForStudent,
+  getXeroTrackingOptions,
+  type XeroRegion,
+} from "@/services/xero";
 import { getCountryTierMap, billingBlockedReason, type Tier } from "@/services/school-billing";
 import { commitWholeProgramPlan, commitSegmentPlans } from "@/services/billing-plan-builder";
 import {
   decideInvoiceGroup,
+  resolveTracking,
   SKIP_REASON_TEXT,
+  type TrackingLookup,
   type SchoolBillingSettings,
   type SkipReason,
 } from "@/lib/finance/invoice-run-policy";
+import { XERO_SCHOOLS_TRACKING_CATEGORY } from "@/lib/finance/billing";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
@@ -48,6 +56,8 @@ export interface GenerationResult {
     error?: string;
     /** Why a 'skipped' line was left alone (rows stay 'scheduled'). */
     reason?: string;
+    /** Lines that couldn't be tagged with their Xero "Schools" option. */
+    warnings?: string[];
   }>;
 }
 
@@ -67,7 +77,7 @@ export async function generateDueInvoices(
   let query = supabase
     .from("student_billing_schedule")
     .select(
-      "id, plan_id, charge_type, label, amount_zar, xero_item_code, due_date, combined_group_key, scheduled_generation_date, student_billing_plans!inner(id, user_id, program_id, xero_region, users!student_billing_plans_user_id_fkey(email, first_name, last_name, preferred_name, nationality))"
+      "id, plan_id, charge_type, label, amount_zar, xero_item_code, xero_tracking_option, due_date, combined_group_key, scheduled_generation_date, student_billing_plans!inner(id, user_id, program_id, xero_region, users!student_billing_plans_user_id_fkey(email, first_name, last_name, preferred_name, nationality))"
     )
     .eq("status", "scheduled")
     .lte("scheduled_generation_date", asOf);
@@ -107,6 +117,19 @@ export async function generateDueInvoices(
   const result: GenerationResult = { asOf, dryRun, autoSend, invoices: [] };
   const nowIso = new Date().toISOString();
 
+  // Each organisation's "Schools" options, read once per run and only if a
+  // line actually wants tagging.
+  const trackingByRegion = new Map<XeroRegion, Promise<TrackingLookup | null>>();
+  const trackingFor = (region: XeroRegion) => {
+    if (!trackingByRegion.has(region)) {
+      trackingByRegion.set(
+        region,
+        getXeroTrackingOptions(supabase, region, XERO_SCHOOLS_TRACKING_CATEGORY)
+      );
+    }
+    return trackingByRegion.get(region)!;
+  };
+
   for (const allRows of groups.values()) {
     const plan = allRows[0].student_billing_plans;
     const user = plan.users ?? {};
@@ -137,7 +160,15 @@ export async function generateDueInvoices(
     const dueDate = grp.map((r) => r.due_date).sort()[0];
     const total = grp.reduce((s, r) => s + Number(r.amount_zar), 0);
     const rowIds = grp.map((r) => r.id);
-    const region = plan.xero_region ?? getXeroRegionForStudent(user.nationality ?? null);
+    const region: XeroRegion =
+      plan.xero_region ?? getXeroRegionForStudent(user.nationality ?? null);
+
+    const lookup = grp.some((r) => r.xero_tracking_option) ? await trackingFor(region) : null;
+    const resolved = grp.map((r) =>
+      resolveTracking(r.xero_tracking_option, lookup, region === "us" ? "US" : "SA")
+    );
+    const warnings = [...new Set(resolved.map((t) => t.warning).filter((w): w is string => !!w))];
+    const tag = warnings.length > 0 ? { warnings } : {};
 
     if (dryRun) {
       result.invoices.push({
@@ -148,6 +179,7 @@ export async function generateDueInvoices(
         rowIds,
         status: "preview",
         send,
+        ...tag,
       });
       continue;
     }
@@ -167,10 +199,11 @@ export async function generateDueInvoices(
     }
 
     const reference = `FFSA-${String(plan.id).slice(0, 8)}-${dueDate}`;
-    const lineItems = grp.map((r) => ({
+    const lineItems = grp.map((r, i) => ({
       itemCode: r.xero_item_code,
       description: r.label,
       amount: Number(r.amount_zar),
+      tracking: resolved[i].tracking,
     }));
 
     // send=false → createScheduledInvoice leaves it as a Xero DRAFT and
@@ -206,6 +239,7 @@ export async function generateDueInvoices(
         status: newStatus,
         send,
         invoiceNumber: inv.invoiceNumber,
+        ...tag,
       });
     } else {
       result.invoices.push({

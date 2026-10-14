@@ -153,6 +153,7 @@ export async function POST(request: Request) {
     sequence: r.sequence,
     amount_zar: r.amount_zar,
     xero_item_code: r.xero_item_code,
+        xero_tracking_option: r.xero_tracking_option,
     scheduled_generation_date: r.scheduled_generation_date,
     due_date: r.due_date,
     combined_group_key: r.combined_group_key,

@@ -52,6 +52,7 @@ async function upsert(request: Request) {
     label: label ?? charge_type,
     amount_zar: body.amount_zar ?? 0,
     xero_item_code: body.xero_item_code ?? null,
+    xero_tracking_option: body.xero_tracking_option?.trim() || null,
     cadence: body.cadence ?? "once",
     quantity: body.quantity ?? 1,
     due_anchor: body.due_anchor ?? "month_day",

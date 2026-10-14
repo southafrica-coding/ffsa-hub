@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { decideInvoiceGroup, type SchoolBillingSettings } from "./invoice-run-policy";
+import { decideInvoiceGroup, resolveTracking, type SchoolBillingSettings } from "./invoice-run-policy";
+import { FFX_2027_PROGRAM_TEMPLATE, ffx2027TrackingOption } from "./billing";
 
 const hub = (over: Partial<SchoolBillingSettings> = {}): SchoolBillingSettings => ({
   billing_mode: "hub_scheduled",
@@ -51,8 +52,10 @@ describe("decideInvoiceGroup", () => {
 // ── The run itself, with Xero and the database faked ─────────────────
 
 const createScheduledInvoice = vi.fn();
+const getXeroTrackingOptions = vi.fn();
 vi.mock("@/services/xero", () => ({
   createScheduledInvoice: (...a: unknown[]) => createScheduledInvoice(...a),
+  getXeroTrackingOptions: (...a: unknown[]) => getXeroTrackingOptions(...a),
   getXeroRegionForStudent: () => "za",
 }));
 vi.mock("@/services/school-billing", () => ({
@@ -173,5 +176,89 @@ describe("generateDueInvoices honours each school", () => {
     expect(line("r-held")).toMatchObject({ status: "preview", send: false });
     expect(line("r-live")).toMatchObject({ status: "preview", send: true });
     expect(line("r-ext")?.status).toBe("skipped");
+  });
+});
+
+describe("resolveTracking", () => {
+  const sa = { category: "Schools", options: ["FFX 27", "Gap Year 2027", "Ltrack 2026.4"] };
+
+  it("tags with Xero's own spelling, ignoring case", () => {
+    expect(resolveTracking("ltrack 2026.4", sa, "SA")).toEqual({
+      tracking: { category: "Schools", option: "Ltrack 2026.4" },
+      warning: null,
+    });
+  });
+
+  it("leaves a line untagged, with a warning, when the organisation lacks the option", () => {
+    const r = resolveTracking("RR Uni", sa, "SA");
+    expect(r.tracking).toBeNull();
+    expect(r.warning).toMatch(/SA Xero has no "Schools" option "RR Uni"/);
+  });
+
+  it("warns rather than guessing when Xero couldn't be read", () => {
+    expect(resolveTracking("FFX 27", null, "US").warning).toMatch(/Couldn't read US Xero/);
+  });
+
+  it("does nothing for a charge with no option", () => {
+    expect(resolveTracking(null, sa, "SA")).toEqual({ tracking: null, warning: null });
+  });
+});
+
+describe("FFX 2027 template tracking", () => {
+  it("matches FFSA's item-code sheet", () => {
+    expect(ffx2027TrackingOption("FFXYL2027-MON-B")).toBe("Gap Year 2027");
+    expect(ffx2027TrackingOption("FFXOR2027")).toBe("Gap Year 2027");
+    expect(ffx2027TrackingOption("FFXQ2027-DEP-A")).toBe("FFX 27");
+    expect(ffx2027TrackingOption("FFBXQ2027-BAL-C")).toBe("FFBX 2027");
+    expect(ffx2027TrackingOption("FFWVQ2027-DEP-B")).toBe("FFWV 2027");
+  });
+
+  it("tags every charge in the template", () => {
+    const all = [
+      ...Object.values(FFX_2027_PROGRAM_TEMPLATE.wholeProgram).flat(),
+      ...FFX_2027_PROGRAM_TEMPLATE.courses.flatMap((c) => Object.values(c.charges).flat()),
+    ];
+    expect(all.length).toBeGreaterThan(0);
+    for (const item of all) expect(item.xero_tracking_option, item.xero_item_code ?? "").toBeTruthy();
+  });
+});
+
+describe("generateDueInvoices tags lines in the student's organisation", () => {
+  beforeEach(() => {
+    createScheduledInvoice.mockReset();
+    createScheduledInvoice.mockResolvedValue({ success: true, invoiceId: "i", emailed: false });
+    getXeroTrackingOptions.mockReset();
+    getXeroTrackingOptions.mockResolvedValue({ category: "Schools", options: ["Gap Year 2027"] });
+  });
+
+  const live = { id: "live", billing_mode: "hub_scheduled", billing_emails_enabled: false, schedule_start_date: null };
+  const tagged = (id: string, option: string | null, due = "2027-02-04") => ({
+    ...scheduleRow(id, "live", due),
+    xero_tracking_option: option,
+  });
+
+  it("tags known options, leaves unknown ones untagged and reports them", async () => {
+    const db = fakeDb({
+      student_billing_schedule: [tagged("a", "Gap Year 2027"), tagged("b", "RR Uni")],
+      programs: [live],
+    });
+    const res = await generateDueInvoices(db, { asOf: "2027-12-31", dryRun: false, autoSend: true });
+
+    const lines = createScheduledInvoice.mock.calls[0][1].lineItems;
+    expect(lines.map((l: { tracking: unknown }) => l.tracking)).toEqual([
+      { category: "Schools", option: "Gap Year 2027" },
+      null,
+    ]);
+    expect(res.invoices[0].warnings).toEqual([
+      'SA Xero has no "Schools" option "RR Uni" — line left untagged',
+    ]);
+    // One read of the organisation's options for the whole run.
+    expect(getXeroTrackingOptions).toHaveBeenCalledTimes(1);
+  });
+
+  it("never reads Xero tracking when no line asks for it", async () => {
+    const db = fakeDb({ student_billing_schedule: [tagged("a", null)], programs: [live] });
+    await generateDueInvoices(db, { asOf: "2027-12-31", dryRun: true, autoSend: true });
+    expect(getXeroTrackingOptions).not.toHaveBeenCalled();
   });
 });
