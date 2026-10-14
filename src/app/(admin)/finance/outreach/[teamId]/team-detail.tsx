@@ -35,6 +35,7 @@ import { ExpensesTab } from "./expenses-tab";
 import { PayoutsTab } from "./payouts-tab";
 import { DashboardTab } from "./dashboard-tab";
 import { CloseoutTab } from "./closeout-tab";
+import { SlackSettings } from "./slack-settings";
 import { BudgetLines, type BudgetLine } from "./budget-lines";
 
 // ────────────────────────────────────────────────────────────
@@ -54,6 +55,8 @@ type Team = {
   currency: string;
   notes: string | null;
   drive_folder_url: string | null;
+  slack_enabled?: boolean;
+  slack_channel_id?: string | null;
   programs: { id: string; name: string; code: string };
 };
 
@@ -342,11 +345,16 @@ export function TeamDetail({
           />
         </TabsContent>
 
-        <TabsContent value="members" className="mt-4">
+        <TabsContent value="members" className="mt-4 space-y-6">
           <MembersTab
             teamId={team.id}
             members={members}
             allUsers={allUsers}
+          />
+          <SlackSettings
+            teamId={team.id}
+            enabled={team.slack_enabled ?? false}
+            channelId={team.slack_channel_id ?? null}
           />
         </TabsContent>
 

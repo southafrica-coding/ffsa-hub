@@ -10,9 +10,14 @@
  *   3. answer the url_verification challenge
  *   4. drop Slack retries (we already accepted the first delivery)
  *   5. ignore bot/own/edited messages
- *   6. gate on the channel + user allowlist
- *   7. ACK 200 within Slack's 3s window
- *   8. run the assistant in the background via after()
+ *   6. ACK 200 within Slack's 3s window
+ *   7. in the background (after()), decide what this conversation may use:
+ *        - an outreach team conversation (team channel, or a DM from
+ *          someone on a Slack-enabled team) → that team's budget tools
+ *          (lib/slack/assistant/outreach)
+ *        - the staff allowlist (access.ts) → the staff Q&A tools
+ *      and refuse when it is neither
+ *   8. run the assistant
  *
  * Auth is by signing secret, not session cookie — so /api/slack is in
  * the middleware publicRoutes allowlist.
@@ -20,6 +25,8 @@
 
 import { after, NextResponse } from "next/server";
 import { isAllowed } from "@/lib/slack/assistant/access";
+import { isFinanceStaff, resolveOutreachScope } from "@/lib/slack/assistant/outreach";
+import { resolveHubUserBySlackId } from "@/services/slack-bot";
 import { runAssistant } from "@/lib/slack/assistant/run";
 import * as slack from "@/lib/slack/client";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -115,38 +122,57 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  // (6) Allowlist gate.
-  const gate = isAllowed({ channelId: event.channel, userId: event.user, isDM });
-  if (!gate.ok) {
-    const channel = event.channel;
-    const threadTs = isDM ? undefined : (event.thread_ts ?? event.ts);
-    after(async () => {
-      try {
-        await slack.postMessage({ channel, text: gate.reason, thread_ts: threadTs });
-      } catch (err) {
-        console.error("[slack/events] refusal post failed", err);
-      }
-    });
-    return NextResponse.json({ ok: true });
-  }
-
   const question = cleanText(event.text ?? "");
   if (!question) {
     return NextResponse.json({ ok: true });
   }
 
-  // (7+8) ACK now; do the heavy work after the response flushes.
-  const ctx = {
-    slackUserId: event.user,
-    channelId: event.channel,
-    isDM,
-    threadTs: isDM ? undefined : (event.thread_ts ?? event.ts),
-    text: question,
-    eventId: body.event_id ?? null,
-  };
+  const channel = event.channel;
+  const slackUserId = event.user;
+  const threadTs = isDM ? undefined : (event.thread_ts ?? event.ts);
+  const gate = isAllowed({ channelId: channel, userId: slackUserId, isDM });
+
+  // (6) ACK now; work out access and answer after the response flushes —
+  // the outreach lookup needs the database, which can't race Slack's 3s.
   after(async () => {
+    const refuse = (text: string) =>
+      slack.postMessage({ channel, text, thread_ts: threadTs }).catch((err) =>
+        console.error("[slack/events] refusal post failed", err)
+      );
     try {
-      await runAssistant(ctx);
+      const admin = createAdminClient();
+      const hubUserId = await resolveHubUserBySlackId(admin, slackUserId);
+      const outreach = await resolveOutreachScope(admin, { hubUserId, channelId: channel, isDM });
+
+      if (outreach.kind === "refuse") {
+        await refuse(outreach.reason);
+        return;
+      }
+      // A team channel is read by the whole team: budget tools only, never
+      // the staff tools (contacts, names) — even for allowlisted staff.
+      const staffTools = gate.ok && !(outreach.kind === "ok" && outreach.scope.inTeamChannel);
+
+      if (!staffTools && outreach.kind !== "ok") {
+        let reason = gate.ok ? "I can't answer here." : gate.reason;
+        // Finance staff @mentioning the bot in an unlinked channel are
+        // probably setting up a team channel: hand them the id to paste.
+        if (!isDM && hubUserId && (await isFinanceStaff(admin, hubUserId))) {
+          reason += `\nTo use me for an outreach team's budget here, paste this channel's ID \`${channel}\` into the team's Slack setting in the Hub (Finance → Outreach → the team → Members).`;
+        }
+        await refuse(reason);
+        return;
+      }
+
+      await runAssistant({
+        slackUserId,
+        channelId: channel,
+        isDM,
+        threadTs,
+        text: question,
+        eventId: body.event_id ?? null,
+        admin: staffTools,
+        outreach: outreach.kind === "ok" ? outreach.scope : null,
+      });
     } catch (err) {
       console.error("[slack/events] assistant failed", err);
     }

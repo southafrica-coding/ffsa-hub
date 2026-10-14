@@ -17,6 +17,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import * as slack from "@/lib/slack/client";
 import { CURATED_TOOLS, executeTool } from "./tools";
 import { buildSystemPrompt } from "./prompt";
+import {
+  executeOutreachTool,
+  OUTREACH_TOOLS,
+  OUTREACH_TOOL_NAMES,
+  sastDate,
+  type OutreachScope,
+} from "./outreach";
 import { logSlackBotQuery, resolveHubUserBySlackId } from "@/services/slack-bot";
 
 const HAIKU_MODEL = "claude-haiku-4-5-20251001"; // current Haiku (3.5-latest is EOL)
@@ -53,6 +60,10 @@ export type AssistantContext = {
   threadTs?: string;
   text: string;
   eventId?: string | null;
+  /** The staff Q&A tools (allowlisted users in the admin channel / DMs). */
+  admin: boolean;
+  /** Set when this is an outreach team conversation (see outreach.ts). */
+  outreach: OutreachScope | null;
 };
 
 export async function runAssistant(ctx: AssistantContext): Promise<void> {
@@ -60,7 +71,16 @@ export async function runAssistant(ctx: AssistantContext): Promise<void> {
   const admin = createAdminClient();
   const sqlEnabled = process.env.SLACK_ENABLE_SQL_TOOL === "true";
 
-  const tools = CURATED_TOOLS; // v2c adds run_readonly_query behind the flag
+  // v2c adds run_readonly_query behind the flag
+  const tools = [...(ctx.admin ? CURATED_TOOLS : []), ...(ctx.outreach ? OUTREACH_TOOLS : [])];
+  const outreachPrompt = ctx.outreach
+    ? {
+        teams: ctx.outreach.teams,
+        defaultTeam: ctx.outreach.teams.find((t) => t.id === ctx.outreach?.defaultTeamId)?.team_name ?? null,
+        inTeamChannel: ctx.outreach.inTeamChannel,
+        today: sastDate(new Date()),
+      }
+    : null;
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: ctx.text }];
   const toolCalls: Array<{ name: string; input: unknown }> = [];
   let sqlText: string | null = null;
@@ -99,7 +119,7 @@ export async function runAssistant(ctx: AssistantContext): Promise<void> {
       const res = await getClient().messages.create({
         model,
         max_tokens: 1500,
-        system: buildSystemPrompt({ withSqlTool: sqlEnabled }),
+        system: buildSystemPrompt({ withSqlTool: sqlEnabled, admin: ctx.admin, outreach: outreachPrompt }),
         tools,
         messages,
       });
@@ -130,7 +150,16 @@ export async function runAssistant(ctx: AssistantContext): Promise<void> {
         if (u.name === "run_readonly_query" && typeof input.sql === "string") {
           sqlText = input.sql;
         }
-        const output = await executeTool(u.name, input);
+        // Outreach tools run inside the asker's team scope; staff tools only
+        // when this conversation is allowed them. A tool outside the set
+        // the model was given is refused rather than run.
+        const output = OUTREACH_TOOL_NAMES.has(u.name)
+          ? ctx.outreach
+            ? await executeOutreachTool(admin, ctx.outreach, u.name, input)
+            : { error: "Not available here" }
+          : ctx.admin
+            ? await executeTool(u.name, input)
+            : { error: "Not available here" };
         toolResults.push({
           type: "tool_result",
           tool_use_id: u.id,
