@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
+import { syncBookingAlerts } from "@/lib/prayer-room/booking-alerts";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthedUser } from "@/lib/api-auth";
 import {
@@ -91,6 +92,7 @@ export async function PATCH(
     });
     if (occErr) return NextResponse.json({ error: occErr.message }, { status: 500 });
     await updateSeries(supabase, booking.series_id, { status: "cancelled" });
+    after(syncBookingAlerts); // prayer-room DM alerts (Auditorium over devo sets)
     return NextResponse.json({ ok: true, appliedToSeries: true });
   }
 
@@ -181,8 +183,10 @@ export async function PATCH(
       // the series show the same details.
       await updateSeries(supabase, booking.series_id, seriesPatch);
     }
+    after(syncBookingAlerts); // prayer-room DM alerts (Auditorium over devo sets)
     return NextResponse.json({ ok: true, appliedToSeries: true, reopened });
   }
 
+  after(syncBookingAlerts); // prayer-room DM alerts (Auditorium over devo sets)
   return NextResponse.json({ ok: true, reopened });
 }

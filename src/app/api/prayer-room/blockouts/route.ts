@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
@@ -9,6 +9,7 @@ import {
   stampRelocation,
 } from "@/services/prayer-room";
 import { announceBlockout } from "@/lib/prayer-room/blockout-announce";
+import { syncBookingAlerts } from "@/lib/prayer-room/booking-alerts";
 
 type OwnerName = { first_name: string | null; last_name: string | null; preferred_name: string | null } | null;
 function ownerName(o: OwnerName): string | null {
@@ -117,6 +118,9 @@ export async function POST(request: Request) {
     },
     user.id
   );
+
+  // A hand-made block-out may cover a booking someone was DM'd about.
+  after(syncBookingAlerts);
 
   return NextResponse.json({ ok: true, blockout, affected: affected.length, slack });
 }

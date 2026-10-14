@@ -9,7 +9,7 @@
  * or moved, so a change on the bookings side never drifts silently.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -252,5 +252,97 @@ function ChangedCard({ c, onDone }: { c: ChangedBlockout; onDone: () => void }) 
         </Button>
       </div>
     </div>
+  );
+}
+
+type Candidate = { id: string; name: string; slackLinked: boolean; chosen: boolean };
+
+/** Who gets the Slack DM when the Auditorium is booked over devo sets. */
+export function AlertRecipients() {
+  const [people, setPeople] = useState<Candidate[] | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/prayer-room/booking-alert-recipients")
+      .then((r) => (r.ok ? r.json() : { candidates: [] }))
+      .then((d: { candidates: Candidate[] }) => {
+        setPeople(d.candidates);
+        setPicked(new Set(d.candidates.filter((c) => c.chosen).map((c) => c.id)));
+      })
+      .catch(() => setPeople([]));
+  }, []);
+
+  if (!people) return null;
+  const chosen = people.filter((p) => p.chosen);
+
+  async function save() {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/prayer-room/booking-alert-recipients", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userIds: [...picked] }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      const ids = new Set<string>(data.userIds);
+      setPeople(people!.map((p) => ({ ...p, chosen: ids.has(p.id) })));
+      setEditing(false);
+      toast.success("Saved — they'll get a Slack DM for each Auditorium booking over devo sets");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="rounded-lg border border-border p-3 text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <span className="font-medium">Slack DMs for Auditorium bookings: </span>
+          <span className="text-muted-foreground">
+            {chosen.length ? chosen.map((p) => p.name + (p.slackLinked ? "" : " (Slack not linked)")).join(", ") : "nobody"}
+          </span>
+        </div>
+        {!editing && (
+          <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
+            Change
+          </Button>
+        )}
+      </div>
+      {editing && (
+        <div className="mt-3 space-y-2">
+          <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+            {people.map((p) => (
+              <label key={p.id} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={picked.has(p.id)}
+                  onChange={(e) => {
+                    const next = new Set(picked);
+                    if (e.target.checked) next.add(p.id);
+                    else next.delete(p.id);
+                    setPicked(next);
+                  }}
+                />
+                {p.name}
+                {!p.slackLinked && <span className="text-xs text-muted-foreground">(Slack not linked)</span>}
+              </label>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" disabled={busy} onClick={save}>
+              Save
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+    </section>
   );
 }

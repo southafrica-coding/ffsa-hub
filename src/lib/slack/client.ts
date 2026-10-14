@@ -118,6 +118,27 @@ export function postMessage(args: {
 }
 
 // ────────────────────────────────────────────────────────────
+// chat.update / views.open
+// ------------------------------------------------------------
+// Rewrite a message we posted (e.g. an alert DM once someone has
+// acted on it), and open a modal from a button click's trigger_id
+// (valid for 3s, so call it before ACKing the interaction).
+// ────────────────────────────────────────────────────────────
+
+export function updateMessage(args: { channel: string; ts: string; text: string; blocks?: unknown[] }) {
+  return callSlack("chat.update", {
+    channel: args.channel,
+    ts: args.ts,
+    text: args.text,
+    blocks: args.blocks ?? [],
+  });
+}
+
+export function openView(triggerId: string, view: unknown) {
+  return callSlack("views.open", { trigger_id: triggerId, view });
+}
+
+// ────────────────────────────────────────────────────────────
 // conversations.open
 // ------------------------------------------------------------
 // Open a DM channel with a Slack user id (U…). Returns the

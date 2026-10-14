@@ -17,7 +17,7 @@ import {
   type Person,
 } from "./helpers";
 import { weekDays, weekRangeLabel, dateRangeLabel, timeRangeLabel } from "@/lib/bookings/dates";
-import BookingSuggestions, { blockoutToast, type SuggestionsPayload } from "./booking-suggestions";
+import BookingSuggestions, { AlertRecipients, blockoutToast, type SuggestionsPayload } from "./booking-suggestions";
 
 export default function AdminPanel({ bookingActions = 0 }: { bookingActions?: number }) {
   // A Space Booking waiting on a block-out is the most time-sensitive thing
@@ -385,6 +385,7 @@ function BlockoutManager() {
   return (
     <div className="space-y-6">
       <BookingSuggestions data={suggestions} onChanged={load} />
+      <AlertRecipients />
 
       <section>
         <h3 className="mb-1 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Block out a time</h3>

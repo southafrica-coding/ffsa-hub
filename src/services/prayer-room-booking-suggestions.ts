@@ -317,6 +317,17 @@ export async function countBookingSuggestions(admin: Client): Promise<number> {
   return suggestions.length + changed.length;
 }
 
+/** Every other active space — the "devo sets move to" quick-picks. */
+export async function getMoveToVenues(admin: Client): Promise<string[]> {
+  const { data } = await admin
+    .from("venues")
+    .select("name")
+    .eq("is_active", true)
+    .neq("slug", PRAYER_ROOM_VENUE_SLUG)
+    .order("sort_order");
+  return ((data ?? []) as { name: string }[]).map((v) => v.name);
+}
+
 // ── actions ─────────────────────────────────────────────────
 
 function pickOccurrences(all: BookingSuggestion[], bookingIds: string[]) {
@@ -335,7 +346,10 @@ export async function applyBookingSuggestion(
   admin: Client,
   userId: string,
   input: { bookingIds: string[]; relocationNote: string | null; reason: string | null }
-): Promise<{ created: number; affected: number; slack: SlackResult } | { error: string; status: number }> {
+): Promise<
+  | { created: number; affected: number; slack: SlackResult; suggestionKey: string; title: string }
+  | { error: string; status: number }
+> {
   const { suggestions } = await getBookingSuggestions(admin);
   const hits = pickOccurrences(suggestions, input.bookingIds);
   if (hits.length === 0) {
@@ -395,7 +409,7 @@ export async function applyBookingSuggestion(
     userId
   );
 
-  return { created: hits.length, affected: affectedAll.length, slack };
+  return { created: hits.length, affected: affectedAll.length, slack, suggestionKey: first.key, title: first.title };
 }
 
 /** Dismiss: stays quiet until the booking's date / time changes. */
@@ -404,10 +418,11 @@ export async function dismissBookingSuggestion(
   admin: Client,
   userId: string,
   bookingIds: string[]
-): Promise<{ dismissed: number; error?: string }> {
+): Promise<{ dismissed: number; error?: string; suggestionKey?: string; title?: string }> {
   const { suggestions } = await getBookingSuggestions(admin);
   const hits = pickOccurrences(suggestions, bookingIds);
   if (hits.length === 0) return { dismissed: 0 };
+  const { key: suggestionKey, title } = hits[0].suggestion;
   const { error } = await supabase.from("prayer_room_booking_dismissals").upsert(
     hits.map(({ occ }) => ({
       booking_id: occ.bookingId,
@@ -417,7 +432,7 @@ export async function dismissBookingSuggestion(
     })),
     { onConflict: "booking_id" }
   );
-  return { dismissed: error ? 0 : hits.length, error: error?.message };
+  return { dismissed: error ? 0 : hits.length, error: error?.message, suggestionKey, title };
 }
 
 /**
