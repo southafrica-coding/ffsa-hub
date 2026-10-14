@@ -67,7 +67,7 @@ export async function generateDueInvoices(
   let query = supabase
     .from("student_billing_schedule")
     .select(
-      "id, plan_id, charge_type, label, amount_zar, xero_item_code, due_date, combined_group_key, scheduled_generation_date, student_billing_plans!inner(id, user_id, program_id, xero_region, users(email, first_name, last_name, preferred_name, nationality))"
+      "id, plan_id, charge_type, label, amount_zar, xero_item_code, due_date, combined_group_key, scheduled_generation_date, student_billing_plans!inner(id, user_id, program_id, xero_region, users!student_billing_plans_user_id_fkey(email, first_name, last_name, preferred_name, nationality))"
     )
     .eq("status", "scheduled")
     .lte("scheduled_generation_date", asOf);
