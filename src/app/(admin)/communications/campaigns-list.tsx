@@ -112,7 +112,6 @@ export function CampaignsList({
 
   async function create() {
     if (!name.trim()) return setErr("Email name is required.");
-    if (labelIds.length === 0) return setErr("Pick at least one audience label.");
     if (!identityId) return setErr("Pick a sending identity.");
     setBusy(true);
     setErr(null);
@@ -178,7 +177,7 @@ export function CampaignsList({
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block">
                 <span className="mono-label mb-1 block">
-                  Audience labels (OR — anyone with ANY)
+                  Audience labels (OR — anyone with ANY; optional — you can hand-pick contacts in the editor)
                 </span>
                 <div className="space-y-2">
                   {selectedLabels.length > 0 && (

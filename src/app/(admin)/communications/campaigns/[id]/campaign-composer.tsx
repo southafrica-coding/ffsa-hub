@@ -28,6 +28,8 @@ import { Input } from "@/components/ui/input";
 // Only the campaign's own status chip uses the design system here — the rest
 // of this file is the email canvas and preview, which keep the brand's look.
 import { StatusPill } from "@/components/ffsa";
+import type { PickableContact } from "@/services/campaigns";
+import { IndividualContactsPicker } from "./individual-contacts-picker";
 import {
   type CampaignBlock,
   type CampaignBlockType,
@@ -185,6 +187,7 @@ export function CampaignComposer({
   labels,
   identities,
   audienceCount,
+  initialContacts,
   brand,
   currentUserEmail,
   subscribeLink,
@@ -194,6 +197,8 @@ export function CampaignComposer({
   labels: Label[];
   identities: Identity[];
   audienceCount: number;
+  /** Hand-picked contacts already saved on the campaign (migration 234). */
+  initialContacts: PickableContact[];
   brand: EffectiveBrand;
   currentUserEmail: string | null;
   /** Public sign-up list (migration 196) the Subscribe module points at. */
@@ -204,6 +209,7 @@ export function CampaignComposer({
   const [subject, setSubject] = useState(campaign.subject);
   const [previewText, setPreviewText] = useState(campaign.preview_text);
   const [labelIds, setLabelIds] = useState<string[]>(campaign.label_ids);
+  const [pickedContacts, setPickedContacts] = useState<PickableContact[]>(initialContacts);
   const [identityId, setIdentityId] = useState(campaign.sending_identity_id ?? "");
   const [body, setBody] = useState<CampaignBody>(initialBody);
   const [busy, setBusy] = useState(false);
@@ -243,6 +249,12 @@ export function CampaignComposer({
     const saved = new Set(campaign.label_ids);
     return labelIds.some((id) => !saved.has(id));
   }, [labelIds, campaign.label_ids]);
+
+  const contactSetChanged = useMemo(() => {
+    if (pickedContacts.length !== initialContacts.length) return true;
+    const saved = new Set(initialContacts.map((c) => c.id));
+    return pickedContacts.some((c) => !saved.has(c.id));
+  }, [pickedContacts, initialContacts]);
 
   function addLabel(id: string) {
     if (!id || labelIds.includes(id)) return;
@@ -526,6 +538,7 @@ export function CampaignComposer({
         preview_text: previewText,
         body_source: body,
         label_ids: labelIds,
+        contact_ids: pickedContacts.map((c) => c.id),
         sending_identity_id: identityId || undefined,
       }),
     });
@@ -549,6 +562,7 @@ export function CampaignComposer({
         preview_text: previewText,
         body_source: body,
         label_ids: labelIds,
+        contact_ids: pickedContacts.map((c) => c.id),
         sending_identity_id: identityId || undefined,
       }),
     });
@@ -557,7 +571,8 @@ export function CampaignComposer({
 
   function preflightError(): string | null {
     if (!subject.trim()) return "Add a subject line before sending.";
-    if (labelIds.length === 0) return "Pick at least one audience label.";
+    if (labelIds.length === 0 && pickedContacts.length === 0)
+      return "Pick an audience label or add individual contacts.";
     if (!identityId) return "Pick a sending identity.";
     if (body.blocks.length === 0) return "Add at least one content block.";
     return null;
@@ -1030,6 +1045,14 @@ export function CampaignComposer({
             </div>
           </Field>
 
+          <Field label="Individual contacts">
+            <IndividualContactsPicker
+              picked={pickedContacts}
+              onChange={setPickedContacts}
+              disabled={sent}
+            />
+          </Field>
+
           <Field label="Send from">
             <select
               value={identityId}
@@ -1063,9 +1086,9 @@ export function CampaignComposer({
             <span className="font-medium">{audienceCount}</span> contact
             {audienceCount === 1 ? "" : "s"} (subscribed, not unsubscribed or
             bounced).
-            {labelSetChanged && (
+            {(labelSetChanged || contactSetChanged) && (
               <span className="text-amber-400 ml-1">
-                Save to recompute after changing labels.
+                Save to recompute after changing the audience.
               </span>
             )}
           </p>

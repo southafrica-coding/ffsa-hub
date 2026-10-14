@@ -102,6 +102,174 @@ export async function setCampaignLabels(
 }
 
 // ────────────────────────────────────────────────────────────
+// Hand-picked contacts (migration 234)
+// ────────────────────────────────────────────────────────────
+
+export type PickableContact = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  /**
+   * Why this person won't actually be emailed, or null when they will. Same
+   * rules as v_campaign_audience, so the composer can say so before sending
+   * rather than the count quietly not moving.
+   */
+  blocked: string | null;
+};
+
+type ContactRow = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  email_normalized: string | null;
+  marketing_status: string | null;
+};
+
+const PICKABLE_COLUMNS =
+  "id, first_name, last_name, email, email_normalized, marketing_status";
+
+/** Annotate contacts with the reason (if any) they can't receive a campaign. */
+async function withMailability(
+  supabase: Client,
+  rows: ContactRow[]
+): Promise<PickableContact[]> {
+  if (rows.length === 0) return [];
+  const ids = rows.map((r) => r.id);
+  const emails = rows.map((r) => r.email_normalized).filter(Boolean) as string[];
+  const [{ data: unsubs }, { data: supps }] = await Promise.all([
+    supabase
+      .from("unsubscribes")
+      .select("contact_id")
+      .in("contact_id", ids)
+      .is("label_id", null),
+    emails.length > 0
+      ? supabase
+          .from("email_suppressions")
+          .select("email_normalized, reason")
+          .in("email_normalized", emails)
+      : Promise.resolve({ data: [] }),
+  ]);
+  const unsubscribed = new Set(
+    ((unsubs ?? []) as { contact_id: string }[]).map((u) => u.contact_id)
+  );
+  const suppressed = new Map(
+    ((supps ?? []) as { email_normalized: string; reason: string }[]).map((x) => [
+      x.email_normalized,
+      x.reason,
+    ])
+  );
+  return rows.map((r) => {
+    let blocked: string | null = null;
+    if (!r.email || !r.email_normalized) blocked = "No email address";
+    else if (unsubscribed.has(r.id) || r.marketing_status !== "subscribed")
+      blocked = "Unsubscribed";
+    else if (suppressed.has(r.email_normalized))
+      blocked =
+        suppressed.get(r.email_normalized) === "complaint"
+          ? "Marked as spam"
+          : "Email bounced";
+    return {
+      id: r.id,
+      first_name: r.first_name,
+      last_name: r.last_name,
+      email: r.email,
+      blocked,
+    };
+  });
+}
+
+/** The contacts hand-picked onto a campaign, with their mailability. */
+export async function getCampaignContacts(
+  supabase: Client,
+  campaignId: string
+): Promise<PickableContact[]> {
+  const { data } = await supabase
+    .from("campaign_contacts")
+    .select(`contacts(${PICKABLE_COLUMNS})`)
+    .eq("campaign_id", campaignId)
+    .order("created_at", { ascending: true })
+    .limit(1000);
+  const rows = ((data ?? []) as { contacts: ContactRow | null }[])
+    .map((r) => r.contacts)
+    .filter((c): c is ContactRow => !!c);
+  return withMailability(supabase, rows);
+}
+
+/**
+ * Contacts matching a name or email, for the composer's "add individual
+ * contacts" search. Every whitespace-separated token must match some column,
+ * so "jane smith" finds Jane Smith.
+ */
+export async function searchPickableContacts(
+  supabase: Client,
+  q: string,
+  limit = 12
+): Promise<PickableContact[]> {
+  const tokens = q
+    .trim()
+    .split(/\s+/)
+    // Strip PostgREST reserved characters so a token can't break the or().
+    .map((t) => t.replace(/[,()*%]/g, ""))
+    .filter(Boolean)
+    .slice(0, 4);
+  if (tokens.length === 0) return [];
+  let query = supabase
+    .from("contacts")
+    .select(PICKABLE_COLUMNS)
+    .order("first_name", { ascending: true })
+    .limit(limit);
+  for (const t of tokens) {
+    query = query.or(
+      ["first_name", "last_name", "preferred_name", "email"]
+        .map((c) => `${c}.ilike.%${t}%`)
+        .join(",")
+    );
+  }
+  const { data } = await query;
+  return withMailability(supabase, (data ?? []) as ContactRow[]);
+}
+
+/** Ids of the contacts hand-picked onto a campaign. */
+export async function getCampaignContactIds(
+  supabase: Client,
+  campaignId: string
+): Promise<string[]> {
+  const { data } = await supabase
+    .from("campaign_contacts")
+    .select("contact_id")
+    .eq("campaign_id", campaignId);
+  return ((data ?? []) as { contact_id: string }[]).map((r) => r.contact_id);
+}
+
+/** Replace the hand-picked contacts on a campaign (delete-then-insert). */
+export async function setCampaignContacts(
+  supabase: Client,
+  campaignId: string,
+  contactIds: string[],
+  addedBy: string | null
+) {
+  const dedup = Array.from(new Set(contactIds.filter(Boolean)));
+  const del = await supabase
+    .from("campaign_contacts")
+    .delete()
+    .eq("campaign_id", campaignId);
+  if (del.error) return del;
+  if (dedup.length === 0) return { data: [], error: null };
+  return supabase
+    .from("campaign_contacts")
+    .insert(
+      dedup.map((contact_id) => ({
+        campaign_id: campaignId,
+        contact_id,
+        added_by: addedBy,
+      }))
+    )
+    .select("contact_id");
+}
+
+// ────────────────────────────────────────────────────────────
 // Audience + recipients
 // ────────────────────────────────────────────────────────────
 

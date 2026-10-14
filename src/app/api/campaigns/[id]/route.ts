@@ -5,6 +5,7 @@ import {
   updateCampaign,
   deleteCampaign,
   setCampaignLabels,
+  setCampaignContacts,
 } from "@/services/campaigns";
 import {
   renderCampaignHtml,
@@ -58,6 +59,8 @@ export async function PATCH(
     preview_text?: string | null;
     body_source?: CampaignBody;
     label_ids?: string[];
+    /** Hand-picked contacts (migration 234) — the full set, replaced. */
+    contact_ids?: string[];
     sending_identity_id?: string;
     scheduled_at?: string | null;
     status?: string;
@@ -89,7 +92,8 @@ export async function PATCH(
   }
 
   const hasLabelIds = Array.isArray(body.label_ids);
-  if (Object.keys(patch).length === 0 && !hasLabelIds) {
+  const hasContactIds = Array.isArray(body.contact_ids);
+  if (Object.keys(patch).length === 0 && !hasLabelIds && !hasContactIds) {
     return NextResponse.json({ error: "No fields to update" }, { status: 400 });
   }
 
@@ -100,6 +104,13 @@ export async function PATCH(
 
   if (hasLabelIds) {
     const setRes = await setCampaignLabels(supabase, id, body.label_ids!);
+    if (setRes.error) {
+      return NextResponse.json({ error: setRes.error.message }, { status: 500 });
+    }
+  }
+
+  if (hasContactIds) {
+    const setRes = await setCampaignContacts(supabase, id, body.contact_ids!, user.id);
     if (setRes.error) {
       return NextResponse.json({ error: setRes.error.message }, { status: 500 });
     }

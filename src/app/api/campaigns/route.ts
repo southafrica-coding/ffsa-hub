@@ -34,11 +34,10 @@ export async function POST(request: Request) {
   if (!body.name || !body.name.trim()) {
     return NextResponse.json({ error: "name is required" }, { status: 400 });
   }
-  if (!Array.isArray(body.labelIds) || body.labelIds.length === 0) {
-    return NextResponse.json(
-      { error: "labelIds (at least one) is required" },
-      { status: 400 }
-    );
+  // Labels are optional at creation: the audience can instead be contacts
+  // hand-picked in the composer (migration 234). Sending still needs one.
+  if (body.labelIds !== undefined && !Array.isArray(body.labelIds)) {
+    return NextResponse.json({ error: "labelIds must be a list" }, { status: 400 });
   }
   if (!body.sendingIdentityId) {
     return NextResponse.json(
@@ -76,7 +75,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const setRes = await setCampaignLabels(supabase, data.id, body.labelIds);
+  const setRes = await setCampaignLabels(supabase, data.id, body.labelIds ?? []);
   if (setRes.error) {
     return NextResponse.json({ error: setRes.error.message }, { status: 500 });
   }

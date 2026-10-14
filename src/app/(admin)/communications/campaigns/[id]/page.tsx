@@ -5,6 +5,7 @@ import {
   getCampaignAudienceCount,
   getCampaignStats,
   getCampaignLabelIds,
+  getCampaignContacts,
   getCampaignRecipients,
   getCampaignLinkClicks,
   listSendingIdentities,
@@ -41,14 +42,21 @@ export default async function CampaignComposerPage({
   const { data: campaign, error } = await getCampaignById(supabase, id);
   if (error || !campaign) notFound();
 
-  const [{ data: labels }, { data: identities }, audienceCount, labelIds, brand] =
-    await Promise.all([
-      getCachedActiveLabels(),
-      listSendingIdentities(supabase),
-      getCampaignAudienceCount(supabase, id),
-      getCampaignLabelIds(supabase, id),
-      getEffectiveBrand(supabase, campaign.sending_identity_id),
-    ]);
+  const [
+    { data: labels },
+    { data: identities },
+    audienceCount,
+    labelIds,
+    brand,
+    pickedContacts,
+  ] = await Promise.all([
+    getCachedActiveLabels(),
+    listSendingIdentities(supabase),
+    getCampaignAudienceCount(supabase, id),
+    getCampaignLabelIds(supabase, id),
+    getEffectiveBrand(supabase, campaign.sending_identity_id),
+    getCampaignContacts(supabase, id),
+  ]);
 
   const body: CampaignBody =
     campaign.body_source &&
@@ -119,6 +127,7 @@ export default async function CampaignComposerPage({
           labels={labels ?? []}
           identities={identities ?? []}
           audienceCount={audienceCount}
+          initialContacts={pickedContacts}
           brand={brand}
           currentUserEmail={user.email ?? null}
           subscribeLink={subscribeLink}

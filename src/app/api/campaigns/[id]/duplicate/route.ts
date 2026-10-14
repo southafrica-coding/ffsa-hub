@@ -5,6 +5,8 @@ import {
   createCampaign,
   getCampaignLabelIds,
   setCampaignLabels,
+  setCampaignContacts,
+  getCampaignContactIds,
 } from "@/services/campaigns";
 import { getAuthedUser, canManageComms } from "@/lib/api-auth";
 import type { Json, TablesInsert } from "@/types/database";
@@ -61,6 +63,15 @@ export async function POST(
   const labelIds = await getCampaignLabelIds(supabase, id);
   if (labelIds.length > 0) {
     const setRes = await setCampaignLabels(supabase, data.id, labelIds);
+    if (setRes.error) {
+      return NextResponse.json({ error: setRes.error.message }, { status: 500 });
+    }
+  }
+
+  // …and the hand-picked contacts (migration 234).
+  const contactIds = await getCampaignContactIds(supabase, id);
+  if (contactIds.length > 0) {
+    const setRes = await setCampaignContacts(supabase, data.id, contactIds, user.id);
     if (setRes.error) {
       return NextResponse.json({ error: setRes.error.message }, { status: 500 });
     }

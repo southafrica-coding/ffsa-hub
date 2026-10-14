@@ -182,7 +182,7 @@ export async function sendCampaignBatch(
   const { data: campaign, error: cErr } = await supabase
     .from("campaigns")
     .select(
-      "*, sending_identities(from_email, from_name, reply_to, sending_domains(domain, dkim_ok, dkim_selector, last_checked_at)), campaign_labels(label_id)"
+      "*, sending_identities(from_email, from_name, reply_to, sending_domains(domain, dkim_ok, dkim_selector, last_checked_at)), campaign_labels(label_id), campaign_contacts(contact_id)"
     )
     .eq("id", campaignId)
     .maybeSingle();
@@ -236,8 +236,9 @@ export async function sendCampaignBatch(
     return { ...base, ok: false, error: "Campaign is missing sender" };
   }
   const labelCount = (campaign.campaign_labels ?? []).length;
-  if (labelCount === 0) {
-    return { ...base, ok: false, error: "Campaign has no audience labels" };
+  const pickedCount = (campaign.campaign_contacts ?? []).length;
+  if (labelCount === 0 && pickedCount === 0) {
+    return { ...base, ok: false, error: "Campaign has no audience — add a label or individual contacts" };
   }
 
   if (campaign.status !== "sending") {
