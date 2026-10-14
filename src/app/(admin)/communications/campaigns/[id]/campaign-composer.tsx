@@ -210,6 +210,7 @@ export function CampaignComposer({
   const [previewText, setPreviewText] = useState(campaign.preview_text);
   const [labelIds, setLabelIds] = useState<string[]>(campaign.label_ids);
   const [pickedContacts, setPickedContacts] = useState<PickableContact[]>(initialContacts);
+  const [picksSaving, setPicksSaving] = useState(false);
   const [identityId, setIdentityId] = useState(campaign.sending_identity_id ?? "");
   const [body, setBody] = useState<CampaignBody>(initialBody);
   const [busy, setBusy] = useState(false);
@@ -262,6 +263,29 @@ export function CampaignComposer({
   }
   function removeLabel(id: string) {
     setLabelIds((ids) => ids.filter((x) => x !== id));
+  }
+
+  // Hand-picked contacts save the moment they're added or removed, so the
+  // audience count moves immediately — waiting for the main Save button left
+  // people adding five contacts while the count sat at zero.
+  async function savePickedContacts(next: PickableContact[]) {
+    const prev = pickedContacts;
+    setPickedContacts(next);
+    setPicksSaving(true);
+    setErr(null);
+    const res = await fetch(`/api/campaigns/${campaign.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contact_ids: next.map((c) => c.id) }),
+    }).catch(() => null);
+    setPicksSaving(false);
+    if (!res?.ok) {
+      setPickedContacts(prev);
+      const data = (await res?.json().catch(() => ({}))) as { error?: string } | undefined;
+      setErr(data?.error ?? "Couldn't save the contact list — try again.");
+      return;
+    }
+    router.refresh();
   }
 
   // Selection can live at the root or inside a section column.
@@ -1045,13 +1069,20 @@ export function CampaignComposer({
             </div>
           </Field>
 
-          <Field label="Individual contacts">
+          {/* A div, not <Field>: Field is a <label>, and a click anywhere in a
+              label is forwarded to its first button — which here is a chip's
+              remove ✕, so clicking a name removed someone. */}
+          <div className="block text-sm">
+            <span className="mb-1 block text-xs font-medium text-muted-foreground">
+              Individual contacts
+            </span>
             <IndividualContactsPicker
               picked={pickedContacts}
-              onChange={setPickedContacts}
+              onChange={savePickedContacts}
               disabled={sent}
+              saving={picksSaving}
             />
-          </Field>
+          </div>
 
           <Field label="Send from">
             <select

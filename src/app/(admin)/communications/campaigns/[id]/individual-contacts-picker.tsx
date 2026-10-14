@@ -18,10 +18,13 @@ export function IndividualContactsPicker({
   picked,
   onChange,
   disabled,
+  saving,
 }: {
   picked: PickableContact[];
   onChange: (next: PickableContact[]) => void;
   disabled: boolean;
+  /** True while the latest add/remove is being saved. */
+  saving: boolean;
 }) {
   const [q, setQ] = useState("");
   const [results, setResults] = useState<PickableContact[]>([]);
@@ -74,8 +77,17 @@ export function IndividualContactsPicker({
     setResults([]);
   }
 
+  const mailable = picked.filter((p) => !p.blocked).length;
+
   return (
     <div className="space-y-2">
+      {picked.length > 0 && (
+        <p className="text-[11px] text-muted-foreground">
+          {saving
+            ? "Saving…"
+            : `${picked.length} picked · ${mailable} will be emailed · saved`}
+        </p>
+      )}
       {picked.length === 0 ? (
         <p className="text-xs italic text-muted-foreground">
           No individual contacts — search below to add people one by one.
