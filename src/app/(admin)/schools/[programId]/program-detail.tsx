@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Masthead, StatusPill } from "@/components/ffsa";
 import { TrackTab } from "./track-tab";
 import type { PipelinePerson, TrackSummary } from "@/lib/schools/track-pipeline";
-import { RosterTab, AddStudentButton, type RosterRow, type PhaseCourseRow } from "./roster-tab";
+import { RosterTab, AddStudentButton, type RosterRow, type RosterFee, type PhaseCourseRow } from "./roster-tab";
 import { GradesMatrix } from "./grades-matrix";
 import { ApplicantReview, type PipelineStage, type ReviewCheck } from "./applicant-review";
 import { FormBuilder, FormPreview } from "./form-builder";
@@ -409,7 +409,7 @@ export function ProgramDetail({
     reminder_after_days: number | null;
   }[];
   grades: GradeRow[];
-  feesByEnrollment: Record<string, { label: string; owed: boolean }>;
+  feesByEnrollment: Record<string, RosterFee>;
   /** The school's fee settings (server-rendered SchoolFeesPanel), shown as
    *  the Fees tab so they can be managed without leaving Training. */
   feesPanel: React.ReactNode;

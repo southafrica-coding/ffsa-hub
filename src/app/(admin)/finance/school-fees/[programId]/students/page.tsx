@@ -11,6 +11,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Masthead, SectionBar, StatusPill, Initials } from "@/components/ffsa";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getSchoolBalances } from "@/services/school-balances";
+import { FeeProgressBar } from "@/components/finance/fee-progress-bar";
+import { RefreshPaymentsButton } from "@/components/finance/refresh-payments-button";
+import { formatZAR } from "@/lib/finance/billing";
 
 const studentName = (u: {
   first_name: string | null;
@@ -64,11 +69,45 @@ export default async function ProgramStudentsPage({
   };
   const list = (students ?? []) as Student[];
 
+  // Where every student stands (paid / overdue / invoiced / not invoiced).
+  // Service-role read: the page is already behind the Finance module gate,
+  // and the billing tables' RLS predates the finance permission bundles.
+  const balances = await getSchoolBalances(createAdminClient(), programId);
+  const t = balances.totals;
+
   return (
     <div className="ffsa-screen">
-      <Masthead context={`School fees · ${program.name}`} title="Student Billing" />
+      <Masthead
+        context={`School fees · ${program.name}`}
+        title="Student Billing"
+        actions={<RefreshPaymentsButton programId={programId} />}
+      />
 
-      <div className="px-5 py-6 md:px-8 md:py-7">
+      <div className="space-y-6 px-5 py-6 md:px-8 md:py-7">
+        {t.total > 0 && (
+          <section className="border border-ink bg-white">
+            <SectionBar title="School totals" meta={`${balances.byEnrollment.size} student${balances.byEnrollment.size === 1 ? "" : "s"} billed`} />
+            <div className="grid grid-cols-2 gap-px border-b border-rule bg-rule md:grid-cols-4">
+              {[
+                ["Billed", t.total, ""],
+                ["Collected", t.paid, "text-grass-text"],
+                ["Outstanding", t.outstanding, ""],
+                ["Overdue", t.overdue, t.overdue > 0 ? "text-destructive" : ""],
+              ].map(([label, value, cls]) => (
+                <div key={label as string} className="bg-white px-4 py-3">
+                  <p className="font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-[color:var(--text-secondary)]">
+                    {label as string}
+                  </p>
+                  <p className={`numeral text-[22px] ${cls as string}`}>{formatZAR(value as number)}</p>
+                </div>
+              ))}
+            </div>
+            <div className="px-4 py-3">
+              <FeeProgressBar balance={t} />
+            </div>
+          </section>
+        )}
+
         <div className="border border-ink">
           <SectionBar
             title="Students"
@@ -89,6 +128,7 @@ export default async function ProgramStudentsPage({
                   <TableHead>Student</TableHead>
                   <TableHead>Nationality</TableHead>
                   <TableHead className="w-[180px]">Billing</TableHead>
+                  <TableHead className="min-w-[220px]">Paid so far</TableHead>
                   <TableHead className="w-[90px] text-right">Open</TableHead>
                 </TableRow>
               </TableHeader>
@@ -116,6 +156,13 @@ export default async function ProgramStudentsPage({
                         <StatusPill tone={n > 0 ? "good" : "quiet"}>
                           {n > 0 ? `${n} phase${n !== 1 ? "s" : ""} billed` : "No billing yet"}
                         </StatusPill>
+                      </TableCell>
+                      <TableCell>
+                        {balances.byEnrollment.get(s.id) ? (
+                          <FeeProgressBar balance={balances.byEnrollment.get(s.id)!.balance} size="compact" />
+                        ) : (
+                          <span className="text-[13px] text-[color:var(--text-tertiary)]">—</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         <Link

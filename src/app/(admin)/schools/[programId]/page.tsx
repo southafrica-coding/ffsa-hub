@@ -10,6 +10,8 @@ import { ProgramDetail } from "./program-detail";
 import { loadTrackPipeline, summariseTrack } from "@/lib/schools/track-pipeline";
 import { Masthead } from "@/components/ffsa";
 import { SchoolFeesPanel } from "@/components/finance/school-fees-panel";
+import { getSchoolBalances } from "@/services/school-balances";
+import type { RosterFee } from "./roster-tab";
 import { requireModuleAccess } from "@/lib/require-permission";
 import { getApplicationExpiry } from "@/lib/auth/application-expiry";
 
@@ -158,53 +160,36 @@ export default async function ProgramDetailPage({
   // program is billing_mode = 'external' its students are mid-payment outside
   // the Hub, so the honest column is "billed outside" — NOT a fabricated
   // "paid", and never the amber that means someone owes us money.
-  const feesByEnrollment: Record<string, { label: string; owed: boolean }> = {};
+  const feesByEnrollment: Record<string, RosterFee> = {};
   if (program.billing_mode === "external") {
     for (const e of enrollments) {
       feesByEnrollment[e.id] = { label: "BILLED OUTSIDE", owed: false };
     }
   } else {
-    // The generated Supabase types predate the billing tables (095/098), so
-    // these reads cast the same way the billing_courses read above does.
-    type PlanRow = { id: string; enrollment_id: string };
-    type ScheduleRow = { plan_id: string; amount_zar: number | string | null; status: string };
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: plansRaw } = await (admin as any)
-      .from("student_billing_plans")
-      .select("id, enrollment_id")
-      .eq("program_id", programId);
-    const plans: PlanRow[] = plansRaw ?? [];
-    const planToEnrollment = new Map<string, string>(plans.map((pl) => [pl.id, pl.enrollment_id]));
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: scheduledRaw } = await (admin as any)
-      .from("student_billing_schedule")
-      .select("plan_id, amount_zar, status")
-      .in("plan_id", Array.from(planToEnrollment.keys()));
-    const scheduled: ScheduleRow[] = scheduledRaw ?? [];
-
-    const owedByEnrollment = new Map<string, number>();
-    for (const row of scheduled) {
-      // 'paid' is settled and 'cancelled' was never owed; everything else is
-      // still money the student has to find.
-      if (row.status === "paid" || row.status === "cancelled") continue;
-      const enrollmentId = planToEnrollment.get(row.plan_id);
-      if (!enrollmentId) continue;
-      owedByEnrollment.set(
-        enrollmentId,
-        (owedByEnrollment.get(enrollmentId) ?? 0) + Number(row.amount_zar ?? 0)
-      );
-    }
-
+    // Same numbers as Finance's student list (services/school-balances.ts):
+    // paid comes back from Xero, so this is real progress, not just "invoiced".
+    const balances = await getSchoolBalances(admin, programId);
     for (const e of enrollments) {
-      const owed = owedByEnrollment.get(e.id) ?? 0;
-      const hasPlan = plans.some((pl) => pl.enrollment_id === e.id);
-      feesByEnrollment[e.id] = hasPlan
-        ? owed > 0
-          ? { label: `R ${owed.toLocaleString("en-ZA")} DUE`, owed: true }
-          : { label: "PAID", owed: false }
-        : { label: "NO PLAN", owed: false };
+      const mine = balances.byEnrollment.get(e.id);
+      if (!mine || mine.balance.total <= 0) {
+        feesByEnrollment[e.id] = { label: "NO PLAN", owed: false };
+        continue;
+      }
+      const b = mine.balance;
+      feesByEnrollment[e.id] =
+        b.outstanding <= 0
+          ? { label: "PAID", owed: false, progress: { percentPaid: 100, overdue: 0 } }
+          : b.overdue > 0
+            ? {
+                label: `R ${Math.round(b.overdue).toLocaleString("en-ZA")} OVERDUE`,
+                owed: true,
+                progress: { percentPaid: b.percentPaid, overdue: b.overdue },
+              }
+            : {
+                label: `${b.percentPaid}% PAID`,
+                owed: false,
+                progress: { percentPaid: b.percentPaid, overdue: 0 },
+              };
     }
   }
 

@@ -35,6 +35,9 @@ export type RosterFee = {
   label: string;
   /** True only when real money is outstanding — drives the amber + 700. */
   owed: boolean;
+  /** Hub-billed students: how far through their fees they are (0–100) and
+   *  what's overdue, for the slim progress bar. Absent = label only. */
+  progress?: { percentPaid: number; overdue: number };
 };
 
 export type RosterRow = {
@@ -198,7 +201,7 @@ function RosterStatusPill({ status }: { status: string }) {
 
 /* ── The tab ──────────────────────────────────────────────── */
 
-const COLS = "minmax(0,1fr) 112px 148px 132px 112px 64px";
+const COLS = "minmax(0,1fr) 112px 148px 132px 132px 64px";
 
 export function RosterTab({
   phaseCourses,
@@ -523,15 +526,28 @@ export function RosterTab({
                       ))}
                     </select>
                   </span>
-                  <span
-                    className={cn(
-                      "font-mono text-[10px] tracking-[0.06em]",
-                      r.fee.owed
-                        ? "font-bold text-[color:var(--amber)]"
-                        : "font-medium text-[color:var(--text-secondary)]"
+                  <span className="min-w-0 pr-3">
+                    {r.fee.progress && (
+                      <span
+                        className="mb-1 block h-1.5 w-full max-w-[120px] overflow-hidden border border-ink bg-white"
+                        aria-hidden
+                      >
+                        <span
+                          className="block h-full bg-grass"
+                          style={{ width: `${Math.min(100, r.fee.progress.percentPaid)}%` }}
+                        />
+                      </span>
                     )}
-                  >
-                    {r.fee.label}
+                    <span
+                      className={cn(
+                        "block font-mono text-[10px] tracking-[0.06em]",
+                        r.fee.owed
+                          ? "font-bold text-[color:var(--amber)]"
+                          : "font-medium text-[color:var(--text-secondary)]"
+                      )}
+                    >
+                      {r.fee.label}
+                    </span>
                   </span>
                   <span className="numeral text-[17px] md:text-right">
                     {r.gradedCount} / {courseCount}

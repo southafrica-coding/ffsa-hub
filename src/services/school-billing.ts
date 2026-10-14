@@ -336,17 +336,36 @@ export async function deleteAllCoursePlans(
 // ENROLLED STUDENTS (program-level enrolment) + billing plans
 // ────────────────────────────────────────────────────────────
 
+/** Enrolment statuses of students currently on a school (migration 032).
+ *  'active' / 'on_hold' no longer exist — filtering on them found nobody. */
+export const CURRENT_ENROLLMENT_STATUSES = ["waiting_for_arrival", "arrived"];
+
+/**
+ * Students to bill: everyone currently on the school, plus anyone who has a
+ * billing plan whatever their status — a student who left or graduated
+ * still owing money mustn't vanish from the fees list.
+ */
 export async function getEnrolledStudentsForProgram(
   supabase: Client,
   programId: string
 ) {
+  const select =
+    "id, user_id, status, enrolled_at, users!enrollments_user_id_fkey(id, first_name, last_name, preferred_name, email, nationality)";
+  const { data: plans } = await supabase
+    .from("student_billing_plans")
+    .select("enrollment_id")
+    .eq("program_id", programId);
+  const billed = [...new Set(((plans ?? []) as { enrollment_id: string }[]).map((p) => p.enrollment_id))];
+
+  const filter = billed.length
+    ? `status.in.(${CURRENT_ENROLLMENT_STATUSES.join(",")}),id.in.(${billed.join(",")})`
+    : `status.in.(${CURRENT_ENROLLMENT_STATUSES.join(",")})`;
   return supabase
     .from("enrollments")
-    .select(
-      "id, user_id, status, enrolled_at, users!enrollments_user_id_fkey(id, first_name, last_name, preferred_name, email, nationality)"
-    )
+    .select(select)
     .eq("program_id", programId)
-    .in("status", ["active", "on_hold"])
+    .is("removed_at", null)
+    .or(filter)
     .order("enrolled_at", { ascending: false });
 }
 

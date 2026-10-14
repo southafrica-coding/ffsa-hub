@@ -6,6 +6,10 @@ import {
 } from "@/services/school-billing";
 import { Masthead } from "@/components/ffsa";
 import { StudentProgramBilling } from "./student-program-billing";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getSchoolBalances } from "@/services/school-balances";
+import { StudentFeeDetail } from "@/components/finance/student-fee-detail";
+import { RefreshPaymentsButton } from "@/components/finance/refresh-payments-button";
 
 const studentName = (u: {
   first_name: string | null;
@@ -55,14 +59,20 @@ export default async function StudentBillingPage({
     .eq("program_id", programId);
   const hasWholeProgram = (wholeProgramCharges ?? 0) > 0;
 
+  const balances = await getSchoolBalances(createAdminClient(), programId, { enrollmentId });
+  const mine = balances.byEnrollment.get(enrollmentId);
+
   return (
     <div className="ffsa-screen">
       <Masthead
         context={`School fees · ${program.name}`}
         title={studentName(enrollment.users)}
+        actions={<RefreshPaymentsButton programId={programId} />}
       />
 
-      <div className="space-y-6 px-8 py-7">
+      <div className="space-y-6 px-4 py-7 md:px-8">
+        {mine && <StudentFeeDetail balance={mine.balance} charges={mine.charges} today={balances.today} />}
+
         <p className="max-w-3xl text-[13px] text-[color:var(--text-secondary)]">
           Choose phases — billing auto-trims to match. Preview before saving;
           nothing goes to Xero yet.
