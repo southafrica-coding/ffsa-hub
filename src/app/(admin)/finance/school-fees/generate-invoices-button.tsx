@@ -19,9 +19,28 @@ type Invoice = {
   dueDate: string;
   total: number;
   status: string;
+  send?: boolean;
   invoiceNumber?: string;
   error?: string;
+  reason?: string;
 };
+
+// What each line means for the student, in words. Each school's own billing
+// settings decide sent vs draft vs skipped (invoice-run-policy.ts).
+function lineLabel(inv: Invoice): string {
+  switch (inv.status) {
+    case "preview":
+      return inv.send ? "will send" : "draft · sending held";
+    case "sent":
+      return "sent";
+    case "generated":
+      return "draft in Xero";
+    case "skipped":
+      return "skipped";
+    default:
+      return inv.status;
+  }
+}
 
 export function GenerateInvoicesButton() {
   const [open, setOpen] = useState(false);
@@ -30,7 +49,13 @@ export function GenerateInvoicesButton() {
   const [invoices, setInvoices] = useState<Invoice[] | null>(null);
 
   async function run(dryRun: boolean) {
-    if (!dryRun && !confirm("Generate and EMAIL these invoices in Xero now?")) return;
+    if (
+      !dryRun &&
+      !confirm(
+        "Create these invoices in Xero now? Schools with sending on are emailed; held schools get drafts."
+      )
+    )
+      return;
     setLoading(true);
     try {
       const res = await fetch("/api/finance/school-fees/generate-invoices", {
@@ -75,8 +100,10 @@ export function GenerateInvoicesButton() {
         <p className="text-xs text-muted-foreground">
           Creates invoices in Xero for any scheduled charges whose generation
           date has arrived. The daily cron does this automatically — use this to
-          preview or run on demand. Real runs <strong>authorise and email</strong>{" "}
-          the student.
+          preview or run on demand. Each school&apos;s billing settings decide:
+          schools with sending on are <strong>approved and emailed</strong>, held
+          schools get <strong>Xero drafts</strong>, and schools outside the Hub or
+          charges before a school&apos;s start date are skipped.
         </p>
 
         {invoices === null ? (
@@ -91,8 +118,9 @@ export function GenerateInvoicesButton() {
           <div className="space-y-1 max-h-[340px] overflow-y-auto">
             {!ranReal && (
               <p className="text-xs text-muted-foreground">
-                {invoices.length} invoice{invoices.length !== 1 ? "s" : ""} would
-                be generated:
+                {invoices.filter((i) => i.status !== "skipped").length} invoice
+                {invoices.filter((i) => i.status !== "skipped").length !== 1 ? "s" : ""}{" "}
+                would be generated:
               </p>
             )}
             {invoices.map((inv, i) => (
@@ -105,6 +133,7 @@ export function GenerateInvoicesButton() {
                   <p className="text-xs text-muted-foreground">
                     due {inv.dueDate}
                     {inv.invoiceNumber ? ` · ${inv.invoiceNumber}` : ""}
+                    {inv.reason ? ` · ${inv.reason}` : ""}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -115,8 +144,11 @@ export function GenerateInvoicesButton() {
                       {inv.error ?? "failed"}
                     </Badge>
                   ) : (
-                    <Badge variant="secondary" className="text-[10px]">
-                      {inv.status}
+                    <Badge
+                      variant={inv.status === "skipped" ? "outline" : "secondary"}
+                      className="text-[10px]"
+                    >
+                      {lineLabel(inv)}
                     </Badge>
                   )}
                 </div>
@@ -131,7 +163,7 @@ export function GenerateInvoicesButton() {
             Preview (dry run)
           </Button>
           <Button onClick={() => run(false)} disabled={loading}>
-            Generate &amp; send
+            Generate now
           </Button>
         </DialogFooter>
       </DialogContent>

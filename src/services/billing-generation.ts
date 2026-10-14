@@ -2,7 +2,8 @@
 // FFSA Hub — Scheduled invoice generation
 // ────────────────────────────────────────────────────────────
 // Finds billing-schedule rows whose generation date has arrived and
-// pushes them to Xero. Rows sharing a (plan, combined_group_key | due_date)
+// pushes them to Xero, honouring each school's billing settings (mode,
+// start date, email hold). Rows sharing a (plan, combined_group_key | due_date)
 // become ONE invoice with multiple line items (e.g. Mar 4 outreach +
 // monthly = one R51k invoice). Idempotent: only acts on 'scheduled' rows
 // and flips them to 'generated'/'sent' so the cron never double-creates.
@@ -11,6 +12,12 @@
 import { createScheduledInvoice, getXeroRegionForStudent } from "@/services/xero";
 import { getCountryTierMap, billingBlockedReason, type Tier } from "@/services/school-billing";
 import { commitWholeProgramPlan, commitSegmentPlans } from "@/services/billing-plan-builder";
+import {
+  decideInvoiceGroup,
+  SKIP_REASON_TEXT,
+  type SchoolBillingSettings,
+  type SkipReason,
+} from "@/lib/finance/invoice-run-policy";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
@@ -33,12 +40,24 @@ export interface GenerationResult {
     dueDate: string;
     total: number;
     rowIds: string[];
-    status: "preview" | "generated" | "sent" | "failed";
+    status: "preview" | "generated" | "sent" | "failed" | "skipped";
+    /** Whether this invoice is (or would be) authorised + emailed. False =
+     * a Xero draft because the school's sending is held. */
+    send?: boolean;
     invoiceNumber?: string;
     error?: string;
+    /** Why a 'skipped' line was left alone (rows stay 'scheduled'). */
+    reason?: string;
   }>;
 }
 
+/**
+ * Generate every due invoice, school by school.
+ *
+ * `autoSend` is a ceiling, not a decision: each school's own settings
+ * (src/lib/finance/invoice-run-policy.ts) decide whether its invoices are
+ * emailed, held as Xero drafts, or skipped entirely.
+ */
 export async function generateDueInvoices(
   supabase: Client,
   opts: { asOf: string; dryRun: boolean; autoSend: boolean; planIds?: string[] }
@@ -48,12 +67,33 @@ export async function generateDueInvoices(
   let query = supabase
     .from("student_billing_schedule")
     .select(
-      "id, plan_id, charge_type, label, amount_zar, xero_item_code, due_date, combined_group_key, scheduled_generation_date, student_billing_plans!inner(id, user_id, xero_region, users(email, first_name, last_name, preferred_name, nationality))"
+      "id, plan_id, charge_type, label, amount_zar, xero_item_code, due_date, combined_group_key, scheduled_generation_date, student_billing_plans!inner(id, user_id, program_id, xero_region, users(email, first_name, last_name, preferred_name, nationality))"
     )
     .eq("status", "scheduled")
     .lte("scheduled_generation_date", asOf);
   if (planIds && planIds.length > 0) query = query.in("plan_id", planIds);
-  const { data: rows } = await query;
+  const { data: rows, error: rowsError } = await query;
+  if (rowsError) throw new Error(`Could not read the billing schedule: ${rowsError.message}`);
+
+  // Each school's billing settings, read once. A school missing from this map
+  // is treated as external by the policy — never billed by default.
+  const programIds = [
+    ...new Set(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (rows ?? []).map((r: any) => r.student_billing_plans?.program_id).filter(Boolean)
+    ),
+  ];
+  const schools = new Map<string, SchoolBillingSettings>();
+  if (programIds.length > 0) {
+    const { data: programs, error: progError } = await supabase
+      .from("programs")
+      .select("id, billing_mode, billing_emails_enabled, schedule_start_date")
+      .in("id", programIds);
+    if (progError) {
+      throw new Error(`Could not read school billing settings: ${progError.message}`);
+    }
+    for (const p of programs ?? []) schools.set(p.id, p);
+  }
 
   // Group rows into invoices.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -67,10 +107,33 @@ export async function generateDueInvoices(
   const result: GenerationResult = { asOf, dryRun, autoSend, invoices: [] };
   const nowIso = new Date().toISOString();
 
-  for (const grp of groups.values()) {
-    const plan = grp[0].student_billing_plans;
+  for (const allRows of groups.values()) {
+    const plan = allRows[0].student_billing_plans;
     const user = plan.users ?? {};
     const name = studentName(user);
+    const decision = decideInvoiceGroup(allRows, schools.get(plan.program_id), autoSend);
+
+    // Report what was left alone, one line per reason.
+    const byReason = new Map<SkipReason, typeof allRows>();
+    for (const { row, reason } of decision.skipped) {
+      if (!byReason.has(reason)) byReason.set(reason, []);
+      byReason.get(reason)!.push(row);
+    }
+    for (const [reason, skippedRows] of byReason) {
+      result.invoices.push({
+        planId: plan.id,
+        student: name,
+        dueDate: skippedRows.map((r) => r.due_date).sort()[0],
+        total: skippedRows.reduce((s, r) => s + Number(r.amount_zar), 0),
+        rowIds: skippedRows.map((r) => r.id),
+        status: "skipped",
+        reason: SKIP_REASON_TEXT[reason],
+      });
+    }
+
+    const grp = decision.invoice;
+    if (grp.length === 0) continue;
+    const send = decision.send;
     const dueDate = grp.map((r) => r.due_date).sort()[0];
     const total = grp.reduce((s, r) => s + Number(r.amount_zar), 0);
     const rowIds = grp.map((r) => r.id);
@@ -84,6 +147,7 @@ export async function generateDueInvoices(
         total,
         rowIds,
         status: "preview",
+        send,
       });
       continue;
     }
@@ -96,6 +160,7 @@ export async function generateDueInvoices(
         total,
         rowIds,
         status: "failed",
+        send,
         error: "No student email on file",
       });
       continue;
@@ -108,6 +173,8 @@ export async function generateDueInvoices(
       amount: Number(r.amount_zar),
     }));
 
+    // send=false → createScheduledInvoice leaves it as a Xero DRAFT and
+    // never calls the email endpoint.
     const inv = await createScheduledInvoice(supabase, {
       region,
       studentEmail: user.email,
@@ -115,7 +182,7 @@ export async function generateDueInvoices(
       dueDate,
       reference,
       lineItems,
-      autoSend,
+      autoSend: send,
     });
 
     if (inv.success) {
@@ -137,6 +204,7 @@ export async function generateDueInvoices(
         total,
         rowIds,
         status: newStatus,
+        send,
         invoiceNumber: inv.invoiceNumber,
       });
     } else {
@@ -147,6 +215,7 @@ export async function generateDueInvoices(
         total,
         rowIds,
         status: "failed",
+        send,
         error: inv.error,
       });
     }

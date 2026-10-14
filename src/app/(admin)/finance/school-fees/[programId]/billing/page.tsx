@@ -3,7 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import { getProgramById } from "@/services/schools";
 import { getBillingCoursesByProgram } from "@/services/school-billing";
 import { Masthead } from "@/components/ffsa";
+import { canManageFinance } from "@/lib/api-auth";
 import { ProgramBillingClient } from "./program-billing-client";
+import { SchoolBillingSettings } from "./school-billing-settings";
 
 export default async function ProgramBillingPage({
   params,
@@ -48,6 +50,18 @@ export default async function ProgramBillingPage({
     .order("tier", { ascending: true })
     .order("sort_order", { ascending: true });
 
+  // Per-school billing switches + how many charges are still waiting on a run.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const canEdit = user ? await canManageFinance(supabase, user.id) : false;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { count: pendingCharges } = await (supabase as any)
+    .from("student_billing_schedule")
+    .select("id, student_billing_plans!inner(program_id)", { count: "exact", head: true })
+    .eq("student_billing_plans.program_id", programId)
+    .eq("status", "scheduled");
+
   return (
     <div className="ffsa-screen">
       <Masthead
@@ -63,7 +77,20 @@ export default async function ProgramBillingPage({
         }
       />
 
-      <div className="space-y-6 px-8 py-7">
+      <div className="space-y-6 px-4 py-7 md:px-8">
+        <SchoolBillingSettings
+          programId={programId}
+          schoolName={program.name}
+          canEdit={canEdit}
+          pendingCharges={pendingCharges ?? 0}
+          initial={{
+            // Columns absent (172 unapplied) read as external — the safe side.
+            billing_mode: program.billing_mode === "hub_scheduled" ? "hub_scheduled" : "external",
+            billing_emails_enabled: program.billing_emails_enabled === true,
+            schedule_start_date: program.schedule_start_date ?? null,
+          }}
+        />
+
         <p className="max-w-3xl text-[13px] text-[color:var(--text-secondary)]">
           The phases (courses) within this program, each with its own timeframe
           and per-tier charges. The phases together make up the full program;

@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     const result = await generateDueInvoices(admin, {
       asOf,
       dryRun,
-      autoSend: true,
+      autoSend: true, // ceiling — each school's settings decide per invoice
     });
     return NextResponse.json({ success: true, ...result });
   } catch (err) {

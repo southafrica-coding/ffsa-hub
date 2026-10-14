@@ -21,15 +21,18 @@ export async function GET(request: Request) {
     const result = await generateDueInvoices(supabase, {
       asOf,
       dryRun: false,
-      autoSend: true, // auto-authorise + email (per finance decision)
+      // Ceiling only — each school's own settings decide whether its invoices
+      // are emailed, held as Xero drafts, or skipped (invoice-run-policy.ts).
+      autoSend: true,
     });
     const sent = result.invoices.filter((i) => i.status === "sent").length;
     const generated = result.invoices.filter((i) => i.status === "generated").length;
     const failed = result.invoices.filter((i) => i.status === "failed").length;
+    const skipped = result.invoices.filter((i) => i.status === "skipped").length;
     console.log(
-      `[cron/generate-invoices] ${asOf}: ${sent} sent, ${generated} draft, ${failed} failed`
+      `[cron/generate-invoices] ${asOf}: ${sent} sent, ${generated} draft, ${failed} failed, ${skipped} skipped`
     );
-    return NextResponse.json({ ok: true, asOf, sent, generated, failed });
+    return NextResponse.json({ ok: true, asOf, sent, generated, failed, skipped });
   } catch (err) {
     console.error("[cron/generate-invoices] failed", err);
     return NextResponse.json(
