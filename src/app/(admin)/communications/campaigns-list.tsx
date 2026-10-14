@@ -175,7 +175,9 @@ export function CampaignsList({
               disabled={busy}
             />
             <div className="grid gap-3 sm:grid-cols-2">
-              <label className="block">
+              {/* div, not label: a click inside a <label> is forwarded to its
+                  first button — a chip's ✕ — so clicking a name removed it. */}
+              <div className="block">
                 <span className="mono-label mb-1 block">
                   Audience labels (OR — anyone with ANY; optional — you can hand-pick contacts in the editor)
                 </span>
@@ -220,7 +222,7 @@ export function CampaignsList({
                     </select>
                   )}
                 </div>
-              </label>
+              </div>
               <label className="block">
                 <span className="mono-label mb-1 block">Send from</span>
                 <select

@@ -1020,7 +1020,7 @@ export function CampaignComposer({
             />
           </Field>
 
-          <Field label="Audience labels (anyone with ANY of these receives the send)">
+          <FieldGroup label="Audience labels (anyone with ANY of these receives the send)">
             <div className="space-y-2">
               {selectedLabels.length === 0 ? (
                 <p className="text-xs text-muted-foreground italic">
@@ -1067,22 +1067,16 @@ export function CampaignComposer({
                 </select>
               )}
             </div>
-          </Field>
+          </FieldGroup>
 
-          {/* A div, not <Field>: Field is a <label>, and a click anywhere in a
-              label is forwarded to its first button — which here is a chip's
-              remove ✕, so clicking a name removed someone. */}
-          <div className="block text-sm">
-            <span className="mb-1 block text-xs font-medium text-muted-foreground">
-              Individual contacts
-            </span>
+          <FieldGroup label="Individual contacts">
             <IndividualContactsPicker
               picked={pickedContacts}
               onChange={savePickedContacts}
               disabled={sent}
               saving={picksSaving}
             />
-          </div>
+          </FieldGroup>
 
           <Field label="Send from">
             <select
@@ -1454,6 +1448,27 @@ export function CampaignComposer({
           </CardContent>
         </Card>
       )}
+    </div>
+  );
+}
+
+/**
+ * Field's look without the <label>. A click anywhere inside a label is
+ * forwarded to its first button, so wrapping a chip list in Field made
+ * clicking a chip's name remove the first chip. Use this for any field whose
+ * content has buttons.
+ */
+function FieldGroup({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="block text-sm">
+      <span className="block text-muted-foreground mb-1 text-xs">{label}</span>
+      {children}
     </div>
   );
 }
