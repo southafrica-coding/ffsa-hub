@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
+import { refreshVehicleRequestAlerts } from "@/lib/vehicles/slack-alerts";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAuthedUser } from "@/lib/api-auth";
@@ -252,6 +253,9 @@ export async function PATCH(
       returnDate: effReturn,
     });
   }
+
+  // A still-open request DM shows vehicles / drivers / dates — keep it current.
+  after(() => refreshVehicleRequestAlerts(id));
 
   return NextResponse.json({ ok: true, drivers });
 }

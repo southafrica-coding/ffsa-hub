@@ -6,6 +6,7 @@
 // the approve/deny notification on decision.
 
 import { dateRangeLabel } from "@/lib/bookings/dates";
+import { notifyVehicleSlack } from "@/lib/vehicles/slack-alerts";
 import { vehicleRequestDecisionEmailHtml } from "./templates/vehicle-request-decision";
 import { vehicleFormReminderEmailHtml } from "./templates/vehicle-form-reminder";
 import {
@@ -122,10 +123,15 @@ export async function notifyVehicleManagers(opts: {
   vehicleLabel?: string | null;
   detailHtml?: string | null;
 }) {
+  // Slack DMs to the coordinator ride alongside the emails (never instead).
+  const slackDone = notifyVehicleSlack(opts.event, opts.bookingId);
   try {
     const admin = createAdminClient();
     const recipients = await getVehicleManagerEmails(admin);
-    if (recipients.length === 0) return;
+    if (recipients.length === 0) {
+      await slackDone;
+      return;
+    }
 
     const html = vehicleManagerAlertEmailHtml({
       event: opts.event,
@@ -155,4 +161,5 @@ export async function notifyVehicleManagers(opts: {
   } catch {
     console.error("[vehicles] manager notification failed");
   }
+  await slackDone;
 }

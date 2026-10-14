@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
+import { notifyVehicleSlack } from "@/lib/vehicles/slack-alerts";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthedUser } from "@/lib/api-auth";
 import {
@@ -63,5 +64,6 @@ export async function POST(request: Request) {
   });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  after(() => notifyVehicleSlack("signed", bookingId, { signerName }));
   return NextResponse.json({ ok: true, agreement: data });
 }

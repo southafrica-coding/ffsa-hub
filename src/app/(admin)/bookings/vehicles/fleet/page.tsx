@@ -4,6 +4,7 @@ import { requireModuleAccess } from "@/lib/require-permission";
 import { getVehicles, getVehicleAccess, type Vehicle } from "@/services/vehicles";
 import { Masthead } from "@/components/ffsa";
 import { FleetAdmin } from "./fleet-admin";
+import { SlackAlertsCard } from "./slack-alerts-card";
 
 export default async function FleetPage() {
   const supabase = await createClient();
@@ -30,6 +31,7 @@ export default async function FleetPage() {
           take it out of availability without deleting its history.
         </p>
         <FleetAdmin vehicles={vehicles} />
+        <SlackAlertsCard />
       </div>
     </div>
   );

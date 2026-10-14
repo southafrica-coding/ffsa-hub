@@ -1,6 +1,8 @@
 /**
  * POST /api/slack/interactions — Slack Interactivity request URL.
  *
+ * Vehicle coordinator DM buttons are routed to lib/vehicles/slack-interactions.
+ *
  * Handles the buttons on the prayer-room booking DM alerts
  * (lib/prayer-room/booking-alerts):
  *   • "Block out & notify" with a room picked → apply the block-out
@@ -36,6 +38,8 @@ import {
   resolveBookingAlerts,
   displayName,
 } from "@/lib/prayer-room/booking-alerts";
+import { isVehicleAction } from "@/lib/vehicles/slack-alerts";
+import { handleVehicleInteraction, isVehicleView, type VehicleInteraction } from "@/lib/vehicles/slack-interactions";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -124,6 +128,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "bad payload" }, { status: 400 });
   }
   const admin = createAdminClient() as Client;
+
+  // ── vehicle coordinator DMs (lib/vehicles/slack-alerts) ──
+  if (
+    isVehicleView(payload.view?.callback_id) ||
+    (payload.type === "block_actions" && payload.actions?.[0] && isVehicleAction(payload.actions[0].action_id))
+  ) {
+    return handleVehicleInteraction(admin, payload as unknown as VehicleInteraction);
+  }
 
   // ── the "Other…" modal ──
   if (payload.type === "view_submission" && payload.view?.callback_id === VIEW_OTHER) {

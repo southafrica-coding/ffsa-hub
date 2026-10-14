@@ -580,6 +580,19 @@ export function dayCount(checkout: string, ret: string): number {
  * Takes an ADMIN client — it reads other users' rows, which RLS would hide.
  */
 export async function getVehicleManagerEmails(admin: Client): Promise<string[]> {
+  const ids = await getVehicleManagerUserIds(admin);
+  if (ids.length === 0) return [];
+  const { data: users } = await admin.from("users").select("email").in("id", ids);
+  const emails = new Set<string>();
+  for (const u of users ?? []) {
+    const e = (u.email as string | null)?.trim();
+    if (e) emails.add(e);
+  }
+  return Array.from(emails);
+}
+
+/** Ids of everyone holding vehicles.approve / vehicles.manage (direct or via a role). */
+export async function getVehicleManagerUserIds(admin: Client): Promise<string[]> {
   const { data: perms } = await admin
     .from("permissions")
     .select("id")
@@ -611,19 +624,7 @@ export async function getVehicleManagerEmails(admin: Client): Promise<string[]> 
     for (const row of holders ?? []) userIds.add(row.user_id as string);
   }
 
-  if (userIds.size === 0) return [];
-
-  const { data: users } = await admin
-    .from("users")
-    .select("email")
-    .in("id", Array.from(userIds));
-
-  const emails = new Set<string>();
-  for (const u of users ?? []) {
-    const e = (u.email as string | null)?.trim();
-    if (e) emails.add(e);
-  }
-  return Array.from(emails);
+  return Array.from(userIds);
 }
 
 export type VehicleActivity = {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { payfastProvider } from "@/lib/payments/payfast";
 import { createScheduledInvoice, getXeroRegionForStudent } from "@/services/xero";
+import { notifyVehicleSlack } from "@/lib/vehicles/slack-alerts";
 import {
   getVehiclePaymentById,
   getVehicleBookingPaymentInfo,
@@ -75,6 +76,7 @@ export async function POST(request: Request) {
       await markBookingPaid(admin, payment.vehicle_booking_id);
 
       // Post to Xero using the vehicle's item code (best-effort).
+      let xeroInvoiceNumber: string | null = null;
       try {
         const { data: booking } = await getVehicleBookingPaymentInfo(
           admin,
@@ -102,6 +104,7 @@ export async function POST(request: Request) {
             autoSend: true,
           });
           if (invoice.success) {
+            xeroInvoiceNumber = invoice.invoiceNumber ?? null;
             await updateVehiclePayment(admin, payment.id, {
               xero_invoice_id: invoice.invoiceId,
               xero_invoice_number: invoice.invoiceNumber,
@@ -116,6 +119,12 @@ export async function POST(request: Request) {
           e instanceof Error ? e.message : e
         );
       }
+
+      // Tell the coordinator on Slack (best-effort, never throws).
+      await notifyVehicleSlack("paid", payment.vehicle_booking_id, {
+        amountCents: payment.amount_cents,
+        xeroInvoiceNumber,
+      });
     }
   } else if (result.status === "cancelled" || result.status === "failed") {
     await markVehiclePaymentStatusIfPending(admin, payment.id, result.status);
