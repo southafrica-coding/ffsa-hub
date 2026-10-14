@@ -486,7 +486,7 @@ function PaymentEditor({
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="grid gap-3 lg:grid-cols-2">
         {/* Amount */}
         <div className="space-y-1.5">
           <p className="text-xs font-semibold">Amount</p>
