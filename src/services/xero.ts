@@ -281,6 +281,76 @@ export async function getXeroTrackingOptions(
 }
 
 // ────────────────────────────────────────────────────────────
+// PAYMENT STATE OF SPECIFIC INVOICES (read-only)
+// ────────────────────────────────────────────────────────────
+
+/** Xero's "/Date(1735689600000+0000)/" → "2025-01-01". */
+function xeroDateToYmd(v: unknown): string | null {
+  const m = typeof v === "string" ? v.match(/\/Date\((\d+)/) : null;
+  return m ? new Date(Number(m[1])).toISOString().slice(0, 10) : null;
+}
+
+export interface XeroInvoicePaymentState {
+  invoiceId: string;
+  invoiceNumber: string | null;
+  status: string;
+  amountPaid: number;
+  amountDue: number;
+  fullyPaidOn: string | null;
+}
+
+/**
+ * Payment state for specific invoices in one organisation, by Xero id.
+ * Batched (Xero accepts a comma-separated IDs filter); an id Xero doesn't
+ * return is simply absent from the result.
+ */
+export async function getXeroInvoicePaymentStates(
+  supabase: Client,
+  region: XeroRegion,
+  invoiceIds: string[]
+): Promise<{ data: Map<string, XeroInvoicePaymentState>; error: string | null }> {
+  const out = new Map<string, XeroInvoicePaymentState>();
+  if (invoiceIds.length === 0) return { data: out, error: null };
+  const auth = await getValidAccessToken(supabase, region);
+  if (!auth) return { data: out, error: `Xero ${region.toUpperCase()} not connected or token expired` };
+
+  try {
+    for (let i = 0; i < invoiceIds.length; i += 40) {
+      const ids = invoiceIds.slice(i, i + 40).join(",");
+      const json = (await xeroGet(
+        auth.accessToken,
+        auth.tenantId,
+        `Invoices?IDs=${encodeURIComponent(ids)}`
+      )) as { Invoices?: Record<string, unknown>[] };
+      for (const inv of json.Invoices ?? []) {
+        const id = inv.InvoiceID as string;
+        out.set(id, {
+          invoiceId: id,
+          invoiceNumber: (inv.InvoiceNumber as string) ?? null,
+          status: (inv.Status as string) ?? "",
+          amountPaid: Number(inv.AmountPaid ?? 0),
+          amountDue: Number(inv.AmountDue ?? 0),
+          fullyPaidOn: xeroDateToYmd(inv.FullyPaidOnDate),
+        });
+      }
+    }
+    return { data: out, error: null };
+  } catch (err) {
+    return { data: out, error: err instanceof Error ? err.message : "Xero read failed" };
+  }
+}
+
+/** Which of our regions a Xero tenant (organisation) id belongs to. */
+export async function regionForXeroTenant(
+  supabase: Client,
+  tenantId: string
+): Promise<XeroRegion | null> {
+  const { data } = await supabase.from("xero_tokens").select("region").eq("tenant_id", tenantId);
+  const region = (data ?? [])[0]?.region;
+  return region === "za" || region === "us" ? region : null;
+}
+
+// ────────────────────────────────────────────────────────────
 // INVOICE CREATION
 // ────────────────────────────────────────────────────────────
 

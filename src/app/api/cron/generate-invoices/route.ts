@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateDueInvoices } from "@/services/billing-generation";
+import { syncInvoicePayments } from "@/services/billing-payments";
 
 export const maxDuration = 60;
 
@@ -18,6 +19,22 @@ export async function GET(request: Request) {
   const supabase = createAdminClient();
 
   try {
+    // Daily catch-up for school-fee payments (the Xero webhook is the fast
+    // path; this covers anything it missed). Runs first so today's run sees
+    // current balances. Never blocks invoicing if Xero can't be read.
+    const payments = await syncInvoicePayments(supabase).catch((err) => ({
+      invoicesChecked: 0,
+      chargesUpdated: 0,
+      voided: [],
+      missing: [],
+      errors: [err instanceof Error ? err.message : "payment sync failed"],
+    }));
+    console.log(
+      `[cron/generate-invoices] payments: ${payments.invoicesChecked} invoices checked, ${payments.chargesUpdated} charges updated` +
+        (payments.voided.length ? `, ${payments.voided.length} voided in Xero` : "") +
+        (payments.errors.length ? `, errors: ${payments.errors.join("; ")}` : "")
+    );
+
     const result = await generateDueInvoices(supabase, {
       asOf,
       dryRun: false,
@@ -32,7 +49,15 @@ export async function GET(request: Request) {
     console.log(
       `[cron/generate-invoices] ${asOf}: ${sent} sent, ${generated} draft, ${failed} failed, ${skipped} skipped`
     );
-    return NextResponse.json({ ok: true, asOf, sent, generated, failed, skipped });
+    return NextResponse.json({
+      ok: true,
+      asOf,
+      sent,
+      generated,
+      failed,
+      skipped,
+      payments: { checked: payments.invoicesChecked, updated: payments.chargesUpdated, voided: payments.voided.length },
+    });
   } catch (err) {
     console.error("[cron/generate-invoices] failed", err);
     return NextResponse.json(
