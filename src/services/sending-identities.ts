@@ -180,7 +180,9 @@ export async function updateSendingIdentity(
 // source of truth for which domains can actually send).
 // ────────────────────────────────────────────────────────────
 
-const VERIFIED_DOMAINS = new Set(["ffsahub.com"]);
+// Both verified in Resend: the Hub's own domain, and the staff domain
+// (send-only — its incoming mail is Google Workspace).
+const VERIFIED_DOMAINS = new Set(["ffsahub.com", "ffsouthafrica.com"]);
 
 export function isLikelyVerifiedDomain(email: string): boolean {
   const at = email.lastIndexOf("@");

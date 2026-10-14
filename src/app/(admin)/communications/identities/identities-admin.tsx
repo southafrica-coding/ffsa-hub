@@ -15,6 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { SectionBar, StatusPill } from "@/components/ffsa";
+import { HUB_RECEIVING_DOMAIN } from "@/lib/email/reply-sender";
 import {
   isLikelyVerifiedDomain,
   type SendingIdentity,
@@ -452,14 +453,22 @@ export function IdentitiesAdmin({
                           >
                             {i.reply_from_email || i.from_email}
                           </div>
-                          {i.reply_to && (
-                            <div
-                              className="mt-0.5 text-[color:var(--amber)]"
-                              title="Replies go to this address instead of the Hub, so they won't appear in the Inbox or be forwarded"
-                            >
-                              reply-to override: {i.reply_to}
-                            </div>
-                          )}
+                          {i.reply_to &&
+                            (i.reply_to.toLowerCase().endsWith(`@${HUB_RECEIVING_DOMAIN}`) ? (
+                              <div
+                                className="mt-0.5 text-[color:var(--text-tertiary)]"
+                                title="Replies are sent here, where the Hub receives them for the Inbox"
+                              >
+                                replies arrive at {i.reply_to}
+                              </div>
+                            ) : (
+                              <div
+                                className="mt-0.5 text-[color:var(--amber)]"
+                                title="Replies go to this address instead of the Hub, so they won't appear in the Inbox or be forwarded"
+                              >
+                                reply-to override: {i.reply_to}
+                              </div>
+                            ))}
                         </TableCell>
                         <TableCell>
                           <StatusPill tone={i.is_active ? "good" : "quiet"}>

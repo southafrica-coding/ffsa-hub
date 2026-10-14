@@ -4,7 +4,8 @@
 //   From:      "<staff first name> · <team>" <identity.reply_from_email>
 //              — the team's work address (e.g. camps@ffsouthafrica.com),
 //              falling back to the identity's own ffsahub.com address.
-//   Reply-To:  the identity's ffsahub.com address, so when she answers again
+//   Reply-To:  the identity's ffsahub.com address (its reply_to when it sends
+//              From a staff domain, else its from_email), so when she answers again
 //              it lands back in the Hub Inbox and is forwarded to the team,
 //              instead of leaving the record.
 //   Threading: In-Reply-To / References point at her message, so mail apps
@@ -16,7 +17,7 @@
 import { getResend } from "@/lib/email/resend";
 import { escapeHtml } from "@/lib/email/placeholders";
 import { recordEmail, markSent, markFailed } from "@/lib/email/ledger";
-import { replySender } from "@/lib/email/reply-sender";
+import { replySender, hubReceivingAddress } from "@/lib/email/reply-sender";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Admin = any;
@@ -26,6 +27,7 @@ const DEFAULT_IDENTITY_SLUG = "default-marketing";
 type IdentityRow = {
   id: string;
   from_email: string;
+  reply_to: string | null;
   from_name: string;
   display_name: string;
   reply_from_email: string | null;
@@ -68,7 +70,7 @@ export async function loadReplyIdentity(
   admin: Admin,
   identityId: string | null
 ): Promise<IdentityRow | null> {
-  const cols = "id, from_email, from_name, display_name, reply_from_email";
+  const cols = "id, from_email, reply_to, from_name, display_name, reply_from_email";
   if (identityId) {
     const { data } = await admin
       .from("sending_identities")
@@ -113,6 +115,8 @@ export async function sendInboxReply(
     .maybeSingle();
   const firstName = staff?.preferred_name?.trim() || staff?.first_name?.trim() || null;
   const sender = replySender(identity, firstName);
+  // Where her next answer must go to come back into the Hub.
+  const hubReplyTo = hubReceivingAddress(identity);
 
   const subject = /^re:/i.test(inbound.subject ?? "")
     ? inbound.subject
@@ -158,7 +162,7 @@ ${paragraphs(body)}
       from: `${sender.name} <${sender.email}>`,
       to: [inbound.from_email],
       // Her next answer comes back into the Hub (and is forwarded to the team).
-      replyTo: identity.from_email,
+      replyTo: hubReplyTo,
       subject,
       html,
       text,
@@ -183,7 +187,7 @@ ${paragraphs(body)}
       contact_id: inbound.contact_id,
       from_email: sender.email,
       from_name: sender.name,
-      reply_to: identity.from_email,
+      reply_to: hubReplyTo,
       to_email: inbound.from_email,
       subject,
       body_text: body,
@@ -203,7 +207,7 @@ ${paragraphs(body)}
       contact_id: inbound.contact_id,
       from_email: sender.email,
       from_name: sender.name,
-      reply_to: identity.from_email,
+      reply_to: hubReplyTo,
       to_email: inbound.from_email,
       subject,
       body_text: body,

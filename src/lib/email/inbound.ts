@@ -5,7 +5,9 @@
 //
 //   1. stores it in inbound_emails (deduped on Resend's id — webhooks retry),
 //   2. routes it to the identity (team) it was addressed to, by matching the
-//      To/Cc addresses against sending_identities.from_email,
+//      To/Cc addresses against each identity's from_email and reply_to (an
+//      identity sending From a staff domain keeps its ffsahub.com address as
+//      Reply-To, and that's where the reply arrives),
 //   3. links it to the contact by the sender's address and puts
 //      "email_replied" on her timeline,
 //   4. forwards it to the team's real inboxes (sending_identities.forward_to)
@@ -41,6 +43,7 @@ type Identity = {
   id: string;
   slug: string;
   from_email: string;
+  reply_to: string | null;
   from_name: string;
   display_name: string;
   forward_to: string[] | null;
@@ -139,11 +142,15 @@ export async function handleInboundEmail(
     // as the owner, and every matching identity's forward list is used.
     const { data: identityRows } = await admin
       .from("sending_identities")
-      .select("id, slug, from_email, from_name, display_name, forward_to")
+      .select("id, slug, from_email, reply_to, from_name, display_name, forward_to")
       .eq("is_active", true);
     const identities = (identityRows ?? []) as Identity[];
     const addressed = new Set([...toList, ...ccList]);
-    const matched = identities.filter((i) => addressed.has(i.from_email.toLowerCase()));
+    const matched = identities.filter(
+      (i) =>
+        addressed.has(i.from_email.toLowerCase()) ||
+        (!!i.reply_to && addressed.has(i.reply_to.trim().toLowerCase()))
+    );
     const fallback = identities.find((i) => i.slug === DEFAULT_IDENTITY_SLUG) ?? null;
     const owner = matched[0] ?? null;
     const routing = matched.length > 0 ? matched : fallback ? [fallback] : [];
