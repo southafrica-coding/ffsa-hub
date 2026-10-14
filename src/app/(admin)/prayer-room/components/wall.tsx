@@ -472,7 +472,7 @@ export default function Wall({
                   <div
                     key={b.id}
                     title={blockoutTip(b)}
-                    className="pointer-events-none absolute left-0 right-0 z-20 overflow-hidden border-y-2 border-ink"
+                    className={`pointer-events-none absolute left-0 right-0 z-20 overflow-hidden border-y-2 border-ink${b.pending ? " border-dashed opacity-70" : ""}`}
                     style={{
                       top: (start - DAY_START) * PX_PER_MIN,
                       height: (end - start) * PX_PER_MIN,
@@ -481,7 +481,7 @@ export default function Wall({
                   >
                     <div className="flex flex-wrap items-center gap-1 p-1">
                       <span className="bg-ink px-1 py-0.5 font-mono text-[7.5px] font-bold uppercase tracking-[0.12em] text-yellow">
-                        Blocked
+                        {b.pending ? "Pending block-out" : "Blocked"}
                       </span>
                       {b.reason && (
                         <span className="min-w-0 truncate font-mono text-[8px] font-bold uppercase tracking-[0.06em] text-ink">

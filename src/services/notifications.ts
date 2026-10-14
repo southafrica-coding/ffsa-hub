@@ -18,6 +18,8 @@ import { dateRangeLabel } from "@/lib/bookings/dates";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sastNow } from "@/lib/prayer-room/practice";
 import { callerIsAdmin } from "@/lib/auth/check-ministry-access";
+import { isPrayerRoomStaff } from "@/lib/auth/prayer-room-access";
+import { getBookingSuggestions } from "./prayer-room-booking-suggestions";
 import { staffSignupNotifyEmails } from "@/lib/email/send-new-staff-notice";
 import {
   getInsuranceStatus,
@@ -341,6 +343,46 @@ async function practiceNotifs(supabase: Client, userId: string): Promise<AppNoti
   ];
 }
 
+// Prayer room managers: the room was booked in Space Bookings over devo sets
+// and needs a block-out (or an applied block-out's booking changed). The key
+// carries the booking's slot, so a moved booking re-surfaces as unread.
+async function prayerRoomBookingNotifs(supabase: Client, userId: string): Promise<AppNotification[]> {
+  if (!(await isPrayerRoomStaff(supabase, userId))) return [];
+  const { suggestions, changed } = await getBookingSuggestions(createAdminClient());
+  const href = "/prayer-room?tab=manage";
+  return [
+    ...suggestions.slice(0, CAP).map((sug) => {
+      const first = sug.occurrences[0];
+      const last = sug.occurrences[sug.occurrences.length - 1];
+      const { label, ts } = timeAgo(sug.at);
+      const dates =
+        sug.occurrences.length > 1
+          ? `${sug.occurrences.length} dates from ${dateRangeLabel(first.date, null)}`
+          : dateRangeLabel(first.date, first.endDate === first.date ? null : first.endDate);
+      return {
+        key: `pr-booking:${sug.key}:${first.signature}:${last.signature}:${sug.occurrences.length}`,
+        kind: "booking" as const,
+        title: "Prayer room booked over devo sets",
+        body: `${sug.title} · ${dates} · ${sug.affected.length} set${sug.affected.length === 1 ? "" : "s"} need a new room`,
+        href,
+        when: label,
+        ts,
+        read: false,
+      };
+    }),
+    ...changed.slice(0, CAP).map((c) => ({
+      key: `pr-booking-changed:${c.blockout.id}:${c.change}:${c.now?.date ?? ""}`,
+      kind: "booking" as const,
+      title: `Prayer room booking ${c.change}`,
+      body: `${c.bookingTitle} — check its block-out (${dateRangeLabel(c.blockout.block_date, c.blockout.end_date === c.blockout.block_date ? null : c.blockout.end_date)})`,
+      href,
+      when: "",
+      ts: 0,
+      read: false,
+    })),
+  ];
+}
+
 async function recordsMatchNotifs(supabase: Client, userId: string): Promise<AppNotification[]> {
   if (!(await hasModuleAccess(supabase, userId, "records-library"))) return [];
   const { count } = await supabase
@@ -564,7 +606,7 @@ async function insuranceExpiryNotifs(supabase: Client, userId: string): Promise<
 // Surfaces staff accounts that haven't logged in for 3+ months so admins
 // can manually offboard leavers without relying on memory. Only visible to
 // admin / super_admin — not shown to ministry leaders or regular staff.
-const PROVIDERS = [bookingNotifs, bookingDecisionNotifs, staffApprovalNotifs, newStaffOnboardedNotifs, vehicleRequestNotifs, recordsMatchNotifs, insuranceExpiryNotifs, practiceNotifs];
+const PROVIDERS = [bookingNotifs, prayerRoomBookingNotifs, bookingDecisionNotifs, staffApprovalNotifs, newStaffOnboardedNotifs, vehicleRequestNotifs, recordsMatchNotifs, insuranceExpiryNotifs, practiceNotifs];
 
 // ── Public API ─────────────────────────────────────────────
 

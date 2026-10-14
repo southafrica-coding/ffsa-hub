@@ -37,6 +37,8 @@ export interface CalendarBlockout {
   end_time: string | null;
   reason: string | null;
   relocation_note: string | null;
+  /** A Space Booking that still needs a block-out (staff-only, Manage acts on it). */
+  pending?: boolean;
 }
 
 type ViewKind = "month" | "week" | "day" | "list";
@@ -66,6 +68,7 @@ const hhmm = (t: string | null) => (t || "").slice(0, 5);
 const setTitle = (s: CalendarSet) => s.title || s.theme || "Devo set";
 export const blockoutTip = (b: CalendarBlockout) => {
   const when = isAllDayBlockout(b) ? "all day" : `${hhmm(b.start_time)}–${hhmm(b.end_time)}`;
+  if (b.pending) return `Pending block-out ${when}${b.reason ? ` — ${b.reason}` : ""} · booked in Space Bookings, block it out in Manage`;
   return `Blocked ${when}${b.reason ? ` — ${b.reason}` : ""}${b.relocation_note ? ` · sets → ${b.relocation_note}` : ""}`;
 };
 
@@ -210,7 +213,7 @@ function MonthView({
                     className="truncate rounded px-1 py-0.5 text-left text-[10px] font-semibold"
                     style={{ background: "hsl(0 72% 52% / 0.18)", color: "hsl(0 85% 80%)", borderLeft: "2px solid hsl(0 80% 60%)" }}
                   >
-                    🚧 {isAllDayBlockout(b) ? "Blocked all day" : `${hhmm(b.start_time)} Blocked`}
+                    {b.pending ? "⏳" : "🚧"} {isAllDayBlockout(b) ? `${b.pending ? "Pending" : "Blocked"} all day` : `${hhmm(b.start_time)} ${b.pending ? "Pending" : "Blocked"}`}
                   </div>
                 ))}
                 {daySets.slice(0, 3).map((s) => (
@@ -391,7 +394,7 @@ function GridView({
                     style={{ top, height, background: BLOCKOUT_FILL }}
                   >
                     <div className="truncate px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[hsl(0_85%_82%)]">
-                      🚧 {allDay ? "Blocked all day" : "Blocked"}
+                      {b.pending ? "⏳ Pending block-out" : `🚧 ${allDay ? "Blocked all day" : "Blocked"}`}
                       {b.relocation_note ? ` → ${b.relocation_note}` : ""}
                     </div>
                   </div>
@@ -438,7 +441,7 @@ function ListView({
                   style={{ borderColor: "hsl(0 72% 52% / 0.4)", background: "hsl(0 72% 52% / 0.08)" }}
                 >
                   <span className="font-semibold text-[hsl(0_85%_80%)]">
-                    🚧 Blocked {isAllDayBlockout(b) ? "all day" : `${hhmm(b.start_time)}–${hhmm(b.end_time)}`}
+                    {b.pending ? "⏳ Pending block-out" : "🚧 Blocked"} {isAllDayBlockout(b) ? "all day" : `${hhmm(b.start_time)}–${hhmm(b.end_time)}`}
                   </span>
                   {(b.reason || b.relocation_note) && (
                     <span className="truncate text-xs text-muted-foreground">

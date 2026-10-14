@@ -17,13 +17,23 @@ import {
   type Person,
 } from "./helpers";
 import { weekDays, weekRangeLabel, dateRangeLabel, timeRangeLabel } from "@/lib/bookings/dates";
+import BookingSuggestions, { blockoutToast, type SuggestionsPayload } from "./booking-suggestions";
 
-export default function AdminPanel() {
+export default function AdminPanel({ bookingActions = 0 }: { bookingActions?: number }) {
+  // A Space Booking waiting on a block-out is the most time-sensitive thing
+  // here, so it opens straight onto it.
   return (
-    <Tabs defaultValue="applications">
+    <Tabs defaultValue={bookingActions > 0 ? "blockout" : "applications"}>
       <TabsList>
         <TabsTrigger value="applications">Applications</TabsTrigger>
-        <TabsTrigger value="blockout">Block-out</TabsTrigger>
+        <TabsTrigger value="blockout">
+          Block-out
+          {bookingActions > 0 && (
+            <Badge className="ml-1.5 h-4 min-w-4 justify-center bg-amber-500 px-1 text-[10px] text-white hover:bg-amber-500">
+              {bookingActions}
+            </Badge>
+          )}
+        </TabsTrigger>
         <TabsTrigger value="members">Members</TabsTrigger>
       </TabsList>
       <TabsContent value="applications" className="mt-4">
@@ -257,6 +267,7 @@ interface Blockout {
   end_time: string | null;
   reason: string | null;
   relocation_note: string | null;
+  source_booking_id?: string | null;
 }
 
 type BlockoutScope = "window" | "day" | "week" | "range";
@@ -284,11 +295,17 @@ function BlockoutManager() {
   const [reason, setReason] = useState("");
   const [reloc, setReloc] = useState("");
 
+  const [suggestions, setSuggestions] = useState<SuggestionsPayload>({ suggestions: [], changed: [], venues: [] });
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/prayer-room/blockouts");
+      const [res, sug] = await Promise.all([
+        fetch("/api/prayer-room/blockouts"),
+        fetch("/api/prayer-room/booking-suggestions"),
+      ]);
       setBlockouts(res.ok ? await res.json() : []);
+      if (sug.ok) setSuggestions(await sug.json());
     } finally {
       setLoading(false);
     }
@@ -341,21 +358,7 @@ function BlockoutManager() {
         data.affected > 0
           ? `Blocked out — ${data.affected} set${data.affected === 1 ? "" : "s"} relocated`
           : "Blocked out — no sets in that period";
-      const slack = data.slack as
-        | { ok?: boolean; skipped?: string; error?: string; debug?: { channelLen: number; team: string | null } }
-        | undefined;
-      const diag = slack?.debug ? ` [channel value: ${slack.debug.channelLen} chars; bot workspace: ${slack.debug.team ?? "unknown"}]` : "";
-      if (slack?.ok) {
-        toast.success(`${moved}. Team notified on Slack.`);
-      } else if (slack?.skipped) {
-        toast.warning(`${moved}. Slack not posted — SLACK_PRAYER_ROOM_CHANNEL_ID isn't set on this deployment yet.`);
-      } else if (slack?.error === "not_in_channel") {
-        toast.warning(`${moved}. Slack post failed — invite the bot to the channel (type /invite @FFSA Hub Activity there).${diag}`);
-      } else if (slack?.error) {
-        toast.warning(`${moved}. Slack post failed: ${slack.error}.${diag}`);
-      } else {
-        toast.success(moved);
-      }
+      blockoutToast(moved, data.slack);
       // Reset the transient fields, keep the scope for repeat entries.
       setReason("");
       setReloc("");
@@ -381,6 +384,8 @@ function BlockoutManager() {
 
   return (
     <div className="space-y-6">
+      <BookingSuggestions data={suggestions} onChanged={load} />
+
       <section>
         <h3 className="mb-1 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Block out a time</h3>
         <p className="mb-3 text-xs text-muted-foreground">
@@ -472,6 +477,7 @@ function BlockoutManager() {
                   </div>
                   {b.reason && <div className="text-xs text-muted-foreground">{b.reason}</div>}
                   {b.relocation_note && <div className="text-xs text-amber-400">Moved to: {b.relocation_note}</div>}
+                  {b.source_booking_id && <div className="text-xs text-muted-foreground">From Space Bookings</div>}
                 </div>
                 <Button
                   size="sm"

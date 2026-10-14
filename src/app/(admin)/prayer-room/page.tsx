@@ -1,11 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { isPrayerRoomStaff, isPrayerRoomEvaluator, canViewDirectory } from "@/lib/auth/prayer-room-access";
 import { getPendingApplicationCount } from "@/services/prayer-room";
+import { countBookingSuggestions } from "@/services/prayer-room-booking-suggestions";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getMemberFlags } from "@/services/prayer-room-members";
 import PrayerRoomClient from "./prayer-room-client";
 import type { TabKey } from "./components/chrome";
 
-const LINKABLE_TABS: TabKey[] = ["week", "day", "practice"];
+const LINKABLE_TABS: TabKey[] = ["week", "day", "practice", "manage"];
 
 export default async function PrayerRoomPage({
   searchParams,
@@ -48,19 +50,25 @@ export default async function PrayerRoomPage({
 
   const inCatalogue = ((qualRes.data as unknown[] | null) ?? []).length > 0;
 
-  const pendingCount = isStaff ? await getPendingApplicationCount(supabase) : 0;
+  const [pendingCount, bookingActions] = isStaff
+    ? await Promise.all([
+        getPendingApplicationCount(supabase),
+        countBookingSuggestions(createAdminClient()).catch(() => 0),
+      ])
+    : [0, 0];
 
   return (
     <PrayerRoomClient
       userId={user.id}
       userName={userName}
       isStaff={isStaff}
+      bookingActions={bookingActions}
       isMember={isMember}
       inCatalogue={inCatalogue}
       isEvaluator={isEvaluator}
       canViewDirectory={canSeeDirectory}
       pendingCount={pendingCount}
-      initialTab={initialTab}
+      initialTab={initialTab === "manage" && !isStaff ? undefined : initialTab}
     />
   );
 }

@@ -14,6 +14,7 @@ import PrayerRoomChrome, { type TabDef, type TabKey } from "./chrome";
 import SetDetail from "./set-detail";
 import MemberPicker from "./member-picker";
 import { ScheduleCalendar, type CalendarSet, type CalendarBlockout } from "./calendar";
+import type { SuggestionsPayload } from "./booking-suggestions";
 import Wall, { needsALead, type WallSet, type SeatType, type Band } from "./wall";
 import { usePracticeWeek } from "./practice-view";
 import PracticeDrawers, { type PracticeTarget } from "./practice-drawers";
@@ -96,16 +97,38 @@ export default function ScheduleView({ userId, isStaff, isMember, inCatalogue, t
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [setsRes, blockoutsRes] = await Promise.all([
+      const [setsRes, blockoutsRes, sugRes] = await Promise.all([
         fetch(`/api/prayer-room/sets?dateFrom=${from}&dateTo=${to}`),
         fetch(`/api/prayer-room/blockouts?from=${from}&to=${to}`),
+        // Staff also see Space Bookings still waiting on a block-out.
+        isStaff ? fetch("/api/prayer-room/booking-suggestions") : Promise.resolve(null),
       ]);
       setSets(setsRes.ok ? await setsRes.json() : []);
-      setBlockouts(blockoutsRes.ok ? await blockoutsRes.json() : []);
+      const real: CalendarBlockout[] = blockoutsRes.ok ? await blockoutsRes.json() : [];
+      const pending: CalendarBlockout[] = [];
+      if (sugRes?.ok) {
+        const { suggestions } = (await sugRes.json()) as SuggestionsPayload;
+        for (const sug of suggestions) {
+          for (const o of sug.occurrences) {
+            if (o.endDate < from || o.date > to) continue;
+            pending.push({
+              id: `pending:${o.bookingId}`,
+              block_date: o.date,
+              end_date: o.endDate,
+              start_time: o.startTime,
+              end_time: o.endTime,
+              reason: sug.title,
+              relocation_note: null,
+              pending: true,
+            });
+          }
+        }
+      }
+      setBlockouts([...real, ...pending]);
     } finally {
       setLoading(false);
     }
-  }, [from, to]);
+  }, [from, to, isStaff]);
 
   useEffect(() => {
     load();

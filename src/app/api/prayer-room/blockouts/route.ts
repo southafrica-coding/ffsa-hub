@@ -8,11 +8,7 @@ import {
   getSetsInWindow,
   stampRelocation,
 } from "@/services/prayer-room";
-import {
-  notifyPrayerRoomBlockout,
-  buildBlockoutMessage,
-} from "@/lib/slack/prayer-room";
-import { sendBroadcast } from "@/lib/slack/broadcast";
+import { announceBlockout } from "@/lib/prayer-room/blockout-announce";
 
 type OwnerName = { first_name: string | null; last_name: string | null; preferred_name: string | null } | null;
 function ownerName(o: OwnerName): string | null {
@@ -103,56 +99,24 @@ export async function POST(request: Request) {
     await stampRelocation(supabase, affected.map((s) => s.id), relocation_note);
   }
 
-  // Announce on the dedicated prayer-room Slack channel; relay the outcome so
-  // the UI can say why it did / didn't post (not configured, bot not in channel…).
-  const blockoutMessage = buildBlockoutMessage({
-    blockDate: block_date,
-    endDate: end_date,
-    startTime: start_time,
-    endTime: end_time,
-    reason,
-    relocationNote: relocation_note,
-    affected: affected.map((s) => ({
-      title: s.title || s.theme || "Devo set",
-      date: s.set_date,
-      startTime: s.start_time,
-      endTime: s.end_time,
-      owner: ownerName(s.owner),
-    })),
-  });
-
-  const slack = await notifyPrayerRoomBlockout({
-    blockDate: block_date,
-    endDate: end_date,
-    startTime: start_time,
-    endTime: end_time,
-    reason,
-    relocationNote: relocation_note,
-    affected: affected.map((s) => ({
-      title: s.title || s.theme || "Devo set",
-      date: s.set_date,
-      startTime: s.start_time,
-      endTime: s.end_time,
-      owner: ownerName(s.owner),
-    })),
-  });
-
-  // …and DM every person individually. A block-out moves other
-  // people's devo sets, so everyone needs it — and the channel post
-  // alone relies on them noticing it. Fire-and-forget: delivery is
-  // paced across ~60 DMs to stay inside Slack's rate limits, and the
-  // block-out itself is already saved, so nothing here may block or
-  // fail the response.
-  void sendBroadcast({
-    type: "prayer_room_blockout",
-    title: blockoutMessage.title,
-    blocks: blockoutMessage.blocks,
-    body: blockoutMessage.body,
-    url: `${process.env.NEXT_PUBLIC_APP_URL ?? "https://www.ffsahub.com"}/prayer-room`,
-    actorUserId: user.id,
-  }).catch((err) => {
-    console.error("[prayer-room/blockouts] broadcast failed", err);
-  });
+  const slack = await announceBlockout(
+    {
+      blockDate: block_date,
+      endDate: end_date,
+      startTime: start_time,
+      endTime: end_time,
+      reason,
+      relocationNote: relocation_note,
+      affected: affected.map((s) => ({
+        title: s.title || s.theme || "Devo set",
+        date: s.set_date,
+        startTime: s.start_time,
+        endTime: s.end_time,
+        owner: ownerName(s.owner),
+      })),
+    },
+    user.id
+  );
 
   return NextResponse.json({ ok: true, blockout, affected: affected.length, slack });
 }

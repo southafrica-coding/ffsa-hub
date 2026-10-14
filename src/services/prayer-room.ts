@@ -465,6 +465,9 @@ export async function createBlockout(
     reason?: string | null;
     relocation_note?: string | null;
     created_by: string;
+    /** Set when applied from a Space Booking (migration 231). */
+    source_booking_id?: string | null;
+    source_signature?: string | null;
   }
 ) {
   return supabase.from("prayer_room_blockouts").insert(data).select().single();

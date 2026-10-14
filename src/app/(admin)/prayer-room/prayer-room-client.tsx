@@ -33,6 +33,8 @@ interface Props {
   isEvaluator: boolean;
   canViewDirectory: boolean;
   pendingCount: number;
+  /** Space Bookings waiting on a block-out decision (staff only). */
+  bookingActions: number;
   /** ?tab= on the URL — the practice notifications link straight to PRACTICE. */
   initialTab?: TabKey;
 }
@@ -46,6 +48,7 @@ export default function PrayerRoomClient({
   isEvaluator,
   canViewDirectory,
   pendingCount,
+  bookingActions,
   initialTab,
 }: Props) {
   const [tab, setTab] = useState<TabKey>(initialTab ?? "week");
@@ -66,7 +69,9 @@ export default function PrayerRoomClient({
     // Always present. A member who now plays drums needs the same form a new
     // person needs — there is no other way to be evaluated for a new seat.
     { key: "join" as const, label: "Join the room" },
-    ...(isStaff ? [{ key: "manage" as const, label: "Manage" }] : []),
+    ...(isStaff
+      ? [{ key: "manage" as const, label: bookingActions > 0 ? `Manage · ${bookingActions}` : "Manage", mark: bookingActions > 0 }]
+      : []),
   ];
 
   const shared = { tabs, active: tab, onChange: setTab };
@@ -117,11 +122,13 @@ export default function PrayerRoomClient({
       {tab === "manage" && isStaff && (
         <>
           <PrayerRoomChrome
-            context={`Applications, members and the weekly template · ${pendingCount} waiting`}
+            context={`Applications, members and block-outs · ${pendingCount} waiting${
+              bookingActions > 0 ? ` · ${bookingActions} room booking${bookingActions === 1 ? "" : "s"} to block out` : ""
+            }`}
             {...shared}
           />
           <div className="px-5 py-6 md:px-8 md:py-7">
-            <AdminPanel />
+            <AdminPanel bookingActions={bookingActions} />
           </div>
         </>
       )}

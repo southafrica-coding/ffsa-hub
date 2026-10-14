@@ -63,6 +63,11 @@ export type BlockoutArgs = {
   reason: string | null;
   relocationNote: string | null;
   affected: AffectedSet[];
+  /** Separate dates (e.g. a weekly booking applied at once). When set, the
+   *  message lists them instead of reading blockDate → endDate as one span. */
+  dates?: string[];
+  /** The dates carry different time windows, so no single window is named. */
+  timesVary?: boolean;
 };
 
 /**
@@ -77,11 +82,23 @@ export function buildBlockoutMessage(args: BlockoutArgs): {
   body: string;
 } {
   // Span first: one day → "Sat 4 Jul", a range → "Sat 4 Jul → Fri 10 Jul".
-  const multiDay = args.endDate && args.endDate !== args.blockDate;
-  const dateSpan = multiDay ? `${dateLabel(args.blockDate)} → ${dateLabel(args.endDate)}` : dateLabel(args.blockDate);
+  // Separate dates list out instead (≤4 by name, more as a count + span).
+  const separate = (args.dates?.length ?? 0) > 1 ? args.dates! : null;
+  const multiDay = !!separate || (args.endDate && args.endDate !== args.blockDate);
+  const dateSpan = separate
+    ? separate.length <= 4
+      ? separate.map(dateLabel).join(", ")
+      : `${separate.length} dates, ${dateLabel(separate[0])} → ${dateLabel(separate[separate.length - 1])}`
+    : multiDay
+      ? `${dateLabel(args.blockDate)} → ${dateLabel(args.endDate)}`
+      : dateLabel(args.blockDate);
   // Then the window: null times mean the room is out all day.
   const allDay = !args.startTime || !args.endTime;
-  const when = allDay ? `${dateSpan} — all day` : `${dateSpan}, ${hhmm(args.startTime!)}–${hhmm(args.endTime!)}`;
+  const when = args.timesVary
+    ? `${dateSpan} — times vary`
+    : allDay
+      ? `${dateSpan} — all day`
+      : `${dateSpan}, ${hhmm(args.startTime!)}–${hhmm(args.endTime!)}`;
   const title = `🚧 Prayer room blocked out — ${when}`;
 
   const lines: string[] = [`*${title}*`];
