@@ -140,25 +140,20 @@ export async function getTeamBudgets(supabase: Client, teamId: string) {
     .order("created_at", { ascending: true });
 }
 
-export async function upsertTeamBudget(
-  supabase: Client,
-  data: {
-    team_id: string;
-    category_id: string;
-    budget_amount_zar: number;
-    people_count?: number | null;
-    notes?: string | null;
-  }
-) {
+/**
+ * Budget lines (migration 236). `outreach_team_budgets` above is derived
+ * from these by a trigger — read it for per-category totals, but write
+ * lines, never it.
+ */
+export async function getTeamBudgetLines(supabase: Client, teamId: string) {
   return supabase
-    .from("outreach_team_budgets")
-    .upsert(data, { onConflict: "team_id,category_id" })
-    .select()
-    .single();
-}
-
-export async function deleteTeamBudget(supabase: Client, id: string) {
-  return supabase.from("outreach_team_budgets").delete().eq("id", id);
+    .from("outreach_budget_lines")
+    .select(
+      "id, team_id, category_id, description, amount_zar, frequency, uses_team_size, fixed_people, total_zar, sheet_total_zar, sort_order, source"
+    )
+    .eq("team_id", teamId)
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true });
 }
 
 // ────────────────────────────────────────────────────────────

@@ -4,7 +4,11 @@ import {
   getTeamExpenses,
   getTeamFundReleases,
   getTeamCashBatches,
+  getTeamBudgetLines,
+  getBudgetCategories,
+  getTeamCloseout,
 } from "@/services/outreach-finance";
+import { BudgetLines } from "@/app/(admin)/finance/outreach/[teamId]/budget-lines";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -52,12 +56,42 @@ export default async function MyOutreachTeamPage({
     );
   }
 
-  const [{ data: expenses }, { data: fundReleases }, { data: cashBatches }] =
-    await Promise.all([
-      getTeamExpenses(supabase, teamId),
-      getTeamFundReleases(supabase, teamId),
-      getTeamCashBatches(supabase, teamId),
-    ]);
+  const [
+    { data: expenses },
+    { data: fundReleases },
+    { data: cashBatches },
+    { data: budgetLines },
+    { data: categories },
+    { data: closeout },
+    { data: membership },
+  ] = await Promise.all([
+    getTeamExpenses(supabase, teamId),
+    getTeamFundReleases(supabase, teamId),
+    getTeamCashBatches(supabase, teamId),
+    getTeamBudgetLines(supabase, teamId),
+    getBudgetCategories(supabase),
+    getTeamCloseout(supabase, teamId),
+    supabase
+      .from("outreach_team_members")
+      .select("role")
+      .eq("team_id", teamId)
+      .eq("user_id", user.id)
+      .maybeSingle(),
+  ]);
+
+  // The team's leaders and finance students run the budget themselves;
+  // everyone else on the team sees it read-only. Mirrors
+  // can_edit_outreach_budget (migration 236), which is what actually
+  // enforces it.
+  const BUDGET_EDITORS = ["finance_admin", "school_leader", "outreach_leader", "finance_student"];
+  const financeClosed =
+    closeout?.status === "auto_closed" || closeout?.status === "admin_override";
+  const canEditBudget = BUDGET_EDITORS.includes(membership?.role ?? "") && !financeClosed;
+
+  const spentByCategory: Record<string, number> = {};
+  for (const e of expenses ?? []) {
+    spentByCategory[e.category_id] = (spentByCategory[e.category_id] || 0) + Number(e.zar_amount);
+  }
 
 
   const formatCurrency = (amount: number) =>
@@ -106,6 +140,15 @@ export default async function MyOutreachTeamPage({
       </KpiStrip>
 
       <div className="space-y-6 px-5 py-6 md:px-8 md:py-7">
+      <BudgetLines
+        teamId={teamId}
+        teamSize={team.people_count}
+        lines={budgetLines ?? []}
+        categories={categories ?? []}
+        spentByCategory={spentByCategory}
+        canEdit={canEditBudget}
+      />
+
       {/* Recent Expenses */}
       <Card>
         <CardHeader>

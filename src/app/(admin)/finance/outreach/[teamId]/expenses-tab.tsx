@@ -36,6 +36,7 @@ import { SUPPORTED_CURRENCIES } from "@/lib/currencies";
 import { ReceiptGallery } from "./receipt-gallery";
 import { createClient } from "@/lib/supabase/client";
 import { ExpenseImport } from "./expense-import";
+import { CategoryPicker } from "./category-picker";
 
 // ────────────────────────────────────────────────────────────
 // TYPES
@@ -96,7 +97,7 @@ const PAYMENT_METHODS = [
 export function ExpensesTab({
   teamId,
   expenses,
-  categories,
+  categories: initialCategories,
   cashBatches,
   receiptCounts = {},
   readOnly = false,
@@ -109,6 +110,8 @@ export function ExpensesTab({
   readOnly?: boolean;
 }) {
   const router = useRouter();
+  // Local copy so a category added from the form is selectable at once.
+  const [categories, setCategories] = useState(initialCategories);
   const [addOpen, setAddOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -367,21 +370,15 @@ export function ExpensesTab({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>Category *</Label>
-                  <Select
+                  <CategoryPicker
+                    categories={categories}
                     value={form.category_id}
-                    onValueChange={(v) => updateField("category_id", v)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select category..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    onChange={(v) => updateField("category_id", v)}
+                    onCreated={(c) =>
+                      setCategories((prev) => (prev.some((p) => p.id === c.id) ? prev : [...prev, c]))
+                    }
+                    placeholder="Select category..."
+                  />
                 </div>
                 <div>
                   <Label>Expense Date *</Label>

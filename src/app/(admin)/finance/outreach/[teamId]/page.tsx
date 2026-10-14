@@ -5,6 +5,7 @@ import {
   getOutreachTeamById,
   getTeamMembers,
   getTeamBudgets,
+  getTeamBudgetLines,
   getBudgetCategories,
   getTeamExpenses,
   getTeamFundReleases,
@@ -37,6 +38,7 @@ export default async function OutreachTeamDetailPage({
   const [
     { data: members },
     { data: budgets },
+    { data: budgetLines },
     { data: categories },
     { data: expenses },
     { data: fundReleases },
@@ -45,6 +47,7 @@ export default async function OutreachTeamDetailPage({
   ] = await Promise.all([
     getTeamMembers(supabase, teamId),
     getTeamBudgets(supabase, teamId),
+    getTeamBudgetLines(supabase, teamId),
     getBudgetCategories(supabase),
     getTeamExpenses(supabase, teamId),
     getTeamFundReleases(supabase, teamId),
@@ -81,6 +84,7 @@ export default async function OutreachTeamDetailPage({
       team={team}
       members={members ?? []}
       budgets={budgets ?? []}
+      budgetLines={budgetLines ?? []}
       categories={categories ?? []}
       allUsers={allUsers ?? []}
       expenses={expenses ?? []}
