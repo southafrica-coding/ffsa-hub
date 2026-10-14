@@ -10,7 +10,7 @@
 --   Reply-To:    its old team address @ffsahub.com  (where the Hub receives
 --                replies → Inbox + contact timeline)
 --   Forward to:  media@ffsouthafrica.com            (every reply, to Gmail)
---   Hub replies: sent from admin@ffsouthafrica.com
+--   Hub replies: sent from media@ffsouthafrica.com
 --
 -- Inbound routing matches To against reply_to as well as from_email, so each
 -- reply still lands under the right team.
@@ -29,6 +29,6 @@ WHERE lower(from_email) LIKE '%@ffsahub.com';
 
 UPDATE public.sending_identities si
 SET from_email       = 'admin@ffsouthafrica.com',
-    reply_from_email = 'admin@ffsouthafrica.com',
+    reply_from_email = 'media@ffsouthafrica.com',
     forward_to       = ARRAY['media@ffsouthafrica.com'],
     domain_id        = (SELECT id FROM public.sending_domains WHERE domain = 'ffsouthafrica.com');
