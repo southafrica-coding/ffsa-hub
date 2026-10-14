@@ -2,7 +2,9 @@
  * POST /api/slack/events — inbound Slack events for the Q&A bot.
  *
  * Handles the Events API: the url_verification handshake, plus
- * app_mention (channel @mentions) and message.im (DMs). Flow:
+ * app_mention (channel @mentions) and message.im (DMs), and user_change
+ * (someone deactivated in Slack → their HUB account is switched off, see
+ * lib/slack/deactivation). Flow:
  *   1. read the RAW body (needed for HMAC) before parsing
  *   2. verify the Slack signature + reject stale timestamps
  *   3. answer the url_verification challenge
@@ -21,6 +23,8 @@ import crypto from "node:crypto";
 import { isAllowed } from "@/lib/slack/assistant/access";
 import { runAssistant } from "@/lib/slack/assistant/run";
 import * as slack from "@/lib/slack/client";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { handleSlackDeactivation } from "@/lib/slack/deactivation";
 
 export const maxDuration = 60; // covers the after() agent work
 export const dynamic = "force-dynamic";
@@ -71,7 +75,8 @@ export async function POST(request: Request) {
       bot_id?: string;
       channel_type?: string;
       channel?: string;
-      user?: string;
+      // A user id on messages; user_change carries the whole member object.
+      user?: string | { id?: string; deleted?: boolean };
       text?: string;
       ts?: string;
       thread_ts?: string;
@@ -99,6 +104,28 @@ export async function POST(request: Request) {
 
   const event = body.event;
 
+  // Workspace member changed. Only deactivation matters to us; Slack fires
+  // this for every profile edit too, so everything else is a no-op.
+  if (event.type === "user_change") {
+    const member = typeof event.user === "object" ? event.user : null;
+    if (member?.id && member.deleted === true) {
+      const slackUserId = member.id;
+      after(async () => {
+        try {
+          const result = await handleSlackDeactivation(
+            createAdminClient(),
+            slackUserId,
+            "event"
+          );
+          console.log("[slack/events] user_change deactivation", slackUserId, result.outcome);
+        } catch (err) {
+          console.error("[slack/events] deactivation failed", slackUserId, err);
+        }
+      });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
   // (5) Ignore bot messages, our own posts, and edits/joins/etc.
   if (event.bot_id || event.subtype) {
     return NextResponse.json({ ok: true });
@@ -106,7 +133,7 @@ export async function POST(request: Request) {
 
   const isMention = event.type === "app_mention";
   const isDM = event.type === "message" && event.channel_type === "im";
-  if ((!isMention && !isDM) || !event.channel || !event.user) {
+  if ((!isMention && !isDM) || !event.channel || typeof event.user !== "string") {
     return NextResponse.json({ ok: true });
   }
 

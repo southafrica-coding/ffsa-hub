@@ -43,6 +43,7 @@ export type SlackResponse<T = unknown> = {
 const FORM_ENCODED_METHODS = new Set([
   "users.lookupByEmail",
   "users.info",
+  "users.list",
 ]);
 
 async function callSlack<T = Record<string, unknown>>(
@@ -179,4 +180,20 @@ export function getUserInfo(slackUserId: string) {
       profile?: { real_name?: string; display_name?: string; email?: string };
     };
   }>("users.info", { user: slackUserId });
+}
+
+// ────────────────────────────────────────────────────────────
+// users.list
+// ------------------------------------------------------------
+// One page of workspace members, deactivated ones included
+// (`deleted: true`). Used by the daily Slack-deactivation
+// reconcile, which needs every member's state in a handful of
+// calls rather than one users.info per linked person.
+// ────────────────────────────────────────────────────────────
+
+export function listUsers(cursor?: string) {
+  return callSlack<{
+    members?: Array<{ id: string; deleted?: boolean; is_bot?: boolean }>;
+    response_metadata?: { next_cursor?: string };
+  }>("users.list", { limit: 200, cursor });
 }
