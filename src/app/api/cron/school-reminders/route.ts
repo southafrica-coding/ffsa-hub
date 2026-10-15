@@ -121,6 +121,10 @@ export async function GET(request: Request) {
           category: "reference_reminder",
           sourceType: "school_application",
           sourceId: app?.id ?? null,
+          programDocuments: {
+            programId: cfg.program_id,
+            emailType: "reference_reminder",
+          },
         });
 
         // Stamp reminder_sent_at whenever the send left our hands (sent,

@@ -68,5 +68,6 @@ export async function sendReferenceInvite(params: {
     html,
     category: "reference_request",
     sourceType: "reference_request",
+    programDocuments: { programId: params.programId, emailType: "reference_request" },
   });
 }

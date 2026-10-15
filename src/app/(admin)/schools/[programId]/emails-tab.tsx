@@ -16,6 +16,7 @@ import {
   PROGRAM_EMAIL_TYPES,
   type ProgramEmailType,
 } from "@/lib/email/program-email-types";
+import { EmailDocuments, EmailDocumentsProvider } from "./email-documents";
 
 type TemplateRow = {
   email_type: string;
@@ -47,6 +48,7 @@ export function EmailsTab({
   const byType = new Map(templates.map((t) => [t.email_type, t]));
 
   return (
+    <EmailDocumentsProvider programId={programId}>
     <div className="space-y-5">
       <div className="border bg-muted/30 px-4 py-3">
         <p className="text-sm text-muted-foreground">
@@ -55,7 +57,8 @@ export function EmailsTab({
           sent today</strong> — edit it to make it your own, or clear a field
           to fall back to the FFSA default. Your text is automatically wrapped
           in FFSA branding, and any required buttons (status link, reference
-          link) are always included.
+          link) are always included. Documents you add to an email are
+          attached every time it goes out for this school.
         </p>
       </div>
 
@@ -85,6 +88,7 @@ export function EmailsTab({
         </Fragment>
       ))}
     </div>
+    </EmailDocumentsProvider>
   );
 }
 
@@ -241,6 +245,7 @@ function EmailTypeEditor({
             </p>
           </div>
         )}
+        <EmailDocuments emailType={type.key} disabled={!enabled} />
 
         <div className="flex items-center gap-3">
           <Button type="button" onClick={save} disabled={!dirty || saving} size="sm">
@@ -333,7 +338,9 @@ function AcceptanceEmailEditor({
         </CardTitle>
         <p className="text-sm text-muted-foreground mt-1">
           Sent the moment you accept someone, along with creating their
-          enrolment. This one always sends — there is no off switch.
+          enrolment. This one always sends — there is no off switch. Its
+          documents also go to accepted applicants who already have a HUB
+          account (they get an enrolment confirmation instead).
         </p>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -370,6 +377,7 @@ function AcceptanceEmailEditor({
             </span>
           </p>
         </div>
+        <EmailDocuments emailType="application_accepted" />
 
         <div className="flex items-center gap-3">
           <Button type="button" onClick={save} disabled={!dirty || saving} size="sm">
@@ -485,6 +493,7 @@ function SetupInviteDateEditor({
               : "This school has no start date yet, so setup links are sent straight away with the acceptance email."}
           </p>
         </div>
+        <EmailDocuments emailType="account_setup_link" />
 
         <div className="flex items-center gap-3">
           <Button type="button" onClick={save} disabled={!dirty || saving} size="sm">

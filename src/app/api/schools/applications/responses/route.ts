@@ -583,6 +583,7 @@ async function sendStatusEmail(
       subject,
       html,
       category: emailType,
+      programDocuments: { programId, emailType },
     });
   } catch {
     // Don't fail the status update if email fails
@@ -714,6 +715,7 @@ export async function PATCH(request: Request) {
       category: "reference_reminder",
       sourceType: "school_application",
       sourceId: app?.id ?? null,
+      programDocuments: { programId: app?.program_id, emailType: "reference_reminder" },
     });
 
     // Update reminder_sent_at

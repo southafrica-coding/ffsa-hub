@@ -424,6 +424,7 @@ export async function POST(request: Request) {
         category: "application_received",
         sourceType: "school_application",
         sourceId: response.id,
+        programDocuments: { programId: program_id, emailType: "application_received" },
       });
     }
   }
@@ -486,6 +487,7 @@ export async function POST(request: Request) {
             category: "reference_request",
             sourceType: "school_application",
             sourceId: response.id,
+            programDocuments: { programId: program_id, emailType: "reference_request" },
           });
         }
 

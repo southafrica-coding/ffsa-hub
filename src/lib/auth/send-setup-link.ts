@@ -48,6 +48,7 @@ export async function sendSetupLink(
     sourceType,
     sourceId,
     reason,
+    programDocumentsFor,
   }: {
     userId: string;
     email: string;
@@ -60,6 +61,8 @@ export async function sendSetupLink(
     sourceType?: string | null;
     sourceId?: string | null;
     reason?: string | null;
+    /** Attach this school's setup-link documents (migration 238). */
+    programDocumentsFor?: string | null;
   }
 ): Promise<SendSetupLinkResult> {
   const siteUrl = resolveSiteUrl();
@@ -91,6 +94,9 @@ export async function sendSetupLink(
     reason:
       reason ??
       "They have an FFSA Hub account with no password yet and asked for a setup link.",
+    programDocuments: programDocumentsFor
+      ? { programId: programDocumentsFor, emailType: "account_setup_link" }
+      : undefined,
   });
 
   if (!sendResult.ok) {

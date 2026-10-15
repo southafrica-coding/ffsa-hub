@@ -18,6 +18,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { recordEmail, markSent, markFailed, markDropped } from "./ledger";
 import { getResend } from "@/lib/email/resend";
+import { loadProgramEmailAttachments } from "./program-email-documents";
 
 export type SendTransactionalInput = {
   to: string;
@@ -38,6 +39,15 @@ export type SendTransactionalInput = {
    * label rather than an explanation.
    */
   reason?: string | null;
+  /**
+   * Attach the documents this school uploaded for this email (migration
+   * 238). A missing programId sends with no documents.
+   */
+  programDocuments?: {
+    programId: string | null | undefined;
+    /** Several when one email stands in for another step's too. */
+    emailType: string | string[];
+  };
 };
 
 export type SendTransactionalResult =
@@ -82,7 +92,33 @@ export async function sendTransactional(
   // 2. Record the queued row before sending.
   const ledgerId = await recordEmail(admin, ledgerFields);
 
-  // 3. Send.
+  // 3. The school's documents for this email, if any.
+  const attachments = input.programDocuments?.programId
+    ? await loadProgramEmailAttachments(
+        admin,
+        input.programDocuments.programId,
+        ([] as string[]).concat(input.programDocuments.emailType)
+      )
+    : [];
+  if (ledgerId && attachments.length > 0) {
+    try {
+      // attachments (migration 238) isn't in the generated types yet.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (admin as any)
+        .from("email_messages")
+        .update({
+          attachments: attachments.map((a) => ({
+            name: a.filename,
+            size: a.content.length,
+          })),
+        })
+        .eq("id", ledgerId);
+    } catch {
+      // column not migrated yet — the send matters more than the record
+    }
+  }
+
+  // 4. Send.
   const fromEmail = (
     process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com"
   ).trim();
@@ -92,6 +128,7 @@ export async function sendTransactional(
     to: input.to,
     subject: input.subject,
     html: input.html,
+    ...(attachments.length > 0 ? { attachments } : {}),
   });
 
   if (error) {

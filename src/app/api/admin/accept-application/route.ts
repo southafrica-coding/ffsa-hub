@@ -203,6 +203,10 @@ export async function POST(request: Request) {
         category: "enrollment_confirmation",
         sourceType: "school_application",
         sourceId: response_id,
+        programDocuments: {
+          programId: appResponse.program_id,
+          emailType: "application_accepted",
+        },
       });
     } else {
       // Create the auth user directly (no password yet). The applicant sets
@@ -356,6 +360,13 @@ export async function POST(request: Request) {
         category: "application_accepted",
         sourceType: "school_application",
         sourceId: response_id,
+        // When the setup link rides in this email, so do its documents.
+        programDocuments: {
+          programId: appResponse.program_id,
+          emailType: inviteUrl
+            ? ["application_accepted", "account_setup_link"]
+            : "application_accepted",
+        },
       });
 
       // The setup token exists either way, but if the email never went out

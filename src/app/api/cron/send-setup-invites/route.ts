@@ -65,7 +65,7 @@ export async function GET(request: Request) {
     // The school they were accepted to — newest enrolment still on a roster.
     const { data: enrolment } = await admin
       .from("enrollments")
-      .select("id, programs(name)")
+      .select("id, program_id, programs(name)")
       .eq("user_id", user.id)
       .is("removed_at", null)
       .order("enrolled_at", { ascending: false })
@@ -105,6 +105,7 @@ export async function GET(request: Request) {
       category: "account_setup_link",
       sourceType: "enrollment",
       sourceId: enrolment.id,
+      programDocumentsFor: enrolment.program_id,
       reason: programName
         ? `They were accepted to ${programName}, which starts soon.`
         : "They were accepted to a school that starts soon.",
