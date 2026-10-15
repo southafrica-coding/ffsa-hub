@@ -9,8 +9,10 @@ export async function GET(request: Request) {
 
     const clientId = process.env.XERO_CLIENT_ID!;
     const redirectUri = xeroRedirectUri();
-    // New granular scopes (required for apps created after March 2, 2026)
-    const scopes = "openid profile email offline_access accounting.invoices accounting.contacts accounting.settings.read";
+    // New granular scopes (required for apps created after March 2, 2026).
+    // accounting.payments lets Stripe ticket invoices be marked PAID and
+    // refunds be paid out; without it POST /Payments returns 401.
+    const scopes = "openid profile email offline_access accounting.invoices accounting.payments accounting.contacts accounting.settings.read";
     // Encode region in state so we know which region on callback
     const state = JSON.stringify({
       nonce: crypto.randomBytes(16).toString("hex"),
