@@ -1196,3 +1196,102 @@ export async function repointRegion(
   if (updErr) return { error: updErr.message };
   return { error: null, tenantName: target.tenantName };
 }
+
+// ────────────────────────────────────────────────────────────
+// STUDENTS' EXISTING INVOICES (read-only) — for matching to the Hub
+// ────────────────────────────────────────────────────────────
+
+export interface XeroStudentInvoice {
+  invoiceId: string;
+  invoiceNumber: string | null;
+  status: string;
+  date: string | null;
+  dueDate: string | null;
+  total: number;
+  amountPaid: number;
+  amountDue: number;
+  reference: string | null;
+  lines: Array<{ itemCode: string | null; description: string; amount: number }>;
+}
+
+/**
+ * Every sales invoice in one organisation for each of these email
+ * addresses, keyed by lower-cased email. Contacts are found by email the
+ * same way invoicing finds them (exact EmailAddress), so a student matched
+ * here is the contact the Hub would invoice. Voided and deleted invoices are
+ * left out. Read-only: nothing in Xero changes.
+ */
+export async function getXeroInvoicesForEmails(
+  supabase: Client,
+  region: XeroRegion,
+  emails: string[]
+): Promise<{ data: Map<string, XeroStudentInvoice[]>; contacts: Map<string, string>; error: string | null }> {
+  const out = new Map<string, XeroStudentInvoice[]>();
+  const contacts = new Map<string, string>(); // email → contact id
+  const wanted = [...new Set(emails.map((e) => e.trim()).filter(Boolean))];
+  if (wanted.length === 0) return { data: out, contacts, error: null };
+  const auth = await getValidAccessToken(supabase, region);
+  if (!auth) return { data: out, contacts, error: `Xero ${region.toUpperCase()} not connected or token expired` };
+
+  const q = (s: string) => s.replace(/"/g, '\\"');
+  try {
+    const contactEmail = new Map<string, string>(); // contact id → email
+    for (let i = 0; i < wanted.length; i += 15) {
+      const chunk = wanted.slice(i, i + 15);
+      const variants = [...new Set(chunk.flatMap((e) => [e, e.toLowerCase()]))];
+      const where = variants.map((e) => `EmailAddress=="${q(e)}"`).join(" OR ");
+      const json = (await xeroGet(
+        auth.accessToken,
+        auth.tenantId,
+        `Contacts?where=${encodeURIComponent(where)}&summaryOnly=true`
+      )) as { Contacts?: Array<{ ContactID: string; EmailAddress?: string; ContactStatus?: string }> };
+      for (const c of json.Contacts ?? []) {
+        const email = (c.EmailAddress ?? "").trim().toLowerCase();
+        if (!email || c.ContactStatus === "ARCHIVED") continue;
+        contactEmail.set(c.ContactID, email);
+        if (!contacts.has(email)) contacts.set(email, c.ContactID);
+      }
+    }
+
+    const ids = [...contactEmail.keys()];
+    for (let i = 0; i < ids.length; i += 40) {
+      const chunk = ids.slice(i, i + 40).join(",");
+      for (let page = 1; page < 50; page++) {
+        // Paged reads include line items (item codes).
+        const json = (await xeroGet(
+          auth.accessToken,
+          auth.tenantId,
+          `Invoices?ContactIDs=${encodeURIComponent(chunk)}&Statuses=DRAFT,SUBMITTED,AUTHORISED,PAID&page=${page}`
+        )) as { Invoices?: Record<string, unknown>[] };
+        const list = json.Invoices ?? [];
+        for (const inv of list) {
+          if (inv.Type !== "ACCREC") continue;
+          const contactId = (inv.Contact as { ContactID?: string } | undefined)?.ContactID ?? "";
+          const email = contactEmail.get(contactId);
+          if (!email) continue;
+          const row: XeroStudentInvoice = {
+            invoiceId: inv.InvoiceID as string,
+            invoiceNumber: (inv.InvoiceNumber as string) ?? null,
+            status: (inv.Status as string) ?? "",
+            date: xeroDateToYmd(inv.Date),
+            dueDate: xeroDateToYmd(inv.DueDate),
+            total: Number(inv.Total ?? 0),
+            amountPaid: Number(inv.AmountPaid ?? 0),
+            amountDue: Number(inv.AmountDue ?? 0),
+            reference: (inv.Reference as string) || null,
+            lines: ((inv.LineItems as Array<Record<string, unknown>>) ?? []).map((l) => ({
+              itemCode: (l.ItemCode as string) || null,
+              description: (l.Description as string) ?? "",
+              amount: Number(l.LineAmount ?? 0),
+            })),
+          };
+          (out.get(email) ?? out.set(email, []).get(email)!).push(row);
+        }
+        if (list.length < 100) break;
+      }
+    }
+    return { data: out, contacts, error: null };
+  } catch (err) {
+    return { data: out, contacts, error: err instanceof Error ? err.message : "Xero read failed" };
+  }
+}

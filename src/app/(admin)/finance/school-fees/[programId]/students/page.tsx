@@ -80,7 +80,17 @@ export default async function ProgramStudentsPage({
       <Masthead
         context={`School fees · ${program.name}`}
         title="Student Billing"
-        actions={<RefreshPaymentsButton programId={programId} />}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={`/finance/school-fees/${programId}/match-xero`}
+              className="inline-block border border-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em]"
+            >
+              Match to Xero
+            </Link>
+            <RefreshPaymentsButton programId={programId} />
+          </div>
+        }
       />
 
       <div className="space-y-6 px-5 py-6 md:px-8 md:py-7">
