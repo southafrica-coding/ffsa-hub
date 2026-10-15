@@ -10,6 +10,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getSchoolBalances } from "@/services/school-balances";
 import { StudentFeeDetail } from "@/components/finance/student-fee-detail";
 import { RefreshPaymentsButton } from "@/components/finance/refresh-payments-button";
+import { canManageFinance } from "@/lib/api-auth";
 
 const studentName = (u: {
   first_name: string | null;
@@ -60,6 +61,10 @@ export default async function StudentBillingPage({
   const hasWholeProgram = (wholeProgramCharges ?? 0) > 0;
 
   const balances = await getSchoolBalances(createAdminClient(), programId, { enrollmentId });
+  const {
+    data: { user: viewer },
+  } = await supabase.auth.getUser();
+  const canInvoice = viewer ? await canManageFinance(supabase, viewer.id) : false;
   const mine = balances.byEnrollment.get(enrollmentId);
 
   return (
@@ -71,7 +76,15 @@ export default async function StudentBillingPage({
       />
 
       <div className="space-y-6 px-4 py-7 md:px-8">
-        {mine && <StudentFeeDetail balance={mine.balance} charges={mine.charges} today={balances.today} />}
+        {mine && (
+          <StudentFeeDetail
+            balance={mine.balance}
+            charges={mine.charges}
+            today={balances.today}
+            enrollmentId={enrollmentId}
+            canEdit={canInvoice}
+          />
+        )}
 
         <p className="max-w-3xl text-[13px] text-[color:var(--text-secondary)]">
           Choose phases — billing auto-trims to match. Preview before saving;

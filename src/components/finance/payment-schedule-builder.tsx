@@ -446,11 +446,21 @@ function PaymentEditor({
     });
   };
 
-  const setTimingKind = (kind: PaymentTiming["kind"]) => {
+  // "On acceptance" is after_acceptance with 0 days, shown as its own choice
+  // because it's the one finance reaches for most (deposits).
+  const dueChoice =
+    p.timing.kind === "after_acceptance" && p.timing.days === 0 ? "on_acceptance" : p.timing.kind;
+
+  const setTimingKind = (choice: PaymentTiming["kind"] | "on_acceptance") => {
+    if (choice === "on_acceptance") {
+      onChange({ timing: { kind: "after_acceptance", days: 0 } });
+      return;
+    }
+    const kind = choice;
     const y = new Date().getUTCFullYear();
     const next: PaymentTiming =
       kind === "after_acceptance"
-        ? { kind, days: 0 }
+        ? { kind, days: 7 }
         : kind === "fixed_date"
           ? { kind, date: "" }
           : kind === "before_arrival"
@@ -566,10 +576,11 @@ function PaymentEditor({
           <select
             className={selectCls}
             disabled={disabled}
-            value={p.timing.kind}
-            onChange={(e) => setTimingKind(e.target.value as PaymentTiming["kind"])}
+            value={dueChoice}
+            onChange={(e) => setTimingKind(e.target.value as PaymentTiming["kind"] | "on_acceptance")}
             aria-label="When it's due"
           >
+            <option value="on_acceptance">On acceptance</option>
             <option value="after_acceptance">Days after they&apos;re accepted</option>
             <option value="fixed_date">On a set date</option>
             {(hasArrival || p.timing.kind === "before_arrival") && (
@@ -577,7 +588,7 @@ function PaymentEditor({
             )}
             <option value="monthly">Monthly run</option>
           </select>
-          {(p.timing.kind === "after_acceptance" || p.timing.kind === "before_arrival") && (
+          {((p.timing.kind === "after_acceptance" && dueChoice !== "on_acceptance") || p.timing.kind === "before_arrival") && (
             <div className="flex items-center gap-2 text-xs">
               <Input
                 type="number"
@@ -592,9 +603,7 @@ function PaymentEditor({
               />
               <span>
                 {p.timing.kind === "after_acceptance"
-                  ? p.timing.days === 0
-                    ? "days (0 = the day they're accepted)"
-                    : "days after acceptance"
+                  ? "days after acceptance"
                   : p.timing.days === 0
                     ? "days (0 = on arrival day)"
                     : "days before arrival"}
@@ -673,7 +682,7 @@ function PaymentEditor({
               }}
               aria-label="When the invoice is created"
             >
-              <option value="on_acceptance">As soon as they&apos;re accepted</option>
+              <option value="on_acceptance">Immediately when they&apos;re accepted (sent straight away)</option>
               <option value="month_before_15th">On the 15th of the month before it&apos;s due</option>
               <option value="days_before_due">Days before it&apos;s due</option>
             </select>

@@ -117,7 +117,12 @@ export async function commitWholeProgramPlan(
     supabase,
     plan.id,
     rows.map((r) => ({
-      charge_item_id: r.charge_item_id ?? null,
+      // Whole-program charges live in program_charge_items, but this column's
+      // foreign key points at fee_charge_items (course charges, migration 095).
+      // Writing a program charge id here broke every insert, so whole-program
+      // students got a plan with NO charges and no deposit invoice. Leave it
+      // empty: nothing reads it for whole-program rows.
+      charge_item_id: null,
       charge_type: r.charge_type,
       label: r.label,
       sequence: r.sequence,
