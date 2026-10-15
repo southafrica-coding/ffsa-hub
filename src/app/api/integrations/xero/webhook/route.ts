@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { after, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { syncInvoicePayments } from "@/services/billing-payments";
+import { syncTicketInvoicePayments } from "@/lib/ticketing/pay-later";
 
 // Xero webhook — Xero calls this when an invoice changes (e.g. a payment is
 // applied), in either organisation, so school-fee balances update without
@@ -64,6 +65,13 @@ export async function POST(request: Request) {
         }
       } catch (err) {
         console.error("[xero/webhook] sync failed", err);
+      }
+      // Pay-later ticket invoices: a full payment issues the tickets.
+      try {
+        const t = await syncTicketInvoicePayments(createAdminClient(), { invoiceIds });
+        if (t.checked || t.errors.length) console.log("[xero/webhook] tickets", JSON.stringify(t));
+      } catch (err) {
+        console.error("[xero/webhook] ticket invoice sync failed", err);
       }
     });
   }

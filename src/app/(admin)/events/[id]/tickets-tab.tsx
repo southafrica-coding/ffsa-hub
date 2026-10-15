@@ -1,4 +1,5 @@
 import { TicketingSettings } from "./ticketing-settings";
+import { PayLaterSettings } from "./pay-later-settings";
 import { TicketTypesManager } from "./ticket-types-manager";
 import { PromoCodesManager } from "./promo-codes-manager";
 import { CheckoutQuestionsManager } from "./checkout-questions-manager";
@@ -26,6 +27,7 @@ export function TicketsTab({
   buyerFields,
   currency,
   currencyLocked,
+  startDate,
 }: {
   eventId: string;
   ticketingEnabled: boolean;
@@ -37,6 +39,7 @@ export function TicketsTab({
   buyerFields: unknown;
   currency: string;
   currencyLocked: boolean;
+  startDate?: string | null;
 }) {
   return (
     <div className="space-y-6">
@@ -47,6 +50,8 @@ export function TicketsTab({
         currency={currency}
         currencyLocked={currencyLocked}
       />
+      {/* Keyed on currency: the Xero org (and so the item) follows it. */}
+      <PayLaterSettings key={currency} eventId={eventId} startDate={startDate ?? null} />
       <TicketTypesManager
         eventId={eventId}
         ticketTypes={ticketTypes}

@@ -1823,6 +1823,9 @@ export type Database = {
       }
       events: {
         Row: {
+          pay_later_enabled: boolean
+          pay_later_due_date: string | null
+          xero_item_code: string | null
           base_label_id: string | null
           brand: string
           buyer_fields: Json
@@ -1848,6 +1851,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          pay_later_enabled?: boolean
+          pay_later_due_date?: string | null
+          xero_item_code?: string | null
           base_label_id?: string | null
           brand?: string
           buyer_fields?: Json
@@ -1873,6 +1879,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          pay_later_enabled?: boolean
+          pay_later_due_date?: string | null
+          xero_item_code?: string | null
           base_label_id?: string | null
           brand?: string
           buyer_fields?: Json
@@ -2723,6 +2732,13 @@ export type Database = {
       }
       orders: {
         Row: {
+          xero_invoice_id: string | null
+          xero_invoice_number: string | null
+          xero_region: string | null
+          invoice_due_date: string | null
+          invoice_paid_cents: number
+          invoice_emailed_at: string | null
+          invoice_error: string | null
           buyer_contact_id: string | null
           buyer_email: string
           buyer_first_name: string
@@ -2758,6 +2774,13 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          xero_invoice_id?: string | null
+          xero_invoice_number?: string | null
+          xero_region?: string | null
+          invoice_due_date?: string | null
+          invoice_paid_cents?: number
+          invoice_emailed_at?: string | null
+          invoice_error?: string | null
           buyer_contact_id?: string | null
           buyer_email: string
           buyer_first_name: string
@@ -2793,6 +2816,13 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          xero_invoice_id?: string | null
+          xero_invoice_number?: string | null
+          xero_region?: string | null
+          invoice_due_date?: string | null
+          invoice_paid_cents?: number
+          invoice_emailed_at?: string | null
+          invoice_error?: string | null
           buyer_contact_id?: string | null
           buyer_email?: string
           buyer_first_name?: string

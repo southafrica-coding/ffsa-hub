@@ -44,6 +44,12 @@ type Order = {
   // Snapshotted from events.currency at checkout, so an order always
   // renders in the currency it was actually sold in.
   currency: string | null;
+  // Pay-later orders (migration 238): the Xero invoice and what's paid so far.
+  xero_invoice_number?: string | null;
+  invoice_due_date?: string | null;
+  invoice_paid_cents?: number;
+  invoice_emailed_at?: string | null;
+  invoice_error?: string | null;
 };
 
 type TicketWithAnswers = {
@@ -145,6 +151,7 @@ const STATUS_VARIANTS: Record<
   "default" | "secondary" | "destructive" | "outline"
 > = {
   pending: "outline",
+  invoiced: "secondary",
   paid: "default",
   expired: "secondary",
   cancelled: "destructive",
@@ -287,6 +294,34 @@ export function OrdersTab({
         ? `${data.settled} order${data.settled === 1 ? "" : "s"} confirmed and fulfilled.`
         : "No new payments found — the pending orders weren't paid on Stripe."
     );
+    router.refresh();
+  }
+
+  // Pay-later orders: resend the invoice, ask Xero now, or cancel (void).
+  async function invoiceAction(order: Order, action: "resend" | "check" | "cancel") {
+    const prompts = {
+      resend: `Email invoice ${order.xero_invoice_number ?? ""} to ${order.buyer_email} again?`,
+      cancel: `Cancel order #${order.id.slice(0, 8)}? This voids invoice ${order.xero_invoice_number ?? ""} in Xero and frees the held seats.`,
+    } as const;
+    if (action !== "check" && !confirm(prompts[action])) return;
+    setBusyId(order.id);
+    setErr(null);
+    const res = await fetch(`/api/events/${eventId}/orders/${order.id}/invoice`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action }),
+    });
+    const data = (await res.json().catch(() => ({}))) as { error?: string; status?: string };
+    setBusyId(null);
+    if (!res.ok) {
+      setErr(data.error ?? "That didn't work");
+      return;
+    }
+    if (action === "resend") toast.success("Invoice sent");
+    if (action === "cancel") toast.success("Order cancelled and invoice voided");
+    if (action === "check") {
+      toast.success(data.status === "paid" ? "Paid in full. Tickets are on their way." : "Not fully paid yet");
+    }
     router.refresh();
   }
 
@@ -444,6 +479,16 @@ export function OrdersTab({
                       </TableCell>
                       <TableCell>
                         <div className="text-sm">{money(o.total_cents, o.currency)}</div>
+                        {o.status === "invoiced" && (
+                          <div className="text-xs text-muted-foreground">
+                            Invoice {o.xero_invoice_number ?? "—"} ·{" "}
+                            {money(o.invoice_paid_cents ?? 0, o.currency)} paid
+                            {o.invoice_due_date && ` · due ${o.invoice_due_date}`}
+                          </div>
+                        )}
+                        {o.invoice_error && o.status === "invoiced" && (
+                          <div className="text-xs text-destructive">{o.invoice_error}</div>
+                        )}
                         {o.refund_cents > 0 && (
                           <div className="text-xs text-muted-foreground">
                             − {money(o.refund_cents, o.currency)} refunded
@@ -483,6 +528,36 @@ export function OrdersTab({
                                   ? "Sent"
                                   : "Resend email"}
                             </button>
+                          )}
+                          {o.status === "invoiced" && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => invoiceAction(o, "check")}
+                                disabled={busyId === o.id}
+                                className="text-xs text-muted-foreground hover:text-foreground hover:underline disabled:opacity-50 normal-case tracking-normal"
+                              >
+                                {busyId === o.id ? "Working…" : "Check payment"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => invoiceAction(o, "resend")}
+                                disabled={busyId === o.id}
+                                className="text-xs text-muted-foreground hover:text-foreground hover:underline disabled:opacity-50 normal-case tracking-normal"
+                              >
+                                Resend invoice
+                              </button>
+                              {(o.invoice_paid_cents ?? 0) === 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => invoiceAction(o, "cancel")}
+                                  disabled={busyId === o.id}
+                                  className="text-xs text-destructive hover:underline disabled:opacity-50 normal-case tracking-normal"
+                                >
+                                  Cancel &amp; void
+                                </button>
+                              )}
+                            </>
                           )}
                           {/* Partially refunded orders still hold money,
                               so they stay refundable up to the balance. */}

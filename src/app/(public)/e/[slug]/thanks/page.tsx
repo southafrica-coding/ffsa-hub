@@ -117,6 +117,21 @@ export default async function ThanksPage({
                 reach us.
               </p>
             </>
+          ) : status === "invoiced" ? (
+            <>
+              <p className="page-eyebrow">Invoice sent</p>
+              <h1 className="page-title">Your seats are held</h1>
+              <p className="text-sm text-foreground/80 normal-case tracking-normal pt-2">
+                We&apos;ve emailed an invoice to{" "}
+                <span className="font-semibold text-foreground">{buyerEmail}</span>
+                . You can pay it online in full or in parts.
+              </p>
+              <p className="text-xs text-muted-foreground normal-case tracking-normal pt-2">
+                Your tickets (with QR codes for the door) are emailed as soon as
+                the invoice is fully paid. Can&apos;t see the invoice? Check your
+                spam folder, or reply to the email to reach us.
+              </p>
+            </>
           ) : status === "pending" ? (
             <>
               <p className="page-eyebrow">Processing</p>

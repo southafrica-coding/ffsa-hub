@@ -109,6 +109,8 @@ type PublicEvent = {
   end_time: string | null;
   logo_url: string | null;
   currency: string;
+  // "Invoice me, pay later" offered (events.pay_later_enabled + Xero item).
+  pay_later?: boolean;
   max_capacity?: number | null;
 };
 
@@ -197,7 +199,7 @@ export function FfsaStorefront({
   const [ticketErrors, setTicketErrors] = useState<
     Record<string, Record<string, string>>
   >({});
-  const [submitting, setSubmitting] = useState<"payfast" | "stripe" | null>(null);
+  const [submitting, setSubmitting] = useState<"payfast" | "stripe" | "invoice" | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   const questionsByTier = useMemo(() => {
@@ -380,7 +382,7 @@ export function FfsaStorefront({
     (!bf.phone.enabled || !bf.phone.required || phone.trim().length > 0) &&
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
-  async function submit(provider: "payfast" | "stripe" = "payfast") {
+  async function submit(provider: "payfast" | "stripe" | "invoice" = "payfast") {
     if (lineCount === 0) {
       setErr("Add at least one ticket.");
       return;
@@ -1134,6 +1136,23 @@ export function FfsaStorefront({
                   ? "Secure checkout via PayFast. Use the international option for cards declined on PayFast or Apple Pay."
                   : "You'll be redirected to Stripe to complete payment securely."}
               </p>
+              {event.pay_later && (
+                <>
+                  <button
+                    type="button"
+                    className="ffe-cta-alt"
+                    onClick={() => submit("invoice")}
+                    disabled={submitting !== null || !buyerValid || !consentAccepted}
+                  >
+                    <span>
+                      {submitting === "invoice" ? "Sending your invoice…" : "Invoice me, pay later"}
+                    </span>
+                  </button>
+                  <p className="ffe-pay-note">
+                    We&apos;ll email you an invoice to pay in full or in parts. Your tickets are sent once it&apos;s fully paid.
+                  </p>
+                </>
+              )}
                 </>
               )}
             </div>

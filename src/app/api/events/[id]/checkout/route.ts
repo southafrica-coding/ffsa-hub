@@ -25,6 +25,7 @@ import {
 } from "@/lib/ticketing/buyer-fields";
 import { TICKET_CONSENT_VERSION } from "@/lib/ticketing/consent-terms";
 import { settlePaidOrder } from "@/lib/ticketing/settle";
+import { invoicePayLaterOrder } from "@/lib/ticketing/pay-later";
 import {
   buildWaiverSignatureGroups,
   type TierWaiver,
@@ -76,7 +77,8 @@ type Body = {
     ticket_type_id?: string;
     values?: WaiverSlotValues;
   }>;
-  payment_provider?: "payfast" | "stripe";
+  // "invoice" = pay later on a Xero invoice (events.pay_later_enabled).
+  payment_provider?: "payfast" | "stripe" | "invoice";
 };
 
 type TicketTypeRow = {
@@ -148,7 +150,7 @@ export async function POST(
   const { data: event, error: eventErr } = await supabase
     .from("events")
     .select(
-      "id, title, status, ticketing_enabled, public_slug, checkout_questions, buyer_fields, currency"
+      "id, title, status, ticketing_enabled, public_slug, checkout_questions, buyer_fields, currency, pay_later_enabled, xero_item_code"
     )
     .eq("id", eventId)
     .maybeSingle();
@@ -212,17 +214,28 @@ export async function POST(
   // ineligible button; this is the authoritative check.
   const currency = eventCurrency(event.currency).code;
   const eligibleProviders = providersForCurrency(currency);
-  const providerName = body.payment_provider ?? eligibleProviders[0];
-  if (providerName !== "payfast" && providerName !== "stripe") {
+  const requested = body.payment_provider ?? eligibleProviders[0];
+  if (requested !== "payfast" && requested !== "stripe" && requested !== "invoice") {
     return NextResponse.json(
       { error: "Unknown payment provider." },
       { status: 400 }
     );
   }
+  // Pay later: no processor now — the buyer is emailed a Xero invoice and
+  // the tickets follow once it's paid. Only where staff switched it on and
+  // the event has its Xero item.
+  const payLater = requested === "invoice";
+  if (payLater && !(event.pay_later_enabled && event.xero_item_code)) {
+    return NextResponse.json(
+      { error: "Paying by invoice isn't available for this event." },
+      { status: 409 }
+    );
+  }
+  const providerName = payLater ? eligibleProviders[0] : requested;
   // A fully-comped order never reaches a processor, so an ineligible
   // provider is only a problem when there's actually money to collect.
   // Enforced with the totals, once the discount is known.
-  const providerEligible = eligibleProviders.includes(providerName);
+  const providerEligible = payLater || eligibleProviders.includes(providerName);
   const providerImpl: PaymentProvider =
     providerName === "stripe" ? stripeProvider : payfastProvider;
 
@@ -538,7 +551,7 @@ export async function POST(
       contact_resolution: "pending",
       // No processor is involved in a comped order, so it carries no
       // provider (the refund path already treats null as "record only").
-      payment_provider: isFreeOrder ? null : providerName,
+      payment_provider: isFreeOrder ? null : payLater ? "invoice" : providerName,
       currency,
       subtotal_cents: subtotalCents,
       discount_cents: discountCents,
@@ -559,7 +572,9 @@ export async function POST(
       waiver_signatures: waiverGroups as unknown as Json,
       // A comped order is settled in the next breath, so it never
       // needs a reservation window.
-      expires_at: isFreeOrder ? null : expiresAt,
+      // A pay-later order holds its seats until the invoice is paid or
+      // cancelled, so it never expires either.
+      expires_at: isFreeOrder || payLater ? null : expiresAt,
     })
     .select("id")
     .single();
@@ -618,6 +633,28 @@ export async function POST(
         "[checkout] comped-order fulfilment failed for order",
         order.id,
         settled.error
+      );
+    }
+    return NextResponse.json({ redirectUrl: thanksUrl });
+  }
+
+  // ── Pay later: raise + email the Xero invoice ───────────────
+  // The seats stay held; tickets are issued when Xero shows it paid
+  // (webhook / daily sync → the same settle path). If Xero can't make the
+  // invoice, cancel the order and free the seats so the buyer can retry
+  // or pay by card.
+  if (payLater) {
+    const invoiced = await invoicePayLaterOrder(supabase, order.id);
+    if (!invoiced.ok) {
+      console.error("[checkout] pay-later invoice failed for order", order.id, invoiced.error);
+      await supabase
+        .from("orders")
+        .update({ status: "cancelled", cancelled_at: new Date().toISOString(), invoice_error: invoiced.error })
+        .eq("id", order.id);
+      await rollbackReservations();
+      return NextResponse.json(
+        { error: "We couldn't create your invoice just now. Please try again, or pay by card." },
+        { status: 502 }
       );
     }
     return NextResponse.json({ redirectUrl: thanksUrl });

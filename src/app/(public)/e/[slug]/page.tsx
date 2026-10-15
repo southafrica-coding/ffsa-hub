@@ -165,6 +165,8 @@ export default async function PublicEventPage({
     // The F&F storefront's seat counter reads this; the five bespoke
     // brands ignore the extra key.
     max_capacity: event.max_capacity ?? null,
+    // Third checkout option: a Xero invoice instead of paying now.
+    pay_later: !!(event.pay_later_enabled && event.xero_item_code),
   };
 
   const brand = resolveEventBrand(event);

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateDueInvoices } from "@/services/billing-generation";
 import { syncInvoicePayments } from "@/services/billing-payments";
+import { syncTicketInvoicePayments } from "@/lib/ticketing/pay-later";
 
 export const maxDuration = 60;
 
@@ -34,6 +35,13 @@ export async function GET(request: Request) {
         (payments.voided.length ? `, ${payments.voided.length} voided in Xero` : "") +
         (payments.errors.length ? `, errors: ${payments.errors.join("; ")}` : "")
     );
+
+    // Same catch-up for pay-later ticket invoices (tickets issue on full payment).
+    const tickets = await syncTicketInvoicePayments(supabase).catch((err) => ({
+      checked: 0, partPaid: 0, settled: 0, cancelled: 0,
+      errors: [err instanceof Error ? err.message : "ticket invoice sync failed"],
+    }));
+    console.log(`[cron/generate-invoices] ticket invoices: ${JSON.stringify(tickets)}`);
 
     const result = await generateDueInvoices(supabase, {
       asOf,

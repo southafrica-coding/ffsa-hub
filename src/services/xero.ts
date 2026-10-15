@@ -700,6 +700,10 @@ export async function createScheduledInvoice(
     xeroEmail?: boolean;
     /** Xero branding theme id in THIS organisation (bank details etc.). */
     brandingThemeId?: string | null;
+    /** Defaults to ZAR (school fees are always ZAR). Event tickets pass the event currency. */
+    currencyCode?: string;
+    /** Per-line quantity; defaults to 1 (amount is then the line total). */
+    lineQuantities?: number[];
   }
 ): Promise<{
   success: boolean;
@@ -718,9 +722,9 @@ export async function createScheduledInvoice(
     };
   }
   const { accessToken, tenantId } = auth;
-  // Hub bills in ZAR regardless of which Xero org (US vs SA) the invoice
-  // posts to. The org/item code still drives the ledger account + tax.
-  const currencyCode = "ZAR";
+  // School fees bill in ZAR regardless of which Xero org (US vs SA) the
+  // invoice posts to. The org/item code still drives the ledger account + tax.
+  const currencyCode = params.currencyCode ?? "ZAR";
 
   try {
     // 1. Find or create the contact
@@ -770,11 +774,11 @@ export async function createScheduledInvoice(
 
     // 3. Line items — item code drives account + tax; fallback only otherwise.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const lineItems = params.lineItems.map((li) => {
+    const lineItems = params.lineItems.map((li, idx) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const item: any = {
         Description: li.description,
-        Quantity: 1,
+        Quantity: params.lineQuantities?.[idx] ?? 1,
         UnitAmount: li.amount,
       };
       if (li.itemCode) {
@@ -1293,5 +1297,112 @@ export async function getXeroInvoicesForEmails(
     return { data: out, contacts, error: null };
   } catch (err) {
     return { data: out, contacts, error: err instanceof Error ? err.message : "Xero read failed" };
+  }
+}
+
+// ────────────────────────────────────────────────────────────
+// ITEMS (event sales items for pay-later ticket invoices)
+// ────────────────────────────────────────────────────────────
+// An event's "sales account" in Xero is an Item: e.g. the US org's `GL`
+// "FF Global Leaders Gathering" → 1050 Event Registration Revenue, Tax
+// Exempt. Account codes differ per org (Event Registration Revenue is 1050
+// in the US org, 1060 in SA), so the account is found by NAME.
+
+export type XeroItemSummary = {
+  itemId: string;
+  code: string;
+  name: string | null;
+  description: string | null;
+  salesAccountCode: string | null;
+  salesTaxType: string | null;
+};
+
+export const EVENT_REVENUE_ACCOUNT_NAME = "Event Registration Revenue";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toItemSummary(i: any): XeroItemSummary {
+  return {
+    itemId: i.ItemID,
+    code: i.Code,
+    name: i.Name ?? null,
+    description: i.Description ?? null,
+    salesAccountCode: i.SalesDetails?.AccountCode ?? null,
+    salesTaxType: i.SalesDetails?.TaxType ?? null,
+  };
+}
+
+/** Every Item in a region's org, with its "Sell" details. GET only. */
+export async function listXeroItems(
+  supabase: Client,
+  region: XeroRegion
+): Promise<XeroItemSummary[]> {
+  const auth = await getValidAccessToken(supabase, region);
+  if (!auth) throw new Error(`Xero ${region.toUpperCase()} not connected or token expired`);
+  const res = await xeroGet(auth.accessToken, auth.tenantId, "Items");
+  return (res.Items ?? []).map(toItemSummary);
+}
+
+/** Active revenue accounts in a region's chart of accounts. GET only. */
+export async function listXeroRevenueAccounts(
+  supabase: Client,
+  region: XeroRegion
+): Promise<{ code: string; name: string }[]> {
+  const auth = await getValidAccessToken(supabase, region);
+  if (!auth) throw new Error(`Xero ${region.toUpperCase()} not connected or token expired`);
+  const res = await xeroGet(
+    auth.accessToken,
+    auth.tenantId,
+    'Accounts?where=Type%3D%3D%22REVENUE%22%20AND%20Status%3D%3D%22ACTIVE%22'
+  );
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (res.Accounts ?? []).map((a: any) => ({ code: a.Code, name: a.Name }));
+}
+
+/**
+ * Create an event's sales Item: sold, posting to the org's Event
+ * Registration Revenue account, tax exempt — the same shape finance sets up
+ * by hand. Needs the `accounting.settings` (write) scope; with only
+ * `.read`, Xero answers 401/403 and the caller says to reconnect.
+ */
+export async function createXeroEventItem(
+  supabase: Client,
+  region: XeroRegion,
+  params: { code: string; name: string; description: string }
+): Promise<{ ok: true; item: XeroItemSummary } | { ok: false; error: string; needsReconnect?: boolean }> {
+  const auth = await getValidAccessToken(supabase, region);
+  if (!auth) return { ok: false, error: `Xero ${region.toUpperCase()} not connected or token expired` };
+  try {
+    const accounts = await listXeroRevenueAccounts(supabase, region);
+    const account = accounts.find(
+      (a) => a.name.trim().toLowerCase() === EVENT_REVENUE_ACCOUNT_NAME.toLowerCase()
+    );
+    if (!account) {
+      return { ok: false, error: `No "${EVENT_REVENUE_ACCOUNT_NAME}" revenue account in the ${region.toUpperCase()} Xero org` };
+    }
+    const res = await xeroPost(auth.accessToken, auth.tenantId, "Items", {
+      Items: [
+        {
+          Code: params.code,
+          Name: params.name.slice(0, 50),
+          Description: params.description,
+          IsSold: true,
+          IsPurchased: false,
+          SalesDetails: { AccountCode: account.code, TaxType: "NONE" },
+        },
+      ],
+    });
+    const item = res.Items?.[0];
+    if (!item?.ItemID) return { ok: false, error: "Xero returned no item" };
+    return { ok: true, item: toItemSummary(item) };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Xero item create failed";
+    const needsReconnect = /\((401|403)\)/.test(msg);
+    return {
+      ok: false,
+      needsReconnect,
+      error: needsReconnect
+        ? "The Hub isn't allowed to create items in Xero yet. Reconnect Xero (Finance → Integrations) to grant it, then try again."
+        : msg,
+    };
   }
 }

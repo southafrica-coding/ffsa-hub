@@ -28,6 +28,8 @@ export async function settlePaidOrder(
     expectedTotalCents: number;
     providerPaymentId: string | null;
     amountCents: number | null;
+    /** Statuses allowed to settle. Pay-later orders settle from "invoiced". */
+    fromStatuses?: Array<"pending" | "invoiced">;
   }
 ): Promise<SettleResult> {
   // Defense-in-depth: the amount the provider actually captured must
@@ -47,7 +49,7 @@ export async function settlePaidOrder(
       provider_payment_id: params.providerPaymentId,
     })
     .eq("id", params.orderId)
-    .eq("status", "pending")
+    .in("status", params.fromStatuses ?? ["pending"])
     .select("id")
     .maybeSingle();
 

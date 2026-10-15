@@ -61,6 +61,8 @@ export async function sendSchoolInvoiceEmail(
     fullName: string;
     /** Send to someone else (a test) instead of the student. */
     overrideTo?: string;
+    /** Ledger labels; default to school fees. Event ticket invoices pass their own. */
+    ledger?: { category: string; reason: string };
   }
 ): Promise<{ ok: true; messageId: string | null } | { ok: false; error: string }> {
   const inv = await getXeroInvoiceForEmail(supabase, opts.region, opts.invoiceId);
@@ -93,13 +95,13 @@ export async function sendSchoolInvoiceEmail(
   const ledgerFields = {
     toEmail: to,
     provider: "resend" as const,
-    category: isTest ? "school_invoice_test" : "school_invoice",
+    category: isTest ? "school_invoice_test" : (opts.ledger?.category ?? "school_invoice"),
     subject: email.subject,
     sourceType: "xero_invoice",
     sourceId: opts.invoiceId,
     reason: isTest
       ? `Test of the ${opts.template.name} invoice email`
-      : `School fees invoice ${inv.invoiceNumber} (${opts.template.name} template)`,
+      : (opts.ledger?.reason ?? `School fees invoice ${inv.invoiceNumber} (${opts.template.name} template)`),
   };
 
   const { data: supp } = await supabase
@@ -122,7 +124,7 @@ export async function sendSchoolInvoiceEmail(
     subject: email.subject,
     html: email.html,
     text: email.text,
-    category: `school_invoice:${inv.invoiceNumber}`,
+    category: `${opts.ledger?.category ?? "school_invoice"}:${inv.invoiceNumber}`,
     attachments: [
       { filename: `Invoice ${inv.invoiceNumber}.pdf`, contentBase64: inv.pdfBase64, type: "application/pdf" },
     ],

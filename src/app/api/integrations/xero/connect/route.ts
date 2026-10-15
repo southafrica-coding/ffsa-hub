@@ -9,8 +9,10 @@ export async function GET(request: Request) {
 
     const clientId = process.env.XERO_CLIENT_ID!;
     const redirectUri = xeroRedirectUri();
-    // New granular scopes (required for apps created after March 2, 2026)
-    const scopes = "openid profile email offline_access accounting.invoices accounting.contacts accounting.settings.read";
+    // New granular scopes (required for apps created after March 2, 2026).
+    // accounting.settings (write, not just .read): event pay-later creates
+    // the event's sales Item — Xero refuses that with .read (tested 2026-10-15).
+    const scopes = "openid profile email offline_access accounting.invoices accounting.contacts accounting.settings";
     // Encode region in state so we know which region on callback
     const state = JSON.stringify({
       nonce: crypto.randomBytes(16).toString("hex"),
