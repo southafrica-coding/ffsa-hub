@@ -59,6 +59,8 @@ type PublicEvent = {
   end_time: string | null;
   logo_url: string | null;
   currency: string;
+  // "Invoice me, pay later" offered (events.pay_later_enabled + Xero item).
+  pay_later?: boolean;
 };
 
 type LineItem = {
@@ -129,7 +131,7 @@ export function Storefront({
   const [consentAccepted, setConsentAccepted] = useState(false);
   const [customAnswers, setCustomAnswers] = useState<Record<string, unknown>>({});
   const [customErrors, setCustomErrors] = useState<Record<string, string>>({});
-  const [submitting, setSubmitting] = useState<"payfast" | "stripe" | null>(null);
+  const [submitting, setSubmitting] = useState<"payfast" | "stripe" | "invoice" | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   function setQty(t: TicketType, qty: number) {
@@ -263,7 +265,7 @@ export function Storefront({
     lastName.trim().length > 0 &&
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
-  async function submit(provider: "payfast" | "stripe" = "payfast") {
+  async function submit(provider: "payfast" | "stripe" | "invoice" = "payfast") {
     if (lineCount === 0) {
       setErr("Add at least one ticket.");
       return;
@@ -792,6 +794,23 @@ export function Storefront({
                     </p>
                   )}
                 </div>
+                {event.pay_later && (
+                  <div className="pt-1">
+                    <Button
+                      type="button"
+                      onClick={() => submit("invoice")}
+                      disabled={submitting !== null || !buyerValid || !consentAccepted}
+                      variant="outline"
+                      size="lg"
+                      className="w-full h-11"
+                    >
+                      {submitting === "invoice" ? "Sending your invoice…" : "Invoice me, pay later →"}
+                    </Button>
+                    <p className="text-[11px] text-muted-foreground normal-case tracking-normal mt-2 text-center">
+                      We&apos;ll email you an invoice to pay in full or in parts. Your tickets are sent once it&apos;s fully paid.
+                    </p>
+                  </div>
+                )}
               </>
             )}
           </CardContent>
