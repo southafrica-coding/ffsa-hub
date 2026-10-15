@@ -90,7 +90,7 @@ async function loadPlans(supabase: Client, programId: string) {
  * for students accepted long ago, and nothing may invoice until finance has
  * matched them against what Xero already holds.
  */
-async function holdDueNow(supabase: Client, planIds: string[]) {
+export async function holdDueNow(supabase: Client, planIds: string[]) {
   if (planIds.length === 0) return;
   await supabase
     .from("student_billing_schedule")

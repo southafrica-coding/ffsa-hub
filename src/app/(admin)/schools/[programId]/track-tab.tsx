@@ -6,9 +6,9 @@
  * For a school split into segments (FFX: FFX / FFBX / FFWX) this is the landing
  * place for the answer to "whole programme, or which sections?" — from the
  * application form, from the survey email, or set by finance on a student's
- * billing page. The headline numbers are people EXPECTED in each part: a
- * whole-programme person counts in every segment, so each tile is the headcount
- * to plan that part around.
+ * billing page. Whole-programme people are counted once, under Whole
+ * programme; each course's tile is only the people doing that course without
+ * the rest. Staff set each student's track on the Students tab.
  */
 
 import { useMemo, useState } from "react";
@@ -130,7 +130,7 @@ export function TrackTab({
         <Kpi label="Not asked yet" value={String(summary.notEmailed)} foot="NO TRACK, NO EMAIL SENT" tick={false} />
       </KpiStrip>
 
-      <SectionBar title="Expected in each part" meta="WHOLE-PROGRAMME PEOPLE COUNT IN EVERY PART" />
+      <SectionBar title="Who's doing what" meta="COURSE TILES ARE PART-YEAR ONLY · WHOLE PROGRAMME COUNTED ONCE" />
       <div className="grid grid-cols-2 border-b border-ink md:grid-cols-4">
         {summary.bySegment.map((s) => (
           <div key={s.code} className="border-r border-rule px-5 py-4 last:border-r-0">

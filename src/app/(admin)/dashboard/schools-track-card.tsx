@@ -61,7 +61,7 @@ export function SchoolsTrackCard() {
             <Figure label="Not told us yet" value={p.unknown} muted />
           </div>
 
-          <p className="mono-label mb-2 mt-5">Expected in each part (accepted)</p>
+          <p className="mono-label mb-2 mt-5">Doing just this part (accepted)</p>
           <div className="grid grid-cols-2 gap-px border border-rule bg-[var(--rule)] md:grid-cols-4">
             {p.bySegment.map((s) => (
               <div key={s.code} className="bg-white px-4 py-3">

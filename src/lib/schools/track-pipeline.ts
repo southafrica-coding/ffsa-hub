@@ -62,7 +62,7 @@ export type TrackSummary = {
   awaiting: number;
   /** Not yet emailed and no track anywhere, with a usable address. */
   notEmailed: number;
-  /** Everyone expected in each segment: whole-programme people plus those who picked it. */
+  /** People doing each segment without the whole programme (whole-programme people are counted once, in `whole`). */
   bySegment: Array<{ code: string; name: string; expected: number; accepted: number }>;
 };
 
@@ -256,7 +256,7 @@ export function summariseTrack(people: PipelinePerson[], segments: TrackSegment[
     awaiting: unknown.filter((p) => p.survey.state === "sent").length,
     notEmailed: unknown.filter((p) => p.survey.state === "not_sent" && p.email).length,
     bySegment: segments.map((s) => {
-      const inSegment = known.filter((p) => p.track.kind === "whole" || p.track.codes.includes(s.code));
+      const inSegment = known.filter((p) => p.track.kind === "segments" && p.track.codes.includes(s.code));
       return {
         code: s.code,
         name: s.name,
@@ -275,7 +275,7 @@ export type AcceptedTrackSummary = {
   partYear: number;
   /** Accepted people who haven't told us (or whom we couldn't ask). */
   unknown: number;
-  /** Accepted people expected in each section (whole-programme counts in all). */
+  /** Accepted people doing each section without the whole programme. */
   bySegment: Array<{ code: string; name: string; expected: number }>;
   /** Part-year people by the exact sections they chose, biggest first. */
   combos: Array<{ label: string; count: number }>;
@@ -307,7 +307,7 @@ export function summariseAcceptedTrack(
     bySegment: segments.map((s) => ({
       code: s.code,
       name: s.name,
-      expected: accepted.filter((p) => p.track.kind === "whole" || p.track.codes.includes(s.code)).length,
+      expected: accepted.filter((p) => p.track.kind === "segments" && p.track.codes.includes(s.code)).length,
     })),
     combos: [...combos.entries()].map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count),
     applying: applying.length,

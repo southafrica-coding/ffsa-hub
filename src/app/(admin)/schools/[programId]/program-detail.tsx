@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Masthead, StatusPill } from "@/components/ffsa";
 import { TrackTab } from "./track-tab";
 import type { PipelinePerson, TrackSummary } from "@/lib/schools/track-pipeline";
-import { RosterTab, AddStudentButton, type RosterRow, type RosterFee, type PhaseCourseRow } from "./roster-tab";
+import { RosterTab, AddStudentButton, type RosterRow, type RosterFee, type RosterTrack, type PhaseCourseRow } from "./roster-tab";
 import { GradesMatrix } from "./grades-matrix";
 import { ApplicantReview, type PipelineStage, type ReviewCheck } from "./applicant-review";
 import { FormBuilder, FormPreview } from "./form-builder";
@@ -355,15 +355,23 @@ function displayName(u: {
 }
 
 /** Track of record (migration 221) → the roster's small track tag. Empty for every ordinary program. */
-function trackLabel(
-  segments: Array<{ billing_course_id: string | null; billing_courses: { code: string; name: string } | null }>
-): string | null {
-  if (segments.length === 0) return null;
-  if (segments.some((s) => s.billing_course_id === null)) return "Whole Program";
-  return segments
-    .map((s) => s.billing_courses?.code)
-    .filter((code): code is string => !!code)
-    .join(", ");
+/**
+ * A student's track for the roster: their enrolment's own track first (what
+ * billing reads), else what the Track tab knows from their application or
+ * survey answer.
+ */
+function rosterTrack(
+  segments: Array<{ billing_course_id: string | null; billing_courses: { code: string; name: string } | null }>,
+  fromPipeline: RosterTrack | undefined
+): RosterTrack {
+  if (segments.length > 0) {
+    if (segments.some((s) => s.billing_course_id === null)) return { kind: "whole", codes: [] };
+    return {
+      kind: "segments",
+      codes: segments.map((s) => s.billing_courses?.code).filter((c): c is string => !!c),
+    };
+  }
+  return fromPipeline ?? { kind: "unknown", codes: [] };
 }
 
 export function ProgramDetail({
@@ -467,6 +475,11 @@ export function ProgramDetail({
 
   // ── Roster (frame 14a) ──
   const activeEnrollments = enrollments.filter((e) => !e.removed_at);
+  const pipelineTrack = new Map<string, RosterTrack>(
+    trackPeople
+      .filter((p) => p.enrollmentId && p.track.kind !== "unknown")
+      .map((p) => [p.enrollmentId as string, { kind: p.track.kind, codes: p.track.codes }])
+  );
   const rosterRows: RosterRow[] = enrollments.map((e) => ({
     enrollmentId: e.id,
     userId: e.user_id,
@@ -479,7 +492,7 @@ export function ProgramDetail({
     // A grade row with no letter is a placeholder, not a grade.
     gradedCount: grades.filter((g) => g.enrollment_id === e.id && g.letter_grade).length,
     removed: !!e.removed_at,
-    track: trackLabel(e.enrollment_segments),
+    track: rosterTrack(e.enrollment_segments, pipelineTrack.get(e.id)),
   }));
   const rosterStaffOptions = staffOptions
     .map((s) => ({ id: s.id, name: displayName(s) }))
@@ -641,6 +654,7 @@ export function ProgramDetail({
             staffOptions={rosterStaffOptions}
             courseCount={billingCourses.length}
             staffOnSchool={staffOnSchool}
+            trackSegments={trackSegments}
             actions={
               <StudentsExportPanel programId={program.id} enrollments={enrollments} />
             }
