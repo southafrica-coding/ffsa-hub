@@ -351,6 +351,120 @@ export async function regionForXeroTenant(
 }
 
 // ────────────────────────────────────────────────────────────
+// HUB-SENT INVOICE EMAILS: themes, online link, PDF, mark sent
+// ────────────────────────────────────────────────────────────
+
+/** Branding themes in one organisation (name → id), for the school picker. */
+export async function getXeroBrandingThemes(
+  supabase: Client,
+  region: XeroRegion
+): Promise<Array<{ id: string; name: string }> | null> {
+  const auth = await getValidAccessToken(supabase, region);
+  if (!auth) return null;
+  try {
+    const res = await xeroGet(auth.accessToken, auth.tenantId, "BrandingThemes");
+    return (res.BrandingThemes ?? []).map((t: { BrandingThemeID: string; Name: string }) => ({
+      id: t.BrandingThemeID,
+      name: t.Name,
+    }));
+  } catch (err) {
+    console.error(`Xero (${region}): could not read branding themes`, err);
+    return null;
+  }
+}
+
+/** The organisation's name as Xero prints it for [Trading Name]. */
+export async function getXeroTradingName(supabase: Client, region: XeroRegion): Promise<string | null> {
+  const auth = await getValidAccessToken(supabase, region);
+  if (!auth) return null;
+  try {
+    const res = await xeroGet(auth.accessToken, auth.tenantId, "Organisation");
+    const org = res.Organisations?.[0];
+    return (org?.Name as string) ?? (org?.LegalName as string) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Everything the Hub needs to email one approved invoice: its online link
+ * (Stripe "Pay now" lives there for the US org), its PDF and its numbers.
+ */
+export async function getXeroInvoiceForEmail(
+  supabase: Client,
+  region: XeroRegion,
+  invoiceId: string
+): Promise<
+  | {
+      ok: true;
+      onlineUrl: string | null;
+      pdfBase64: string;
+      invoiceNumber: string;
+      total: number;
+      amountDue: number;
+      currencyCode: string;
+      dueDate: string;
+      contactName: string;
+    }
+  | { ok: false; error: string }
+> {
+  const auth = await getValidAccessToken(supabase, region);
+  if (!auth) return { ok: false, error: `Xero ${region.toUpperCase()} not connected or token expired` };
+  const { accessToken, tenantId } = auth;
+  try {
+    const inv = (await xeroGet(accessToken, tenantId, `Invoices/${invoiceId}`)).Invoices?.[0];
+    if (!inv) return { ok: false, error: "Invoice not found in Xero" };
+
+    let onlineUrl: string | null = null;
+    try {
+      const online = await xeroGet(accessToken, tenantId, `Invoices/${invoiceId}/OnlineInvoice`);
+      onlineUrl = online.OnlineInvoices?.[0]?.OnlineInvoiceUrl ?? null;
+    } catch {
+      // Drafts have no online invoice; the caller decides what that means.
+    }
+
+    const pdfRes = await fetch(`${XERO_API}/Invoices/${invoiceId}`, {
+      headers: { Authorization: `Bearer ${accessToken}`, "xero-tenant-id": tenantId, Accept: "application/pdf" },
+    });
+    if (!pdfRes.ok) return { ok: false, error: `Xero PDF failed (${pdfRes.status})` };
+    const pdfBase64 = Buffer.from(await pdfRes.arrayBuffer()).toString("base64");
+
+    return {
+      ok: true,
+      onlineUrl,
+      pdfBase64,
+      invoiceNumber: inv.InvoiceNumber,
+      total: Number(inv.Total ?? 0),
+      amountDue: Number(inv.AmountDue ?? 0),
+      currencyCode: inv.CurrencyCode ?? "ZAR",
+      dueDate: (inv.DueDateString as string)?.slice(0, 10) ?? "",
+      contactName: inv.Contact?.Name ?? "",
+    };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Xero read failed" };
+  }
+}
+
+/** Tell Xero the invoice was sent (the Hub emailed it), as Xero's own send would. */
+export async function markXeroInvoiceSent(
+  supabase: Client,
+  region: XeroRegion,
+  invoiceId: string
+): Promise<boolean> {
+  const auth = await getValidAccessToken(supabase, region);
+  if (!auth) return false;
+  try {
+    await xeroPost(auth.accessToken, auth.tenantId, "Invoices", {
+      Invoices: [{ InvoiceID: invoiceId, SentToContact: true }],
+    });
+    return true;
+  } catch (err) {
+    console.error(`Xero (${region}): could not mark ${invoiceId} sent`, err);
+    return false;
+  }
+}
+
+// ────────────────────────────────────────────────────────────
 // INVOICE CREATION
 // ────────────────────────────────────────────────────────────
 
@@ -576,7 +690,16 @@ export async function createScheduledInvoice(
        * Xero rejects the whole invoice for an option it doesn't have. */
       tracking?: { category: string; option: string } | null;
     }>;
+    /** Approve (AUTHORISED) rather than leave as a draft. */
     autoSend: boolean;
+    /**
+     * Have XERO email it once approved. Defaults to autoSend (the original
+     * behaviour). School fees pass false: the Hub sends the email itself from
+     * the school's own template, which Xero's API can't select.
+     */
+    xeroEmail?: boolean;
+    /** Xero branding theme id in THIS organisation (bank details etc.). */
+    brandingThemeId?: string | null;
   }
 ): Promise<{
   success: boolean;
@@ -683,6 +806,7 @@ export async function createScheduledInvoice(
           CurrencyCode: currencyCode,
           Status: initialStatus,
           LineAmountTypes: "NoTax",
+          ...(params.brandingThemeId ? { BrandingThemeID: params.brandingThemeId } : {}),
         },
       ],
     });
@@ -693,7 +817,7 @@ export async function createScheduledInvoice(
     }
 
     let emailed = false;
-    if (params.autoSend && initialStatus === "AUTHORISED") {
+    if ((params.xeroEmail ?? params.autoSend) && initialStatus === "AUTHORISED") {
       try {
         await xeroPost(
           accessToken,

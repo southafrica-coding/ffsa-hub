@@ -7,6 +7,7 @@ import { designFromCharges, parseDesign, type ChargeLike } from "@/lib/finance/p
 import type { Tier } from "@/services/school-billing";
 import { SchoolBillingSettings } from "@/app/(admin)/finance/school-fees/[programId]/billing/school-billing-settings";
 import { PaymentScheduleBuilder } from "@/components/finance/payment-schedule-builder";
+import { SchoolInvoiceEmailSettings, type TemplateOption } from "@/components/finance/school-invoice-email-settings";
 
 // A school's money settings in one place: who bills it, its payment
 // schedules (whole program + each course), and links into Finance. Rendered
@@ -43,7 +44,9 @@ export async function SchoolFeesPanel({
     await Promise.all([
       admin
         .from("programs")
-        .select("id, name, billing_mode, billing_emails_enabled, schedule_start_date")
+        .select(
+          "id, name, billing_mode, billing_emails_enabled, schedule_start_date, email_template_za_id, email_template_us_id, xero_branding_theme_za, xero_branding_theme_us"
+        )
         .eq("id", programId)
         .single(),
       admin
@@ -57,6 +60,11 @@ export async function SchoolFeesPanel({
     ]);
 
   if (!program) return <p className="text-sm text-destructive">School not found.</p>;
+
+  const { data: templateRows } = await admin
+    .from("invoice_email_templates")
+    .select("id, name, xero_region, is_default")
+    .order("name", { ascending: true });
 
   const { count: pendingCharges } = await admin
     .from("student_billing_schedule")
@@ -112,6 +120,16 @@ export async function SchoolFeesPanel({
           billing_mode: program.billing_mode === "hub_scheduled" ? "hub_scheduled" : "external",
           billing_emails_enabled: program.billing_emails_enabled === true,
           schedule_start_date: program.schedule_start_date ?? null,
+        }}
+      />
+
+      <SchoolInvoiceEmailSettings
+        programId={programId}
+        canEdit={canEdit}
+        templates={(templateRows ?? []) as TemplateOption[]}
+        initial={{
+          za: { templateId: program.email_template_za_id ?? null, theme: program.xero_branding_theme_za ?? null },
+          us: { templateId: program.email_template_us_id ?? null, theme: program.xero_branding_theme_us ?? null },
         }}
       />
 

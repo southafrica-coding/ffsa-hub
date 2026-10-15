@@ -13,8 +13,10 @@ import {
   createScheduledInvoice,
   getXeroRegionForStudent,
   getXeroTrackingOptions,
+  getXeroBrandingThemes,
   type XeroRegion,
 } from "@/services/xero";
+import { chooseTemplate, sendSchoolInvoiceEmail, type StoredTemplate } from "@/services/invoice-email-delivery";
 import { getCountryTierMap, billingBlockedReason, type Tier } from "@/services/school-billing";
 import { commitWholeProgramPlan, commitSegmentPlans } from "@/services/billing-plan-builder";
 import {
@@ -52,6 +54,8 @@ export interface GenerationResult {
     /** Whether this invoice is (or would be) authorised + emailed. False =
      * a Xero draft because the school's sending is held. */
     send?: boolean;
+    /** The school email template used (or that would be). */
+    emailTemplate?: string;
     invoiceNumber?: string;
     error?: string;
     /** Why a 'skipped' line was left alone (rows stay 'scheduled'). */
@@ -93,11 +97,19 @@ export async function generateDueInvoices(
       (rows ?? []).map((r: any) => r.student_billing_plans?.program_id).filter(Boolean)
     ),
   ];
-  const schools = new Map<string, SchoolBillingSettings>();
+  type SchoolRow = SchoolBillingSettings & {
+    email_template_za_id?: string | null;
+    email_template_us_id?: string | null;
+    xero_branding_theme_za?: string | null;
+    xero_branding_theme_us?: string | null;
+  };
+  const schools = new Map<string, SchoolRow>();
   if (programIds.length > 0) {
     const { data: programs, error: progError } = await supabase
       .from("programs")
-      .select("id, billing_mode, billing_emails_enabled, schedule_start_date")
+      .select(
+        "id, billing_mode, billing_emails_enabled, schedule_start_date, email_template_za_id, email_template_us_id, xero_branding_theme_za, xero_branding_theme_us"
+      )
       .in("id", programIds);
     if (progError) {
       throw new Error(`Could not read school billing settings: ${progError.message}`);
@@ -116,6 +128,25 @@ export async function generateDueInvoices(
 
   const result: GenerationResult = { asOf, dryRun, autoSend, invoices: [] };
   const nowIso = new Date().toISOString();
+
+  // School email templates (migration 237) — the Hub sends school invoices
+  // from these, because Xero's API can't choose a template.
+  const { data: templateRows } = await supabase
+    .from("invoice_email_templates")
+    .select("id, name, xero_region, subject, body, include_online_action, is_default");
+  const templates = (templateRows ?? []) as StoredTemplate[];
+
+  // Each organisation's branding themes, by name, read once per run.
+  const themesByRegion = new Map<XeroRegion, Promise<Array<{ id: string; name: string }> | null>>();
+  const themeId = async (region: XeroRegion, name: string | null | undefined) => {
+    if (!name) return { id: null as string | null, warning: null as string | null };
+    if (!themesByRegion.has(region)) themesByRegion.set(region, getXeroBrandingThemes(supabase, region));
+    const list = await themesByRegion.get(region)!;
+    const hit = list?.find((t) => t.name.trim().toLowerCase() === name.trim().toLowerCase());
+    return hit
+      ? { id: hit.id, warning: null }
+      : { id: null, warning: `${region === "us" ? "US" : "SA"} Xero has no branding theme "${name}" — Xero's default was used` };
+  };
 
   // Each organisation's "Schools" options, read once per run and only if a
   // line actually wants tagging.
@@ -167,8 +198,24 @@ export async function generateDueInvoices(
     const resolved = grp.map((r) =>
       resolveTracking(r.xero_tracking_option, lookup, region === "us" ? "US" : "SA")
     );
-    const warnings = [...new Set(resolved.map((t) => t.warning).filter((w): w is string => !!w))];
-    const tag = warnings.length > 0 ? { warnings } : {};
+    const school = schools.get(plan.program_id);
+    const template = chooseTemplate(
+      templates,
+      region,
+      region === "us" ? school?.email_template_us_id : school?.email_template_za_id
+    );
+    const theme = await themeId(region, region === "us" ? school?.xero_branding_theme_us : school?.xero_branding_theme_za);
+    const warnings = [
+      ...new Set(
+        [...resolved.map((t) => t.warning), theme.warning, send && !template ? "No email template for this organisation — invoice approved but not emailed" : null].filter(
+          (w): w is string => !!w
+        )
+      ),
+    ];
+    const tag = {
+      ...(warnings.length > 0 ? { warnings } : {}),
+      ...(template ? { emailTemplate: `${region === "us" ? "US" : "SA"} · ${template.name}` } : {}),
+    };
 
     if (dryRun) {
       result.invoices.push({
@@ -206,8 +253,9 @@ export async function generateDueInvoices(
       tracking: resolved[i].tracking,
     }));
 
-    // send=false → createScheduledInvoice leaves it as a Xero DRAFT and
-    // never calls the email endpoint.
+    // send=false → a Xero DRAFT, nobody emailed. send=true → approved in
+    // Xero (never emailed BY Xero), then the Hub emails it from the school's
+    // own template.
     const inv = await createScheduledInvoice(supabase, {
       region,
       studentEmail: user.email,
@@ -216,10 +264,27 @@ export async function generateDueInvoices(
       reference,
       lineItems,
       autoSend: send,
+      xeroEmail: false,
+      brandingThemeId: theme.id,
     });
 
+    let emailed = false;
+    let emailError: string | null = null;
+    if (inv.success && send && template && inv.invoiceId && inv.status === "AUTHORISED") {
+      const delivered = await sendSchoolInvoiceEmail(supabase, {
+        region,
+        invoiceId: inv.invoiceId,
+        template,
+        to: user.email,
+        firstName: user.first_name ?? "",
+        fullName: name,
+      });
+      emailed = delivered.ok;
+      if (!delivered.ok) emailError = delivered.error;
+    }
+
     if (inv.success) {
-      const newStatus = inv.emailed ? "sent" : "generated";
+      const newStatus = emailed ? "sent" : "generated";
       await supabase
         .from("student_billing_schedule")
         .update({
@@ -227,7 +292,7 @@ export async function generateDueInvoices(
           xero_invoice_id: inv.invoiceId,
           xero_invoice_number: inv.invoiceNumber ?? null,
           generated_at: nowIso,
-          sent_at: inv.emailed ? nowIso : null,
+          sent_at: emailed ? nowIso : null,
         })
         .in("id", rowIds);
       result.invoices.push({
@@ -240,6 +305,7 @@ export async function generateDueInvoices(
         send,
         invoiceNumber: inv.invoiceNumber,
         ...tag,
+        ...(emailError ? { error: `Approved in Xero but the email failed: ${emailError}` } : {}),
       });
     } else {
       result.invoices.push({

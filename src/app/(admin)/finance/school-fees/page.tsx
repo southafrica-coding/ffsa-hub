@@ -46,6 +46,12 @@ export default async function SchoolFeesPage() {
         actions={
           <>
             <GenerateInvoicesButton />
+            <Link
+              href="/finance/school-fees/email-templates"
+              className="inline-flex shrink-0 items-center border border-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em]"
+            >
+              Email templates
+            </Link>
             <CountryTiersDialog
               initialTiers={
                 (countryTiers ?? []) as Parameters<

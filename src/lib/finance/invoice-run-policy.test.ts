@@ -58,6 +58,11 @@ vi.mock("@/services/xero", () => ({
   getXeroTrackingOptions: (...a: unknown[]) => getXeroTrackingOptions(...a),
   getXeroRegionForStudent: () => "za",
 }));
+const sendSchoolInvoiceEmail = vi.fn();
+vi.mock("@/services/invoice-email-delivery", async (orig) => {
+  const actual = await orig<typeof import("@/services/invoice-email-delivery")>();
+  return { ...actual, sendSchoolInvoiceEmail: (...a: unknown[]) => sendSchoolInvoiceEmail(...a) };
+});
 vi.mock("@/services/school-billing", () => ({
   getCountryTierMap: vi.fn(),
   billingBlockedReason: vi.fn(),
@@ -119,8 +124,11 @@ describe("generateDueInvoices honours each school", () => {
       success: true,
       invoiceId: "inv",
       invoiceNumber: "INV-1",
-      emailed: p.autoSend,
+      status: p.autoSend ? "AUTHORISED" : "DRAFT",
+      emailed: false,
     }));
+    sendSchoolInvoiceEmail.mockReset();
+    sendSchoolInvoiceEmail.mockResolvedValue({ ok: true, messageId: "m" });
   });
 
   const tables = {
@@ -130,6 +138,9 @@ describe("generateDueInvoices honours each school", () => {
       scheduleRow("r-live", "live", "2027-02-04"),
       scheduleRow("r-early", "late", "2027-02-04"),
       scheduleRow("r-ok", "late", "2027-04-04"),
+    ],
+    invoice_email_templates: [
+      { id: "basic-za", name: "Basic", xero_region: "za", subject: "s", body: "b", include_online_action: true, is_default: true },
     ],
     programs: [
       { id: "ext", billing_mode: "external", billing_emails_enabled: true, schedule_start_date: null },
@@ -160,6 +171,11 @@ describe("generateDueInvoices honours each school", () => {
     expect(status("r-live")).toBe("sent");
     expect(status("r-early")).toBe("skipped");
     expect(status("r-ok")).toBe("sent");
+
+    // Xero never emails school invoices; the Hub does, only for live schools.
+    expect(createScheduledInvoice.mock.calls.every(([, p]) => p.xeroEmail === false)).toBe(true);
+    expect(sendSchoolInvoiceEmail.mock.calls.map(([, o]) => o.to).sort()).toEqual(["late@example.com", "live@example.com"]);
+    expect(sendSchoolInvoiceEmail.mock.calls[0][1].template.name).toBe("Basic");
 
     // Skipped rows are never written — they stay 'scheduled'.
     const touched = db.updates.flatMap((u) => u.ids as string[]);
@@ -260,5 +276,39 @@ describe("generateDueInvoices tags lines in the student's organisation", () => {
     const db = fakeDb({ student_billing_schedule: [tagged("a", null)], programs: [live] });
     await generateDueInvoices(db, { asOf: "2027-12-31", dryRun: true, autoSend: true });
     expect(getXeroTrackingOptions).not.toHaveBeenCalled();
+  });
+});
+
+describe("generateDueInvoices — school email outcomes", () => {
+  beforeEach(() => {
+    createScheduledInvoice.mockReset();
+    createScheduledInvoice.mockResolvedValue({ success: true, invoiceId: "inv", invoiceNumber: "INV-9", status: "AUTHORISED" });
+    sendSchoolInvoiceEmail.mockReset();
+    getXeroTrackingOptions.mockReset();
+  });
+  const live = { id: "live", billing_mode: "hub_scheduled", billing_emails_enabled: true, schedule_start_date: null, email_template_za_id: "gap" };
+  const tpl = (id: string, name: string, isDefault = false) => ({ id, name, xero_region: "za", subject: "s", body: "b", include_online_action: true, is_default: isDefault });
+
+  it("uses the school's own template, and leaves it 'generated' with the error if the email fails", async () => {
+    sendSchoolInvoiceEmail.mockResolvedValue({ ok: false, error: "Resend down" });
+    const db = fakeDb({
+      student_billing_schedule: [scheduleRow("a", "live", "2027-02-04")],
+      programs: [live],
+      invoice_email_templates: [tpl("basic", "Basic", true), tpl("gap", "Gap Year 2027")],
+    });
+    const res = await generateDueInvoices(db, { asOf: "2027-12-31", dryRun: false, autoSend: true });
+    expect(sendSchoolInvoiceEmail.mock.calls[0][1].template.name).toBe("Gap Year 2027");
+    expect(res.invoices[0]).toMatchObject({ status: "generated", emailTemplate: "SA · Gap Year 2027" });
+    expect(res.invoices[0].error).toMatch(/Approved in Xero but the email failed: Resend down/);
+  });
+
+  it("previews which template each invoice would use", async () => {
+    const db = fakeDb({
+      student_billing_schedule: [scheduleRow("a", "live", "2027-02-04")],
+      programs: [{ ...live, email_template_za_id: null }],
+      invoice_email_templates: [tpl("basic", "Basic", true)],
+    });
+    const res = await generateDueInvoices(db, { asOf: "2027-12-31", dryRun: true, autoSend: true });
+    expect(res.invoices[0]).toMatchObject({ status: "preview", emailTemplate: "SA · Basic" });
   });
 });

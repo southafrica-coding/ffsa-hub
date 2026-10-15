@@ -42,7 +42,19 @@ export async function PATCH(request: Request) {
     billing_mode?: "external" | "hub_scheduled";
     billing_emails_enabled?: boolean;
     schedule_start_date?: string | null;
+    email_template_za_id?: string | null;
+    email_template_us_id?: string | null;
+    xero_branding_theme_za?: string | null;
+    xero_branding_theme_us?: string | null;
   } = {};
+  // Per-organisation invoice email template + Xero branding theme (237).
+  for (const key of ["email_template_za_id", "email_template_us_id", "xero_branding_theme_za", "xero_branding_theme_us"] as const) {
+    if (body[key] === undefined) continue;
+    if (body[key] !== null && typeof body[key] !== "string") {
+      return NextResponse.json({ error: `${key} must be text or null` }, { status: 400 });
+    }
+    patch[key] = (body[key] as string | null)?.trim() || null;
+  }
   if (body.billing_mode !== undefined) {
     if (body.billing_mode !== "external" && body.billing_mode !== "hub_scheduled") {
       return NextResponse.json({ error: "Unknown billing mode" }, { status: 400 });
@@ -66,6 +78,20 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Nothing to change" }, { status: 400 });
   }
 
+  for (const [key, region] of [["email_template_za_id", "za"], ["email_template_us_id", "us"]] as const) {
+    const id = patch[key];
+    if (!id) continue;
+    const { data: t } = await createAdminClient()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .from("invoice_email_templates" as any)
+      .select("xero_region")
+      .eq("id", id)
+      .maybeSingle();
+    if (!t || (t as { xero_region: string }).xero_region !== region) {
+      return NextResponse.json({ error: `That template isn't a ${region === "us" ? "US" : "SA"} template` }, { status: 400 });
+    }
+  }
+
   // Finance access was checked above; the admin client keeps this route
   // working for finance staff who are not school leaders under programs RLS.
   // Untyped: the generated types predate migrations 095/172.
@@ -73,7 +99,9 @@ export async function PATCH(request: Request) {
   const admin = createAdminClient() as any;
   const { data: before, error: readError } = await admin
     .from("programs")
-    .select("id, name, billing_mode, billing_emails_enabled, schedule_start_date")
+    .select(
+      "id, name, billing_mode, billing_emails_enabled, schedule_start_date, email_template_za_id, email_template_us_id, xero_branding_theme_za, xero_branding_theme_us"
+    )
     .eq("id", programId)
     .maybeSingle();
   if (readError) {
@@ -108,7 +136,9 @@ export async function PATCH(request: Request) {
     .from("programs")
     .update(patch)
     .eq("id", programId)
-    .select("id, billing_mode, billing_emails_enabled, schedule_start_date")
+    .select(
+      "id, billing_mode, billing_emails_enabled, schedule_start_date, email_template_za_id, email_template_us_id, xero_branding_theme_za, xero_branding_theme_us"
+    )
     .single();
   if (updateError) {
     return NextResponse.json({ error: updateError.message }, { status: 500 });
