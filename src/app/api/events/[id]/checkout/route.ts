@@ -79,6 +79,9 @@ type Body = {
   }>;
   // "invoice" = pay later on a Xero invoice (events.pay_later_enabled).
   payment_provider?: "payfast" | "stripe" | "invoice";
+  // Pay later only: the buyer's country, which picks the Xero org that
+  // invoices them (USA → US, everyone else → SA), as in Training.
+  invoice_country?: string;
 };
 
 type TicketTypeRow = {
@@ -229,6 +232,13 @@ export async function POST(
     return NextResponse.json(
       { error: "Paying by invoice isn't available for this event." },
       { status: 409 }
+    );
+  }
+  const invoiceCountry = typeof body.invoice_country === "string" ? body.invoice_country.trim().slice(0, 80) : "";
+  if (payLater && !invoiceCountry) {
+    return NextResponse.json(
+      { error: "Choose your country so we can send your invoice from the right office." },
+      { status: 400 }
     );
   }
   const providerName = payLater ? eligibleProviders[0] : requested;
@@ -552,6 +562,7 @@ export async function POST(
       // No processor is involved in a comped order, so it carries no
       // provider (the refund path already treats null as "record only").
       payment_provider: isFreeOrder ? null : payLater ? "invoice" : providerName,
+      buyer_country: payLater ? invoiceCountry : null,
       currency,
       subtotal_cents: subtotalCents,
       discount_cents: discountCents,

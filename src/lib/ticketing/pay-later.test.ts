@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { invoiceDueDate, suggestItemCode, xeroRegionForCurrency } from "./pay-later";
+import { invoiceDueDate, suggestItemCode, xeroRegionForOrder } from "./pay-later-rules";
 
 describe("pay-later helpers", () => {
-  it("routes the invoice to the org matching the event currency", () => {
-    expect(xeroRegionForCurrency("USD")).toBe("us");
-    expect(xeroRegionForCurrency("ZAR")).toBe("za");
-    expect(xeroRegionForCurrency(null)).toBe("za");
+  it("invoices USA buyers from the US org and everyone else from SA, whatever the currency", () => {
+    expect(xeroRegionForOrder({ buyer_country: "United States", currency: "ZAR" })).toBe("us");
+    expect(xeroRegionForOrder({ buyer_country: "South Africa", currency: "USD" })).toBe("za");
+    expect(xeroRegionForOrder({ buyer_country: "Norway", currency: "USD" })).toBe("za");
+    expect(xeroRegionForOrder({ buyer_country: "USA", currency: "USD" })).toBe("us");
+  });
+
+  it("routes orders from before buyers were asked by the event currency", () => {
+    expect(xeroRegionForOrder({ buyer_country: null, currency: "USD" })).toBe("us");
+    expect(xeroRegionForOrder({ buyer_country: "", currency: "ZAR" })).toBe("za");
+    expect(xeroRegionForOrder({ buyer_country: null, currency: null })).toBe("za");
   });
 
   it("uses the due date, else the start date, never in the past", () => {

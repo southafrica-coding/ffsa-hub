@@ -1,5 +1,6 @@
 "use client";
 
+import { PayLaterCountry } from "./pay-later-country";
 import { useMemo, useState } from "react";
 import { PhoneInputNative } from "@/components/ui/phone-input-native";
 import { EventDescription } from "@/components/events/event-description";
@@ -166,6 +167,8 @@ export function CampsStorefront({
     Record<string, Record<string, string>>
   >({});
   const [submitting, setSubmitting] = useState<"payfast" | "stripe" | "invoice" | null>(null);
+  // Pay later only: which of our Xero orgs invoices them (see PayLaterCountry).
+  const [invoiceCountry, setInvoiceCountry] = useState("");
   const [err, setErr] = useState<string | null>(null);
 
   const questionsByTier = useMemo(() => {
@@ -350,6 +353,10 @@ export function CampsStorefront({
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
   async function submit(provider: "payfast" | "stripe" | "invoice" = "payfast") {
+    if (provider === "invoice" && !invoiceCountry) {
+      setErr("Choose your country so we can send your invoice from the right office.");
+      return;
+    }
     if (lineCount === 0) {
       setErr("Add at least one pass first.");
       return;
@@ -422,6 +429,7 @@ export function CampsStorefront({
         ticket_answers: ticketCollect.payload,
         waiver_signatures: waiverCollect.payload,
         payment_provider: provider,
+        ...(provider === "invoice" ? { invoice_country: invoiceCountry } : {}),
       }),
     }).catch(() => null);
     setSubmitting(null);
@@ -920,10 +928,11 @@ export function CampsStorefront({
             </div>
             {event.pay_later && (
               <div className="cmp-paybtn-alt-wrap">
+                <PayLaterCountry value={invoiceCountry} onChange={setInvoiceCountry} disabled={submitting !== null} />
                 <button
                   type="button"
                   onClick={() => submit("invoice")}
-                  disabled={submitting !== null || !buyerValid || !consentAccepted}
+                  disabled={submitting !== null || !buyerValid || !consentAccepted || !invoiceCountry}
                   className="cmp-paybtn-alt"
                 >
                   {submitting === "invoice" ? "SENDING YOUR INVOICE…" : "INVOICE ME — PAY LATER"}

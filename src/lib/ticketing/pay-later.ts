@@ -4,7 +4,8 @@
 // A pay-later order holds its seats (inventory is reserved at checkout,
 // exactly like a card order) but issues NO tickets yet. Instead the buyer
 // gets an AUTHORISED Xero invoice — lines on the event's Xero Item, in the
-// org that matches the event currency (ZAR → SA, USD → US) — emailed by the
+// org of the BUYER'S country (USA → US, everyone else → SA — the same rule as
+// Training), in the event's own currency (both orgs take ZAR and USD) — emailed by the
 // Hub with the online pay link + PDF. They can pay in full or in parts;
 // once Xero shows it fully paid, the order settles through the same path
 // as a card payment and the tickets go out.
@@ -13,7 +14,9 @@
 import type { createAdminClient } from "@/lib/supabase/admin";
 import {
   createScheduledInvoice,
+  createXeroEventItem,
   getXeroInvoicePaymentStates,
+  listXeroItems,
   voidInvoice,
   type XeroRegion,
 } from "@/services/xero";
@@ -22,42 +25,8 @@ import { settlePaidOrder } from "./settle";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
-/** Which Xero organisation an event's invoices post to. */
-export function xeroRegionForCurrency(currency: string | null | undefined): XeroRegion {
-  return (currency ?? "ZAR").toUpperCase() === "USD" ? "us" : "za";
-}
-
-/** Today in South Africa (Vercel renders in UTC), as YYYY-MM-DD. */
-export function todayYmd(now: Date = new Date()): string {
-  return now.toLocaleDateString("en-CA", { timeZone: "Africa/Johannesburg" });
-}
-
-/** The event's due date (or its start date), never in the past. */
-export function invoiceDueDate(
-  event: { pay_later_due_date: string | null; start_date: string | null },
-  today: string = todayYmd()
-): string {
-  const due = event.pay_later_due_date ?? event.start_date ?? today;
-  return due < today ? today : due;
-}
-
-/**
- * A Xero item code suggestion from the event title: initials of the words
- * plus a 2-digit year if one is in the title ("Preachers 2026" → "PREACHERS26",
- * "FF Global Leaders Gathering" → "FFGLG"). Xero codes max out at 30 chars.
- */
-export function suggestItemCode(title: string): string {
-  const yearMatch = title.match(/\b(20\d{2})\b/);
-  const words = title
-    .replace(/\b20\d{2}\b/g, "")
-    .split(/[^A-Za-z0-9]+/)
-    .filter(Boolean);
-  const base =
-    words.length === 1
-      ? words[0].toUpperCase()
-      : words.map((w) => (/^[A-Z]{2,}$/.test(w) ? w : w[0].toUpperCase())).join("");
-  return `${base}${yearMatch ? yearMatch[1].slice(2) : ""}`.slice(0, 30) || "EVENT";
-}
+export { xeroRegionForOrder, todayYmd, invoiceDueDate, suggestItemCode } from "./pay-later-rules";
+import { xeroRegionForOrder, invoiceDueDate } from "./pay-later-rules";
 
 type OrderLine = { ticket_type_id: string; qty: number; per_ticket_cents: number };
 
@@ -127,7 +96,7 @@ export async function invoicePayLaterOrder(
   const { data: order } = await supabase
     .from("orders")
     .select(
-      "id, status, currency, buyer_email, buyer_first_name, buyer_last_name, lines, discount_cents, donation_cents, total_cents, events(id, title, start_date, xero_item_code, pay_later_due_date)"
+      "id, status, currency, buyer_country, buyer_email, buyer_first_name, buyer_last_name, lines, discount_cents, donation_cents, total_cents, events(id, title, start_date, xero_item_code, pay_later_due_date)"
     )
     .eq("id", orderId)
     .maybeSingle();
@@ -168,8 +137,22 @@ export async function invoicePayLaterOrder(
     quantities.push(1);
   }
 
-  const region = xeroRegionForCurrency(order.currency);
+  const region = xeroRegionForOrder(order);
   const dueDate = invoiceDueDate(event);
+
+  // The buyer's org must hold the event's item. An event switched on before
+  // buyers were routed by country may only have it in one org — add it to
+  // this one (Event Registration Revenue, tax exempt) rather than fail the
+  // order.
+  try {
+    const items = await listXeroItems(supabase, region);
+    if (!items.some((i) => i.code.trim().toLowerCase() === itemCode.trim().toLowerCase())) {
+      const made = await createXeroEventItem(supabase, region, { code: itemCode, name: event.title, description: event.title });
+      if (!made.ok) return { ok: false, error: `${region === "us" ? "US" : "SA"} Xero has no item ${itemCode}: ${made.error}` };
+    }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Couldn't read Xero items" };
+  }
   const created = await createScheduledInvoice(supabase, {
     region,
     studentEmail: order.buyer_email,

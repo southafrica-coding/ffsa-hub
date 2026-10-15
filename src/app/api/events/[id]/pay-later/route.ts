@@ -7,20 +7,26 @@ import {
   createXeroEventItem,
   listXeroItems,
   type XeroItemSummary,
+  type XeroRegion,
 } from "@/services/xero";
-import { suggestItemCode, xeroRegionForCurrency } from "@/lib/ticketing/pay-later";
+import { suggestItemCode } from "@/lib/ticketing/pay-later";
 
 // /api/events/[id]/pay-later — the "Invoice me, pay later" switch.
 //
-// GET   → current settings + the event's Xero Item: the stored code if it
-//         exists in the org, else an item whose name matches the event title
-//         (offered, not assumed), plus a suggested code for a new one.
+// Invoices go to the Xero org of the BUYER'S country, as in Training: USA →
+// the US org, everyone else → the SA org (getXeroRegionForStudent). So the
+// event's item (one code) has to exist in BOTH orgs.
+//
+// GET   → current settings + per org: the stored code's item if it exists
+//         there, else an item whose name matches the event title (offered,
+//         not assumed), plus a suggested code for a new one.
 // PATCH → { enabled?, due_date?, item_code?, create_item? }
-//         create_item makes the Item in Xero (Event Registration Revenue,
-//         tax exempt) before saving the code. Switching on requires an item
-//         that really exists in the event's org.
+//         create_item links the code in each org where it exists and creates
+//         it (Event Registration Revenue, tax exempt) where it doesn't.
+//         Switching on requires the item in both orgs.
 
 const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
+const REGIONS: XeroRegion[] = ["za", "us"];
 
 async function guard(eventId: string) {
   const supabase = await createClient();
@@ -38,40 +44,49 @@ async function guard(eventId: string) {
   return { supabase, event };
 }
 
+async function itemsByRegion(admin: ReturnType<typeof createAdminClient>) {
+  const out = {} as Record<XeroRegion, { items: XeroItemSummary[]; error: string | null }>;
+  await Promise.all(
+    REGIONS.map(async (r) => {
+      try {
+        out[r] = { items: await listXeroItems(admin, r), error: null };
+      } catch (err) {
+        out[r] = { items: [], error: err instanceof Error ? err.message : "Couldn't read Xero" };
+      }
+    })
+  );
+  return out;
+}
+
 export async function GET(_req: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
   const g = await guard(id);
   if ("error" in g) return g.error;
   const { event } = g;
-  const region = xeroRegionForCurrency(event.currency);
 
-  let items: XeroItemSummary[] = [];
-  let xeroError: string | null = null;
-  try {
-    items = await listXeroItems(createAdminClient(), region);
-  } catch (err) {
-    xeroError = err instanceof Error ? err.message : "Couldn't read Xero";
-  }
-  const item = event.xero_item_code
-    ? items.find((i) => norm(i.code) === norm(event.xero_item_code)) ?? null
-    : null;
-  const match = !item
-    ? items.find((i) => norm(i.name) === norm(event.title) || norm(i.description) === norm(event.title)) ?? null
-    : null;
+  const all = await itemsByRegion(createAdminClient());
+  const orgs = REGIONS.map((region) => {
+    const { items, error } = all[region];
+    const item = event.xero_item_code
+      ? items.find((i) => norm(i.code) === norm(event.xero_item_code)) ?? null
+      : null;
+    const match = !item
+      ? items.find((i) => norm(i.name) === norm(event.title) || norm(i.description) === norm(event.title)) ?? null
+      : null;
+    return { region, item, match, xero_error: error };
+  });
 
+  // A code free in both orgs, so one code works everywhere.
+  const taken = new Set(REGIONS.flatMap((r) => all[r].items.map((i) => norm(i.code))));
   let suggested = suggestItemCode(event.title);
-  const taken = new Set(items.map((i) => norm(i.code)));
   for (let n = 2; taken.has(norm(suggested)) && n < 100; n++) suggested = `${suggestItemCode(event.title)}-${n}`;
 
   return NextResponse.json({
     enabled: event.pay_later_enabled,
     due_date: event.pay_later_due_date,
     item_code: event.xero_item_code,
-    region,
-    item,
-    match,
+    orgs,
     suggested_code: suggested,
-    xero_error: xeroError,
   });
 }
 
@@ -80,7 +95,6 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const g = await guard(id);
   if ("error" in g) return g.error;
   const { supabase, event } = g;
-  const region = xeroRegionForCurrency(event.currency);
 
   const body = (await request.json().catch(() => ({}))) as {
     enabled?: boolean;
@@ -106,31 +120,35 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   }
 
   const admin = createAdminClient();
-  let linkedOrCreated: "linked" | "created" | null = null;
+  const outcome: Partial<Record<XeroRegion, "linked" | "created">> = {};
   if (body.create_item) {
     if (!itemCode) return NextResponse.json({ error: "Enter a code for the Xero item." }, { status: 400 });
-    // A code that already exists in the org is linked, not re-created.
-    let existing: XeroItemSummary | undefined;
-    try {
-      existing = (await listXeroItems(admin, region)).find((i) => norm(i.code) === norm(itemCode));
-    } catch (err) {
-      return NextResponse.json({ error: err instanceof Error ? err.message : "Couldn't read Xero" }, { status: 502 });
-    }
-    if (existing) {
-      itemCode = existing.code;
-      patch.xero_item_code = existing.code;
-      linkedOrCreated = "linked";
-    } else {
+    const all = await itemsByRegion(admin);
+    for (const region of REGIONS) {
+      if (all[region].error) {
+        return NextResponse.json({ error: `${region.toUpperCase()} Xero: ${all[region].error}` }, { status: 502 });
+      }
+      // A code that already exists in the org is linked, not re-created.
+      if (all[region].items.some((i) => norm(i.code) === norm(itemCode))) {
+        outcome[region] = "linked";
+        continue;
+      }
       const created = await createXeroEventItem(admin, region, {
         code: itemCode,
         name: event.title,
         description: event.title,
       });
       if (!created.ok) {
-        return NextResponse.json({ error: created.error, needs_reconnect: created.needsReconnect ?? false }, { status: 502 });
+        // Save the code anyway so the org that worked stays linked.
+        await updateEvent(supabase, id, { ...patch, xero_item_code: itemCode });
+        return NextResponse.json(
+          { error: `${region === "us" ? "US" : "SA"} Xero: ${created.error}`, needs_reconnect: created.needsReconnect ?? false },
+          { status: 502 }
+        );
       }
-      linkedOrCreated = "created";
+      outcome[region] = "created";
     }
+    patch.xero_item_code = itemCode;
   }
 
   if (typeof body.enabled === "boolean") {
@@ -138,23 +156,26 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       if (!itemCode) {
         return NextResponse.json({ error: "Link or create the event's Xero item before switching this on." }, { status: 400 });
       }
-      try {
-        const items = await listXeroItems(admin, region);
-        if (!items.some((i) => norm(i.code) === norm(itemCode))) {
+      const all = await itemsByRegion(admin);
+      for (const region of REGIONS) {
+        if (all[region].error) {
+          return NextResponse.json({ error: `${region.toUpperCase()} Xero: ${all[region].error}` }, { status: 502 });
+        }
+        if (!all[region].items.some((i) => norm(i.code) === norm(itemCode))) {
           return NextResponse.json(
-            { error: `There's no item "${itemCode}" in the ${region.toUpperCase()} Xero org.` },
+            {
+              error: `There's no item "${itemCode}" in the ${region === "us" ? "US" : "SA"} Xero org yet — buyers are invoiced in their own country's org, so it's needed in both. Use Link or create.`,
+            },
             { status: 400 }
           );
         }
-      } catch (err) {
-        return NextResponse.json({ error: err instanceof Error ? err.message : "Couldn't read Xero" }, { status: 502 });
       }
     }
     patch.pay_later_enabled = body.enabled;
   }
 
-  if (Object.keys(patch).length === 0) return NextResponse.json({ ok: true, item: linkedOrCreated });
+  if (Object.keys(patch).length === 0) return NextResponse.json({ ok: true, item: outcome });
   const { error } = await updateEvent(supabase, id, patch);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, item: linkedOrCreated });
+  return NextResponse.json({ ok: true, item: outcome });
 }

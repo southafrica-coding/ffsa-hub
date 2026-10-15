@@ -10,21 +10,32 @@ type XeroItem = {
   salesAccountCode: string | null;
 };
 
+type OrgState = {
+  region: "za" | "us";
+  item: XeroItem | null;
+  match: XeroItem | null;
+  xero_error: string | null;
+};
+
 type State = {
   enabled: boolean;
   due_date: string | null;
   item_code: string | null;
-  region: "za" | "us";
-  item: XeroItem | null;
-  match: XeroItem | null;
+  orgs: OrgState[];
   suggested_code: string;
-  xero_error: string | null;
 };
+
+const ORG_LABEL = {
+  za: { name: "SA · Fire & Fragrance SA NPC", who: "South Africans and every other country" },
+  us: { name: "US · FF SA USA, Inc", who: "Buyers from the USA" },
+} as const;
 
 // "Invoice me, pay later" for one event. Buyers who pick it get a Xero
 // invoice by email; their seats are held and the tickets go out once the
-// invoice is fully paid. Invoice lines post to the event's Xero Item —
-// found here, or created (Event Registration Revenue, tax exempt).
+// invoice is fully paid. Each buyer is invoiced in their country's Xero org
+// (USA → US, everyone else → SA, as in Training), on the event's Xero Item —
+// one code, linked or created in both orgs (Event Registration Revenue,
+// tax exempt).
 export function PayLaterSettings({
   eventId,
   startDate,
@@ -52,7 +63,8 @@ export function PayLaterSettings({
     setState(data);
     setEnabled(data.enabled);
     setDueDate(data.due_date ?? "");
-    setNewCode(data.suggested_code);
+    // A code already linked in one org is the one to add to the other.
+    setNewCode(data.item_code ?? data.suggested_code);
   }, [eventId]);
 
   useEffect(() => {
@@ -80,8 +92,8 @@ export function PayLaterSettings({
     return true;
   }
 
-  const orgLabel = state?.region === "us" ? "US (FF SA USA, Inc)" : "SA (Fire & Fragrance SA NPC)";
-  const hasItem = !!state?.item;
+  const linkedEverywhere = !!state && state.orgs.every((o) => !!o.item);
+  const matches = state?.orgs.filter((o) => !o.item && o.match) ?? [];
   const dirty =
     !!state && (enabled !== state.enabled || (dueDate || null) !== state.due_date);
 
@@ -105,42 +117,54 @@ export function PayLaterSettings({
           <>
             <div className="border border-border bg-muted/40 p-3 space-y-2 text-sm">
               <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                Xero sales item · {orgLabel}
+                Xero sales item · invoiced by the buyer&apos;s country
               </p>
-              {state.xero_error && (
-                <p className="text-xs text-destructive">Xero: {state.xero_error}</p>
-              )}
-              {hasItem ? (
-                <p>
-                  <code className="text-xs">{state.item!.code}</code> — {state.item!.name}
-                  {state.item!.salesAccountCode && (
-                    <span className="text-muted-foreground"> · sales account {state.item!.salesAccountCode}</span>
-                  )}
-                </p>
-              ) : (
+              <div className="divide-y divide-border border border-border bg-white">
+                {state.orgs.map((o) => (
+                  <div key={o.region} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-3 py-2">
+                    <div>
+                      <p className="text-xs font-semibold">{ORG_LABEL[o.region].name}</p>
+                      <p className="text-[11px] text-muted-foreground">{ORG_LABEL[o.region].who}</p>
+                    </div>
+                    <div className="text-xs">
+                      {o.xero_error ? (
+                        <span className="text-destructive">Xero: {o.xero_error}</span>
+                      ) : o.item ? (
+                        <span>
+                          <code>{o.item.code}</code> — {o.item.name}
+                          {o.item.salesAccountCode && (
+                            <span className="text-muted-foreground"> · account {o.item.salesAccountCode}</span>
+                          )}
+                        </span>
+                      ) : state.item_code ? (
+                        <span className="text-amber">No item &quot;{state.item_code}&quot; here yet</span>
+                      ) : (
+                        <span className="text-muted-foreground">Not linked</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {!linkedEverywhere && (
                 <>
-                  {state.item_code && (
-                    <p className="text-xs text-amber">
-                      The saved code &quot;{state.item_code}&quot; isn&apos;t an item in this Xero org.
-                    </p>
-                  )}
-                  {state.match ? (
+                  {!state.item_code && matches.length > 0 && (
                     <div className="flex flex-wrap items-center gap-2">
                       <span>
-                        Found <code className="text-xs">{state.match.code}</code> — {state.match.name}
-                        {state.match.salesAccountCode && ` (account ${state.match.salesAccountCode})`}
+                        Found <code className="text-xs">{matches[0].match!.code}</code> — {matches[0].match!.name} in{" "}
+                        {matches[0].region === "us" ? "US" : "SA"} Xero
                       </span>
                       <button
                         type="button"
                         disabled={busy}
-                        onClick={() => patch({ item_code: state.match!.code }, "Linked.")}
+                        onClick={() =>
+                          patch({ item_code: matches[0].match!.code, create_item: true }, "Linked in both orgs.")
+                        }
                         className="px-2.5 py-1 bg-ink text-white text-xs hover:bg-[#262622] disabled:bg-[color:var(--surface-4)]"
                       >
-                        Use this item
+                        Use this code in both
                       </button>
                     </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">No Xero item matches this event yet.</p>
                   )}
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-xs text-muted-foreground">Item code</span>
@@ -155,17 +179,16 @@ export function PayLaterSettings({
                       type="button"
                       disabled={busy || !newCode.trim()}
                       onClick={() =>
-                        patch({ item_code: newCode.trim(), create_item: true }, "Xero item linked.")
+                        patch({ item_code: newCode.trim(), create_item: true }, "Xero item linked in both orgs.")
                       }
                       className="px-2.5 py-1 border border-border text-xs hover:bg-muted disabled:opacity-50"
                     >
-                      Link or create
+                      Link or create in both
                     </button>
                   </div>
                   <p className="text-[11px] text-muted-foreground">
-                    An existing Xero item with this code is linked. Otherwise a new one is
-                    created: named after the event, posting to Event Registration Revenue,
-                    tax exempt.
+                    In each org, an existing item with this code is linked; otherwise one is created
+                    there: named after the event, posting to Event Registration Revenue, tax exempt.
                   </p>
                 </>
               )}
@@ -176,7 +199,7 @@ export function PayLaterSettings({
                 type="checkbox"
                 checked={enabled}
                 onChange={(e) => setEnabled(e.target.checked)}
-                disabled={busy || (!hasItem && !state.enabled)}
+                disabled={busy || (!linkedEverywhere && !state.enabled)}
               />
               Offer &quot;Invoice me, pay later&quot; at checkout
             </label>

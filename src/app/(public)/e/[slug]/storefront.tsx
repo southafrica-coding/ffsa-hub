@@ -1,5 +1,6 @@
 "use client";
 
+import { PayLaterCountry } from "./pay-later-country";
 import { useMemo, useState } from "react";
 import { EventDescription } from "@/components/events/event-description";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -132,6 +133,8 @@ export function Storefront({
   const [customAnswers, setCustomAnswers] = useState<Record<string, unknown>>({});
   const [customErrors, setCustomErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState<"payfast" | "stripe" | "invoice" | null>(null);
+  // Pay later only: which of our Xero orgs invoices them (see PayLaterCountry).
+  const [invoiceCountry, setInvoiceCountry] = useState("");
   const [err, setErr] = useState<string | null>(null);
 
   function setQty(t: TicketType, qty: number) {
@@ -266,6 +269,10 @@ export function Storefront({
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
   async function submit(provider: "payfast" | "stripe" | "invoice" = "payfast") {
+    if (provider === "invoice" && !invoiceCountry) {
+      setErr("Choose your country so we can send your invoice from the right office.");
+      return;
+    }
     if (lineCount === 0) {
       setErr("Add at least one ticket.");
       return;
@@ -313,6 +320,7 @@ export function Storefront({
         consent_accepted: consentAccepted,
         custom_answers: customAnswers,
         payment_provider: provider,
+        ...(provider === "invoice" ? { invoice_country: invoiceCountry } : {}),
       }),
     });
     setSubmitting(null);
@@ -796,10 +804,11 @@ export function Storefront({
                 </div>
                 {event.pay_later && (
                   <div className="pt-1">
+                    <PayLaterCountry value={invoiceCountry} onChange={setInvoiceCountry} disabled={submitting !== null} />
                     <Button
                       type="button"
                       onClick={() => submit("invoice")}
-                      disabled={submitting !== null || !buyerValid || !consentAccepted}
+                      disabled={submitting !== null || !buyerValid || !consentAccepted || !invoiceCountry}
                       variant="outline"
                       size="lg"
                       className="w-full h-11"

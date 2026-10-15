@@ -1,5 +1,6 @@
 "use client";
 
+import { PayLaterCountry } from "./pay-later-country";
 import { useMemo, useState } from "react";
 import { PhoneInputNative } from "@/components/ui/phone-input-native";
 import type { FormField } from "@/lib/forms/schema";
@@ -164,6 +165,8 @@ export function TheSendStorefront({
     Record<string, Record<string, string>>
   >({});
   const [submitting, setSubmitting] = useState<"payfast" | "stripe" | "invoice" | null>(null);
+  // Pay later only: which of our Xero orgs invoices them (see PayLaterCountry).
+  const [invoiceCountry, setInvoiceCountry] = useState("");
   const [err, setErr] = useState<string | null>(null);
 
   const questionsByTier = useMemo(() => {
@@ -343,6 +346,10 @@ export function TheSendStorefront({
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
   async function submit(provider: "payfast" | "stripe" | "invoice" = "payfast") {
+    if (provider === "invoice" && !invoiceCountry) {
+      setErr("Choose your country so we can send your invoice from the right office.");
+      return;
+    }
     if (lineCount === 0) {
       setErr("Add at least one ticket.");
       return;
@@ -415,6 +422,7 @@ export function TheSendStorefront({
         ticket_answers: ticketCollect.payload,
         waiver_signatures: waiverCollect.payload,
         payment_provider: provider,
+        ...(provider === "invoice" ? { invoice_country: invoiceCountry } : {}),
       }),
     }).catch(() => null);
     setSubmitting(null);
@@ -932,10 +940,11 @@ export function TheSendStorefront({
             </div>
             {event.pay_later && (
               <div className="tss-paybtn-alt-wrap">
+                <PayLaterCountry value={invoiceCountry} onChange={setInvoiceCountry} disabled={submitting !== null} />
                 <button
                   type="button"
                   onClick={() => submit("invoice")}
-                  disabled={submitting !== null || !buyerValid || !consentAccepted}
+                  disabled={submitting !== null || !buyerValid || !consentAccepted || !invoiceCountry}
                   className="tss-paybtn-alt"
                 >
                   {submitting === "invoice" ? "SENDING YOUR INVOICE…" : "INVOICE ME — PAY LATER"}

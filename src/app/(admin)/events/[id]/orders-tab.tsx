@@ -46,6 +46,9 @@ type Order = {
   currency: string | null;
   // Pay-later orders (migration 238): the Xero invoice and what's paid so far.
   xero_invoice_number?: string | null;
+  // Which Xero org invoiced them (by the buyer's country, migration 240).
+  xero_region?: "za" | "us" | null;
+  buyer_country?: string | null;
   invoice_due_date?: string | null;
   invoice_paid_cents?: number;
   invoice_emailed_at?: string | null;
@@ -481,7 +484,16 @@ export function OrdersTab({
                         <div className="text-sm">{money(o.total_cents, o.currency)}</div>
                         {o.status === "invoiced" && (
                           <div className="text-xs text-muted-foreground">
-                            Invoice {o.xero_invoice_number ?? "—"} ·{" "}
+                            Invoice {o.xero_invoice_number ?? "—"}
+                            {o.xero_region && (
+                              <span
+                                className="mx-1 border border-border px-1 font-mono text-[10px]"
+                                title={o.buyer_country ? `Invoiced by country: ${o.buyer_country}` : undefined}
+                              >
+                                {o.xero_region === "us" ? "US Xero" : "SA Xero"}
+                              </span>
+                            )}{" "}
+                            ·{" "}
                             {money(o.invoice_paid_cents ?? 0, o.currency)} paid
                             {o.invoice_due_date && ` · due ${o.invoice_due_date}`}
                           </div>
