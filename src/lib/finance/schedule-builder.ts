@@ -320,6 +320,11 @@ export function buildSchedule(
   ctx: BuilderContext
 ): BuildResult {
   const warnings: string[] = [];
+  if (items.length === 0) {
+    // A student put on pricing with no payment schedule would otherwise get
+    // an empty plan in silence — and never be invoiced.
+    warnings.push("No payment schedule is set up for this pricing, so nothing will be billed. Set one up in the school's Fees settings.");
+  }
   const active = [...items].sort((a, b) => a.sort_order - b.sort_order);
 
   const rows: ScheduleRow[] = [];

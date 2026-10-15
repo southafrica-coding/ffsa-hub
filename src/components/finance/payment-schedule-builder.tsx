@@ -212,6 +212,12 @@ export function PaymentScheduleBuilder({
         </div>
       </div>
 
+      {target.courseId && !saved && !startingPoint && (
+        <p className="border-b border-rule bg-[#FFF4E5] px-4 py-2 text-xs text-amber">
+          No payment schedule yet — a student who signs up for this course on its own won&apos;t be billed for it until
+          one is saved here.
+        </p>
+      )}
       {!saved && startingPoint && startingPointLabel && (
         <p className="border-b border-rule bg-bone px-4 py-2 text-xs">{startingPointLabel}</p>
       )}

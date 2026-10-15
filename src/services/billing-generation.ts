@@ -423,7 +423,12 @@ export async function setupProgramBillingOnAcceptance(
       (i) => i.status === "sent" || i.status === "generated"
     ).length;
 
-    return { ok: true, plansCreated: planIds.length, generated };
+    return {
+      ok: true,
+      plansCreated: planIds.length,
+      generated,
+      ...(committed.warnings?.length ? { note: committed.warnings.join(" | ") } : {}),
+    };
   } catch (err) {
     console.error("[setupProgramBillingOnAcceptance] failed", err);
     return {

@@ -186,3 +186,11 @@ describe("resolving a held charge", () => {
     expect(patch.scheduled_generation_date).toBeUndefined();
   });
 });
+
+describe("empty pricing", () => {
+  it("warns that nothing will be billed when there is no schedule", () => {
+    const { rows, warnings } = buildSchedule([], { acceptanceDate: "2027-01-10", paymentPreference: "standard", today: "2027-01-10" });
+    expect(rows).toEqual([]);
+    expect(warnings.join(" ")).toMatch(/nothing will be billed/);
+  });
+});
