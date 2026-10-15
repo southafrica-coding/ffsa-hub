@@ -26,6 +26,7 @@ export function TicketsTab({
   buyerFields,
   currency,
   currencyLocked,
+  xeroItemCode,
 }: {
   eventId: string;
   ticketingEnabled: boolean;
@@ -37,6 +38,7 @@ export function TicketsTab({
   buyerFields: unknown;
   currency: string;
   currencyLocked: boolean;
+  xeroItemCode: string | null;
 }) {
   return (
     <div className="space-y-6">
@@ -46,6 +48,7 @@ export function TicketsTab({
         publicSlug={publicSlug}
         currency={currency}
         currencyLocked={currencyLocked}
+        xeroItemCode={xeroItemCode}
       />
       <TicketTypesManager
         eventId={eventId}

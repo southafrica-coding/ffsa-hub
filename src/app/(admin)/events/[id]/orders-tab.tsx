@@ -44,6 +44,9 @@ type Order = {
   // Snapshotted from events.currency at checkout, so an order always
   // renders in the currency it was actually sold in.
   currency: string | null;
+  // US Xero invoice for Stripe orders (migration 238).
+  xero_invoice_number?: string | null;
+  xero_sync_error?: string | null;
 };
 
 type TicketWithAnswers = {
@@ -178,6 +181,7 @@ export function OrdersTab({
     formatMoney(cents, c ?? currency);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
+  const [xeroBusyId, setXeroBusyId] = useState<string | null>(null);
   const [recentlySentId, setRecentlySentId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [refundOrder, setRefundOrder] = useState<Order | null>(null);
@@ -311,6 +315,20 @@ export function OrdersTab({
     }
     setRecentlySentId(order.id);
     setTimeout(() => setRecentlySentId(null), 3000);
+  }
+
+  async function pushToXero(order: Order) {
+    setXeroBusyId(order.id);
+    setErr(null);
+    const res = await fetch(`/api/events/${eventId}/orders/${order.id}/xero`, {
+      method: "POST",
+    });
+    setXeroBusyId(null);
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      setErr(`Xero: ${data.error ?? "push failed"}`);
+    }
+    router.refresh();
   }
 
   return (
@@ -465,6 +483,21 @@ export function OrdersTab({
                         {o.paid_at
                           ? new Date(o.paid_at).toLocaleString()
                           : "—"}
+                        {o.xero_invoice_number && (
+                          <div className="text-[11px] text-[color:var(--text-quiet)]">
+                            Xero {o.xero_invoice_number}
+                          </div>
+                        )}
+                        {o.xero_sync_error && (
+                          <div
+                            className="text-[11px] text-destructive max-w-[16rem]"
+                            title={o.xero_sync_error}
+                          >
+                            Xero: {o.xero_sync_error.length > 80
+                              ? `${o.xero_sync_error.slice(0, 80)}…`
+                              : o.xero_sync_error}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex flex-col items-end gap-1">
@@ -484,6 +517,19 @@ export function OrdersTab({
                                   : "Resend email"}
                             </button>
                           )}
+                          {o.payment_provider === "stripe" &&
+                            ["paid", "partially_refunded", "refunded"].includes(o.status) &&
+                            o.total_cents > 0 &&
+                            (!o.xero_invoice_number || o.xero_sync_error) && (
+                              <button
+                                type="button"
+                                onClick={() => pushToXero(o)}
+                                disabled={xeroBusyId === o.id}
+                                className="text-xs text-muted-foreground hover:text-foreground hover:underline disabled:opacity-50 disabled:no-underline normal-case tracking-normal"
+                              >
+                                {xeroBusyId === o.id ? "Pushing…" : "Push to Xero"}
+                              </button>
+                            )}
                           {/* Partially refunded orders still hold money,
                               so they stay refundable up to the balance. */}
                           {(o.status === "paid" ||
