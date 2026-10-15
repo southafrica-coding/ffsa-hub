@@ -13,7 +13,10 @@ import {
   setBookingDrivers,
   getLicenceFactsFor,
   markDrivingTestPending,
+  purposeLabel,
 } from "@/services/vehicles";
+import { dateRangeLabel } from "@/lib/bookings/dates";
+import { notifyVehicleRequester } from "@/lib/vehicles/requester-notify";
 import { checkDriverEligibility } from "@/lib/vehicles/licence";
 import { notifyVehicleManagers } from "@/lib/email/send-vehicle-request";
 
@@ -51,6 +54,49 @@ type PatchBody = {
 function nn(v: string | null | undefined): string | null {
   const t = (v ?? "").trim();
   return t.length ? t : null;
+}
+
+// The request details. These only change while the booking is pending — an
+// approved booking has to be moved back to pending first, so nothing about it
+// shifts under an approval that has already been given.
+const DETAIL_FIELDS = [
+  "booking_name",
+  "point_person",
+  "purpose",
+  "purpose_note",
+  "requester_phone",
+  "num_people",
+  "notes",
+  "checkout_date",
+  "return_date",
+] as const;
+
+/** Human "what changed" lines for the requester, old → new. */
+function describeChanges(
+  before: Record<string, unknown>,
+  after: Record<string, unknown>
+): string[] {
+  const lines: string[] = [];
+  const changed = (k: string) => k in after && (after[k] ?? null) !== (before[k] ?? null);
+  const show = (v: unknown) => (v === null || v === undefined || v === "" ? "—" : String(v));
+
+  if (changed("checkout_date") || changed("return_date")) {
+    const from = dateRangeLabel(before.checkout_date as string, before.return_date as string);
+    const to = dateRangeLabel(
+      (after.checkout_date ?? before.checkout_date) as string,
+      (after.return_date ?? before.return_date) as string
+    );
+    if (from !== to) lines.push(`Dates: ${from} → ${to}`);
+  }
+  if (changed("booking_name")) lines.push(`Booking name: ${show(before.booking_name)} → ${show(after.booking_name)}`);
+  if (changed("purpose"))
+    lines.push(`Purpose: ${purposeLabel(String(before.purpose ?? ""))} → ${purposeLabel(String(after.purpose ?? ""))}`);
+  if (changed("purpose_note")) lines.push(`Purpose detail: ${show(before.purpose_note)} → ${show(after.purpose_note)}`);
+  if (changed("num_people")) lines.push(`People: ${show(before.num_people)} → ${show(after.num_people)}`);
+  if (changed("point_person")) lines.push(`Point person: ${show(before.point_person)} → ${show(after.point_person)}`);
+  if (changed("requester_phone")) lines.push(`WhatsApp: ${show(before.requester_phone)} → ${show(after.requester_phone)}`);
+  if (changed("notes")) lines.push(`Notes: ${show(after.notes)}`);
+  return lines;
 }
 
 export async function PATCH(
@@ -98,6 +144,21 @@ export async function PATCH(
   if (body.checkout_date !== undefined) update.checkout_date = nn(body.checkout_date);
   if (body.return_date !== undefined) update.return_date = nn(body.return_date);
   if (body.status === "cancelled") update.status = "cancelled";
+
+  const touchesDetails = DETAIL_FIELDS.some(
+    (k) => k in update && (update[k] ?? null) !== ((booking as Record<string, unknown>)[k] ?? null)
+  );
+  if (touchesDetails && booking.status !== "pending") {
+    return NextResponse.json(
+      {
+        error:
+          booking.status === "approved"
+            ? "Move this booking back to pending before changing its details."
+            : `This booking is ${booking.status} — its details can't be changed.`,
+      },
+      { status: 409 }
+    );
+  }
 
   // Effective window for clash checks (body override, else existing).
   const effCheckout = (update.checkout_date as string) ?? booking.checkout_date;
@@ -163,8 +224,24 @@ export async function PATCH(
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  let vehicleChange: string | null = null;
   if (vehicleIds !== null) {
+    const beforeIds = (booking.assignments ?? [])
+      .map((a: { vehicle: { id: string } | null }) => a.vehicle?.id)
+      .filter(Boolean) as string[];
+    const same =
+      beforeIds.length === vehicleIds.length && beforeIds.every((v) => vehicleIds!.includes(v));
     await setBookingVehicles(supabase, id, vehicleIds);
+    if (!same) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: vs } = await (createAdminClient() as any)
+        .from("vehicles")
+        .select("id, name")
+        .in("id", [...beforeIds, ...vehicleIds]);
+      const nameOf = new Map(((vs ?? []) as { id: string; name: string }[]).map((v) => [v.id, v.name]));
+      const label = (ids: string[]) => ids.map((v) => nameOf.get(v) ?? "vehicle").join(", ") || "none";
+      vehicleChange = `Vehicle: ${label(beforeIds)} → ${label(vehicleIds)}`;
+    }
   }
 
   let drivers: { id: string; name: string }[] = [];
@@ -252,6 +329,20 @@ export async function PATCH(
       checkoutDate: effCheckout,
       returnDate: effReturn,
     });
+  }
+
+  // Tell the person who booked, straight away, when someone else changed it.
+  // (Their own edits need no announcement.)
+  if (booking.requested_by !== user.id) {
+    if (update.status === "cancelled" && booking.status !== "cancelled") {
+      await notifyVehicleRequester({ bookingId: id, kind: "cancelled", sentBy: user.id });
+    } else {
+      const changes = describeChanges(booking as Record<string, unknown>, update);
+      if (vehicleChange) changes.push(vehicleChange);
+      if (changes.length > 0) {
+        await notifyVehicleRequester({ bookingId: id, kind: "changed", changes, sentBy: user.id });
+      }
+    }
   }
 
   // A still-open request DM shows vehicles / drivers / dates — keep it current.

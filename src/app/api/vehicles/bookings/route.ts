@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
+import { notifyVehicleRequester } from "@/lib/vehicles/requester-notify";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAuthedUser } from "@/lib/api-auth";
@@ -259,6 +260,9 @@ export async function POST(request: Request) {
     checkoutDate: checkout,
     returnDate: ret,
   });
+
+  // Confirm receipt to the person who booked (Slack DM + email).
+  after(() => notifyVehicleRequester({ bookingId: booking.id, kind: "submitted" }).then(() => undefined));
 
   return NextResponse.json({ ok: true, bookingId: booking.id, drivers: created });
 }

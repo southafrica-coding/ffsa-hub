@@ -7,7 +7,8 @@ import { refreshVehicleRequestAlerts } from "@/lib/vehicles/slack-alerts";
 
 type DecisionBody = { decision?: string; note?: string };
 
-// POST /api/vehicles/bookings/[id]/decision — approve / deny / complete.
+// POST /api/vehicles/bookings/[id]/decision — approve / deny / complete, or
+// "pending" to move an approved booking back into review.
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -31,7 +32,7 @@ export async function POST(
 
   if (!body.decision || !VEHICLE_DECISIONS.includes(body.decision as VehicleDecision)) {
     return NextResponse.json(
-      { error: "decision must be one of: approved, denied, completed" },
+      { error: "decision must be one of: approved, denied, completed, pending" },
       { status: 400 }
     );
   }

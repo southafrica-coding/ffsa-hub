@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Check, X, Ban, CheckCheck, Wand2 } from "lucide-react";
+import { Check, X, Ban, CheckCheck, Wand2, Undo2 } from "lucide-react";
 import { SectionBar } from "@/components/ffsa";
 import type { Vehicle } from "@/services/vehicles";
 import { standardDailyUsd, standardQuoteUsd } from "@/lib/vehicles/pricing";
@@ -116,7 +116,7 @@ export function VehicleBookingActions({
     }
   }
 
-  async function decide(decision: "approved" | "denied" | "completed") {
+  async function decide(decision: "approved" | "denied" | "completed" | "pending") {
     setBusy(decision);
     try {
       const res = await fetch(`/api/vehicles/bookings/${booking.id}/decision`, {
@@ -130,7 +130,12 @@ export function VehicleBookingActions({
         setBusy(null);
         return;
       }
-      toast.success(`Booking ${decision}.`);
+      toast.success(
+        decision === "pending"
+          ? "Back to pending — the requester has been told on Slack."
+          : `Booking ${decision} — the requester has been told.`
+      );
+      setNote("");
       router.refresh();
     } catch {
       toast.error("Network error — please try again.");
@@ -305,18 +310,25 @@ export function VehicleBookingActions({
             <Button onClick={saveManage} disabled={!!busy} size="sm">
               {busy === "save" ? "Saving…" : "Save assignment & payment"}
             </Button>
+            <p className="-mt-3 text-xs text-[color:var(--text-secondary)]">
+              Changing the vehicle sends the requester a Slack DM + email.
+            </p>
 
             {/* Decision */}
             {isActive && (
               <div className="space-y-3 border-t border-rule pt-4">
                 <div className="space-y-2">
-                  <Label htmlFor="decision-note">Decision note (optional)</Label>
+                  <Label htmlFor="decision-note">Note to the requester (optional)</Label>
                   <textarea
                     id="decision-note"
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
                     rows={2}
-                    placeholder="e.g. Approved — collect keys at the Legal Offices."
+                    placeholder={
+                      booking.status === "approved"
+                        ? "e.g. Moving this back to pending while we confirm the dates."
+                        : "e.g. Approved — collect keys at the Legal Offices."
+                    }
                     className="flex w-full"
                   />
                 </div>
@@ -342,6 +354,24 @@ export function VehicleBookingActions({
                         {busy === "denied" ? "Denying…" : "Deny"}
                       </button>
                     </>
+                  )}
+                  {booking.status === "approved" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            "Move this booking back to pending? It will need approving again, and the requester is told straight away."
+                          )
+                        )
+                          decide("pending");
+                      }}
+                      disabled={!!busy}
+                      className="inline-flex items-center gap-1.5 border border-ink px-4 py-2.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-ink disabled:opacity-50"
+                    >
+                      <Undo2 className="h-4 w-4" />
+                      {busy === "pending" ? "Moving…" : "Back to pending"}
+                    </button>
                   )}
                   {booking.status === "approved" && (
                     <button

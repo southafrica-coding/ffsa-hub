@@ -1,6 +1,6 @@
-// Approve / deny / complete a vehicle booking — one implementation shared by
-// the Hub route and the Slack DM buttons, so both enforce the same licence
-// re-check and send the same requester email.
+// Approve / deny / complete / reopen a vehicle booking — one implementation
+// shared by the Hub route and the Slack DM buttons, so both enforce the same
+// licence re-check and tell the requester the same way (Slack DM + email).
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
@@ -12,13 +12,15 @@ import {
   setBookingVehicles,
 } from "@/services/vehicles";
 import { checkDriverEligibility } from "@/lib/vehicles/licence";
-import { sendVehicleRequestDecision } from "@/lib/email/send-vehicle-request";
+import { notifyVehicleRequester } from "@/lib/vehicles/requester-notify";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
 
-export type VehicleDecision = "approved" | "denied" | "completed";
-export const VEHICLE_DECISIONS: VehicleDecision[] = ["approved", "denied", "completed"];
+// "pending" moves an approved booking back into review so its details can be
+// changed; it has to be approved again (with the licence re-check) after.
+export type VehicleDecision = "approved" | "denied" | "completed" | "pending";
+export const VEHICLE_DECISIONS: VehicleDecision[] = ["approved", "denied", "completed", "pending"];
 
 export type DecisionResult =
   | { ok: true }
@@ -36,6 +38,14 @@ export async function decideVehicleBooking(
   rawNote: string | null | undefined
 ): Promise<DecisionResult> {
   const note = (rawNote ?? "").trim();
+
+  if (decision === "pending") {
+    const { data: current } = await getVehicleBookingById(supabase, id);
+    if (!current) return { ok: false, error: "Not found", status: 404 };
+    if (current.status !== "approved") {
+      return { ok: false, error: `Only an approved booking can go back to pending (this one is ${current.status}).`, status: 409 };
+    }
+  }
 
   // Approval re-checks every driver's licence against the database.
   //
@@ -79,27 +89,29 @@ export async function decideVehicleBooking(
     }
   }
 
-  const { data: updated, error } = await updateVehicleBooking(supabase, id, {
-    status: decision,
-    decision_note: note.length ? note : null,
-    decided_by: userId,
-    decided_at: new Date().toISOString(),
-  });
+  const { error } = await updateVehicleBooking(
+    supabase,
+    id,
+    decision === "pending"
+      ? // Back in review: the old approval no longer stands.
+        { status: "pending", decision_note: note.length ? note : null, decided_by: null, decided_at: null }
+      : {
+          status: decision,
+          decision_note: note.length ? note : null,
+          decided_by: userId,
+          decided_at: new Date().toISOString(),
+        }
+  );
   if (error) return { ok: false, error: error.message, status: 500 };
 
-  // Email the requester on approve/deny (covers public requesters who have no
-  // in-app feed). Best-effort — a mail failure never fails the decision.
-  if (updated?.requester_email && (decision === "approved" || decision === "denied")) {
-    await sendVehicleRequestDecision({
-      email: updated.requester_email,
-      requesterName: updated.requester_name,
-      bookingName: updated.booking_name,
-      checkoutDate: updated.checkout_date,
-      returnDate: updated.return_date,
-      approved: decision === "approved",
-      note: note.length ? note : null,
-    });
-  }
+  // Tell the requester straight away — Slack DM + email. Best-effort: a
+  // delivery failure never fails the decision.
+  await notifyVehicleRequester({
+    bookingId: id,
+    kind: decision === "pending" ? "reopened" : decision,
+    note: note.length ? note : null,
+    sentBy: userId,
+  });
 
   return { ok: true };
 }

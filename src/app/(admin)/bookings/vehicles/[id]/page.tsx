@@ -32,6 +32,9 @@ import { dateRangeLabel } from "@/lib/bookings/dates";
 import { countries } from "@/lib/countries";
 import { VehicleBookingActions } from "./booking-actions";
 import { DriversPanel, type DriverPanelRow } from "./drivers-panel";
+import { DetailsEditor } from "./details-editor";
+import { RequesterMessages } from "./requester-messages";
+import { getRequesterMessages } from "@/lib/vehicles/requester-notify";
 
 function countryLabel(iso2: string | null): string {
   if (!iso2) return "—";
@@ -221,6 +224,9 @@ export default async function VehicleBookingDetail({
   const canEditDrivers =
     isManager || (isOwner && b.status !== "completed" && b.status !== "cancelled");
   const days = dayCount(b.checkout_date, b.return_date);
+  // Request details are editable only while pending (the API enforces it).
+  const canEditDetails = b.status === "pending" && (isManager || isOwner);
+  const requesterMessages = isManager ? await getRequesterMessages(b.id) : [];
 
   return (
     <div className="ffsa-screen">
@@ -268,6 +274,30 @@ export default async function VehicleBookingDetail({
             <div className="sm:col-span-2">
               <Field label="Decision note">{b.decision_note}</Field>
             </div>
+          )}
+          {canEditDetails && (
+            <div className="sm:col-span-2">
+              <DetailsEditor
+                bookingId={b.id}
+                notifiesRequester={!isOwner}
+                initial={{
+                  booking_name: b.booking_name ?? "",
+                  point_person: b.point_person ?? "",
+                  purpose: b.purpose ?? "",
+                  purpose_note: b.purpose_note ?? "",
+                  requester_phone: b.requester_phone ?? "",
+                  num_people: b.num_people != null ? String(b.num_people) : "",
+                  checkout_date: b.checkout_date,
+                  return_date: b.return_date,
+                  notes: b.notes ?? "",
+                }}
+              />
+            </div>
+          )}
+          {isManager && b.status === "approved" && (
+            <p className="text-xs text-[color:var(--text-secondary)] sm:col-span-2">
+              To change dates or details, move this booking back to pending under Manage booking.
+            </p>
           )}
         </div>
       </div>
@@ -349,6 +379,14 @@ export default async function VehicleBookingDetail({
           )}
         </div>
       </div>
+
+      {isManager && (
+        <RequesterMessages
+          bookingId={b.id}
+          requesterName={b.requester_name}
+          rows={requesterMessages}
+        />
+      )}
 
       {/* Management */}
       <VehicleBookingActions
