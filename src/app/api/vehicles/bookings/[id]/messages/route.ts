@@ -2,11 +2,12 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthedUser } from "@/lib/api-auth";
 import { getVehicleAccess, getVehicleBookingById } from "@/services/vehicles";
-import { notifyVehicleRequester } from "@/lib/vehicles/requester-notify";
+import { messageRequesterAsSender } from "@/lib/vehicles/requester-notify";
 
 // POST /api/vehicles/bookings/[id]/messages — a vehicle manager writes to the
-// person who booked. Goes to them as a Slack DM; email only if Slack can't
-// reach them. Logged on the booking (vehicle_booking_messages).
+// person who booked. Sent from the manager's own Slack account (they connect
+// it once), so the reply comes straight back to them; email only if the
+// requester isn't on Slack. 409 { needsConnect } until they've connected.
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -36,20 +37,15 @@ export async function POST(
     return NextResponse.json({ error: "Keep the message under 3,000 characters." }, { status: 400 });
   }
 
-  const sent = await notifyVehicleRequester({
-    bookingId: id,
-    kind: "message",
-    note: text,
-    sentBy: user.id,
-  });
-  if (!sent.slack && !sent.email) {
-    return NextResponse.json(
-      {
-        error:
-          "Couldn't reach the requester — they aren't linked to Slack and there's no email on the booking.",
-      },
-      { status: 422 }
-    );
+  const sent = await messageRequesterAsSender({ bookingId: id, text, senderId: user.id });
+  if (!sent.ok) {
+    if (sent.needsConnect) {
+      return NextResponse.json(
+        { error: "Connect your Slack first so the message comes from you.", needsConnect: true },
+        { status: 409 }
+      );
+    }
+    return NextResponse.json({ error: sent.error }, { status: 422 });
   }
-  return NextResponse.json({ ok: true, ...sent });
+  return NextResponse.json({ ok: true, via: sent.via });
 }

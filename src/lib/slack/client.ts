@@ -44,6 +44,7 @@ const FORM_ENCODED_METHODS = new Set([
   "users.lookupByEmail",
   "users.info",
   "users.list",
+  "conversations.history",
 ]);
 
 async function callSlack<T = Record<string, unknown>>(
@@ -54,6 +55,16 @@ async function callSlack<T = Record<string, unknown>>(
   if (!token) {
     throw new Error("SLACK_BOT_TOKEN not configured");
   }
+  return callSlackWith<T>(token, method, body);
+}
+
+// Same transport with an explicit token — a person's own user token
+// (xoxp-…) when the Hub acts as them (see lib/slack/user-tokens.ts).
+async function callSlackWith<T = Record<string, unknown>>(
+  token: string,
+  method: string,
+  body: Record<string, unknown>
+): Promise<SlackResponse<T>> {
 
   const useForm = FORM_ENCODED_METHODS.has(method);
 
@@ -217,4 +228,71 @@ export function listUsers(cursor?: string) {
     members?: Array<{ id: string; deleted?: boolean; is_bot?: boolean }>;
     response_metadata?: { next_cursor?: string };
   }>("users.list", { limit: 200, cursor });
+}
+
+// ────────────────────────────────────────────────────────────
+// Acting as a person (user token)
+// ------------------------------------------------------------
+// With a user token the message is theirs: it appears in their own
+// DM with the recipient, and replies come straight back to them.
+// ────────────────────────────────────────────────────────────
+
+export function openConversationAs(userToken: string, slackUserId: string) {
+  return callSlackWith<{ channel?: { id: string } }>(userToken, "conversations.open", {
+    users: slackUserId,
+  });
+}
+
+export function postMessageAs(
+  userToken: string,
+  args: { channel: string; text: string; blocks?: unknown[] }
+) {
+  return callSlackWith<{ ts?: string; channel?: string }>(userToken, "chat.postMessage", {
+    channel: args.channel,
+    text: args.text,
+    blocks: args.blocks,
+    unfurl_links: false,
+  });
+}
+
+export type SlackHistoryMessage = {
+  ts: string;
+  user?: string;
+  text?: string;
+  subtype?: string;
+};
+
+export function conversationHistoryAs(
+  userToken: string,
+  args: { channel: string; oldest?: string; latest?: string; limit?: number }
+) {
+  return callSlackWith<{ messages?: SlackHistoryMessage[] }>(userToken, "conversations.history", {
+    channel: args.channel,
+    oldest: args.oldest,
+    latest: args.latest,
+    inclusive: true,
+    limit: args.limit ?? 100,
+  });
+}
+
+// oauth.v2.access — swap the code from "Connect my Slack" for the
+// person's user token. Authenticated by the app's client id/secret,
+// not a token, and form-encoded.
+export async function exchangeOAuthCode(code: string, redirectUri: string) {
+  const form = new URLSearchParams({
+    code,
+    redirect_uri: redirectUri,
+    client_id: process.env.SLACK_CLIENT_ID ?? "",
+    client_secret: process.env.SLACK_CLIENT_SECRET ?? "",
+  });
+  const res = await fetch(`${SLACK_API_BASE}/oauth.v2.access`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded; charset=utf-8" },
+    body: form.toString(),
+  });
+  if (!res.ok) throw new Error(`Slack API oauth.v2.access HTTP ${res.status}`);
+  return (await res.json()) as SlackResponse<{
+    team?: { id: string };
+    authed_user?: { id: string; scope?: string; access_token?: string; token_type?: string };
+  }>;
 }

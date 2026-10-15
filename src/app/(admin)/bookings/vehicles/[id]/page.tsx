@@ -34,7 +34,11 @@ import { VehicleBookingActions } from "./booking-actions";
 import { DriversPanel, type DriverPanelRow } from "./drivers-panel";
 import { DetailsEditor } from "./details-editor";
 import { RequesterMessages } from "./requester-messages";
-import { getRequesterMessages } from "@/lib/vehicles/requester-notify";
+import {
+  getRequesterMessages,
+  getBookingConversation,
+  isSlackConnected,
+} from "@/lib/vehicles/requester-notify";
 
 function countryLabel(iso2: string | null): string {
   if (!iso2) return "—";
@@ -226,7 +230,13 @@ export default async function VehicleBookingDetail({
   const days = dayCount(b.checkout_date, b.return_date);
   // Request details are editable only while pending (the API enforces it).
   const canEditDetails = b.status === "pending" && (isManager || isOwner);
-  const requesterMessages = isManager ? await getRequesterMessages(b.id) : [];
+  const [requesterMessages, conversation, slackConnected] = isManager
+    ? await Promise.all([
+        getRequesterMessages(b.id),
+        getBookingConversation(b.id),
+        isSlackConnected(user.id),
+      ])
+    : [[], [], false];
 
   return (
     <div className="ffsa-screen">
@@ -385,6 +395,8 @@ export default async function VehicleBookingDetail({
           bookingId={b.id}
           requesterName={b.requester_name}
           rows={requesterMessages}
+          conversation={conversation}
+          slackConnected={slackConnected}
         />
       )}
 
