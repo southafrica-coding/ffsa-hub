@@ -12,10 +12,11 @@
  *   5. ignore bot/own/edited messages
  *   6. ACK 200 within Slack's 3s window
  *   7. in the background (after()), decide what this conversation may use:
- *        - an outreach team conversation (team channel, or a DM from
- *          someone on a Slack-enabled team) → that team's budget tools
- *          (lib/slack/assistant/outreach)
  *        - the staff allowlist (access.ts) → the staff Q&A tools
+ *        - outreach budget questions belong to the separate Outreach
+ *          Finance bot (/api/slack/outreach/events). Until that app's keys
+ *          are set this bot still answers them, so nothing breaks while
+ *          it is being installed; after that it points people there.
  *      and refuse when it is neither
  *   8. run the assistant
  *
@@ -32,6 +33,7 @@ import * as slack from "@/lib/slack/client";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { handleSlackDeactivation } from "@/lib/slack/deactivation";
 import { verifySlackSignature } from "@/lib/slack/verify";
+import { BOT_NAMES, isBotConfigured } from "@/lib/slack/bots";
 
 export const maxDuration = 60; // covers the after() agent work
 export const dynamic = "force-dynamic";
@@ -144,6 +146,9 @@ export async function POST(request: Request) {
       const hubUserId = await resolveHubUserBySlackId(admin, slackUserId);
       const outreach = await resolveOutreachScope(admin, { hubUserId, channelId: channel, isDM });
 
+      // Once Outreach Finance is installed, budget questions are its job.
+      const outreachBotLive = isBotConfigured("outreach");
+
       if (outreach.kind === "refuse") {
         await refuse(outreach.reason);
         return;
@@ -152,11 +157,17 @@ export async function POST(request: Request) {
       // the staff tools (contacts, names) — even for allowlisted staff.
       const staffTools = gate.ok && !(outreach.kind === "ok" && outreach.scope.inTeamChannel);
 
-      if (!staffTools && outreach.kind !== "ok") {
+      if (outreachBotLive && outreach.kind === "ok" && !staffTools) {
+        await refuse(`For budget questions, message *${BOT_NAMES.outreach}* instead — DM it, or @mention it in your team channel.`);
+        return;
+      }
+      const outreachScope = !outreachBotLive && outreach.kind === "ok" ? outreach.scope : null;
+
+      if (!staffTools && !outreachScope) {
         let reason = gate.ok ? "I can't answer here." : gate.reason;
         // Finance staff @mentioning the bot in an unlinked channel are
         // probably setting up a team channel: hand them the id to paste.
-        if (!isDM && hubUserId && (await isFinanceStaff(admin, hubUserId))) {
+        if (!outreachBotLive && !isDM && hubUserId && (await isFinanceStaff(admin, hubUserId))) {
           reason += `\nTo use me for an outreach team's budget here, paste this channel's ID \`${channel}\` into the team's Slack setting in the Hub (Finance → Outreach → the team → Members).`;
         }
         await refuse(reason);
@@ -171,7 +182,7 @@ export async function POST(request: Request) {
         text: question,
         eventId: body.event_id ?? null,
         admin: staffTools,
-        outreach: outreach.kind === "ok" ? outreach.scope : null,
+        outreach: outreachScope,
       });
     } catch (err) {
       console.error("[slack/events] assistant failed", err);

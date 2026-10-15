@@ -8,15 +8,16 @@
  *   • conversations.open       — open a DM with a user id
  *   • users.lookupByEmail      — map email → Slack user id
  *
- * Auth is a bot token from the `SLACK_BOT_TOKEN` env var, set in
- * Vercel project env (Production + Preview + Development). The
- * token is the OAuth Bot User token (`xoxb-…`) for the FFSA Hub
- * Slack App.
+ * Auth is a bot token (`xoxb-…`) from Vercel project env. Which bot
+ * is chosen per call (`bot`, see lib/slack/bots): the default is the
+ * original FFSA Hub app (`SLACK_BOT_TOKEN`).
  *
  * All methods return the raw Slack response object as JSON. Slack
  * uses an `ok: boolean` field — callers should check it before
  * relying on other fields. We surface `error` strings as-is.
  */
+
+import { botToken, type SlackBotId } from "./bots";
 
 const SLACK_API_BASE = "https://slack.com/api";
 
@@ -49,11 +50,14 @@ const FORM_ENCODED_METHODS = new Set([
 
 async function callSlack<T = Record<string, unknown>>(
   method: string,
-  body: Record<string, unknown>
+  body: Record<string, unknown>,
+  // Which of the Hub's Slack apps speaks (lib/slack/bots). Everything
+  // defaults to the original FFSA Hub Activity bot.
+  bot: SlackBotId = "hub"
 ): Promise<SlackResponse<T>> {
-  const token = process.env.SLACK_BOT_TOKEN;
+  const token = botToken(bot);
   if (!token) {
-    throw new Error("SLACK_BOT_TOKEN not configured");
+    throw new Error(`Slack bot token for "${bot}" not configured`);
   }
   return callSlackWith<T>(token, method, body);
 }
@@ -114,6 +118,7 @@ export function postMessage(args: {
   blocks?: unknown[];
   unfurl_links?: boolean;
   thread_ts?: string;
+  bot?: SlackBotId;
 }) {
   return callSlack<{ ts?: string; channel?: string }>("chat.postMessage", {
     channel: args.channel,
@@ -125,7 +130,7 @@ export function postMessage(args: {
     // Disable link unfurling by default — our messages already
     // include explicit buttons, unfurled previews are visual noise.
     unfurl_links: args.unfurl_links ?? false,
-  });
+  }, args.bot);
 }
 
 // ────────────────────────────────────────────────────────────
@@ -136,17 +141,27 @@ export function postMessage(args: {
 // (valid for 3s, so call it before ACKing the interaction).
 // ────────────────────────────────────────────────────────────
 
-export function updateMessage(args: { channel: string; ts: string; text: string; blocks?: unknown[] }) {
-  return callSlack("chat.update", {
-    channel: args.channel,
-    ts: args.ts,
-    text: args.text,
-    blocks: args.blocks ?? [],
-  });
+export function updateMessage(args: {
+  channel: string;
+  ts: string;
+  text: string;
+  blocks?: unknown[];
+  bot?: SlackBotId;
+}) {
+  return callSlack(
+    "chat.update",
+    {
+      channel: args.channel,
+      ts: args.ts,
+      text: args.text,
+      blocks: args.blocks ?? [],
+    },
+    args.bot
+  );
 }
 
-export function openView(triggerId: string, view: unknown) {
-  return callSlack("views.open", { trigger_id: triggerId, view });
+export function openView(triggerId: string, view: unknown, bot?: SlackBotId) {
+  return callSlack("views.open", { trigger_id: triggerId, view }, bot);
 }
 
 // ────────────────────────────────────────────────────────────
@@ -156,10 +171,12 @@ export function openView(triggerId: string, view: unknown) {
 // channel id (D…) which is what postMessage needs.
 // ────────────────────────────────────────────────────────────
 
-export function openConversation(slackUserId: string) {
-  return callSlack<{ channel?: { id: string } }>("conversations.open", {
-    users: slackUserId,
-  });
+export function openConversation(slackUserId: string, bot?: SlackBotId) {
+  return callSlack<{ channel?: { id: string } }>(
+    "conversations.open",
+    { users: slackUserId },
+    bot
+  );
 }
 
 // ────────────────────────────────────────────────────────────

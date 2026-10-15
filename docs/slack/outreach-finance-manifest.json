@@ -1,0 +1,43 @@
+{
+  "display_information": {
+    "name": "Outreach Finance",
+    "description": "Ask about your outreach budget and log receipts, straight into the FFSA Hub.",
+    "long_description": "The FFSA Hub's outreach finance helper. DM it, or @mention it in your outreach team's channel, to ask what's left in your budget (\"how much is left for food?\"), see what you've spent, and send receipt photos to log them as expenses. Nothing is logged until you tap to confirm. It only ever sees your own team's budget.",
+    "background_color": "#1d3b2a"
+  },
+  "features": {
+    "app_home": {
+      "home_tab_enabled": false,
+      "messages_tab_enabled": true,
+      "messages_tab_read_only_enabled": false
+    },
+    "bot_user": {
+      "display_name": "Outreach Finance",
+      "always_online": true
+    }
+  },
+  "oauth_config": {
+    "scopes": {
+      "bot": [
+        "app_mentions:read",
+        "chat:write",
+        "im:history",
+        "im:write",
+        "files:read"
+      ]
+    }
+  },
+  "settings": {
+    "event_subscriptions": {
+      "request_url": "https://www.ffsahub.com/api/slack/outreach/events",
+      "bot_events": ["app_mention", "message.im"]
+    },
+    "interactivity": {
+      "is_enabled": true,
+      "request_url": "https://www.ffsahub.com/api/slack/outreach/interactions"
+    },
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": false,
+    "token_rotation_enabled": false
+  }
+}

@@ -15,6 +15,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createAdminClient } from "@/lib/supabase/admin";
 import * as slack from "@/lib/slack/client";
+import type { SlackBotId } from "@/lib/slack/bots";
 import { CURATED_TOOLS, executeTool } from "./tools";
 import { buildSystemPrompt } from "./prompt";
 import {
@@ -64,6 +65,8 @@ export type AssistantContext = {
   admin: boolean;
   /** Set when this is an outreach team conversation (see outreach.ts). */
   outreach: OutreachScope | null;
+  /** Which Slack app answers (the one that was messaged). */
+  bot?: SlackBotId;
 };
 
 export async function runAssistant(ctx: AssistantContext): Promise<void> {
@@ -87,7 +90,7 @@ export async function runAssistant(ctx: AssistantContext): Promise<void> {
   let model = chooseInitialModel(ctx.text);
 
   const post = (text: string) =>
-    slack.postMessage({ channel: ctx.channelId, text, thread_ts: ctx.threadTs });
+    slack.postMessage({ channel: ctx.channelId, text, thread_ts: ctx.threadTs, bot: ctx.bot });
 
   const log = (answer: string | null) =>
     resolveHubUserBySlackId(admin, ctx.slackUserId)

@@ -3,13 +3,16 @@
 // authenticate by signing secret instead of a session cookie.
 
 import crypto from "node:crypto";
+import { botSigningSecret, type SlackBotId } from "./bots";
 
 export function verifySlackSignature(
   rawBody: string,
   timestamp: string | null,
-  signature: string | null
+  signature: string | null,
+  // Each Slack app signs with its own secret (lib/slack/bots).
+  bot: SlackBotId = "hub"
 ): boolean {
-  const secret = process.env.SLACK_SIGNING_SECRET;
+  const secret = botSigningSecret(bot);
   if (!secret || !timestamp || !signature) return false;
 
   // Replay guard: reject timestamps more than 5 minutes off.

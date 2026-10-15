@@ -65,8 +65,9 @@ export function SlackSettings({
       <div>
         <h3 className="font-medium">Slack</h3>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          Team members can ask the Hub bot about this budget (&ldquo;how much is left in food?&rdquo;) by DM, or by
-          @mentioning it in the team&apos;s channel. They need their Slack linked on their Hub profile.
+          Team members can ask the <strong>Outreach Finance</strong> Slack bot about this budget (&ldquo;how much is
+          left in food?&rdquo;) by DM, or by @mentioning it in the team&apos;s channel. They need their Slack linked on
+          their Hub profile.
         </p>
       </div>
 
@@ -87,8 +88,8 @@ export function SlackSettings({
           className={`h-9 font-mono ${invalid ? "border-destructive" : ""}`}
         />
         <span className="text-xs text-muted-foreground">
-          In Slack, invite the bot to the channel and @mention it — it replies with the channel ID to paste here. Or
-          open the channel name → the ID is at the bottom.
+          In Slack, type <code>/invite @Outreach Finance</code> in the channel and @mention it — it replies with the
+          channel ID to paste here. Or open the channel name → the ID is at the bottom.
         </span>
         {invalid && <span className="text-xs text-destructive">That doesn&apos;t look like a Slack channel ID.</span>}
       </div>
