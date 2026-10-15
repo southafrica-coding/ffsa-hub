@@ -8,7 +8,10 @@
 
 import { sendViaResend, isEmailConfigured } from "@/lib/email/resend-send";
 import { refundConfirmationEmailHtml } from "@/lib/email/templates/refund-confirmation";
-import { resolveEventBrand, identitySlugForBrand } from "./fulfillment";
+import { resolveEventBrand } from "./fulfillment";
+import { resolveEventSender } from "@/lib/email/event-sender";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { recordEmail, markSent, markFailed } from "@/lib/email/ledger";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
@@ -23,7 +26,12 @@ export async function sendRefundEmail(
       title: string;
       brand?: string | null;
       public_slug?: string | null;
+      sending_identity_id?: string | null;
+      email_show_event_logo?: boolean | null;
+      logo_url?: string | null;
     };
+    eventId?: string | null;
+    contactId?: string | null;
     refundedCents: number;
     totalRefundedCents: number;
     orderTotalCents: number;
@@ -42,27 +50,32 @@ export async function sendRefundEmail(
   }
 
   const brand = resolveEventBrand(opts.event);
-  const { data: identity } = await supabase
-    .from("sending_identities")
-    .select("from_email, from_name, reply_to")
-    .eq("slug", identitySlugForBrand(brand))
-    .eq("is_active", true)
-    .maybeSingle();
+  // The event's own email settings (migration 241), else its brand's sender.
+  const sender = await resolveEventSender(supabase, opts.event, brand);
+  const subject = opts.isFullRefund
+    ? `Your refund for ${opts.event.title}`
+    : `A partial refund for ${opts.event.title}`;
 
-  const fromEmail = (
-    identity?.from_email ||
-    process.env.RESEND_FROM_EMAIL ||
-    "noreply@ffsahub.com"
-  ).trim();
+  // Logged in the email ledger like every other buyer email, so a refund
+  // notice can't vanish without a trace. Best-effort; never blocks.
+  const admin = createAdminClient();
+  const ledgerId = await recordEmail(admin, {
+    toEmail: opts.buyerEmail,
+    provider: "resend",
+    category: "refund_confirmation",
+    subject,
+    contactId: opts.contactId ?? null,
+    eventId: opts.eventId ?? null,
+    orderId: opts.orderId,
+    reason: `Her order for ${opts.event.title} was refunded`,
+  });
 
   const result = await sendViaResend({
-    fromEmail,
-    fromName: identity?.from_name || "Fire & Fragrance SA",
-    replyTo: identity?.reply_to ?? null,
+    fromEmail: sender.fromEmail,
+    fromName: sender.fromName,
+    replyTo: sender.replyTo,
     to: opts.buyerEmail,
-    subject: opts.isFullRefund
-      ? `Your refund for ${opts.event.title}`
-      : `A partial refund for ${opts.event.title}`,
+    subject,
     html: refundConfirmationEmailHtml({
       buyerFirstName: opts.buyerFirstName,
       eventTitle: opts.event.title,
@@ -74,9 +87,12 @@ export async function sendRefundEmail(
       currency: opts.currency,
       cancellationMessage: opts.cancellationMessage ?? null,
       siteUrl: process.env.NEXT_PUBLIC_SITE_URL || "https://www.ffsahub.com",
+      headerLogoUrl: sender.headerLogoUrl,
     }),
     category: "refund_confirmation",
   });
+  if (result.error) await markFailed(admin, ledgerId, result.error);
+  else await markSent(admin, ledgerId, result.messageId);
 
   if (result.error) {
     console.error("[refund-email] failed to send:", result.error);

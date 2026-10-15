@@ -1,3 +1,4 @@
+import { eventLogoBlock } from "../event-sender";
 // FFSA Hub — Event cancellation notice (transactional).
 //
 // Sent to ticket holders when an event is cancelled, to explain WHY —
@@ -22,6 +23,8 @@ export function eventCancellationNoticeEmailHtml(opts: {
   /** Reassurance line about the refund. Omit to hide. */
   refundLine?: string | null;
   siteUrl: string;
+  /** The event's own logo, shown first when it asked for one (migration 241). */
+  headerLogoUrl?: string | null;
 }): string {
   const base = opts.siteUrl.replace(/\/$/, "");
 
@@ -57,7 +60,8 @@ export function eventCancellationNoticeEmailHtml(opts: {
           <td style="height:5px;background:${YELLOW};line-height:5px;font-size:0;">&nbsp;</td>
         </tr>
 
-        <!-- Header (logo intentionally omitted) -->
+        ${opts.headerLogoUrl ? `<tr><td align="center" style="padding:26px 32px 0;">${eventLogoBlock(opts.headerLogoUrl, opts.eventTitle)}</td></tr>` : ""}
+        <!-- Header (the event's own logo above, when it has asked for one) -->
         <tr>
           <td style="padding:26px 32px 8px 32px;">
             <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:10px;font-weight:700;color:${YELLOW};letter-spacing:0.3em;text-transform:uppercase;">Event Cancelled</p>

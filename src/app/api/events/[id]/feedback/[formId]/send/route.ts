@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { resolveEventSender } from "@/lib/email/event-sender";
+import { resolveEventBrand } from "@/lib/ticketing/fulfillment";
 import { createClient } from "@/lib/supabase/server";
 import {
   getFeedbackFormById,
@@ -98,6 +100,14 @@ export async function POST(
   }
 
   const event = form.events as { title?: string } | null;
+  // Sent as the event (its own email settings, migration 241, else its
+  // brand's sender) so a reply reaches the Hub inbox, not a dead address.
+  const { data: eventRow } = await supabase
+    .from("events")
+    .select("title, brand, public_slug, sending_identity_id, email_show_event_logo, logo_url")
+    .eq("id", eventId)
+    .maybeSingle();
+  const sender = await resolveEventSender(supabase, eventRow ?? {}, resolveEventBrand(eventRow ?? {}));
   const eventTitle = event?.title ?? "the event";
   const feedbackUrl = `${siteBase()}/fb/${form.slug}`;
 
@@ -117,6 +127,7 @@ export async function POST(
       isAnonymous: form.is_anonymous,
       note: body.note ?? null,
       siteUrl: siteBase(),
+      headerLogoUrl: sender.headerLogoUrl,
     });
 
     const result = await sendTransactional({
@@ -127,6 +138,9 @@ export async function POST(
           : `How did ${eventTitle} go? Your feedback, in 3 minutes`,
       html,
       category: kind === "reminder" ? "event_feedback_reminder" : "event_feedback_invite",
+      fromEmail: sender.fromEmail,
+      fromName: sender.fromName,
+      replyTo: sender.replyTo,
       sourceType: "event_feedback_form",
       sourceId: form.id,
     });

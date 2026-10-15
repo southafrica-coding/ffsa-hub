@@ -22,6 +22,8 @@ import {
 } from "@/services/xero";
 import { sendSchoolInvoiceEmail, type StoredTemplate } from "@/services/invoice-email-delivery";
 import { settlePaidOrder } from "./settle";
+import { resolveEventBrand } from "./fulfillment";
+import { resolveEventSender, type EventEmailEvent } from "@/lib/email/event-sender";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -49,7 +51,7 @@ export async function emailOrderInvoice(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const { data: order } = await supabase
     .from("orders")
-    .select("id, status, buyer_email, buyer_first_name, buyer_last_name, xero_invoice_id, xero_invoice_number, xero_region, events(title)")
+    .select("id, status, buyer_email, buyer_first_name, buyer_last_name, xero_invoice_id, xero_invoice_number, xero_region, events(title, brand, public_slug, sending_identity_id, email_show_event_logo, logo_url)")
     .eq("id", orderId)
     .maybeSingle();
   if (!order?.xero_invoice_id || !order.xero_region) return { ok: false, error: "This order has no Xero invoice." };
@@ -59,7 +61,11 @@ export async function emailOrderInvoice(
   const template = await defaultTemplate(supabase, region);
   if (!template) return { ok: false, error: `No default invoice email template for the ${region.toUpperCase()} org.` };
 
-  const eventTitle = (order.events as unknown as { title: string } | null)?.title ?? "event";
+  const ev = (order.events as unknown as EventEmailEvent & { title: string }) ?? null;
+  const eventTitle = ev?.title ?? "event";
+  // From the event's sender name and address (migration 241); replies stay
+  // with finance, where payment questions belong.
+  const sender = ev ? await resolveEventSender(supabase, ev, resolveEventBrand(ev)) : null;
   const sent = await sendSchoolInvoiceEmail(supabase, {
     region,
     invoiceId: order.xero_invoice_id,
@@ -67,6 +73,7 @@ export async function emailOrderInvoice(
     to: order.buyer_email,
     firstName: order.buyer_first_name || "there",
     fullName: `${order.buyer_first_name} ${order.buyer_last_name}`.trim(),
+    ...(sender ? { sender: { name: sender.fromName, email: sender.fromEmail }, headerLogoUrl: sender.headerLogoUrl } : {}),
     ledger: {
       category: "event_invoice",
       reason: `Ticket invoice ${order.xero_invoice_number ?? ""} for ${eventTitle}`.replace(/\s+/g, " "),

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { EmailsTab } from "./emails-tab";
 import { createClient } from "@/lib/supabase/server";
 import { getEventById, getEventAttendanceCounts } from "@/services/events";
 import { capacityPct, groupDigits } from "../format";
@@ -63,6 +64,7 @@ const TABS = [
   { key: "check-in", label: "Check-in" },
   { key: "forms", label: "Forms" },
   { key: "feedback", label: "Feedback" },
+  { key: "emails", label: "Emails" },
 ] as const;
 
 export default async function EventDetailPage({
@@ -289,6 +291,8 @@ export default async function EventDetailPage({
         )}
 
         {tab === "forms" && <FormsTab eventId={id} forms={forms ?? []} />}
+
+        {tab === "emails" && <EmailsTab eventId={id} />}
 
         {tab === "feedback" && (
           <FeedbackTab

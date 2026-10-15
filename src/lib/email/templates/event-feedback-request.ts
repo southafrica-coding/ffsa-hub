@@ -1,3 +1,4 @@
+import { eventLogoBlock } from "../event-sender";
 import { renderEmailShell, escapeHtml, bodyParagraph, emphasis } from "../shell";
 
 /**
@@ -15,6 +16,7 @@ export function eventFeedbackRequestEmailHtml({
   isAnonymous,
   note,
   siteUrl,
+  headerLogoUrl,
 }: {
   firstName?: string | null;
   eventTitle: string;
@@ -23,6 +25,8 @@ export function eventFeedbackRequestEmailHtml({
   isAnonymous?: boolean;
   note?: string | null;
   siteUrl?: string | null;
+  /** The event's own logo, shown first when it asked for one (migration 241). */
+  headerLogoUrl?: string | null;
 }): string {
   const greeting = firstName?.trim() ? `Hi ${escapeHtml(firstName.trim())},` : "Hi there,";
 
@@ -48,6 +52,7 @@ export function eventFeedbackRequestEmailHtml({
     eyebrow: isReminder ? "Still open" : "Post-event feedback",
     heading: isReminder ? "One more ask" : "How did<br/>it go?",
     bodyHtml: `
+      ${eventLogoBlock(headerLogoUrl, eventTitle)}
       ${bodyParagraph(greeting)}
       ${opening}
       ${privacyLine}

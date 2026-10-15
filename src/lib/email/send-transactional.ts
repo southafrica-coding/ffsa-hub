@@ -27,6 +27,10 @@ export type SendTransactionalInput = {
   /** Ledger category, e.g. 'application_accepted', 'reference_request'. */
   category: string;
   fromName?: string;
+  /** Send from this address instead of the default (an event's sender, migration 241). */
+  fromEmail?: string;
+  /** Where replies go — an event sender's Hub inbox. */
+  replyTo?: string | null;
   /** Best-effort CRM link for the per-contact email history. */
   contactId?: string | null;
   /** Generic source linkage for non-contact records (schools etc.). */
@@ -120,7 +124,7 @@ export async function sendTransactional(
 
   // 4. Send.
   const fromEmail = (
-    process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com"
+    input.fromEmail || process.env.RESEND_FROM_EMAIL || "noreply@ffsahub.com"
   ).trim();
   const fromName = input.fromName || "Fire & Fragrance SA";
   const { data, error } = await getResend().emails.send({
@@ -128,6 +132,7 @@ export async function sendTransactional(
     to: input.to,
     subject: input.subject,
     html: input.html,
+    ...(input.replyTo ? { replyTo: input.replyTo } : {}),
     ...(attachments.length > 0 ? { attachments } : {}),
   });
 

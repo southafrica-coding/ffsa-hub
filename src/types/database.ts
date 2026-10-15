@@ -1824,6 +1824,8 @@ export type Database = {
       events: {
         Row: {
           pay_later_enabled: boolean
+          sending_identity_id: string | null
+          email_show_event_logo: boolean
           pay_later_due_date: string | null
           xero_item_code: string | null
           base_label_id: string | null
@@ -1852,6 +1854,8 @@ export type Database = {
         }
         Insert: {
           pay_later_enabled?: boolean
+          sending_identity_id?: string | null
+          email_show_event_logo?: boolean
           pay_later_due_date?: string | null
           xero_item_code?: string | null
           base_label_id?: string | null
@@ -1880,6 +1884,8 @@ export type Database = {
         }
         Update: {
           pay_later_enabled?: boolean
+          sending_identity_id?: string | null
+          email_show_event_logo?: boolean
           pay_later_due_date?: string | null
           xero_item_code?: string | null
           base_label_id?: string | null

@@ -63,6 +63,14 @@ export async function sendSchoolInvoiceEmail(
     overrideTo?: string;
     /** Ledger labels; default to school fees. Event ticket invoices pass their own. */
     ledger?: { category: string; reason: string };
+    /**
+     * Send as someone other than "Finance office" — an event invoice comes
+     * from the event's sender (migration 241). Replies still go to finance
+     * unless replyTo is given.
+     */
+    sender?: { name: string; email: string; replyTo?: string | null };
+    /** An event's own logo above the message. */
+    headerLogoUrl?: string | null;
   }
 ): Promise<{ ok: true; messageId: string | null } | { ok: false; error: string }> {
   const inv = await getXeroInvoiceForEmail(supabase, opts.region, opts.invoiceId);
@@ -85,6 +93,7 @@ export async function sendSchoolInvoiceEmail(
     amountDue: inv.amountDue,
     dueDate: inv.dueDate,
     onlineInvoiceUrl: inv.onlineUrl,
+    headerLogoUrl: opts.headerLogoUrl ?? null,
   });
   if (email.unknownPlaceholders.length) {
     return { ok: false, error: `Template "${opts.template.name}" has unknown placeholders: ${email.unknownPlaceholders.join(", ")}` };
@@ -117,9 +126,9 @@ export async function sendSchoolInvoiceEmail(
 
   const ledgerId = await recordEmail(supabase, ledgerFields);
   const sent = await sendViaResend({
-    fromEmail: INVOICE_SENDER.email,
-    fromName: INVOICE_SENDER.name,
-    replyTo: INVOICE_SENDER.replyTo,
+    fromEmail: opts.sender?.email || INVOICE_SENDER.email,
+    fromName: opts.sender?.name || INVOICE_SENDER.name,
+    replyTo: opts.sender?.replyTo || INVOICE_SENDER.replyTo,
     to,
     subject: email.subject,
     html: email.html,

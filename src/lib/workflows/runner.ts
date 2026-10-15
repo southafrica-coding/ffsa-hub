@@ -124,8 +124,9 @@ async function recordStep(
 }
 
 // ── Identity resolution ──────────────────────────────────────
-// Sender priority: step override → outcome label's identity →
-// first active identity (prefer the seeded 'default-marketing').
+// Sender priority: step override → the event's own sender (migration 241)
+// → outcome label's identity → first active identity (prefer the seeded
+// 'default-marketing').
 
 async function resolveFallbackIdentity(supabase: Client): Promise<IdentityRow | null> {
   const { data } = await supabase
@@ -163,14 +164,19 @@ async function loadWorkflowIdentity(
   const { data } = await supabase
     .from("outcome_workflows")
     .select(
-      "id, created_by, event_outcomes(label_id, events(brand), labels(id, sending_identity_id, sending_identities(id, from_email, from_name, reply_to)))"
+      "id, created_by, event_outcomes(label_id, events(brand, sending_identities(id, from_email, from_name, reply_to, is_active)), labels(id, sending_identity_id, sending_identities(id, from_email, from_name, reply_to)))"
     )
     .eq("id", workflowId)
     .maybeSingle();
 
   const outcome = data?.event_outcomes ?? null;
   const label = outcome?.labels ?? null;
-  const identity = (label?.sending_identities ?? null) as IdentityRow | null;
+  // The event's own sender (set on its Emails tab) beats the label's.
+  const eventIdentity = (outcome?.events as { sending_identities?: (IdentityRow & { is_active?: boolean }) | null } | null)
+    ?.sending_identities;
+  const identity = (
+    eventIdentity && eventIdentity.is_active !== false ? eventIdentity : label?.sending_identities ?? null
+  ) as IdentityRow | null;
   const rawBrand = (outcome?.events?.brand as string | null | undefined) ?? "ff";
   const brand: WorkflowEmailBrand =
     rawBrand === "the_send"

@@ -1,3 +1,4 @@
+import { eventLogoBlock } from "@/lib/email/event-sender";
 // ────────────────────────────────────────────────────────────
 // FFSA Hub — rendering a school invoice email from a Xero template
 // ────────────────────────────────────────────────────────────
@@ -26,6 +27,8 @@ export interface InvoiceEmailData {
   amountDue: number;
   dueDate: string; // YYYY-MM-DD
   onlineInvoiceUrl: string | null;
+  /** An event's own logo above the message (event invoices, migration 241). */
+  headerLogoUrl?: string | null;
 }
 
 /** How Xero prints values in emails. One place to adjust against a real email. */
@@ -121,7 +124,7 @@ export function renderInvoiceEmail(
       : "";
 
   const html = `<!doctype html><html><body style="margin:0;padding:24px;background:#FFFFFF">
-<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#1F2937;max-width:640px">${textToHtml(body.text)}${action}</div>
+<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#1F2937;max-width:640px">${data.headerLogoUrl ? eventLogoBlock(data.headerLogoUrl).replace("margin:0 auto;", "margin:0;").replace('align="center"', 'align="left"') : ""}${textToHtml(body.text)}${action}</div>
 </body></html>`;
 
   const text =

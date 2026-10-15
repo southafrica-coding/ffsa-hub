@@ -1,3 +1,4 @@
+import { eventLogoBlock } from "../event-sender";
 import { formatMoney } from "@/lib/currencies";
 import {
   FE,
@@ -27,6 +28,8 @@ export function ticketConfirmationEmailHtml(opts: {
   orderId: string;
   totalCents: number;
   siteUrl: string;
+  /** The event's own logo, shown first when it asked for one (migration 241). */
+  headerLogoUrl?: string | null;
   /** ISO 4217 code from orders.currency. */
   currency: string;
 }): string {
@@ -66,7 +69,7 @@ export function ticketConfirmationEmailHtml(opts: {
       : []),
   ];
 
-  const body = `${feEyebrow("Your tickets")}${feHeading(opts.eventTitle)}${feCoords(
+  const body = `${eventLogoBlock(opts.headerLogoUrl, opts.eventTitle)}${feEyebrow("Your tickets")}${feHeading(opts.eventTitle)}${feCoords(
     meta
   )}${feParagraph(
     `Hi ${feStrong(feEsc(opts.buyerFirstName))}, your ${ticketsCount} ${ticketWord} confirmed. Show the QR ${qrPlural} below at the door.`

@@ -12,7 +12,8 @@
 
 import { sendViaResend, isEmailConfigured } from "@/lib/email/resend-send";
 import { eventCancellationNoticeEmailHtml } from "@/lib/email/templates/event-cancellation-notice";
-import { resolveEventBrand, identitySlugForBrand } from "@/lib/ticketing/fulfillment";
+import { resolveEventBrand } from "@/lib/ticketing/fulfillment";
+import { resolveEventSender } from "@/lib/email/event-sender";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
@@ -76,7 +77,7 @@ export async function sendCancellationNotice(
 ): Promise<CancellationNoticeResult> {
   const { data: event } = await supabase
     .from("events")
-    .select("id, title, brand, public_slug, status, cancellation_message")
+    .select("id, title, brand, public_slug, status, cancellation_message, sending_identity_id, email_show_event_logo, logo_url")
     .eq("id", eventId)
     .maybeSingle();
 
@@ -95,11 +96,14 @@ export async function sendCancellationNotice(
 
   const recipients = await refundedRecipients(supabase, eventId);
 
+  // The event's own email settings (migration 241), else its brand's sender.
+  const sender = await resolveEventSender(supabase, event, resolveEventBrand(event));
   const html = eventCancellationNoticeEmailHtml({
     eventTitle: event.title,
     message,
     refundLine: REFUND_LINE,
     siteUrl: process.env.NEXT_PUBLIC_SITE_URL || "https://www.ffsahub.com",
+    headerLogoUrl: sender.headerLogoUrl,
   });
 
   // Dry run: show who would receive it and exactly what they'd get.
@@ -115,28 +119,15 @@ export async function sendCancellationNotice(
     };
   }
 
-  const brand = resolveEventBrand(event);
-  const { data: identity } = await supabase
-    .from("sending_identities")
-    .select("from_email, from_name, reply_to")
-    .eq("slug", identitySlugForBrand(brand))
-    .eq("is_active", true)
-    .maybeSingle();
-
-  const fromEmail = (
-    identity?.from_email ||
-    process.env.RESEND_FROM_EMAIL ||
-    "noreply@ffsahub.com"
-  ).trim();
   const subject = `${event.title} has been cancelled`;
 
   let sent = 0;
   const failures: Array<{ email: string; error: string }> = [];
   for (const r of recipients) {
     const result = await sendViaResend({
-      fromEmail,
-      fromName: identity?.from_name || "Fire & Fragrance SA",
-      replyTo: identity?.reply_to ?? null,
+      fromEmail: sender.fromEmail,
+      fromName: sender.fromName,
+      replyTo: sender.replyTo,
       to: r.email,
       subject,
       html,

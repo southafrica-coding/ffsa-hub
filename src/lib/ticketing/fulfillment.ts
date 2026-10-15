@@ -15,6 +15,7 @@
 // the tickets-by-order lookup short-circuits re-issuance, and the
 // email re-sends (acceptable for retries).
 
+import { resolveEventSender } from "@/lib/email/event-sender";
 import { randomBytes } from "node:crypto";
 import { sendViaResend, isEmailConfigured } from "@/lib/email/resend-send";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -74,21 +75,6 @@ export function resolveEventBrand(event: {
   return "ff";
 }
 
-// sending_identities.slug for a brand (migration 080 + the ffsa-camps
-// and preachers identities). Shared with the refund email so both send
-// from the same inbox for a given event.
-export function identitySlugForBrand(brand: EventBrand): string {
-  switch (brand) {
-    case "the_send":
-      return "the-send";
-    case "ffsa_camps":
-      return "ffsa-camps";
-    case "preachers":
-      return "preachers";
-    default:
-      return "events";
-  }
-}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
@@ -128,7 +114,7 @@ export async function fulfillOrder(
   const { data: order, error: orderErr } = await supabase
     .from("orders")
     .select(
-      "id, status, total_cents, currency, buyer_first_name, buyer_last_name, buyer_email, buyer_contact_id, lines, ticket_answers, waiver_signatures, event_id, events(id, title, start_date, end_date, location, public_slug, brand)"
+      "id, status, total_cents, currency, buyer_first_name, buyer_last_name, buyer_email, buyer_contact_id, lines, ticket_answers, waiver_signatures, event_id, events(id, title, start_date, end_date, location, public_slug, brand, sending_identity_id, email_show_event_logo, logo_url)"
     )
     .eq("id", orderId)
     .maybeSingle();
@@ -258,24 +244,12 @@ export async function fulfillOrder(
     return { ok: true };
   }
   const brand = resolveEventBrand(order.events);
-  // Resolve From: + reply-to from sending_identities keyed by brand
-  // (migration 080 + the ffsa-camps identity). Admins can edit the inbox
-  // display name from /communications/identities without a code change.
-  // Env-var fallback preserves pre-migration behaviour if the row is missing.
-  const identitySlug = identitySlugForBrand(brand);
-  const { data: identity } = await supabase
-    .from("sending_identities")
-    .select("from_email, from_name, reply_to")
-    .eq("slug", identitySlug)
-    .eq("is_active", true)
-    .maybeSingle();
-  const fromEmail = (
-    identity?.from_email ||
-    process.env.RESEND_FROM_EMAIL ||
-    "noreply@ffsahub.com"
-  ).trim();
-  const fromName = identity?.from_name || "Fire & Fragrance SA";
-  const replyTo = identity?.reply_to ?? null;
+  // From / reply-to / logo: the event's own email settings (migration 241),
+  // else its brand's sender — src/lib/email/event-sender.ts.
+  const sender = await resolveEventSender(supabase, order.events, brand);
+  const fromEmail = sender.fromEmail;
+  const fromName = sender.fromName;
+  const replyTo = sender.replyTo;
   const emailArgs = {
     buyerFirstName: order.buyer_first_name,
     eventTitle: order.events.title,
@@ -289,6 +263,7 @@ export async function fulfillOrder(
     totalCents: order.total_cents,
     currency: order.currency ?? "ZAR",
     siteUrl,
+    headerLogoUrl: sender.headerLogoUrl,
   };
   const subject =
     brand === "the_send"

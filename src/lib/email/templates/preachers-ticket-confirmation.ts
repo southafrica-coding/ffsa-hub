@@ -1,3 +1,4 @@
+import { eventLogoBlock } from "../event-sender";
 import { formatMoney } from "@/lib/currencies";
 // FFSA Hub — Ticket confirmation email for PREACHERS SA.
 //
@@ -42,6 +43,8 @@ export function preachersTicketEmailHtml(opts: {
   orderId: string;
   totalCents: number;
   siteUrl: string;
+  /** The event's own logo, shown first when it asked for one (migration 241). */
+  headerLogoUrl?: string | null;
   /** ISO 4217 code from orders.currency. */
   currency: string;
 }): string {
@@ -112,6 +115,7 @@ export function preachersTicketEmailHtml(opts: {
   <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:${INK};padding:30px 10px;">
     <tr><td align="center">
       <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width:600px;background:${NAVY};table-layout:fixed;">
+        ${opts.headerLogoUrl ? `<tr><td align="center" style="padding:22px 22px 0;">${eventLogoBlock(opts.headerLogoUrl, opts.eventTitle)}</td></tr>` : ""}
 
         <!-- Ink ticker bar -->
         <tr>
