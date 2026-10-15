@@ -36,6 +36,7 @@ import {
   type WaiverSignatureRecord,
 } from "./waivers";
 import { renderWaiverCertificate } from "./render-waiver-certificate";
+import { syncStripeTicketOrderToXero } from "@/services/xero";
 
 export type EventBrand =
   | "ff"
@@ -235,6 +236,23 @@ export async function fulfillOrder(
         console.error("[fulfillment] waiver cert render threw:", e);
       }
     }
+  }
+
+  // 2c. Stripe orders post a PAID invoice into the US Xero org, built
+  //     from the order as charged. Idempotent (orders.xero_invoice_id),
+  //     so webhook replays and "resend email" never double-invoice; a
+  //     failure is stored on the order for staff to retry. Runs before
+  //     the email step's early return so accounting doesn't depend on
+  //     email config. Non-blocking: tickets are already issued.
+  try {
+    // Service role: Xero tokens aren't readable by staff sessions, and
+    // "resend email" calls this with one.
+    const xero = await syncStripeTicketOrderToXero(createAdminClient(), orderId);
+    if (!xero.success) {
+      console.error("[fulfillment] Xero invoice failed (non-blocking):", xero.error);
+    }
+  } catch (e) {
+    console.error("[fulfillment] Xero invoice threw (non-blocking):", e);
   }
 
   // 3. Build the ticket list for the email. QR codes are loaded

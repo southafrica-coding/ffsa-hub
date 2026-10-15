@@ -222,7 +222,10 @@ async function xeroPost(
   accessToken: string,
   tenantId: string,
   endpoint: string,
-  body: unknown
+  body: unknown,
+  // Xero replays the original response for a repeated key, so a retried
+  // webhook can't create the same invoice/payment twice.
+  idempotencyKey?: string
 ) {
   const res = await fetch(`${XERO_API}/${endpoint}`, {
     method: "POST",
@@ -231,6 +234,7 @@ async function xeroPost(
       "xero-tenant-id": tenantId,
       "Content-Type": "application/json",
       Accept: "application/json",
+      ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
     },
     body: JSON.stringify(body),
   });
@@ -907,6 +911,477 @@ export async function voidInvoice(
     const message = err instanceof Error ? err.message : "Unknown error";
     return { success: false, error: message };
   }
+}
+
+// ────────────────────────────────────────────────────────────
+// STRIPE TICKET SALES → US XERO (paid invoice + refund credit notes)
+// ────────────────────────────────────────────────────────────
+//
+// Every ticket order paid through Stripe becomes an AUTHORISED sales
+// invoice in the US organisation, built from the order exactly as it
+// was charged (one line per tier at the price paid, then discount and
+// donation), with a payment applied against the US bank account so it
+// reads PAID. Not emailed — the buyer already has their ticket email.
+// PayFast orders are left out of Xero entirely.
+//
+// Coding: the event's `xero_item_code` (a US Xero item) drives the
+// revenue account; without one, lines post to XERO_US_TICKET_ACCOUNT_CODE.
+// Money lands in XERO_US_BANK_ACCOUNT_CODE (an account code, or the
+// bank account's AccountID — Xero bank accounts often have no code).
+//
+// A refund posts a credit note for the refunded amount and records a
+// cash refund from the same bank account, so the original sale stays
+// intact in the books.
+
+const TICKET_REGION: XeroRegion = "us";
+
+type TicketOrderLine = {
+  ticket_type_id: string;
+  qty: number;
+  per_ticket_cents: number;
+};
+
+type TicketXeroResult = {
+  success: boolean;
+  skipped?: boolean;
+  reason?: string;
+  invoiceId?: string;
+  invoiceNumber?: string;
+  paid?: boolean;
+  error?: string;
+};
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function bankAccountRef(): { Code: string } | { AccountID: string } | null {
+  const v = process.env.XERO_US_BANK_ACCOUNT_CODE?.trim();
+  if (!v) return null;
+  return UUID_RE.test(v) ? { AccountID: v } : { Code: v };
+}
+
+/** Revenue coding for a ticket line: the event's item, else the fallback account. */
+function ticketLineCoding(
+  itemCode: string | null | undefined
+): { ItemCode: string } | { AccountCode: string } | null {
+  const item = itemCode?.trim();
+  if (item) return { ItemCode: item };
+  const account = process.env.XERO_US_TICKET_ACCOUNT_CODE?.trim();
+  return account ? { AccountCode: account } : null;
+}
+
+function cents(n: number): number {
+  return Math.round(n) / 100;
+}
+
+function xeroQuote(v: string): string {
+  return encodeURIComponent(`"${v.replace(/"/g, '\\"')}"`);
+}
+
+// Find a contact by email, else create one. Xero contact names are unique,
+// so a buyer whose name already belongs to another contact reuses that one.
+async function findOrCreateTicketContact(
+  accessToken: string,
+  tenantId: string,
+  name: string,
+  email: string
+): Promise<string> {
+  const byEmail = await xeroGet(
+    accessToken,
+    tenantId,
+    `Contacts?where=EmailAddress%3D%3D${xeroQuote(email)}`
+  );
+  if (byEmail.Contacts?.length) return byEmail.Contacts[0].ContactID;
+
+  const nameParts = name.split(" ");
+  try {
+    const created = await xeroPost(accessToken, tenantId, "Contacts", {
+      Contacts: [
+        {
+          Name: name,
+          EmailAddress: email,
+          FirstName: nameParts[0],
+          LastName: nameParts.slice(1).join(" ") || undefined,
+        },
+      ],
+    });
+    return created.Contacts[0].ContactID;
+  } catch (err) {
+    const byName = await xeroGet(
+      accessToken,
+      tenantId,
+      `Contacts?where=Name%3D%3D${xeroQuote(name)}`
+    );
+    if (byName.Contacts?.length) return byName.Contacts[0].ContactID;
+    throw err;
+  }
+}
+
+function errMessage(err: unknown): string {
+  return err instanceof Error ? err.message : "Unknown Xero error";
+}
+
+/**
+ * Post the PAID US Xero invoice for a Stripe ticket order. Safe to call
+ * repeatedly: an order that already has an invoice is skipped, and the
+ * Xero calls carry idempotency keys derived from the order id.
+ */
+export async function createStripeTicketInvoice(
+  supabase: Client,
+  orderId: string
+): Promise<TicketXeroResult> {
+  const { data: order, error: orderErr } = await supabase
+    .from("orders")
+    .select(
+      "id, status, payment_provider, buyer_first_name, buyer_last_name, buyer_email, lines, currency, discount_cents, donation_cents, total_cents, provider_payment_id, paid_at, xero_invoice_id, xero_invoice_number, xero_sync_error, events(id, title, xero_item_code)"
+    )
+    .eq("id", orderId)
+    .maybeSingle();
+  if (orderErr || !order) {
+    return { success: false, error: `Order ${orderId} not found` };
+  }
+  if (order.payment_provider !== "stripe") {
+    return { success: true, skipped: true, reason: "not a Stripe order" };
+  }
+  if (order.xero_invoice_id && !order.xero_sync_error) {
+    return {
+      success: true,
+      skipped: true,
+      reason: "already invoiced",
+      invoiceId: order.xero_invoice_id,
+    };
+  }
+  // Refunded orders were paid first, so they still get their sale invoice
+  // (the refund then posts as a credit note against it).
+  if (!["paid", "partially_refunded", "refunded"].includes(order.status)) {
+    return { success: true, skipped: true, reason: `order not paid (${order.status})` };
+  }
+  if (order.total_cents <= 0) {
+    return { success: true, skipped: true, reason: "nothing was charged" };
+  }
+
+  const fail = async (error: string): Promise<TicketXeroResult> => {
+    await supabase.from("orders").update({ xero_sync_error: error }).eq("id", order.id);
+    return { success: false, error };
+  };
+
+  const coding = ticketLineCoding(order.events?.xero_item_code);
+  if (!coding) {
+    return fail(
+      "No Xero coding: set a Xero item code on the event, or XERO_US_TICKET_ACCOUNT_CODE."
+    );
+  }
+
+  const auth = await getValidAccessToken(supabase, TICKET_REGION);
+  if (!auth) return fail("Xero US is not connected or its authorisation expired.");
+  const { accessToken, tenantId } = auth;
+
+  const paidDate = (order.paid_at ? new Date(order.paid_at) : new Date())
+    .toISOString()
+    .slice(0, 10);
+  const reference = order.provider_payment_id
+    ? `Stripe ${order.provider_payment_id}`
+    : `Ticket order ${order.id.slice(0, 8)}`;
+
+  // Pays the invoice in full from the US bank account so it reads PAID.
+  const payInvoice = async (
+    invoiceId: string,
+    invoiceNumber: string | null
+  ): Promise<TicketXeroResult> => {
+    const bank = bankAccountRef();
+    if (!bank) {
+      await supabase
+        .from("orders")
+        .update({
+          xero_sync_error:
+            "Invoice posted but not marked paid: XERO_US_BANK_ACCOUNT_CODE is not set.",
+        })
+        .eq("id", order.id);
+      return { success: true, invoiceId, invoiceNumber: invoiceNumber ?? undefined, paid: false };
+    }
+    try {
+      const existing = await xeroGet(accessToken, tenantId, `Invoices/${invoiceId}`);
+      const amountDue = Number(existing.Invoices?.[0]?.AmountDue ?? 0);
+      if (amountDue > 0) {
+        await xeroPost(accessToken, tenantId, "Payments", {
+          Payments: [
+            {
+              Invoice: { InvoiceID: invoiceId },
+              Account: bank,
+              Date: paidDate,
+              Amount: amountDue,
+              Reference: reference,
+            },
+          ],
+        });
+      }
+    } catch (payErr) {
+      const msg = `Invoice ${invoiceNumber ?? ""} posted but the payment failed (left outstanding): ${errMessage(payErr)}`;
+      console.error(`Xero (us): ${msg}`);
+      await supabase.from("orders").update({ xero_sync_error: msg }).eq("id", order.id);
+      return {
+        success: false,
+        invoiceId,
+        invoiceNumber: invoiceNumber ?? undefined,
+        paid: false,
+        error: msg,
+      };
+    }
+    await supabase.from("orders").update({ xero_sync_error: null }).eq("id", order.id);
+    return { success: true, invoiceId, invoiceNumber: invoiceNumber ?? undefined, paid: true };
+  };
+
+  if (order.xero_invoice_id) {
+    return payInvoice(order.xero_invoice_id, order.xero_invoice_number);
+  }
+
+  try {
+    const buyerName =
+      `${order.buyer_first_name ?? ""} ${order.buyer_last_name ?? ""}`.trim() || order.buyer_email;
+    const contactId = await findOrCreateTicketContact(
+      accessToken,
+      tenantId,
+      buyerName,
+      order.buyer_email
+    );
+
+    const lines = (order.lines as TicketOrderLine[] | null) ?? [];
+    const typeIds = [...new Set(lines.map((l) => l.ticket_type_id))];
+    const nameByType = new Map<string, string>();
+    if (typeIds.length > 0) {
+      const { data: types } = await supabase
+        .from("ticket_types")
+        .select("id, name")
+        .in("id", typeIds);
+      for (const t of types ?? []) nameByType.set(t.id, t.name);
+    }
+
+    // Mirrors the checkout math: total = max(0, subtotal − discount) + donation.
+    const eventTitle = order.events?.title ?? "Event";
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const lineItems: any[] = lines.map((l) => ({
+      Description: `${eventTitle} — ${nameByType.get(l.ticket_type_id) ?? "Ticket"}`,
+      Quantity: l.qty,
+      UnitAmount: cents(l.per_ticket_cents),
+      ...coding,
+    }));
+    const subtotalCents = lines.reduce((s, l) => s + l.qty * l.per_ticket_cents, 0);
+    const discountCents = Math.min(order.discount_cents ?? 0, subtotalCents);
+    if (discountCents > 0) {
+      lineItems.push({
+        Description: "Promo discount",
+        Quantity: 1,
+        UnitAmount: -cents(discountCents),
+        ...coding,
+      });
+    }
+    if ((order.donation_cents ?? 0) > 0) {
+      const donationAccount = process.env.XERO_US_DONATION_ACCOUNT_CODE?.trim();
+      lineItems.push({
+        Description: `Donation — ${eventTitle}`,
+        Quantity: 1,
+        UnitAmount: cents(order.donation_cents),
+        ...(donationAccount ? { AccountCode: donationAccount } : coding),
+      });
+    }
+    const invoiceCents = subtotalCents - discountCents + (order.donation_cents ?? 0);
+    if (invoiceCents !== order.total_cents) {
+      return fail(
+        `Order lines add up to ${invoiceCents} cents but the order charged ${order.total_cents} — not posting a mismatched invoice.`
+      );
+    }
+
+    const invoiceRes = await xeroPost(
+      accessToken,
+      tenantId,
+      "Invoices",
+      {
+        Invoices: [
+          {
+            Type: "ACCREC",
+            Contact: { ContactID: contactId },
+            LineItems: lineItems,
+            Date: paidDate,
+            DueDate: paidDate,
+            Reference: reference,
+            CurrencyCode: order.currency || "USD",
+            Status: "AUTHORISED",
+            LineAmountTypes: "NoTax",
+          },
+        ],
+      },
+      // Keyed on the coding too, so a retry after staff fix a bad item
+      // code isn't answered with the replayed failure.
+      `ticket-invoice-${order.id}-${Object.values(coding)[0]}`
+    );
+    const invoice = invoiceRes.Invoices?.[0];
+    if (!invoice?.InvoiceID) return fail("Xero returned no invoice.");
+
+    // Record the invoice before the payment, so a payment failure can
+    // never lead to a second invoice on retry.
+    await supabase
+      .from("orders")
+      .update({
+        xero_invoice_id: invoice.InvoiceID,
+        xero_invoice_number: invoice.InvoiceNumber ?? null,
+        xero_synced_at: new Date().toISOString(),
+        xero_sync_error: null,
+      })
+      .eq("id", order.id);
+
+    return payInvoice(invoice.InvoiceID, invoice.InvoiceNumber ?? null);
+  } catch (err) {
+    console.error(`Xero (us): ticket invoice failed for order ${orderId}:`, err);
+    return fail(errMessage(err));
+  }
+}
+
+/**
+ * Post a credit note + cash refund in US Xero for one succeeded refund on
+ * a Stripe ticket order that has been invoiced. Idempotent per refund.
+ */
+export async function createStripeTicketRefundCreditNote(
+  supabase: Client,
+  refundId: string
+): Promise<{
+  success: boolean;
+  skipped?: boolean;
+  reason?: string;
+  creditNoteId?: string;
+  error?: string;
+}> {
+  const { data: refund } = await supabase
+    .from("order_refunds")
+    .select(
+      "id, amount_cents, status, reason, provider_refund_id, completed_at, xero_credit_note_id, orders(id, payment_provider, currency, buyer_email, xero_invoice_id, xero_invoice_number, events(title, xero_item_code))"
+    )
+    .eq("id", refundId)
+    .maybeSingle();
+  if (!refund?.orders) return { success: false, error: `Refund ${refundId} not found` };
+  const order = refund.orders;
+  if (order.payment_provider !== "stripe")
+    return { success: true, skipped: true, reason: "not a Stripe order" };
+  if (refund.status !== "succeeded")
+    return { success: true, skipped: true, reason: `refund ${refund.status}` };
+  if (!order.xero_invoice_id)
+    return { success: true, skipped: true, reason: "order has no Xero invoice yet" };
+
+  const fail = async (error: string) => {
+    await supabase
+      .from("orders")
+      .update({ xero_sync_error: `Refund credit note failed: ${error}` })
+      .eq("id", order.id);
+    return { success: false, error };
+  };
+
+  const coding = ticketLineCoding(order.events?.xero_item_code);
+  if (!coding) return fail("No Xero coding for this event.");
+  const bank = bankAccountRef();
+  if (!bank) return fail("XERO_US_BANK_ACCOUNT_CODE is not set.");
+  const auth = await getValidAccessToken(supabase, TICKET_REGION);
+  if (!auth) return fail("Xero US is not connected or its authorisation expired.");
+  const { accessToken, tenantId } = auth;
+
+  try {
+    const date = (refund.completed_at ? new Date(refund.completed_at) : new Date())
+      .toISOString()
+      .slice(0, 10);
+    const reference = refund.provider_refund_id
+      ? `Stripe refund ${refund.provider_refund_id}`
+      : `Refund of ${order.xero_invoice_number ?? "ticket order"}`;
+
+    let creditNoteId: string | null = refund.xero_credit_note_id;
+    if (!creditNoteId) {
+      const inv = await xeroGet(accessToken, tenantId, `Invoices/${order.xero_invoice_id}`);
+      const contactId = inv.Invoices?.[0]?.Contact?.ContactID;
+      if (!contactId) return fail("Could not read the original invoice's contact.");
+      const cnRes = await xeroPost(
+        accessToken,
+        tenantId,
+        "CreditNotes",
+        {
+          CreditNotes: [
+            {
+              Type: "ACCRECCREDIT",
+              Contact: { ContactID: contactId },
+              Date: date,
+              Reference: reference,
+              CurrencyCode: order.currency || "USD",
+              Status: "AUTHORISED",
+              LineAmountTypes: "NoTax",
+              LineItems: [
+                {
+                  Description: `Refund — ${order.events?.title ?? "Event"} (${order.xero_invoice_number ?? "ticket order"})${refund.reason ? `: ${refund.reason}` : ""}`,
+                  Quantity: 1,
+                  UnitAmount: cents(refund.amount_cents),
+                  ...coding,
+                },
+              ],
+            },
+          ],
+        },
+        `ticket-credit-${refund.id}`
+      );
+      creditNoteId = cnRes.CreditNotes?.[0]?.CreditNoteID ?? null;
+      if (!creditNoteId) return fail("Xero returned no credit note.");
+      await supabase
+        .from("order_refunds")
+        .update({ xero_credit_note_id: creditNoteId })
+        .eq("id", refund.id);
+    }
+
+    // Cash refund: money leaves the bank account against the credit note.
+    // Checked first so a retry after a failed refund payment never pays twice.
+    const cn = await xeroGet(accessToken, tenantId, `CreditNotes/${creditNoteId}`);
+    const remaining = Number(cn.CreditNotes?.[0]?.RemainingCredit ?? 0);
+    if (remaining <= 0) return { success: true, creditNoteId };
+    await xeroPost(accessToken, tenantId, "Payments", {
+      Payments: [
+        {
+          CreditNote: { CreditNoteID: creditNoteId },
+          Account: bank,
+          Date: date,
+          Amount: remaining,
+          Reference: reference,
+        },
+      ],
+    });
+    return { success: true, creditNoteId };
+  } catch (err) {
+    console.error(`Xero (us): refund credit note failed for refund ${refundId}:`, err);
+    return fail(errMessage(err));
+  }
+}
+
+/**
+ * Bring one Stripe ticket order fully into US Xero: its invoice, then a
+ * credit note + cash refund for every succeeded refund (each idempotent).
+ * Used by fulfilment and by the admin "Push to Xero" retry.
+ */
+export async function syncStripeTicketOrderToXero(
+  supabase: Client,
+  orderId: string
+): Promise<TicketXeroResult> {
+  const invoice = await createStripeTicketInvoice(supabase, orderId);
+  if (!invoice.success || invoice.reason === "not a Stripe order") return invoice;
+
+  const { data: refunds } = await supabase
+    .from("order_refunds")
+    .select("id")
+    .eq("order_id", orderId)
+    .eq("status", "succeeded")
+    .order("created_at");
+  for (const r of refunds ?? []) {
+    const cn = await createStripeTicketRefundCreditNote(supabase, r.id);
+    if (!cn.success) return { ...invoice, success: false, error: cn.error };
+  }
+  if ((refunds ?? []).length > 0 && invoice.paid !== false) {
+    await supabase
+      .from("orders")
+      .update({ xero_sync_error: null })
+      .eq("id", orderId)
+      .not("xero_invoice_id", "is", null);
+  }
+  return invoice;
 }
 
 // ────────────────────────────────────────────────────────────

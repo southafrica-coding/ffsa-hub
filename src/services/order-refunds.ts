@@ -17,6 +17,8 @@
 
 import { payfastProvider } from "@/lib/payments/payfast";
 import { stripeProvider } from "@/lib/payments/stripe";
+import { createStripeTicketRefundCreditNote } from "@/services/xero";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type {
   PaymentProvider,
   RefundOutcome,
@@ -303,6 +305,18 @@ export async function refundOrder(
     }
   }
 
+  // ── US Xero credit note for a Stripe order (never fail the refund) ──
+  if (status === "succeeded" && order.payment_provider === "stripe" && refundRow?.id) {
+    try {
+      const xero = await createStripeTicketRefundCreditNote(createAdminClient(), refundRow.id);
+      if (!xero.success) {
+        console.error("[refunds] Xero credit note failed (non-blocking):", xero.error);
+      }
+    } catch (e) {
+      console.error("[refunds] Xero credit note threw (non-blocking):", e);
+    }
+  }
+
   // ── Buyer email + CRM timeline (never fail the refund) ───────
   let emailSent = false;
   try {
@@ -409,6 +423,14 @@ export async function syncPendingRefunds(
       })
       .eq("id", row.id);
     updated++;
+
+    if (outcome.status === "succeeded") {
+      try {
+        await createStripeTicketRefundCreditNote(createAdminClient(), row.id);
+      } catch (e) {
+        console.error("[refunds] Xero credit note threw (non-blocking):", e);
+      }
+    }
 
     // A refund the provider ultimately rejected must give the money
     // back on our side too, or the order stays wrongly written down.

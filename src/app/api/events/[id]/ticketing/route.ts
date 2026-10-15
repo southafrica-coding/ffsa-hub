@@ -11,7 +11,7 @@ const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
 
 // PATCH /api/events/[id]/ticketing
 // Body: { ticketing_enabled?: boolean; public_slug?: string | null;
-//         currency?: "ZAR" | "USD" }
+//         currency?: "ZAR" | "USD"; xero_item_code?: string | null }
 export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string }> }
@@ -30,6 +30,7 @@ export async function PATCH(
     ticketing_enabled?: boolean;
     public_slug?: string | null;
     currency?: string;
+    xero_item_code?: string | null;
   };
   try {
     body = await request.json();
@@ -40,6 +41,13 @@ export async function PATCH(
   const patch: Record<string, unknown> = {};
   if (typeof body.ticketing_enabled === "boolean") {
     patch.ticketing_enabled = body.ticketing_enabled;
+  }
+  // US Xero item code for this event's Stripe ticket invoices. Empty ⇒
+  // null (fall back to the default ticket-sales account). Xero item codes
+  // are case-sensitive, so only trimmed.
+  if (body.xero_item_code !== undefined) {
+    const code = body.xero_item_code?.trim();
+    patch.xero_item_code = code ? code : null;
   }
   if (body.public_slug !== undefined) {
     if (body.public_slug === null || body.public_slug.trim() === "") {

@@ -268,6 +268,7 @@ export default async function EventDetailPage({
               (event.checkout_questions as FormField[] | null) ?? []
             }
             buyerFields={event.buyer_fields ?? []}
+            xeroItemCode={event.xero_item_code ?? null}
           />
         )}
 

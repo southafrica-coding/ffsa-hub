@@ -12,17 +12,20 @@ export function TicketingSettings({
   publicSlug,
   currency: savedCurrency,
   currencyLocked,
+  xeroItemCode,
 }: {
   eventId: string;
   ticketingEnabled: boolean;
   publicSlug: string | null;
   currency: string;
   currencyLocked: boolean;
+  xeroItemCode: string | null;
 }) {
   const router = useRouter();
   const [enabled, setEnabled] = useState(ticketingEnabled);
   const [slug, setSlug] = useState(publicSlug ?? "");
   const [currency, setCurrency] = useState(savedCurrency);
+  const [xeroCode, setXeroCode] = useState(xeroItemCode ?? "");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [savedHint, setSavedHint] = useState<string | null>(null);
@@ -38,7 +41,8 @@ export function TicketingSettings({
   const dirty =
     enabled !== ticketingEnabled ||
     (slug.trim() || null) !== publicSlug ||
-    currency !== savedCurrency;
+    currency !== savedCurrency ||
+    (xeroCode.trim() || null) !== xeroItemCode;
 
   const trimmedSlug = slug.trim();
   const fullUrl = trimmedSlug ? `${origin}/e/${trimmedSlug}` : "";
@@ -75,6 +79,7 @@ export function TicketingSettings({
         ticketing_enabled: enabled,
         public_slug: slug.trim() || null,
         currency,
+        xero_item_code: xeroCode.trim() || null,
       }),
     });
     setBusy(false);
@@ -156,6 +161,25 @@ export function TicketingSettings({
                 " Saving re-calculates the display price of every fixed-price tier."}
             </p>
           )}
+        </div>
+
+        <div>
+          <label className="block text-xs text-muted-foreground mb-1">
+            Xero item code (US)
+          </label>
+          <input
+            type="text"
+            value={xeroCode}
+            onChange={(e) => setXeroCode(e.target.value)}
+            placeholder="e.g. EVENT-TICKETS"
+            className="w-full border px-2 py-1.5 text-sm font-mono"
+            disabled={busy}
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Every order paid by card (Stripe) posts a PAID invoice to the US
+            Xero organisation. This item sets which income account it lands
+            in; leave blank to use the default ticket-sales account.
+          </p>
         </div>
 
         {/* Shareable storefront link — appears as soon as a slug is typed. */}

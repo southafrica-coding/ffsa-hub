@@ -1846,6 +1846,7 @@ export type Database = {
           ticketing_enabled: boolean
           title: string
           updated_at: string
+          xero_item_code: string | null
         }
         Insert: {
           base_label_id?: string | null
@@ -1871,6 +1872,7 @@ export type Database = {
           ticketing_enabled?: boolean
           title: string
           updated_at?: string
+          xero_item_code?: string | null
         }
         Update: {
           base_label_id?: string | null
@@ -1896,6 +1898,7 @@ export type Database = {
           ticketing_enabled?: boolean
           title?: string
           updated_at?: string
+          xero_item_code?: string | null
         }
         Relationships: [
           {
@@ -2754,6 +2757,10 @@ export type Database = {
           subtotal_cents: number
           ticket_answers: Json
           waiver_signatures: Json | null
+          xero_invoice_id: string | null
+          xero_invoice_number: string | null
+          xero_sync_error: string | null
+          xero_synced_at: string | null
           total_cents: number
           updated_at: string
         }
@@ -2789,6 +2796,10 @@ export type Database = {
           subtotal_cents?: number
           ticket_answers?: Json
           waiver_signatures?: Json | null
+          xero_invoice_id?: string | null
+          xero_invoice_number?: string | null
+          xero_sync_error?: string | null
+          xero_synced_at?: string | null
           total_cents?: number
           updated_at?: string
         }
@@ -2824,6 +2835,10 @@ export type Database = {
           subtotal_cents?: number
           ticket_answers?: Json
           waiver_signatures?: Json | null
+          xero_invoice_id?: string | null
+          xero_invoice_number?: string | null
+          xero_sync_error?: string | null
+          xero_synced_at?: string | null
           total_cents?: number
           updated_at?: string
         }
