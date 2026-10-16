@@ -36,12 +36,14 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Generate signed URLs for each receipt
+  // Sign with the service role. The rows above were read through RLS, so
+  // only receipts this user may see are here — but the FILES' storage
+  // rules key on who uploaded them, and receipts filed by the server
+  // (logged from Slack) have no uploader, so a user-signed URL fails.
+  const storage = createAdminClient().storage.from("outreach-receipts");
   const withUrls = await Promise.all(
     (receipts ?? []).map(async (receipt: { file_path: string; [key: string]: unknown }) => {
-      const { data } = await supabase.storage
-        .from("outreach-receipts")
-        .createSignedUrl(receipt.file_path, 3600);
+      const { data } = await storage.createSignedUrl(receipt.file_path, 3600);
       return {
         ...receipt,
         signed_url: data?.signedUrl ?? null,

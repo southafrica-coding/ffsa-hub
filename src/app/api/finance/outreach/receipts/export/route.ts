@@ -1,10 +1,17 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import {
   getOutreachTeamById,
   getTeamExpenses,
 } from "@/services/outreach-finance";
 import JSZip from "jszip";
+
+export const maxDuration = 60;
+
+/** A ZIP-safe name chunk. */
+const part = (s: string | null | undefined) =>
+  String(s ?? "").trim().replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^_+|_+$/g, "");
 
 export async function GET(request: Request) {
   const supabase = await createClient();
@@ -44,10 +51,16 @@ export async function GET(request: Request) {
     );
   }
 
+  // Rows through RLS (only what this user may see)…
   const { data: receipts } = await supabase
     .from("outreach_receipts")
     .select("*")
-    .in("expense_id", expenseIds);
+    .in("expense_id", expenseIds)
+    .order("uploaded_at", { ascending: true });
+
+  // …files through the service role: storage rules key on who uploaded a
+  // file, and receipts filed by the server (logged from Slack) have none.
+  const storage = createAdminClient().storage.from("outreach-receipts");
 
   if (!receipts || receipts.length === 0) {
     return NextResponse.json(
@@ -59,13 +72,21 @@ export async function GET(request: Request) {
   // Build expense lookup map
   const expenseMap: Record<
     string,
-    { expense_date: string; receipt_code: string | null; vendor: string | null }
+    {
+      expense_date: string;
+      receipt_code: string | null;
+      vendor: string | null;
+      zar_amount: number | null;
+      category: string | null;
+    }
   > = {};
   for (const exp of expenses ?? []) {
     expenseMap[exp.id] = {
       expense_date: exp.expense_date,
       receipt_code: exp.receipt_code,
       vendor: exp.vendor,
+      zar_amount: exp.zar_amount,
+      category: exp.outreach_budget_categories?.name ?? null,
     };
   }
 
@@ -74,8 +95,10 @@ export async function GET(request: Request) {
 
   // Add manifest CSV
   const manifestLines = [
-    "File,Expense Date,Receipt Code,Vendor,File Name,File Size,Mime Type",
+    "File,Expense Date,Receipt Code,Vendor,Category,Amount (ZAR),Original File Name,File Size,Mime Type",
   ];
+  const missing: string[] = [];
+  const used = new Set<string>();
 
   let fileCount = 0;
 
@@ -83,28 +106,26 @@ export async function GET(request: Request) {
     const expense = expenseMap[receipt.expense_id];
     if (!expense) continue;
 
-    // Download file from Supabase Storage
-    const { data: fileData, error: downloadError } = await supabase.storage
-      .from("outreach-receipts")
-      .download(receipt.file_path);
-
+    const { data: fileData, error: downloadError } = await storage.download(receipt.file_path);
     if (downloadError || !fileData) {
-      continue; // Skip files that fail to download
+      console.error("[receipts/export] download failed", receipt.file_path, downloadError);
+      missing.push(`${expense.expense_date} ${expense.vendor ?? ""} — ${receipt.file_name}`);
+      continue;
     }
 
-    // Build folder name: date_receiptCode
-    const folderName = [
-      expense.expense_date,
-      expense.receipt_code ?? "no-code",
-    ]
-      .join("_")
-      .replace(/[^a-zA-Z0-9_-]/g, "_");
+    // One flat folder, every name unique and readable:
+    // 2026-03-24_Choppies_0042.jpg — a second receipt on the same expense
+    // gets _2, so two phones' "image.jpg" can never overwrite each other.
+    const ext = (receipt.file_name.match(/\.[A-Za-z0-9]{1,5}$/)?.[0] ?? "").toLowerCase();
+    const base =
+      [expense.expense_date, part(expense.vendor), part(expense.receipt_code)].filter(Boolean).join("_") ||
+      "receipt";
+    let name = `${base}${ext}`;
+    for (let n = 2; used.has(name.toLowerCase()); n++) name = `${base}_${n}${ext}`;
+    used.add(name.toLowerCase());
+    const filePath = `receipts/${name}`;
 
-    const filePath = `receipts/${folderName}/${receipt.file_name}`;
-
-    // Convert Blob to ArrayBuffer
-    const buffer = await fileData.arrayBuffer();
-    zip.file(filePath, buffer);
+    zip.file(filePath, await fileData.arrayBuffer());
 
     manifestLines.push(
       [
@@ -112,13 +133,15 @@ export async function GET(request: Request) {
         expense.expense_date,
         expense.receipt_code ?? "",
         expense.vendor ?? "",
+        expense.category ?? "",
+        expense.zar_amount ?? "",
         receipt.file_name,
         receipt.file_size,
         receipt.mime_type,
       ]
         .map((v) => {
           const s = String(v ?? "");
-          return s.includes(",") ? `"${s}"` : s;
+          return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
         })
         .join(",")
     );
@@ -133,8 +156,11 @@ export async function GET(request: Request) {
     );
   }
 
-  // Add manifest
+  // Add manifest (and say plainly if any file couldn't be fetched)
   zip.file("manifest.csv", manifestLines.join("\n"));
+  if (missing.length) {
+    zip.file("MISSING.txt", `These receipts are recorded but their files couldn't be fetched:\n\n${missing.join("\n")}\n`);
+  }
 
   // Generate ZIP
   const zipBuffer = await zip.generateAsync({ type: "arraybuffer" });
