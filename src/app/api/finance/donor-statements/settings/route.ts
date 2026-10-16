@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isValidEmail } from "@/lib/finance/donor-statements";
 import {
   authorizeDonorStatements,
   dsDb,
@@ -6,6 +7,7 @@ import {
   DONOR_STATEMENTS_BUCKET,
   EDITABLE_LIST_SETTINGS,
   EDITABLE_TEXT_SETTINGS,
+  EMAIL_SETTINGS,
 } from "@/lib/finance/donor-statements-server";
 
 // GET                      → settings
@@ -49,6 +51,9 @@ export async function PUT(request: Request) {
     if (k in body) {
       const v = String(body[k] ?? "").trim();
       if (!v) return NextResponse.json({ error: `${k.replace(/_/g, " ")} can't be empty` }, { status: 400 });
+      if ((EMAIL_SETTINGS as readonly string[]).includes(k) && !isValidEmail(v)) {
+        return NextResponse.json({ error: `${k.replace(/_/g, " ")} must be an email address` }, { status: 400 });
+      }
       patch[k] = v;
     }
   }

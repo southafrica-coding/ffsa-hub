@@ -52,6 +52,10 @@ export type SendTransactionalInput = {
     /** Several when one email stands in for another step's too. */
     emailType: string | string[];
   };
+  /** Files made for this send (e.g. a donor's PDF statement). */
+  attachments?: { filename: string; content: Buffer; contentType?: string }[];
+  /** Plain-text alternative to the html. */
+  text?: string;
 };
 
 export type SendTransactionalResult =
@@ -97,13 +101,20 @@ export async function sendTransactional(
   const ledgerId = await recordEmail(admin, ledgerFields);
 
   // 3. The school's documents for this email, if any.
-  const attachments = input.programDocuments?.programId
-    ? await loadProgramEmailAttachments(
-        admin,
-        input.programDocuments.programId,
-        ([] as string[]).concat(input.programDocuments.emailType)
-      )
-    : [];
+  const attachments = [
+    ...(input.programDocuments?.programId
+      ? await loadProgramEmailAttachments(
+          admin,
+          input.programDocuments.programId,
+          ([] as string[]).concat(input.programDocuments.emailType)
+        )
+      : []),
+    ...(input.attachments ?? []).map((a) => ({
+      filename: a.filename,
+      content: a.content,
+      contentType: a.contentType ?? "application/octet-stream",
+    })),
+  ];
   if (ledgerId && attachments.length > 0) {
     try {
       // attachments (migration 238) isn't in the generated types yet.
@@ -132,6 +143,7 @@ export async function sendTransactional(
     to: input.to,
     subject: input.subject,
     html: input.html,
+    ...(input.text ? { text: input.text } : {}),
     ...(input.replyTo ? { replyTo: input.replyTo } : {}),
     ...(attachments.length > 0 ? { attachments } : {}),
   });

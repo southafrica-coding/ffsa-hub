@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { SectionBar } from "@/components/ffsa";
 import type { DonorStatementSettings } from "@/lib/finance/donor-statements-server";
+import { DEFAULT_WORDING, PLACEHOLDERS, unknownPlaceholders } from "@/lib/finance/donor-statement-wording";
 
 // The organisation details printed on every statement and email, plus the
 // import rules. Stored once (migration 245) so a change is made in one place.
@@ -19,6 +20,18 @@ const TEXT_FIELDS: { key: keyof DonorStatementSettings; label: string }[] = [
   { key: "address_city_line", label: "City, state, ZIP" },
   { key: "signer_name", label: "Signer name" },
   { key: "signer_title", label: "Signer title" },
+];
+
+// Sender and words (migration 246). Long ones get a big textarea.
+const WORDING_FIELDS: { key: keyof DonorStatementSettings; label: string; rows?: number; help?: string }[] = [
+  { key: "from_name", label: "Email from (name)" },
+  { key: "from_email", label: "Email from (address)", help: "Must be on a verified sending domain (ffsouthafrica.com or ffsahub.com)." },
+  { key: "reply_to", label: "Replies go to", help: "Donors are invited to reply — this inbox must be read." },
+  { key: "email_subject", label: "Email subject" },
+  { key: "email_body", label: "Email body", rows: 18 },
+  { key: "mission_paragraph", label: "PDF · mission paragraph", rows: 4 },
+  { key: "irs_paragraph", label: "PDF · IRS paragraph (keep word for word)", rows: 3, help: "The written acknowledgment donors need for any gift of $250 or more." },
+  { key: "closing_line", label: "PDF · closing line" },
 ];
 
 const LIST_FIELDS: { key: keyof DonorStatementSettings; label: string; help: string }[] = [
@@ -39,20 +52,24 @@ export function SettingsCard({
   const [draft, setDraft] = useState<Record<string, string>>(() =>
     Object.fromEntries([
       ...TEXT_FIELDS.map((f) => [f.key, String(settings[f.key] ?? "")]),
+      ...WORDING_FIELDS.map((f) => [f.key, wordingValue(settings, f.key)]),
       ...LIST_FIELDS.map((f) => [f.key, ((settings[f.key] as string[]) ?? []).join(", ")]),
     ])
   );
   const [saving, setSaving] = useState(false);
   const [imgVersion, setImgVersion] = useState(Date.now());
 
+  const hasWording = settings.from_email !== undefined;
   const dirty =
     TEXT_FIELDS.some((f) => draft[f.key] !== String(settings[f.key] ?? "")) ||
+    (hasWording && WORDING_FIELDS.some((f) => draft[f.key] !== wordingValue(settings, f.key))) ||
     LIST_FIELDS.some((f) => draft[f.key] !== ((settings[f.key] as string[]) ?? []).join(", "));
 
   async function save() {
     setSaving(true);
     const body: Record<string, unknown> = {};
     for (const f of TEXT_FIELDS) body[f.key] = draft[f.key];
+    if (hasWording) for (const f of WORDING_FIELDS) body[f.key] = draft[f.key];
     for (const f of LIST_FIELDS) body[f.key] = draft[f.key];
     const res = await fetch("/api/finance/donor-statements/settings", {
       method: "PUT",
@@ -122,6 +139,37 @@ export function SettingsCard({
           ))}
         </div>
       </div>
+      <div className="border-t border-ink">
+        <SectionBar title="Email and wording" meta="Placeholders are filled per donor" />
+        {!hasWording ? (
+          <p className="p-5 text-sm text-amber">Apply migration 246 to edit the sender and wording. Until then statements use the default wording.</p>
+        ) : (
+          <div className="grid gap-4 p-5 md:grid-cols-2">
+            {WORDING_FIELDS.map((f) => {
+              const unknown = f.rows ? unknownPlaceholders(draft[f.key] ?? "") : [];
+              return (
+                <label key={f.key} className={`block ${f.rows && f.rows > 4 ? "md:col-span-2" : ""}`}>
+                  <span className="mono-label mb-1 block">{f.label}</span>
+                  {f.rows ? (
+                    <Textarea rows={f.rows} value={draft[f.key]} onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))} />
+                  ) : (
+                    <Input value={draft[f.key]} onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))} />
+                  )}
+                  {f.help && <span className="mt-1 block text-xs text-[color:var(--text-tertiary)]">{f.help}</span>}
+                  {unknown.length > 0 && (
+                    <span className="mt-1 block text-xs text-destructive">
+                      {unknown.join(", ")} won&rsquo;t be filled in — use {PLACEHOLDERS.join(" ")}
+                    </span>
+                  )}
+                </label>
+              );
+            })}
+            <p className="text-xs text-[color:var(--text-tertiary)] md:col-span-2">
+              Placeholders: {PLACEHOLDERS.join(" ")}. [Address] is the three address lines above.
+            </p>
+          </div>
+        )}
+      </div>
       <div className="flex items-center justify-end gap-3 border-t border-rule px-5 py-3">
         {dirty && <span className="text-xs text-[color:var(--text-tertiary)]">Unsaved changes</span>}
         <Button size="sm" onClick={save} disabled={!dirty || saving}>
@@ -176,4 +224,10 @@ function ImageSlot({
       </Button>
     </div>
   );
+}
+
+function wordingValue(s: DonorStatementSettings, key: keyof DonorStatementSettings): string {
+  const v = s[key];
+  if (typeof v === "string" && v.trim()) return v;
+  return (DEFAULT_WORDING as Record<string, string>)[key as string] ?? "";
 }

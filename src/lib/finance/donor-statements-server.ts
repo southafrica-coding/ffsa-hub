@@ -53,12 +53,23 @@ export type DonorStatementSettings = {
   excluded_line_phrases: string[];
   review_line_phrases: string[];
   organisation_phrases: string[];
+  // Migration 246 — absent until applied; the wording falls back to defaults.
+  from_name?: string;
+  from_email?: string;
+  reply_to?: string;
+  email_subject?: string;
+  email_body?: string;
+  mission_paragraph?: string;
+  irs_paragraph?: string;
+  closing_line?: string;
   updated_at: string;
 };
 
 export const EDITABLE_TEXT_SETTINGS = [
   "org_name", "tax_id", "address_line1", "address_line2", "address_city_line", "signer_name", "signer_title",
+  "from_name", "from_email", "reply_to", "email_subject", "email_body", "mission_paragraph", "irs_paragraph", "closing_line",
 ] as const;
+export const EMAIL_SETTINGS = ["from_email", "reply_to"] as const;
 export const EDITABLE_LIST_SETTINGS = [
   "account_codes", "excluded_item_codes", "excluded_line_phrases", "review_line_phrases", "organisation_phrases",
 ] as const;
@@ -188,4 +199,34 @@ export async function loadRunReview(admin: any, runId: string): Promise<RunRevie
   const hubEmails = missing.length ? await hubEmailsFor(admin, missing) : {};
   const build = Object.keys(hubEmails).length ? buildStatements({ ...input, hubEmails }) : first;
   return { run, build, options };
+}
+
+// ── Phase 2: one donor's statement ───────────────────────────
+
+export type StatementImages = {
+  logo: { data: Buffer; format: "png" | "jpg" } | null;
+  signature: { data: Buffer; format: "png" | "jpg" } | null;
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function loadStatementImages(admin: any, s: DonorStatementSettings | null): Promise<StatementImages> {
+  const load = async (path: string | null | undefined) => {
+    if (!path) return null;
+    const { data, error } = await admin.storage.from(DONOR_STATEMENTS_BUCKET).download(path);
+    if (error || !data) return null;
+    return { data: Buffer.from(await data.arrayBuffer()), format: /\.png$/i.test(path) ? ("png" as const) : ("jpg" as const) };
+  };
+  const [logo, signature] = await Promise.all([load(s?.logo_path), load(s?.signature_path)]);
+  return { logo, signature };
+}
+
+/** A run's review plus one donor in it, and the settings to print with. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function loadDonorStatement(admin: any, runId: string, key: string) {
+  const [review, settings] = await Promise.all([loadRunReview(admin, runId), loadSettings(admin)]);
+  if (!review) return { error: "Run not found", status: 404 as const };
+  if (!settings) return { error: "Settings missing — apply migration 245.", status: 500 as const };
+  const donor = review.build.donors.find((d) => d.key === key);
+  if (!donor) return { error: "Donor not found in this run", status: 404 as const };
+  return { review, donor, settings };
 }

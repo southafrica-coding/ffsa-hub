@@ -3,7 +3,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";
-import { ChevronDown, ChevronRight, Download } from "lucide-react";
+import { ChevronDown, ChevronRight, Download, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -19,6 +19,7 @@ import {
 } from "@/lib/finance/donor-statements";
 import type { DonorStatementSettings, RunRow } from "@/lib/finance/donor-statements-server";
 import { SettingsCard } from "./settings-card";
+import { StatementPreview } from "./statement-preview";
 
 type RunListItem = Pick<RunRow, "id" | "tax_year" | "source" | "source_file_name" | "status" | "imported_at" | "created_at">;
 type Review = { run: RunRow; build: StatementBuild; options: RunOptions };
@@ -232,6 +233,7 @@ function RunReview({ runId, onArchived }: { runId: string; onArchived: () => voi
   const [filter, setFilter] = useState<Filter>("all");
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
+  const [preview, setPreview] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -406,6 +408,7 @@ function RunReview({ runId, onArchived }: { runId: string; onArchived: () => voi
                 }
                 others={build.donors.filter((o) => o.key !== d.key)}
                 onEdit={(patch) => editDonor(d.key, patch)}
+                onPreview={() => setPreview(rows.indexOf(d))}
               />
             ))}
             {rows.length === 0 && (
@@ -432,6 +435,8 @@ function RunReview({ runId, onArchived }: { runId: string; onArchived: () => voi
       </div>
 
       <SetAside build={build} />
+
+      <StatementPreview runId={runId} donors={rows} index={preview} onIndex={setPreview} onClose={() => setPreview(null)} />
     </div>
   );
 }
@@ -471,12 +476,14 @@ function DonorRow({
   toggle,
   others,
   onEdit,
+  onPreview,
 }: {
   donor: Donor;
   open: boolean;
   toggle: () => void;
   others: Donor[];
   onEdit: (patch: Record<string, unknown>) => Promise<void>;
+  onPreview: () => void;
 }) {
   const [email, setEmail] = useState(d.email ?? "");
   const [name, setName] = useState(d.name);
@@ -516,7 +523,20 @@ function DonorRow({
           )}
         </TableCell>
         <TableCell className="text-right align-top">{d.gifts.filter((g) => !g.isCreditNote).length}</TableCell>
-        <TableCell className="text-right align-top font-semibold">{fmtUsd(d.totalCents)}</TableCell>
+        <TableCell className="text-right align-top font-semibold">
+          {fmtUsd(d.totalCents)}
+          {!out && (
+            <button
+              type="button"
+              onClick={onPreview}
+              className="ml-2 inline-flex align-[-2px] text-[color:var(--text-tertiary)] hover:text-electric"
+              aria-label={`Preview ${d.name}'s statement`}
+              title="Preview statement"
+            >
+              <FileText className="h-4 w-4" />
+            </button>
+          )}
+        </TableCell>
         <TableCell className="align-top">
           <div className="flex flex-wrap gap-1">
             {d.excluded && <StatusPill tone="quiet">Left out</StatusPill>}
@@ -605,6 +625,11 @@ function DonorRow({
               <Button size="sm" variant="outline" disabled={!mergeInto} onClick={() => onEdit({ mergeIntoKey: mergeInto })}>
                 Merge into them
               </Button>
+              {!out && (
+                <Button size="sm" onClick={onPreview}>
+                  <FileText className="mr-1.5 h-3.5 w-3.5" /> Preview statement
+                </Button>
+              )}
               <Button size="sm" variant={d.excluded ? "default" : "outline"} onClick={() => onEdit({ excluded: !d.excluded })}>
                 {d.excluded ? "Include again" : "Leave out of statements"}
               </Button>
