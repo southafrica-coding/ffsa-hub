@@ -1,3 +1,4 @@
+import { eventMessageHtml } from "../event-email-wording";
 import { eventLogoBlock } from "../event-sender";
 import { formatMoney } from "@/lib/currencies";
 // FFSA Hub — Refund confirmation email (transactional).
@@ -34,6 +35,8 @@ export function refundConfirmationEmailHtml(opts: {
   siteUrl: string;
   /** The event's own logo, shown first when it asked for one (migration 241). */
   headerLogoUrl?: string | null;
+  /** The event's own message, above the amount (migration 242). */
+  message?: string | null;
   /** ISO 4217 code from orders.currency. */
   currency: string;
   /** Buyer-facing note, e.g. why the event was cancelled. */
@@ -102,6 +105,7 @@ export function refundConfirmationEmailHtml(opts: {
 
         <tr><td style="height:22px;line-height:22px;font-size:0;">&nbsp;</td></tr>
 
+        ${opts.message ? `<tr><td style="padding:0 32px 8px 32px;">${eventMessageHtml(opts.message, { color: TEXT, font: "Helvetica,Arial,sans-serif" })}</td></tr>` : ""}
         <!-- Amount -->
         <tr>
           <td style="padding:0 32px;">

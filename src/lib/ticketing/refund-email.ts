@@ -10,6 +10,7 @@ import { sendViaResend, isEmailConfigured } from "@/lib/email/resend-send";
 import { refundConfirmationEmailHtml } from "@/lib/email/templates/refund-confirmation";
 import { resolveEventBrand } from "./fulfillment";
 import { resolveEventSender } from "@/lib/email/event-sender";
+import { wordingFor } from "@/lib/email/event-email-wording";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { recordEmail, markSent, markFailed } from "@/lib/email/ledger";
 
@@ -29,6 +30,7 @@ export async function sendRefundEmail(
       sending_identity_id?: string | null;
       email_show_event_logo?: boolean | null;
       logo_url?: string | null;
+      email_wording?: unknown;
     };
     eventId?: string | null;
     contactId?: string | null;
@@ -52,9 +54,15 @@ export async function sendRefundEmail(
   const brand = resolveEventBrand(opts.event);
   // The event's own email settings (migration 241), else its brand's sender.
   const sender = await resolveEventSender(supabase, opts.event, brand);
-  const subject = opts.isFullRefund
-    ? `Your refund for ${opts.event.title}`
-    : `A partial refund for ${opts.event.title}`;
+  // The event's own subject / message for this email (migration 242).
+  const wording = wordingFor(opts.event.email_wording, "refund", {
+    firstName: opts.buyerFirstName,
+    eventTitle: opts.event.title,
+    defaultSubject: opts.isFullRefund
+      ? `Your refund for ${opts.event.title}`
+      : `A partial refund for ${opts.event.title}`,
+  });
+  const subject = wording.subject;
 
   // Logged in the email ledger like every other buyer email, so a refund
   // notice can't vanish without a trace. Best-effort; never blocks.
@@ -88,6 +96,7 @@ export async function sendRefundEmail(
       cancellationMessage: opts.cancellationMessage ?? null,
       siteUrl: process.env.NEXT_PUBLIC_SITE_URL || "https://www.ffsahub.com",
       headerLogoUrl: sender.headerLogoUrl,
+      message: wording.message,
     }),
     category: "refund_confirmation",
   });

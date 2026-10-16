@@ -1,3 +1,4 @@
+import { eventMessageHtml } from "@/lib/email/event-email-wording";
 import { eventLogoBlock } from "@/lib/email/event-sender";
 // ────────────────────────────────────────────────────────────
 // FFSA Hub — rendering a school invoice email from a Xero template
@@ -29,6 +30,8 @@ export interface InvoiceEmailData {
   onlineInvoiceUrl: string | null;
   /** An event's own logo above the message (event invoices, migration 241). */
   headerLogoUrl?: string | null;
+  /** An event's own message above the template's (migration 242). */
+  message?: string | null;
 }
 
 /** How Xero prints values in emails. One place to adjust against a real email. */
@@ -124,11 +127,12 @@ export function renderInvoiceEmail(
       : "";
 
   const html = `<!doctype html><html><body style="margin:0;padding:24px;background:#FFFFFF">
-<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#1F2937;max-width:640px">${data.headerLogoUrl ? eventLogoBlock(data.headerLogoUrl).replace("margin:0 auto;", "margin:0;").replace('align="center"', 'align="left"') : ""}${textToHtml(body.text)}${action}</div>
+<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#1F2937;max-width:640px">${data.headerLogoUrl ? eventLogoBlock(data.headerLogoUrl).replace("margin:0 auto;", "margin:0;").replace('align="center"', 'align="left"') : ""}${textToHtml(body.text)}${data.message ? `<div style="margin-top:16px">${eventMessageHtml(data.message, { color: "#1F2937", font: "Arial,Helvetica,sans-serif" })}</div>` : ""}${action}</div>
 </body></html>`;
 
   const text =
     body.text +
+    (data.message?.trim() ? `\n\n${data.message.trim()}` : "") +
     (template.include_online_action && data.onlineInvoiceUrl
       ? `\n\n—\nInvoice ${data.invoiceNumber} · ${data.currencyCode} ${values["Amount Due"]} due ${values["Due Date"]}\nView invoice: ${data.onlineInvoiceUrl}`
       : "");

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { resolveEventSender } from "@/lib/email/event-sender";
+import { wordingFor } from "@/lib/email/event-email-wording";
 import { resolveEventBrand } from "@/lib/ticketing/fulfillment";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -104,7 +105,7 @@ export async function POST(
   // brand's sender) so a reply reaches the Hub inbox, not a dead address.
   const { data: eventRow } = await supabase
     .from("events")
-    .select("title, brand, public_slug, sending_identity_id, email_show_event_logo, logo_url")
+    .select("title, brand, public_slug, sending_identity_id, email_show_event_logo, logo_url, email_wording")
     .eq("id", eventId)
     .maybeSingle();
   const sender = await resolveEventSender(supabase, eventRow ?? {}, resolveEventBrand(eventRow ?? {}));
@@ -119,6 +120,15 @@ export async function POST(
     // The greeting uses the first word of whatever name we were given —
     // "Hi Thandi," reads better than "Hi Thandi Mokoena,".
     const firstName = r.name ? r.name.split(/\s+/)[0] : null;
+    // The event's own subject / message for this email (migration 242).
+    const wording = wordingFor(eventRow?.email_wording, kind === "reminder" ? "feedback_reminder" : "feedback_invite", {
+      firstName,
+      eventTitle,
+      defaultSubject:
+        kind === "reminder"
+          ? `A quick reminder — your feedback on ${eventTitle}`
+          : `How did ${eventTitle} go? Your feedback, in 3 minutes`,
+    });
     const html = eventFeedbackRequestEmailHtml({
       firstName,
       eventTitle,
@@ -128,14 +138,12 @@ export async function POST(
       note: body.note ?? null,
       siteUrl: siteBase(),
       headerLogoUrl: sender.headerLogoUrl,
+      message: wording.message,
     });
 
     const result = await sendTransactional({
       to: r.email,
-      subject:
-        kind === "reminder"
-          ? `A quick reminder — your feedback on ${eventTitle}`
-          : `How did ${eventTitle} go? Your feedback, in 3 minutes`,
+      subject: wording.subject,
       html,
       category: kind === "reminder" ? "event_feedback_reminder" : "event_feedback_invite",
       fromEmail: sender.fromEmail,

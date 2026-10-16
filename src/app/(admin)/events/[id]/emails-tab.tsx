@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { EventEmailWording } from "@/lib/email/event-email-wording";
+import { EmailWordingEditor } from "./email-wording-editor";
 
 // The event's Emails tab (migration 241): who every email this event sends
 // comes from, where replies go, and whether the event's own logo heads them.
@@ -28,6 +30,7 @@ type Settings = {
     logo_url: string | null;
     email_show_event_logo: boolean;
     sending_identity_id: string | null;
+    email_wording: EventEmailWording;
   };
   brand_sender: Identity;
   current: Identity | null;
@@ -136,6 +139,7 @@ export function EmailsTab({ eventId }: { eventId: string }) {
   const others = s.identities.filter((i) => i.id !== s.brand_sender.id);
 
   return (
+    <div className="space-y-6">
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
       <div className="space-y-6">
         <Card>
@@ -375,6 +379,9 @@ export function EmailsTab({ eventId }: { eventId: string }) {
           </ul>
         </CardContent>
       </Card>
+    </div>
+
+    <EmailWordingEditor eventId={eventId} saved={s.event.email_wording ?? {}} onSaved={load} />
     </div>
   );
 }

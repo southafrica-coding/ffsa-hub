@@ -71,7 +71,7 @@ const PROVIDERS: Record<ProviderName, PaymentProvider> = {
 };
 
 const ORDER_FIELDS =
-  "id, status, total_cents, refund_cents, currency, lines, buyer_contact_id, buyer_first_name, buyer_email, event_id, payment_provider, provider_payment_id, events(id, title, brand, public_slug, status, cancellation_message, sending_identity_id, email_show_event_logo, logo_url)";
+  "id, status, total_cents, refund_cents, currency, lines, buyer_contact_id, buyer_first_name, buyer_email, event_id, payment_provider, provider_payment_id, events(id, title, brand, public_slug, status, cancellation_message, sending_identity_id, email_show_event_logo, logo_url, email_wording)";
 
 /**
  * Sum of refunds that actually settled. Authoritative over

@@ -1,3 +1,4 @@
+import { eventMessageHtml } from "../event-email-wording";
 import { eventLogoBlock } from "../event-sender";
 import { formatMoney } from "@/lib/currencies";
 // FFSA Hub — Ticket confirmation email for THE SEND South Africa
@@ -44,6 +45,8 @@ export function theSendTicketEmailHtml(opts: {
   siteUrl: string;
   /** The event's own logo, shown first when it asked for one (migration 241). */
   headerLogoUrl?: string | null;
+  /** The event's own message, between the opening and the tickets (migration 242). */
+  message?: string | null;
   /** ISO 4217 code from orders.currency. */
   currency: string;
 }): string {
@@ -189,6 +192,7 @@ export function theSendTicketEmailHtml(opts: {
 
         <tr><td style="background:${CREAM};height:24px;line-height:24px;font-size:0;">&nbsp;</td></tr>
 
+        ${opts.message ? `<tr><td style="background:${CREAM};padding:0 28px 20px 28px;">${eventMessageHtml(opts.message, { color: NAVY, font: BODY })}</td></tr>` : ""}
         <!-- Tickets -->
         <tr>
           <td style="background:${CREAM};padding:0 28px;">

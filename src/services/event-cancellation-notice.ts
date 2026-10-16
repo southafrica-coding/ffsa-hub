@@ -14,6 +14,7 @@ import { sendViaResend, isEmailConfigured } from "@/lib/email/resend-send";
 import { eventCancellationNoticeEmailHtml } from "@/lib/email/templates/event-cancellation-notice";
 import { resolveEventBrand } from "@/lib/ticketing/fulfillment";
 import { resolveEventSender } from "@/lib/email/event-sender";
+import { wordingFor } from "@/lib/email/event-email-wording";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
@@ -34,7 +35,7 @@ export type CancellationNoticeResult =
     }
   | { ok: false; error: string; httpStatus: number };
 
-const REFUND_LINE =
+export const REFUND_LINE =
   "Your refund for this event has been processed and is on its way back to the card or account you paid from — no action is needed on your side.";
 
 /** Buyers of the event who have already been refunded, deduped by email. */
@@ -77,7 +78,7 @@ export async function sendCancellationNotice(
 ): Promise<CancellationNoticeResult> {
   const { data: event } = await supabase
     .from("events")
-    .select("id, title, brand, public_slug, status, cancellation_message, sending_identity_id, email_show_event_logo, logo_url")
+    .select("id, title, brand, public_slug, status, cancellation_message, sending_identity_id, email_show_event_logo, logo_url, email_wording")
     .eq("id", eventId)
     .maybeSingle();
 
@@ -119,7 +120,7 @@ export async function sendCancellationNotice(
     };
   }
 
-  const subject = `${event.title} has been cancelled`;
+  const defaultSubject = `${event.title} has been cancelled`;
 
   let sent = 0;
   const failures: Array<{ email: string; error: string }> = [];
@@ -129,7 +130,11 @@ export async function sendCancellationNotice(
       fromName: sender.fromName,
       replyTo: sender.replyTo,
       to: r.email,
-      subject,
+      subject: wordingFor(event.email_wording, "cancellation_notice", {
+        firstName: r.firstName,
+        eventTitle: event.title,
+        defaultSubject,
+      }).subject,
       html,
       category: "event_cancellation_notice",
     });

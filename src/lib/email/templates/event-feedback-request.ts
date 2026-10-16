@@ -17,6 +17,7 @@ export function eventFeedbackRequestEmailHtml({
   note,
   siteUrl,
   headerLogoUrl,
+  message,
 }: {
   firstName?: string | null;
   eventTitle: string;
@@ -27,6 +28,8 @@ export function eventFeedbackRequestEmailHtml({
   siteUrl?: string | null;
   /** The event's own logo, shown first when it asked for one (migration 241). */
   headerLogoUrl?: string | null;
+  /** The event's own standing message (migration 242), above the per-send note. */
+  message?: string | null;
 }): string {
   const greeting = firstName?.trim() ? `Hi ${escapeHtml(firstName.trim())},` : "Hi there,";
 
@@ -56,6 +59,7 @@ export function eventFeedbackRequestEmailHtml({
       ${bodyParagraph(greeting)}
       ${opening}
       ${privacyLine}
+      ${message?.trim() ? message.trim().split(/\n{2,}/).map((p) => bodyParagraph(escapeHtml(p).replace(/\n/g, "<br />"))).join("") : ""}
       ${note?.trim() ? bodyParagraph(escapeHtml(note.trim())) : ""}
       <p style="margin:24px 0 4px;font-size:12px;color:#5a4e44;line-height:1.6;">If the button doesn't work, copy and paste this link into your browser:</p>
       <p style="margin:0;font-size:11px;color:#7a6e64;word-break:break-all;line-height:1.6;">

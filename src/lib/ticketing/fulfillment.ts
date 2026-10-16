@@ -16,16 +16,12 @@
 // email re-sends (acceptable for retries).
 
 import { resolveEventSender } from "@/lib/email/event-sender";
+import { wordingFor } from "@/lib/email/event-email-wording";
+import { ticketEmailHtml, ticketEmailSubject } from "./ticket-email";
 import { randomBytes } from "node:crypto";
 import { sendViaResend, isEmailConfigured } from "@/lib/email/resend-send";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { recordEmail, markSent, markFailed } from "@/lib/email/ledger";
-import { ticketConfirmationEmailHtml } from "@/lib/email/templates/ticket-confirmation";
-import { theSendTicketEmailHtml } from "@/lib/email/templates/the-send-ticket-confirmation";
-import { campsTicketEmailHtml } from "@/lib/email/templates/ffsa-camps-ticket-confirmation";
-import { preachersTicketEmailHtml } from "@/lib/email/templates/preachers-ticket-confirmation";
-import { wildOnesTicketEmailHtml } from "@/lib/email/templates/wild-ones-ticket-confirmation";
-import { missioTicketEmailHtml } from "@/lib/email/templates/missio-ticket-confirmation";
 import { resolveOrderToCrm } from "./crm-resolution";
 import {
   ticketAnswerDrainer,
@@ -114,7 +110,7 @@ export async function fulfillOrder(
   const { data: order, error: orderErr } = await supabase
     .from("orders")
     .select(
-      "id, status, total_cents, currency, buyer_first_name, buyer_last_name, buyer_email, buyer_contact_id, lines, ticket_answers, waiver_signatures, event_id, events(id, title, start_date, end_date, location, public_slug, brand, sending_identity_id, email_show_event_logo, logo_url)"
+      "id, status, total_cents, currency, buyer_first_name, buyer_last_name, buyer_email, buyer_contact_id, lines, ticket_answers, waiver_signatures, event_id, events(id, title, start_date, end_date, location, public_slug, brand, sending_identity_id, email_show_event_logo, logo_url, email_wording)"
     )
     .eq("id", orderId)
     .maybeSingle();
@@ -265,18 +261,13 @@ export async function fulfillOrder(
     siteUrl,
     headerLogoUrl: sender.headerLogoUrl,
   };
-  const subject =
-    brand === "the_send"
-      ? `You're in — ${order.events.title} →`
-      : brand === "ffsa_camps"
-        ? `you're in 🤞 — ${order.events.title}`
-        : brand === "preachers"
-          ? `You're in — ${order.events.title} ⚡`
-          : brand === "wild_ones"
-            ? `You're in — ${order.events.title} 🔥`
-            : brand === "missio"
-              ? `You're in — ${order.events.title} ✝`
-              : `Your tickets for ${order.events.title}`;
+  // The event's own subject / message for this email (migration 242).
+  const wording = wordingFor(order.events.email_wording, "ticket_confirmation", {
+    firstName: order.buyer_first_name,
+    eventTitle: order.events.title,
+    defaultSubject: ticketEmailSubject(brand, order.events.title),
+  });
+  const subject = wording.subject;
 
   // Record the send in the email ledger (migration 141) BEFORE we send,
   // so a confirmation email can never again vanish without a trace. The
@@ -304,18 +295,7 @@ export async function fulfillOrder(
     replyTo,
     to: order.buyer_email,
     subject,
-    html:
-      brand === "the_send"
-        ? theSendTicketEmailHtml(emailArgs)
-        : brand === "ffsa_camps"
-          ? campsTicketEmailHtml(emailArgs)
-          : brand === "preachers"
-            ? preachersTicketEmailHtml(emailArgs)
-            : brand === "wild_ones"
-              ? wildOnesTicketEmailHtml(emailArgs)
-              : brand === "missio"
-                ? missioTicketEmailHtml(emailArgs)
-                : ticketConfirmationEmailHtml(emailArgs),
+    html: ticketEmailHtml(brand, { ...emailArgs, message: wording.message }),
     category: "ticket_confirmation",
   });
   if (sendResult.error) {

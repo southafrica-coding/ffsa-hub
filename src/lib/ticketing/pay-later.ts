@@ -24,6 +24,7 @@ import { sendSchoolInvoiceEmail, type StoredTemplate } from "@/services/invoice-
 import { settlePaidOrder } from "./settle";
 import { resolveEventBrand } from "./fulfillment";
 import { resolveEventSender, type EventEmailEvent } from "@/lib/email/event-sender";
+import { wordingFor } from "@/lib/email/event-email-wording";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -32,7 +33,7 @@ import { xeroRegionForOrder, invoiceDueDate } from "./pay-later-rules";
 
 type OrderLine = { ticket_type_id: string; qty: number; per_ticket_cents: number };
 
-async function defaultTemplate(supabase: AdminClient, region: XeroRegion): Promise<StoredTemplate | null> {
+export async function defaultTemplate(supabase: AdminClient, region: XeroRegion): Promise<StoredTemplate | null> {
   // Not in the generated types yet (migration 237).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data } = await (supabase as any)
@@ -51,7 +52,7 @@ export async function emailOrderInvoice(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const { data: order } = await supabase
     .from("orders")
-    .select("id, status, buyer_email, buyer_first_name, buyer_last_name, xero_invoice_id, xero_invoice_number, xero_region, events(title, brand, public_slug, sending_identity_id, email_show_event_logo, logo_url)")
+    .select("id, status, buyer_email, buyer_first_name, buyer_last_name, xero_invoice_id, xero_invoice_number, xero_region, events(title, brand, public_slug, sending_identity_id, email_show_event_logo, logo_url, email_wording)")
     .eq("id", orderId)
     .maybeSingle();
   if (!order?.xero_invoice_id || !order.xero_region) return { ok: false, error: "This order has no Xero invoice." };
@@ -74,6 +75,17 @@ export async function emailOrderInvoice(
     firstName: order.buyer_first_name || "there",
     fullName: `${order.buyer_first_name} ${order.buyer_last_name}`.trim(),
     ...(sender ? { sender: { name: sender.fromName, email: sender.fromEmail }, headerLogoUrl: sender.headerLogoUrl } : {}),
+    // The event's own subject / message (migration 242); none = the template's.
+    wording: ev
+      ? (() => {
+          const w = wordingFor((ev as { email_wording?: unknown }).email_wording, "pay_later_invoice", {
+            firstName: order.buyer_first_name,
+            eventTitle,
+            defaultSubject: "",
+          });
+          return { subject: w.subject || null, message: w.message };
+        })()
+      : undefined,
     ledger: {
       category: "event_invoice",
       reason: `Ticket invoice ${order.xero_invoice_number ?? ""} for ${eventTitle}`.replace(/\s+/g, " "),

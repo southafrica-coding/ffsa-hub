@@ -5,6 +5,7 @@ import { getAuthedUser, canManageEvents } from "@/lib/api-auth";
 import { createAuditLog } from "@/services/audit";
 import { resolveEventBrand } from "@/lib/ticketing/fulfillment";
 import { resolveEventSender } from "@/lib/email/event-sender";
+import { EVENT_EMAILS, cleanWording, type EventEmailKey } from "@/lib/email/event-email-wording";
 import {
   VERIFIED_SENDING_DOMAINS,
   createSendingIdentity,
@@ -45,7 +46,7 @@ async function guard(eventId: string) {
   const admin: Admin = createAdminClient();
   const { data: event } = await admin
     .from("events")
-    .select("id, title, brand, public_slug, logo_url, sending_identity_id, email_show_event_logo")
+    .select("id, title, brand, public_slug, logo_url, sending_identity_id, email_show_event_logo, email_wording")
     .eq("id", eventId)
     .maybeSingle();
   if (!event) return { error: NextResponse.json({ error: "Event not found" }, { status: 404 }) };
@@ -106,6 +107,7 @@ export async function GET(_req: Request, context: { params: Promise<{ id: string
       logo_url: event.logo_url,
       email_show_event_logo: event.email_show_event_logo,
       sending_identity_id: event.sending_identity_id,
+      email_wording: cleanWording(event.email_wording),
     },
     brand_sender: brandIdentity ?? {
       id: null,
@@ -134,6 +136,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const b = (await request.json().catch(() => ({}))) as {
     sending_identity_id?: string | null;
     email_show_event_logo?: boolean;
+    email_wording?: unknown;
   };
   const patch: Record<string, unknown> = {};
   if (b.sending_identity_id !== undefined) {
@@ -149,6 +152,19 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     patch.sending_identity_id = b.sending_identity_id;
   }
   if (typeof b.email_show_event_logo === "boolean") patch.email_show_event_logo = b.email_show_event_logo;
+  // One email's wording at a time: { email_wording: { <key>: { subject, message } } }
+  // merges into what's stored; an empty subject + message resets that email.
+  if (b.email_wording && typeof b.email_wording === "object") {
+    const { data: cur } = await admin.from("events").select("email_wording").eq("id", id).maybeSingle();
+    const merged: Record<string, unknown> = { ...cleanWording(cur?.email_wording) };
+    for (const k of Object.keys(b.email_wording as object)) {
+      if (!(k in EVENT_EMAILS)) continue;
+      const one = cleanWording({ [k]: (b.email_wording as Record<string, unknown>)[k] })[k as EventEmailKey];
+      if (one) merged[k] = one;
+      else delete merged[k];
+    }
+    patch.email_wording = merged;
+  }
   if (Object.keys(patch).length === 0) return NextResponse.json({ ok: true });
 
   const { error } = await admin.from("events").update(patch).eq("id", id);

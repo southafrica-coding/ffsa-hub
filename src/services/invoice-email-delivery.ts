@@ -71,6 +71,8 @@ export async function sendSchoolInvoiceEmail(
     sender?: { name: string; email: string; replyTo?: string | null };
     /** An event's own logo above the message. */
     headerLogoUrl?: string | null;
+    /** An event's own subject / message for this email (migration 242). */
+    wording?: { subject?: string | null; message?: string | null };
   }
 ): Promise<{ ok: true; messageId: string | null } | { ok: false; error: string }> {
   const inv = await getXeroInvoiceForEmail(supabase, opts.region, opts.invoiceId);
@@ -94,7 +96,9 @@ export async function sendSchoolInvoiceEmail(
     dueDate: inv.dueDate,
     onlineInvoiceUrl: inv.onlineUrl,
     headerLogoUrl: opts.headerLogoUrl ?? null,
+    message: opts.wording?.message ?? null,
   });
+  if (opts.wording?.subject) email.subject = opts.wording.subject;
   if (email.unknownPlaceholders.length) {
     return { ok: false, error: `Template "${opts.template.name}" has unknown placeholders: ${email.unknownPlaceholders.join(", ")}` };
   }

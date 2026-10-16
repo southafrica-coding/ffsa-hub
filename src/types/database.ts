@@ -1826,6 +1826,7 @@ export type Database = {
           pay_later_enabled: boolean
           sending_identity_id: string | null
           email_show_event_logo: boolean
+          email_wording: Json
           pay_later_due_date: string | null
           xero_item_code: string | null
           base_label_id: string | null
@@ -1856,6 +1857,7 @@ export type Database = {
           pay_later_enabled?: boolean
           sending_identity_id?: string | null
           email_show_event_logo?: boolean
+          email_wording?: Json
           pay_later_due_date?: string | null
           xero_item_code?: string | null
           base_label_id?: string | null
@@ -1886,6 +1888,7 @@ export type Database = {
           pay_later_enabled?: boolean
           sending_identity_id?: string | null
           email_show_event_logo?: boolean
+          email_wording?: Json
           pay_later_due_date?: string | null
           xero_item_code?: string | null
           base_label_id?: string | null

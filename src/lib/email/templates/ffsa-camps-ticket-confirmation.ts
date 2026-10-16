@@ -13,6 +13,7 @@
 //   - Critical entry info (QR, code, date, venue, total) stays legible —
 //     the GenZ copy decorates around it, never obscures it.
 
+import { eventMessageHtml } from "../event-email-wording";
 import { eventLogoBlock } from "../event-sender";
 import { CAMPS_COLORS, CAMPS_FONTS, CAMPS_SLOGAN, CAMPS_VISION } from "../ffsa-camps-shell";
 import { formatMoney } from "@/lib/currencies";
@@ -41,6 +42,8 @@ export function campsTicketEmailHtml(opts: {
   siteUrl: string;
   /** The event's own logo, shown first when it asked for one (migration 241). */
   headerLogoUrl?: string | null;
+  /** The event's own message, between the opening and the tickets (migration 242). */
+  message?: string | null;
   /** ISO 4217 code from orders.currency. */
   currency: string;
 }): string {
@@ -181,6 +184,7 @@ export function campsTicketEmailHtml(opts: {
 
         <tr><td style="background:${CREAM};height:24px;line-height:24px;font-size:0;">&nbsp;</td></tr>
 
+        ${opts.message ? `<tr><td style="background:${CREAM};padding:0 28px 20px 28px;">${eventMessageHtml(opts.message, { color: INK, font: BODY })}</td></tr>` : ""}
         <!-- Tickets -->
         <tr>
           <td style="background:${CREAM};padding:0 28px;">
