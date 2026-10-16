@@ -1,6 +1,8 @@
 export const dynamic = "force-dynamic";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { isFinanceStaff } from "@/lib/slack/assistant/outreach";
 import {
   getOutreachTeamById,
   getTeamMembers,
@@ -35,6 +37,17 @@ export default async function OutreachTeamDetailPage({
     );
   }
 
+  // People's names. The users table only lets admins read everyone, so a
+  // finance admin managing a team saw nobody to add (and blank names for
+  // existing members). Finance staff get names + emails via the service
+  // role — nothing else about anyone; everyone else reads through RLS.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const admin = createAdminClient();
+  const staff = user ? await isFinanceStaff(admin, user.id) : false;
+  const people = staff ? admin : supabase;
+
   const [
     { data: members },
     { data: budgets },
@@ -45,7 +58,7 @@ export default async function OutreachTeamDetailPage({
     { data: cashBatches },
     { data: closeout },
   ] = await Promise.all([
-    getTeamMembers(supabase, teamId),
+    getTeamMembers(people, teamId),
     getTeamBudgets(supabase, teamId),
     getTeamBudgetLines(supabase, teamId),
     getBudgetCategories(supabase),
@@ -57,7 +70,7 @@ export default async function OutreachTeamDetailPage({
 
   // Get all users for member assignment + receipt counts per expense
   const [{ data: allUsers }, { data: receiptRows }] = await Promise.all([
-    supabase
+    people
       .from("users")
       .select("id, first_name, last_name, preferred_name, email")
       .eq("is_active", true)

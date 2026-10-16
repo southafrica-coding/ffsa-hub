@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   Table,
   TableBody,
@@ -71,7 +72,7 @@ type Member = {
     last_name: string | null;
     preferred_name: string | null;
     email: string | null;
-  };
+  } | null;
 };
 
 type TeamBudget = {
@@ -425,7 +426,8 @@ function MembersTab({
   const memberUserIds = new Set(members.map((m) => m.user_id));
   const availableUsers = allUsers.filter((u) => !memberUserIds.has(u.id));
 
-  function userName(u: { first_name: string | null; last_name: string | null; preferred_name: string | null; email: string | null }) {
+  function userName(u: { first_name: string | null; last_name: string | null; preferred_name: string | null; email: string | null } | null) {
+    if (!u) return "Unknown";
     if (u.first_name) {
       return `${u.first_name} ${u.last_name ?? ""}`.trim();
     }
@@ -503,19 +505,21 @@ function MembersTab({
             </DialogHeader>
             <form onSubmit={handleAddMember} className="space-y-4">
               <div>
-                <Label>User</Label>
-                <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a user..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableUsers.map((u) => (
-                      <SelectItem key={u.id} value={u.id}>
-                        {userName(u)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>Person</Label>
+                <SearchableSelect
+                  value={selectedUserId}
+                  onChange={setSelectedUserId}
+                  placeholder={`Choose from ${availableUsers.length} people…`}
+                  options={[...availableUsers]
+                    .sort((a, b) => userName(a).localeCompare(userName(b)))
+                    .map((u) => ({
+                      value: u.id,
+                      label: u.email ? `${userName(u)} — ${u.email}` : userName(u),
+                    }))}
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Click the list and start typing a name to jump to it.
+                </p>
               </div>
               <div>
                 <Label>Role</Label>
@@ -567,7 +571,7 @@ function MembersTab({
                     {userName(m.users)}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {m.users.email ?? "—"}
+                    {m.users?.email ?? "—"}
                   </TableCell>
                   <TableCell>
                     <Select
