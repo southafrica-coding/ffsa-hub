@@ -284,7 +284,7 @@ export const SUPER_ADMIN_ONLY_MODULES = new Set(["records-library", "evangelism"
 
 /**
  * Modules shown by role alone — admins don't get them for free and no
- * permission grant unlocks them. Staff decisions (migration 245) are for the
+ * permission grant unlocks them. Staff decisions (migration 247) are for the
  * Leadership Team only, admin or not.
  */
 export const ROLE_ONLY_MODULES: Record<string, string> = {

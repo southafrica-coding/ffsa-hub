@@ -10,7 +10,7 @@ import {
 import { Masthead } from "@/components/ffsa";
 
 // Leadership Team's way in to the Leadership Track "accepted as staff?" tab
-// (migration 245). Lists every Leadership Track school — ended and archived
+// (migration 247). Lists every Leadership Track school — ended and archived
 // ones included, since this access never expires — read with the
 // service-role client after the Leadership Team check.
 export default async function StaffDecisionsPage() {

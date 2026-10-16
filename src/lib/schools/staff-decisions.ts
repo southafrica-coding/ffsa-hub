@@ -1,6 +1,6 @@
 import { LEADERSHIP_TRACK_CODES, isLeadershipTrackCode } from "@/lib/schools/leadership-track";
 
-// Leadership Track "accepted as staff?" decisions (migration 245).
+// Leadership Track "accepted as staff?" decisions (migration 247).
 //
 // Every read here uses the service-role client, so callers MUST check
 // isLeadershipTeam() first. That is deliberate: the Leadership Team keeps

@@ -6,7 +6,7 @@ import { canBeDecided, getLeadershipTrackProgram } from "@/lib/schools/staff-dec
 
 // POST /api/schools/staff-decisions — record (or change) whether a Leadership
 // Track student is accepted onto staff. Leadership Team only. A "no" needs a
-// note; migration 245's CHECK enforces the same rule in the database.
+// note; migration 247's CHECK enforces the same rule in the database.
 export async function POST(request: Request) {
   const supabase = await createClient();
   const {

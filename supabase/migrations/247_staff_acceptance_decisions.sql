@@ -1,5 +1,5 @@
 -- ────────────────────────────────────────────────────────────
--- 245 — Leadership Track: "accepted as staff?" decisions
+-- 247 — Leadership Track: "accepted as staff?" decisions
 --
 -- At the end of Leadership Track the Leadership Team decides, per student,
 -- whether they are accepted onto staff. One row per enrolment holds the

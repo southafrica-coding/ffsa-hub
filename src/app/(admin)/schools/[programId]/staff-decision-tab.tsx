@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import type { StaffDecisionRow } from "@/lib/schools/staff-decisions";
 
-// Leadership Track "accepted as staff?" (migration 245). Leadership Team only
+// Leadership Track "accepted as staff?" (migration 247). Leadership Team only
 // — the page decides whether this renders at all; the API re-checks.
 //
 // Recording a "yes" then offers to make the person staff and pick their
