@@ -95,7 +95,7 @@ export async function decideVehicleBooking(
         if (!check.ok) {
           return {
             ok: false,
-            error: `Can't approve — ${d.name} ${check.message.charAt(0).toLowerCase()}${check.message.slice(1)}`,
+            error: `Can't approve — ${d.name}: ${check.message}`,
             status: 409,
             blockedDriver: d.id,
             reason: check.reason,
