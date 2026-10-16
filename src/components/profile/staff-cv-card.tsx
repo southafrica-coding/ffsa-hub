@@ -56,6 +56,8 @@ export function StaffCvCard({
   initialEssenceStatement,
   initialJobDescription,
   initialEntries,
+  parts = "all",
+  categoryOrder,
 }: {
   targetUserId: string;
   viewer: CvViewer;
@@ -66,6 +68,11 @@ export function StaffCvCard({
   initialEssenceStatement: string;
   initialJobDescription: string;
   initialEntries: CvEntry[];
+  // Split the card so a page can put something between the statements and
+  // the entry lists (the profile slots OKRs in there). Default: whole card.
+  parts?: "all" | "statements" | "entries";
+  // Category display order; defaults to CV_ENTRY_CATEGORIES order.
+  categoryOrder?: CvEntryCategory[];
 }) {
   const router = useRouter();
   const [essence, setEssence] = useState(initialEssenceStatement);
@@ -87,6 +94,12 @@ export function StaffCvCard({
   const [draftEndDate, setDraftEndDate] = useState("");
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  const orderedCategories = categoryOrder
+    ? categoryOrder
+        .map((v) => CV_ENTRY_CATEGORIES.find((c) => c.value === v))
+        .filter((c): c is (typeof CV_ENTRY_CATEGORIES)[number] => !!c)
+    : CV_ENTRY_CATEGORIES;
 
   const canEditEssence = viewer.id === targetUserId || viewer.isAdmin;
   const canAddSelf = viewer.id === targetUserId || viewer.isAdmin;
@@ -280,6 +293,8 @@ export function StaffCvCard({
 
   return (
     <div className="space-y-6">
+      {parts !== "entries" && (
+      <>
       <section className="space-y-2 rounded-xl border p-4">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Essence statement
@@ -342,8 +357,10 @@ export function StaffCvCard({
           </p>
         )}
       </section>
+      </>
+      )}
 
-      {CV_ENTRY_CATEGORIES.map((cat) => {
+      {parts !== "statements" && orderedCategories.map((cat) => {
         const rows = entries.filter((e) => e.category === cat.value);
         const isAddingHere = adding?.category === cat.value;
         return (

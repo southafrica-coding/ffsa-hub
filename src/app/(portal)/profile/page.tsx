@@ -6,15 +6,9 @@ import { redirect } from "next/navigation";
 import { ProfileRecords } from "@/components/profile-records";
 import { AvatarUploader } from "@/components/avatar-uploader";
 import { EditableProfileSection } from "@/components/profile/editable-profile-section";
-import {
-  InsuranceHistory,
-  type InsurancePolicyRow,
-} from "@/components/profile/insurance-history";
+import { InsuranceHistory, type InsurancePolicyRow } from "@/components/profile/insurance-history";
 import { currentPolicyId } from "@/lib/users/insurance-policies";
-import {
-  HouseholdMembers,
-  type HouseholdMember,
-} from "@/components/profile/household-members";
+import { HouseholdMembers, type HouseholdMember } from "@/components/profile/household-members";
 import { getHouseholdMembers } from "@/services/household";
 import { HouseholdLinkCard } from "@/components/profile/household-link-card";
 import { SlackLinkCard } from "@/components/profile/slack-link-card";
@@ -23,14 +17,8 @@ import { PassportPhotoCard } from "@/components/profile/passport-photo-card";
 import { NotificationPrefsCard } from "@/components/profile/notification-prefs-card";
 import { getSlackLink } from "@/services/slack-links";
 import { activeBroadcastModules } from "@/lib/slack/broadcast-types";
-import {
-  AgreementsCard,
-  type SignedAgreement,
-} from "@/components/profile/agreements-card";
-import {
-  getConsentRecordsForUser,
-  getConsentAgreementByVersion,
-} from "@/services/consent";
+import { AgreementsCard, type SignedAgreement } from "@/components/profile/agreements-card";
+import { getConsentRecordsForUser, getConsentAgreementByVersion } from "@/services/consent";
 import { PROFILE_SECTIONS } from "@/lib/users/profile-sections";
 import { deriveUserLifecycle } from "@/lib/users/lifecycle";
 import { ProfileIncompleteSummary } from "@/components/profile/incomplete-summary";
@@ -38,8 +26,9 @@ import { excludedProfileFields, applyListOptions } from "@/lib/users/profile-fie
 import { INSURANCE_PROVIDERS } from "@/lib/profile/options";
 import { getAllListOptions, activeSets } from "@/services/list-options";
 import { listActiveMinistries } from "@/services/ministries";
-import { SectionBar, Chip } from "@/components/ffsa";
+import { Chip } from "@/components/ffsa";
 import { StaffCvCard, type CvEntry } from "@/components/profile/staff-cv-card";
+import type { CvEntryCategory } from "@/lib/users/cv-entry-types";
 import { listCvEntries } from "@/services/staff-cv";
 import { callerIsAdmin } from "@/lib/auth/check-ministry-access";
 import { isLeadershipTeam } from "@/lib/auth/check-okr-access";
@@ -47,12 +36,30 @@ import { canEditJobDescription } from "@/lib/auth/check-cv-access";
 import { PersonalOkrs } from "@/components/profile/personal-okrs";
 import { getCurrentCycle, listObjectives } from "@/services/okrs";
 import { listUserMinistries } from "@/services/staff-cv";
+import { ProfileTabs, PROFILE_TABS, type ProfileTab } from "@/components/profile/profile-tabs";
 
-export default async function ProfilePage() {
+export default async function ProfilePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
   const supabase = await createClient();
   const { data: user } = await getCurrentUser(supabase);
 
   if (!user) redirect("/login");
+
+  const { tab: tabParam } = await searchParams;
+  const initialTab: ProfileTab = (PROFILE_TABS as readonly string[]).includes(tabParam ?? "")
+    ? (tabParam as ProfileTab)
+    : "personal";
+
+  // The Work tab (CV + OKRs) is for staff. "Staff" = holds any role beyond
+  // the membership floor — never signup_type, which is NULL for most real
+  // staff. Same test the admin user page uses for departmentEditable.
+  const MEMBERSHIP_ONLY = new Set(["student", "community_member", "self_service"]);
+  const showWorkTab = ((user.user_roles ?? []) as Array<{ roles: { name?: string } | null }>).some(
+    (ur) => !!ur.roles?.name && !MEMBERSHIP_ONLY.has(ur.roles.name)
+  );
 
   const { data: insurancePolicies } = await getInsurancePolicies(supabase, user.id);
   const insuranceRows = (insurancePolicies ?? []) as InsurancePolicyRow[];
@@ -89,22 +96,21 @@ export default async function ProfilePage() {
     .select("muted_modules")
     .eq("user_id", user.id)
     .maybeSingle();
-  const mutedModules =
-    ((prefsRow as { muted_modules: string[] | null } | null)?.muted_modules) ??
-    [];
+  const mutedModules = (prefsRow as { muted_modules: string[] | null } | null)?.muted_modules ?? [];
 
   // Policies this user has personally signed (RLS: own records only). Resolve
   // each record's agreement title from the exact version they accepted; cache
   // lookups so repeat versions aren't re-fetched.
-  const { data: cvEntries } = await listCvEntries(supabase, user.id);
-  const isAdmin = await callerIsAdmin(supabase, user.id);
-  const isLeadership = await isLeadershipTeam(supabase, user.id);
-  const canEditOwnJobDescription = await canEditJobDescription(supabase, user.id, user.id);
+  const { data: cvEntries } = showWorkTab ? await listCvEntries(supabase, user.id) : { data: [] };
+  const isAdmin = showWorkTab && (await callerIsAdmin(supabase, user.id));
+  const isLeadership = showWorkTab && (await isLeadershipTeam(supabase, user.id));
+  const canEditOwnJobDescription =
+    showWorkTab && (await canEditJobDescription(supabase, user.id, user.id));
 
   // Personal OKRs (migration 182's individual scope) — RLS on okr_objectives
   // already decides what comes back, so the caller's own client is correct
   // here, not the admin client.
-  const { data: currentCycle } = await getCurrentCycle(supabase);
+  const { data: currentCycle } = showWorkTab ? await getCurrentCycle(supabase) : { data: null };
   const { data: okrObjectives } = currentCycle
     ? await listObjectives(supabase, {
         cycleId: currentCycle.id,
@@ -112,7 +118,9 @@ export default async function ProfilePage() {
         ownerUserId: user.id,
       })
     : { data: [] };
-  const { data: ownMinistries } = await listUserMinistries(createAdminClient(), user.id);
+  const { data: ownMinistries } = showWorkTab
+    ? await listUserMinistries(createAdminClient(), user.id)
+    : { data: [] };
 
   const { data: consentRows } = await getConsentRecordsForUser(supabase, user.id);
   const titleByVersion = new Map<string, string>();
@@ -139,9 +147,10 @@ export default async function ProfilePage() {
   const sets = activeSets(lists);
   const { data: mins } = await listActiveMinistries(supabase);
   if (mins?.length) {
-    sets.department = mins.map(
-      (m: { slug: string; name: string }) => ({ value: m.slug, label: m.name })
-    );
+    sets.department = mins.map((m: { slug: string; name: string }) => ({
+      value: m.slug,
+      label: m.name,
+    }));
   }
 
   const row = user as Record<string, unknown>;
@@ -163,8 +172,7 @@ export default async function ProfilePage() {
   const pendingInsurance = row.next_health_insurance_provider
     ? {
         provider: String(row.next_health_insurance_provider),
-        policy_number:
-          (row.next_health_insurance_policy_number as string | null) ?? null,
+        policy_number: (row.next_health_insurance_policy_number as string | null) ?? null,
         expiry_date:
           row.next_health_insurance_no_expiry === true
             ? null
@@ -185,26 +193,36 @@ export default async function ProfilePage() {
   // scheme except the free-text "Other" sentinel. Stored VALUES, since that
   // is what the API validates against.
   const eligibleNoExpiryProviders = insuranceListOptions
-    .filter(
-      (o) =>
-        o.value.toLowerCase() !== "none" && o.value.toLowerCase() !== "other"
-    )
+    .filter((o) => o.value.toLowerCase() !== "none" && o.value.toLowerCase() !== "other")
     .map((o) => o.value);
 
   const fullName =
-    [user.first_name, user.last_name]
-      .filter(Boolean)
-      .join(" ") || user.email || "Profile";
+    [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email || "Profile";
 
-  const avatarName =
-    user.first_name ?? user.email ?? "?";
+  // Shared by the two StaffCvCard halves on the Work tab (statements above
+  // the OKRs, entry lists below). Profile order: skills first, training last;
+  // "Other" only when something is filed under it.
+  const cvProps = {
+    targetUserId: user.id,
+    viewer: { id: user.id, isAdmin, isLeadership },
+    canEditJobDescription: canEditOwnJobDescription,
+    initialEssenceStatement: String(row.essence_statement ?? ""),
+    initialJobDescription: String(row.job_description ?? ""),
+    initialEntries: (cvEntries ?? []) as CvEntry[],
+  };
+  const cvCategoryOrder: CvEntryCategory[] = [
+    "skill",
+    "workshop",
+    "involvement",
+    "training",
+    ...(cvProps.initialEntries.some((e) => e.category === "other") ? (["other"] as const) : []),
+  ];
+
+  const avatarName = user.first_name ?? user.email ?? "?";
 
   // Email is auth-managed, so it rides along as a read-only row in the
   // Contact card rather than as an editable field.
-  const readOnlyRowsById: Record<
-    string,
-    { label: string; value: string; hint?: string }[]
-  > = {
+  const readOnlyRowsById: Record<string, { label: string; value: string; hint?: string }[]> = {
     contact: [
       {
         label: "Email",
@@ -220,18 +238,11 @@ export default async function ProfilePage() {
           screen leads with the avatar uploader, which the primitive has no
           slot for. Same rule, same type scale. */}
       <div className="flex items-start gap-4 border-b border-ink bg-white px-5 pb-4 pt-5 md:gap-5 md:px-8 md:pb-5 md:pt-6">
-        <AvatarUploader
-          userId={user.id}
-          initialSrc={user.avatar_url}
-          name={avatarName}
-          size={72}
-        />
+        <AvatarUploader userId={user.id} initialSrc={user.avatar_url} name={avatarName} size={72} />
         <div className="min-w-0 flex-1">
           <div className="masthead-context">My profile</div>
           <h1 className="masthead-title truncate">{fullName}</h1>
-          <div className="mt-2 text-sm text-[color:var(--text-secondary)]">
-            {user.email ?? "—"}
-          </div>
+          <div className="mt-2 text-sm text-[color:var(--text-secondary)]">{user.email ?? "—"}</div>
           {roles.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mt-3">
               {roles.map(
@@ -254,198 +265,212 @@ export default async function ProfilePage() {
 
       <ProfileIncompleteSummary lifecycle={lifecycle} />
 
-      <SectionBar title="Personal information" meta="Everything on file" />
+      <ProfileTabs
+        initialTab={initialTab}
+        personalNeedsAttention={lifecycle.stage === "profile_incomplete"}
+        personal={
+          <>
+            <section className="space-y-3 px-5 py-6 md:px-8 md:py-7">
+              <p className="max-w-2xl text-sm text-[color:var(--text-secondary)]">
+                Use the Edit button on any section to keep it up to date.
+              </p>
+              <div className="grid gap-4 lg:grid-cols-2">
+                {PROFILE_SECTIONS.map((rawSection) => {
+                  // Hide fields that don't apply to this user's signup type
+                  // (province for staff/student/community; department for
+                  // student/community).
+                  const excluded = excludedProfileFields(
+                    row.signup_type as string | null | undefined
+                  );
+                  const section = {
+                    ...rawSection,
+                    fields: applyListOptions(
+                      rawSection.fields.filter((f) => !excluded.has(f.field)),
+                      sets
+                    ),
+                  };
+                  return (
+                    <EditableProfileSection
+                      key={section.id}
+                      section={section}
+                      values={{
+                        ...sectionValues(row, section.fields),
+                        // Not a rendered field — it rides along so the insurance
+                        // card knows the policy is open-ended (and when it was
+                        // last confirmed).
+                        health_insurance_no_expiry: currentInsuranceNoExpiry ? "true" : "",
+                        health_insurance_confirmed_at: String(
+                          row.health_insurance_confirmed_at ?? ""
+                        ).slice(0, 10),
+                      }}
+                      readOnlyRows={readOnlyRowsById[section.id]}
+                      footer={
+                        section.id === "insurance" ? (
+                          <InsuranceHistory
+                            policies={insuranceRows}
+                            currentPolicyId={insuranceCurrentId}
+                            canDelete
+                            manageable
+                            pending={pendingInsurance}
+                            currentExpiry={currentInsuranceExpiry}
+                            currentNoExpiry={currentInsuranceNoExpiry}
+                            providerOptions={insuranceProviderOptions}
+                            eligibleProviders={eligibleNoExpiryProviders}
+                          />
+                        ) : undefined
+                      }
+                    />
+                  );
+                })}
+              </div>
+            </section>
 
-      <section className="space-y-3 px-5 py-6 md:px-8 md:py-7">
-        <p className="max-w-2xl text-sm text-[color:var(--text-secondary)]">
-          Use the Edit button on any section to keep it up to date.
-        </p>
-        <div className="grid gap-4 lg:grid-cols-2">
-          {PROFILE_SECTIONS.map((rawSection) => {
-            // Hide fields that don't apply to this user's signup type
-            // (province for staff/student/community; department for
-            // student/community).
-            const excluded = excludedProfileFields(
-              row.signup_type as string | null | undefined
-            );
-            const section = {
-              ...rawSection,
-              fields: applyListOptions(
-                rawSection.fields.filter((f) => !excluded.has(f.field)),
-                sets
-              ),
-            };
-            return (
-            <EditableProfileSection
-              key={section.id}
-              section={section}
-              values={{
-                ...sectionValues(row, section.fields),
-                // Not a rendered field — it rides along so the insurance
-                // card knows the policy is open-ended (and when it was
-                // last confirmed).
-                health_insurance_no_expiry: currentInsuranceNoExpiry
-                  ? "true"
-                  : "",
-                health_insurance_confirmed_at: String(
-                  row.health_insurance_confirmed_at ?? ""
-                ).slice(0, 10),
-              }}
-              readOnlyRows={readOnlyRowsById[section.id]}
-              footer={
-                section.id === "insurance" ? (
-                  <InsuranceHistory
-                    policies={insuranceRows}
-                    currentPolicyId={insuranceCurrentId}
-                    canDelete
-                    manageable
-                    pending={pendingInsurance}
-                    currentExpiry={currentInsuranceExpiry}
-                    currentNoExpiry={currentInsuranceNoExpiry}
-                    providerOptions={insuranceProviderOptions}
-                    eligibleProviders={eligibleNoExpiryProviders}
-                  />
-                ) : undefined
-              }
-            />
-            );
-          })}
-        </div>
-      </section>
+            <section className="space-y-3 px-5 pb-6 md:px-8 md:pb-7">
+              <div>
+                <p className="page-eyebrow">MY HOUSEHOLD</p>
+                <h2 className="text-xl font-semibold">Family members</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Your spouse and children. For a spouse we just need their name and email; for
+                  children, their passport, visa and health-insurance details. If your spouse has
+                  their own Hub account with that email, you both see and edit the same records
+                  &mdash; only one of you needs to fill the children in.
+                </p>
+              </div>
+              <HouseholdLinkCard linkedAt={(row.household_linked_at ?? null) as string | null} />
+              <div className="rounded-xl border p-4">
+                <HouseholdMembers
+                  initialMembers={householdMembers}
+                  selfDefaults={{
+                    is_international: row.is_international as boolean | null | undefined,
+                    visa_category: row.visa_category as string | null | undefined,
+                    visa_type: row.visa_type as string | null | undefined,
+                    visa_expiry_date: row.visa_expiry_date as string | null | undefined,
+                    health_insurance_provider: row.health_insurance_provider as
+                      string | null | undefined,
+                    health_insurance_policy_number: row.health_insurance_policy_number as
+                      string | null | undefined,
+                    health_insurance_expiry_date: row.health_insurance_expiry_date as
+                      string | null | undefined,
+                    health_insurance_no_expiry: row.health_insurance_no_expiry as
+                      boolean | null | undefined,
+                  }}
+                />
+              </div>
+            </section>
 
-      <section className="space-y-3 px-5 pb-6 md:px-8 md:pb-7">
-        <div>
-          <p className="page-eyebrow">STAFF CV</p>
-          <h2 className="text-xl font-semibold">Your CV</h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            An essence statement, past involvement, training and skills — visible to
-            the Leadership Team and to your ministry leader. Anything added by
-            leadership shows up here too, but only they can change it. Your job
-            description is set by your ministry leader.
-          </p>
-        </div>
-        <StaffCvCard
-          targetUserId={user.id}
-          viewer={{ id: user.id, isAdmin, isLeadership }}
-          canEditJobDescription={canEditOwnJobDescription}
-          initialEssenceStatement={String(row.essence_statement ?? "")}
-          initialJobDescription={String(row.job_description ?? "")}
-          initialEntries={(cvEntries ?? []) as CvEntry[]}
-        />
-      </section>
+            <section className="space-y-3 px-5 pb-6 md:px-8 md:pb-7">
+              <div>
+                <p className="page-eyebrow">DRIVING</p>
+                <h2 className="text-xl font-semibold">Driver&rsquo;s licence &amp; passport</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Add your licence and a photo of your passport page once and every vehicle booking
+                  fills itself in — no re-typing your details or photographing your documents again.
+                  Both are required before you can be added as a driver on a base vehicle.
+                </p>
+              </div>
+              <LicenceCard />
+              <PassportPhotoCard />
+            </section>
+          </>
+        }
+        work={
+          showWorkTab ? (
+            <>
+              <section className="space-y-3 px-5 py-6 md:px-8 md:py-7">
+                <div>
+                  <p className="page-eyebrow">STAFF CV</p>
+                  <h2 className="text-xl font-semibold">About your role</h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Visible to the Leadership Team and to your ministry leader. Your job description
+                    is set by your ministry leader.
+                  </p>
+                </div>
+                <StaffCvCard parts="statements" {...cvProps} />
+              </section>
 
-      <section className="space-y-3 px-5 pb-6 md:px-8 md:pb-7">
-        <div>
-          <p className="page-eyebrow">GOALS</p>
-          <h2 className="text-xl font-semibold">Personal OKRs</h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            Your own objectives for the current cycle — visible to the same
-            people as your CV. You can add and edit your own.
-          </p>
-        </div>
-        <PersonalOkrs
-          targetUserId={user.id}
-          cycle={currentCycle ?? null}
-          canManage={Boolean(currentCycle)}
-          ministries={(ownMinistries ?? []) as { id: string; name: string }[]}
-          initialObjectives={okrObjectives ?? []}
-        />
-      </section>
+              <section className="space-y-3 px-5 pb-6 md:px-8 md:pb-7">
+                <div>
+                  <p className="page-eyebrow">GOALS</p>
+                  <h2 className="text-xl font-semibold">Personal OKRs</h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Your own objectives for the current cycle — visible to the same people as your
+                    CV. You can add and edit your own.
+                  </p>
+                </div>
+                <PersonalOkrs
+                  targetUserId={user.id}
+                  cycle={currentCycle ?? null}
+                  canManage={Boolean(currentCycle)}
+                  ministries={(ownMinistries ?? []) as { id: string; name: string }[]}
+                  initialObjectives={okrObjectives ?? []}
+                />
+              </section>
 
-      <section className="space-y-3 px-5 pb-6 md:px-8 md:pb-7">
-        <div>
-          <p className="page-eyebrow">MY HOUSEHOLD</p>
-          <h2 className="text-xl font-semibold">Family members</h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            Your spouse and children. For a spouse we just need their name and
-            email; for children, their passport, visa and health-insurance
-            details. If your spouse has their own Hub account with that email,
-            you both see and edit the same records &mdash; only one of you needs
-            to fill the children in.
-          </p>
-        </div>
-        <HouseholdLinkCard
-          linkedAt={(row.household_linked_at ?? null) as string | null}
-        />
-        <div className="rounded-xl border p-4">
-          <HouseholdMembers
-            initialMembers={householdMembers}
-            selfDefaults={{
-              is_international: row.is_international as boolean | null | undefined,
-              visa_category: row.visa_category as string | null | undefined,
-              visa_type: row.visa_type as string | null | undefined,
-              visa_expiry_date: row.visa_expiry_date as string | null | undefined,
-              health_insurance_provider: row.health_insurance_provider as string | null | undefined,
-              health_insurance_policy_number: row.health_insurance_policy_number as string | null | undefined,
-              health_insurance_expiry_date: row.health_insurance_expiry_date as string | null | undefined,
-              health_insurance_no_expiry: row.health_insurance_no_expiry as boolean | null | undefined,
-            }}
-          />
-        </div>
-      </section>
-
-      <section className="space-y-3 px-5 pb-6 md:px-8 md:pb-7">
-        <div>
-          <p className="page-eyebrow">NOTIFICATIONS</p>
-          <h2 className="text-xl font-semibold">Slack messages</h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            The Hub messages you directly in Slack when something happens that
-            you need to know about, rather than adding you to another group
-            channel.
-          </p>
-        </div>
-        <SlackLinkCard
-          slackUserId={slackLink.slackUserId}
-          linkedAt={slackLink.linkedAt}
-          source={slackLink.source}
-        />
-        <NotificationPrefsCard
-          modules={broadcastModules}
-          mutedModules={mutedModules}
-          slackConnected={!!slackLink.slackUserId}
-        />
-      </section>
-
-      <section className="space-y-3 px-5 pb-6 md:px-8 md:pb-7">
-        <div>
-          <p className="page-eyebrow">DRIVING</p>
-          <h2 className="text-xl font-semibold">Driver&rsquo;s licence &amp; passport</h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            Add your licence and a photo of your passport page once and every
-            vehicle booking fills itself in — no re-typing your details or
-            photographing your documents again. Both are required before you
-            can be added as a driver on a base vehicle.
-          </p>
-        </div>
-        <LicenceCard />
-        <PassportPhotoCard />
-      </section>
-
-      <section className="space-y-3 px-5 pb-6 md:px-8 md:pb-7">
-        <div>
-          <p className="page-eyebrow">LEGAL</p>
-          <h2 className="text-xl font-semibold">Agreements you&rsquo;ve signed</h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            The policies and agreements you&rsquo;ve accepted. Open any one to
-            read the full text you agreed to, or print / save it as a PDF.
-          </p>
-        </div>
-        <div className="rounded-xl border p-4">
-          <AgreementsCard agreements={signedAgreements} />
-        </div>
-      </section>
-
-      <section className="space-y-3 px-5 pb-6 md:px-8 md:pb-7">
-        <div>
-          <p className="page-eyebrow">RECORDS ON FILE</p>
-          <h2 className="text-xl font-semibold">Your attached history</h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            Past applications, schools attended, payments and documents we
-            have on file for you.
-          </p>
-        </div>
-        <ProfileRecords userId={user.id} canOpenLibrary={false} />
-      </section>
+              <section className="space-y-3 px-5 pb-6 md:px-8 md:pb-7">
+                <div>
+                  <p className="page-eyebrow">STAFF CV</p>
+                  <h2 className="text-xl font-semibold">Skills, training &amp; experience</h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Anything added by leadership shows up here too, but only they can change it.
+                  </p>
+                </div>
+                <StaffCvCard parts="entries" categoryOrder={cvCategoryOrder} {...cvProps} />
+              </section>
+            </>
+          ) : undefined
+        }
+        slack={
+          <>
+            <section className="space-y-3 px-5 py-6 md:px-8 md:py-7">
+              <div>
+                <p className="page-eyebrow">NOTIFICATIONS</p>
+                <h2 className="text-xl font-semibold">Slack messages</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  The Hub messages you directly in Slack when something happens that you need to
+                  know about, rather than adding you to another group channel.
+                </p>
+              </div>
+              <SlackLinkCard
+                slackUserId={slackLink.slackUserId}
+                linkedAt={slackLink.linkedAt}
+                source={slackLink.source}
+              />
+              <NotificationPrefsCard
+                modules={broadcastModules}
+                mutedModules={mutedModules}
+                slackConnected={!!slackLink.slackUserId}
+              />
+            </section>
+          </>
+        }
+        legal={
+          <section className="space-y-3 px-5 py-6 md:px-8 md:py-7">
+            <div>
+              <p className="page-eyebrow">LEGAL</p>
+              <h2 className="text-xl font-semibold">Agreements you&rsquo;ve signed</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                The policies and agreements you&rsquo;ve accepted. Open any one to read the full
+                text you agreed to, or print / save it as a PDF.
+              </p>
+            </div>
+            <div className="rounded-xl border p-4">
+              <AgreementsCard agreements={signedAgreements} />
+            </div>
+          </section>
+        }
+        records={
+          <section className="space-y-3 px-5 py-6 md:px-8 md:py-7">
+            <div>
+              <p className="page-eyebrow">RECORDS ON FILE</p>
+              <h2 className="text-xl font-semibold">Your attached history</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Past applications, schools attended, payments and documents we have on file for you.
+              </p>
+            </div>
+            <ProfileRecords userId={user.id} canOpenLibrary={false} />
+          </section>
+        }
+      />
     </div>
   );
 }
