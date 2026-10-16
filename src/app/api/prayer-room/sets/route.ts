@@ -19,6 +19,15 @@ import {
 } from "@/services/prayer-room";
 import { weeklyOccurrenceDates } from "@/lib/bookings/recurrence";
 import { sendPrayerRoomInvite } from "@/lib/email/send-prayer-room";
+import {
+  checkAltVenue,
+  bookAltVenue,
+  syncAltBookings,
+  altBookingIdsFor,
+  releaseAltBookings,
+  setBookingTitle,
+  type AltVenue,
+} from "@/lib/prayer-room/alt-venue";
 
 type TeamPick = { user_id: string; role: string };
 
@@ -149,6 +158,19 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
+  const altVenueId = (body.alt_venue_id as string) || null;
+
+  // Alternate space: check it's free on every date BEFORE creating anything,
+  // so a clash never leaves sets behind with nowhere to go.
+  async function resolveAltVenue(dates: string[]): Promise<AltVenue | NextResponse | null> {
+    if (!altVenueId || dates.length === 0) return null;
+    const check = await checkAltVenue(admin, altVenueId, dates, start_time, end_time);
+    if (!("venue" in check)) return NextResponse.json({ error: check.error }, { status: 400 });
+    if (check.blocked) {
+      return NextResponse.json({ error: check.error, conflicts: check.conflicts }, { status: 409 });
+    }
+    return check.venue;
+  }
 
   // ── Weekly recurrence ───────────────────────────────────────────────────
   if (recurrence === "weekly") {
@@ -168,6 +190,8 @@ export async function POST(request: Request) {
     if (dates.length === 0) {
       return NextResponse.json({ error: "No dates in that range fall on the chosen day" }, { status: 400 });
     }
+    const altVenue = await resolveAltVenue(dates);
+    if (altVenue instanceof NextResponse) return altVenue;
 
     const keepTeam = body.keep_team !== false; // default true
     const { data: series, error: serr } = await createSeries(supabase, {
@@ -218,6 +242,19 @@ export async function POST(request: Request) {
       });
     }
 
+    const altBooking = altVenue
+      ? await bookAltVenue(admin, {
+          venue: altVenue,
+          sets: created,
+          title: setBookingTitle({ title, theme }),
+          startTime: start_time,
+          endTime: end_time,
+          userId: user.id,
+          ownerId,
+          weekly: { weekday, series_start, series_end },
+        })
+      : null;
+
     // set_date so the caller can move the schedule to the week the series
     // actually starts in — a weekly series beginning on the first matching
     // weekday ON OR AFTER "runs from" often lands in NEXT week, and the wall
@@ -227,6 +264,7 @@ export async function POST(request: Request) {
       set_date: created[0].set_date,
       count: created.length,
       seriesId: series.id,
+      altBooking: altBooking && altVenue ? { venue: altVenue.name, ...altBooking } : null,
     });
   }
 
@@ -235,6 +273,8 @@ export async function POST(request: Request) {
   if (!set_date) {
     return NextResponse.json({ error: "set_date is required" }, { status: 400 });
   }
+  const altVenue = await resolveAltVenue([set_date]);
+  if (altVenue instanceof NextResponse) return altVenue;
 
   const { data: set, error } = await createSet(supabase, {
     owner_id: ownerId,
@@ -260,7 +300,24 @@ export async function POST(request: Request) {
     endTime: end_time,
   });
 
-  return NextResponse.json({ id: set.id, set_date, count: 1 });
+  const altBooking = altVenue
+    ? await bookAltVenue(admin, {
+        venue: altVenue,
+        sets: [set],
+        title: setBookingTitle({ title, theme }),
+        startTime: start_time,
+        endTime: end_time,
+        userId: user.id,
+        ownerId,
+      })
+    : null;
+
+  return NextResponse.json({
+    id: set.id,
+    set_date,
+    count: 1,
+    altBooking: altBooking && altVenue ? { venue: altVenue.name, ...altBooking } : null,
+  });
 }
 
 // PUT — update / complete / cancel a set (RLS: owner or staff).
@@ -295,6 +352,10 @@ export async function PUT(request: Request) {
       scope === "all" ? undefined : todayISO()
     );
     if (result.error) return NextResponse.json({ error: result.error.message }, { status: 403 });
+    await syncAltBookings(createAdminClient(), {
+      seriesId: series_id,
+      fromDate: scope === "all" ? undefined : todayISO(),
+    });
     return NextResponse.json(result.data);
   }
 
@@ -314,6 +375,8 @@ export async function PUT(request: Request) {
   }
 
   if (result.error) return NextResponse.json({ error: result.error.message }, { status: 403 });
+  // Retimed, renamed or cancelled → the alternate-space booking follows.
+  if (action !== "complete") await syncAltBookings(createAdminClient(), { setId: id });
   return NextResponse.json(result.data);
 }
 
@@ -324,6 +387,7 @@ export async function DELETE(request: Request) {
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const params = new URL(request.url).searchParams;
+  const admin = createAdminClient();
 
   // Bulk delete a weekly series. Defaults to the remaining occurrences so
   // clearing a series that is halfway through doesn't erase the sets that
@@ -331,19 +395,22 @@ export async function DELETE(request: Request) {
   const seriesId = params.get("seriesId");
   if (seriesId) {
     const scope = params.get("scope");
-    const { data, error } = await deleteSeriesSets(
-      supabase,
-      seriesId,
-      scope === "all" ? undefined : todayISO()
-    );
+    const fromDate = scope === "all" ? undefined : todayISO();
+    const held = await altBookingIdsFor(admin, { seriesId, fromDate });
+    const { data, error } = await deleteSeriesSets(supabase, seriesId, fromDate);
     if (error) return NextResponse.json({ error: error.message }, { status: 403 });
+    // Only free what was actually deleted — RLS can filter rows silently.
+    const stillHeld = new Set(await altBookingIdsFor(admin, { seriesId, fromDate }));
+    await releaseAltBookings(admin, held.filter((b) => !stillHeld.has(b)));
     return NextResponse.json({ ok: true, ...data });
   }
 
   const id = params.get("id");
   if (!id) return NextResponse.json({ error: "id or seriesId is required" }, { status: 400 });
 
+  const held = await altBookingIdsFor(admin, { setId: id });
   const { error } = await deleteSet(supabase, id);
   if (error) return NextResponse.json({ error: error.message }, { status: 403 });
+  if ((await altBookingIdsFor(admin, { setId: id })).length === 0) await releaseAltBookings(admin, held);
   return NextResponse.json({ ok: true });
 }

@@ -403,10 +403,22 @@ function CreateSetDialog({
   const [team, setTeam] = useState<TeamRow[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [altVenues, setAltVenues] = useState<{ id: string; name: string }[]>([]);
+  const [altVenueId, setAltVenueId] = useState("none");
+
+  // Spaces the set can move to — Music Room comes back first.
+  useEffect(() => {
+    if (!open || altVenues.length > 0) return;
+    fetch("/api/prayer-room/alt-venues")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((v) => setAltVenues(Array.isArray(v) ? v : []))
+      .catch(() => {});
+  }, [open, altVenues.length]);
 
   // Fresh defaults each time the dialog opens.
   useEffect(() => {
     if (!open) return;
+    setAltVenueId("none");
     const base = new Date(defaultDate + "T00:00:00");
     setRecurrence("none");
     setSetDate(defaultDate);
@@ -454,6 +466,7 @@ function CreateSetDialog({
     setBusy(true);
     try {
       const teamPayload = team.map((t) => ({ user_id: t.user_id, role: t.role }));
+      const alt_venue_id = altVenueId === "none" ? null : altVenueId;
       const body =
         recurrence === "weekly"
           ? {
@@ -467,6 +480,7 @@ function CreateSetDialog({
               series_end: seriesEnd,
               keep_team: keepTeam,
               team: teamPayload,
+              alt_venue_id,
             }
           : {
               recurrence: "none",
@@ -476,6 +490,7 @@ function CreateSetDialog({
               title: title || null,
               theme: theme || null,
               team: teamPayload,
+              alt_venue_id,
             };
       const res = await fetch("/api/prayer-room/sets", {
         method: "POST",
@@ -485,6 +500,16 @@ function CreateSetDialog({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to create set");
       toast.success(data.count > 1 ? `Created ${data.count} weekly sets` : "Set created — add your roster");
+      const alt = data.altBooking as { venue: string; count: number; pending: boolean; error?: string } | null;
+      if (alt?.error) {
+        toast.error(`The set was created, but ${alt.venue} couldn't be booked: ${alt.error}`);
+      } else if (alt) {
+        toast.success(
+          alt.pending
+            ? `${alt.venue} requested in Space Bookings — waiting on approval`
+            : `${alt.venue} booked in Space Bookings`
+        );
+      }
       onCreated(data.id, data.set_date ?? null);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to create set");
@@ -595,6 +620,31 @@ function CreateSetDialog({
               <Label className="text-xs">Theme / focus (optional)</Label>
               <Input value={theme} onChange={(e) => setTheme(e.target.value)} />
             </div>
+          </div>
+
+          {/* Alternate space — when the prayer room isn't available */}
+          <div className="space-y-1">
+            <Label className="text-xs">Alternate space (if needed)</Label>
+            <Select value={altVenueId} onValueChange={setAltVenueId}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None — in the prayer room</SelectItem>
+                {altVenues.map((v) => (
+                  <SelectItem key={v.id} value={v.id}>
+                    {v.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {altVenueId !== "none" && (
+              <p className="text-[11px] text-muted-foreground">
+                {altVenues.find((v) => v.id === altVenueId)?.name ?? "This space"} will be booked in Space Bookings
+                as &ldquo;{title.trim() || theme.trim() || "Devo set"}&rdquo;
+                {recurrence === "weekly" ? " for every week of the series" : ""}.
+              </p>
+            )}
           </div>
 
           {/* Keep-team choice (weekly only) */}
