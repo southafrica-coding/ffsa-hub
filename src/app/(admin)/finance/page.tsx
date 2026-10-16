@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireModuleAccess } from "@/lib/require-permission";
-import { Globe, Wallet, CreditCard, Home } from "lucide-react";
+import { Globe, Wallet, CreditCard, Home, HeartHandshake } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Masthead, SectionBar, StatusPill } from "@/components/ffsa";
 import { XeroConnection } from "./xero-connection";
@@ -35,6 +35,13 @@ const FINANCE_MODULES = [
     description: "Tiered school fee tracking, student payments, and outstanding balances.",
     href: "/finance/school-fees",
     icon: Wallet,
+    ready: true,
+  },
+  {
+    title: "Donor Statements",
+    description: "Year-end giving statements for US donors to FF SA USA, INC: import from Xero, review, send.",
+    href: "/finance/donor-statements",
+    icon: HeartHandshake,
     ready: true,
   },
 ];

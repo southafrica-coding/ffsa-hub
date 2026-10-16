@@ -1406,3 +1406,130 @@ export async function createXeroEventItem(
     };
   }
 }
+
+// ────────────────────────────────────────────────────────────
+// DONATIONS FOR DONOR STATEMENTS (US org, read-only)
+// ────────────────────────────────────────────────────────────
+// The same data as the "Receivable Invoice Detail" report finance used to
+// export by hand: every invoice line and credit-note line dated in the tax
+// year, Approved or Paid, with amounts converted to USD. The import rules
+// (src/lib/finance/donor-statements.ts) decide what counts as a gift.
+// Contact emails come back too, so nobody pastes an Emails tab.
+
+export type XeroDonationLine = {
+  invoiceNumber: string;
+  invoiceDate: string | null;
+  contactName: string;
+  contactId: string | null;
+  itemCode: string | null;
+  description: string | null;
+  accountCode: string | null;
+  quantity: number;
+  unitPriceUsd: number;
+  invoiceTotalUsd: number;
+  currency: string;
+  status: string;
+};
+
+export async function listXeroDonationLines(
+  supabase: Client,
+  taxYear: number
+): Promise<{
+  lines: XeroDonationLine[];
+  contactEmails: Map<string, string>; // ContactID → email
+  tenantName: string | null;
+  error: string | null;
+}> {
+  const empty = { lines: [], contactEmails: new Map<string, string>(), tenantName: null };
+  const auth = await getValidAccessToken(supabase, "us");
+  if (!auth) {
+    return {
+      ...empty,
+      error: "The US Xero organisation isn't connected, or its authorisation has lapsed. Reconnect it in Finance → Xero.",
+    };
+  }
+  const tokens = await getStoredTokens(supabase, "us");
+  const range = `Date>=DateTime(${taxYear},01,01) AND Date<=DateTime(${taxYear},12,31)`;
+  const lines: XeroDonationLine[] = [];
+  const contactIds = new Set<string>();
+
+  // Xero's CurrencyRate is units of the document currency per 1 USD (the US
+  // org's base currency); 1 for USD documents.
+  const toUsd = (amount: number, rate: unknown) => {
+    const r = Number(rate) || 1;
+    return Math.round((amount / r) * 100) / 100;
+  };
+
+  type Doc = Record<string, unknown>;
+  const collect = (doc: Doc, number: string, sign: 1 | -1) => {
+    const contact = (doc.Contact as { ContactID?: string; Name?: string } | undefined) ?? {};
+    if (contact.ContactID) contactIds.add(contact.ContactID);
+    for (const l of (doc.LineItems as Doc[] | undefined) ?? []) {
+      lines.push({
+        invoiceNumber: number,
+        invoiceDate: xeroDateToYmd(doc.Date),
+        contactName: contact.Name ?? "",
+        contactId: contact.ContactID ?? null,
+        itemCode: (l.ItemCode as string) || null,
+        description: (l.Description as string) || null,
+        accountCode: (l.AccountCode as string) || null,
+        quantity: sign * Number(l.Quantity ?? 1),
+        unitPriceUsd: toUsd(Number(l.UnitAmount ?? 0), doc.CurrencyRate),
+        invoiceTotalUsd: sign * toUsd(Number(doc.Total ?? 0), doc.CurrencyRate),
+        currency: (doc.CurrencyCode as string) || "USD",
+        status: (doc.Status as string) || "",
+      });
+    }
+  };
+
+  try {
+    for (let page = 1; page < 100; page++) {
+      const where = encodeURIComponent(`Type=="ACCREC" AND ${range}`);
+      const json = (await xeroGet(
+        auth.accessToken,
+        auth.tenantId,
+        `Invoices?where=${where}&Statuses=AUTHORISED,PAID&page=${page}`
+      )) as { Invoices?: Doc[] };
+      const list = json.Invoices ?? [];
+      for (const inv of list) collect(inv, (inv.InvoiceNumber as string) || String(inv.InvoiceID), 1);
+      if (list.length < 100) break;
+    }
+    // Credit notes reverse earlier gifts; they come in as negative quantities,
+    // the same way the report shows them.
+    for (let page = 1; page < 100; page++) {
+      const where = encodeURIComponent(`Type=="ACCRECCREDIT" AND ${range} AND (Status=="AUTHORISED" OR Status=="PAID")`);
+      const json = (await xeroGet(
+        auth.accessToken,
+        auth.tenantId,
+        `CreditNotes?where=${where}&page=${page}`
+      )) as { CreditNotes?: Doc[] };
+      const list = json.CreditNotes ?? [];
+      for (const cn of list) {
+        const n = (cn.CreditNoteNumber as string) || String(cn.CreditNoteID);
+        collect({ ...cn, Status: "PAID" }, /^CN-/i.test(n) ? n : `CN-${n}`, -1);
+      }
+      if (list.length < 100) break;
+    }
+
+    const contactEmails = new Map<string, string>();
+    const ids = [...contactIds];
+    for (let i = 0; i < ids.length; i += 50) {
+      const json = (await xeroGet(
+        auth.accessToken,
+        auth.tenantId,
+        `Contacts?IDs=${ids.slice(i, i + 50).join(",")}&summaryOnly=true`
+      )) as { Contacts?: Array<{ ContactID: string; EmailAddress?: string }> };
+      for (const c of json.Contacts ?? []) {
+        const email = (c.EmailAddress ?? "").trim();
+        if (email) contactEmails.set(c.ContactID, email);
+      }
+    }
+    return { lines, contactEmails, tenantName: tokens?.tenant_name ?? null, error: null };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("401") || msg.includes("403")) {
+      return { ...empty, error: "Xero refused the request — the US authorisation has expired. Reconnect Xero in Finance → Xero." };
+    }
+    return { ...empty, error: msg };
+  }
+}
