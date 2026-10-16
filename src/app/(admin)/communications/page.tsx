@@ -60,6 +60,7 @@ export default async function CommunicationsPage() {
             <SubNav href="/communications/automations">Automations</SubNav>
             <SubNav href="/communications/labels">Labels</SubNav>
             <SubNav href="/communications/identities">Identities</SubNav>
+            <SubNav href="/communications/domains">Sending domains</SubNav>
             <SubNav href="/communications/brand">Brand kits</SubNav>
           </>
         }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkDomain } from "@/lib/email/dns-checks";
+import { syncDomainsFromResend } from "@/services/sending-domains";
 
 export const maxDuration = 60;
 // node:dns is not available on the edge runtime.
@@ -31,6 +32,10 @@ export async function GET(request: Request) {
   // sending_domains is not in the generated types yet.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = createAdminClient() as any;
+
+  // Resend's own verdict first (migration 243) — it's what decides whether a
+  // domain may send, and it adds any domain added straight in Resend.
+  const resend = await syncDomainsFromResend(db);
 
   const { data: domains, error } = await db
     .from("sending_domains")
@@ -75,5 +80,5 @@ export async function GET(request: Request) {
     });
   }
 
-  return NextResponse.json({ checked: results.length, results });
+  return NextResponse.json({ checked: results.length, results, resendError: resend.error });
 }

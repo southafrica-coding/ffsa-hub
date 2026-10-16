@@ -6,8 +6,8 @@ import { createAuditLog } from "@/services/audit";
 import { resolveEventBrand } from "@/lib/ticketing/fulfillment";
 import { resolveEventSender } from "@/lib/email/event-sender";
 import { EVENT_EMAILS, cleanWording, type EventEmailKey } from "@/lib/email/event-email-wording";
+import { getVerifiedSendingDomains } from "@/services/sending-domains";
 import {
-  VERIFIED_SENDING_DOMAINS,
   createSendingIdentity,
   ensureUniqueSlug,
   forwardListError,
@@ -62,12 +62,15 @@ async function eventsUsing(admin: Admin, identityId: string) {
   return count ?? 0;
 }
 
-function fromAddress(b: { from_local?: unknown; from_domain?: unknown }): string | { error: string } {
+function fromAddress(
+  b: { from_local?: unknown; from_domain?: unknown },
+  verified: string[]
+): string | { error: string } {
   const local = typeof b.from_local === "string" ? b.from_local.trim().toLowerCase() : "";
   const domain = typeof b.from_domain === "string" ? b.from_domain.trim().toLowerCase() : "";
   if (!/^[a-z0-9][a-z0-9._+-]{0,63}$/.test(local)) return { error: "The From address needs a name before the @ (letters, numbers, dots or dashes)." };
-  if (!VERIFIED_SENDING_DOMAINS.includes(domain)) {
-    return { error: `Send from a verified domain: ${VERIFIED_SENDING_DOMAINS.join(" or ")}.` };
+  if (!verified.includes(domain)) {
+    return { error: `Send from a verified domain: ${verified.join(", ")}. Add others under Communications → Sending domains.` };
   }
   return `${local}@${domain}`;
 }
@@ -122,7 +125,8 @@ export async function GET(_req: Request, context: { params: Promise<{ id: string
     current_editable:
       !!current && current.id !== brandSender.identityId && (await eventsUsing(admin, current.id)) <= 1,
     identities: identities ?? [],
-    domains: VERIFIED_SENDING_DOMAINS,
+    // Verified in Resend (Communications → Sending domains, migration 243).
+    domains: await getVerifiedSendingDomains(admin),
     default_forward: DEFAULT_FORWARD,
     hub_inbox_domain: HUB_INBOX_DOMAIN,
   });
@@ -182,7 +186,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
   const fromName = typeof b.from_name === "string" ? b.from_name.trim().slice(0, 80) : "";
   if (!fromName) return NextResponse.json({ error: "Give the sender a name." }, { status: 400 });
-  const from = fromAddress(b);
+  const from = fromAddress(b, await getVerifiedSendingDomains(admin));
   if (typeof from !== "string") return NextResponse.json(from, { status: 400 });
   const forward = forwardList(b.forward_to);
   if (!Array.isArray(forward)) return NextResponse.json(forward, { status: 400 });
@@ -235,7 +239,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
   const b = await request.json().catch(() => ({}));
   const fromName = typeof b.from_name === "string" ? b.from_name.trim().slice(0, 80) : "";
   if (!fromName) return NextResponse.json({ error: "Give the sender a name." }, { status: 400 });
-  const from = fromAddress(b);
+  const from = fromAddress(b, await getVerifiedSendingDomains(admin));
   if (typeof from !== "string") return NextResponse.json(from, { status: 400 });
   const forward = forwardList(b.forward_to);
   if (!Array.isArray(forward)) return NextResponse.json(forward, { status: 400 });

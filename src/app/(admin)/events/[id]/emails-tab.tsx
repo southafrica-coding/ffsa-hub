@@ -233,7 +233,11 @@ export function EmailsTab({ eventId }: { eventId: string }) {
                     </select>
                   </div>
                   <p className="mt-1 text-[11px] text-muted-foreground">
-                    Only verified sending domains are listed. People reply to the Hub address below, not this one.
+                    Only domains verified for sending are listed —{" "}
+                    <Link className="underline" href="/communications/domains">
+                      add another
+                    </Link>
+                    . People reply to the Hub address below, not this one.
                   </p>
                 </div>
                 <label className="block">
