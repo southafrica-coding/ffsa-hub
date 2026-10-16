@@ -54,6 +54,7 @@ import { getInsuranceConfirmation } from "@/lib/users/profile-fields";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { deriveJobTitle, type MinistryRole } from "@/lib/users/derive-title";
 import { ConvertToCommunityDialog } from "./convert-to-community-dialog";
+import { SetDepartmentDialog } from "./set-department-dialog";
 import { formatInviteDate } from "@/lib/schools/setup-invite-schedule";
 
 type UserRow = {
@@ -239,6 +240,7 @@ export function UsersTable({
   users,
   currentUserId,
   departmentLabels,
+  departmentOptions: staffDepartmentOptions = [],
   ministryRoleByUser,
   schoolByUser,
   awaitingArrivalByUser,
@@ -249,6 +251,8 @@ export function UsersTable({
   // DB-backed department value→label map (from the editable Settings list).
   // Falls back to the built-in defaults for any value not present.
   departmentLabels?: Record<string, string>;
+  // Active main ministries a staff member can be given as their department.
+  departmentOptions?: { value: string; label: string }[];
   // user_id → strongest ministry role, for the derived job title.
   ministryRoleByUser?: Record<string, MinistryRole>;
   // user_id → current school name, for a student's derived job title.
@@ -266,6 +270,12 @@ export function UsersTable({
   const [converting, setConverting] = useState<{
     userId: string;
     name: string;
+  } | null>(null);
+  // Someone just made Staff — prompt for their department straight away.
+  const [pickingDepartment, setPickingDepartment] = useState<{
+    userId: string;
+    name: string;
+    department: string | null;
   } | null>(null);
 
   async function handleSetMembership(userId: string, role: string) {
@@ -297,7 +307,17 @@ export function UsersTable({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: userId, role }),
       });
-      if (res.ok) router.refresh();
+      if (res.ok) {
+        const user = users.find((u) => u.id === userId);
+        if (role === "staff" && user && currentMembership(user) !== "staff") {
+          setPickingDepartment({
+            userId,
+            name: displayName(user),
+            department: user.department,
+          });
+        }
+        router.refresh();
+      }
     } finally {
       setBusy(null);
     }
@@ -980,6 +1000,18 @@ export function UsersTable({
           open
           onOpenChange={(o) => {
             if (!o) setConverting(null);
+          }}
+        />
+      )}
+      {pickingDepartment && (
+        <SetDepartmentDialog
+          userId={pickingDepartment.userId}
+          personName={pickingDepartment.name}
+          currentDepartment={pickingDepartment.department}
+          options={staffDepartmentOptions}
+          open
+          onOpenChange={(o) => {
+            if (!o) setPickingDepartment(null);
           }}
         />
       )}

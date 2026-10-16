@@ -37,6 +37,23 @@ export default async function UsersPage() {
   for (const m of (ministries ?? []) as Array<{ slug: string; name: string }>) {
     departmentLabels[m.slug] = m.name;
   }
+  // What a newly-made staff member can be given as their department: active
+  // MAIN ministries only, same rule as the profile picker and the PATCH API.
+  const departmentOptions = (
+    (ministries ?? []) as Array<{
+      slug: string;
+      name: string;
+      is_active: boolean;
+      ministry_type: string | null;
+      sort_order: number | null;
+    }>
+  )
+    .filter((m) => m.is_active && m.ministry_type === "main")
+    .sort(
+      (a, b) =>
+        (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name)
+    )
+    .map((m) => ({ value: m.slug, label: m.name }));
 
   // Ministry role + school lookups drive the derived job title. Read via the
   // service-role client — this is a cross-user admin report, and the ministry /
@@ -203,6 +220,7 @@ export default async function UsersPage() {
         users={usersWithSignIn}
         currentUserId={authUser?.id ?? ""}
         departmentLabels={departmentLabels}
+        departmentOptions={departmentOptions}
         ministryRoleByUser={ministryRoleByUser}
         schoolByUser={schoolByUser}
         awaitingArrivalByUser={awaitingArrivalByUser}
