@@ -1,5 +1,5 @@
 -- ────────────────────────────────────────────────────────────
--- 243 — Receipts from Slack
+-- 244 — Receipts from Slack
 --
 -- A team sends a receipt photo to the Outreach Finance bot. The original
 -- file is stored straight away, Claude reads it, and the bot posts a card
