@@ -452,13 +452,19 @@ export function buildStatements(input: BuildInput): StatementBuild {
   const kept: SourceLine[] = [];
   for (const line of input.lines) {
     const desc = line.description ?? "";
+    const isCredit = isCreditNoteNumber(line.invoiceNumber) || line.quantity < 0;
     let reason: string | null = null;
     if (line.itemCode && excludedItems.has(line.itemCode.trim().toUpperCase())) {
       reason = `Not a donation (item ${line.itemCode})`;
     } else if (rules.excludedLinePhrases.some((p) => containsPhrase(desc, p))) {
       reason = "Not a donation (fee / pass-through line)";
-    } else if (line.accountCode && accounts.size > 0 && !accounts.has(line.accountCode.trim())) {
-      reason = `Account ${line.accountCode} isn't a donation account`;
+    } else if (
+      line.accountCode && accounts.size > 0 && !accounts.has(line.accountCode.trim()) &&
+      // A credit note reversing a gift posts elsewhere (2850 — the gift moved
+      // to a student's DTS) but must still be listed.
+      !(isCredit && /donation/i.test(desc))
+    ) {
+      reason = isCredit ? "Credit note not for a donation" : `Account ${line.accountCode} isn't a donation account`;
     } else if (line.invoiceDate && !line.invoiceDate.startsWith(yearPrefix)) {
       reason = `Dated ${formatUsDate(line.invoiceDate)} — outside ${input.taxYear}`;
     } else if (line.currency.toUpperCase() !== "USD" && !options.includeNonUsd) {
@@ -524,7 +530,9 @@ export function buildStatements(input: BuildInput): StatementBuild {
   };
 
   for (const p of pending) {
-    if (p.gift.isCreditNote) creditPending.push(p);
+    if (p.gift.isCreditNote) {
+      if (p.gift.grossCents !== 0) creditPending.push(p); // a $0 credit note reverses nothing
+    }
     else if (!p.paid) unpaidGifts.push({ ...p.gift, contactName: cleanName(p.contactName) });
     else ensureDonor(p.contactName).gifts.push(p.gift);
   }
@@ -655,15 +663,30 @@ const tokens = (name: string) => donorKey(name).split(" ").filter(Boolean);
  * named person appears in the donor's name. Only a single clear match counts.
  */
 export function matchCreditNoteDonor(description: string, donors: Pick<Donor, "key" | "name">[]): Pick<Donor, "key" | "name"> | null {
-  const named = description.split(/\s[-–]\s/).slice(1).join(" ").trim();
-  if (!named) return null;
-  const want = tokens(named);
-  if (want.length < 2) return null;
-  const hits = donors.filter((d) => {
-    const have = new Set(tokens(d.name));
-    return want.every((t) => have.has(t));
-  });
-  return hits.length === 1 ? hits[0] : null;
+  // "Donation - DTS - Larry Jones": the person is usually the last segment,
+  // so try each segment after the first, last first.
+  const segments = description.split(/\s+[-–]\s+/).slice(1).reverse();
+  for (const seg of segments) {
+    const want = tokens(seg);
+    if (want.length < 2) continue;
+    const hits = donors.filter((d) => {
+      const have = new Set(tokens(d.name));
+      return want.every((t) => have.has(t));
+    });
+    if (hits.length === 1) return hits[0];
+    // Several donors contain the words: an exact name match still wins.
+    const exact = hits.filter((d) => tokens(d.name).length === want.length);
+    if (exact.length === 1) return exact[0];
+    // "Kassandra Desiree Aleck" → the donor "Kassandra Aleck": same first and last name.
+    if (hits.length === 0) {
+      const ends = donors.filter((d) => {
+        const t = tokens(d.name);
+        return t.length >= 2 && t[0] === want[0] && t[t.length - 1] === want[want.length - 1];
+      });
+      if (ends.length === 1) return ends[0];
+    }
+  }
+  return null;
 }
 
 /** Same email under two names, or "Kassandra Aleck" / "Kassandra Desiree Aleck". */

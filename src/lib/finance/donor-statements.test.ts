@@ -154,6 +154,14 @@ describe("buildStatements", () => {
     expect(peter.flags.map((f) => f.code)).toEqual(expect.arrayContaining(["credit_note", "dts"]));
     expect(r.totals.creditNoteCents).toBe(-7500);
 
+    // Credit notes on a non-donation account (2850) are still listed.
+    const onLiability = buildStatements({
+      taxYear: 2026,
+      lines: [{ ...lines[0], accountCode: "1010" }, { ...lines[1], accountCode: "2850" }],
+    });
+    expect(onLiability.creditNotes).toHaveLength(1);
+    expect(onLiability.excludedLines).toHaveLength(0);
+
     const netted = buildStatements({ taxYear: 2026, lines, options: { creditNotes: "net" } });
     expect(netted.donors[0].totalCents).toBe(0);
     expect(netted.totals.donorCount).toBe(0);
@@ -232,6 +240,32 @@ describe("matchCreditNoteDonor", () => {
     { key: "peter c gill", name: "Peter C Gill" },
     { key: "peter gillespie", name: "Peter Gillespie" },
   ];
+  it("finds the person in any segment, preferring an exact name", () => {
+    const more = [...donors, { key: "kassandra aleck", name: "Kassandra Aleck" }, { key: "kassandra desiree aleck", name: "Kassandra Desiree Aleck" }, { key: "larry jones", name: "Larry Jones" }];
+    expect(matchCreditNoteDonor("Donation - DTS - Larry Jones", more)?.name).toBe("Larry Jones");
+    expect(matchCreditNoteDonor("Donation - DTS Donation  - Peter Gill", more)?.name).toBe("Peter C Gill");
+    expect(matchCreditNoteDonor("Donation - Kassandra Aleck", more)?.name).toBe("Kassandra Aleck");
+    expect(matchCreditNoteDonor("Donation - Kassandra Desiree Aleck", more)?.name).toBe("Kassandra Desiree Aleck");
+    expect(matchCreditNoteDonor("Donation - DTS", more)).toBeNull();
+    const onlyShort = [{ key: "kassandra aleck", name: "Kassandra Aleck" }];
+    expect(matchCreditNoteDonor("Donation - Kassandra Desiree Aleck", onlyShort)?.name).toBe("Kassandra Aleck");
+  });
+
+  it("lists donation credit notes on other accounts, but not tuition or refunds", () => {
+    const r = buildStatements({
+      taxYear: 2026,
+      lines: [
+        line({ invoiceNumber: "INV-1", contactName: "Owen Veer", unitPriceUsd: 250, accountCode: "1010" }),
+        line({ invoiceNumber: "CN-2096", contactName: "Parker Pollard", unitPriceUsd: 242.45, quantity: -1, accountCode: "2850", description: "Donation - DTS Donation  - Owen Veer" }),
+        line({ invoiceNumber: "CN-2101", contactName: "Kiana Redding", unitPriceUsd: 1000, quantity: -1, accountCode: "4105", description: "Discipleship Training School" }),
+        line({ invoiceNumber: "CN-3070", contactName: "Dwayne Roberts", unitPriceUsd: 750, quantity: -1, accountCode: "1050", description: "Overpayment Refund" }),
+      ],
+    });
+    expect(r.creditNotes.map((c) => c.invoiceNumber)).toEqual(["CN-2096"]);
+    expect(r.creditNotes[0].matchedDonorName).toBe("Owen Veer");
+    expect(r.excludedLines.map((e) => e.reason)).toEqual(["Credit note not for a donation", "Credit note not for a donation"]);
+  });
+
   it("needs every named word in the donor's name", () => {
     expect(matchCreditNoteDonor("DTS Donation - Peter Gill", donors)?.name).toBe("Peter C Gill");
     expect(matchCreditNoteDonor("DTS Donation", donors)).toBeNull();
