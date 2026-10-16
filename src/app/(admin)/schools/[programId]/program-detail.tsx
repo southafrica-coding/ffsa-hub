@@ -338,6 +338,7 @@ type RefRequestSummary = {
  *  is still in the wild as ?tab=enrollments, so it maps rather than 404s. */
 const TAB_KEYS = [
   "students", "courses", "track", "grades", "applicants", "application", "arrival", "leaders", "emails", "fees",
+  "staff_decision",
 ];
 function normaliseTab(tab: string): string {
   return tab === "enrollments" ? "students" : tab;
@@ -399,6 +400,7 @@ export function ProgramDetail({
   referenceQuestions,
   refRequestSummaries,
   applicationExpiry,
+  staffDecisionPanel,
 }: {
   program: Program;
   initialTab?: string;
@@ -433,6 +435,9 @@ export function ProgramDetail({
   referenceQuestions: TreeQuestion[];
   refRequestSummaries: RefRequestSummary[];
   applicationExpiry: ApplicationExpiry;
+  /** Leadership Track only, and only for Leadership Team viewers — the
+   *  server-rendered "accepted as staff?" tab. Absent = no tab. */
+  staffDecisionPanel?: React.ReactNode;
 }) {
   const router = useRouter();
   const [editingProgram, setEditingProgram] = useState(false);
@@ -643,6 +648,9 @@ export function ProgramDetail({
             <TabsTrigger value="leaders">Leaders ({leaders.length})</TabsTrigger>
             <TabsTrigger value="emails">Emails</TabsTrigger>
             <TabsTrigger value="fees">Fees</TabsTrigger>
+            {staffDecisionPanel && (
+              <TabsTrigger value="staff_decision">Staff decision</TabsTrigger>
+            )}
           </TabsList>
         </div>
 
@@ -757,6 +765,12 @@ export function ProgramDetail({
             allUsers={allUsers}
           />
         </TabsContent>
+
+        {staffDecisionPanel && (
+          <TabsContent value="staff_decision" className="mt-0 px-5 py-6 md:px-8">
+            {staffDecisionPanel}
+          </TabsContent>
+        )}
 
         <TabsContent value="emails" className="mt-0 px-5 py-6 md:px-8">
           <EmailsTab

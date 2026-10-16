@@ -12,7 +12,11 @@ import { Masthead } from "@/components/ffsa";
 import { SchoolFeesPanel } from "@/components/finance/school-fees-panel";
 import { getSchoolBalances } from "@/services/school-balances";
 import type { RosterFee } from "./roster-tab";
-import { requireModuleAccess } from "@/lib/require-permission";
+import { hasModuleAccess } from "@/lib/require-permission";
+import { isLeadershipTeam } from "@/lib/auth/check-okr-access";
+import { getLeadershipTrackProgram, loadStaffDecisionRows } from "@/lib/schools/staff-decisions";
+import { listActiveMinistries } from "@/services/ministries";
+import { StaffDecisionTab } from "./staff-decision-tab";
 import { getApplicationExpiry } from "@/lib/auth/application-expiry";
 
 type UserIdentity = {
@@ -119,7 +123,38 @@ export default async function ProgramDetailPage({
     data: { session },
   } = await supabase.auth.getSession();
   if (!session?.user) redirect("/login");
-  await requireModuleAccess(supabase, session.user.id, "schools");
+
+  // Leadership Track "accepted as staff?" tab — Leadership Team only, read
+  // with the service-role client so it keeps working after the school ends
+  // or is archived. A Leadership Team member without Training access gets a
+  // page holding just this tab instead of the usual redirect.
+  const viewerIsLeadership = await isLeadershipTeam(supabase, session.user.id);
+  const ltProgram = viewerIsLeadership ? await getLeadershipTrackProgram(admin, programId) : null;
+  let staffDecisionPanel: React.ReactNode = null;
+  if (ltProgram) {
+    const [rows, { data: ministries }] = await Promise.all([
+      loadStaffDecisionRows(admin, programId),
+      listActiveMinistries(supabase),
+    ]);
+    staffDecisionPanel = (
+      <StaffDecisionTab
+        rows={rows}
+        departmentOptions={((ministries ?? []) as Array<{ slug: string; name: string }>).map(
+          (m) => ({ value: m.slug, label: m.name })
+        )}
+      />
+    );
+  }
+
+  if (!(await hasModuleAccess(supabase, session.user.id, "schools"))) {
+    if (!ltProgram) redirect("/dashboard");
+    return (
+      <div className="ffsa-screen">
+        <Masthead context="Leadership Track · Staff decision" title={ltProgram.name} />
+        <div className="px-5 py-6 md:px-8">{staffDecisionPanel}</div>
+      </div>
+    );
+  }
 
   // 6-month expiry lock (migration 223). RLS already hides an expired
   // school's applications from this user client; this only explains why.
@@ -323,6 +358,7 @@ export default async function ProgramDetailPage({
         referenceQuestions={referenceQuestions ?? []}
         refRequestSummaries={refRequests ?? []}
         applicationExpiry={applicationExpiry}
+        staffDecisionPanel={staffDecisionPanel ?? undefined}
       />
     </>
   );

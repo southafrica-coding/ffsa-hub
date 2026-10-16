@@ -21,6 +21,7 @@ import {
   Scale,
   Target,
   Megaphone,
+  UserCheck,
   type LucideIcon,
 } from "lucide-react";
 
@@ -146,6 +147,14 @@ export const ADMIN_MODULES: ModuleDefinition[] = [
     icon: Target,
     description: "Ministry objectives and key results, with a dated check-in history",
     requiredRoles: [], // ministry OKRs are meant to be seen by the whole base
+  },
+  {
+    id: "staff-decisions",
+    label: "Staff decisions",
+    href: "/staff-decisions",
+    icon: UserCheck,
+    description: "Leadership Track: who is accepted onto staff",
+    requiredRoles: ["leadership_team"], // role-only — see ROLE_ONLY_MODULES
   },
   {
     id: "brand-kit",
@@ -274,6 +283,15 @@ export const PORTAL_TABS: PortalTab[] = [
 export const SUPER_ADMIN_ONLY_MODULES = new Set(["records-library", "evangelism"]);
 
 /**
+ * Modules shown by role alone — admins don't get them for free and no
+ * permission grant unlocks them. Staff decisions (migration 245) are for the
+ * Leadership Team only, admin or not.
+ */
+export const ROLE_ONLY_MODULES: Record<string, string> = {
+  "staff-decisions": "leadership_team",
+};
+
+/**
  * Returns modules the user can access.
  *
  * super_admin sees everything. `admin` sees everything except the modules in
@@ -290,6 +308,8 @@ export function getAccessibleModules(
   const isAdmin = isSuperAdmin || userRoles.includes("admin");
 
   return modules.filter((mod) => {
+    const onlyRole = ROLE_ONLY_MODULES[mod.id];
+    if (onlyRole) return userRoles.includes(onlyRole);
     // Always open (dashboard, prayer room)
     if (mod.requiredRoles.length === 0) return true;
     // Admins see everything — except the super-admin-only carve-outs
