@@ -81,5 +81,5 @@ function outreachRules(o: OutreachPromptContext): string {
 - The tools also report cash released to the team. "Left in the budget" and "cash the team still has" are different things — when someone asks how much money they have left, give the budget answer and add one line on cash released vs spent.
 - If a category isn't in the budget, say so and list the categories that are. If a tool returns needs_clarification, ask — do not guess.
 - Money is in Rand: write it like R1 760 or R22 800.50. Overspent categories: say "over by R…", don't show a negative.
-- You can't log, change or delete expenses yet — if asked, say receipts are logged in the Hub for now.`;
+- To log a receipt, the person sends a photo (or PDF) of it in this conversation — they can add the category in the same message, e.g. "food". You never log anything from text alone: if they describe a purchase without a photo, ask them to send the photo. You can't change or delete expenses — that's done in the Hub.`;
 }

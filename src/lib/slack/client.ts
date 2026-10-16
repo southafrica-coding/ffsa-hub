@@ -134,6 +134,26 @@ export function postMessage(args: {
 }
 
 // ────────────────────────────────────────────────────────────
+// File download
+// ------------------------------------------------------------
+// A file someone shared with the bot (url_private_download, or one of
+// its thumb_* URLs). Needs the files:read scope and the bot's token —
+// without them Slack answers 200 with its HTML sign-in page, so the
+// content type is checked rather than trusting the status.
+// ────────────────────────────────────────────────────────────
+
+export async function downloadFile(url: string, bot: SlackBotId = "hub"): Promise<Buffer> {
+  const token = botToken(bot);
+  if (!token) throw new Error(`Slack bot token for "${bot}" not configured`);
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new Error(`Slack file download HTTP ${res.status}`);
+  if ((res.headers.get("content-type") ?? "").startsWith("text/html")) {
+    throw new Error("Slack returned a web page instead of the file — is files:read granted?");
+  }
+  return Buffer.from(await res.arrayBuffer());
+}
+
+// ────────────────────────────────────────────────────────────
 // chat.update / views.open
 // ------------------------------------------------------------
 // Rewrite a message we posted (e.g. an alert DM once someone has

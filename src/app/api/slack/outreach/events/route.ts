@@ -4,7 +4,9 @@
  * A separate Slack app from FFSA Hub Activity (see lib/slack/bots), so
  * teams get a bot that only does one job: their outreach budget. It
  * handles app_mention (an @mention in a team channel) and message.im
- * (a DM). Flow mirrors /api/slack/events:
+ * (a DM). A message with a photo or PDF attached is a receipt
+ * (lib/slack/outreach/receipts); anything else is a budget question.
+ * Flow mirrors /api/slack/events:
  *   1. verify the signature with THIS app's signing secret
  *   2. url_verification handshake, drop retries, ignore bots/edits
  *   3. ACK within Slack's 3s, then in after():
@@ -18,6 +20,8 @@
 import { after, NextResponse } from "next/server";
 import { isFinanceStaff, resolveOutreachScope } from "@/lib/slack/assistant/outreach";
 import { runAssistant } from "@/lib/slack/assistant/run";
+import { handleIncomingReceipts } from "@/lib/slack/outreach/receipts";
+import type { SlackFile } from "@/lib/slack/outreach/receipt-logic";
 import * as slack from "@/lib/slack/client";
 import { botSigningSecret } from "@/lib/slack/bots";
 import { verifySlackSignature } from "@/lib/slack/verify";
@@ -73,6 +77,7 @@ export async function POST(request: Request) {
       text?: string;
       ts?: string;
       thread_ts?: string;
+      files?: SlackFile[];
     };
   };
   try {
@@ -92,8 +97,9 @@ export async function POST(request: Request) {
   }
 
   const event = body.event;
-  // Our own posts, other bots, edits, joins…
-  if (event.bot_id || event.subtype) {
+  // Our own posts, other bots, edits, joins… — but a message with a file
+  // attached arrives as subtype file_share, and that's a receipt.
+  if (event.bot_id || (event.subtype && event.subtype !== "file_share")) {
     return NextResponse.json({ ok: true });
   }
 
@@ -102,9 +108,14 @@ export async function POST(request: Request) {
   if ((!isMention && !isDM) || !event.channel || typeof event.user !== "string") {
     return NextResponse.json({ ok: true });
   }
+  // @mentioning the bot inside a DM fires both events — answer the DM one.
+  if (isMention && event.channel.startsWith("D")) {
+    return NextResponse.json({ ok: true });
+  }
 
   const question = cleanText(event.text ?? "");
-  if (!question) {
+  const files = event.files ?? [];
+  if (!question && files.length === 0) {
     return NextResponse.json({ ok: true });
   }
 
@@ -143,6 +154,19 @@ export async function POST(request: Request) {
             "I help outreach teams with their budget, but you're not on an outreach team that's using me yet. If you should be, ask your finance lead to add you to the team in the Hub."
           );
         }
+        return;
+      }
+
+      if (files.length > 0) {
+        await handleIncomingReceipts({
+          files,
+          slackUserId,
+          hubUserId,
+          channelId: channel,
+          threadTs,
+          userNote: question || null,
+          scope: outreach.scope,
+        });
         return;
       }
 

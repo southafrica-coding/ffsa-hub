@@ -15,6 +15,8 @@ export const SUPPORTED_CURRENCIES = [
   { code: "GBP", name: "British Pound", symbol: "£" },
   { code: "MWK", name: "Malawian Kwacha", symbol: "MK" },
   { code: "TZS", name: "Tanzanian Shilling", symbol: "TSh" },
+  { code: "BWP", name: "Botswana Pula", symbol: "P" },
+  { code: "NAD", name: "Namibian Dollar", symbol: "N$" },
 ] as const;
 
 export type CurrencyCode = (typeof SUPPORTED_CURRENCIES)[number]["code"];

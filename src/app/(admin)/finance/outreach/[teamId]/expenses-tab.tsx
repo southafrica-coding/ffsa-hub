@@ -60,6 +60,7 @@ type Expense = {
   cash_batch_id: string | null;
   receipt_path: string | null;
   notes: string | null;
+  source?: "hub" | "import" | "slack" | null;
   outreach_budget_categories: {
     id: string;
     name: string;
@@ -328,6 +329,11 @@ export function ExpensesTab({
     setAddOpen(true);
   }
 
+  // Bookkeeping needs a receipt behind every expense.
+  const missingReceipts = expenses.filter(
+    (e) => !(receiptCounts[e.id] || e.receipt_path)
+  ).length;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -336,6 +342,11 @@ export function ExpensesTab({
           <span className="text-muted-foreground font-normal">
             ({expenses.length})
           </span>
+          {missingReceipts > 0 && (
+            <span className="ml-2 font-mono text-[11px] font-normal text-amber">
+              {missingReceipts} without a receipt
+            </span>
+          )}
         </h3>
         <Dialog
           open={addOpen}
@@ -713,7 +724,14 @@ export function ExpensesTab({
                   <TableCell>
                     {exp.outreach_budget_categories?.name ?? "—"}
                   </TableCell>
-                  <TableCell>{exp.vendor ?? "—"}</TableCell>
+                  <TableCell>
+                    {exp.vendor ?? "—"}
+                    {exp.source === "slack" && (
+                      <Badge variant="outline" className="ml-1.5 text-[10px]" title="Logged from Slack">
+                        Slack
+                      </Badge>
+                    )}
+                  </TableCell>
                   <TableCell className="max-w-[200px] truncate">
                     {exp.description ?? "—"}
                   </TableCell>
