@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Plus, Trash2 } from "lucide-react";
+import { FileText, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SectionBar } from "@/components/ffsa";
@@ -30,8 +30,10 @@ export type DriverPanelRow = {
   is_first_time: boolean;
   driving_test_status: string;
   license: LicenseValue;
-  /** Staged file for a driver that doesn't exist server-side yet. */
+  passport: LicenseValue;
+  /** Staged files for a driver that doesn't exist server-side yet. */
   stagedLicense?: File | null;
+  stagedPassport?: File | null;
 };
 
 /**
@@ -84,6 +86,9 @@ export function DriversPanel({
       body: JSON.stringify({
         drivers: clean.map((r) => ({
           id: r.id,
+          // Keep the Hub link — without it a Hub driver would be saved back
+          // as an outsider and lose the documents on their profile.
+          user_id: r.user_id ?? null,
           name: r.name,
           phone: r.phone,
           has_sa_license: r.has_sa_license,
@@ -99,26 +104,34 @@ export function DriversPanel({
     }
 
     // Newly added drivers only get an id once saved, so their staged licence
-    // uploads now. The API returns drivers in the order they were sent.
+    // and passport photos upload now. The API returns drivers in the order
+    // they were sent.
     const saved: { id: string }[] = json.drivers ?? [];
     const failed: string[] = [];
     await Promise.all(
-      clean.map(async (r, i) => {
-        if (!r.stagedLicense) return;
-        const target = saved[i];
-        if (!target) {
-          failed.push(r.name);
-          return;
-        }
-        const result = await uploadDriverLicense(target.id, r.stagedLicense);
-        if ("error" in result) failed.push(r.name);
-      })
+      clean.flatMap((r, i) =>
+        (
+          [
+            ["license", r.stagedLicense, "licence"],
+            ["passport", r.stagedPassport, "passport photo"],
+          ] as const
+        ).map(async ([kind, file, label]) => {
+          if (!file) return;
+          const target = saved[i];
+          if (!target) {
+            failed.push(`${r.name}'s ${label}`);
+            return;
+          }
+          const result = await uploadDriverLicense(target.id, file, kind);
+          if ("error" in result) failed.push(`${r.name}'s ${label}`);
+        })
+      )
     );
 
     setSaving(false);
     setEditing(false);
     if (failed.length > 0) {
-      toast.warning(`Drivers saved, but the licence for ${failed.join(", ")} did not upload.`);
+      toast.warning(`Drivers saved, but ${failed.join(", ")} did not upload.`);
     } else {
       toast.success("Drivers updated.");
     }
@@ -181,19 +194,29 @@ export function DriversPanel({
                   <span className="text-xs text-[color:var(--text-tertiary)]">
                     {TEST_LABEL[d.driving_test_status] ?? d.driving_test_status}
                   </span>
-                  {d.license?.signed_url ? (
-                    <a
-                      href={d.license.signed_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs underline underline-offset-2"
-                    >
-                      {d.license.file_name ?? "View licence"}
-                    </a>
-                  ) : (
-                    <span className="text-xs text-[color:var(--text-tertiary)]">
-                      No licence photo
-                    </span>
+                  {(
+                    [
+                      ["Licence", d.license],
+                      ["Passport", d.passport],
+                    ] as const
+                  ).map(([label, doc]) =>
+                    doc?.signed_url ? (
+                      <a
+                        key={label}
+                        href={doc.signed_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 border border-rule px-2 py-0.5 text-xs hover:bg-bone"
+                      >
+                        <FileText className="h-3.5 w-3.5" />
+                        {label}
+                      </a>
+                    ) : (
+                      <span key={label} className="text-xs text-destructive">
+                        No {label.toLowerCase()} photo
+                        {d.user_id ? " on their profile" : ""}
+                      </span>
+                    )
                   )}
                   {canRecordTest && d.id && d.driving_test_status === "pending" && (
                     <span className="ml-auto flex items-center gap-2">
@@ -232,8 +255,10 @@ export function DriversPanel({
       <SectionBar title="Drivers" meta={`${rows.length}`} />
       <div className="space-y-3 p-6">
         <p className="text-xs text-muted-foreground">
-          A licence photo is optional. Drivers already saved take their licence
-          straight away; a driver you add here uploads their licence when you save.
+          Every driver needs a licence photo and a passport page photo — Hub
+          users&apos; come from their profile. Drivers already saved take a photo
+          straight away; a driver you add here uploads theirs when you save. A
+          booking can&apos;t be approved until every driver has both.
         </p>
         {rows.map((d, i) => (
           <div key={d.id ?? `new-${i}`} className="space-y-1.5 border-b border-rule pb-3 last:border-b-0 last:pb-0">
@@ -277,14 +302,31 @@ export function DriversPanel({
                 <Trash2 className="h-4 w-4" />
               </button>
             </div>
-            <DriverLicenseField
-              driverId={d.id}
-              value={d.license}
-              staged={d.stagedLicense ?? null}
-              disabled={saving}
-              onStage={(file) => setRow(i, { stagedLicense: file })}
-              onChange={(value) => setRow(i, { license: value })}
-            />
+            {d.user_id ? (
+              <p className="text-xs text-muted-foreground">
+                Licence &amp; passport photo come from their Hub profile.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-x-5 gap-y-1">
+                <DriverLicenseField
+                  driverId={d.id}
+                  value={d.license}
+                  staged={d.stagedLicense ?? null}
+                  disabled={saving}
+                  onStage={(file) => setRow(i, { stagedLicense: file })}
+                  onChange={(value) => setRow(i, { license: value })}
+                />
+                <DriverLicenseField
+                  kind="passport"
+                  driverId={d.id}
+                  value={d.passport}
+                  staged={d.stagedPassport ?? null}
+                  disabled={saving}
+                  onStage={(file) => setRow(i, { stagedPassport: file })}
+                  onChange={(value) => setRow(i, { passport: value })}
+                />
+              </div>
+            )}
           </div>
         ))}
 
@@ -304,7 +346,9 @@ export function DriversPanel({
                 is_first_time: false,
                 driving_test_status: "not_required",
                 license: null,
+                passport: null,
                 stagedLicense: null,
+                stagedPassport: null,
               },
             ])
           }

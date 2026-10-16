@@ -194,17 +194,43 @@ export default async function VehicleBookingDetail({
   const photos = files.filter((f) => f.kind === "damage_photo");
   const licenses = files.filter((f) => f.kind === "license");
 
-  // Per-driver licences live on the driver row as an object path in the same
-  // private bucket — mint signed URLs so they render on first paint.
+  // Each driver's licence + passport page photo. Hub users' live on their
+  // profile (that's the whole point — upload once, every booking pulls them);
+  // outsiders' are on the driver row. All in the same private bucket — mint
+  // signed URLs so they open in one click, but only for the people who run
+  // this booking: its requester and the vehicle managers.
+  const canSeeDocs =
+    access.isAdmin || access.canApprove || access.canManage || b.requested_by === user.id;
+  const profileIds = drivers.map((d) => d.user_id).filter((v): v is string => !!v);
+  const { data: profileDocs } = profileIds.length
+    ? await (admin as any) // eslint-disable-line @typescript-eslint/no-explicit-any
+        .from("users")
+        .select("id, licence_file_url, licence_file_name, passport_file_url, passport_file_name")
+        .in("id", profileIds)
+    : { data: [] };
+  const profileById = new Map(
+    ((profileDocs ?? []) as {
+      id: string;
+      licence_file_url: string | null;
+      licence_file_name: string | null;
+      passport_file_url: string | null;
+      passport_file_name: string | null;
+    }[]).map((p) => [p.id, p])
+  );
+  async function sign(path: string | null, name: string | null) {
+    if (!path) return null;
+    if (!canSeeDocs) return { file_name: name, signed_url: null };
+    const { data: signed } = await admin.storage.from("vehicle-inspections").createSignedUrl(path, 3600);
+    return { file_name: name, signed_url: signed?.signedUrl ?? null };
+  }
   const driverRows: DriverPanelRow[] = await Promise.all(
     drivers.map(async (d) => {
-      let signedUrl: string | null = null;
-      if (d.license_file_url) {
-        const { data: signed } = await admin.storage
-          .from("vehicle-inspections")
-          .createSignedUrl(d.license_file_url, 3600);
-        signedUrl = signed?.signedUrl ?? null;
-      }
+      const p = d.user_id ? profileById.get(d.user_id) : undefined;
+      const [license, passport] = await Promise.all(
+        p
+          ? [sign(p.licence_file_url, p.licence_file_name), sign(p.passport_file_url, p.passport_file_name)]
+          : [sign(d.license_file_url, d.license_file_name), sign(d.passport_file_url, d.passport_file_name)]
+      );
       return {
         id: d.id,
         user_id: d.user_id,
@@ -213,9 +239,8 @@ export default async function VehicleBookingDetail({
         has_sa_license: d.has_sa_license,
         is_first_time: d.is_first_time,
         driving_test_status: d.driving_test_status,
-        license: d.license_file_url
-          ? { file_name: d.license_file_name, signed_url: signedUrl }
-          : null,
+        license,
+        passport,
       };
     })
   );

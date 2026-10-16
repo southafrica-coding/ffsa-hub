@@ -10,6 +10,7 @@ import {
   setBookingVehicles,
   setBookingDrivers,
   getLicenceFactsFor,
+  eligibilityInput,
   markDrivingTestPending,
 } from "@/services/vehicles";
 import { checkDriverEligibility } from "@/lib/vehicles/licence";
@@ -83,6 +84,9 @@ export async function POST(request: Request) {
   if (!bookingName) {
     return NextResponse.json({ error: "A booking name is required" }, { status: 400 });
   }
+  if (!nn(body.point_person)) {
+    return NextResponse.json({ error: "A point person is required" }, { status: 400 });
+  }
   if (!checkout || !ret) {
     return NextResponse.json(
       { error: "Collection and return dates are required" },
@@ -155,6 +159,13 @@ export async function POST(request: Request) {
     }))
     .filter((d) => d.name);
 
+  // Every booking needs at least one driver (each needs a licence + passport
+  // photo — Hub users' from their profile, checked below; outsiders' are
+  // uploaded right after create and checked again at approval).
+  if (drivers.length === 0) {
+    return NextResponse.json({ error: "Add at least one driver" }, { status: 400 });
+  }
+
   // Hard block, server side. The form runs the same check, but a client can
   // post whatever it likes — this is the one that decides. Licence facts come
   // from the database, never from the request body.
@@ -177,12 +188,7 @@ export async function POST(request: Request) {
         );
       }
       const check = checkDriverEligibility(
-        {
-          licence_expiry_date: f.expiry,
-          licence_file_url: f.hasFile ? "on-file" : null,
-          base_driving_test_status:
-            f.test as "not_required" | "pending" | "passed" | "failed",
-        },
+        eligibilityInput(f),
         ret,
         "request"
       );

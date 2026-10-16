@@ -115,6 +115,9 @@ export async function POST(request: Request) {
   if (!bookingName) {
     return NextResponse.json({ error: "Please give the booking a name." }, { status: 400 });
   }
+  if (!nn(payload.point_person)) {
+    return NextResponse.json({ error: "Please give the point person for this booking." }, { status: 400 });
+  }
   if (!requesterName || !requesterEmail) {
     return NextResponse.json(
       { error: "Please give your name and email address." },
@@ -193,6 +196,26 @@ export async function POST(request: Request) {
     );
   }
 
+  // Every driver's licence AND passport page photo must come with the
+  // request (licence_<i> / passport_<i>, index-matched to the drivers). Checked
+  // before anything is written, so a refused request leaves nothing behind.
+  const usable = (f: FormDataEntryValue | null): f is File =>
+    f instanceof File && ALLOWED.includes(f.type) && f.size <= MAX_BYTES;
+  for (let i = 0; i < drivers.length; i++) {
+    if (!usable(form.get(`licence_${i}`))) {
+      return NextResponse.json(
+        { error: `Please attach ${drivers[i].name}'s licence photo (image or PDF, up to 10 MB).` },
+        { status: 400 }
+      );
+    }
+    if (!usable(form.get(`passport_${i}`))) {
+      return NextResponse.json(
+        { error: `Please attach ${drivers[i].name}'s passport page photo (image or PDF, up to 10 MB).` },
+        { status: 400 }
+      );
+    }
+  }
+
   const { data: booking, error } = await insertVehicleBooking(admin, {
     booking_name: bookingName,
     point_person: nn(payload.point_person),
@@ -227,26 +250,30 @@ export async function POST(request: Request) {
 
   const { data: created } = await setBookingDrivers(admin, booking.id, drivers);
 
-  // Licences arrive as licence_0, licence_1… matching the driver order.
-  // A failed upload must not lose the request: the booking page can take the
-  // licence later, and the manager can chase it.
+  // Licences / passport photos arrive as licence_<i> / passport_<i>, matching
+  // the driver order. A failed storage write must not lose the request: the
+  // booking page can take the file later, and approval waits for it.
   await Promise.all(
-    created.map(async (driver, i) => {
-      const file = form.get(`licence_${i}`);
-      if (!(file instanceof File)) return;
-      if (!ALLOWED.includes(file.type) || file.size > MAX_BYTES) return;
-      const path = `licenses/${booking.id}/${driver.id}/${Date.now()}.${EXT[file.type] ?? "bin"}`;
-      const { error: upErr } = await admin.storage
-        .from(BUCKET)
-        .upload(path, file, { contentType: file.type, upsert: false });
-      if (upErr) return;
-      await setDriverLicense(admin, driver.id, {
-        license_file_url: path,
-        license_file_name: file.name,
-        license_uploaded_at: new Date().toISOString(),
-        license_uploaded_by: null,
-      });
-    })
+    created.flatMap((driver, i) =>
+      (["licence", "passport"] as const).map(async (kind) => {
+        const file = form.get(`${kind}_${i}`);
+        if (!usable(file)) return;
+        const folder = kind === "licence" ? "licenses" : "passports";
+        const path = `${folder}/${booking.id}/${driver.id}/${Date.now()}.${EXT[file.type] ?? "bin"}`;
+        const { error: upErr } = await admin.storage
+          .from(BUCKET)
+          .upload(path, file, { contentType: file.type, upsert: false });
+        if (upErr) return;
+        const now = new Date().toISOString();
+        await setDriverLicense(
+          admin,
+          driver.id,
+          kind === "licence"
+            ? { license_file_url: path, license_file_name: file.name, license_uploaded_at: now, license_uploaded_by: null }
+            : { passport_file_url: path, passport_file_name: file.name, passport_uploaded_at: now }
+        );
+      })
+    )
   );
 
   await notifyVehicleManagers({

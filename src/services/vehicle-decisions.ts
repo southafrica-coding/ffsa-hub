@@ -7,6 +7,7 @@ import {
   updateVehicleBooking,
   getBookingDrivers,
   getLicenceFactsFor,
+  eligibilityInput,
   getVehicleBookingById,
   getOverlappingAssignments,
   setBookingVehicles,
@@ -56,6 +57,26 @@ export async function decideVehicleBooking(
   if (decision === "approved") {
     const { data: booking } = await getVehicleBookingById(supabase, id);
     const { data: drivers } = await getBookingDrivers(supabase, id);
+    // Every booking goes out with at least one driver, and every outsider
+    // driver's licence + passport photo must actually be on the booking (a
+    // Hub user's come from their profile — checked below).
+    if (drivers.length === 0) {
+      return { ok: false, error: "Can't approve — add at least one driver first.", status: 409 };
+    }
+    for (const d of drivers.filter((x) => !x.user_id)) {
+      if (!d.license_file_url || !d.passport_file_url) {
+        const missing = [!d.license_file_url && "licence photo", !d.passport_file_url && "passport photo"]
+          .filter(Boolean)
+          .join(" and ");
+        return {
+          ok: false,
+          error: `Can't approve — ${d.name} has no ${missing} on this booking.`,
+          status: 409,
+          blockedDriver: d.id,
+          reason: !d.license_file_url ? "no_licence" : "no_passport",
+        };
+      }
+    }
     const linked = drivers.filter((d) => d.user_id);
     if (linked.length > 0) {
       const facts = await getLicenceFactsFor(
@@ -66,12 +87,7 @@ export async function decideVehicleBooking(
         const f = facts.get(d.user_id as string);
         const check = f
           ? checkDriverEligibility(
-              {
-                licence_expiry_date: f.expiry,
-                licence_file_url: f.hasFile ? "on-file" : null,
-                base_driving_test_status:
-                  f.test as "not_required" | "pending" | "passed" | "failed",
-              },
+              eligibilityInput(f),
               booking?.return_date ?? null,
               "approval"
             )

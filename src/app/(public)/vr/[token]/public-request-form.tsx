@@ -17,7 +17,7 @@ import { Plus, Trash2, Paperclip, FileText, X } from "lucide-react";
  * The vehicle request form for people with no Hub account.
  *
  * Everything an internal requester gets from their profile has to be typed
- * here, licence photo included — there's no profile to draw on. That's the
+ * here, licence and passport photos included — there's no profile to draw on. That's the
  * whole difference between this form and the internal one.
  */
 
@@ -33,6 +33,7 @@ type DriverRow = {
   phone: string;
   has_sa_license: boolean;
   licence: File | null;
+  passport: File | null;
 };
 
 const EMPTY_DRIVER: DriverRow = {
@@ -40,6 +41,7 @@ const EMPTY_DRIVER: DriverRow = {
   phone: "",
   has_sa_license: false,
   licence: null,
+  passport: null,
 };
 
 export function PublicVehicleRequestForm({
@@ -51,6 +53,7 @@ export function PublicVehicleRequestForm({
 }) {
   const [form, setForm] = useState({
     booking_name: "",
+    point_person: "",
     purpose: "ministry",
     purpose_note: "",
     requester_name: "",
@@ -77,14 +80,14 @@ export function PublicVehicleRequestForm({
     setDrivers((prev) => prev.map((d, idx) => (idx === i ? { ...d, ...patch } : d)));
   }
 
-  async function stageLicence(i: number, raw: File | undefined) {
+  async function stageDoc(i: number, kind: "licence" | "passport", raw: File | undefined) {
     if (!raw) return;
     const prepared = await prepareLicenseFile(raw);
     if ("error" in prepared) {
       setError(prepared.error);
       return;
     }
-    setDriver(i, { licence: prepared.file });
+    setDriver(i, { [kind]: prepared.file });
     setError(null);
   }
 
@@ -97,6 +100,7 @@ export function PublicVehicleRequestForm({
     if (!form.requester_name.trim()) return "Please enter your name.";
     if (!form.requester_email.trim()) return "Please enter your email address.";
     if (!form.booking_name.trim()) return "Please give the booking a name.";
+    if (!form.point_person.trim()) return "Please give the point person for this booking.";
     if (!form.checkout_date || !form.return_date)
       return "Please choose collection and return dates.";
     if (form.return_date < form.checkout_date)
@@ -109,6 +113,8 @@ export function PublicVehicleRequestForm({
     // has to come with the request or a coordinator can't approve anything.
     if (named.some((d) => !d.licence))
       return "Please attach a photo of each driver's licence.";
+    if (named.some((d) => !d.passport))
+      return "Please attach a photo of each driver's passport page.";
     return null;
   }
 
@@ -128,6 +134,7 @@ export function PublicVehicleRequestForm({
       "payload",
       JSON.stringify({
         booking_name: form.booking_name.trim(),
+        point_person: form.point_person.trim(),
         purpose: form.purpose,
         purpose_note: form.purpose === "other" ? form.purpose_note.trim() : null,
         requester_name: form.requester_name.trim(),
@@ -149,6 +156,7 @@ export function PublicVehicleRequestForm({
     // Index-matched to the driver order above.
     named.forEach((d, i) => {
       if (d.licence) body.append(`licence_${i}`, d.licence);
+      if (d.passport) body.append(`passport_${i}`, d.passport);
     });
 
     const res = await fetch("/api/public/vehicle-requests", { method: "POST", body });
@@ -218,6 +226,17 @@ export function PublicVehicleRequestForm({
             onChange={(v) => update("home_country", v)}
           />
         </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="point_person">Point person *</Label>
+        <Input
+          id="point_person"
+          value={form.point_person}
+          onChange={(e) => update("point_person", e.target.value)}
+          placeholder="Who we should contact about this booking"
+          required
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -337,7 +356,8 @@ export function PublicVehicleRequestForm({
           </Button>
         </div>
         <p className="text-xs opacity-70">
-          Everyone who&apos;ll drive, with a photo of their licence. First-time
+          Everyone who&apos;ll drive, with a photo of their licence and of
+          their passport photo page. First-time
           drivers of an FFSA vehicle take a short driving test before the
           booking is approved.
         </p>
@@ -375,38 +395,46 @@ export function PublicVehicleRequestForm({
                 </button>
               )}
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                id={`licence-${i}`}
-                type="file"
-                accept={LICENSE_ACCEPT}
-                className="hidden"
-                onChange={(e) => stageLicence(i, e.target.files?.[0])}
-              />
-              {d.licence ? (
-                <>
-                  <span className="inline-flex items-center gap-1.5 text-xs">
-                    <FileText className="h-3.5 w-3.5" />
-                    {d.licence.name}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setDriver(i, { licence: null })}
-                    className="opacity-60 hover:opacity-100"
-                    aria-label="Remove licence"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </>
-              ) : (
-                <label
-                  htmlFor={`licence-${i}`}
-                  className="inline-flex cursor-pointer items-center gap-1.5 text-xs underline underline-offset-2"
-                >
-                  <Paperclip className="h-3.5 w-3.5" />
-                  Attach licence photo *
-                </label>
-              )}
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+              {(["licence", "passport"] as const).map((kind) => {
+                const file = d[kind];
+                const label = kind === "licence" ? "licence photo" : "passport page photo";
+                return (
+                  <div key={kind} className="flex items-center gap-2">
+                    <input
+                      id={`${kind}-${i}`}
+                      type="file"
+                      accept={LICENSE_ACCEPT}
+                      className="hidden"
+                      onChange={(e) => stageDoc(i, kind, e.target.files?.[0])}
+                    />
+                    {file ? (
+                      <>
+                        <span className="inline-flex items-center gap-1.5 text-xs">
+                          <FileText className="h-3.5 w-3.5" />
+                          {file.name}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setDriver(i, { [kind]: null })}
+                          className="opacity-60 hover:opacity-100"
+                          aria-label={`Remove ${label}`}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </>
+                    ) : (
+                      <label
+                        htmlFor={`${kind}-${i}`}
+                        className="inline-flex cursor-pointer items-center gap-1.5 text-xs underline underline-offset-2"
+                      >
+                        <Paperclip className="h-3.5 w-3.5" />
+                        Attach {label} *
+                      </label>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         ))}

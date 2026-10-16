@@ -53,6 +53,7 @@ export function DetailsEditor({
 
   async function save() {
     if (!form.booking_name.trim()) return toast.error("Give the booking a name.");
+    if (!form.point_person.trim()) return toast.error("A point person is required.");
     if (!form.checkout_date || !form.return_date) return toast.error("Both dates are needed.");
     if (form.return_date < form.checkout_date)
       return toast.error("The return date must be on or after the collection date.");
@@ -145,7 +146,7 @@ export function DetailsEditor({
           </div>
         )}
         <div className="space-y-1">
-          <Label htmlFor="ed-point">Point person</Label>
+          <Label htmlFor="ed-point">Point person *</Label>
           <Input id="ed-point" value={form.point_person} onChange={(e) => set("point_person", e.target.value)} />
         </div>
         <div className="space-y-1">

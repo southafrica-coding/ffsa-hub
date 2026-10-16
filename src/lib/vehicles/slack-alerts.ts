@@ -22,6 +22,7 @@ import {
   purposeLabel,
   randsLabel,
   getLicenceFactsFor,
+  eligibilityInput,
   getOverlappingAssignments,
   type VehicleBookingWithRefs,
 } from "@/services/vehicles";
@@ -171,11 +172,7 @@ async function loadCtx(admin: Client, bookingId: string): Promise<Ctx | null> {
     const f = facts.get(d.user_id);
     const check = f
       ? checkDriverEligibility(
-          {
-            licence_expiry_date: f.expiry,
-            licence_file_url: f.hasFile ? "on-file" : null,
-            base_driving_test_status: f.test as "not_required" | "pending" | "passed" | "failed",
-          },
+          eligibilityInput(f),
           b.return_date,
           "approval"
         )

@@ -12,6 +12,7 @@ import {
   setBookingVehicles,
   setBookingDrivers,
   getLicenceFactsFor,
+  eligibilityInput,
   markDrivingTestPending,
   purposeLabel,
 } from "@/services/vehicles";
@@ -129,7 +130,12 @@ export async function PATCH(
 
   // Fields anyone with edit rights may change.
   if (body.booking_name !== undefined) update.booking_name = nn(body.booking_name);
-  if (body.point_person !== undefined) update.point_person = nn(body.point_person);
+  if (body.point_person !== undefined) {
+    update.point_person = nn(body.point_person);
+    if (!update.point_person) {
+      return NextResponse.json({ error: "A point person is required" }, { status: 400 });
+    }
+  }
   if (body.purpose !== undefined) update.purpose = body.purpose;
   if (body.purpose_note !== undefined) update.purpose_note = nn(body.purpose_note);
   if (body.requester_phone !== undefined)
@@ -268,6 +274,9 @@ export async function PATCH(
         licence_number_snapshot: null as string | null,
       }))
       .filter((d) => d.name);
+    if (rows.length === 0) {
+      return NextResponse.json({ error: "A booking needs at least one driver." }, { status: 400 });
+    }
 
     // The same hard block as create. Drivers can be added long after a booking
     // is approved, which would otherwise walk straight past both the request
@@ -285,12 +294,7 @@ export async function PATCH(
         const f = facts.get(d.user_id);
         const check = f
           ? checkDriverEligibility(
-              {
-                licence_expiry_date: f.expiry,
-                licence_file_url: f.hasFile ? "on-file" : null,
-                base_driving_test_status:
-                  f.test as "not_required" | "pending" | "passed" | "failed",
-              },
+              eligibilityInput(f),
               returnDate,
               // Editing the driver list is still the request stage — the
               // driving test is re-checked when the booking is approved.

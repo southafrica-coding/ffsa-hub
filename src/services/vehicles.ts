@@ -87,6 +87,9 @@ export type VehicleDriver = {
   license_file_name: string | null;
   license_uploaded_at: string | null;
   license_uploaded_by: string | null;
+  passport_file_url: string | null;
+  passport_file_name: string | null;
+  passport_uploaded_at: string | null;
   created_at: string;
 };
 
@@ -463,12 +466,18 @@ export async function getBookingDrivers(
 export async function setDriverLicense(
   supabase: Client,
   driverId: string,
-  patch: {
-    license_file_url: string | null;
-    license_file_name: string | null;
-    license_uploaded_at: string | null;
-    license_uploaded_by: string | null;
-  }
+  patch:
+    | {
+        license_file_url: string | null;
+        license_file_name: string | null;
+        license_uploaded_at: string | null;
+        license_uploaded_by: string | null;
+      }
+    | {
+        passport_file_url: string | null;
+        passport_file_name: string | null;
+        passport_uploaded_at: string | null;
+      }
 ): Promise<{ error: { message: string } | null }> {
   const { error } = await supabase
     .from("vehicle_booking_drivers")
@@ -482,7 +491,7 @@ export async function getDriverWithBooking(supabase: Client, driverId: string) {
   return supabase
     .from("vehicle_booking_drivers")
     .select(
-      "id, vehicle_booking_id, license_file_url, booking:vehicle_bookings(id,status,requested_by)"
+      "id, vehicle_booking_id, license_file_url, passport_file_url, booking:vehicle_bookings(id,status,requested_by)"
     )
     .eq("id", driverId)
     .maybeSingle();
@@ -1003,12 +1012,13 @@ export type VehiclePerson = {
   country: string | null;
   licence_expiry_date: string | null;
   licence_file_url: string | null; // presence only — see toVehiclePerson
+  passport_file_url: string | null; // presence only
   base_driving_test_status: "not_required" | "pending" | "passed" | "failed";
 };
 
 const PERSON_COLUMNS =
   "id, first_name, last_name, display_name, email, phone, nationality, country, is_active, " +
-  "licence_expiry_date, licence_file_url, base_driving_test_status";
+  "licence_expiry_date, licence_file_url, passport_file_url, base_driving_test_status";
 
 type PersonRow = {
   id: string;
@@ -1021,6 +1031,7 @@ type PersonRow = {
   country: string | null;
   licence_expiry_date: string | null;
   licence_file_url: string | null;
+  passport_file_url: string | null;
   base_driving_test_status: string | null;
 };
 
@@ -1039,6 +1050,7 @@ function toVehiclePerson(row: PersonRow): VehiclePerson {
     licence_expiry_date: row.licence_expiry_date,
     // Collapsed to a boolean-ish marker: the caller must not learn the path.
     licence_file_url: row.licence_file_url ? "on-file" : null,
+    passport_file_url: row.passport_file_url ? "on-file" : null,
     base_driving_test_status:
       (row.base_driving_test_status as VehiclePerson["base_driving_test_status"]) ??
       "not_required",
@@ -1061,6 +1073,24 @@ export async function getVehiclePeople(admin: Client): Promise<VehiclePerson[]> 
   return ((data ?? []) as PersonRow[]).map(toVehiclePerson);
 }
 
+export type LicenceFacts = {
+  expiry: string | null;
+  hasFile: boolean;
+  hasPassport: boolean;
+  test: string;
+  number: string | null;
+};
+
+/** The facts in the shape checkDriverEligibility takes. */
+export function eligibilityInput(f: LicenceFacts) {
+  return {
+    licence_expiry_date: f.expiry,
+    licence_file_url: f.hasFile ? "on-file" : null,
+    passport_file_url: f.hasPassport ? "on-file" : null,
+    base_driving_test_status: f.test as "not_required" | "pending" | "passed" | "failed",
+  };
+}
+
 /**
  * The licence facts for specific users, straight from the source.
  *
@@ -1070,23 +1100,25 @@ export async function getVehiclePeople(admin: Client): Promise<VehiclePerson[]> 
 export async function getLicenceFactsFor(
   admin: Client,
   userIds: string[]
-): Promise<Map<string, { expiry: string | null; hasFile: boolean; test: string; number: string | null }>> {
-  const out = new Map<string, { expiry: string | null; hasFile: boolean; test: string; number: string | null }>();
+): Promise<Map<string, LicenceFacts>> {
+  const out = new Map<string, LicenceFacts>();
   if (userIds.length === 0) return out;
   const { data } = await admin
     .from("users")
-    .select("id, licence_expiry_date, licence_file_url, base_driving_test_status, drivers_licence_number")
+    .select("id, licence_expiry_date, licence_file_url, passport_file_url, base_driving_test_status, drivers_licence_number")
     .in("id", userIds);
   for (const r of (data ?? []) as {
     id: string;
     licence_expiry_date: string | null;
     licence_file_url: string | null;
+    passport_file_url: string | null;
     base_driving_test_status: string | null;
     drivers_licence_number: string | null;
   }[]) {
     out.set(r.id, {
       expiry: r.licence_expiry_date,
       hasFile: !!r.licence_file_url,
+      hasPassport: !!r.passport_file_url,
       test: r.base_driving_test_status ?? "not_required",
       number: r.drivers_licence_number,
     });

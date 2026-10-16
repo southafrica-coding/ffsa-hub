@@ -41,19 +41,23 @@ export async function prepareLicenseFile(
   return { file };
 }
 
-/** Upload (or replace) a driver's licence once the driver row exists. */
+export type DriverDocKind = "license" | "passport";
+const DOC_LABEL: Record<DriverDocKind, string> = { license: "licence", passport: "passport photo" };
+
+/** Upload (or replace) a driver's licence / passport photo once the driver row exists. */
 export async function uploadDriverLicense(
   driverId: string,
-  file: File
+  file: File,
+  kind: DriverDocKind = "license"
 ): Promise<{ ok: true; file_name: string; signed_url: string | null } | { error: string }> {
   const body = new FormData();
   body.append("file", file);
-  const res = await fetch(`/api/vehicles/drivers/${driverId}/license`, {
+  const res = await fetch(`/api/vehicles/drivers/${driverId}/${kind}`, {
     method: "POST",
     body,
   });
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) return { error: json.error ?? "Could not upload the licence." };
+  if (!res.ok) return { error: json.error ?? `Could not upload the ${DOC_LABEL[kind]}.` };
   return { ok: true, file_name: json.file_name, signed_url: json.signed_url ?? null };
 }
 
@@ -65,6 +69,7 @@ export async function uploadDriverLicense(
  * parent uploads it after the booking POST returns driver ids.
  */
 export function DriverLicenseField({
+  kind = "license",
   driverId,
   value,
   staged,
@@ -72,6 +77,8 @@ export function DriverLicenseField({
   onStage,
   onChange,
 }: {
+  /** Which document this field carries. */
+  kind?: DriverDocKind;
   driverId?: string | null;
   value?: LicenseValue;
   staged?: File | null;
@@ -97,7 +104,7 @@ export function DriverLicenseField({
         onStage?.(prepared.file);
         return;
       }
-      const result = await uploadDriverLicense(driverId, prepared.file);
+      const result = await uploadDriverLicense(driverId, prepared.file, kind);
       if ("error" in result) {
         setError(result.error);
         return;
@@ -117,12 +124,12 @@ export function DriverLicenseField({
     }
     setBusy(true);
     try {
-      const res = await fetch(`/api/vehicles/drivers/${driverId}/license`, {
+      const res = await fetch(`/api/vehicles/drivers/${driverId}/${kind}`, {
         method: "DELETE",
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(json.error ?? "Could not remove the licence.");
+        setError(json.error ?? `Could not remove the ${DOC_LABEL[kind]}.`);
         return;
       }
       onChange?.(null);
@@ -153,12 +160,12 @@ export function DriverLicenseField({
               className="inline-flex items-center gap-1.5 text-xs underline underline-offset-2"
             >
               <FileText className="h-3.5 w-3.5" />
-              {attachedName ?? "Licence"}
+              {attachedName ?? (kind === "license" ? "Licence" : "Passport")}
             </a>
           ) : (
             <span className="inline-flex items-center gap-1.5 text-xs text-[color:var(--text-secondary)]">
               <FileText className="h-3.5 w-3.5" />
-              {attachedName ?? "Licence"}
+              {attachedName ?? (kind === "license" ? "Licence" : "Passport")}
               {staged && <span className="text-[color:var(--text-tertiary)]">(uploads on submit)</span>}
             </span>
           )}
@@ -175,7 +182,7 @@ export function DriverLicenseField({
             disabled={disabled || busy}
             onClick={remove}
             className="text-muted-foreground hover:text-destructive disabled:opacity-50"
-            aria-label="Remove licence"
+            aria-label={`Remove ${DOC_LABEL[kind]}`}
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -188,7 +195,7 @@ export function DriverLicenseField({
           className="inline-flex items-center gap-1.5 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground disabled:opacity-50"
         >
           {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Paperclip className="h-3.5 w-3.5" />}
-          Attach licence
+          Attach {DOC_LABEL[kind]}
         </button>
       )}
       {busy && hasFile && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}

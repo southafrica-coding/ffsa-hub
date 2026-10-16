@@ -19,6 +19,7 @@ import { getHouseholdMembers } from "@/services/household";
 import { HouseholdLinkCard } from "@/components/profile/household-link-card";
 import { SlackLinkCard } from "@/components/profile/slack-link-card";
 import { LicenceCard } from "@/components/profile/licence-card";
+import { PassportPhotoCard } from "@/components/profile/passport-photo-card";
 import { NotificationPrefsCard } from "@/components/profile/notification-prefs-card";
 import { getSlackLink } from "@/services/slack-links";
 import { activeBroadcastModules } from "@/lib/slack/broadcast-types";
@@ -408,14 +409,16 @@ export default async function ProfilePage() {
       <section className="space-y-3 px-5 pb-6 md:px-8 md:pb-7">
         <div>
           <p className="page-eyebrow">DRIVING</p>
-          <h2 className="text-xl font-semibold">Driver&rsquo;s licence</h2>
+          <h2 className="text-xl font-semibold">Driver&rsquo;s licence &amp; passport</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Add your licence once and every vehicle booking fills itself in —
-            no re-typing your details or photographing your card again. Only
-            needed if you drive a base vehicle.
+            Add your licence and a photo of your passport page once and every
+            vehicle booking fills itself in — no re-typing your details or
+            photographing your documents again. Both are required before you
+            can be added as a driver on a base vehicle.
           </p>
         </div>
         <LicenceCard />
+        <PassportPhotoCard />
       </section>
 
       <section className="space-y-3 px-5 pb-6 md:px-8 md:pb-7">

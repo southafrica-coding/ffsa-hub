@@ -11,10 +11,17 @@ export type DriverLicenceInfo = {
   licence_expiry_date: string | null;
   licence_file_url: string | null;
   base_driving_test_status: "not_required" | "pending" | "passed" | "failed";
+  /**
+   * Passport page photo on file (presence only). Every driver needs one
+   * (migration 242). Left undefined by callers that don't know — only an
+   * explicit null blocks.
+   */
+  passport_file_url?: string | null;
 };
 
 export type DriverBlockReason =
   | "no_licence"
+  | "no_passport"
   | "expired"
   | "expires_before_return"
   | "test_pending"
@@ -56,6 +63,14 @@ export function checkDriverEligibility(
       ok: false,
       reason: "no_licence",
       message: "No driver's licence on file. Ask them to add one to their profile.",
+    };
+  }
+
+  if (driver.passport_file_url === null) {
+    return {
+      ok: false,
+      reason: "no_passport",
+      message: "No passport photo on file. Ask them to add one to their profile.",
     };
   }
 

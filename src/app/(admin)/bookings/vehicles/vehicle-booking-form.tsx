@@ -29,10 +29,11 @@ type DriverRow = {
   phone: string;
   has_sa_license: boolean;
   is_first_time: boolean;
-  /** Staged licence file — uploaded after the booking POST returns driver ids.
-   *  Only used for outsiders: a Hub user's licence already lives on their
-   *  profile and is never re-uploaded here. */
+  /** Staged licence / passport files — uploaded after the booking POST
+   *  returns driver ids. Only used for outsiders: a Hub user's documents
+   *  already live on their profile and are never re-uploaded here. */
   license: File | null;
+  passport: File | null;
 };
 
 const EMPTY_DRIVER: DriverRow = {
@@ -42,6 +43,7 @@ const EMPTY_DRIVER: DriverRow = {
   has_sa_license: false,
   is_first_time: false,
   license: null,
+  passport: null,
 };
 
 export function VehicleBookingForm({
@@ -129,6 +131,7 @@ export function VehicleBookingForm({
       has_sa_license: toIso2(person.country) === "ZA",
       is_first_time: person.base_driving_test_status === "pending",
       license: null,
+      passport: null,
     });
   }
 
@@ -182,6 +185,7 @@ export function VehicleBookingForm({
 
   function validate(): string | null {
     if (!form.booking_name.trim()) return "Please enter a booking name (team or person).";
+    if (!form.point_person.trim()) return "Please enter the point person for this booking.";
     if (!form.checkout_date || !form.return_date) return "Please choose collection and return dates.";
     if (form.return_date < form.checkout_date) return "The return date must be on or after the collection date.";
     if (form.purpose === "other" && !form.purpose_note.trim())
@@ -191,8 +195,19 @@ export function VehicleBookingForm({
     // Hard block: a Hub driver must hold a licence that is valid for the whole
     // trip. The API repeats this check against the database — this copy only
     // exists so the requester finds out before submitting, not after.
-    for (const d of drivers) {
-      if (!d.user_id) continue;
+    //
+    // Every booking needs at least one driver, and every driver needs a
+    // licence photo AND a passport page photo — from their profile (Hub users)
+    // or attached here (outsiders).
+    const named = drivers.filter((d) => d.user_id || d.name.trim());
+    if (named.length === 0) return "Add at least one driver.";
+    for (const d of named) {
+      if (!d.user_id) {
+        const who = d.name.trim();
+        if (!d.license) return `Attach ${who}'s driver's licence photo.`;
+        if (!d.passport) return `Attach ${who}'s passport page photo.`;
+        continue;
+      }
       const person = peopleById.get(d.user_id);
       if (!person) continue;
       const check = checkDriverEligibility(person, form.return_date || null, "request");
@@ -219,7 +234,7 @@ export function VehicleBookingForm({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         booking_name: form.booking_name.trim(),
-        point_person: form.point_person.trim() || null,
+        point_person: form.point_person.trim(),
         purpose: form.purpose,
         purpose_note: form.purpose === "other" ? form.purpose_note.trim() : null,
         requester_name: form.requester_name.trim() || null,
@@ -254,24 +269,29 @@ export function VehicleBookingForm({
     // The API returns the created drivers in the order they were submitted, so
     // index i here is the same driver as cleanDrivers[i].
     const createdDrivers: { id: string; name: string }[] = json.drivers ?? [];
-    const withLicense = cleanDrivers
-      .map((d, i) => ({ driver: d, created: createdDrivers[i] ?? null }))
-      .filter((x) => x.driver.license);
-    if (withLicense.length > 0) {
+    const uploads = cleanDrivers.flatMap((d, i) => {
+      const created = createdDrivers[i] ?? null;
+      return [
+        d.license ? { driver: d, created, file: d.license, kind: "license" as const } : null,
+        d.passport ? { driver: d, created, file: d.passport, kind: "passport" as const } : null,
+      ].filter((x): x is NonNullable<typeof x> => !!x);
+    });
+    if (uploads.length > 0) {
       const failed: string[] = [];
       await Promise.all(
-        withLicense.map(async ({ driver, created }) => {
+        uploads.map(async ({ driver, created, file, kind }) => {
+          const what = `${driver.name}'s ${kind === "license" ? "licence" : "passport photo"}`;
           if (!created) {
-            failed.push(driver.name);
+            failed.push(what);
             return;
           }
-          const result = await uploadDriverLicense(created.id, driver.license as File);
-          if ("error" in result) failed.push(driver.name);
+          const result = await uploadDriverLicense(created.id, file, kind);
+          if ("error" in result) failed.push(what);
         })
       );
       if (failed.length > 0) {
         toast.warning(
-          `Request submitted, but the licence for ${failed.join(", ")} did not upload. Add it from the booking page.`
+          `Request submitted, but ${failed.join(", ")} did not upload. Add it from the booking page — it can't be approved without it.`
         );
       }
     }
@@ -379,6 +399,18 @@ export function VehicleBookingForm({
             </div>
           </div>
 
+          {/* Point person — the coordinator's contact for this booking. */}
+          <div className="space-y-2 max-w-md">
+            <Label htmlFor="point_person">Point person *</Label>
+            <Input
+              id="point_person"
+              value={form.point_person}
+              onChange={(e) => update("point_person", e.target.value)}
+              placeholder="Who the coordinator should contact about this booking"
+              required
+            />
+          </div>
+
           {/* Home country (drives the Xero org) */}
           <div className="space-y-2 max-w-xs">
             <Label htmlFor="home_country">Renter&apos;s home country</Label>
@@ -478,10 +510,12 @@ export function VehicleBookingForm({
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Pick each driver from the Hub and their licence comes with them.
-              A driver whose licence is missing or expires before the return
-              date can&apos;t be added — they need to update it on their profile
-              first. Drivers from outside the Hub are typed in by hand.
+              At least one driver is required. Pick each driver from the Hub and
+              their licence and passport photo come from their profile. A
+              driver missing either, or whose licence expires before the return
+              date, can&apos;t be added — they need to add it on their profile
+              first. Drivers from outside the Hub are typed in by hand with
+              both photos attached.
             </p>
             {drivers.map((d, i) => {
               const person = d.user_id ? peopleById.get(d.user_id) : undefined;
@@ -580,10 +614,17 @@ export function VehicleBookingForm({
               {/* Only outsiders attach a licence here — a Hub user's licence
                   is already on their profile. */}
               {!d.user_id && (
-                <DriverLicenseField
-                  staged={d.license}
-                  onStage={(file) => setDriver(i, { license: file })}
-                />
+                <div className="flex flex-wrap gap-x-5 gap-y-1">
+                  <DriverLicenseField
+                    staged={d.license}
+                    onStage={(file) => setDriver(i, { license: file })}
+                  />
+                  <DriverLicenseField
+                    kind="passport"
+                    staged={d.passport}
+                    onStage={(file) => setDriver(i, { passport: file })}
+                  />
+                </div>
               )}
               </div>
               );
