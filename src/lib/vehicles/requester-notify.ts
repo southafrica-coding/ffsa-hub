@@ -408,7 +408,8 @@ export async function messageRequesterAsSender(opts: {
     const when = dateRangeLabel(b.checkout_date, b.return_date);
     const posted = await slack.postMessageAs(token.accessToken, {
       channel: open.channel.id,
-      text: `${opts.text}\n\n_Re: <${bookingUrl(b.id)}|${b.booking_name}> · ${when}_`,
+      // The footer tells them Slack is the place to answer — no need to open the Hub.
+      text: `${opts.text}\n\n_Sent from the FFSA Hub about <${bookingUrl(b.id)}|${b.booking_name}> · ${when}. Just reply here._`,
     });
     if (!posted.ok) {
       if (posted.error === "invalid_auth" || posted.error === "token_revoked" || posted.error === "missing_scope")
@@ -446,6 +447,11 @@ export type ConversationLine = {
 /** Slack mrkdwn → readable plain text (links, mentions, entities). */
 function plain(text: string): string {
   return text
+    // The booking footer we append when sending (current and original
+    // wording) — redundant on the booking page itself.
+    .replace(/\n*_(?:Sent from the FFSA Hub about|Re:) [^\n]*_\s*$/, "")
+    // Slack mrkdwn emphasis: _italic_, *bold*, ~strike~.
+    .replace(/(^|[\s(])([_*~])([^\n]+?)\2(?=$|[\s).,!?:;])/g, "$1$3")
     .replace(/<([^|>]+)\|([^>]+)>/g, "$2")
     .replace(/<(https?:[^>]+)>/g, "$1")
     .replace(/<@[A-Z0-9]+>/g, "@someone")
