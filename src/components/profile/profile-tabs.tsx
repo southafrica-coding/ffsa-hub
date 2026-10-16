@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PROFILE_TABS, type ProfileTab } from "./profile-tab-keys";
 
 // The /profile page split into tabs. Content is rendered on the server and
 // handed in as nodes, so this only owns which tab is showing. The choice is
@@ -9,8 +10,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 // /profile?tab=work lands on that tab and a router.refresh() — after a save,
 // or the portal's 10s AutoRefresh — keeps it.
 
-export const PROFILE_TABS = ["personal", "work", "slack", "legal", "records"] as const;
-export type ProfileTab = (typeof PROFILE_TABS)[number];
 
 const LABELS: Record<ProfileTab, string> = {
   personal: "Personal",

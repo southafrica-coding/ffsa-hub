@@ -36,7 +36,8 @@ import { canEditJobDescription } from "@/lib/auth/check-cv-access";
 import { PersonalOkrs } from "@/components/profile/personal-okrs";
 import { getCurrentCycle, listObjectives } from "@/services/okrs";
 import { listUserMinistries } from "@/services/staff-cv";
-import { ProfileTabs, PROFILE_TABS, type ProfileTab } from "@/components/profile/profile-tabs";
+import { ProfileTabs } from "@/components/profile/profile-tabs";
+import { PROFILE_TABS, type ProfileTab } from "@/components/profile/profile-tab-keys";
 
 export default async function ProfilePage({
   searchParams,
