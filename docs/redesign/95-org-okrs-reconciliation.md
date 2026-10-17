@@ -295,16 +295,26 @@ team-scoped roles, the `ministries` view.
 
 ---
 
-## Questions that need an answer before H is built
+## Answers so far (Jack, 2026-10-18)
 
-1. **Inside Ministry / Outside Ministry** — are these teams with their own
-   rosters, or Ally's and Caleb's portfolios (a set of reporting lines over
-   other ministries)? The import differs completely.
-2. **Evangelism** — a part-time ministry, or covered by the Evangelism module?
-3. **Sub-units** — agree that FFX / FFBX / FFSBI / FFLTrack stay
-   sub-categories of Training, and RCA / Ed for Life become its child
-   ministries?
-4. **`org.manage` instead of a new `org.admin`** — fine?
-5. **Removing someone from a ministry** — after H, the roster page will end
-   the membership rather than delete it. That is visible to ministry leaders
-   only as "the person is gone", same as today. Any objection?
+1. **Inside Ministry / Outside Ministry are real ministries with their own
+   rosters.** Create both as staff ministries. Ally and Caleb can also assign
+   people into them. So: Ally is a leader of Inside Ministry and Caleb of
+   Outside Ministry (which already lets each manage that roster through
+   `leads_staff_ministry`), and each also gets an `oversees` reporting line
+   from the Leadership Team.
+2. **Evangelism the module is a separate thing** — statistics and testimony
+   capture, not a team. The `okr_teams` row called Evangelism is retired with
+   the others. If an Evangelism *team* ever needs OKRs, it becomes a part-time
+   ministry then; H does not create one.
+3. **Sub-units: yes, for now.** FFX / FFBX / FFSBI / FFLTrack stay
+   sub-categories of Training; RCA and Ed for Life become child ministries of
+   Training (`parent_id`). Expected to change later, and nothing in H makes
+   that hard — moving a sub-category to a child ministry is a data move.
+
+## Still open
+
+4. **`org.manage` instead of a new `org.admin`** — explained to Jack in plain
+   terms; awaiting an answer.
+5. **Removing someone from a ministry ends the membership instead of deleting
+   it** — explained; awaiting an answer.
