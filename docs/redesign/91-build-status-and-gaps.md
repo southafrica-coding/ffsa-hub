@@ -636,3 +636,12 @@ written.
 many worktrees: main is often checked out elsewhere, checkout fails, `&&`
 short-circuits, and the audit silently reads a stale tree. **Audit from a
 worktree created fresh off `origin/main`, and print the HEAD sha first.**
+
+## Org chart & OKRs (doc 18) — reconciled 2026-10-18, not built
+
+`18-org-and-okrs.md` arrived with the October design export and reads as
+greenfield. It is not: `staff_ministries` (126) is its `teams`, and the 182
+OKR tables are its `objectives` / `key_results` / `kr_checkins`. **Read
+`95-org-okrs-reconciliation.md` before starting step H** — it maps every
+proposed table onto what exists and proposes H as an extension, not new tables.
+Steps I and J need frames 40a–43b, which are not yet in `design/`.
