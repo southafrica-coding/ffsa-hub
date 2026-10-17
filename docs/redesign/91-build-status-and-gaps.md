@@ -637,7 +637,7 @@ many worktrees: main is often checked out elsewhere, checkout fails, `&&`
 short-circuits, and the audit silently reads a stale tree. **Audit from a
 worktree created fresh off `origin/main`, and print the HEAD sha first.**
 
-## Org chart & OKRs (doc 18) — reconciled 2026-10-18, not built
+## Org chart & OKRs (doc 18) — step H built 2026-10-18 (migration 250, NOT yet applied)
 
 `18-org-and-okrs.md` arrived with the October design export and reads as
 greenfield. It is not: `staff_ministries` (126) is its `teams`, and the 182
@@ -645,3 +645,10 @@ OKR tables are its `objectives` / `key_results` / `kr_checkins`. **Read
 `95-org-okrs-reconciliation.md` before starting step H** — it maps every
 proposed table onto what exists and proposes H as an extension, not new tables.
 Steps I and J need frames 40a–43b, which are not yet in `design/`.
+
+Step H: migration `250_org_structure.sql` + `/org-chart/import` review screen.
+Structure columns on `staff_ministries`, role columns on
+`staff_ministry_members`, membership history by trigger, `reporting_lines`,
+`org_layout`, `org_changes` (empty), `org_edit_log`, `okr_shepherds`, OKR
+columns, `okr_teams` retired, `org.manage` reused. Details and the manual
+steps after applying are at the end of doc 95. I and J not started.

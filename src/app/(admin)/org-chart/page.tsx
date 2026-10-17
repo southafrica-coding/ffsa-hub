@@ -2,7 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { requireModuleAccess } from "@/lib/require-permission";
 import { getOrgChart } from "@/services/org-chart";
-import { Masthead } from "@/components/ffsa";
+import { Masthead, MastheadAction } from "@/components/ffsa";
+import { canManageOrg } from "@/services/org-import";
 import { OrgChartFlow } from "./org-chart-flow";
 
 export const metadata = { title: "Org Chart · FFSA Hub" };
@@ -18,11 +19,17 @@ export default async function OrgChartPage() {
   // Gated until the module is dialed in — admins or holders of org.view.
   await requireModuleAccess(supabase, user.id, "org-chart");
 
-  const data = await getOrgChart(supabase);
+  const [data, canManage] = await Promise.all([getOrgChart(supabase), canManageOrg(supabase)]);
 
   return (
     <div className="ffsa-screen">
-      <Masthead context="Organisation · 2026" title="Org chart" />
+      <Masthead
+        context="Organisation · 2026"
+        title="Org chart"
+        actions={
+          canManage ? <MastheadAction href="/org-chart/import">Who is who</MastheadAction> : undefined
+        }
+      />
 
       <p className="max-w-3xl border-b border-rule px-5 py-4 text-[14px] leading-relaxed text-[color:var(--text-secondary)] md:px-8">
         {data?.chart.description ??

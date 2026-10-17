@@ -312,9 +312,47 @@ team-scoped roles, the `ministries` view.
    Training (`parent_id`). Expected to change later, and nothing in H makes
    that hard — moving a sub-category to a child ministry is a data move.
 
-## Still open
+4. **Reuse `org.manage`** — yes.
+5. **Removed people are kept as history** — yes.
 
-4. **`org.manage` instead of a new `org.admin`** — explained to Jack in plain
-   terms; awaiting an answer.
-5. **Removing someone from a ministry ends the membership instead of deleting
-   it** — explained; awaiting an answer.
+---
+
+## Step H as built (migration 250, branch `redesign/H-org-data`)
+
+Two things changed from the proposal above while building, both for safety:
+
+**History is a separate table, not `ends_on` on live rows.** The proposal
+said to add `ends_on` to `staff_ministry_members` and teach every reader to
+ignore ended rows. That is ~30 code readers, three RLS helpers and four
+triggers, any one of which, missed, would let an ex-leader keep their rights.
+Instead a `BEFORE DELETE` trigger copies the row into
+`staff_ministry_membership_history` (with names snapshotted, sub-categories,
+who removed them and when) and the live row goes as before. Every delete path
+— the roster page, convert-to-community, trigger 206, a user being deleted —
+is covered with **no code change**, and no reader can get it wrong. Pending
+requests and the "No Ministry" placeholder are not archived. A *future* end
+(a change set effective next month) is step J's job.
+
+**The import applies nothing by itself.** Every chart box (171), connector
+(21) and the Integrator seat land in `org_import_queue` with a match and
+suggestions. A person with `org.manage` resolves them at `/org-chart/import`
+— one by one, or "Apply N exact matches". Applying goes through SECURITY
+DEFINER functions called with the user's own client, so the database checks
+the permission and the edit log records who decided.
+
+Tested against a copy of production rows in an in-memory Postgres: the
+migration runs twice cleanly; 193 rows queue, all with a ministry; of the 58
+exact matches, **39 were already on the roster** (left untouched), 16 became
+new memberships and 3 reporting lines; a non-manager is refused; deleting a
+membership — directly or by deleting the user — leaves a history row.
+
+**After applying 250, by hand:**
+- Resolve Ally and Caleb in the queue (neither matches automatically).
+- Grant them `org.manage` ("Administer org & OKR structure") in Users & Roles.
+- Appoint Ally leader of Inside Ministry and Caleb of Outside Ministry on the
+  Ministry tab — that route also keeps the `ministry_leader` role in sync,
+  which the import deliberately does not touch.
+
+**Not in H:** seeding 2026 objectives (needs `ORG_TEAMS` from the re-exported
+design file), the nightly job that ends Woven on 31 Oct, the canvas (I),
+change sets and monthly updates (J).
