@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireModuleAccess } from "@/lib/require-permission";
+import { canManageFinance } from "@/lib/api-auth";
 import { Globe, Wallet, CreditCard, Home, HeartHandshake } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Masthead, SectionBar, StatusPill } from "@/components/ffsa";
@@ -52,7 +53,13 @@ export default async function FinancePage() {
   if (!user) redirect("/login");
   await requireModuleAccess(supabase, user.id, "finance");
 
-  const liveCount = FINANCE_MODULES.filter((m) => m.ready).length;
+  // The Finance Office role (migration 248) only runs donor statements;
+  // everyone else with finance access sees every module and the Xero card.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: canView } = await (supabase as any).rpc("has_permission", { required_permission: "finance.view" });
+  const fullFinance = canView === true || (await canManageFinance(supabase, user.id));
+  const modules = fullFinance ? FINANCE_MODULES : FINANCE_MODULES.filter((m) => m.href === "/finance/donor-statements");
+  const liveCount = modules.filter((m) => m.ready).length;
 
   return (
     <div className="ffsa-screen">
@@ -60,7 +67,7 @@ export default async function FinancePage() {
 
       <div className="space-y-7 px-8 py-7">
         <div className="border border-ink">
-          <SectionBar title="Modules" meta={`${liveCount} of ${FINANCE_MODULES.length} live`} />
+          <SectionBar title="Modules" meta={`${liveCount} of ${modules.length} live`} />
           <Table>
             <TableHeader>
               <TableRow>
@@ -71,7 +78,7 @@ export default async function FinancePage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {FINANCE_MODULES.map((mod) => {
+              {modules.map((mod) => {
                 const Icon = mod.icon;
                 return (
                   <TableRow key={mod.title} className={mod.ready ? undefined : "opacity-55"}>
@@ -117,9 +124,11 @@ export default async function FinancePage() {
         </div>
 
         {/* Integrations */}
-        <Suspense>
-          <XeroConnection />
-        </Suspense>
+        {fullFinance && (
+          <Suspense>
+            <XeroConnection />
+          </Suspense>
+        )}
       </div>
     </div>
   );
