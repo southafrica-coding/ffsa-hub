@@ -9,7 +9,6 @@ import {
   getTeamCloseout,
 } from "@/services/outreach-finance";
 import { BudgetLines } from "@/app/(admin)/finance/outreach/[teamId]/budget-lines";
-import { PlanView } from "@/app/(admin)/finance/outreach/[teamId]/plan-view";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -21,6 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Masthead, KpiStrip, Kpi, StatusPill, type Tone } from "@/components/ffsa";
+import { PlanView } from "@/app/(admin)/finance/outreach/[teamId]/plan-view";
 
 const TEAM_TONE: Record<string, Tone> = {
   active: "good",
