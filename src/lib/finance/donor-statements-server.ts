@@ -4,10 +4,14 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { canManageFinance } from "@/lib/api-auth";
+import { renderDonorStatementPdf } from "./donor-statement-pdf";
+import { statementEmail, statementFileName } from "./donor-statement-wording";
+import { sendTransactional } from "@/lib/email/send-transactional";
 import {
   buildStatements,
   donorKey,
   DEFAULT_RUN_OPTIONS,
+  type Donor,
   type DonorEdit,
   type ImportRules,
   type RunOptions,
@@ -229,4 +233,142 @@ export async function loadDonorStatement(admin: any, runId: string, key: string)
   const donor = review.build.donors.find((d) => d.key === key);
   if (!donor) return { error: "Donor not found in this run", status: 404 as const };
   return { review, donor, settings };
+}
+
+// ── Phase 3: sending and the log (migration 247) ─────────────
+
+export type SendRow = {
+  id: string;
+  run_id: string | null;
+  tax_year: number;
+  donor_key: string;
+  donor_name: string;
+  email: string | null;
+  channel: "email" | "paper";
+  status: "sending" | "sent" | "failed";
+  is_resend: boolean;
+  total_cents: number;
+  gift_count: number;
+  pdf_path: string | null;
+  file_name: string;
+  provider_id: string | null;
+  error: string | null;
+  created_at: string;
+  sent_at: string | null;
+};
+
+/** Every send for a tax year, newest first (paged past PostgREST's 1000). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function loadSends(admin: any, taxYear: number): Promise<SendRow[]> {
+  const out: SendRow[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await admin
+      .from("donor_statement_sends")
+      .select("*")
+      .eq("tax_year", taxYear)
+      .order("created_at", { ascending: false })
+      .range(from, from + 999);
+    if (error) throw new Error(error.message);
+    out.push(...(data ?? []));
+    if ((data ?? []).length < 1000) break;
+  }
+  return out;
+}
+
+/** Donors who already got this year's statement by email. */
+export function sentKeys(rows: SendRow[]): Set<string> {
+  return new Set(rows.filter((r) => r.channel === "email" && r.status === "sent").map((r) => r.donor_key));
+}
+
+const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "donor";
+
+/**
+ * Render, store and log one donor's statement; email it unless `channel`
+ * is paper. The PDF is stored before anything is sent, so the log always
+ * points at exactly what the donor received.
+ */
+export async function deliverStatement(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+  args: {
+    runId: string;
+    year: number;
+    donor: Donor;
+    settings: DonorStatementSettings;
+    images: StatementImages;
+    userId: string;
+    channel: "email" | "paper";
+    isResend: boolean;
+  }
+): Promise<{ row: SendRow; pdf: Buffer }> {
+  const { runId, year, donor, settings, images, userId, channel, isResend } = args;
+  const fileName = statementFileName(year, donor.name);
+  const pdf = await renderDonorStatementPdf({ settings, donor, year, ...images });
+  const pdfPath = `sent/${year}/${slug(donor.key)}/${Date.now()}-${channel}.pdf`;
+  const { error: upErr } = await admin.storage
+    .from(DONOR_STATEMENTS_BUCKET)
+    .upload(pdfPath, pdf, { contentType: "application/pdf" });
+
+  const base = {
+    run_id: runId,
+    tax_year: year,
+    donor_key: donor.key,
+    donor_name: donor.name,
+    email: donor.email,
+    channel,
+    is_resend: isResend,
+    total_cents: donor.totalCents,
+    gift_count: donor.gifts.filter((g) => !g.isCreditNote).length,
+    pdf_path: upErr ? null : pdfPath,
+    file_name: fileName,
+    sent_by: userId,
+  };
+
+  if (upErr) {
+    const { data } = await admin
+      .from("donor_statement_sends")
+      .insert({ ...base, status: "failed", error: `Couldn't save the PDF: ${upErr.message}` })
+      .select("*")
+      .single();
+    return { row: data, pdf };
+  }
+
+  if (channel === "paper") {
+    const { data } = await admin
+      .from("donor_statement_sends")
+      .insert({ ...base, status: "sent", sent_at: new Date().toISOString() })
+      .select("*")
+      .single();
+    return { row: data, pdf };
+  }
+
+  const { data: row } = await admin.from("donor_statement_sends").insert({ ...base, status: "sending" }).select("*").single();
+  const email = statementEmail(settings, donor, year);
+  const result = await sendTransactional({
+    to: donor.email!,
+    subject: email.subject,
+    html: email.html,
+    text: email.text,
+    category: "donor_statement",
+    fromName: settings.from_name || settings.org_name,
+    fromEmail: settings.from_email,
+    replyTo: settings.reply_to || null,
+    sourceType: "donor_statement_send",
+    sourceId: row?.id ?? null,
+    reason: `${year} giving statement for gifts to ${settings.org_name}`,
+    attachments: [{ filename: fileName, content: pdf, contentType: "application/pdf" }],
+  });
+  const patch = result.ok
+    ? { status: "sent", provider_id: result.id, sent_at: new Date().toISOString() }
+    : { status: "failed", error: result.error };
+  const { data: updated } = await admin.from("donor_statement_sends").update(patch).eq("id", row.id).select("*").single();
+  return { row: updated ?? { ...row, ...patch }, pdf };
+}
+
+/** Real sends need the logo and signature on the PDF. */
+export function sendBlocker(s: DonorStatementSettings): string | null {
+  const missing = [!s.logo_path && "logo", !s.signature_path && "signature"].filter(Boolean);
+  if (missing.length) return `Upload the ${missing.join(" and ")} in Settings before sending statements.`;
+  if (!s.from_email) return "Apply migration 246 so statements have a sender.";
+  return null;
 }

@@ -11,6 +11,7 @@ import {
   parseWorkbook,
   parseDateCell,
   matchCreditNoteDonor,
+  planSends,
   type SourceLine,
 } from "./donor-statements";
 
@@ -339,5 +340,37 @@ describe("spreadsheet parsing", () => {
     ]);
     expect(lines).toHaveLength(0);
     expect(warnings[0]).toMatch(/couldn’t be read/);
+  });
+});
+
+
+describe("planSends", () => {
+  const r = buildStatements({
+    taxYear: 2026,
+    lines: [
+      line({ invoiceNumber: "INV-1", contactName: "Ready Donor", unitPriceUsd: 10, email: "ready@x.com" }),
+      line({ invoiceNumber: "INV-2", contactName: "Sent Donor", unitPriceUsd: 10, email: "sent@x.com" }),
+      line({ invoiceNumber: "INV-3", contactName: "Paper Donor", unitPriceUsd: 10 }),
+      line({ invoiceNumber: "INV-4", contactName: "Left Out", unitPriceUsd: 10, email: "out@x.com" }),
+    ],
+    edits: [{ donorKey: "left out", excluded: true }],
+  });
+  const keys = ["ready donor", "sent donor", "paper donor", "left out", "nobody"];
+
+  it("sends only to ready donors not yet sent, and says why the rest were skipped", () => {
+    const p = planSends(r.donors, keys, new Set(["sent donor"]));
+    expect(p.send.map((d) => d.name)).toEqual(["Ready Donor"]);
+    expect(Object.fromEntries(p.skipped.map((s) => [s.key, s.reason]))).toEqual({
+      "sent donor": "Already sent this year",
+      "paper donor": "No usable email — post a paper statement",
+      "left out": "Left out of statements",
+      nobody: "Not in this import",
+    });
+  });
+
+  it("re-sends on purpose, but still never to left-out or email-less donors", () => {
+    const p = planSends(r.donors, keys, new Set(["sent donor"]), { resend: true });
+    expect(p.send.map((d) => d.name).sort()).toEqual(["Ready Donor", "Sent Donor"]);
+    expect(p.skipped.map((s) => s.key).sort()).toEqual(["left out", "nobody", "paper donor"]);
   });
 });

@@ -719,3 +719,38 @@ function flagDuplicates(donors: Donor[]) {
     }
   }
 }
+
+// ── Sending (phase 3) ────────────────────────────────────────
+
+export type SendSkip = { key: string; name: string; reason: string };
+
+/**
+ * Which of the asked-for donors may be emailed now. Never: left-out
+ * donors, zero totals, donors without a usable email (they get a paper
+ * statement), and donors already sent this year — unless `resend`, which
+ * is finance re-sending one on purpose (lost statement, corrected gift).
+ */
+export function planSends(
+  donors: Donor[],
+  askedKeys: string[],
+  alreadySent: Set<string>,
+  opts: { resend?: boolean } = {}
+): { send: Donor[]; skipped: SendSkip[] } {
+  const byKey = new Map(donors.map((d) => [d.key, d]));
+  const send: Donor[] = [];
+  const skipped: SendSkip[] = [];
+  for (const key of [...new Set(askedKeys)]) {
+    const d = byKey.get(key);
+    if (!d) {
+      skipped.push({ key, name: key, reason: "Not in this import" });
+      continue;
+    }
+    const skip = (reason: string) => skipped.push({ key, name: d.name, reason });
+    if (d.excluded) skip("Left out of statements");
+    else if (d.totalCents <= 0) skip("Total is zero or less");
+    else if (!d.emailValid) skip("No usable email — post a paper statement");
+    else if (alreadySent.has(d.key) && !opts.resend) skip("Already sent this year");
+    else send.push(d);
+  }
+  return { send, skipped };
+}

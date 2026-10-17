@@ -17,12 +17,13 @@ import {
   type RunOptions,
   type StatementBuild,
 } from "@/lib/finance/donor-statements";
-import type { DonorStatementSettings, RunRow } from "@/lib/finance/donor-statements-server";
+import type { DonorStatementSettings, RunRow, SendRow } from "@/lib/finance/donor-statements-server";
 import { SettingsCard } from "./settings-card";
 import { StatementPreview } from "./statement-preview";
+import { SendPanel, sendIndex, sendInBatches } from "./send-panel";
 
 type RunListItem = Pick<RunRow, "id" | "tax_year" | "source" | "source_file_name" | "status" | "imported_at" | "created_at">;
-type Review = { run: RunRow; build: StatementBuild; options: RunOptions };
+type Review = { run: RunRow; build: StatementBuild; options: RunOptions; sendBlocker: string | null };
 
 const FLAG_LABEL: Record<FlagCode, string> = {
   organisation: "Organisation",
@@ -234,10 +235,17 @@ function RunReview({ runId, onArchived }: { runId: string; onArchived: () => voi
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
   const [preview, setPreview] = useState<number | null>(null);
+  const [sends, setSends] = useState<SendRow[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     try {
-      setReview(await call<Review>(`${api}/runs/${runId}`));
+      const [r, s] = await Promise.all([
+        call<Review>(`${api}/runs/${runId}`),
+        call<{ sends: SendRow[] }>(`${api}/runs/${runId}/sends`).catch(() => ({ sends: [] as SendRow[] })),
+      ]);
+      setReview(r);
+      setSends(s.sends);
       setError(null);
     } catch (e) {
       setError((e as Error).message);
@@ -295,10 +303,27 @@ function RunReview({ runId, onArchived }: { runId: string; onArchived: () => voi
     });
   }, [review, filter, query]);
 
+  const resendOne = useCallback(
+    async (d: Donor, sentAt: string) => {
+      if (!confirm(`${d.name} was already sent ${review?.run.tax_year}'s statement on ${new Date(sentAt).toLocaleDateString("en-ZA", { dateStyle: "medium" })}.\n\nSend it again to ${d.email}? A fresh PDF is made from today's figures.`)) return;
+      try {
+        const out = await sendInBatches(runId, [d.key], { resend: true });
+        const r = out.results[0];
+        if (r?.status === "sent") toast.success(`Statement re-sent to ${d.email}`);
+        else toast.error(r?.error ?? out.skipped[0]?.reason ?? "Not sent");
+      } catch (e) {
+        toast.error((e as Error).message);
+      }
+      await load();
+    },
+    [runId, review, load]
+  );
+
   if (error) return <p className="text-sm text-destructive">{error}</p>;
   if (!review) return <p className="text-sm text-[color:var(--text-tertiary)]">Working out the donor list…</p>;
 
   const { build, options, run } = review;
+  const idx = sendIndex(sends);
   const t = build.totals;
   const allDonors = build.donors.filter((d) => !d.excluded && d.totalCents > 0);
   const counts: Record<Filter, number> = {
@@ -360,6 +385,16 @@ function RunReview({ runId, onArchived }: { runId: string; onArchived: () => voi
         </div>
       </div>
 
+      <SendPanel
+        runId={runId}
+        year={run.tax_year}
+        donors={build.donors}
+        selected={selected}
+        sends={sends}
+        blocker={review.sendBlocker}
+        onDone={load}
+      />
+
       <div className="border border-ink">
         <div className="flex flex-wrap items-center gap-2 border-b border-rule px-5 py-3">
           {(
@@ -384,12 +419,30 @@ function RunReview({ runId, onArchived }: { runId: string; onArchived: () => voi
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-8">
+                <input
+                  type="checkbox"
+                  aria-label="Tick everyone shown"
+                  checked={rows.length > 0 && rows.every((d) => selected.has(d.key))}
+                  onChange={(e) =>
+                    setSelected((cur) => {
+                      const n = new Set(cur);
+                      for (const d of rows) {
+                        if (e.target.checked) n.add(d.key);
+                        else n.delete(d.key);
+                      }
+                      return n;
+                    })
+                  }
+                />
+              </TableHead>
               <TableHead className="w-8" />
               <TableHead>Donor</TableHead>
               <TableHead>Email</TableHead>
               <TableHead className="w-[70px] text-right">Gifts</TableHead>
               <TableHead className="w-[120px] text-right">Total</TableHead>
               <TableHead>Flags</TableHead>
+              <TableHead className="w-[110px]">Sent</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -409,11 +462,23 @@ function RunReview({ runId, onArchived }: { runId: string; onArchived: () => voi
                 others={build.donors.filter((o) => o.key !== d.key)}
                 onEdit={(patch) => editDonor(d.key, patch)}
                 onPreview={() => setPreview(rows.indexOf(d))}
+                checked={selected.has(d.key)}
+                onCheck={(v) =>
+                  setSelected((cur) => {
+                    const n = new Set(cur);
+                    if (v) n.add(d.key);
+                    else n.delete(d.key);
+                    return n;
+                  })
+                }
+                emailSend={idx.email.get(d.key) ?? null}
+                paperSend={idx.paper.get(d.key) ?? null}
+                onResend={resendOne}
               />
             ))}
             {rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="py-6 text-center text-sm text-[color:var(--text-tertiary)]">
+                <TableCell colSpan={8} className="py-6 text-center text-sm text-[color:var(--text-tertiary)]">
                   Nobody here.
                 </TableCell>
               </TableRow>
@@ -423,10 +488,12 @@ function RunReview({ runId, onArchived }: { runId: string; onArchived: () => voi
             <TableFooter>
               <TableRow>
                 <TableCell />
+                <TableCell />
                 <TableCell className="font-bold">Grand total · {t.donorCount} donors</TableCell>
                 <TableCell />
                 <TableCell className="text-right font-bold">{t.giftCount}</TableCell>
                 <TableCell className="text-right font-bold">{fmtUsd(t.grandTotalCents)}</TableCell>
+                <TableCell />
                 <TableCell />
               </TableRow>
             </TableFooter>
@@ -477,6 +544,11 @@ function DonorRow({
   others,
   onEdit,
   onPreview,
+  checked,
+  onCheck,
+  emailSend,
+  paperSend,
+  onResend,
 }: {
   donor: Donor;
   open: boolean;
@@ -484,6 +556,11 @@ function DonorRow({
   others: Donor[];
   onEdit: (patch: Record<string, unknown>) => Promise<void>;
   onPreview: () => void;
+  checked: boolean;
+  onCheck: (v: boolean) => void;
+  emailSend: SendRow | null;
+  paperSend: SendRow | null;
+  onResend: (d: Donor, sentAt: string) => void;
 }) {
   const [email, setEmail] = useState(d.email ?? "");
   const [name, setName] = useState(d.name);
@@ -497,6 +574,9 @@ function DonorRow({
   return (
     <Fragment>
       <TableRow className={out ? "opacity-60" : undefined}>
+        <TableCell className="align-top">
+          <input type="checkbox" aria-label={`Tick ${d.name}`} checked={checked} onChange={(e) => onCheck(e.target.checked)} />
+        </TableCell>
         <TableCell className="align-top">
           <button type="button" onClick={toggle} aria-label={open ? "Hide gifts" : "Show gifts"}>
             {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -547,11 +627,15 @@ function DonorRow({
             ))}
           </div>
         </TableCell>
+        <TableCell className="align-top">
+          <SentCell email={emailSend} paper={paperSend} />
+        </TableCell>
       </TableRow>
       {open && (
         <TableRow className="bg-bone hover:bg-bone">
           <TableCell />
-          <TableCell colSpan={5} className="space-y-4 py-4">
+          <TableCell />
+          <TableCell colSpan={6} className="space-y-4 py-4">
             {d.flags.length > 0 && (
               <ul className="space-y-1 text-sm">
                 {d.flags.map((f, i) => (
@@ -628,6 +712,11 @@ function DonorRow({
               {!out && (
                 <Button size="sm" onClick={onPreview}>
                   <FileText className="mr-1.5 h-3.5 w-3.5" /> Preview statement
+                </Button>
+              )}
+              {!out && d.emailValid && emailSend?.status === "sent" && (
+                <Button size="sm" variant="outline" onClick={() => onResend(d, emailSend.sent_at ?? emailSend.created_at)}>
+                  Resend statement
                 </Button>
               )}
               <Button size="sm" variant={d.excluded ? "default" : "outline"} onClick={() => onEdit({ excluded: !d.excluded })}>
@@ -735,4 +824,13 @@ function downloadCsv(year: number, donors: Donor[]) {
   a.download = `FF SA USA - ${year} donor list.csv`;
   a.click();
   URL.revokeObjectURL(a.href);
+}
+
+function SentCell({ email, paper }: { email: SendRow | null; paper: SendRow | null }) {
+  const day = (r: SendRow) => new Date(r.sent_at ?? r.created_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short" });
+  if (email?.status === "sent") return <StatusPill tone="good">Sent {day(email)}</StatusPill>;
+  if (email?.status === "failed") return <StatusPill tone="bad">Failed</StatusPill>;
+  if (email?.status === "sending") return <StatusPill tone="warn">Sending</StatusPill>;
+  if (paper?.status === "sent") return <StatusPill tone="quiet">Paper {day(paper)}</StatusPill>;
+  return <span className="text-[color:var(--text-tertiary)]">—</span>;
 }

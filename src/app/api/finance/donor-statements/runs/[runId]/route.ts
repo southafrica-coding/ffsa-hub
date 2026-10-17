@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { authorizeDonorStatements, dsDb, loadRunReview } from "@/lib/finance/donor-statements-server";
+import { authorizeDonorStatements, dsDb, loadRunReview, loadSettings, sendBlocker } from "@/lib/finance/donor-statements-server";
 import type { RunOptions } from "@/lib/finance/donor-statements";
 
 // GET                         → the review (donors, totals, set-aside lines)
@@ -13,9 +13,10 @@ export async function GET(_request: Request, context: Ctx) {
   if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
   const { runId } = await context.params;
   try {
-    const review = await loadRunReview(dsDb(), runId);
+    const admin = dsDb();
+    const [review, settings] = await Promise.all([loadRunReview(admin, runId), loadSettings(admin)]);
     if (!review) return NextResponse.json({ error: "Run not found" }, { status: 404 });
-    return NextResponse.json(review);
+    return NextResponse.json({ ...review, sendBlocker: settings ? sendBlocker(settings) : "Settings missing" });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Load failed" }, { status: 500 });
   }
