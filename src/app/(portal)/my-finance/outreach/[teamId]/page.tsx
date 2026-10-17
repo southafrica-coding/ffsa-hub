@@ -9,6 +9,7 @@ import {
   getTeamCloseout,
 } from "@/services/outreach-finance";
 import { BudgetLines } from "@/app/(admin)/finance/outreach/[teamId]/budget-lines";
+import { PlanView } from "@/app/(admin)/finance/outreach/[teamId]/plan-view";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -148,6 +149,18 @@ export default async function MyOutreachTeamPage({
         spentByCategory={spentByCategory}
         canEdit={canEditBudget}
       />
+
+      <section className="space-y-3">
+        <h2 className="font-medium">Day-by-day plan</h2>
+        <PlanView
+          lines={budgetLines ?? []}
+          teamSize={team.people_count}
+          tripStart={team.start_date}
+          tripEnd={team.end_date}
+          expenses={expenses ?? []}
+          categories={categories ?? []}
+        />
+      </section>
 
       {/* Recent Expenses */}
       <Card>

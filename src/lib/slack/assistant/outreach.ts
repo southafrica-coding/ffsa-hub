@@ -20,6 +20,7 @@
 
 import type Anthropic from "@anthropic-ai/sdk";
 import { guessCategory, type BudgetCategory } from "@/lib/finance/outreach-budget";
+import { buildPlan, mondayOf, periodSummary, shiftDate, type PlanKind } from "@/lib/finance/outreach-plan";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AdminClient = any;
@@ -456,6 +457,76 @@ async function outreachExpenses(
   };
 }
 
+export type PlanPeriod = "today" | "tomorrow" | "this_week" | "next_week" | "whole";
+
+export function planRange(period: PlanPeriod | undefined, today: string): { from: string; to: string; label: string } {
+  switch (period) {
+    case "tomorrow":
+      return { from: shiftDate(today, 1), to: shiftDate(today, 1), label: "tomorrow" };
+    case "this_week":
+      return { from: mondayOf(today), to: shiftDate(mondayOf(today), 6), label: "this week (Mon–Sun)" };
+    case "next_week":
+      return { from: shiftDate(mondayOf(today), 7), to: shiftDate(mondayOf(today), 13), label: "next week (Mon–Sun)" };
+    case "whole":
+      return { from: "0000-01-01", to: "9999-12-31", label: "the whole plan" };
+    default:
+      return { from: today, to: today, label: "today" };
+  }
+}
+
+async function outreachPlan(admin: AdminClient, scope: OutreachScope, input: { team?: string; period?: PlanPeriod }) {
+  const pick = pickTeam(scope, input.team);
+  if (!pick.ok) return pick;
+  const team = pick.team;
+  const [{ data: teamRow }, { data: lines }, { data: expenses }, categories] = await Promise.all([
+    admin.from("outreach_teams").select("start_date, end_date").eq("id", team.id).single(),
+    admin
+      .from("outreach_budget_lines")
+      .select("id, description, category_id, total_zar, plan_kind, plan_start, plan_end")
+      .eq("team_id", team.id),
+    admin.from("outreach_expenses").select("expense_date, zar_amount, category_id, vendor, description").eq("team_id", team.id).range(0, 9999),
+    loadCategories(admin),
+  ]);
+  const plan = buildPlan({
+    trip: { start: teamRow?.start_date ?? null, end: teamRow?.end_date ?? null },
+    lines: ((lines ?? []) as { id: string; description: string; category_id: string; total_zar: number; plan_kind: PlanKind | null; plan_start: string | null; plan_end: string | null }[]).map((l) => ({
+      id: l.id,
+      description: l.description,
+      category_id: l.category_id,
+      total: Number(l.total_zar),
+      plan_kind: l.plan_kind,
+      plan_start: l.plan_start,
+      plan_end: l.plan_end,
+    })),
+    expenses: (expenses ?? []) as { expense_date: string; zar_amount: number; category_id: string }[],
+  });
+  const today = sastDate(new Date());
+  const r = planRange(input.period, today);
+  const sum = periodSummary(plan, r.from, r.to);
+  const name = new Map(categories.map((c) => [c.id, c.name]));
+
+  // What the plan for the period is made of, biggest first.
+  const byLine = new Map<string, { description: string; category: string; planned: number }>();
+  for (const d of sum.days) {
+    for (const it of d.items) {
+      const cur = byLine.get(it.lineId) ?? { description: it.description, category: name.get(it.category_id) ?? "", planned: 0 };
+      cur.planned = Math.round((cur.planned + it.amount) * 100) / 100;
+      byLine.set(it.lineId, cur);
+    }
+  }
+  return {
+    team: team.team_name,
+    period: r.label,
+    dates: input.period === "whole" ? null : r.from === r.to ? r.from : `${r.from} to ${r.to}`,
+    planned: sum.planned,
+    spent: sum.spent,
+    left_to_spend: sum.left,
+    plan_made_of: [...byLine.values()].sort((a, b) => b.planned - a.planned).slice(0, 10),
+    no_plan: plan.days.length === 0,
+    lines_without_dates: plan.unplaced.map((l) => l.description),
+  };
+}
+
 export async function executeOutreachTool(
   admin: AdminClient,
   scope: OutreachScope,
@@ -466,6 +537,8 @@ export async function executeOutreachTool(
     switch (name) {
       case "outreach_budget":
         return await outreachBudget(admin, scope, input as { team?: string; category?: string });
+      case "outreach_plan":
+        return await outreachPlan(admin, scope, input as { team?: string; period?: PlanPeriod });
       case "outreach_expenses":
         return await outreachExpenses(
           admin,
@@ -480,7 +553,7 @@ export async function executeOutreachTool(
   }
 }
 
-export const OUTREACH_TOOL_NAMES = new Set(["outreach_budget", "outreach_expenses"]);
+export const OUTREACH_TOOL_NAMES = new Set(["outreach_budget", "outreach_expenses", "outreach_plan"]);
 
 const TEAM_PARAM = {
   type: "string" as const,
@@ -500,6 +573,22 @@ export const OUTREACH_TOOLS: Anthropic.Tool[] = [
         category: {
           type: "string",
           description: "The category the user asked about, in their words. Omit for the whole budget.",
+        },
+      },
+    },
+  },
+  {
+    name: "outreach_plan",
+    description:
+      "The team's day-by-day spending plan: how much was planned for today / tomorrow / this week / next week, how much has been spent, and what's left to spend in that period, with the budget lines that make up the plan. Use for 'how much can we spend today?' or 'what's our budget this week?'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        team: TEAM_PARAM,
+        period: {
+          type: "string",
+          enum: ["today", "tomorrow", "this_week", "next_week", "whole"],
+          description: "Which period. Defaults to today.",
         },
       },
     },

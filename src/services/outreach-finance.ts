@@ -149,7 +149,7 @@ export async function getTeamBudgetLines(supabase: Client, teamId: string) {
   return supabase
     .from("outreach_budget_lines")
     .select(
-      "id, team_id, category_id, description, amount_zar, frequency, uses_team_size, fixed_people, total_zar, sheet_total_zar, sort_order, source"
+      "id, team_id, category_id, description, amount_zar, frequency, uses_team_size, fixed_people, total_zar, sheet_total_zar, sort_order, source, plan_kind, plan_start, plan_end"
     )
     .eq("team_id", teamId)
     .order("sort_order", { ascending: true })

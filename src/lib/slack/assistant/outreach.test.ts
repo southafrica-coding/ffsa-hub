@@ -119,3 +119,13 @@ describe("dates (SAST)", () => {
     expect(periodRange(undefined, late)).toMatchObject({ from: null, to: null });
   });
 });
+
+describe("planRange", () => {
+  it("today, tomorrow and Mon–Sun weeks in SA time", async () => {
+    const { planRange } = await import("./outreach");
+    expect(planRange(undefined, "2026-10-29")).toMatchObject({ from: "2026-10-29", to: "2026-10-29" });
+    expect(planRange("tomorrow", "2026-10-29")).toMatchObject({ from: "2026-10-30", to: "2026-10-30" });
+    expect(planRange("this_week", "2026-10-29")).toMatchObject({ from: "2026-10-26", to: "2026-11-01" });
+    expect(planRange("next_week", "2026-10-29")).toMatchObject({ from: "2026-11-02", to: "2026-11-08" });
+  });
+});

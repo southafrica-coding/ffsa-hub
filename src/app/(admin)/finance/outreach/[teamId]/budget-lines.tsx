@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Minus, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import {
   Select,
   SelectContent,
@@ -32,6 +33,9 @@ export type BudgetLine = {
   sheet_total_zar: number | null;
   sort_order: number;
   source: "manual" | "import";
+  plan_kind?: "trip" | "range" | "day" | null;
+  plan_start?: string | null;
+  plan_end?: string | null;
 };
 
 type Draft = {
@@ -41,6 +45,9 @@ type Draft = {
   frequency: string;
   uses_team_size: boolean;
   fixed_people: string;
+  plan_kind: "trip" | "range" | "day";
+  plan_start: string;
+  plan_end: string;
 };
 
 const zar = (n: number) =>
@@ -62,6 +69,9 @@ function toDraft(l?: Partial<BudgetLine>, categoryId = ""): Draft {
     frequency: l?.frequency != null ? num(l.frequency) : "1",
     uses_team_size: l?.uses_team_size ?? true,
     fixed_people: l?.fixed_people != null ? String(l.fixed_people) : "1",
+    plan_kind: l?.plan_kind ?? "trip",
+    plan_start: l?.plan_start ?? "",
+    plan_end: l?.plan_end ?? "",
   };
 }
 
@@ -160,6 +170,9 @@ export function BudgetLines({
   async function saveLine(id: string | null, d: Draft) {
     if (!d.description.trim()) return toast.error("Say what the line is for");
     if (!d.category_id) return toast.error("Pick a category");
+    if (d.plan_kind === "day" && !d.plan_start) return toast.error("Pick the day it's spent");
+    if (d.plan_kind === "range" && (!d.plan_start || !d.plan_end)) return toast.error("Pick the dates it's spent over");
+    if (d.plan_kind === "range" && d.plan_end < d.plan_start) return toast.error("The end date is before the start date");
     setBusy(true);
     try {
       const body = {
@@ -167,6 +180,9 @@ export function BudgetLines({
         category_id: d.category_id,
         description: d.description.trim(),
         ...draftLine(d),
+        plan_kind: d.plan_kind,
+        plan_start: d.plan_start || null,
+        plan_end: d.plan_end || null,
       };
       const res = await fetch("/api/finance/outreach/budget-lines", {
         method: id ? "PATCH" : "POST",
@@ -474,6 +490,7 @@ function LineRow({
               {zarShort(Number(line.amount_zar))} × {num(line.frequency)} × {people}{" "}
               {people === 1 ? "person" : "people"}
               {line.uses_team_size && <span className="text-[#7C786C]"> (whole team)</span>}
+              {whenLabel(line) && <span className="text-[#7C786C]"> · {whenLabel(line)}</span>}
             </>
           )}
         </div>
@@ -621,6 +638,31 @@ function LineEditor({
         </Field>
       </div>
 
+      <div className="grid gap-3 sm:grid-cols-[1fr_1fr_1fr]">
+        <Field label="When is it spent?">
+          <Select value={d.plan_kind} onValueChange={(v) => set("plan_kind", v as Draft["plan_kind"])}>
+            <SelectTrigger className="h-9 min-w-0">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="trip">Spread over the whole trip</SelectItem>
+              <SelectItem value="range">Spread over certain dates</SelectItem>
+              <SelectItem value="day">All on one day</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
+        {d.plan_kind !== "trip" && (
+          <Field label={d.plan_kind === "day" ? "Date" : "From"}>
+            <DateInput value={d.plan_start} onChange={(v) => set("plan_start", v)} aria-label="Plan start date" className="h-9" />
+          </Field>
+        )}
+        {d.plan_kind === "range" && (
+          <Field label="To">
+            <DateInput value={d.plan_end} onChange={(v) => set("plan_end", v)} aria-label="Plan end date" className="h-9" />
+          </Field>
+        )}
+      </div>
+
       <div className="flex justify-end gap-2">
         <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
           Cancel
@@ -631,6 +673,18 @@ function LineEditor({
       </div>
     </form>
   );
+}
+
+const fmtDay = (iso: string) =>
+  new Date(iso + "T00:00:00Z").toLocaleDateString("en-ZA", { day: "numeric", month: "short", timeZone: "UTC" });
+
+/** "28 Oct – 3 Nov" / "on 28 Oct" — nothing for the whole-trip default. */
+function whenLabel(line: Pick<BudgetLine, "plan_kind" | "plan_start" | "plan_end">): string | null {
+  if (line.plan_kind === "day" && line.plan_start) return `on ${fmtDay(line.plan_start)}`;
+  if (line.plan_kind === "range" && line.plan_start && line.plan_end) {
+    return `${fmtDay(line.plan_start)} – ${fmtDay(line.plan_end)}`;
+  }
+  return null;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {

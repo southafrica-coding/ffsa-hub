@@ -13,7 +13,12 @@ type LineBody = {
   uses_team_size?: boolean;
   fixed_people?: number;
   sort_order?: number;
+  plan_kind?: "trip" | "range" | "day";
+  plan_start?: string | null;
+  plan_end?: string | null;
 };
+
+const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
 function clean(body: LineBody) {
   const out: Record<string, unknown> = {};
@@ -25,6 +30,23 @@ function clean(body: LineBody) {
   if (body.fixed_people !== undefined)
     out.fixed_people = Math.max(0, Math.round(Number(body.fixed_people) || 0));
   if (body.sort_order !== undefined) out.sort_order = Math.round(Number(body.sort_order) || 0);
+  // When the money goes out (daily/weekly plan). Dates that don't fit the
+  // kind are dropped rather than stored half-set.
+  if (body.plan_kind !== undefined) {
+    const kind = ["trip", "range", "day"].includes(body.plan_kind) ? body.plan_kind : "trip";
+    const start = body.plan_start && ISO.test(body.plan_start) ? body.plan_start : null;
+    let end = body.plan_end && ISO.test(body.plan_end) ? body.plan_end : null;
+    if (kind === "range" && start && end && end < start) end = null;
+    if ((kind === "day" && !start) || (kind === "range" && (!start || !end))) {
+      out.plan_kind = "trip";
+      out.plan_start = null;
+      out.plan_end = null;
+    } else {
+      out.plan_kind = kind;
+      out.plan_start = kind === "trip" ? null : start;
+      out.plan_end = kind === "range" ? end : null;
+    }
+  }
   return out;
 }
 

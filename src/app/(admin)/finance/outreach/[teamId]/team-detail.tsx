@@ -29,7 +29,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Plus, Trash2, Users, Wallet, Receipt, Banknote, BarChart3, CheckCircle2 } from "lucide-react";
+import { CalendarDays, Plus, Trash2, Users, Wallet, Receipt, Banknote, BarChart3, CheckCircle2 } from "lucide-react";
 import { Masthead, KpiStrip, NeedsYou, StatusPill } from "@/components/ffsa";
 import { MoneyKpi, barTone } from "../../money-kpi";
 import { ExpensesTab } from "./expenses-tab";
@@ -38,6 +38,7 @@ import { DashboardTab } from "./dashboard-tab";
 import { CloseoutTab } from "./closeout-tab";
 import { SlackSettings } from "./slack-settings";
 import { BudgetLines, type BudgetLine } from "./budget-lines";
+import { PlanView } from "./plan-view";
 
 // ────────────────────────────────────────────────────────────
 // TYPES
@@ -318,6 +319,9 @@ export function TeamDetail({
           <TabsTrigger value="budget" className="gap-1">
             <Wallet className="h-3 w-3" /> Budget ({budgetLines.length})
           </TabsTrigger>
+          <TabsTrigger value="plan" className="gap-1">
+            <CalendarDays className="h-3 w-3" /> Plan
+          </TabsTrigger>
           <TabsTrigger value="members" className="gap-1">
             <Users className="h-3 w-3" /> Members ({members.length})
           </TabsTrigger>
@@ -343,6 +347,17 @@ export function TeamDetail({
             categories={categories}
             spentByCategory={spentByCategory}
             canEdit={!isFinanceLocked}
+          />
+        </TabsContent>
+
+        <TabsContent value="plan" className="mt-4">
+          <PlanView
+            lines={budgetLines}
+            teamSize={team.people_count}
+            tripStart={team.start_date}
+            tripEnd={team.end_date}
+            expenses={expenses}
+            categories={categories}
           />
         </TabsContent>
 
