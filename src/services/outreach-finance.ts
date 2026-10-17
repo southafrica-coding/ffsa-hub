@@ -1,3 +1,4 @@
+import { TEAM_CASH_METHODS } from "@/lib/finance/outreach-cash";
 import {
   getRecentStudentPayments,
   getUnreferencedBankPayments,
@@ -83,7 +84,7 @@ export async function getTeamMembers(supabase: Client, teamId: string) {
   return supabase
     .from("outreach_team_members")
     .select(
-      "*, users!outreach_team_members_user_id_fkey(id, first_name, last_name, preferred_name, email)"
+      "*, users!outreach_team_members_user_id_fkey(id, first_name, last_name, preferred_name, email, slack_user_id)"
     )
     .eq("team_id", teamId)
     .order("role", { ascending: true });
@@ -389,17 +390,40 @@ export async function updateCloseoutStatus(
 // AGGREGATE FINANCIALS (for all-teams dashboard)
 // ────────────────────────────────────────────────────────────
 
+/**
+ * Every row of a query, page by page. PostgREST silently stops at 1000
+ * rows, which would quietly under-count org-wide totals once enough
+ * expenses exist.
+ */
+async function allRows<T>(
+  build: () => { range: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }> }
+): Promise<T[]> {
+  const PAGE = 1000;
+  const out: T[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await build().range(from, from + PAGE - 1);
+    if (error || !data) break;
+    out.push(...data);
+    if (data.length < PAGE) break;
+  }
+  return out;
+}
+
 export async function getAggregateFinancials(supabase: Client) {
   const [
-    { data: expenses },
-    { data: releases },
+    expenseRows,
+    releases,
     { data: budgets },
     { data: closeouts },
     { data: budgetDetails },
-    { data: expenseDetails },
+    { data: teamAlerts },
   ] = await Promise.all([
-    supabase.from("outreach_expenses").select("team_id, zar_amount"),
-    supabase.from("outreach_fund_releases").select("team_id, amount_zar"),
+    allRows<{ team_id: string; category_id: string; zar_amount: number; payment_method: string | null }>(() =>
+      supabase.from("outreach_expenses").select("team_id, category_id, zar_amount, payment_method").order("id")
+    ),
+    allRows<{ team_id: string; amount_zar: number }>(() =>
+      supabase.from("outreach_fund_releases").select("team_id, amount_zar").order("id")
+    ),
     supabase.from("outreach_team_budgets").select("team_id, budget_amount_zar"),
     supabase.from("outreach_closeouts").select("team_id, status"),
     supabase
@@ -407,10 +431,12 @@ export async function getAggregateFinancials(supabase: Client) {
       .select(
         "team_id, category_id, budget_amount_zar, outreach_budget_categories(id, name, slug, sort_order)"
       ),
-    supabase
-      .from("outreach_expenses")
-      .select("team_id, category_id, zar_amount"),
+    supabase.from("outreach_teams").select("id, cash_alert_low_pct, cash_alert_critical_pct"),
   ]);
+  const expenses = expenseRows;
+  const expenseDetails = expenseRows;
+  // Spending that came out of the money sent to the team (see outreach-cash.ts).
+  const teamCashSpent = expenseRows.filter((e) => TEAM_CASH_METHODS.has(e.payment_method ?? "cash"));
 
   const sumByTeam = (
     rows: { team_id: string; [key: string]: unknown }[] | null,
@@ -464,6 +490,12 @@ export async function getAggregateFinancials(supabase: Client) {
 
   return {
     expensesByTeam: sumByTeam(expenses, "zar_amount"),
+    teamCashSpentByTeam: sumByTeam(teamCashSpent, "zar_amount"),
+    cashThresholdsByTeam: Object.fromEntries(
+      ((teamAlerts ?? []) as { id: string; cash_alert_low_pct: number | null; cash_alert_critical_pct: number | null }[]).map(
+        (t) => [t.id, { low: t.cash_alert_low_pct, critical: t.cash_alert_critical_pct }]
+      )
+    ) as Record<string, { low: number | null; critical: number | null }>,
     releasesByTeam: sumByTeam(releases, "amount_zar"),
     budgetsByTeam: sumByTeam(budgets, "budget_amount_zar"),
     closeoutsByTeam: (closeouts ?? []).reduce(

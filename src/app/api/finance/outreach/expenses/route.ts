@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
+import { checkCashAlert } from "@/lib/outreach/cash-alerts";
 import { createClient } from "@/lib/supabase/server";
 import {
   createExpense,
@@ -34,6 +35,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // Money changed: maybe tell school leaders the team is running low.
+  after(() => checkCashAlert(body.team_id));
   return NextResponse.json({ success: true, data });
 }
 
@@ -60,6 +63,7 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  if (data?.team_id) after(() => checkCashAlert(data.team_id));
   return NextResponse.json({ success: true, data });
 }
 
@@ -80,11 +84,13 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "id is required" }, { status: 400 });
   }
 
+  const { data: before } = await supabase.from("outreach_expenses").select("team_id").eq("id", id).maybeSingle();
   const { error } = await deleteExpense(supabase, id);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  if (before?.team_id) after(() => checkCashAlert(before.team_id));
   return NextResponse.json({ success: true });
 }

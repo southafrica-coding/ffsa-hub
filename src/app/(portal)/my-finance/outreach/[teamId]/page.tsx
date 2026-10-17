@@ -9,6 +9,7 @@ import {
   getTeamCloseout,
 } from "@/services/outreach-finance";
 import { BudgetLines } from "@/app/(admin)/finance/outreach/[teamId]/budget-lines";
+import { CashInHand } from "@/app/(admin)/finance/outreach/cash-in-hand";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -132,14 +133,21 @@ export default async function MyOutreachTeamPage({
         <Kpi label="Total released" value={formatCurrency(totalReleased)} size={26} />
         <Kpi label="Total spent" value={formatCurrency(totalSpent)} size={26} />
         <Kpi
-          label="Remaining"
-          value={formatCurrency(totalReleased - totalSpent)}
+          label="Budget left"
+          value={formatCurrency(team.total_budget_zar - totalSpent)}
           size={26}
-          valueColor={totalReleased - totalSpent < 0 ? "hsl(var(--destructive))" : undefined}
+          valueColor={team.total_budget_zar - totalSpent < 0 ? "hsl(var(--destructive))" : undefined}
         />
       </KpiStrip>
 
       <div className="space-y-6 px-5 py-6 md:px-8 md:py-7">
+      <CashInHand
+        releases={fundReleases ?? []}
+        expenses={expenses ?? []}
+        lowPct={team.cash_alert_low_pct}
+        criticalPct={team.cash_alert_critical_pct}
+      />
+
       <BudgetLines
         teamId={teamId}
         teamSize={team.people_count}

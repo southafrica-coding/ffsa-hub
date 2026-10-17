@@ -32,11 +32,13 @@ import {
 import { Plus, Trash2, Users, Wallet, Receipt, Banknote, BarChart3, CheckCircle2 } from "lucide-react";
 import { Masthead, KpiStrip, NeedsYou, StatusPill } from "@/components/ffsa";
 import { MoneyKpi, barTone } from "../../money-kpi";
+import { CashInHand } from "../cash-in-hand";
 import { ExpensesTab } from "./expenses-tab";
 import { PayoutsTab } from "./payouts-tab";
 import { DashboardTab } from "./dashboard-tab";
 import { CloseoutTab } from "./closeout-tab";
 import { SlackSettings } from "./slack-settings";
+import { MoneyAlertSettings } from "./money-alert-settings";
 import { BudgetLines, type BudgetLine } from "./budget-lines";
 
 // ────────────────────────────────────────────────────────────
@@ -58,6 +60,8 @@ type Team = {
   drive_folder_url: string | null;
   slack_enabled?: boolean;
   slack_channel_id?: string | null;
+  cash_alert_low_pct?: number | null;
+  cash_alert_critical_pct?: number | null;
   programs: { id: string; name: string; code: string };
 };
 
@@ -72,6 +76,7 @@ type Member = {
     last_name: string | null;
     preferred_name: string | null;
     email: string | null;
+    slack_user_id?: string | null;
   } | null;
 };
 
@@ -298,7 +303,7 @@ export function TeamDetail({
               foot={`${spentPct.toFixed(0)}% of budget`}
             />
             <MoneyKpi
-              label="Remaining funds"
+              label="Budget left"
               value={formatCurrency(remainingFunds)}
               negative={remainingFunds < 0}
               positive={remainingFunds >= 0}
@@ -311,6 +316,13 @@ export function TeamDetail({
             />
           </KpiStrip>
         </div>
+
+        <CashInHand
+          releases={fundReleases}
+          expenses={expenses}
+          lowPct={team.cash_alert_low_pct}
+          criticalPct={team.cash_alert_critical_pct}
+        />
 
         {/* Tabs */}
         <Tabs defaultValue="budget">
@@ -356,6 +368,17 @@ export function TeamDetail({
             teamId={team.id}
             enabled={team.slack_enabled ?? false}
             channelId={team.slack_channel_id ?? null}
+          />
+          <MoneyAlertSettings
+            teamId={team.id}
+            lowPct={team.cash_alert_low_pct ?? 30}
+            criticalPct={team.cash_alert_critical_pct ?? 15}
+            schoolLeaders={members
+              .filter((m) => m.role === "school_leader")
+              .map((m) => ({
+                name: [m.users?.first_name, m.users?.last_name].filter(Boolean).join(" ") || "Unnamed",
+                slackLinked: Boolean(m.users?.slack_user_id),
+              }))}
           />
         </TabsContent>
 

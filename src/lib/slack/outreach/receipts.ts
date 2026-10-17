@@ -23,6 +23,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import sharp from "sharp";
 import * as slack from "@/lib/slack/client";
+import { checkCashAlert } from "@/lib/outreach/cash-alerts";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { BudgetCategory } from "@/lib/finance/outreach-budget";
 import { isFinanceStaff, pickTeam, sastDate, summarise, type OutreachScope, type OutreachTeamRef } from "@/lib/slack/assistant/outreach";
@@ -526,6 +527,7 @@ export async function logReceipt(draftId: string, slackUserId: string, reply: Re
       .eq("id", draftId);
 
     const left = await categoryLeft(admin, draft.team_id, p.category_id!);
+    await checkCashAlert(draft.team_id);
     if (draft.card_ts) {
       const amount =
         p.local_currency === "ZAR"

@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
+import { checkCashAlert } from "@/lib/outreach/cash-alerts";
 import { createClient } from "@/lib/supabase/server";
 import { rowKey, type ImportRow } from "@/lib/finance/outreach-import";
 
@@ -136,6 +137,7 @@ export async function POST(request: Request) {
     .update({ created_count: created, skipped_count: skipped })
     .eq("id", batch.id);
 
+  after(() => checkCashAlert(teamId));
   return NextResponse.json({
     success: true,
     batchId: batch.id,
@@ -171,12 +173,15 @@ export async function DELETE(request: Request) {
     .from("outreach_expenses")
     .delete()
     .eq("import_batch_id", batchId)
-    .select("id");
+    .select("id, team_id");
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   await db.from("outreach_expense_imports").delete().eq("id", batchId);
 
-  const removedCount = (removed as { id: string }[] | null)?.length ?? 0;
+  const removedRows = (removed as { id: string; team_id: string }[] | null) ?? [];
+  const removedCount = removedRows.length;
+  const teamOfBatch = removedRows[0]?.team_id;
+  if (teamOfBatch) after(() => checkCashAlert(teamOfBatch));
   return NextResponse.json({ success: true, removed: removedCount });
 }

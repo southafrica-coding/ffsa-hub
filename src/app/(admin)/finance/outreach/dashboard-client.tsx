@@ -27,6 +27,8 @@ import {
   KpiStrip,
   Bar,
 } from "@/components/ffsa";
+import { cashInHand } from "@/lib/finance/outreach-cash";
+import { LEVEL_COLOUR } from "./cash-in-hand";
 import { MoneyKpi, barTone } from "../money-kpi";
 import { CreateTeamForm } from "./create-team-form";
 import { MovementsPanel } from "./movements-panel";
@@ -66,6 +68,8 @@ type BudgetDetail = {
 
 type Aggregates = {
   expensesByTeam: Record<string, number>;
+  teamCashSpentByTeam: Record<string, number>;
+  cashThresholdsByTeam: Record<string, { low: number | null; critical: number | null }>;
   releasesByTeam: Record<string, number>;
   budgetsByTeam: Record<string, number>;
   closeoutsByTeam: Record<string, string>;
@@ -129,6 +133,14 @@ export function OutreachDashboardClient({
   const [expandedTeams, setExpandedTeams] = useState<Set<string>>(new Set());
 
   // Filter teams
+  const teamCash = (teamId: string) =>
+    cashInHand({
+      sent: aggregates.releasesByTeam[teamId] || 0,
+      spent: aggregates.teamCashSpentByTeam?.[teamId] || 0,
+      lowPct: aggregates.cashThresholdsByTeam?.[teamId]?.low,
+      criticalPct: aggregates.cashThresholdsByTeam?.[teamId]?.critical,
+    });
+
   const filteredTeams = useMemo(() => {
     let result = teams;
     if (schoolFilter !== "all") {
@@ -137,8 +149,20 @@ export function OutreachDashboardClient({
     if (statusFilter !== "all") {
       result = result.filter((t) => t.status === statusFilter);
     }
-    return result;
-  }, [teams, schoolFilter, statusFilter]);
+    // Teams running out of the money sent to them come first, so school
+    // leaders see who needs money before anything else.
+    const urgency = (t: Team) => {
+      const c = teamCash(t.id);
+      const rank = { critical: 0, low: 1, ok: 2, none: 3 }[c.level];
+      return [rank, c.pctLeft ?? 1000] as const;
+    };
+    return [...result].sort((a, b) => {
+      const [ra, pa] = urgency(a);
+      const [rb, pb] = urgency(b);
+      return ra - rb || pa - pb;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teams, schoolFilter, statusFilter, aggregates]);
 
   // Compute aggregates from filtered teams
   const filteredAggregates = useMemo(() => {
@@ -340,7 +364,7 @@ export function OutreachDashboardClient({
                     <TableHead className="min-w-[170px]">Funded</TableHead>
                     <TableHead>Funding state</TableHead>
                     <TableHead className="text-right">Spent</TableHead>
-                    <TableHead className="text-right">Available</TableHead>
+                    <TableHead className="min-w-[170px]">Still with team</TableHead>
                     <TableHead className="w-[150px]">Status</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -348,7 +372,10 @@ export function OutreachDashboardClient({
                   {filteredTeams.map((team) => {
                     const released = aggregates.releasesByTeam[team.id] || 0;
                     const spent = aggregates.expensesByTeam[team.id] || 0;
-                    const available = released - spent;
+                    // Money still with the team: sent minus what they spent
+                    // of it (not base prepayments) — see outreach-cash.ts.
+                    const cash = teamCash(team.id);
+                    const available = cash.left;
                     const budget = Number(team.total_budget_zar);
                     const pctUsed = budget > 0 ? (spent / budget) * 100 : 0;
                     const pctFunded = budget > 0 ? (released / budget) * 100 : 0;
@@ -444,16 +471,28 @@ export function OutreachDashboardClient({
                             </p>
                           </TableCell>
 
-                          <TableCell
-                            className="tabular align-top whitespace-nowrap text-right font-mono text-[12.5px]"
-                            style={{
-                              color:
-                                available < 0
-                                  ? "hsl(var(--destructive))"
-                                  : "var(--green-text)",
-                            }}
-                          >
-                            {formatCurrency(available)}
+                          <TableCell className="align-top">
+                            {cash.level === "none" ? (
+                              <span className="mono-label">Nothing sent yet</span>
+                            ) : (
+                              <>
+                                <div
+                                  className="tabular mb-1.5 whitespace-nowrap font-mono text-[12.5px]"
+                                  style={{ color: LEVEL_COLOUR[cash.level] }}
+                                >
+                                  {formatCurrency(available)}
+                                  <span className="ml-2">
+                                    {Math.max(0, cash.pctLeft ?? 0).toFixed(0)}% left
+                                  </span>
+                                </div>
+                                <Bar pct={cash.pctSpent ?? 0} tone={LEVEL_COLOUR[cash.level]} />
+                                {cash.level !== "ok" && (
+                                  <p className="mono-label mt-1.5" style={{ color: LEVEL_COLOUR[cash.level] }}>
+                                    {cash.level === "critical" ? "Send money now" : "Send money soon"}
+                                  </p>
+                                )}
+                              </>
+                            )}
                           </TableCell>
 
                           <TableCell className="align-top">
