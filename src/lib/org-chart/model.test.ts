@@ -29,11 +29,11 @@ function input(over: Partial<OrgInput> = {}): OrgInput {
       { id: "none", name: "No Ministry", slug: "no_ministry", cluster: null, parent_id: null, purpose: null, description: null, ministry_type: "main", sort_order: 7 },
     ],
     members: [
-      { staff_ministry_id: "lt", user_id: "caleb", member_role: "member", is_point_leader: false, role_title: "Integrator", responsibilities: [], subcategories: [] },
-      { staff_ministry_id: "media", user_id: "tosca", member_role: "leader", is_point_leader: true, role_title: null, responsibilities: ["Runs the team"], subcategories: [] },
-      { staff_ministry_id: "events", user_id: "tosca", member_role: "member", is_point_leader: false, role_title: "Events media", responsibilities: [], subcategories: [] },
-      { staff_ministry_id: "events", user_id: "mache", member_role: "member", is_point_leader: false, role_title: null, responsibilities: [], subcategories: ["Hosting"] },
-      { staff_ministry_id: "none", user_id: "x", member_role: "member", is_point_leader: false, role_title: null, responsibilities: [], subcategories: [] },
+      { id: "m1", staff_ministry_id: "lt", user_id: "caleb", member_role: "member", is_point_leader: false, role_title: "Integrator", responsibilities: [], share_pct: null, staff_kind: null, subcategories: [] },
+      { id: "m2", staff_ministry_id: "media", user_id: "tosca", member_role: "leader", is_point_leader: true, role_title: null, responsibilities: ["Runs the team"], share_pct: null, staff_kind: null, subcategories: [] },
+      { id: "m3", staff_ministry_id: "events", user_id: "tosca", member_role: "member", is_point_leader: false, role_title: "Events media", responsibilities: [], share_pct: null, staff_kind: null, subcategories: [] },
+      { id: "m4", staff_ministry_id: "events", user_id: "mache", member_role: "member", is_point_leader: false, role_title: null, responsibilities: [], share_pct: null, staff_kind: null, subcategories: ["Hosting"] },
+      { id: "m5", staff_ministry_id: "none", user_id: "x", member_role: "member", is_point_leader: false, role_title: null, responsibilities: [], share_pct: null, staff_kind: null, subcategories: [] },
     ],
     people: [
       { id: "caleb", name: "Caleb", job_title: null },

@@ -56,7 +56,7 @@ export async function loadOrgChart(admin: Client, now = new Date()): Promise<Org
       admin
         .from("staff_ministry_members")
         .select(
-          "staff_ministry_id, user_id, member_role, is_point_leader, role_title, responsibilities, staff_ministry_member_subcategories(staff_ministry_subcategories(name))"
+          "id, staff_ministry_id, user_id, member_role, is_point_leader, role_title, responsibilities, share_pct, staff_kind, staff_ministry_member_subcategories(staff_ministry_subcategories(name))"
         )
         .eq("status", "active")
         .range(a, b)
@@ -94,12 +94,15 @@ export async function loadOrgChart(admin: Client, now = new Date()): Promise<Org
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const members: RawMember[] = (memberRows as any[]).map((m) => ({
+    id: m.id,
     staff_ministry_id: m.staff_ministry_id,
     user_id: m.user_id,
     member_role: m.member_role,
     is_point_leader: m.is_point_leader,
     role_title: m.role_title,
     responsibilities: m.responsibilities,
+    share_pct: m.share_pct,
+    staff_kind: m.staff_kind,
     subcategories: (m.staff_ministry_member_subcategories ?? [])
       .map((j: { staff_ministry_subcategories: { name: string } | null }) => j.staff_ministry_subcategories?.name)
       .filter(Boolean),

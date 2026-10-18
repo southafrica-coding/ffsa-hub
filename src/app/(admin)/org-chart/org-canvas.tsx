@@ -17,6 +17,7 @@ import {
   type OrgTeam,
 } from "@/lib/org-chart/model";
 import { GEO, bezier, computeLayout, litSet, type NodeId } from "@/lib/org-chart/layout";
+import { OrgEditPanel, useOrgSave } from "./org-edit-panel";
 
 // ── Theme: ORG_THEME.light from the design file ──────────────────────────
 const T = {
@@ -133,7 +134,13 @@ export function OrgCanvas({
   savedLayout: Record<string, { x: number; y: number }>;
   canManage: boolean;
 }) {
-  const layout = useMemo(() => computeLayout(model, savedLayout), [model, savedLayout]);
+  // Tables moved in edit mode show where they were dropped straight away;
+  // the server's org_layout catches up on the next refresh.
+  const [moves, setMoves] = useState<Record<string, { x: number; y: number }>>({});
+  const layout = useMemo(() => computeLayout(model, { ...savedLayout, ...moves }), [model, savedLayout, moves]);
+  const [editMode, setEditMode] = useState(false);
+  const { save: saveEdit, error: layoutError } = useOrgSave();
+  const tableDrag = useRef<{ id: string; x: number; y: number; px: number; py: number; moved: boolean } | null>(null);
   const team = useMemo(() => new Map(model.teams.map((t) => [t.id, t])), [model]);
   const dirByKey = useMemo(() => new Map(model.directions.map((d) => [d.key, d])), [model]);
   const leaderIds = useMemo(() => new Set(model.leaders.map((l) => l.userId)), [model]);
@@ -177,6 +184,8 @@ export function OrgCanvas({
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
       if (zoomTeam) return;
+      // Panels sitting over the canvas scroll themselves; only the canvas pans.
+      if ((e.target as Element | null)?.closest?.("[data-no-pan]")) return;
       e.preventDefault();
       const rect = el.getBoundingClientRect();
       const px = e.clientX - rect.left;
@@ -218,7 +227,7 @@ export function OrgCanvas({
   };
   // A drag that ends over a table must not also select it.
   const onClickCapture = (e: React.MouseEvent) => {
-    if (drag.current?.moved) {
+    if (drag.current?.moved || tableDrag.current?.moved) {
       e.stopPropagation();
       e.preventDefault();
     }
@@ -323,7 +332,8 @@ export function OrgCanvas({
         return { title: nodeName(other), meta, right: "›", onClick: pick(other) };
       });
 
-  const drawer = sel && !zoomTeam ? buildDrawer() : null;
+  const editing = editMode && sel?.startsWith("team:") ? team.get(sel.slice(5)) : undefined;
+  const drawer = sel && !zoomTeam && !editing ? buildDrawer() : null;
 
   function objectiveRows(o: OrgObjective, teamName?: string): DRow[] {
     const dir = o.direction ? dirByKey.get(o.direction) : undefined;
@@ -487,6 +497,40 @@ export function OrgCanvas({
 
   // ── Tables ──
   const { ROW, LW, DIR_H } = GEO;
+  // Edit mode: drag a team's table to move it. Positions are in canvas units,
+  // so the pointer's travel is divided by the current zoom.
+  const startTableDrag = (id: string) => (e: React.PointerEvent) => {
+    if (!editMode || e.button !== 0) return;
+    e.stopPropagation(); // not a pan
+    const p = layout.pos[id];
+    tableDrag.current = { id, x: p.x, y: p.y, px: e.clientX, py: e.clientY, moved: false };
+    const move = (ev: PointerEvent) => {
+      const d = tableDrag.current;
+      if (!d) return;
+      const dx = (ev.clientX - d.px) / view.s;
+      const dy = (ev.clientY - d.py) / view.s;
+      if (!d.moved && Math.hypot(dx, dy) < 4) return;
+      d.moved = true;
+      setMoves((m) => ({ ...m, [d.id]: { x: Math.round(d.x + dx), y: Math.round(d.y + dy) } }));
+    };
+    const up = (ev: PointerEvent) => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      const d = tableDrag.current;
+      if (d?.moved) {
+        saveEdit({
+          op: "layout",
+          ministry_id: d.id,
+          x: Math.round(d.x + (ev.clientX - d.px) / view.s),
+          y: Math.round(d.y + (ev.clientY - d.py) / view.s),
+        });
+      }
+      setTimeout(() => (tableDrag.current = null), 0);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+
   const tableShell = (nid: NodeId | null, p: { x: number; y: number; w: number }, dashed = false) => {
     const on = !!nid && nid === sel;
     return {
@@ -597,7 +641,7 @@ export function OrgCanvas({
     const nid = "team:" + leadership.id;
     const s = tableShell(nid, { ...layout.pos[leadership.id], w: LW });
     tables.push(
-      <div key={leadership.id} className="absolute" style={s.style}>
+      <div key={leadership.id} className="absolute" style={{ ...s.style, cursor: editMode ? "move" : undefined }} onPointerDown={startTableDrag(leadership.id)}>
         <Head nid={nid} on={s.on} icon={icon(Network)} name={leadership.name} count={String(leadership.headcount)} />
         {objRows(leadership.objectives)}
         {model.leaders.length ? (
@@ -614,7 +658,7 @@ export function OrgCanvas({
     const nid = "team:" + missio.id;
     const s = tableShell(nid, layout.pos[missio.id], true);
     tables.push(
-      <div key={missio.id} className="absolute" style={s.style}>
+      <div key={missio.id} className="absolute" style={{ ...s.style, cursor: editMode ? "move" : undefined }} onPointerDown={startTableDrag(missio.id)}>
         <Head nid={nid} on={s.on} icon={icon(Heart)} name={missio.name} count="ALONGSIDE" />
         {missio.groups.length ? (
           missio.groups.map((g) => <Row key={g.name} text={g.name} right={String(g.people.length)} />)
@@ -630,7 +674,7 @@ export function OrgCanvas({
     const s = tableShell(nid, layout.pos[t.id]);
     const parent = t.parentId ? team.get(t.parentId) : undefined;
     tables.push(
-      <div key={t.id} className="absolute" style={s.style}>
+      <div key={t.id} className="absolute" style={{ ...s.style, cursor: editMode ? "move" : undefined }} onPointerDown={startTableDrag(t.id)}>
         <Head nid={nid} on={s.on} icon={icon(UsersRound)} name={t.name} count={String(t.headcount)} />
         <Row
           mono={parent ? "WITHIN" : "LEAD"}
@@ -714,7 +758,9 @@ export function OrgCanvas({
     return () => window.removeEventListener("keydown", onKey);
   }, [zoomTeam]);
 
-  const kicker = `ORG CHART · FFSA ${model.cycleName ?? ""} · ${model.staffCount} STAFF · ${model.teams.length} TEAMS`;
+  const kicker = editMode
+    ? "ORG CHART · EDIT MODE · YOU ARE AN ORG ADMIN"
+    : `ORG CHART · FFSA ${model.cycleName ?? ""} · ${model.staffCount} STAFF · ${model.teams.length} TEAMS`;
 
   return (
     <div className="flex flex-col">
@@ -727,7 +773,7 @@ export function OrgCanvas({
               {kicker}
             </span>
           </div>
-          <h1 className={`${COND} m-0 text-[34px] uppercase leading-[0.9] lg:text-[40px]`}>Rooted &amp; Sent</h1>
+          <h1 className={`${COND} m-0 text-[34px] uppercase leading-[0.9] lg:text-[40px]`}>{editMode ? "Editing the chart" : <>Rooted &amp; Sent</>}</h1>
         </div>
         <div className="flex flex-wrap items-center gap-2.5 lg:gap-3.5">
           <div className="relative w-full sm:w-[250px]">
@@ -758,7 +804,7 @@ export function OrgCanvas({
                     className="flex w-full flex-col items-start gap-0.5 border-b px-3 py-2 text-left hover:bg-bone"
                     style={{ borderColor: T.rowBorder }}
                   >
-                    <span className="text-[13px] font-bold">{r.label}</span>
+                    <span className="text-[13px] font-bold font-sans normal-case tracking-normal">{r.label}</span>
                     <span className={`${MONO} text-[8.5px] tracking-[0.1em]`} style={{ color: T.mono }}>
                       {r.kind === "team" ? "TEAM · " : ""}
                       {r.meta.toUpperCase()}
@@ -793,6 +839,19 @@ export function OrgCanvas({
             ))}
           </div>
           {canManage && (
+            <button
+              type="button"
+              onClick={() => {
+                setEditMode((v) => !v);
+                setZoomTeam(null);
+              }}
+              className={`${MONO} flex h-11 items-center border px-3 text-[9px] uppercase tracking-[0.14em] lg:h-10`}
+              style={editMode ? { background: T.yellow, borderColor: T.ink, color: T.ink } : { background: "#fff", borderColor: T.ink, color: T.ink }}
+            >
+              {editMode ? "Done editing" : "Edit the chart"}
+            </button>
+          )}
+          {canManage && !editMode && (
             <Link
               href="/org-chart/import"
               className={`${MONO} flex h-11 items-center border border-ink bg-ink px-3 text-[9px] uppercase tracking-[0.14em] text-white hover:bg-[#262622] hover:text-white lg:h-10`}
@@ -875,8 +934,28 @@ export function OrgCanvas({
         )}
 
         {/* Drawer */}
+        {editing && (
+          <OrgEditPanel key={editing.id} t={editing} model={model} team={team} onClose={() => setSel(null)} />
+        )}
+
+        {editMode && layoutError && (
+          <div className="absolute left-4 top-4 z-10 max-w-[320px] border border-destructive bg-white px-4 py-3 text-[12.5px] text-destructive" onPointerDown={(e) => e.stopPropagation()}>
+            That position wasn&rsquo;t saved: {layoutError}
+          </div>
+        )}
+
+        {editMode && !editing && (
+          <div className="absolute right-4 top-4 z-10 max-w-[280px] border border-ink bg-white px-4 py-3 text-[12.5px] leading-[1.45]" onPointerDown={(e) => e.stopPropagation()}>
+            <div className={`${MONO} mb-1 text-[8.5px] tracking-[0.14em]`} style={{ color: T.mono }}>
+              EDIT MODE
+            </div>
+            Click a team to edit what it is for, its direction, shepherd and people. Drag a table to move it.
+          </div>
+        )}
+
         {drawer && (
           <div
+            data-no-pan
             className="absolute bottom-0 right-0 top-0 z-20 flex w-full flex-col border-l border-ink bg-white sm:w-[360px]"
             onPointerDown={(e) => e.stopPropagation()}
             style={{ cursor: "default" }}
@@ -921,7 +1000,7 @@ export function OrgCanvas({
                 <div className="text-[13px] font-bold leading-[1.35]">{drawer.band.text}</div>
               </div>
             ) : null}
-            <div className="flex-1 overflow-y-auto">
+            <div className="min-h-0 flex-1 overflow-y-auto">
               {drawer.sections.map((s) => (
                 <div key={s.title}>
                   <SectionHead title={s.title} right={s.right} />
@@ -1208,7 +1287,7 @@ function TeamView({
                       className="flex h-12 w-full items-center justify-between px-6 text-left"
                       style={{ borderBottom: `1px solid ${T.rowBorder}` }}
                     >
-                      <span className="text-[13.5px] font-bold">{team.get(id)?.name}</span>
+                      <span className="text-[13.5px] font-bold font-sans normal-case tracking-normal">{team.get(id)?.name}</span>
                       <span className={`${MONO} text-[9px] tracking-[0.1em]`}>OPEN ›</span>
                     </button>
                   ))}

@@ -687,3 +687,30 @@ yet, so no OKR lines draw; only Leadership-team members can be the source of
 a reports-to line, and few `reporting_lines` exist until Who is who is worked
 through; no shepherds or purposes are set. All are typed in at step J (edit
 mode) or via the OKR import.
+
+## Org chart step J1 — edit mode (43b) built 2026-10-18 (branch `redesign/J1-org-editing`, migration 252 NOT yet applied)
+
+Org admins (admin, or `org.manage`) get **Edit the chart**. Clicking a team
+opens the 43b inspector, every fact tagged with where it lives:
+
+| Tag | Facts | Written by |
+|---|---|---|
+| ✎ typed here, saves on blur | team name, cluster, purpose; objective direction; OKR Shepherd; each person's role title, responsibilities, share %, staff / volunteer | `org_edit_field()` / `org_set_shepherd()` — SECURITY DEFINER, field whitelist, `has_org_chart_manage()` checked in the database |
+| ↗ another module | sub-groups and lead (Ministry tab), objective wording and KRs (OKRs page) | links out, never edited here |
+| ∑ worked out | headcount, shared-person lines, monthly update state | not editable |
+| change set | lead and reporting lines | read-only until J3 |
+
+Drag a table to move it (`org_set_layout()`, not logged — moving a box is not
+an organisational change). **History** lists every logged edit for the team,
+with who / when / before → after; **Undo** puts a field back through the same
+whitelist and refuses if the field was changed again since.
+
+A ministry's `ends_on` is now its **last day** (252 corrects 250's trigger,
+which ended it on that day). `/api/cron/org-daily` (22:30 UTC = 00:30 SAST)
+calls `org_end_due_ministries()`: due ministries go inactive and their
+objectives get `ended_on`. Woven (ends 31 Oct 2026) goes inactive on 1 Nov.
+
+Also fixed in passing (affects the live step I chart): the wheel over the
+drawer panned the canvas instead of scrolling it, the drawer could not scroll
+at all (flex child without `min-h-0`), and search results / "Also serves on"
+rendered in the global uppercase-mono button style.

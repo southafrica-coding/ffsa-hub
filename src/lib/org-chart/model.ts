@@ -55,12 +55,15 @@ export type RawTeam = {
   sort_order: number;
 };
 export type RawMember = {
+  id: string;
   staff_ministry_id: string;
   user_id: string;
   member_role: string;
   is_point_leader: boolean;
   role_title: string | null;
   responsibilities: string[] | null;
+  share_pct: number | null;
+  staff_kind: string | null;
   subcategories: string[];
 };
 export type RawPerson = { id: string; name: string; job_title: string | null };
@@ -123,9 +126,15 @@ export type OrgObjective = {
   krs: OrgKr[];
 };
 export type OrgMember = {
+  membershipId: string;
   userId: string;
   name: string;
+  /** role_title, else the person's job title — what the chart shows. */
   title: string | null;
+  /** role_title alone — what edit mode edits. */
+  roleTitle: string | null;
+  sharePct: number | null;
+  staffKind: "staff" | "volunteer";
   responsibilities: string[];
   isLead: boolean;
   /** Other team ids this person is on. */
@@ -136,8 +145,13 @@ export type OrgTeam = {
   id: string;
   name: string;
   cluster: OrgCluster;
+  /** The stored cluster, null when unset — what edit mode edits. */
+  clusterRaw: string | null;
   parentId: string | null;
   purpose: string | null;
+  /** The stored purpose alone (purpose falls back to the description). */
+  purposeRaw: string | null;
+  shepherdId: string | null;
   leads: string[];
   headcount: number;
   groups: { name: string; people: string[] }[];
@@ -287,9 +301,13 @@ export function buildOrgModel(input: OrgInput): OrgModel {
       .map((m) => nameOf(m.user_id));
     const members: OrgMember[] = rows
       .map((m) => ({
+        membershipId: m.id,
         userId: m.user_id,
         name: nameOf(m.user_id),
         title: m.role_title?.trim() || person.get(m.user_id)?.job_title?.trim() || null,
+        roleTitle: m.role_title?.trim() || null,
+        sharePct: m.share_pct ?? null,
+        staffKind: m.staff_kind === "volunteer" ? ("volunteer" as const) : ("staff" as const),
         responsibilities: (m.responsibilities ?? []).filter((r) => r.trim()),
         isLead: m.member_role === "leader",
         alsoOn: [...(teamsByUser.get(m.user_id) ?? [])].filter((id) => id !== t.id),
@@ -307,8 +325,11 @@ export function buildOrgModel(input: OrgInput): OrgModel {
       id: t.id,
       name: t.name,
       cluster: clusterOf(t),
+      clusterRaw: t.cluster && CLUSTERS.has(t.cluster) ? t.cluster : null,
       parentId: t.parent_id && teamIds.has(t.parent_id) ? t.parent_id : null,
       purpose: t.purpose?.trim() || t.description?.trim() || null,
+      purposeRaw: t.purpose?.trim() || null,
+      shepherdId: shepherdOf.get(t.id) ?? null,
       leads,
       headcount: new Set(rows.map((m) => m.user_id)).size,
       groups: [...groups.entries()]
