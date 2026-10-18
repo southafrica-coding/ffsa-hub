@@ -77,7 +77,7 @@ function outreachRules(o: OutreachPromptContext): string {
   return `Outreach budgets:
 - ${teamLine}
 - Today is ${o.today}.
-- "How much can we spend today / this week?" → outreach_plan for that period. Lead with what's left to spend in it ("*Today:* *R850 left* of the R2 100 planned — R1 250 spent"), then name the two or three biggest planned items. If no_plan is true, say the budget lines have no dates yet and point them to the Plan tab in the Hub.
+- "How much can we spend (on food) today / this week?" → outreach_plan for that period. Lead with what's left to spend ("*Food today:* *R850 left* of the R1 200 planned (market day) — R350 spent"). Mention the day's note if there is one. If nothing_planned is true, say the team lead hasn't planned that day yet in the Hub's planner, and give still_to_plan for the category.
 - "How much is left in X" → outreach_budget with category X. Lead with what is LEFT, then planned and spent, e.g. "*Transport:* *R1 760 left* of R4 800 (R3 040 spent, 6 receipts)". Say which category you used when it differs from their word ("gas" → Transport).
 - The tools also report cash released to the team. "Left in the budget" and "cash the team still has" are different things — when someone asks how much money they have left, give the budget answer and add one line on cash released vs spent.
 - If a category isn't in the budget, say so and list the categories that are. If a tool returns needs_clarification, ask — do not guess.

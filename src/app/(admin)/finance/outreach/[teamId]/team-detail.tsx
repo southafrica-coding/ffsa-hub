@@ -40,7 +40,7 @@ import { CloseoutTab } from "./closeout-tab";
 import { SlackSettings } from "./slack-settings";
 import { MoneyAlertSettings } from "./money-alert-settings";
 import { BudgetLines, type BudgetLine } from "./budget-lines";
-import { PlanView } from "./plan-view";
+import { Planner } from "./planner";
 
 // ────────────────────────────────────────────────────────────
 // TYPES
@@ -204,6 +204,7 @@ export function TeamDetail({
   members,
   budgets,
   budgetLines,
+  dayPlans,
   categories,
   allUsers,
   expenses,
@@ -216,6 +217,7 @@ export function TeamDetail({
   members: Member[];
   budgets: TeamBudget[];
   budgetLines: BudgetLine[];
+  dayPlans: { category_id: string; plan_date: string; amount_zar: number | string; note: string | null }[];
   categories: Category[];
   allUsers: UserOption[];
   expenses: Expense[];
@@ -363,13 +365,16 @@ export function TeamDetail({
         </TabsContent>
 
         <TabsContent value="plan" className="mt-4">
-          <PlanView
-            lines={budgetLines}
-            teamSize={team.people_count}
+          <Planner
+            teamId={team.id}
             tripStart={team.start_date}
             tripEnd={team.end_date}
+            teamSize={team.people_count}
+            lines={budgetLines}
             expenses={expenses}
             categories={categories}
+            dayPlans={dayPlans}
+            canEdit={!isFinanceLocked}
           />
         </TabsContent>
 

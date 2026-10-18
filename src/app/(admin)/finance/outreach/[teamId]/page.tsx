@@ -8,6 +8,7 @@ import {
   getTeamMembers,
   getTeamBudgets,
   getTeamBudgetLines,
+  getTeamDayPlans,
   getBudgetCategories,
   getTeamExpenses,
   getTeamFundReleases,
@@ -52,6 +53,7 @@ export default async function OutreachTeamDetailPage({
     { data: members },
     { data: budgets },
     { data: budgetLines },
+    { data: dayPlans },
     { data: categories },
     { data: expenses },
     { data: fundReleases },
@@ -61,6 +63,7 @@ export default async function OutreachTeamDetailPage({
     getTeamMembers(people, teamId),
     getTeamBudgets(supabase, teamId),
     getTeamBudgetLines(supabase, teamId),
+    getTeamDayPlans(supabase, teamId),
     getBudgetCategories(supabase),
     getTeamExpenses(supabase, teamId),
     getTeamFundReleases(supabase, teamId),
@@ -98,6 +101,7 @@ export default async function OutreachTeamDetailPage({
       members={members ?? []}
       budgets={budgets ?? []}
       budgetLines={budgetLines ?? []}
+      dayPlans={dayPlans ?? []}
       categories={categories ?? []}
       allUsers={allUsers ?? []}
       expenses={expenses ?? []}

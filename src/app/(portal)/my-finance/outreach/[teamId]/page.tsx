@@ -7,6 +7,7 @@ import {
   getTeamBudgetLines,
   getBudgetCategories,
   getTeamCloseout,
+  getTeamDayPlans,
 } from "@/services/outreach-finance";
 import { BudgetLines } from "@/app/(admin)/finance/outreach/[teamId]/budget-lines";
 import { CashInHand } from "@/app/(admin)/finance/outreach/cash-in-hand";
@@ -21,7 +22,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Masthead, KpiStrip, Kpi, StatusPill, type Tone } from "@/components/ffsa";
-import { PlanView } from "@/app/(admin)/finance/outreach/[teamId]/plan-view";
+import { Planner } from "@/app/(admin)/finance/outreach/[teamId]/planner";
 
 const TEAM_TONE: Record<string, Tone> = {
   active: "good",
@@ -66,6 +67,7 @@ export default async function MyOutreachTeamPage({
     { data: categories },
     { data: closeout },
     { data: membership },
+    { data: dayPlans },
   ] = await Promise.all([
     getTeamExpenses(supabase, teamId),
     getTeamFundReleases(supabase, teamId),
@@ -79,6 +81,7 @@ export default async function MyOutreachTeamPage({
       .eq("team_id", teamId)
       .eq("user_id", user.id)
       .maybeSingle(),
+    getTeamDayPlans(supabase, teamId),
   ]);
 
   // The team's leaders and finance students run the budget themselves;
@@ -159,14 +162,17 @@ export default async function MyOutreachTeamPage({
       />
 
       <section className="space-y-3">
-        <h2 className="font-medium">Day-by-day plan</h2>
-        <PlanView
-          lines={budgetLines ?? []}
-          teamSize={team.people_count}
+        <h2 className="font-medium">Daily planner</h2>
+        <Planner
+          teamId={teamId}
           tripStart={team.start_date}
           tripEnd={team.end_date}
+          teamSize={team.people_count}
+          lines={budgetLines ?? []}
           expenses={expenses ?? []}
           categories={categories ?? []}
+          dayPlans={dayPlans ?? []}
+          canEdit={canEditBudget}
         />
       </section>
 

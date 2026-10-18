@@ -730,3 +730,12 @@ export async function getMyOutreachTeams(supabase: Client, userId: string) {
     .eq("user_id", userId)
     .order("joined_at", { ascending: false });
 }
+
+/** The team lead's day plans (food / accommodation planner, migration 252). */
+export async function getTeamDayPlans(supabase: Client, teamId: string) {
+  return supabase
+    .from("outreach_day_plans")
+    .select("category_id, plan_date, amount_zar, note")
+    .eq("team_id", teamId)
+    .order("plan_date", { ascending: true });
+}
