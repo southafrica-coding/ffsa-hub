@@ -652,3 +652,38 @@ Structure columns on `staff_ministries`, role columns on
 `org_layout`, `org_changes` (empty), `org_edit_log`, `okr_shepherds`, OKR
 columns, `okr_teams` retired, `org.manage` reused. Details and the manual
 steps after applying are at the end of doc 95. I and J not started.
+
+## Org chart step I — frames 40a + 41a built 2026-10-18 (branch `redesign/I-org-chart`)
+
+The React Flow drawing is gone. `/org-chart` is now the 40a canvas, read
+entirely from real tables via `services/org-chart.ts` → `lib/org-chart/model.ts`
+(rules, tested) → `lib/org-chart/layout.ts` (geometry, tested) →
+`org-canvas.tsx`. No migration.
+
+| Frame piece | Reads from |
+|---|---|
+| Teams as tables, by cluster zone | `staff_ministries` (cluster, parent_id); part-time ministries get their own zone; No Ministry never drawn |
+| Lead / headcount / people groups | `staff_ministry_members` (leaders, point leader first; sub-categories as groups) |
+| Leadership team rows, Integrator tag | Leadership Team roster + `reporting_lines.kind = integrates` |
+| Reports-to lines (solid) | `reporting_lines` (oversees / integrates) from a Leadership-team row |
+| Shared-person lines (dotted) | worked out from people holding two memberships — never stored |
+| OKR lines, coloured by state | current-cycle `okr_objectives.direction` → the five FFSA directions |
+| Percentages | only where a KR has a real metric ("no ratio, no bar"); otherwise a state chip |
+| OKR Shepherd / monthly update band | `okr_shepherds`; any check-in since the 1st of last month (SAST) |
+| Schools in session | active programmes with active, not-removed enrolments |
+| Saved positions | `org_layout` overrides the automatic layout (nothing writes it until step J) |
+
+Also built: BOTH / OKRS / REPORTING layers, click-to-light with dimming, the
+drawer (team, direction, leader, person, schools), 41a zoom (0.8s,
+cubic-bezier(.7,0,.25,1)) with purpose / facts / OKRs with KR owners / people
+with roles / person panel / prev-next / back, pan (drag, wheel), zoom (pinch,
+ctrl-wheel, buttons), search for a person or team, Escape to step back.
+
+Verified against production data at 1440×900 and 375×812, no page-level
+horizontal scroll, no console errors.
+
+**What will look empty until data exists:** no objective has a `direction`
+yet, so no OKR lines draw; only Leadership-team members can be the source of
+a reports-to line, and few `reporting_lines` exist until Who is who is worked
+through; no shepherds or purposes are set. All are typed in at step J (edit
+mode) or via the OKR import.
