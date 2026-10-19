@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
+import { requireModuleAccess } from "@/lib/require-permission";
 import { getProgramsForBilling } from "@/services/school-billing";
 import NeedsDecisionQueue from "./needs-decision-queue";
 import { getCountryTiers } from "@/services/school-fees";
@@ -30,6 +32,11 @@ type ProgramRow = {
 
 export default async function SchoolFeesPage() {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+  await requireModuleAccess(supabase, user.id, "finance");
 
   const [{ data: programs }, { data: countryTiers }] = await Promise.all([
     getProgramsForBilling(supabase),

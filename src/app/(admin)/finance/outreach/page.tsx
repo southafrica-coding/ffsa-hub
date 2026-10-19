@@ -1,6 +1,8 @@
 export const dynamic = "force-dynamic";
 
 import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
+import { requireModuleAccess } from "@/lib/require-permission";
 import {
   getOutreachTeams,
   getAggregateFinancials,
@@ -12,6 +14,11 @@ import { OutreachDashboardClient } from "./dashboard-client";
 
 export default async function OutreachFinancePage() {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+  await requireModuleAccess(supabase, user.id, "finance");
   // Same RLS-bound client as the rest of the page: the ledger shows exactly the
   // movements this viewer is already entitled to see, and each source inside
   // these two calls settles on its own so one blocked table cannot 500 the page.

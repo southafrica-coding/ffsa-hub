@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
+import { requireModuleAccess } from "@/lib/require-permission";
 import { getProgramById } from "@/services/schools";
 import { getBillingCoursesByProgram } from "@/services/school-billing";
 import { Masthead } from "@/components/ffsa";
@@ -13,6 +15,11 @@ export default async function ProgramBillingPage({
 }) {
   const { programId } = await params;
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+  await requireModuleAccess(supabase, user.id, "finance");
 
   const { data: program, error } = await getProgramById(supabase, programId);
   if (error || !program) {

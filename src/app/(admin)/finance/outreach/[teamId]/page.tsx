@@ -1,6 +1,8 @@
 export const dynamic = "force-dynamic";
 
 import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
+import { requireModuleAccess } from "@/lib/require-permission";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isFinanceStaff } from "@/lib/slack/assistant/outreach";
 import {
@@ -24,6 +26,11 @@ export default async function OutreachTeamDetailPage({
 }) {
   const { teamId } = await params;
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+  await requireModuleAccess(supabase, user.id, "finance");
 
   const { data: team, error: teamError } = await getOutreachTeamById(
     supabase,
@@ -42,11 +49,8 @@ export default async function OutreachTeamDetailPage({
   // finance admin managing a team saw nobody to add (and blank names for
   // existing members). Finance staff get names + emails via the service
   // role — nothing else about anyone; everyone else reads through RLS.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
   const admin = createAdminClient();
-  const staff = user ? await isFinanceStaff(admin, user.id) : false;
+  const staff = await isFinanceStaff(admin, user.id);
   const people = staff ? admin : supabase;
 
   const [
