@@ -268,7 +268,7 @@ export default async function ItemPage({
                   <div
                     key={d}
                     className={cn(
-                      "h-[52px] rounded-[5px] p-[5px]",
+                      "min-h-[56px] rounded-[5px] p-[5px] leading-tight",
                       sel ? "bg-[color:var(--hire-accent)] text-[color:var(--hire-on-accent)]" : "border border-[color:var(--hire-line2)]"
                     )}
                   >
