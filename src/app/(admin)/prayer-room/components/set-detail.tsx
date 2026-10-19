@@ -68,6 +68,7 @@ interface SetRow {
   setlist: string | null;
   status: string;
   relocation_note: string | null;
+  alt_venue_id: string | null;
   series_id: string | null;
   owner_id: string | null;
   owner: Person;
@@ -121,6 +122,10 @@ export default function SetDetail({
   const [fillSlot, setFillSlot] = useState<Slot | null>(null);
   const [addRole, setAddRole] = useState<string>("vocals");
   const [repeating, setRepeating] = useState(false);
+  // Edit form's "where": "room" = the prayer room, "blockout" = leave the
+  // block-out's move as it is, otherwise an alternate space's id.
+  const [altVenues, setAltVenues] = useState<{ id: string; name: string }[]>([]);
+  const [where, setWhere] = useState("room");
 
   const load = useCallback(async () => {
     if (!setId) return;
@@ -280,6 +285,16 @@ export default function SetDetail({
     }
   }
 
+  useEffect(() => {
+    if (!editing || !set) return;
+    setWhere(set.alt_venue_id ?? (set.relocation_note ? "blockout" : "room"));
+    if (altVenues.length > 0) return;
+    fetch("/api/prayer-room/alt-venues")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((v) => setAltVenues(Array.isArray(v) ? v : []))
+      .catch(() => {});
+  }, [editing, set, altVenues.length]);
+
   async function saveDetails(form: FormData) {
     if (!set) return;
     const set_date = String(form.get("set_date") || "");
@@ -308,6 +323,7 @@ export default function SetDetail({
           set_date,
           start_time,
           end_time,
+          ...(where === "blockout" ? {} : { alt_venue_id: where === "room" ? null : where }),
         }),
       });
       if (!res.ok) {
@@ -410,6 +426,34 @@ export default function SetDetail({
                 <Label className="text-xs">End</Label>
                 <Input type="time" name="end_time" defaultValue={formatTime(set.end_time)} required />
               </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Where</Label>
+              <Select value={where} onValueChange={setWhere}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="room">In the prayer room</SelectItem>
+                  {!set.alt_venue_id && set.relocation_note && (
+                    <SelectItem value="blockout">{set.relocation_note} (moved by a block-out)</SelectItem>
+                  )}
+                  {altVenues.map((v) => (
+                    <SelectItem key={v.id} value={v.id}>
+                      {v.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {where !== "room" && where !== "blockout" && where !== set.alt_venue_id && (
+                <p className="text-[11px] text-muted-foreground">
+                  {altVenues.find((v) => v.id === where)?.name ?? "This space"} will be booked in Space Bookings for
+                  this set{set.alt_venue_id ? ", and the old space released" : ""}.
+                </p>
+              )}
+              {where === "room" && set.alt_venue_id && (
+                <p className="text-[11px] text-muted-foreground">The alternate space booking will be released.</p>
+              )}
             </div>
             <Field name="title" label="Title" defaultValue={set.title} />
             <Field name="theme" label="Theme / focus" defaultValue={set.theme} />

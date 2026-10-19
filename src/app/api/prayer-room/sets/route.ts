@@ -371,7 +371,67 @@ export async function PUT(request: Request) {
     for (const k of ["title", "theme", "scripture", "prayer_focus", "setlist", "set_date", "start_time", "end_time", "owner_id"]) {
       if (k in body) fields[k] = body[k];
     }
+
+    // Where the set happens: alt_venue_id null = back in the prayer room,
+    // an id = book that space instead. Only acted on when it actually changes.
+    let move: { venue: AltVenue | null; oldBookingId: string | null } | null = null;
+    if ("alt_venue_id" in body) {
+      const admin = createAdminClient();
+      const { data: cur } = (await getSetById(admin, id)) as {
+        data: {
+          set_date: string;
+          start_time: string;
+          end_time: string;
+          alt_venue_id: string | null;
+          alt_booking_id: string | null;
+          relocation_note: string | null;
+        } | null;
+      };
+      if (!cur) return NextResponse.json({ error: "Set not found" }, { status: 404 });
+      const next = (body.alt_venue_id as string) || null;
+      if (next !== cur.alt_venue_id || (!next && cur.relocation_note)) {
+        let venue: AltVenue | null = null;
+        if (next) {
+          // Check the space is free BEFORE changing anything.
+          const check = await checkAltVenue(
+            admin,
+            next,
+            [(fields.set_date as string) || cur.set_date],
+            (fields.start_time as string) || cur.start_time,
+            (fields.end_time as string) || cur.end_time
+          );
+          if (!("venue" in check)) return NextResponse.json({ error: check.error }, { status: 400 });
+          if (check.blocked) {
+            return NextResponse.json({ error: check.error, conflicts: check.conflicts }, { status: 409 });
+          }
+          venue = check.venue;
+        }
+        // Cleared through the caller's own client so RLS (owner or staff)
+        // decides whether they may move this set at all.
+        Object.assign(fields, { alt_venue_id: null, alt_booking_id: null, relocation_note: null });
+        move = { venue, oldBookingId: cur.alt_booking_id };
+      }
+    }
+
     result = await updateSet(supabase, id, fields);
+
+    if (!result.error && result.data && move) {
+      const admin = createAdminClient();
+      if (move.oldBookingId) await releaseAltBookings(admin, [move.oldBookingId]);
+      if (move.venue) {
+        const s = result.data as { id: string; set_date: string; start_time: string; end_time: string; title: string | null; theme: string | null; owner_id: string | null };
+        const booked = await bookAltVenue(admin, {
+          venue: move.venue,
+          sets: [{ id: s.id, set_date: s.set_date }],
+          title: setBookingTitle(s),
+          startTime: s.start_time,
+          endTime: s.end_time,
+          userId: user.id,
+          ownerId: s.owner_id ?? user.id,
+        });
+        if (booked.error) return NextResponse.json({ error: booked.error }, { status: 500 });
+      }
+    }
   }
 
   if (result.error) return NextResponse.json({ error: result.error.message }, { status: 403 });
