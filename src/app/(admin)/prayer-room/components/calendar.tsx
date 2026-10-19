@@ -1,6 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
+import { MapPin } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import {
   monthGridDays,
@@ -14,7 +15,7 @@ import {
   WEEKDAY_HEADERS,
 } from "@/lib/bookings/dates";
 import { packLanes, computeHourRange, nowMinutes } from "@/lib/bookings/timegrid";
-import { fullName, type Person } from "./helpers";
+import { fullName, offSiteLocation, type Person } from "./helpers";
 
 export interface CalendarSet {
   id: string;
@@ -98,6 +99,21 @@ function accentOf(s: CalendarSet): string {
   if (s.status === "cancelled") return "hsl(30 6% 40%)";
   return "hsl(42 95% 58%)";
 }
+/** Not in the prayer room — the space the set is in, as a solid tag. */
+function LocationTag({ location, className }: { location: string; className?: string }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex max-w-full items-center gap-0.5 rounded-sm bg-[hsl(28_95%_58%)] px-1 align-middle text-[9px] font-bold uppercase tracking-wide text-black",
+        className
+      )}
+    >
+      <MapPin className="h-2.5 w-2.5 shrink-0" aria-hidden />
+      <span className="truncate">{location}</span>
+    </span>
+  );
+}
+
 function fillLabel(s: CalendarSet): string | null {
   const total = s.slots.length;
   if (total === 0) return null;
@@ -220,11 +236,14 @@ function MonthView({
                   <button
                     key={s.id}
                     onClick={() => onSelect(s.id)}
-                    title={`${hhmm(s.start_time)} ${setTitle(s)}`}
+                    title={`${hhmm(s.start_time)} ${setTitle(s)}${offSiteLocation(s) ? ` · in ${offSiteLocation(s)}` : ""}`}
                     style={{ ...chipStyle(s.status), borderLeft: `2px solid ${accentOf(s)}` }}
                     className="block w-full truncate rounded px-1 py-0.5 text-left text-[10px] font-medium"
                   >
-                    <span className="tabular-nums opacity-80">{hhmm(s.start_time)}</span> {setTitle(s)}
+                    <span className="tabular-nums opacity-80">{hhmm(s.start_time)}</span>{" "}
+                    {/* Before the title, so truncation can't hide it. */}
+                    {offSiteLocation(s) && <LocationTag location={offSiteLocation(s)!} className="mr-1" />}
+                    {setTitle(s)}
                   </button>
                 ))}
                 {daySets.length > 3 && (
@@ -353,7 +372,7 @@ function GridView({
                   <button
                     key={s.id}
                     onClick={() => onSelect(s.id)}
-                    title={`${setTitle(s)} · ${timeRangeLabel(s.start_time, s.end_time)}`}
+                    title={`${setTitle(s)} · ${timeRangeLabel(s.start_time, s.end_time)}${offSiteLocation(s) ? ` · in ${offSiteLocation(s)}` : ""}`}
                     style={{
                       ...chipStyle(s.status),
                       top,
@@ -371,7 +390,11 @@ function GridView({
                         {fill ? ` · ${fill}` : ""}
                       </div>
                     )}
-                    {s.relocation_note && height > 42 && <div className="truncate text-[9px] opacity-80">→ {s.relocation_note}</div>}
+                    {offSiteLocation(s) && (
+                      <div className="flex min-w-0">
+                        <LocationTag location={offSiteLocation(s)!} />
+                      </div>
+                    )}
                   </button>
                 );
               })}
@@ -467,8 +490,8 @@ function ListView({
                       <div className="truncate text-xs text-muted-foreground">
                         {hhmm(s.start_time)}–{hhmm(s.end_time)}
                         {s.owner ? ` · ${fullName(s.owner)}` : ""}
-                        {s.relocation_note ? ` · → ${s.relocation_note}` : ""}
                       </div>
+                      {offSiteLocation(s) && <LocationTag location={offSiteLocation(s)!} className="mt-1" />}
                     </div>
                     {fill && <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{fill}</span>}
                   </button>

@@ -45,7 +45,8 @@ const set = (
   start: string,
   end: string,
   title: string,
-  lead: boolean
+  lead: boolean,
+  relocation_note: string | null = null
 ): WallSet => ({
   id,
   set_date: date,
@@ -54,7 +55,7 @@ const set = (
   title,
   theme: null,
   status: "scheduled",
-  relocation_note: null,
+  relocation_note,
   owner,
   // A set is live once a LEAD seat is filled; otherwise it draws dashed.
   slots: lead
@@ -73,7 +74,9 @@ const SETS: WallSet[] = [
   set("g", "2026-08-04", "17:30", "20:00", "Night set opens", true),
   set("h", "2026-08-05", "08:00", "09:30", "Unreached — Central Asia", true),
   set("i", "2026-08-05", "12:00", "14:00", "Midday intercession", true),
-  set("j", "2026-08-06", "09:30", "11:00", "Selah — instrumental", true),
+  // Off-site: booked into another space, at a full and a tight card size.
+  set("j", "2026-08-06", "09:30", "12:00", "Selah — instrumental", true, "Music Room"),
+  set("l", "2026-08-06", "15:00", "15:30", "Soaking", true, "Music Room"),
   set("k", "2026-08-07", "17:30", "20:00", "Friday night worship", true),
 ];
 
