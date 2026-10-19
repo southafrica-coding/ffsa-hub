@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { requireModuleAccess } from "@/lib/require-permission";
 import { Masthead, StatusPill, type Tone } from "@/components/ffsa";
 import {
   getFeedbackFormById,
@@ -57,6 +58,7 @@ export default async function FeedbackFormPage({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+  await requireModuleAccess(supabase, user.id, "events");
 
   const { data: form } = await getFeedbackFormById(supabase, formId);
   if (!form || form.event_id !== eventId) notFound();

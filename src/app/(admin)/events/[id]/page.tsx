@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { EmailsTab } from "./emails-tab";
 import { createClient } from "@/lib/supabase/server";
+import { requireModuleAccess } from "@/lib/require-permission";
 import { getEventById, getEventAttendanceCounts } from "@/services/events";
 import { capacityPct, groupDigits } from "../format";
 import { getRegistrationsForEvent } from "@/services/registrations";
@@ -8,7 +9,7 @@ import { getAttendanceForEvent } from "@/services/attendance";
 import { getEventOutcomes } from "@/services/event-outcomes";
 import { getEventRoles } from "@/services/event-roles";
 import { getCachedActiveLabels } from "@/lib/cached-reads";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Masthead,
@@ -79,6 +80,11 @@ export default async function EventDetailPage({
   const tab = TABS.some((t) => t.key === tabParam) ? tabParam! : "details";
 
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+  await requireModuleAccess(supabase, user.id, "events");
 
   const { data: event, error } = await getEventById(supabase, id);
   if (error || !event) notFound();
