@@ -502,6 +502,53 @@ export async function getSetsInWindow(
   return q;
 }
 
+/**
+ * A block-out was removed: take its relocation note back off the sets it
+ * moved, so they show in the prayer room again. Only sets still carrying THIS
+ * block-out's note are touched — a set booked into its own alternate space, or
+ * re-stamped by another block-out that still covers it, keeps its note.
+ * `remaining` = the block-outs left after the delete.
+ */
+export async function clearBlockoutRelocation(
+  supabase: Client,
+  admin: Client,
+  removed: {
+    block_date: string;
+    end_date: string | null;
+    start_time: string | null;
+    end_time: string | null;
+    relocation_note: string | null;
+  },
+  remaining: Array<{ block_date: string; end_date: string | null; start_time: string | null; end_time: string | null }>
+) {
+  if (!removed.relocation_note) return { cleared: 0 };
+  const end = removed.end_date || removed.block_date;
+  let q = admin
+    .from("prayer_room_sets")
+    .select("id, set_date, start_time, end_time")
+    .gte("set_date", removed.block_date)
+    .lte("set_date", end)
+    .eq("relocation_note", removed.relocation_note)
+    .is("alt_venue_id", null);
+  if (removed.start_time && removed.end_time) {
+    q = q.lt("start_time", removed.end_time).gt("end_time", removed.start_time);
+  }
+  const { data } = await q;
+  const inWindow = (
+    s: { set_date: string; start_time: string; end_time: string },
+    b: { block_date: string; end_date: string | null; start_time: string | null; end_time: string | null }
+  ) =>
+    s.set_date >= b.block_date &&
+    s.set_date <= (b.end_date || b.block_date) &&
+    (!b.start_time || !b.end_time || (s.start_time < b.end_time && s.end_time > b.start_time));
+  const ids = ((data ?? []) as Array<{ id: string; set_date: string; start_time: string; end_time: string }>)
+    .filter((s) => !remaining.some((b) => inWindow(s, b)))
+    .map((s) => s.id);
+  if (ids.length === 0) return { cleared: 0 };
+  const { error } = await stampRelocation(supabase, ids, null);
+  return { cleared: error ? 0 : ids.length };
+}
+
 /** Stamp the relocation note on the displaced sets (staff client). */
 export async function stampRelocation(supabase: Client, ids: string[], note: string | null) {
   return supabase.from("prayer_room_sets").update({ relocation_note: note }).in("id", ids);

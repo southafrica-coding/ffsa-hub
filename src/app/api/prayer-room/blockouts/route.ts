@@ -5,6 +5,7 @@ import {
   getBlockouts,
   createBlockout,
   deleteBlockout,
+  clearBlockoutRelocation,
   getSetsInWindow,
   stampRelocation,
 } from "@/services/prayer-room";
@@ -125,8 +126,9 @@ export async function POST(request: Request) {
   return NextResponse.json({ ok: true, blockout, affected: affected.length, slack });
 }
 
-// DELETE — remove a block-out entry (RLS: staff only). Leaves any relocation
-// notes already stamped on sets in place; a manager can clear those per set.
+// DELETE — remove a block-out entry (RLS: staff only). The sets it moved come
+// back to the prayer room: their relocation note is cleared unless another
+// block-out still covers them or they were booked into their own space.
 export async function DELETE(request: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -135,7 +137,23 @@ export async function DELETE(request: Request) {
   const id = new URL(request.url).searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
 
+  const { data: removed } = await supabase
+    .from("prayer_room_blockouts")
+    .select("block_date, end_date, start_time, end_time, relocation_note")
+    .eq("id", id)
+    .maybeSingle();
+
   const { error } = await deleteBlockout(supabase, id);
   if (error) return NextResponse.json({ error: error.message }, { status: 403 });
-  return NextResponse.json({ ok: true });
+
+  let cleared = 0;
+  if (removed) {
+    const admin = createAdminClient();
+    const { data: remaining } = await getBlockouts(admin, {
+      from: removed.block_date,
+      to: removed.end_date || removed.block_date,
+    });
+    ({ cleared } = await clearBlockoutRelocation(supabase, admin, removed, remaining ?? []));
+  }
+  return NextResponse.json({ ok: true, cleared });
 }
