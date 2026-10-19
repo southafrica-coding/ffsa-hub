@@ -25,7 +25,7 @@ import {
 } from "@/services/equipment";
 import { rands } from "@/lib/equipment/money";
 import { eventLabel, hasNoSerial, sastDate, shortDate } from "@/lib/equipment/register";
-import { HIRE } from "../../hire-theme";
+import { HIRE } from "@/lib/equipment/hire-theme";
 import { StatusPill } from "../register-view";
 
 type UnitOrderRow = {
@@ -260,7 +260,17 @@ export default async function UnitPage({ params }: { params: Promise<{ tag: stri
               </>
             )}
           </SideBlock>
-          <SideBlock title="Storefront">{storefront}</SideBlock>
+          <SideBlock title="Storefront">
+            {storefront}
+            {product && (
+              <Link
+                href={`/bookings/equipment/gear/products/${product.id}`}
+                className="mt-1.5 block text-[color:var(--hire-accent)] underline-offset-4 hover:underline"
+              >
+                Edit listing ›
+              </Link>
+            )}
+          </SideBlock>
           <SideBlock title="Same product" last>
             {product ? (
               <Link

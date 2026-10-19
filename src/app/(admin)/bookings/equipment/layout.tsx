@@ -5,7 +5,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { hasEquipmentAccess } from "@/services/equipment";
-import { HIRE_CSS } from "./hire-theme";
+import { HIRE_CSS } from "@/lib/equipment/hire-theme";
 import { HirePanel, HireTabBar } from "./hire-nav";
 
 export default async function EquipmentLayout({ children }: { children: React.ReactNode }) {

@@ -555,3 +555,108 @@ export async function freeCountForKit(
 export async function getEquipmentSettings(supabase: Client) {
   return supabase.from("equipment_settings").select("*").eq("id", true).maybeSingle();
 }
+
+export async function updateEquipmentSettings(supabase: Client, data: Partial<EquipmentSettings>) {
+  return supabase
+    .from("equipment_settings")
+    .update({ ...data, updated_at: new Date().toISOString() })
+    .eq("id", true)
+    .select()
+    .single();
+}
+
+// ── Listing (stage L) ──────────────────────────────────────
+
+export async function updateProduct(supabase: Client, id: string, data: Partial<EquipmentProduct>) {
+  return supabase
+    .from("equipment_products")
+    .update({ ...data, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select()
+    .single();
+}
+
+export async function listCategories(supabase: Client, opts?: { visibleOnly?: boolean }) {
+  let query = supabase
+    .from("equipment_categories")
+    .select("*")
+    .order("sort_order", { ascending: true })
+    .order("name", { ascending: true });
+  if (opts?.visibleOnly) query = query.eq("is_visible", true);
+  return query;
+}
+
+export async function getCategoryBySlug(supabase: Client, slug: string) {
+  return supabase.from("equipment_categories").select("*").eq("slug", slug).maybeSingle();
+}
+
+export async function listProductPhotos(supabase: Client, productIds: string[]) {
+  if (productIds.length === 0) return { data: [] as EquipmentProductPhoto[], error: null };
+  return supabase
+    .from("equipment_product_photos")
+    .select("*")
+    .in("product_id", productIds)
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true });
+}
+
+export async function insertProductPhoto(
+  supabase: Client,
+  data: Pick<EquipmentProductPhoto, "product_id" | "file_path" | "alt" | "sort_order">
+) {
+  return supabase.from("equipment_product_photos").insert(data).select().single();
+}
+
+export async function deleteProductPhoto(supabase: Client, id: string) {
+  return supabase.from("equipment_product_photos").delete().eq("id", id).select().maybeSingle();
+}
+
+/** Free count and stock for every listed product over [from, to] (migration 257). */
+export async function listedAvailability(
+  supabase: Client,
+  from: string,
+  to: string
+): Promise<{ data: Map<string, { stock: number; free: number }>; error: { message: string } | null }> {
+  const { data, error } = await supabase.rpc("equipment_listed_availability", { p_from: from, p_to: to });
+  const map = new Map<string, { stock: number; free: number }>();
+  for (const r of (data ?? []) as { product_id: string; stock: number; free: number }[]) {
+    map.set(r.product_id, { stock: r.stock, free: r.free });
+  }
+  return { data: map, error };
+}
+
+/** First day on or after `from` with `qty` free, or null inside ~6 months. */
+export async function freeFrom(supabase: Client, productId: string, from: string, qty = 1) {
+  const { data, error } = await supabase.rpc("equipment_free_from", {
+    p_product: productId,
+    p_from: from,
+    p_qty: qty,
+  });
+  return { data: (data as string | null) ?? null, error };
+}
+
+/** "Frequently rented with": the hand-picked related product ids. */
+export async function listRelatedIds(supabase: Client, productId: string) {
+  return supabase
+    .from("equipment_related")
+    .select("related_id")
+    .eq("product_id", productId)
+    .order("sort_order", { ascending: true });
+}
+
+/**
+ * For /t/[tag]: the product a tag belongs to. Call with the service-role
+ * client (the public can't read units) and pass on nothing but the slug.
+ */
+export async function getTagProduct(
+  supabase: Client,
+  tag: string
+): Promise<{ slug: string; is_listed: boolean } | null> {
+  const { data } = await supabase
+    .from("equipment_units")
+    .select("product:equipment_products(slug,is_listed)")
+    .eq("tag", tag)
+    .maybeSingle();
+  const p = Array.isArray(data?.product) ? data.product[0] : data?.product;
+  return p ?? null;
+}

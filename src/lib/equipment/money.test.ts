@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { rands } from "./money";
+import { rands, randsShort } from "./money";
 
 describe("rands", () => {
   it("puts a space between thousands and a point before cents", () => {
@@ -20,5 +20,11 @@ describe("rands", () => {
 
   it("signs negatives", () => {
     expect(rands(-25000)).toBe("-R 250.00");
+  });
+
+  it("drops .00 on cards", () => {
+    expect(randsShort(75000)).toBe("R 750");
+    expect(randsShort(380000)).toBe("R 3 800");
+    expect(randsShort(75050)).toBe("R 750.50");
   });
 });

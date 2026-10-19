@@ -1,5 +1,5 @@
 // Equipment hire is dark (frames 44–47): one palette for the storefront and
-// the staff tools. Every /bookings/equipment page sits inside `.theme-hire`,
+// the staff tools. Every /bookings/equipment and /hire page sits inside `.theme-hire`,
 // which sets these as CSS variables so Tailwind classes can read them, e.g.
 // bg-[color:var(--hire-surface)]. The rest of the Hub stays light.
 
@@ -53,14 +53,17 @@ export const HIRE_CSS = `
   background: var(--hire-surface2) !important;
   color: var(--hire-ink) !important;
   border-color: var(--hire-line-strong) !important;
+  border-radius: 8px !important;
 }
 /* A field drawn inside its own box (the search bar): the box is the field. */
 .theme-hire input.hire-bare:not([type="checkbox"]):not([type="radio"]):not([type="range"]) {
   background: transparent !important; border: 0 !important; padding: 0 !important;
-  font-size: inherit !important; height: 100%;
+  font-size: inherit !important; font-family: inherit !important; color: inherit !important;
+  line-height: inherit; border-radius: 0 !important; height: 100%;
 }
 .theme-hire input::placeholder, .theme-hire textarea::placeholder { color: var(--hire-muted) !important; }
 
+body:has(.theme-hire) { background: ${P.bg}; }
 body:has(.theme-hire) [data-shell-main] { background: ${P.bg} !important; }
 body:has(.theme-hire) [data-shell-topbar] { display: none !important; }
 body:has(.theme-hire) [data-shell-tabbar] { display: none !important; }

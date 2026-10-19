@@ -87,6 +87,7 @@ export default async function RegisterPage({
         needsAttention: needsAttention(s),
         checked: checkedText(s),
         checkedIncomplete: s.never > 0,
+        listed: p.is_listed,
         units: us.map((u) => ({
           tag: u.tag,
           label: u.label,

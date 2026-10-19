@@ -12,3 +12,8 @@ export function rands(cents: number): string {
   const part = (abs % 100).toString().padStart(2, "0");
   return `${sign}R ${whole}.${part}`;
 }
+
+/** "R 750" when there are no cents, else the full "R 750.50" — for cards. */
+export function randsShort(cents: number): string {
+  return Math.round(cents) % 100 === 0 ? rands(cents).slice(0, -3) : rands(cents);
+}

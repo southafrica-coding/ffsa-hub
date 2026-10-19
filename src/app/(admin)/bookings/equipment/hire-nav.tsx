@@ -24,8 +24,8 @@ const PANEL: NavItem[] = [
   { label: "Calendar", href: `${BASE}/calendar`, ready: false },
   { label: "Register", href: `${BASE}/gear`, ready: true },
   { label: "Maintenance", href: `${BASE}/maintenance`, ready: false },
-  { label: "Storefront", href: "/hire", ready: false },
-  { label: "Pricing", href: `${BASE}/pricing`, ready: false },
+  { label: "Storefront", href: "/hire", ready: true },
+  { label: "Pricing", href: `${BASE}/pricing`, ready: true },
 ];
 
 function isActive(pathname: string, href: string) {

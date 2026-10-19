@@ -35,6 +35,7 @@ export type RegisterProduct = {
   needsAttention: boolean;
   checked: string;
   checkedIncomplete: boolean;
+  listed: boolean;
   units: RegisterUnit[];
 };
 
@@ -303,7 +304,7 @@ export function RegisterView({
                 </span>
               </button>
 
-              {open && <UnitList units={units} />}
+              {open && <UnitList product={p} units={units} />}
             </li>
           );
         })}
@@ -312,9 +313,21 @@ export function RegisterView({
   );
 }
 
-function UnitList({ units }: { units: RegisterUnit[] }) {
+function UnitList({ product, units }: { product: RegisterProduct; units: RegisterUnit[] }) {
   return (
     <div className="bg-[color:var(--hire-surface)] md:px-9 md:pb-4 md:pl-[52px]">
+      <Link
+        href={`/bookings/equipment/gear/products/${product.id}`}
+        className="flex min-h-[48px] items-center justify-between gap-3 border-t border-[color:var(--hire-line)] pl-8 pr-[18px] text-[13px] hover:text-[color:var(--hire-ink)] md:min-h-0 md:border-t-0 md:px-0 md:pb-2.5"
+      >
+        <span>
+          Store:{" "}
+          <span className={product.listed ? "text-[color:var(--hire-ok)]" : "text-[color:var(--hire-muted)]"}>
+            {product.listed ? "listed" : "not listed"}
+          </span>
+        </span>
+        <span className="text-[color:var(--hire-accent)]">Edit listing ›</span>
+      </Link>
       <div className="md:border md:border-[color:var(--hire-line2)] md:bg-[color:var(--hire-bg)]">
         <div
           className={cn(

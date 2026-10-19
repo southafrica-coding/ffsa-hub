@@ -33,6 +33,8 @@ export async function middleware(request: NextRequest) {
     "/fb", // public event-feedback runtime (/fb/[slug])
     "/scan", // public door scanner (/scan/[token]) — the welcome team has no Hub account, which is the point
     "/vr", // public vehicle request form (/vr/[token]) — shipped in 342 but never listed here, so every outsider was bounced to /login
+    "/hire", // public equipment-hire storefront (/hire, /hire/c/[slug], /hire/p/[slug]) — browsing needs no account
+    "/t", // public tag landing (/t/[tag]) — the QR on every equipment tag; staff are sent on to the register
     "/track-intent", // public FFX track-intent survey (/track-intent/[token], migration 222) — same gotcha as /vr above
     "/api/scan", // public door scanner actions — authorised by the token in the path, not session cookies
     "/api/upload/sign", // public applicants upload photos from /apply
