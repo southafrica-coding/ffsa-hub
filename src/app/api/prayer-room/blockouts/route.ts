@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   getBlockouts,
+  getBlockout,
   createBlockout,
   deleteBlockout,
   clearBlockoutRelocation,
@@ -137,11 +138,7 @@ export async function DELETE(request: Request) {
   const id = new URL(request.url).searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
 
-  const { data: removed } = await supabase
-    .from("prayer_room_blockouts")
-    .select("block_date, end_date, start_time, end_time, relocation_note")
-    .eq("id", id)
-    .maybeSingle();
+  const { data: removed } = await getBlockout(supabase, id);
 
   const { error } = await deleteBlockout(supabase, id);
   if (error) return NextResponse.json({ error: error.message }, { status: 403 });

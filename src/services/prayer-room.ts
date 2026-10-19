@@ -473,6 +473,14 @@ export async function createBlockout(
   return supabase.from("prayer_room_blockouts").insert(data).select().single();
 }
 
+export async function getBlockout(supabase: Client, id: string) {
+  return supabase
+    .from("prayer_room_blockouts")
+    .select("block_date, end_date, start_time, end_time, relocation_note")
+    .eq("id", id)
+    .maybeSingle();
+}
+
 export async function deleteBlockout(supabase: Client, id: string) {
   return supabase.from("prayer_room_blockouts").delete().eq("id", id);
 }
