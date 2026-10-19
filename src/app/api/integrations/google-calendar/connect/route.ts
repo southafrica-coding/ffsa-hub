@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { callerIsAdmin } from "@/lib/auth/check-ministry-access";
 import { googleCalendarRedirectUri } from "@/lib/google/calendar";
 
 export async function GET() {
@@ -10,6 +11,10 @@ export async function GET() {
     } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.redirect(`${process.env.NEXT_PUBLIC_SITE_URL}/login`);
+    }
+    // The shared calendar connection is managed from admin-only Settings.
+    if (!(await callerIsAdmin(supabase, user.id))) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
