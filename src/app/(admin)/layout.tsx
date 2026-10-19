@@ -28,7 +28,7 @@ export default async function AdminLayout({
       {/* pb-20 on phones keeps the last row clear of the frame-4d tab bar. */}
       <main data-shell-main className="flex-1 overflow-y-auto bg-background pb-20 pt-14 md:pb-0 md:pt-0">
         <div className="animate-fade-up">
-          <div className="mx-auto max-w-6xl px-4 md:px-6 pt-6 md:pt-8">
+          <div data-shell-topbar className="mx-auto max-w-6xl px-4 md:px-6 pt-6 md:pt-8">
             <AutoRefresh />
             <BackButton />
           </div>

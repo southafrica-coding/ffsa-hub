@@ -81,7 +81,7 @@ export const ADMIN_MODULES: ModuleDefinition[] = [
     label: "Bookings",
     href: "/bookings",
     icon: Building2,
-    description: "Space bookings and vehicle reservations",
+    description: "Space bookings, vehicle reservations and equipment hire",
     requiredRoles: ["super_admin", "admin"], // others via bookings.* permissions
   },
   {

@@ -42,6 +42,7 @@ export function MobileTabBar() {
   return (
     <nav
       aria-label="Primary"
+      data-shell-tabbar
       className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-4 border-t border-ink bg-ink md:hidden"
       // The iOS home indicator sits over the bar's bottom edge; without this
       // the labels are half-covered on every notched phone.
