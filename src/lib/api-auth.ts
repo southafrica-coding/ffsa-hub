@@ -29,7 +29,12 @@ export async function hasAnyRole(
 export const EVENTS_MANAGE_ROLES = ["super_admin", "admin", "events_admin"];
 export const COMMS_MANAGE_ROLES = ["super_admin", "admin", "comms_admin"];
 
-/** True if the user holds at least one of the given granular permission keys. */
+/**
+ * True if the user holds at least one of the given granular permission keys,
+ * either granted directly or through an assigned role's bundle
+ * (user_roles -> role_permissions). Mirrors SQL has_permission() (migration
+ * 089) and requireModuleAccess: role scope is not considered.
+ */
 export async function hasAnyPermission(
   supabase: Client,
   userId: string,
@@ -41,7 +46,22 @@ export async function hasAnyPermission(
     .eq("user_id", userId)
     .in("permissions.key", permissionKeys)
     .limit(1);
-  return !!data && data.length > 0;
+  if (data && data.length > 0) return true;
+
+  const { data: roleRows } = await supabase
+    .from("user_roles")
+    .select("role_id")
+    .eq("user_id", userId);
+  const roleIds = ((roleRows ?? []) as { role_id: string }[]).map((r) => r.role_id);
+  if (roleIds.length === 0) return false;
+
+  const { data: viaRole } = await supabase
+    .from("role_permissions")
+    .select("permissions!inner(key)")
+    .in("role_id", roleIds)
+    .in("permissions.key", permissionKeys)
+    .limit(1);
+  return !!viaRole && viaRole.length > 0;
 }
 
 // Roles or granular permissions that allow writing contact data.
