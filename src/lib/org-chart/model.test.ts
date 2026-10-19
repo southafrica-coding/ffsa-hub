@@ -174,9 +174,15 @@ describe("computeLayout", () => {
     expect(l.pos.schools).toBeDefined();
   });
 
-  it("keeps OKRs off the canvas: no OKR lines, even for an objective with a direction", () => {
-    expect(l.edges.filter((e) => e.kind === "okr")).toHaveLength(0);
-    expect(l.pos.dir).toBeUndefined();
+  it("works out OKR lines for objectives with a direction (the canvas shows them only on selection)", () => {
+    const okr = l.edges.filter((e) => e.kind === "okr");
+    expect(okr).toHaveLength(1);
+    expect(okr[0]).toMatchObject({ a: "dir:mission", b: "team:media", state: "stuck" });
+  });
+
+  it("reserves the direction column under the left-hand tables, so nothing shifts when it appears", () => {
+    expect(l.pos.dir).toBeDefined();
+    expect(l.pos.dir.y).toBeGreaterThan(l.pos.lt.y + l.pos.lt.h);
   });
 
   it("sizes a team's table by its people, not its objectives", () => {

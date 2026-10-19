@@ -74,9 +74,11 @@ export function computeLayout(model: OrgModel, overrides: Record<string, { x: nu
   const zones: Zone[] = [];
   const byId = new Map(model.teams.map((t) => [t.id, t]));
 
-  // ── Left column: the Leadership team, then Missio ──
-  // (The FFSA direction table and OKR lines are no longer drawn on the main
-  // canvas — Jack, 2026-10-19: people first, objectives one click in.)
+  // ── Left column: the Leadership team, Missio, then the FFSA direction ──
+  // The direction table and the OKR lines into it are NOT drawn on the resting
+  // canvas (Jack, 2026-10-19: people first). Their place is reserved here so
+  // nothing shifts when they appear: the canvas shows them only while a team
+  // or a direction is selected, and only that team's lines.
   const leadership = model.leadershipId ? byId.get(model.leadershipId) : undefined;
   const leadY = DIR_Y;
   const leadRowY: Record<string, number> = {};
@@ -91,6 +93,8 @@ export function computeLayout(model: OrgModel, overrides: Record<string, { x: nu
   if (missio) {
     pos[missio.id] = { x: LX, y: afterLead, w: LW, h: HEAD + ROW * Math.max(missio.groups.length, 1), cluster: "alongside" };
   }
+  const afterMissio = missio ? pos[missio.id].y + pos[missio.id].h + 30 : afterLead;
+  pos.dir = { x: LX, y: afterMissio, w: LW, h: HEAD + GEO.DIR_H * model.directions.length, cluster: "leadership" };
 
   // ── Cluster zones ──
   // Children sit straight after their parent, so Training's schools read
@@ -152,6 +156,18 @@ export function computeLayout(model: OrgModel, overrides: Record<string, { x: nu
   const edges: Edge[] = [];
   const left = (id: string): [number, number, number] => [pos[id].x, pos[id].y + HEAD / 2, -1];
   const right = (id: string): [number, number, number] => [pos[id].x + pos[id].w, pos[id].y + HEAD / 2, 1];
+
+  const dirIdx = new Map(model.directions.map((d, i) => [d.key, i]));
+  for (const t of model.teams) {
+    if (!pos[t.id]) continue;
+    for (const o of t.objectives) {
+      if (!o.direction) continue;
+      const from: [number, number, number] = [LX + LW, pos.dir.y + HEAD + GEO.DIR_H * dirIdx.get(o.direction)! + GEO.DIR_H / 2, 1];
+      // Teams in the left column (Leadership, Missio) are met on their right edge.
+      const to: [number, number, number] = pos[t.id].x === LX ? right(t.id) : left(t.id);
+      edges.push({ a: "dir:" + o.direction, b: "team:" + t.id, kind: "okr", state: o.state, from, to });
+    }
+  }
 
   for (const t of model.teams) {
     if (!pos[t.id] || t.id === model.leadershipId) continue;

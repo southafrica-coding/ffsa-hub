@@ -11,13 +11,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { DIRECTIONS, type OrgModel, type OrgTeam } from "@/lib/org-chart/model";
+import { T } from "./org-theme";
 
-const INK = "#0A0A0A";
-const SUB = "#55524A";
-const MONO_C = "#7C786C";
-const RULE = "#EFEDE4";
-const OPEN = "#8A6400";
-const YELLOW = "#FFB801";
+const INK = T.ink;
+const SUB = T.sub;
+const MONO_C = T.mono;
+const RULE = T.row;
+const OPEN = T.open;
+const YELLOW = T.yellow;
 const MONO = "font-mono font-bold";
 const COND = "font-[family-name:var(--font-roboto-condensed)] font-black";
 
@@ -90,15 +91,15 @@ function Tag({ kind, text }: { kind: "here" | "module" | "worked" | "changeset";
 
 function Section({ title, right }: { title: string; right?: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-3 px-[22px] py-2" style={{ background: INK }}>
-      <span className={`${MONO} text-[9px] tracking-[0.18em] text-white`}>{title}</span>
+    <div className="flex items-center justify-between gap-3 px-[22px] py-2" style={{ background: T.section }}>
+      <span className={`${MONO} text-[9px] tracking-[0.18em]`} style={{ color: T.sectionInk }}>{title}</span>
       {right}
     </div>
   );
 }
 
 const INPUT =
-  "w-full min-w-0 border bg-white px-2.5 py-2 text-[13px] text-ink outline-none focus:border-ink";
+  "w-full min-w-0 border px-2.5 py-2 text-[13px] outline-none";
 
 /** A text field that saves when you leave it, and only if it changed. */
 function SaveText({
@@ -128,7 +129,7 @@ function SaveText({
     onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setDraft(e.target.value),
     onBlur: commit,
     className: INPUT,
-    style: { borderColor: "#C7C3B5" },
+    style: { borderColor: T.border },
   };
   return multiline ? (
     <textarea {...common} rows={3} className={`${INPUT} resize-y leading-[1.45]`} />
@@ -172,8 +173,8 @@ export function OrgEditPanel({
   const kicker = (CLUSTERS.find(([k]) => k === (t.clusterRaw ?? ""))?.[1] ?? "").toUpperCase();
 
   return (
-    <div data-no-pan className="absolute bottom-0 right-0 top-0 z-20 flex w-full flex-col border-l border-ink bg-white sm:w-[400px]" onPointerDown={(e) => e.stopPropagation()} style={{ cursor: "default" }}>
-      <div className="border-b border-ink px-[22px] pb-4 pt-5">
+    <div data-no-pan className="absolute bottom-0 right-0 top-0 z-20 flex w-full flex-col border-l border-[color:var(--org-border)] bg-[color:var(--org-drawer)] sm:w-[400px]" onPointerDown={(e) => e.stopPropagation()} style={{ cursor: "default" }}>
+      <div className="border-b border-[color:var(--org-border)] px-[22px] pb-4 pt-5">
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-[9px]">
             <span className="h-[3px] w-3.5 shrink-0" style={{ background: YELLOW }} />
@@ -181,12 +182,12 @@ export function OrgEditPanel({
               {kicker || "NOT PLACED"} · TEAM
             </span>
           </div>
-          <button type="button" aria-label="Close" onClick={onClose} className="flex h-11 w-11 shrink-0 items-center justify-center border text-[16px] sm:h-8 sm:w-8" style={{ borderColor: "#C7C3B5" }}>
+          <button type="button" aria-label="Close" onClick={onClose} className="flex h-11 w-11 shrink-0 items-center justify-center border text-[16px] sm:h-8 sm:w-8" style={{ borderColor: T.border }}>
             ×
           </button>
         </div>
         <div className={`${COND} mt-2.5 text-[30px] uppercase leading-[0.95]`}>{t.name}</div>
-        <div className={`${MONO} mt-2 text-[8.5px] tracking-[0.14em]`} style={{ color: error ? "#B42318" : MONO_C }}>
+        <div className={`${MONO} mt-2 text-[8.5px] tracking-[0.14em]`} style={{ color: error ? T.danger : MONO_C }}>
           {error ? `NOT SAVED · ${error.toUpperCase()}` : saving ? "SAVING…" : savedAt ? `ALL CHANGES SAVED · ${savedAt}` : "CHANGES SAVE AS YOU GO"}
         </div>
         <div className="mt-3 flex">
@@ -199,7 +200,7 @@ export function OrgEditPanel({
               type="button"
               onClick={() => setShowHistory(h as boolean)}
               className={`${MONO} flex h-10 flex-1 items-center justify-center border text-[9px] tracking-[0.12em]`}
-              style={{ marginLeft: i ? -1 : 0, background: showHistory === h ? INK : "#fff", color: showHistory === h ? "#fff" : SUB, borderColor: showHistory === h ? INK : "#C7C3B5" }}
+              style={{ marginLeft: i ? -1 : 0, background: showHistory === h ? T.ink : "transparent", color: showHistory === h ? T.onInk : SUB, borderColor: showHistory === h ? T.ink : T.border }}
             >
               {String(label)}
             </button>
@@ -208,9 +209,9 @@ export function OrgEditPanel({
       </div>
 
       {!t.shepherdId && t.objectives.length > 0 && !showHistory && (
-        <div className="flex items-center gap-3.5 px-[22px] py-3" style={{ background: YELLOW, borderBottom: `2px solid ${INK}` }}>
+        <div className="flex items-center gap-3.5 px-[22px] py-3" style={{ background: YELLOW, borderBottom: `2px solid ${T.onYellow}`, color: T.onYellow }}>
           <div className={`${MONO} shrink-0 text-[8.5px] tracking-[0.2em]`}>NEEDS YOU</div>
-          <div className="w-0.5 self-stretch bg-ink" />
+          <div className="w-0.5 self-stretch" style={{ background: T.onYellow }} />
           <div className="text-[13px] font-bold leading-[1.35]">{t.name} has no OKR Shepherd, so nobody sends its monthly update.</div>
         </div>
       )}
@@ -230,7 +231,7 @@ export function OrgEditPanel({
                 value={t.clusterRaw ?? ""}
                 onChange={(e) => field("staff_ministries", t.id, "cluster")(e.target.value || null)}
                 className={`${INPUT} h-10`}
-                style={{ borderColor: "#C7C3B5" }}
+                style={{ borderColor: T.border }}
               >
                 {CLUSTERS.map(([k, label]) => (
                   <option key={k} value={k}>
@@ -251,7 +252,7 @@ export function OrgEditPanel({
             <Labelled label="SUB-GROUPS" tag={<Tag kind="module" text="↗ MINISTRY TAB" />}>
               <div className="flex items-center justify-between gap-3 text-[13px]">
                 <span>{t.groups.filter((g) => g.name !== "Team").map((g) => g.name).join(" · ") || "None"}</span>
-                <Link href={`/ministry/${t.id}`} className={`${MONO} shrink-0 text-[9px] tracking-[0.1em] text-ink underline`}>
+                <Link href={`/ministry/${t.id}`} className={`${MONO} shrink-0 text-[9px] tracking-[0.1em] text-[color:var(--org-ink)] underline`}>
                   EDIT THERE ↗
                 </Link>
               </div>
@@ -261,7 +262,7 @@ export function OrgEditPanel({
             <Labelled label="LEAD" tag={<Tag kind="module" text="↗ MINISTRY TAB FOR NOW" />}>
               <div className="flex items-center justify-between gap-3 text-[13px] font-bold">
                 <span style={{ color: t.leads.length ? INK : OPEN }}>{t.leads.join(" & ") || "Not named yet"}</span>
-                <Link href={`/ministry/${t.id}`} className={`${MONO} shrink-0 text-[9px] tracking-[0.1em] text-ink underline`}>
+                <Link href={`/ministry/${t.id}`} className={`${MONO} shrink-0 text-[9px] tracking-[0.1em] text-[color:var(--org-ink)] underline`}>
                   APPOINT ↗
                 </Link>
               </div>
@@ -276,7 +277,7 @@ export function OrgEditPanel({
             {t.objectives.length === 0 ? (
               <div className="flex items-center justify-between gap-3 px-[22px] py-3 text-[13px]" style={{ borderBottom: `1px solid ${RULE}`, color: OPEN }}>
                 <span className="font-bold">No objective this cycle yet</span>
-                <Link href={`/okrs/${t.id}`} className={`${MONO} shrink-0 text-[9px] tracking-[0.1em] text-ink underline`}>
+                <Link href={`/okrs/${t.id}`} className={`${MONO} shrink-0 text-[9px] tracking-[0.1em] text-[color:var(--org-ink)] underline`}>
                   ADD ONE ↗
                 </Link>
               </div>
@@ -285,7 +286,7 @@ export function OrgEditPanel({
                 <div key={o.id} className="flex flex-col gap-2 px-[22px] py-3" style={{ borderBottom: `1px solid ${RULE}` }}>
                   <div className="flex items-baseline justify-between gap-3">
                     <span className="text-[13px] font-bold leading-[1.35]">{o.title}</span>
-                    <Link href={`/okrs/${t.id}`} className={`${MONO} shrink-0 text-[9px] tracking-[0.1em] text-ink underline`}>
+                    <Link href={`/okrs/${t.id}`} className={`${MONO} shrink-0 text-[9px] tracking-[0.1em] text-[color:var(--org-ink)] underline`}>
                       ↗
                     </Link>
                   </div>
@@ -298,7 +299,7 @@ export function OrgEditPanel({
                       value={o.direction ?? ""}
                       onChange={(e) => field("okr_objectives", o.id, "direction")(e.target.value || null)}
                       className={`${INPUT} h-10`}
-                      style={{ borderColor: o.direction ? "#C7C3B5" : OPEN }}
+                      style={{ borderColor: o.direction ? T.border : OPEN }}
                     >
                       <option value="">No direction yet</option>
                       {DIRECTIONS.map((d) => (
@@ -321,7 +322,7 @@ export function OrgEditPanel({
                 value={t.shepherdId ?? ""}
                 onChange={(e) => save({ op: "shepherd", ministry_id: t.id, user_id: e.target.value || null })}
                 className={`${INPUT} h-10`}
-                style={{ borderColor: t.shepherdId ? "#C7C3B5" : OPEN }}
+                style={{ borderColor: t.shepherdId ? T.border : OPEN }}
               >
                 <option value="">Pick someone on {t.name}</option>
                 {t.members.map((m) => (
@@ -350,7 +351,7 @@ export function OrgEditPanel({
                     onClick={() => setOpen(isOpen ? null : m.membershipId)}
                     onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), setOpen(isOpen ? null : m.membershipId))}
                     className="flex w-full cursor-pointer items-center gap-3 px-[22px] py-2.5 text-left"
-                    style={{ background: isOpen ? "#FFFDF6" : "transparent" }}
+                    style={{ background: isOpen ? T.openBg : "transparent" }}
                   >
                     <div className="min-w-0 flex-1 font-sans normal-case tracking-normal">
                       <div className="truncate text-[13.5px] font-bold">{m.name}</div>
@@ -392,7 +393,7 @@ export function OrgEditPanel({
                           value={m.staffKind}
                           onChange={(e) => field("staff_ministry_members", m.membershipId, "staff_kind")(e.target.value)}
                           className={`${INPUT} h-10 flex-1`}
-                          style={{ borderColor: "#C7C3B5" }}
+                          style={{ borderColor: T.border }}
                         >
                           <option value="staff">Staff</option>
                           <option value="volunteer">Volunteer · not in staff count</option>
@@ -528,7 +529,7 @@ function History({ ministryId, save }: { ministryId: string; save: Save }) {
                 onClick={async () => {
                   if (await save({ op: "undo", log_id: r.id })) setTick((x) => x + 1);
                 }}
-                className={`${MONO} flex h-9 items-center border border-ink px-3 text-[8.5px] tracking-[0.12em]`}
+                className={`${MONO} flex h-9 items-center border border-[color:var(--org-border)] px-3 text-[8.5px] tracking-[0.12em]`}
               >
                 UNDO
               </button>

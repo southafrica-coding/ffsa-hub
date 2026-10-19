@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { GraduationCap, Heart, Network, Search, UsersRound } from "lucide-react";
+import { GraduationCap, Heart, LayoutDashboard, Network, Search, UsersRound } from "lucide-react";
 import {
   CLUSTER_LABEL,
   STATE_LABEL,
@@ -19,31 +19,7 @@ import {
 } from "@/lib/org-chart/model";
 import { GEO, bezier, computeLayout, litSet, teamTableRows, type NodeId } from "@/lib/org-chart/layout";
 import { OrgEditPanel, useOrgSave } from "./org-edit-panel";
-
-// ── Theme: ORG_THEME.light from the design file ──────────────────────────
-const T = {
-  ink: "#0A0A0A",
-  sub: "#55524A",
-  mono: "#7C786C",
-  canvasBg: "#F4F2EA",
-  dots: "radial-gradient(#D3CFC1 1px, transparent 1px)",
-  zoneBorder: "#C7C3B5",
-  tableBg: "#FFFFFF",
-  headMono: "#8E8A7C",
-  rowBorder: "#EFEDE4",
-  edge: "#BDB9AB",
-  barTrack: "#EFEDE4",
-  btnBorder: "#C7C3B5",
-  openInk: "#8A6400",
-  yellow: "#FFB801",
-  st: {
-    complete: { dot: "#0A0A0A", color: "#FFFFFF", bg: "#0A0A0A", border: "#0A0A0A" },
-    moving: { dot: "#3E7F2B", color: "#3E7F2B", bg: "#FFFFFF", border: "#3E7F2B" },
-    progress: { dot: "#8E8A7C", color: "#45423B", bg: "#FFFFFF", border: "#C7C3B5" },
-    stuck: { dot: "#C99400", color: "#8A6400", bg: "#FFFDF6", border: "#E2C77A" },
-    notstarted: { dot: "#DEDACE", color: "#9A9689", bg: "#FFFFFF", border: "#DEDACE" },
-  } as Record<OrgState, { dot: string; color: string; bg: string; border: string }>,
-};
+import { ORG_CSS, ORG_VARS, T } from "./org-theme";
 
 const MONO = "font-mono font-bold";
 const COND = "font-[family-name:var(--font-roboto-condensed)] font-black";
@@ -74,7 +50,7 @@ function Progress({ pct, state, thick = 4, measured = true }: { pct: number | nu
   return (
     <div className="flex items-center gap-2.5">
       {pct !== null ? (
-        <div className="flex-1" style={{ height: thick, background: T.barTrack }} title={measured ? undefined : "Estimated from the status — no number recorded yet"}>
+        <div className="flex-1" style={{ height: thick, background: T.track }} title={measured ? undefined : "Estimated from the status — no number recorded yet"}>
           <div style={{ width: `${pct}%`, height: thick, background: T.st[state].dot, opacity: measured ? 1 : 0.45 }} />
         </div>
       ) : (
@@ -87,8 +63,8 @@ function Progress({ pct, state, thick = 4, measured = true }: { pct: number | nu
 
 function SectionHead({ title, right }: { title: string; right?: string }) {
   return (
-    <div className="flex justify-between gap-3 px-[22px] py-2" style={{ background: T.ink }}>
-      <span className={`${MONO} text-[9px] tracking-[0.18em] text-white`}>{title}</span>
+    <div className="flex justify-between gap-3 px-[22px] py-2" style={{ background: T.section }}>
+      <span className={`${MONO} text-[9px] tracking-[0.18em] text-[color:var(--org-section-ink)]`}>{title}</span>
       {right ? <span className="font-mono text-[9px] tracking-[0.1em]" style={{ color: T.mono }}>{right}</span> : null}
     </div>
   );
@@ -111,7 +87,7 @@ function DrawerRow({ r }: { r: DRow }) {
     <div
       onClick={r.onClick}
       className="flex flex-col gap-[5px] py-[11px] pr-[22px]"
-      style={{ paddingLeft: r.indent ?? 22, borderBottom: `1px solid ${T.rowBorder}`, cursor: r.onClick ? "pointer" : "default" }}
+      style={{ paddingLeft: r.indent ?? 22, borderBottom: `1px solid ${T.row}`, cursor: r.onClick ? "pointer" : "default" }}
     >
       <div className="flex items-baseline gap-2.5">
         <span
@@ -275,7 +251,12 @@ export function OrgCanvas({
   };
 
   // ── What is lit ──
-  const shown = layout.edges;
+  // OKR lines only while you are looking at OKRs: a selected team shows the
+  // lines from its objectives to the FFSA direction they roll up to, a
+  // selected direction shows every team that feeds it. Click away and both
+  // the lines and the direction column go (Jack, 2026-10-19).
+  const showOkrs = !!sel && (sel.startsWith("team:") || sel.startsWith("dir:"));
+  const shown = layout.edges.filter((e) => e.kind !== "okr" || (showOkrs && (e.a === sel || e.b === sel)));
   const extra: NodeId[] = [];
   if (sel?.startsWith("lead:") && model.leadershipId) extra.push("team:" + model.leadershipId);
   if (sel === "team:" + model.leadershipId) model.leaders.forEach((l) => extra.push("lead:" + l.userId));
@@ -516,7 +497,7 @@ export function OrgCanvas({
   }
 
   // ── Tables ──
-  const { ROW, LW } = GEO;
+  const { ROW, LW, DIR_H } = GEO;
   // Edit mode: drag a team's table to move it. Positions are in canvas units,
   // so the pointer's travel is divided by the current zoom.
   const startTableDrag = (id: string) => (e: React.PointerEvent) => {
@@ -559,9 +540,9 @@ export function OrgCanvas({
         left: p.x,
         top: p.y,
         width: p.w,
-        background: T.tableBg,
-        border: `1px ${dashed ? "dashed" : "solid"} ${T.ink}`,
-        outline: on ? `2px solid ${T.ink}` : "0px solid transparent",
+        background: T.surface,
+        border: `1px ${dashed ? "dashed" : "solid"} ${T.border}`,
+        outline: on ? `2px solid ${T.yellow}` : "0px solid transparent",
         outlineOffset: 2,
         opacity: nid && dim(nid) ? 0.3 : 1,
         transition: "opacity 0.2s",
@@ -574,11 +555,11 @@ export function OrgCanvas({
       <div
         onClick={nid ? pick(nid) : undefined}
         className="flex h-[34px] items-center gap-2 px-2.5"
-        style={{ background: on ? T.yellow : T.ink, cursor: nid ? "pointer" : "default", color: on ? T.ink : "#fff" }}
+        style={{ background: on ? T.yellow : T.head, cursor: nid ? "pointer" : "default", color: on ? T.onYellow : T.headInk }}
       >
         <span className="flex h-[13px] w-[13px] shrink-0 items-center">{icon}</span>
         <span className="min-w-0 flex-1 truncate text-[12.5px] font-bold">{name}</span>
-        <span className={`${MONO} shrink-0 text-[8.5px] tracking-[0.1em]`} style={{ color: on ? T.ink : T.headMono }}>
+        <span className={`${MONO} shrink-0 text-[8.5px] tracking-[0.1em]`} style={{ color: on ? T.onYellow : T.headMono }}>
           {count}
         </span>
       </div>
@@ -615,7 +596,7 @@ export function OrgCanvas({
         className="flex items-center gap-[7px] px-2.5"
         style={{
           height,
-          borderTop: `1px solid ${T.rowBorder}`,
+          borderTop: `1px solid ${T.row}`,
           background: on ? T.yellow : "transparent",
           // A person row dims only while someone is being looked for; otherwise
           // it rises and falls with its team's card.
@@ -623,13 +604,13 @@ export function OrgCanvas({
           cursor: onClick || nid ? "pointer" : "default",
         }}
       >
-        {mono ? <span className={`${MONO} shrink-0 text-[8px] tracking-[0.08em]`} style={{ color: on ? T.ink : T.mono }}>{mono}</span> : null}
+        {mono ? <span className={`${MONO} shrink-0 text-[8px] tracking-[0.08em]`} style={{ color: on ? T.onYellow : T.mono }}>{mono}</span> : null}
         {dot ? <span className="h-[7px] w-[7px] shrink-0" style={{ background: dot }} /> : null}
-        <span className={`min-w-0 flex-1 truncate text-[11.5px] leading-[1.25] ${bold ? "font-bold" : "font-medium"}`} style={{ color: ink ?? T.ink }}>
+        <span className={`min-w-0 flex-1 truncate text-[11.5px] leading-[1.25] ${bold ? "font-bold" : "font-medium"}`} style={{ color: on ? T.onYellow : ink ?? T.ink }}>
           {text}
         </span>
         {right ? (
-          <span className={`${MONO} shrink-0 text-[8.5px] tracking-[0.06em] tabular-nums`} style={{ color: on ? T.ink : rightInk ?? T.mono }}>
+          <span className={`${MONO} shrink-0 text-[8.5px] tracking-[0.06em] tabular-nums`} style={{ color: on ? T.onYellow : rightInk ?? T.mono }}>
             {right}
           </span>
         ) : null}
@@ -642,6 +623,49 @@ export function OrgCanvas({
   const missio = model.missioId ? team.get(model.missioId) : undefined;
 
   const tables: React.ReactNode[] = [];
+  // The FFSA direction: its place is reserved in the layout, but it is only
+  // drawn while OKRs are being looked at.
+  if (layout.pos.dir) {
+    const p = layout.pos.dir;
+    const s = tableShell(null, p);
+    const selTeam = sel?.startsWith("team:") ? team.get(sel.slice(5)) : undefined;
+    const undirected = selTeam ? selTeam.objectives.filter((o) => !o.direction).length : 0;
+    tables.push(
+      <div
+        key="dir"
+        data-node
+        className="absolute"
+        style={{
+          ...s.style,
+          opacity: showOkrs ? 1 : 0,
+          pointerEvents: showOkrs ? "auto" : "none",
+          transition: "opacity 0.25s",
+        }}
+        aria-hidden={!showOkrs}
+      >
+        <Head nid={null} on={false} icon={icon(LayoutDashboard)} name={`FFSA ${model.cycleName ?? ""} direction`} count="THE RHYTHM" />
+        {model.directions.map((d) => (
+          <Row
+            key={d.key}
+            nid={"dir:" + d.key}
+            mono={d.code}
+            dot={T.st[d.state].dot}
+            text={d.title}
+            right={d.pct !== null ? `${d.pct}%` : undefined}
+            height={DIR_H}
+          />
+        ))}
+        {selTeam && undirected > 0 && (
+          <div className="px-2.5 py-2 text-[11px] leading-[1.4]" style={{ borderTop: `1px solid ${T.row}`, color: T.open }}>
+            {undirected === selTeam.objectives.length
+              ? `None of ${selTeam.name}'s objectives has a direction yet.`
+              : `${undirected} of ${selTeam.name}'s objectives ${undirected === 1 ? "has" : "have"} no direction yet.`}{" "}
+            Set them in edit mode and their lines appear here.
+          </div>
+        )}
+      </div>
+    );
+  }
   if (leadership && layout.pos[leadership.id]) {
     const nid = "team:" + leadership.id;
     const s = tableShell(nid, { ...layout.pos[leadership.id], w: LW });
@@ -653,7 +677,7 @@ export function OrgCanvas({
             <Row key={l.userId} nid={"lead:" + l.userId} text={l.name} right={l.tag} rightInk={l.tag === "INTEGRATOR" ? T.ink : T.mono} />
           ))
         ) : (
-          <Row text="Nobody on the Leadership team roster yet" ink={T.openInk} />
+          <Row text="Nobody on the Leadership team roster yet" ink={T.open} />
         )}
       </div>
     );
@@ -687,7 +711,7 @@ export function OrgCanvas({
             <Row key={m.userId} nid={"person:" + m.userId} mono="LEAD" text={m.name} bold />
           ))
         ) : (
-          <Row mono="LEAD" text="Not named yet" ink={T.openInk} />
+          <Row mono="LEAD" text="Not named yet" ink={T.open} />
         )}
         {rows.shown.map((m) => (
           <Row key={m.userId} nid={"person:" + m.userId} text={m.name} />
@@ -701,7 +725,7 @@ export function OrgCanvas({
                 : `${t.headcount} ${t.headcount === 1 ? "person" : "people"}`
           }
           right="OPEN ›"
-          ink={t.headcount === 0 ? T.openInk : T.mono}
+          ink={t.headcount === 0 ? T.open : T.mono}
           rightInk={T.ink}
           onClick={() => openTeam(t.id)}
         />
@@ -728,7 +752,7 @@ export function OrgCanvas({
         key={i}
         d={bezier(e.from, e.to)}
         fill="none"
-        stroke={on ? (e.kind === "okr" ? T.st[e.state!].dot : T.ink) : T.edge}
+        stroke={on ? (e.kind === "okr" ? T.st[e.state!].dot : T.edgeOn) : T.edge}
         strokeWidth={on ? (e.kind === "okr" ? 2.5 : 1.5) : 1}
         strokeDasharray={e.kind === "works" ? "4 4" : e.kind === "alongside" ? "2 4" : undefined}
         opacity={sel && !on ? 0.55 : 1}
@@ -779,9 +803,10 @@ export function OrgCanvas({
     : `ORG CHART · FFSA ${model.cycleName ?? ""} · ${model.staffCount} STAFF · ${model.teams.length} TEAMS`;
 
   return (
-    <div className="flex flex-col">
+    <div className="org-theme flex h-[100dvh] min-h-[640px] flex-col" style={{ ...ORG_VARS, background: T.frame, color: T.ink }}>
+      <style>{ORG_CSS}</style>
       {/* Top bar: 40a's masthead row */}
-      <div className="flex flex-col gap-4 border-b border-ink bg-white px-5 pb-4 pt-5 lg:flex-row lg:items-center lg:justify-between lg:px-6">
+      <div className="flex flex-col gap-4 border-b border-[color:var(--org-border)] bg-[color:var(--org-surface)] px-5 pb-4 pt-5 lg:flex-row lg:items-center lg:justify-between lg:px-6">
         <div className="min-w-0">
           <div className="mb-[7px] flex items-center gap-2.5">
             <span className="h-[3px] w-4 shrink-0" style={{ background: T.yellow }} />
@@ -793,7 +818,7 @@ export function OrgCanvas({
         </div>
         <div className="flex flex-wrap items-center gap-2.5 lg:gap-3.5">
           <div className="relative w-full sm:w-[250px]">
-            <div className="flex h-11 items-center gap-2.5 border bg-white px-3 lg:h-10" style={{ borderColor: T.btnBorder }}>
+            <div className="flex h-11 items-center gap-2.5 border bg-[color:var(--org-surface)] px-3 lg:h-10" style={{ borderColor: T.btnBorder }}>
               <Search size={14} color={T.mono} />
               <input
                 value={query}
@@ -806,19 +831,19 @@ export function OrgCanvas({
                 onKeyDown={(e) => e.key === "Enter" && results[0] && choose(results[0])}
                 placeholder="Find a person or team"
                 aria-label="Find a person or team"
-                className="h-full min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-[#7C786C]"
+                className="h-full min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-[color:var(--org-mono)]"
               />
             </div>
             {searchOpen && results.length > 0 && (
-              <div className="absolute left-0 right-0 top-full z-30 border border-t-0 border-ink bg-white">
+              <div className="absolute left-0 right-0 top-full z-30 border border-t-0 border-[color:var(--org-border)] bg-[color:var(--org-surface)]">
                 {results.map((r) => (
                   <button
                     key={r.kind + r.id}
                     type="button"
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => choose(r)}
-                    className="flex w-full flex-col items-start gap-0.5 border-b px-3 py-2 text-left hover:bg-bone"
-                    style={{ borderColor: T.rowBorder }}
+                    className="flex w-full flex-col items-start gap-0.5 border-b px-3 py-2 text-left hover:bg-[color:var(--org-hover)]"
+                    style={{ borderColor: T.row }}
                   >
                     <span className="text-[13px] font-bold font-sans normal-case tracking-normal">{r.label}</span>
                     <span className={`${MONO} text-[8.5px] tracking-[0.1em]`} style={{ color: T.mono }}>
@@ -838,7 +863,7 @@ export function OrgCanvas({
                 setZoomTeam(null);
               }}
               className={`${MONO} flex h-11 items-center border px-3 text-[9px] uppercase tracking-[0.14em] lg:h-10`}
-              style={editMode ? { background: T.yellow, borderColor: T.ink, color: T.ink } : { background: "#fff", borderColor: T.ink, color: T.ink }}
+              style={editMode ? { background: T.yellow, borderColor: T.yellow, color: T.onYellow } : { background: "transparent", borderColor: T.border, color: T.ink }}
             >
               {editMode ? "Done editing" : "Edit the chart"}
             </button>
@@ -846,7 +871,7 @@ export function OrgCanvas({
           {canManage && !editMode && (
             <Link
               href="/org-chart/import"
-              className={`${MONO} flex h-11 items-center border border-ink bg-ink px-3 text-[9px] uppercase tracking-[0.14em] text-white hover:bg-[#262622] hover:text-white lg:h-10`}
+              className={`${MONO} flex h-11 items-center border border-[color:var(--org-border)] bg-[color:var(--org-ink)] px-3 text-[9px] uppercase tracking-[0.14em] text-[color:var(--org-on-ink)] hover:opacity-90 lg:h-10`}
             >
               Who is who
             </Link>
@@ -860,10 +885,10 @@ export function OrgCanvas({
         onPointerDown={onPointerDown}
         onClickCapture={onClickCapture}
         onClick={onCanvasClick}
-        className="relative h-[calc(100dvh-210px)] min-h-[520px] touch-none select-none overflow-hidden"
+        className="relative min-h-0 flex-1 touch-none select-none overflow-hidden"
         style={{
-          background: T.canvasBg,
-          backgroundImage: T.dots,
+          background: T.canvas,
+          backgroundImage: T.dotsBg,
           backgroundSize: "20px 20px",
           cursor: zoomTeam ? "default" : dragging ? "grabbing" : "grab",
         }}
@@ -883,7 +908,7 @@ export function OrgCanvas({
             <div
               key={z.label}
               className="absolute flex items-baseline gap-3 px-3 py-[9px]"
-              style={{ left: z.x, top: z.y, width: z.w, height: z.h, border: `1px dashed ${T.zoneBorder}` }}
+              style={{ left: z.x, top: z.y, width: z.w, height: z.h, border: `1px dashed ${T.zone}` }}
             >
               <span className={`${MONO} text-[9px] tracking-[0.18em]`}>{z.label}</span>
               <span className="font-mono text-[8.5px] tracking-[0.12em]" style={{ color: T.mono }}>
@@ -900,20 +925,21 @@ export function OrgCanvas({
         {/* Zoom + legend */}
         {!zoomTeam && (
           <div data-no-pan className="absolute bottom-4 left-4 flex flex-wrap items-stretch gap-2.5" onPointerDown={(e) => e.stopPropagation()}>
-            <div className="flex border border-ink bg-white">
+            <div className="flex border border-[color:var(--org-border)] bg-[color:var(--org-surface)]">
               <button type="button" aria-label="Zoom out" onClick={() => zoomBy(1 / 1.2)} className={`${MONO} flex h-11 w-11 items-center justify-center text-[14px] lg:h-9 lg:w-9`}>
                 −
               </button>
-              <span className={`${MONO} flex items-center px-2.5 text-[9px] tracking-[0.08em]`} style={{ borderLeft: `1px solid ${T.rowBorder}`, borderRight: `1px solid ${T.rowBorder}` }}>
+              <span className={`${MONO} flex items-center px-2.5 text-[9px] tracking-[0.08em]`} style={{ borderLeft: `1px solid ${T.row}`, borderRight: `1px solid ${T.row}` }}>
                 {Math.round(view.s * 100)}%
               </span>
               <button type="button" aria-label="Zoom in" onClick={() => zoomBy(1.2)} className={`${MONO} flex h-11 w-11 items-center justify-center text-[14px] lg:h-9 lg:w-9`}>
                 +
               </button>
             </div>
-            <div className="hidden flex-wrap items-center gap-[18px] border border-ink bg-white px-3.5 py-2.5 md:flex">
-              <Legend line={`1.5px solid ${T.ink}`} label="REPORTS TO" />
-              <Legend line={`1.5px dashed ${T.ink}`} label="SHARED PERSON" />
+            <div className="hidden flex-wrap items-center gap-[18px] border border-[color:var(--org-border)] bg-[color:var(--org-surface)] px-3.5 py-2.5 md:flex">
+              {showOkrs && <Legend line={`2.5px solid ${T.st.moving.dot}`} label="OKR" />}
+              <Legend line={`1.5px solid ${T.edgeOn}`} label="REPORTS TO" />
+              <Legend line={`1.5px dashed ${T.edgeOn}`} label="SHARED PERSON" />
             </div>
           </div>
         )}
@@ -924,13 +950,13 @@ export function OrgCanvas({
         )}
 
         {editMode && layoutError && (
-          <div data-no-pan className="absolute left-4 top-4 z-10 max-w-[320px] border border-destructive bg-white px-4 py-3 text-[12.5px] text-destructive" onPointerDown={(e) => e.stopPropagation()}>
+          <div data-no-pan className="absolute left-4 top-4 z-10 max-w-[320px] border border-destructive bg-[color:var(--org-surface)] px-4 py-3 text-[12.5px] text-destructive" onPointerDown={(e) => e.stopPropagation()}>
             That position wasn&rsquo;t saved: {layoutError}
           </div>
         )}
 
         {editMode && !editing && (
-          <div data-no-pan className="absolute right-4 top-4 z-10 max-w-[280px] border border-ink bg-white px-4 py-3 text-[12.5px] leading-[1.45]" onPointerDown={(e) => e.stopPropagation()}>
+          <div data-no-pan className="absolute right-4 top-4 z-10 max-w-[280px] border border-[color:var(--org-border)] bg-[color:var(--org-surface)] px-4 py-3 text-[12.5px] leading-[1.45]" onPointerDown={(e) => e.stopPropagation()}>
             <div className={`${MONO} mb-1 text-[8.5px] tracking-[0.14em]`} style={{ color: T.mono }}>
               EDIT MODE
             </div>
@@ -941,11 +967,11 @@ export function OrgCanvas({
         {drawer && (
           <div
             data-no-pan
-            className="absolute bottom-0 right-0 top-0 z-20 flex w-full flex-col border-l border-ink bg-white sm:w-[360px]"
+            className="absolute bottom-0 right-0 top-0 z-20 flex w-full flex-col border-l border-[color:var(--org-border)] bg-[color:var(--org-drawer)] sm:w-[360px]"
             onPointerDown={(e) => e.stopPropagation()}
             style={{ cursor: "default" }}
           >
-            <div className="border-b border-ink px-[22px] pb-[18px] pt-5">
+            <div className="border-b border-[color:var(--org-border)] px-[22px] pb-[18px] pt-5">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-[9px]">
                   <span className="h-[3px] w-3.5 shrink-0" style={{ background: T.yellow }} />
@@ -969,19 +995,19 @@ export function OrgCanvas({
                 <button
                   type="button"
                   onClick={drawer.zoom}
-                  className={`${MONO} mt-3.5 flex h-11 w-full items-center justify-center bg-ink text-[9.5px] tracking-[0.12em] text-white`}
+                  className={`${MONO} mt-3.5 flex h-11 w-full items-center justify-center bg-[color:var(--org-ink)] text-[9.5px] tracking-[0.12em] text-[color:var(--org-on-ink)]`}
                 >
                   OPEN THE TEAM · ROLES &amp; OKRS ›
                 </button>
               ) : null}
             </div>
             {drawer.band ? (
-              <div className="flex items-center gap-3.5 px-[22px] py-3" style={{ background: T.yellow, borderBottom: `2px solid ${T.ink}` }}>
+              <div className="flex items-center gap-3.5 px-[22px] py-3" style={{ background: T.yellow, borderBottom: `2px solid ${T.onYellow}`, color: T.onYellow }}>
                 <div>
                   <div className={`${MONO} text-[8.5px] tracking-[0.2em]`}>NEEDS YOU</div>
                   <div className={`${COND} text-[30px] leading-none tabular-nums`}>{drawer.band.n}</div>
                 </div>
-                <div className="w-0.5 self-stretch bg-ink" />
+                <div className="w-0.5 self-stretch" style={{ background: T.onYellow }} />
                 <div className="text-[13px] font-bold leading-[1.35]">{drawer.band.text}</div>
               </div>
             ) : null}
@@ -1002,7 +1028,7 @@ export function OrgCanvas({
         <div
           className="absolute inset-0 z-10 flex flex-col"
           style={{
-            background: T.canvasBg,
+            background: T.canvas,
             opacity: zoomTeam ? 1 : 0,
             transform: zoomTeam ? "scale(1)" : "scale(0.94)",
             transition: zoomTeam
@@ -1084,8 +1110,8 @@ function TeamView({
 
   return (
     <>
-      <div className="flex h-auto shrink-0 flex-wrap items-center gap-3 border-b border-ink bg-white px-4 py-2.5 lg:h-[60px] lg:flex-nowrap lg:gap-[18px] lg:px-5 lg:py-0">
-        <button type="button" onClick={onBack} className={`${MONO} flex h-11 items-center bg-ink px-4 text-[9.5px] tracking-[0.12em] text-white lg:h-10`}>
+      <div className="flex h-auto shrink-0 flex-wrap items-center gap-3 border-b border-[color:var(--org-border)] bg-[color:var(--org-surface)] px-4 py-2.5 lg:h-[60px] lg:flex-nowrap lg:gap-[18px] lg:px-5 lg:py-0">
+        <button type="button" onClick={onBack} className={`${MONO} flex h-11 items-center bg-[color:var(--org-ink)] px-4 text-[9.5px] tracking-[0.12em] text-[color:var(--org-on-ink)] lg:h-10`}>
           ← THE WHOLE BASE
         </button>
         <span className={`${MONO} hidden min-w-0 flex-1 truncate whitespace-pre text-[9.5px] tracking-[0.14em] md:block`} style={{ color: T.mono }}>
@@ -1103,7 +1129,7 @@ function TeamView({
 
       <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-[420px_minmax(0,1fr)_400px] lg:overflow-hidden">
         {/* Left: the team and its OKRs */}
-        <div className="bg-white lg:overflow-y-auto lg:border-r lg:border-ink">
+        <div className="bg-[color:var(--org-surface)] lg:overflow-y-auto lg:border-r lg:border-[color:var(--org-border)]">
           <div className="px-[26px] pb-[22px] pt-[26px]">
             <div className="flex items-center gap-2.5">
               <span className="h-[3px] w-4" style={{ background: T.yellow }} />
@@ -1112,28 +1138,28 @@ function TeamView({
               </span>
             </div>
             <h2 className={`${COND} mb-0 mt-2.5 text-[40px] uppercase leading-[0.9] lg:text-[50px]`}>{t.name}</h2>
-            <p className="mb-0 mt-3.5 text-[13.5px] leading-[1.55]" style={{ color: t.purpose ? T.sub : T.openInk }}>
+            <p className="mb-0 mt-3.5 text-[13.5px] leading-[1.55]" style={{ color: t.purpose ? T.sub : T.open }}>
               {t.purpose ?? "No purpose written down for this team yet."}
             </p>
           </div>
-          <div className="grid grid-cols-2" style={{ borderTop: `1px solid ${T.rowBorder}` }}>
+          <div className="grid grid-cols-2" style={{ borderTop: `1px solid ${T.row}` }}>
             {facts.map(([label, value]) => (
-              <div key={label} className="px-[26px] py-3" style={{ borderBottom: `1px solid ${T.rowBorder}` }}>
+              <div key={label} className="px-[26px] py-3" style={{ borderBottom: `1px solid ${T.row}` }}>
                 <div className={`${MONO} text-[8px] tracking-[0.14em]`} style={{ color: T.mono }}>{label}</div>
                 <div className="mt-1 text-[14px] font-bold">{value}</div>
               </div>
             ))}
           </div>
-          <div className="mt-[18px] flex justify-between px-[26px] py-[9px]" style={{ background: T.ink }}>
-            <span className={`${MONO} text-[9px] tracking-[0.18em] text-white`}>{model.cycleName ?? ""} OKRS</span>
+          <div className="mt-[18px] flex justify-between px-[26px] py-[9px]" style={{ background: T.section }}>
+            <span className={`${MONO} text-[9px] tracking-[0.18em] text-[color:var(--org-section-ink)]`}>{model.cycleName ?? ""} OKRS</span>
           </div>
           {t.objectives.length === 0 && (
-            <div className="px-[26px] py-4 text-[13px] font-bold" style={{ color: T.openInk }}>
+            <div className="px-[26px] py-4 text-[13px] font-bold" style={{ color: T.open }}>
               No objective this cycle yet.
             </div>
           )}
           {t.objectives.map((o) => (
-            <div key={o.id} className="px-[26px] pb-1.5 pt-4" style={{ borderBottom: `1px solid ${T.rowBorder}` }}>
+            <div key={o.id} className="px-[26px] pb-1.5 pt-4" style={{ borderBottom: `1px solid ${T.row}` }}>
               <div className={`${MONO} text-[8px] tracking-[0.14em]`} style={{ color: T.mono }}>
                 {o.direction ? `ROLLS UP TO ${dirTitle(o.direction)!.toUpperCase()}` : "NO DIRECTION SET YET"}
               </div>
@@ -1157,7 +1183,7 @@ function TeamView({
                   key={kr.id}
                   onClick={kr.ownerId && t.members.some((m) => m.userId === kr.ownerId) ? () => setPerson(kr.ownerId!) : undefined}
                   className="flex flex-col gap-[5px] py-2.5 pl-4"
-                  style={{ borderTop: `1px solid ${T.rowBorder}`, cursor: kr.ownerId ? "pointer" : "default" }}
+                  style={{ borderTop: `1px solid ${T.row}`, cursor: kr.ownerId ? "pointer" : "default" }}
                 >
                   <div className="flex items-baseline gap-2.5">
                     <span className="flex-1 text-[12.5px] leading-[1.35]">{kr.text}</span>
@@ -1166,7 +1192,7 @@ function TeamView({
                     </span>
                   </div>
                   <Progress pct={kr.pct} state={kr.state} thick={3} measured={kr.measured} />
-                  <span className={`${MONO} text-[8px] tracking-[0.12em]`} style={{ color: kr.ownerName ? T.mono : T.openInk }}>
+                  <span className={`${MONO} text-[8px] tracking-[0.12em]`} style={{ color: kr.ownerName ? T.mono : T.open }}>
                     {kr.ownerName ? `OWNER · ${kr.ownerName.toUpperCase()}` : "NO OWNER YET"}
                   </span>
                 </div>
@@ -1176,14 +1202,14 @@ function TeamView({
         </div>
 
         {/* Middle: the people */}
-        <div className="bg-white lg:overflow-y-auto">
-          <div className="sticky top-0 z-[1] grid grid-cols-[44px_minmax(0,1fr)_70px] gap-3.5 px-[22px] py-[9px] md:grid-cols-[44px_minmax(0,1fr)_70px_150px]" style={{ background: T.ink }}>
-            <span className={`${MONO} col-span-2 text-[9px] tracking-[0.18em] text-white`}>PEOPLE · {t.members.length} · ROLE</span>
+        <div className="bg-[color:var(--org-surface)] lg:overflow-y-auto">
+          <div className="sticky top-0 z-[1] grid grid-cols-[44px_minmax(0,1fr)_70px] gap-3.5 px-[22px] py-[9px] md:grid-cols-[44px_minmax(0,1fr)_70px_150px]" style={{ background: T.section }}>
+            <span className={`${MONO} col-span-2 text-[9px] tracking-[0.18em] text-[color:var(--org-section-ink)]`}>PEOPLE · {t.members.length} · ROLE</span>
             <span className="font-mono text-[9px] tracking-[0.1em]" style={{ color: T.mono }}>OWNS</span>
             <span className="hidden font-mono text-[9px] tracking-[0.1em] md:block" style={{ color: T.mono }}>ALSO ON</span>
           </div>
           {t.members.length === 0 && (
-            <div className="px-[22px] py-4 text-[13px]" style={{ color: T.openInk }}>
+            <div className="px-[22px] py-4 text-[13px]" style={{ color: T.open }}>
               Nobody is on this roster yet. Add people on the Ministry tab, or from Who is who.
             </div>
           )}
@@ -1195,22 +1221,22 @@ function TeamView({
                 key={m.userId}
                 onClick={() => setPerson(m.userId)}
                 className="grid min-h-[58px] cursor-pointer grid-cols-[44px_minmax(0,1fr)_70px] items-center gap-3.5 px-[22px] py-[9px] md:grid-cols-[44px_minmax(0,1fr)_70px_150px]"
-                style={{ borderBottom: `1px solid ${T.rowBorder}`, background: on ? T.yellow : "transparent" }}
+                style={{ borderBottom: `1px solid ${T.row}`, background: on ? T.yellow : "transparent" }}
               >
                 <span
                   className={`${COND} flex h-10 w-10 items-center justify-center text-[15px]`}
-                  style={{ background: on ? T.ink : T.ink, color: on ? T.yellow : "#fff" }}
+                  style={{ background: on ? T.onYellow : T.head, color: on ? T.yellow : T.headInk }}
                 >
                   {initials(m.name)}
                 </span>
-                <div className="min-w-0">
+                <div className="min-w-0" style={{ color: on ? T.onYellow : T.ink }}>
                   <div className="truncate text-[14px] font-bold">{m.name}</div>
-                  <div className="mt-0.5 truncate text-[12.5px]" style={{ color: on ? T.ink : T.sub }}>
+                  <div className="mt-0.5 truncate text-[12.5px]" style={{ color: on ? T.onYellow : T.sub }}>
                     {m.title ?? (m.isLead ? "Leader" : "Member")}
                   </div>
                 </div>
-                <span className={`${MONO} text-[8.5px] tracking-[0.1em]`}>{kc ? `${kc} KR${kc > 1 ? "S" : ""}` : ""}</span>
-                <span className={`${MONO} hidden text-[8.5px] leading-[1.4] tracking-[0.06em] md:block`} style={{ color: on ? T.ink : T.sub }}>
+                <span className={`${MONO} text-[8.5px] tracking-[0.1em]`} style={{ color: on ? T.onYellow : T.ink }}>{kc ? `${kc} KR${kc > 1 ? "S" : ""}` : ""}</span>
+                <span className={`${MONO} hidden text-[8.5px] leading-[1.4] tracking-[0.06em] md:block`} style={{ color: on ? T.onYellow : T.sub }}>
                   {m.alsoOn.map((id) => team.get(id)?.name).filter(Boolean).join(" · ")}
                 </span>
               </div>
@@ -1219,12 +1245,12 @@ function TeamView({
         </div>
 
         {/* Right: the person */}
-        <div className="bg-white lg:overflow-y-auto lg:border-l lg:border-ink">
+        <div className="bg-[color:var(--org-surface)] lg:overflow-y-auto lg:border-l lg:border-[color:var(--org-border)]">
           {cur ? (
             <>
-              <div className="border-b border-ink px-6 pb-[22px] pt-[26px]">
+              <div className="border-b border-[color:var(--org-border)] px-6 pb-[22px] pt-[26px]">
                 <div className="flex items-center gap-3.5">
-                  <span className={`${COND} flex h-[58px] w-[58px] shrink-0 items-center justify-center text-[22px]`} style={{ background: T.yellow }}>
+                  <span className={`${COND} flex h-[58px] w-[58px] shrink-0 items-center justify-center text-[22px]`} style={{ background: T.yellow, color: T.onYellow }}>
                     {initials(cur.name)}
                   </span>
                   <span className={`${MONO} text-[9px] tracking-[0.16em]`} style={{ color: T.mono }}>
@@ -1240,20 +1266,20 @@ function TeamView({
               <SectionHead title="WHAT THIS ROLE CARRIES" />
               {cur.responsibilities.length ? (
                 cur.responsibilities.map((r) => (
-                  <div key={r} className="flex items-baseline gap-3 px-6 py-[11px]" style={{ borderBottom: `1px solid ${T.rowBorder}` }}>
-                    <span className="h-1.5 w-1.5 shrink-0 -translate-y-0.5 bg-ink" />
+                  <div key={r} className="flex items-baseline gap-3 px-6 py-[11px]" style={{ borderBottom: `1px solid ${T.row}` }}>
+                    <span className="h-1.5 w-1.5 shrink-0 -translate-y-0.5 bg-[color:var(--org-ink)]" />
                     <span className="text-[13.5px] leading-[1.45]">{r}</span>
                   </div>
                 ))
               ) : (
-                <div className="px-6 py-3.5 text-[13px] leading-[1.5]" style={{ borderBottom: `1px solid ${T.rowBorder}`, color: T.openInk }}>
+                <div className="px-6 py-3.5 text-[13px] leading-[1.5]" style={{ borderBottom: `1px solid ${T.row}`, color: T.open }}>
                   {cur.title ? "Only the title is written down so far." : "Nothing is written down for this role yet."} The rest of this role description hasn&rsquo;t been filled in.
                 </div>
               )}
               <SectionHead title="KEY RESULTS OWNED" />
               {curKrs.length ? (
                 curKrs.map((kr) => (
-                  <div key={kr.id} className="flex flex-col gap-1.5 px-6 py-3" style={{ borderBottom: `1px solid ${T.rowBorder}` }}>
+                  <div key={kr.id} className="flex flex-col gap-1.5 px-6 py-3" style={{ borderBottom: `1px solid ${T.row}` }}>
                     <div className="flex items-baseline gap-2.5">
                       <span className="flex-1 text-[13px] font-bold leading-[1.35]">{kr.text}</span>
                       <span className={`${COND} text-[16px] leading-none tabular-nums`} style={{ color: kr.measured ? T.ink : T.mono }}>
@@ -1264,7 +1290,7 @@ function TeamView({
                   </div>
                 ))
               ) : (
-                <div className="px-6 py-3.5 text-[13px] leading-[1.5]" style={{ borderBottom: `1px solid ${T.rowBorder}`, color: T.sub }}>
+                <div className="px-6 py-3.5 text-[13px] leading-[1.5]" style={{ borderBottom: `1px solid ${T.row}`, color: T.sub }}>
                   Doesn&rsquo;t own a key result this cycle. Carries the team&rsquo;s objective with everyone else.
                 </div>
               )}
@@ -1277,7 +1303,7 @@ function TeamView({
                       type="button"
                       onClick={() => openTeam(id)}
                       className="flex h-12 w-full items-center justify-between px-6 text-left"
-                      style={{ borderBottom: `1px solid ${T.rowBorder}` }}
+                      style={{ borderBottom: `1px solid ${T.row}` }}
                     >
                       <span className="text-[13.5px] font-bold font-sans normal-case tracking-normal">{team.get(id)?.name}</span>
                       <span className={`${MONO} text-[9px] tracking-[0.1em]`}>OPEN ›</span>
