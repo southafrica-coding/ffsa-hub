@@ -86,7 +86,7 @@ export function CheckoutView() {
         <p className="mt-3 max-w-[480px]">{checkError ?? "Something in your cart no longer fits your dates."}</p>
         <Link
           href="/hire/cart"
-          className="mt-5 inline-flex h-12 items-center rounded-[8px] bg-[color:var(--hire-accent)] px-6 font-bold text-[color:var(--hire-on-accent)]"
+          className="mt-5 inline-flex h-12 items-center rounded-[8px] bg-[color:var(--hire-accent)] px-6 font-bold !text-[color:var(--hire-on-accent)]"
         >
           Back to the cart
         </Link>

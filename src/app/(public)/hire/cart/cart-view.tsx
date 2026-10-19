@@ -39,7 +39,7 @@ export function CartView() {
       <main className="px-[18px] py-12 md:px-10 md:py-16">
         <h1 className="hire-display text-[52px] md:text-[80px]">Cart</h1>
         <p className="mt-3 text-[16px]">Your cart is empty.</p>
-        <Link href="/hire" className="mt-5 inline-flex h-12 items-center rounded-[8px] bg-[color:var(--hire-accent)] px-6 text-[15px] font-bold text-[color:var(--hire-on-accent)]">
+        <Link href="/hire" className="mt-5 inline-flex h-12 items-center rounded-[8px] bg-[color:var(--hire-accent)] px-6 text-[15px] font-bold !text-[color:var(--hire-on-accent)]">
           Pick dates and browse
         </Link>
       </main>
@@ -175,7 +175,7 @@ export function CartView() {
                     <Photo src={l.photo} alt={l.title} className="h-16 rounded-[6px] md:h-20" />
                   </Link>
                   <div className="min-w-0">
-                    <Link href={`/hire/p/${l.slug}?from=${cart.from}&to=${cart.to}`} className="text-[15px] text-[color:var(--hire-ink)]">
+                    <Link href={`/hire/p/${l.slug}?from=${cart.from}&to=${cart.to}`} className="text-[15px] !text-[color:var(--hire-ink)]">
                       {l.quantity} × {l.title}
                     </Link>
                     <div
@@ -332,7 +332,7 @@ function CheckoutButton({ ready, waiting, loading }: { ready: boolean; waiting: 
     return (
       <Link
         href="/hire/checkout"
-        className="mt-2 flex h-[52px] items-center justify-center rounded-[8px] bg-[color:var(--hire-accent)] text-[16px] font-bold text-[color:var(--hire-on-accent)]"
+        className="mt-2 flex h-[52px] items-center justify-center rounded-[8px] bg-[color:var(--hire-accent)] text-[16px] font-bold !text-[color:var(--hire-on-accent)]"
       >
         Check out
       </Link>

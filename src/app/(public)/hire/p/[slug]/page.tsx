@@ -182,7 +182,7 @@ export default async function ItemPage({
             <Link
               href={withDates(cat ? `/hire/c/${cat.slug}` : "/hire/c/all", range)}
               aria-label="Back"
-              className="absolute left-3.5 top-3 flex h-11 w-11 items-center justify-center rounded-[999px] bg-[rgba(16,14,11,0.75)] text-[color:var(--hire-ink)] md:hidden"
+              className="absolute left-3.5 top-3 flex h-11 w-11 items-center justify-center rounded-[999px] bg-[rgba(16,14,11,0.75)] !text-[color:var(--hire-ink)] md:hidden"
             >
               <ChevronLeft className="h-5 w-5" />
             </Link>
@@ -373,11 +373,11 @@ export default async function ItemPage({
           <div className="mb-3 flex items-baseline justify-between">
             <span className="hire-display text-[30px]">{monthLabel(month)}</span>
             <span className="flex gap-3 text-[13px] text-[color:var(--hire-muted)]">
-              <Link href={monthHref(shiftMonth(month, -1))} scroll={false} className="hover:text-[color:var(--hire-ink)]">
+              <Link href={monthHref(shiftMonth(month, -1))} scroll={false} className="hover:!text-[color:var(--hire-ink)]">
                 ‹ {monthLabel(shiftMonth(month, -1)).slice(0, 3)}
               </Link>
               ·
-              <Link href={monthHref(shiftMonth(month, 1))} scroll={false} className="hover:text-[color:var(--hire-ink)]">
+              <Link href={monthHref(shiftMonth(month, 1))} scroll={false} className="hover:!text-[color:var(--hire-ink)]">
                 {monthLabel(shiftMonth(month, 1)).slice(0, 3)} ›
               </Link>
             </span>

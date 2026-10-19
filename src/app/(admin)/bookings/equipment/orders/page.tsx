@@ -57,7 +57,7 @@ export default async function OrdersPage() {
       {access?.canManage && waiting.length > 0 && (
         <Link
           href={`/bookings/equipment/orders/${waiting[0].id}`}
-          className="flex flex-col gap-1 bg-[color:var(--hire-accent)] px-[18px] py-3.5 text-[15px] text-[color:var(--hire-on-accent)] md:flex-row md:items-center md:justify-between md:px-9"
+          className="flex flex-col gap-1 bg-[color:var(--hire-accent)] px-[18px] py-3.5 text-[15px] !text-[color:var(--hire-on-accent)] md:flex-row md:items-center md:justify-between md:px-9"
         >
           <span>
             <b>

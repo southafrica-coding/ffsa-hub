@@ -39,7 +39,7 @@ export function HirePanel() {
     <aside className="hidden w-[200px] shrink-0 flex-col border-r border-[color:var(--hire-line)] bg-[color:var(--hire-surface)] py-6 md:flex">
       <Link
         href="/bookings"
-        className="mb-3 flex items-center gap-1.5 px-5 text-[12px] text-[color:var(--hire-muted)] hover:text-[color:var(--hire-ink)]"
+        className="mb-3 flex items-center gap-1.5 px-5 text-[12px] !text-[color:var(--hire-muted)] hover:!text-[color:var(--hire-ink)]"
       >
         <ArrowLeft className="h-3.5 w-3.5" /> Bookings
       </Link>
@@ -68,8 +68,8 @@ export function HirePanel() {
               className={cn(
                 "px-5 py-[9px] text-[14px]",
                 active
-                  ? "bg-[color:var(--hire-hover)] font-bold text-[color:var(--hire-ink)] shadow-[inset_3px_0_0_var(--hire-accent)]"
-                  : "text-[color:var(--hire-body)] hover:bg-[color:var(--hire-hover)]"
+                  ? "bg-[color:var(--hire-hover)] font-bold !text-[color:var(--hire-ink)] shadow-[inset_3px_0_0_var(--hire-accent)]"
+                  : "!text-[color:var(--hire-body)] hover:bg-[color:var(--hire-hover)]"
               )}
             >
               {item.label}
@@ -138,7 +138,7 @@ export function HireTabBar() {
               aria-current={active ? "page" : undefined}
               className={cn(
                 cell,
-                active ? "font-bold text-[color:var(--hire-accent)]" : "text-[color:var(--hire-muted)]"
+                active ? "font-bold !text-[color:var(--hire-accent)]" : "!text-[color:var(--hire-muted)]"
               )}
             >
               {tab.label}
@@ -185,7 +185,7 @@ export function HireTabBar() {
                 <Link
                   key={item.label}
                   href={item.href}
-                  className="flex min-h-[52px] items-center border-t border-[color:var(--hire-line)] px-[18px] text-[15px] text-[color:var(--hire-ink)]"
+                  className="flex min-h-[52px] items-center border-t border-[color:var(--hire-line)] px-[18px] text-[15px] !text-[color:var(--hire-ink)]"
                 >
                   {item.label}
                 </Link>
@@ -202,7 +202,7 @@ export function HireTabBar() {
             )}
             <Link
               href="/bookings"
-              className="flex min-h-[52px] items-center gap-2 border-t border-[color:var(--hire-line)] px-[18px] text-[15px] text-[color:var(--hire-body)]"
+              className="flex min-h-[52px] items-center gap-2 border-t border-[color:var(--hire-line)] px-[18px] text-[15px] !text-[color:var(--hire-body)]"
             >
               <ArrowLeft className="h-4 w-4" /> Back to Bookings
             </Link>

@@ -102,7 +102,7 @@ export function ItemBooking({
   const note = added ? (
     <span>
       Added.{" "}
-      <Link href="/hire/cart" className="font-bold text-[color:var(--hire-accent)] underline underline-offset-4">
+      <Link href="/hire/cart" className="font-bold !text-[color:var(--hire-accent)] underline underline-offset-4">
         View cart
       </Link>
     </span>

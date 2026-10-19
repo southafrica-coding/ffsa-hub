@@ -36,8 +36,11 @@ const vars = Object.entries(P)
 export const HIRE_CSS = `
 .theme-hire { ${vars} background: var(--hire-bg); color: var(--hire-body); }
 .theme-hire h1, .theme-hire h2, .theme-hire h3 { color: var(--hire-ink); }
-.theme-hire a { color: inherit; }
-.theme-hire a:hover { color: inherit; }
+/* Links: a plain link takes its parent's colour, and the Hub's blue hover
+   is switched off. A link with its own colour uses Tailwind's important
+   form (!text-…), because the Hub's a:hover outranks a plain class. */
+:where(.theme-hire) a { color: inherit; }
+:where(.theme-hire) a:hover { color: inherit; }
 .theme-hire .hire-display {
   font-family: var(--font-bebas), 'Bebas Neue', sans-serif;
   font-weight: 400; text-transform: none; letter-spacing: 0.005em; line-height: 0.9;

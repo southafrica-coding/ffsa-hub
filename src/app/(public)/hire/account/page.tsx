@@ -38,7 +38,7 @@ export default async function AccountPage() {
         </p>
         <Link
           href="/login?redirect=/hire/account"
-          className="mt-5 inline-flex h-12 items-center rounded-[8px] bg-[color:var(--hire-accent)] px-6 font-bold text-[color:var(--hire-on-accent)]"
+          className="mt-5 inline-flex h-12 items-center rounded-[8px] bg-[color:var(--hire-accent)] px-6 font-bold !text-[color:var(--hire-on-accent)]"
         >
           Sign in
         </Link>

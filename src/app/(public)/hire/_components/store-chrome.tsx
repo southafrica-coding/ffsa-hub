@@ -60,7 +60,7 @@ export function StoreHeader({
               <Link
                 key={c.slug}
                 href={dated(`/hire/c/${c.slug}`)}
-                className={cn("hover:text-[color:var(--hire-ink)]", active && "font-bold !text-[color:var(--hire-accent)]")}
+                className={cn("hover:!text-[color:var(--hire-ink)]", active && "font-bold !text-[color:var(--hire-accent)]")}
               >
                 {c.name}
               </Link>
@@ -90,7 +90,7 @@ export function StoreHeader({
         <Link
           href={dated("/hire/c/all")}
           aria-label="Search the store"
-          className="ml-auto flex h-11 w-11 items-center justify-center text-[color:var(--hire-ink)]"
+          className="ml-auto flex h-11 w-11 items-center justify-center !text-[color:var(--hire-ink)]"
         >
           <Search className="h-5 w-5" />
         </Link>
@@ -143,7 +143,7 @@ export function StoreTabBar() {
             key={t.label}
             href={t.href === "/hire/cart" || t.href === "/hire/account" ? t.href : dated(t.href)}
             aria-current={t.active ? "page" : undefined}
-            className={cn(cell, t.active ? "font-bold text-[color:var(--hire-accent)]" : "text-[color:var(--hire-muted)]")}
+            className={cn(cell, t.active ? "font-bold !text-[color:var(--hire-accent)]" : "!text-[color:var(--hire-muted)]")}
           >
             {t.label}
           </Link>
