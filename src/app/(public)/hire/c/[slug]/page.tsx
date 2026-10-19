@@ -88,7 +88,7 @@ export default async function CategoryPage({
 
   const chip = (on: boolean) =>
     cn(
-      "flex h-11 shrink-0 items-center rounded-full px-4 text-[13px]",
+      "flex h-11 shrink-0 items-center rounded-[999px] px-4 text-[13px]",
       on
         ? "bg-[color:var(--hire-accent)] font-bold text-[color:var(--hire-on-accent)]"
         : "border border-[color:var(--hire-line-strong)] text-[color:var(--hire-ink)]"
@@ -140,10 +140,10 @@ export default async function CategoryPage({
         <aside className="hidden flex-col gap-7 border-r border-[color:var(--hire-line)] py-7 pl-10 pr-7 md:flex">
           <Link href={href({ only: onlyFree ? undefined : "free" })} className="flex items-center justify-between text-[14px] font-medium text-[color:var(--hire-ink)]">
             Only free on my dates
-            <span className={cn("relative h-[22px] w-[38px] rounded-full", onlyFree ? "bg-[color:var(--hire-accent)]" : "bg-[color:var(--hire-line-strong)]")}>
+            <span className={cn("relative h-[22px] w-[38px] rounded-[999px]", onlyFree ? "bg-[color:var(--hire-accent)]" : "bg-[color:var(--hire-line-strong)]")}>
               <span
                 className={cn(
-                  "absolute top-[3px] h-4 w-4 rounded-full",
+                  "absolute top-[3px] h-4 w-4 rounded-[999px]",
                   onlyFree ? "right-[3px] bg-[color:var(--hire-on-accent)]" : "left-[3px] bg-[color:var(--hire-muted)]"
                 )}
               />
@@ -153,12 +153,12 @@ export default async function CategoryPage({
             <div className="flex flex-col gap-2.5">
               <div className="hire-label">Type</div>
               <Link href={href({ type: undefined })} className="flex items-center gap-2.5 text-[14px] text-[color:var(--hire-ink)]">
-                <span className={cn("h-4 w-4 rounded", !type ? "bg-[color:var(--hire-accent)]" : "border border-[color:var(--hire-dim)]")} />
+                <span className={cn("h-4 w-4 rounded-[4px]", !type ? "bg-[color:var(--hire-accent)]" : "border border-[color:var(--hire-dim)]")} />
                 All {category.name.toLowerCase()}
               </Link>
               {category.children.map((c) => (
                 <Link key={c.id} href={href({ type: c.slug })} className="flex items-center gap-2.5 text-[14px] text-[color:var(--hire-ink)]">
-                  <span className={cn("h-4 w-4 rounded", type?.id === c.id ? "bg-[color:var(--hire-accent)]" : "border border-[color:var(--hire-dim)]")} />
+                  <span className={cn("h-4 w-4 rounded-[4px]", type?.id === c.id ? "bg-[color:var(--hire-accent)]" : "border border-[color:var(--hire-dim)]")} />
                   {c.name}
                   <span className="ml-auto text-[color:var(--hire-muted)]">{typeCounts.get(c.id) ?? 0}</span>
                 </Link>

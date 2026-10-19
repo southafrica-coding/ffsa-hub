@@ -228,7 +228,7 @@ export default async function UnitPage({ params }: { params: Promise<{ tag: stri
         <aside className="hidden flex-col bg-[color:var(--hire-surface)] md:flex">
           <div className="flex items-center gap-5 border-b border-[color:var(--hire-line)] px-7 py-6">
             <div
-              className="h-24 w-24 shrink-0 overflow-hidden rounded [&>svg]:h-full [&>svg]:w-full"
+              className="h-24 w-24 shrink-0 overflow-hidden rounded-[4px] [&>svg]:h-full [&>svg]:w-full"
               aria-label={`QR code for ${unit.tag}`}
               dangerouslySetInnerHTML={{ __html: qrSvg }}
             />

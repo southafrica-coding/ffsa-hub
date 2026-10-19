@@ -48,7 +48,7 @@ export function StatusPill({ status }: { status: EquipmentLiveStatus }) {
   return (
     <span
       className={cn(
-        "inline-block whitespace-nowrap rounded px-1.5 py-[3px] text-[10px] font-bold uppercase tracking-[0.14em]",
+        "inline-block whitespace-nowrap rounded-[4px] px-1.5 py-[3px] text-[10px] font-bold uppercase tracking-[0.14em]",
         status === "available" && "text-[color:var(--hire-ok)] ring-1 ring-inset ring-[color:var(--hire-line-strong)]",
         status === "maintenance" && "bg-[color:var(--hire-ink)] text-[color:var(--hire-bg)]",
         status === "out" && "bg-[color:var(--hire-surface2)] text-[color:var(--hire-ink)] ring-1 ring-inset ring-[color:var(--hire-ink)]",
@@ -169,7 +169,7 @@ export function RegisterView({
                 type="button"
                 onClick={() => setPhoneFilter(key)}
                 className={cn(
-                  "flex h-11 shrink-0 items-center rounded-full px-4 text-[13px]",
+                  "flex h-11 shrink-0 items-center rounded-[999px] px-4 text-[13px]",
                   phoneFilter === key
                     ? "bg-[color:var(--hire-accent)] font-bold text-[color:var(--hire-on-accent)]"
                     : "border border-[color:var(--hire-line-strong)] text-[color:var(--hire-ink)]"
@@ -190,7 +190,7 @@ export function RegisterView({
             type="button"
             onClick={() => setCategory(c.key)}
             className={cn(
-              "flex h-9 items-center gap-2 rounded-full px-4 text-[12px] font-bold uppercase tracking-[0.12em]",
+              "flex h-9 items-center gap-2 rounded-[999px] px-4 text-[12px] font-bold uppercase tracking-[0.12em]",
               category === c.key
                 ? "bg-[color:var(--hire-accent)] text-[color:var(--hire-on-accent)]"
                 : "border border-[color:var(--hire-line-strong)] text-[color:var(--hire-ink)] hover:bg-[color:var(--hire-hover)]"
@@ -407,15 +407,17 @@ function SearchBox({
   placeholder: string;
 }) {
   return (
-    <label className="flex h-11 items-center gap-2.5 rounded-lg text-[16px] md:text-[13px] border border-[color:var(--hire-line-strong)] bg-[color:var(--hire-surface2)] px-3.5 md:h-9 md:rounded-md">
-      <Search className="h-[15px] w-[15px] shrink-0 text-[color:var(--hire-muted)]" />
-      <input
-        type="search"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="hire-bare w-full min-w-0 outline-none"
-      />
-    </label>
+    <div className="text-[16px] md:text-[13px]">
+      <label className="flex h-11 items-center gap-2.5 rounded-[8px] border border-[color:var(--hire-line-strong)] bg-[color:var(--hire-surface2)] px-3.5 md:h-9 md:rounded-[6px]">
+        <Search className="h-[15px] w-[15px] shrink-0 text-[color:var(--hire-muted)]" />
+        <input
+          type="search"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="hire-bare w-full min-w-0 outline-none"
+        />
+      </label>
+    </div>
   );
 }

@@ -37,7 +37,7 @@ export function ItemBooking({
   const total = q.lines[0].lineTotalCents;
 
   const stepper = (
-    <div className="flex h-[46px] items-center rounded-md border border-[color:var(--hire-line-strong)] md:h-[46px]">
+    <div className="flex h-[46px] items-center rounded-[6px] border border-[color:var(--hire-line-strong)] md:h-[46px]">
       <button
         type="button"
         aria-label="One fewer"
@@ -68,7 +68,7 @@ export function ItemBooking({
       disabled
       title="Booking online opens soon"
       className={cn(
-        "flex h-[46px] flex-1 items-center justify-center rounded-md px-4 text-[15px] font-bold md:h-[46px]",
+        "flex h-[46px] flex-1 items-center justify-center rounded-[6px] px-4 text-[15px] font-bold md:h-[46px]",
         free > 0
           ? "bg-[color:var(--hire-accent)] text-[color:var(--hire-on-accent)] opacity-60"
           : "bg-[color:var(--hire-surface2)] text-[color:var(--hire-dim)]"
@@ -99,7 +99,7 @@ export function ItemBooking({
   }
 
   return (
-    <div className="flex flex-col gap-3.5 rounded-lg border border-[color:var(--hire-line-strong)] bg-[color:var(--hire-surface)] p-[18px]">
+    <div className="flex flex-col gap-3.5 rounded-[8px] border border-[color:var(--hire-line-strong)] bg-[color:var(--hire-surface)] p-[18px]">
       <div className="flex items-baseline justify-between gap-3">
         <span className="text-[15px] font-medium text-[color:var(--hire-ink)]">{rangeText}</span>
         <a href="#dates" className="text-[13px] underline underline-offset-4">

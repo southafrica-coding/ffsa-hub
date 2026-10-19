@@ -39,7 +39,7 @@ export function StoreHeader({
           <Image src="/brand/ff-wordmark-white.png" alt="Fire & Fragrance" width={150} height={22} style={{ height: 22, width: "auto" }} priority />
           <span className="hire-display pt-[3px] text-[22px] tracking-[0.08em] !text-[color:var(--hire-accent)]">HIRE</span>
         </Link>
-        <form action="/hire/c/all" className="flex h-10 max-w-[440px] flex-1 items-center gap-2.5 rounded-md border border-[color:var(--hire-line2)] bg-[color:var(--hire-surface2)] px-3.5 text-[14px]">
+        <form action="/hire/c/all" className="flex h-10 max-w-[440px] flex-1 items-center gap-2.5 rounded-[6px] border border-[color:var(--hire-line2)] bg-[color:var(--hire-surface2)] px-3.5 text-[14px]">
           <Search className="h-[15px] w-[15px] shrink-0 text-[color:var(--hire-muted)]" />
           {sp.get("from") && <input type="hidden" name="from" value={sp.get("from")!} />}
           {sp.get("to") && <input type="hidden" name="to" value={sp.get("to")!} />}

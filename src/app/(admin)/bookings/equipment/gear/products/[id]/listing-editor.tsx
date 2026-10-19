@@ -153,7 +153,7 @@ export function ListingEditor({
     router.refresh();
   }
 
-  const box = "rounded-lg border border-[color:var(--hire-line-strong)]";
+  const box = "rounded-[8px] border border-[color:var(--hire-line-strong)]";
   const disabled = !canEdit;
 
   return (
@@ -167,8 +167,8 @@ export function ListingEditor({
       <div className="grid gap-0 md:grid-cols-[minmax(0,1fr)_380px]">
         <div className="flex flex-col gap-4 px-[18px] py-4 md:border-r md:border-[color:var(--hire-line)] md:px-9 md:py-6">
           {/* Can leave the building */}
-          <label className={cn(box, "flex min-h-[52px] items-center justify-between gap-4 px-3.5 text-[15px] text-[color:var(--hire-ink)]")}>
-            <span>
+          <label className={cn(box, "flex min-h-[52px] items-center justify-between gap-4 px-3.5")}>
+            <span className="text-[15px] text-[color:var(--hire-ink)]">
               Can leave the building
               <span className="block text-[12px] text-[color:var(--hire-muted)]">
                 Off for anything that has to stay installed here.
@@ -197,7 +197,7 @@ export function ListingEditor({
             </div>
             <div className="grid grid-cols-4 gap-1.5 md:grid-cols-6">
               {photos.map((p) => (
-                <div key={p.id} className="relative aspect-square overflow-hidden rounded-md bg-[color:var(--hire-surface2)]">
+                <div key={p.id} className="relative aspect-square overflow-hidden rounded-[6px] bg-[color:var(--hire-surface2)]">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={p.url} alt="" className="h-full w-full object-cover" />
                   {canEdit && (
@@ -206,7 +206,7 @@ export function ListingEditor({
                       onClick={() => removePhoto(p.id)}
                       disabled={busy !== null}
                       aria-label="Remove photo"
-                      className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-[color:var(--hire-ink)]"
+                      className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-[999px] bg-black/70 text-[color:var(--hire-ink)]"
                     >
                       <X className="h-4 w-4" />
                     </button>
@@ -218,7 +218,7 @@ export function ListingEditor({
                   type="button"
                   onClick={() => fileRef.current?.click()}
                   disabled={busy !== null}
-                  className="flex aspect-square flex-col items-center justify-center gap-1 rounded-md border border-dashed border-[color:var(--hire-dim)] text-[12px] text-[color:var(--hire-muted)]"
+                  className="flex aspect-square flex-col items-center justify-center gap-1 rounded-[6px] border border-dashed border-[color:var(--hire-dim)] text-[12px] text-[color:var(--hire-muted)]"
                 >
                   {busy === "photo" ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImagePlus className="h-5 w-5" />}
                   Add
@@ -335,7 +335,7 @@ export function ListingEditor({
               type="button"
               onClick={() => save("save")}
               disabled={busy !== null}
-              className="flex h-[52px] flex-1 items-center justify-center rounded-lg border border-[color:var(--hire-line-strong)] px-5 text-[15px] text-[color:var(--hire-ink)] md:h-11 md:flex-none"
+              className="flex h-[52px] flex-1 items-center justify-center rounded-[8px] border border-[color:var(--hire-line-strong)] px-5 text-[15px] text-[color:var(--hire-ink)] md:h-11 md:flex-none"
             >
               {busy === "save" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
             </button>
@@ -344,7 +344,7 @@ export function ListingEditor({
                 type="button"
                 onClick={() => save("off")}
                 disabled={busy !== null}
-                className="flex h-[52px] flex-[2] items-center justify-center rounded-lg border border-[color:var(--hire-accent)] px-5 text-[15px] font-bold text-[color:var(--hire-accent)] md:h-11 md:flex-none"
+                className="flex h-[52px] flex-[2] items-center justify-center rounded-[8px] border border-[color:var(--hire-accent)] px-5 text-[15px] font-bold text-[color:var(--hire-accent)] md:h-11 md:flex-none"
               >
                 {busy === "off" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Take it off the store"}
               </button>
@@ -355,7 +355,7 @@ export function ListingEditor({
                 disabled={busy !== null || blockers.length > 0}
                 title={blockers.join(" ")}
                 className={cn(
-                  "flex h-[52px] flex-[2] items-center justify-center rounded-lg px-5 text-[15px] font-bold md:h-11 md:flex-none",
+                  "flex h-[52px] flex-[2] items-center justify-center rounded-[8px] px-5 text-[15px] font-bold md:h-11 md:flex-none",
                   blockers.length > 0
                     ? "bg-[color:var(--hire-surface2)] text-[color:var(--hire-dim)]"
                     : "bg-[color:var(--hire-accent)] text-[color:var(--hire-on-accent)]"
@@ -391,13 +391,13 @@ function Toggle({
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cn(
-        "relative h-7 w-[46px] shrink-0 rounded-full transition-colors",
+        "relative h-7 w-[46px] shrink-0 rounded-[999px] transition-colors",
         checked ? "bg-[color:var(--hire-accent)]" : "bg-[color:var(--hire-line-strong)]"
       )}
     >
       <span
         className={cn(
-          "absolute top-[3px] h-[22px] w-[22px] rounded-full transition-all",
+          "absolute top-[3px] h-[22px] w-[22px] rounded-[999px] transition-all",
           checked ? "right-[3px] bg-[color:var(--hire-on-accent)]" : "left-[3px] bg-[color:var(--hire-muted)]"
         )}
       />
@@ -424,7 +424,7 @@ function MoneyBox({
   return (
     <label
       className={cn(
-        "block rounded-lg border px-2.5 py-2",
+        "block rounded-[8px] border px-2.5 py-2",
         bad ? "border-[color:var(--hire-accent)]" : "border-[color:var(--hire-line-strong)]"
       )}
     >

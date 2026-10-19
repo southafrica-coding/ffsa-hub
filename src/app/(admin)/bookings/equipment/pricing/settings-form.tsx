@@ -109,7 +109,7 @@ export function SettingsForm({ canEdit, settings }: { canEdit: boolean; settings
           <button
             type="submit"
             disabled={busy}
-            className="flex h-12 min-w-[140px] items-center justify-center rounded-lg bg-[color:var(--hire-accent)] px-6 text-[15px] font-bold text-[color:var(--hire-on-accent)]"
+            className="flex h-12 min-w-[140px] items-center justify-center rounded-[8px] bg-[color:var(--hire-accent)] px-6 text-[15px] font-bold text-[color:var(--hire-on-accent)]"
           >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
           </button>

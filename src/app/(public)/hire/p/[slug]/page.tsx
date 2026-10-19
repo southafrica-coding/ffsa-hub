@@ -176,16 +176,16 @@ export default async function ItemPage({
         {/* Photos */}
         <div className="flex flex-col gap-3">
           <div className="relative">
-            <Photo src={photos[photoIndex] ?? null} alt={heading} className="h-[290px] md:h-[520px] md:rounded-lg" />
+            <Photo src={photos[photoIndex] ?? null} alt={heading} className="h-[290px] md:h-[520px] md:rounded-[8px]" />
             <Link
               href={withDates(cat ? `/hire/c/${cat.slug}` : "/hire/c/all", range)}
               aria-label="Back"
-              className="absolute left-3.5 top-3 flex h-11 w-11 items-center justify-center rounded-full bg-[rgba(16,14,11,0.75)] text-[color:var(--hire-ink)] md:hidden"
+              className="absolute left-3.5 top-3 flex h-11 w-11 items-center justify-center rounded-[999px] bg-[rgba(16,14,11,0.75)] text-[color:var(--hire-ink)] md:hidden"
             >
               <ChevronLeft className="h-5 w-5" />
             </Link>
             {photos.length > 1 && (
-              <span className="absolute bottom-3 right-3.5 rounded-full bg-[rgba(16,14,11,0.75)] px-2.5 py-1 text-[12px] text-[color:var(--hire-ink)] md:hidden">
+              <span className="absolute bottom-3 right-3.5 rounded-[999px] bg-[rgba(16,14,11,0.75)] px-2.5 py-1 text-[12px] text-[color:var(--hire-ink)] md:hidden">
                 {photoIndex + 1} / {photos.length}
               </span>
             )}
@@ -197,7 +197,7 @@ export default async function ItemPage({
                   key={src}
                   href={withDates(`/hire/p/${product.slug}`, range, { photo: String(i), month: sp.month })}
                   scroll={false}
-                  className={cn("overflow-hidden rounded-md", i === photoIndex && "outline outline-2 outline-[color:var(--hire-accent)]")}
+                  className={cn("overflow-hidden rounded-[6px]", i === photoIndex && "outline outline-2 outline-[color:var(--hire-accent)]")}
                 >
                   <Photo src={src} alt="" className="h-[110px]" />
                 </Link>
@@ -211,7 +211,7 @@ export default async function ItemPage({
                   key={src}
                   href={withDates(`/hire/p/${product.slug}`, range, { photo: String(i), month: sp.month })}
                   scroll={false}
-                  className={cn("shrink-0 overflow-hidden rounded", i === photoIndex && "outline outline-2 outline-[color:var(--hire-accent)]")}
+                  className={cn("shrink-0 overflow-hidden rounded-[4px]", i === photoIndex && "outline outline-2 outline-[color:var(--hire-accent)]")}
                 >
                   <Photo src={src} alt="" className="h-14 w-14" />
                 </Link>
@@ -230,7 +230,7 @@ export default async function ItemPage({
 
           {prices.length > 0 && (
             <div
-              className="grid gap-[2px] overflow-hidden rounded-lg border border-[color:var(--hire-line2)] bg-[color:var(--hire-line2)]"
+              className="grid gap-[2px] overflow-hidden rounded-[8px] border border-[color:var(--hire-line2)] bg-[color:var(--hire-line2)]"
               style={{ gridTemplateColumns: `repeat(${prices.length}, minmax(0, 1fr))` }}>
               {prices.map((p) => (
                 <div
@@ -425,7 +425,7 @@ export default async function ItemPage({
           </div>
           <div className="mt-3 flex gap-[18px] text-[12px] text-[color:var(--hire-muted)]">
             <span className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-sm bg-[color:var(--hire-accent)]" />
+              <span className="h-2.5 w-2.5 rounded-[2px] bg-[color:var(--hire-accent)]" />
               Your dates
             </span>
             <span>Amber number: some out</span>

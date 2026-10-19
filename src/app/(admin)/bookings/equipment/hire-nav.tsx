@@ -114,7 +114,7 @@ export function HireTabBar() {
             const circle = (
               <span
                 className={cn(
-                  "flex h-12 w-12 items-center justify-center rounded-full bg-[color:var(--hire-accent)] text-[12px] font-bold text-[color:var(--hire-on-accent)]",
+                  "flex h-12 w-12 items-center justify-center rounded-[999px] bg-[color:var(--hire-accent)] text-[12px] font-bold text-[color:var(--hire-on-accent)]",
                   !tab.ready && "opacity-40"
                 )}
               >
@@ -166,7 +166,7 @@ export function HireTabBar() {
       {moreOpen && (
         <div className="fixed inset-0 z-[60] flex flex-col justify-end bg-black/60" onClick={() => setMoreOpen(false)}>
           <div
-            className="rounded-t-2xl border-t border-[color:var(--hire-line)] bg-[color:var(--hire-surface)] pb-[max(16px,env(safe-area-inset-bottom))]"
+            className="rounded-t-[16px] border-t border-[color:var(--hire-line)] bg-[color:var(--hire-surface)] pb-[max(16px,env(safe-area-inset-bottom))]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-[18px] pb-2 pt-4">

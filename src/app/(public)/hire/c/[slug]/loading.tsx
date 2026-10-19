@@ -5,8 +5,8 @@ export default function Loading() {
   return (
     <main aria-busy="true">
       <div className="border-b border-[color:var(--hire-line)] px-[18px] pb-4 pt-4 md:px-10 md:pb-7 md:pt-9">
-        <div className="h-12 w-48 animate-pulse rounded bg-[color:var(--hire-surface2)] md:h-20 md:w-80" />
-        <div className="mt-3 h-[50px] animate-pulse rounded-lg bg-[color:var(--hire-surface2)] md:w-[560px]" />
+        <div className="h-12 w-48 animate-pulse rounded-[4px] bg-[color:var(--hire-surface2)] md:h-20 md:w-80" />
+        <div className="mt-3 h-[50px] animate-pulse rounded-[8px] bg-[color:var(--hire-surface2)] md:w-[560px]" />
       </div>
       <div className="md:grid md:grid-cols-[260px_minmax(0,1fr)]">
         <div className="hidden border-r border-[color:var(--hire-line)] md:block" />

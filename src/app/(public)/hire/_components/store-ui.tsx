@@ -32,7 +32,7 @@ export function DateBar({
     <form
       action={action}
       className={cn(
-        "grid grid-cols-2 gap-[2px] overflow-hidden rounded-lg border border-[color:var(--hire-line-strong)] bg-[color:var(--hire-line2)] md:flex",
+        "grid grid-cols-2 gap-[2px] overflow-hidden text-[16px] font-medium text-[color:var(--hire-ink)] rounded-[8px] border border-[color:var(--hire-line-strong)] bg-[color:var(--hire-line2)] md:flex",
         className
       )}
     >
@@ -123,14 +123,14 @@ export function ItemCard({ item, range, label }: { item: StoreItem; range: Range
       )}
     >
       <div className="relative">
-        <Photo src={item.photo} alt={title} className="h-[92px] rounded-md md:h-[220px] md:rounded-lg" />
+        <Photo src={item.photo} alt={title} className="h-[92px] rounded-[6px] md:h-[220px] md:rounded-[8px]" />
         {f.tone === "some" && (
-          <span className="absolute left-3 top-3 hidden rounded bg-[color:var(--hire-accent)] px-2 py-1 text-[12px] font-bold text-[color:var(--hire-on-accent)] md:block">
+          <span className="absolute left-3 top-3 hidden rounded-[4px] bg-[color:var(--hire-accent)] px-2 py-1 text-[12px] font-bold text-[color:var(--hire-on-accent)] md:block">
             {item.free} of {item.stock} left
           </span>
         )}
         {booked && (
-          <span className="absolute left-3 top-3 hidden rounded border border-[color:var(--hire-dim)] bg-[color:var(--hire-bg)] px-2 py-1 text-[12px] font-bold text-[color:var(--hire-ink)] md:block">
+          <span className="absolute left-3 top-3 hidden rounded-[4px] border border-[color:var(--hire-dim)] bg-[color:var(--hire-bg)] px-2 py-1 text-[12px] font-bold text-[color:var(--hire-ink)] md:block">
             Booked on your dates
           </span>
         )}
@@ -155,11 +155,11 @@ export function ItemCard({ item, range, label }: { item: StoreItem; range: Range
 export function ItemCardSkeleton() {
   return (
     <div className="grid grid-cols-[92px_minmax(0,1fr)] items-center gap-3.5 border-b border-[color:var(--hire-line)] px-[18px] py-3.5 md:flex md:flex-col md:items-stretch md:gap-2.5 md:border-0 md:p-0">
-      <div className="h-[92px] animate-pulse rounded-md bg-[color:var(--hire-surface2)] md:h-[220px] md:rounded-lg" />
+      <div className="h-[92px] animate-pulse rounded-[6px] bg-[color:var(--hire-surface2)] md:h-[220px] md:rounded-[8px]" />
       <div className="flex flex-col gap-2">
-        <span className="h-[13px] w-4/5 animate-pulse rounded bg-[#231F19]" />
-        <span className="h-5 w-2/5 animate-pulse rounded bg-[#231F19]" />
-        <span className="h-[11px] w-1/3 animate-pulse rounded bg-[#1F1B16]" />
+        <span className="h-[13px] w-4/5 animate-pulse rounded-[4px] bg-[#231F19]" />
+        <span className="h-5 w-2/5 animate-pulse rounded-[4px] bg-[#231F19]" />
+        <span className="h-[11px] w-1/3 animate-pulse rounded-[4px] bg-[#1F1B16]" />
       </div>
     </div>
   );

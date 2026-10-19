@@ -50,7 +50,7 @@ export default async function HireHome({
       </section>
 
       {!auth.user && (
-        <div className="mx-[18px] mt-4 flex flex-col gap-2 rounded-lg border border-[color:var(--hire-line2)] bg-[color:var(--hire-surface)] px-4 py-3.5 text-[14px] md:mx-10 md:flex-row md:items-center md:justify-between md:px-5">
+        <div className="mx-[18px] mt-4 flex flex-col gap-2 rounded-[8px] border border-[color:var(--hire-line2)] bg-[color:var(--hire-surface)] px-4 py-3.5 text-[14px] md:mx-10 md:flex-row md:items-center md:justify-between md:px-5">
           <span>
             <b className="text-[color:var(--hire-ink)]">Booking for a ministry wing?</b> Sign in with your Hub account to see internal
             rates. Internal bookings go to the rental manager for approval.
@@ -82,7 +82,7 @@ export default async function HireHome({
                   <Link
                     key={cat.id}
                     href={withDates(`/hire/c/${cat.slug}`, range)}
-                    className="flex min-h-[76px] flex-col justify-between rounded-lg border border-[color:var(--hire-line2)] bg-[color:var(--hire-surface2)] p-3 hover:border-[color:var(--hire-line-strong)] md:h-[180px] md:p-5"
+                    className="flex min-h-[76px] flex-col justify-between rounded-[8px] border border-[color:var(--hire-line2)] bg-[color:var(--hire-surface2)] p-3 hover:border-[color:var(--hire-line-strong)] md:h-[180px] md:p-5"
                   >
                     <span className="hire-display text-[24px] md:text-[40px]">{cat.name}</span>
                     <span className={cn("text-[12px] md:text-[13px]", free < total ? "text-[color:var(--hire-accent)]" : "text-[color:var(--hire-ok)]")}>
@@ -93,7 +93,7 @@ export default async function HireHome({
                   <Link
                     key={cat.id}
                     href={withDates(`/hire/c/${cat.slug}`, range)}
-                    className="flex min-h-[76px] flex-col justify-between rounded-lg border border-dashed border-[color:var(--hire-line-strong)] p-3 md:h-[180px] md:p-5"
+                    className="flex min-h-[76px] flex-col justify-between rounded-[8px] border border-dashed border-[color:var(--hire-line-strong)] p-3 md:h-[180px] md:p-5"
                   >
                     <span className="hire-display text-[24px] !text-[color:var(--hire-muted)] md:text-[40px]">{cat.name}</span>
                     <span className="text-[12px] text-[color:var(--hire-muted)] md:text-[13px]">Nothing listed yet</span>
@@ -102,7 +102,7 @@ export default async function HireHome({
               )}
               <Link
                 href={withDates("/hire/c/all", range)}
-                className="flex min-h-[76px] flex-col justify-between rounded-lg border border-[color:var(--hire-accent)] bg-[color:var(--hire-surface)] p-3 md:h-[180px] md:p-5"
+                className="flex min-h-[76px] flex-col justify-between rounded-[8px] border border-[color:var(--hire-accent)] bg-[color:var(--hire-surface)] p-3 md:h-[180px] md:p-5"
               >
                 <span className="hire-display text-[24px] !text-[color:var(--hire-accent)] md:text-[40px]">All gear</span>
                 <span className="text-[12px] md:text-[13px]">
