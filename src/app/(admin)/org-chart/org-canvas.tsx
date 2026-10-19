@@ -11,6 +11,7 @@ import {
   CLUSTER_LABEL,
   STATE_LABEL,
   initials,
+  pctLabel,
   type OrgModel,
   type OrgObjective,
   type OrgState,
@@ -64,13 +65,17 @@ function Chip({ state }: { state: OrgState }) {
   );
 }
 
-/** A status line with a bar only where a real percentage exists. */
-function Progress({ pct, state, thick = 4 }: { pct: number | null; state: OrgState; thick?: number }) {
+/**
+ * A status line with its bar. A measured bar is solid; one estimated from the
+ * status (no metric on the key result) is drawn at reduced strength and
+ * labelled "~" by the caller, so a guess never passes for a measurement.
+ */
+function Progress({ pct, state, thick = 4, measured = true }: { pct: number | null; state: OrgState; thick?: number; measured?: boolean }) {
   return (
     <div className="flex items-center gap-2.5">
       {pct !== null ? (
-        <div className="flex-1" style={{ height: thick, background: T.barTrack }}>
-          <div style={{ width: `${pct}%`, height: thick, background: T.st[state].dot }} />
+        <div className="flex-1" style={{ height: thick, background: T.barTrack }} title={measured ? undefined : "Estimated from the status — no number recorded yet"}>
+          <div style={{ width: `${pct}%`, height: thick, background: T.st[state].dot, opacity: measured ? 1 : 0.45 }} />
         </div>
       ) : (
         <div className="flex-1" />
@@ -94,6 +99,7 @@ type DRow = {
   meta?: string;
   right?: string;
   pct?: number | null;
+  measured?: boolean;
   state?: OrgState;
   indent?: number;
   small?: boolean;
@@ -116,7 +122,7 @@ function DrawerRow({ r }: { r: DRow }) {
         </span>
         {r.right ? <span className={`${COND} shrink-0 text-[16px] leading-none tabular-nums`}>{r.right}</span> : null}
       </div>
-      {r.state ? <Progress pct={r.pct ?? null} state={r.state} /> : null}
+      {r.state ? <Progress pct={r.pct ?? null} state={r.state} measured={r.measured ?? true} /> : null}
       {r.meta ? <span className="text-[11.5px] leading-[1.45]" style={{ color: T.sub }}>{r.meta}</span> : null}
     </div>
   );
@@ -350,13 +356,20 @@ export function OrgCanvas({
         right: o.pct !== null ? `${o.pct}%` : undefined,
         pct: o.pct,
         state: o.state,
-        meta: teamName ?? (dir ? `Rolls up to ${dir.title}` : "No direction set yet"),
+        meta: [
+          teamName,
+          o.krs.length ? `${o.complete} of ${o.krs.length} key results complete` : "No key results yet",
+          teamName ? "" : dir ? `Rolls up to ${dir.title}` : "No direction set yet",
+        ]
+          .filter(Boolean)
+          .join(" · "),
         onClick: dir && !teamName ? pick("dir:" + dir.key) : undefined,
       },
       ...o.krs.map((kr) => ({
         title: kr.text,
-        right: kr.pct !== null ? `${kr.pct}%` : undefined,
+        right: pctLabel(kr.pct, kr.measured),
         pct: kr.pct,
+        measured: kr.measured,
         state: kr.state,
         small: true,
         indent: 40,
@@ -397,7 +410,7 @@ export function OrgCanvas({
         sections: [
           {
             title: `${cycle} ${t.objectives.length > 1 ? "OBJECTIVES" : "OBJECTIVE"}`,
-            right: "OKRS",
+            right: t.objectives.some((o) => o.krs.some((k) => !k.measured)) ? "~ = FROM STATUS" : "OKRS",
             rows: t.objectives.length
               ? t.objectives.flatMap((o) => objectiveRows(o))
               : [{ title: "No objective this cycle yet", meta: "Draft one at the next all-team review, or ask Ally." }],
@@ -483,7 +496,7 @@ export function OrgCanvas({
           {
             title: "KEY RESULTS OWNED",
             right: String(owned.length),
-            rows: owned.map((k) => ({ title: k.text, pct: k.pct, state: k.state, right: k.pct !== null ? `${k.pct}%` : undefined, small: true })),
+            rows: owned.map((k) => ({ title: k.text, pct: k.pct, measured: k.measured, state: k.state, right: pctLabel(k.pct, k.measured), small: true })),
           },
         ].filter((s) => s.rows.length),
       };
@@ -1136,6 +1149,9 @@ function TeamView({
               <div className="my-2.5">
                 <Progress pct={o.pct} state={o.state} thick={5} />
               </div>
+              <div className={`${MONO} -mt-1 mb-2 text-[8px] tracking-[0.12em]`} style={{ color: T.mono }}>
+                {o.krs.length ? `${o.complete} OF ${o.krs.length} KEY RESULTS COMPLETE` : "NO KEY RESULTS YET"}
+              </div>
               {o.krs.map((kr) => (
                 <div
                   key={kr.id}
@@ -1145,9 +1161,11 @@ function TeamView({
                 >
                   <div className="flex items-baseline gap-2.5">
                     <span className="flex-1 text-[12.5px] leading-[1.35]">{kr.text}</span>
-                    {kr.pct !== null ? <span className={`${COND} text-[15px] leading-none tabular-nums`}>{kr.pct}%</span> : null}
+                    <span className={`${COND} text-[15px] leading-none tabular-nums`} style={{ color: kr.measured ? T.ink : T.mono }}>
+                      {pctLabel(kr.pct, kr.measured)}
+                    </span>
                   </div>
-                  <Progress pct={kr.pct} state={kr.state} thick={3} />
+                  <Progress pct={kr.pct} state={kr.state} thick={3} measured={kr.measured} />
                   <span className={`${MONO} text-[8px] tracking-[0.12em]`} style={{ color: kr.ownerName ? T.mono : T.openInk }}>
                     {kr.ownerName ? `OWNER · ${kr.ownerName.toUpperCase()}` : "NO OWNER YET"}
                   </span>
@@ -1238,9 +1256,11 @@ function TeamView({
                   <div key={kr.id} className="flex flex-col gap-1.5 px-6 py-3" style={{ borderBottom: `1px solid ${T.rowBorder}` }}>
                     <div className="flex items-baseline gap-2.5">
                       <span className="flex-1 text-[13px] font-bold leading-[1.35]">{kr.text}</span>
-                      {kr.pct !== null ? <span className={`${COND} text-[16px] leading-none tabular-nums`}>{kr.pct}%</span> : null}
+                      <span className={`${COND} text-[16px] leading-none tabular-nums`} style={{ color: kr.measured ? T.ink : T.mono }}>
+                        {pctLabel(kr.pct, kr.measured)}
+                      </span>
                     </div>
-                    <Progress pct={kr.pct} state={kr.state} />
+                    <Progress pct={kr.pct} state={kr.state} measured={kr.measured} />
                   </div>
                 ))
               ) : (
