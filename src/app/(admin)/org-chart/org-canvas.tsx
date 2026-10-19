@@ -231,6 +231,15 @@ export function OrgCanvas({
     }
   };
 
+  // Clicking open space closes the panel, like its ×. A table, a name, the
+  // panel itself and the controls are all left alone, and a drag-to-pan never
+  // gets here (onClickCapture swallows the click that ends a drag).
+  const onCanvasClick = (e: React.MouseEvent) => {
+    if (zoomTeam || !sel) return;
+    if ((e.target as Element).closest("[data-node], [data-no-pan]")) return;
+    setSel(null);
+  };
+
   const zoomBy = (f: number) =>
     setView((v) => {
       const s = clamp(v.s * f, 0.3, 2);
@@ -624,7 +633,7 @@ export function OrgCanvas({
     const nid = "team:" + leadership.id;
     const s = tableShell(nid, { ...layout.pos[leadership.id], w: LW });
     tables.push(
-      <div key={leadership.id} className="absolute" style={{ ...s.style, cursor: editMode ? "move" : undefined }} onPointerDown={startTableDrag(leadership.id)}>
+      <div key={leadership.id} data-node className="absolute" style={{ ...s.style, cursor: editMode ? "move" : undefined }} onPointerDown={startTableDrag(leadership.id)}>
         <Head nid={nid} on={s.on} icon={icon(Network)} name={leadership.name} count={String(leadership.headcount)} />
         {model.leaders.length ? (
           model.leaders.map((l) => (
@@ -640,7 +649,7 @@ export function OrgCanvas({
     const nid = "team:" + missio.id;
     const s = tableShell(nid, layout.pos[missio.id], true);
     tables.push(
-      <div key={missio.id} className="absolute" style={{ ...s.style, cursor: editMode ? "move" : undefined }} onPointerDown={startTableDrag(missio.id)}>
+      <div key={missio.id} data-node className="absolute" style={{ ...s.style, cursor: editMode ? "move" : undefined }} onPointerDown={startTableDrag(missio.id)}>
         <Head nid={nid} on={s.on} icon={icon(Heart)} name={missio.name} count="ALONGSIDE" />
         {missio.groups.length ? (
           missio.groups.map((g) => <Row key={g.name} text={g.name} right={String(g.people.length)} />)
@@ -657,7 +666,7 @@ export function OrgCanvas({
     const parent = t.parentId ? team.get(t.parentId) : undefined;
     const rows = teamTableRows(t);
     tables.push(
-      <div key={t.id} className="absolute" style={{ ...s.style, cursor: editMode ? "move" : undefined }} onPointerDown={startTableDrag(t.id)}>
+      <div key={t.id} data-node className="absolute" style={{ ...s.style, cursor: editMode ? "move" : undefined }} onPointerDown={startTableDrag(t.id)}>
         <Head nid={nid} on={s.on} icon={icon(UsersRound)} name={t.name} count={String(t.headcount)} />
         {parent ? <Row mono="WITHIN" text={parent.name} ink={T.mono} /> : null}
         {rows.leads.length ? (
@@ -689,7 +698,7 @@ export function OrgCanvas({
   if (layout.pos.schools) {
     const s = tableShell("schools", layout.pos.schools);
     tables.push(
-      <div key="schools" className="absolute" style={s.style}>
+      <div key="schools" data-node className="absolute" style={s.style}>
         <Head nid="schools" on={s.on} icon={icon(GraduationCap)} name="Schools in session" count={String(model.schools.reduce((n, x) => n + x.students, 0))} />
         {model.schools.map((x) => (
           <Row key={x.id} text={x.name} right={String(x.students)} />
@@ -837,6 +846,7 @@ export function OrgCanvas({
         ref={viewport}
         onPointerDown={onPointerDown}
         onClickCapture={onClickCapture}
+        onClick={onCanvasClick}
         className="relative h-[calc(100dvh-210px)] min-h-[520px] touch-none select-none overflow-hidden"
         style={{
           background: T.canvasBg,
@@ -876,7 +886,7 @@ export function OrgCanvas({
 
         {/* Zoom + legend */}
         {!zoomTeam && (
-          <div className="absolute bottom-4 left-4 flex flex-wrap items-stretch gap-2.5" onPointerDown={(e) => e.stopPropagation()}>
+          <div data-no-pan className="absolute bottom-4 left-4 flex flex-wrap items-stretch gap-2.5" onPointerDown={(e) => e.stopPropagation()}>
             <div className="flex border border-ink bg-white">
               <button type="button" aria-label="Zoom out" onClick={() => zoomBy(1 / 1.2)} className={`${MONO} flex h-11 w-11 items-center justify-center text-[14px] lg:h-9 lg:w-9`}>
                 −
@@ -901,13 +911,13 @@ export function OrgCanvas({
         )}
 
         {editMode && layoutError && (
-          <div className="absolute left-4 top-4 z-10 max-w-[320px] border border-destructive bg-white px-4 py-3 text-[12.5px] text-destructive" onPointerDown={(e) => e.stopPropagation()}>
+          <div data-no-pan className="absolute left-4 top-4 z-10 max-w-[320px] border border-destructive bg-white px-4 py-3 text-[12.5px] text-destructive" onPointerDown={(e) => e.stopPropagation()}>
             That position wasn&rsquo;t saved: {layoutError}
           </div>
         )}
 
         {editMode && !editing && (
-          <div className="absolute right-4 top-4 z-10 max-w-[280px] border border-ink bg-white px-4 py-3 text-[12.5px] leading-[1.45]" onPointerDown={(e) => e.stopPropagation()}>
+          <div data-no-pan className="absolute right-4 top-4 z-10 max-w-[280px] border border-ink bg-white px-4 py-3 text-[12.5px] leading-[1.45]" onPointerDown={(e) => e.stopPropagation()}>
             <div className={`${MONO} mb-1 text-[8.5px] tracking-[0.14em]`} style={{ color: T.mono }}>
               EDIT MODE
             </div>
