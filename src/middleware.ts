@@ -62,6 +62,9 @@ export async function middleware(request: NextRequest) {
     "/t", // public tag landing (/t/[tag]) — the QR on every equipment tag; staff are sent on to the register
     "/track-intent", // public FFX track-intent survey (/track-intent/[token], migration 222) — same gotcha as /vr above
     "/.well-known", // public app-link files (apple-app-site-association, assetlinks.json) — fetched by Apple / Google with no session
+    "/api/equipment/cart", // public: re-checks a hire cart against its dates (no account needed to hire)
+    "/api/equipment/checkout", // public: places a hire order and opens PayFast
+    "/api/equipment/rental", // public: /hire/o/[token] actions — authorised by the token in the path
     "/api/scan", // public door scanner actions — authorised by the token in the path, not session cookies
     "/api/serve/missio", // public Missio availability — authorised by the hashed token, not session cookies
     "/api/upload/sign", // public applicants upload photos from /apply

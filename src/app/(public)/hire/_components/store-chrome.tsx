@@ -2,14 +2,15 @@
 
 // Storefront chrome (frames 44b, 46a, 47a): the header on desktop, the slim
 // header + bottom tab bar on a phone (Home · Browse · Cart · Rentals). Every
-// link keeps the visitor's chosen dates. Cart and Rentals arrive with
-// checkout, so until then they show but can't be opened.
+// store link keeps the visitor's chosen dates; the cart count comes from
+// this browser's saved cart.
 
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Search } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { cartCount, useCart } from "@/lib/equipment/use-cart";
 
 type NavCategory = { slug: string; name: string };
 
@@ -76,6 +77,7 @@ export function StoreHeader({
               Sign in
             </Link>
           )}
+          <CartButton />
         </div>
       </header>
 
@@ -97,15 +99,37 @@ export function StoreHeader({
   );
 }
 
+function CartButton() {
+  const [cart] = useCart();
+  return (
+    <Link
+      href="/hire/cart"
+      className="flex items-center gap-2 rounded-[6px] border border-[color:var(--hire-line-strong)] px-3 py-[7px]"
+    >
+      Cart
+      <span className="rounded-[10px] bg-[color:var(--hire-accent)] px-[7px] py-px text-[12px] font-bold text-[color:var(--hire-on-accent)]">
+        {cartCount(cart)}
+      </span>
+    </Link>
+  );
+}
+
 export function StoreTabBar() {
   const dated = useDated();
   const pathname = usePathname() ?? "";
+  const [cart] = useCart();
+  const count = cartCount(cart);
   const cell = "flex min-h-[48px] items-center justify-center text-[12px]";
   const tabs = [
     { label: "Home", href: "/hire", active: pathname === "/hire", ready: true },
     { label: "Browse", href: "/hire/c/all", active: pathname.startsWith("/hire/c/"), ready: true },
-    { label: "Cart", href: "/hire/cart", active: false, ready: false },
-    { label: "Rentals", href: "/hire/account", active: false, ready: false },
+    {
+      label: count ? `Cart · ${count}` : "Cart",
+      href: "/hire/cart",
+      active: pathname === "/hire/cart" || pathname === "/hire/checkout",
+      ready: true,
+    },
+    { label: "Rentals", href: "/hire/account", active: pathname === "/hire/account" || pathname.startsWith("/hire/o/"), ready: true },
   ];
   return (
     <nav
@@ -117,7 +141,7 @@ export function StoreTabBar() {
         t.ready ? (
           <Link
             key={t.label}
-            href={dated(t.href)}
+            href={t.href === "/hire/cart" || t.href === "/hire/account" ? t.href : dated(t.href)}
             aria-current={t.active ? "page" : undefined}
             className={cn(cell, t.active ? "font-bold text-[color:var(--hire-accent)]" : "text-[color:var(--hire-muted)]")}
           >

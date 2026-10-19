@@ -20,7 +20,7 @@ const BASE = "/bookings/equipment";
 
 const PANEL: NavItem[] = [
   { label: "Dashboard", href: BASE, ready: false },
-  { label: "Orders", href: `${BASE}/orders`, ready: false },
+  { label: "Orders", href: `${BASE}/orders`, ready: true },
   { label: "Calendar", href: `${BASE}/calendar`, ready: false },
   { label: "Register", href: `${BASE}/gear`, ready: true },
   { label: "Maintenance", href: `${BASE}/maintenance`, ready: false },
@@ -84,7 +84,7 @@ export function HirePanel() {
 const TABS: (NavItem & { scan?: boolean })[] = [
   { label: "Today", href: `${BASE}/today`, ready: false },
   { label: "Scan", href: `${BASE}/scan`, ready: false, scan: true },
-  { label: "Orders", href: `${BASE}/orders`, ready: false },
+  { label: "Orders", href: `${BASE}/orders`, ready: true },
   { label: "Gear", href: `${BASE}/gear`, ready: true },
 ];
 

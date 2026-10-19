@@ -44,6 +44,7 @@ import { periodForDates } from "@/lib/equipment/pricing";
 import { DEFAULT_SETTINGS, loadStore, withDates } from "@/lib/equipment/storefront";
 import { DateBar, ItemCard, Photo } from "../../_components/store-ui";
 import { ItemBooking } from "./item-booking";
+import { canBookInternally } from "@/lib/equipment/checkout-server";
 
 type Search = { from?: string; to?: string; month?: string; photo?: string };
 
@@ -75,6 +76,7 @@ export default async function ItemPage({
   if (!productData) notFound();
   const product = productData as EquipmentProductWithRefs;
   const staff = await hasEquipmentAccess(supabase);
+  const internalRate = await canBookInternally(supabase);
   // RLS already hides unlisted products from the public; staff may preview.
   if (!product.is_listed && !staff) notFound();
 
@@ -295,6 +297,7 @@ export default async function ItemPage({
               stock={stock}
               rangeText={rangeText}
               allFreeFrom={allFreeFromIso ? dayLabel(allFreeFromIso) : null}
+              internalRate={internalRate}
             />
           </div>
           {free === 0 && freeAgainIso && (
@@ -312,9 +315,15 @@ export default async function ItemPage({
             <div className="hire-label mb-2">Change your dates</div>
             <DateBar action={`/hire/p/${product.slug}`} range={range} today={today} submitLabel="Check these dates" />
           </div>
-          <p className="text-[13px]">
-            <b className="text-[color:var(--hire-ink)]">Booking for a ministry wing?</b> Sign in to see your internal rate.
-          </p>
+          {!internalRate && (
+            <p className="text-[13px]">
+              <b className="text-[color:var(--hire-ink)]">Booking for a ministry wing?</b>{" "}
+              <Link href={`/login?redirect=${encodeURIComponent(`/hire/p/${product.slug}`)}`} className="underline underline-offset-4">
+                Sign in
+              </Link>{" "}
+              to see your internal rate.
+            </p>
+          )}
         </div>
       </div>
 
@@ -451,6 +460,7 @@ export default async function ItemPage({
           stock={stock}
           rangeText={rangeText}
           allFreeFrom={allFreeFromIso ? dayLabel(allFreeFromIso) : null}
+              internalRate={internalRate}
         />
       </div>
     </main>
