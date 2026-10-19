@@ -10,6 +10,7 @@ import {
   type Vehicle,
 } from "@/services/vehicles";
 import { VehiclesBoard } from "../vehicles-view";
+import { monthWindow } from "../fleet-calendar";
 
 /**
  * The vehicles team's booking board — every request with its status, dates,
@@ -22,7 +23,7 @@ import { VehiclesBoard } from "../vehicles-view";
 export default async function VehicleBoardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; month?: string }>;
 }) {
   const params = await searchParams;
   const supabase = await createClient();
@@ -41,10 +42,14 @@ export default async function VehicleBoardPage({
   }
 
   const status = params.status ?? "all";
-  const [bookingsRes, vehiclesRes, pendingCount] = await Promise.all([
+  // The fleet calendar always shows every live booking in its month — the
+  // status filter only narrows the table underneath.
+  const w = monthWindow(params.month);
+  const [bookingsRes, vehiclesRes, pendingCount, calendarRes] = await Promise.all([
     getVehicleBookings(supabase, status !== "all" ? { status } : undefined),
     getVehicles(supabase),
     countPendingVehicleBookings(supabase),
+    getVehicleBookings(supabase, { from: w.from, to: w.to }),
   ]);
 
   return (
@@ -54,6 +59,8 @@ export default async function VehicleBoardPage({
       access={access}
       statusFilter={status}
       pendingCount={pendingCount}
+      calendarBookings={(calendarRes.data ?? []) as VehicleBookingWithRefs[]}
+      month={params.month}
     />
   );
 }

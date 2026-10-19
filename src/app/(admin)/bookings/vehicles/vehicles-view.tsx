@@ -17,7 +17,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { StatusPill, ColorDot, AssignedVehicles } from "./ui";
+import { StatusPill, AssignedVehicles } from "./ui";
+import { FleetCalendar } from "./fleet-calendar";
 import { dateRangeLabel } from "@/lib/bookings/dates";
 import {
   purposeLabel,
@@ -45,14 +46,18 @@ export function VehiclesBoard({
   access,
   statusFilter,
   pendingCount,
+  calendarBookings,
+  month,
 }: {
   bookings: VehicleBookingWithRefs[];
   vehicles: Vehicle[];
   access: VehicleAccess;
   statusFilter: string;
   pendingCount: number;
+  /** Every booking overlapping the calendar's month, whatever the filter. */
+  calendarBookings: VehicleBookingWithRefs[];
+  month?: string;
 }) {
-  const activeFleet = vehicles.filter((v) => v.status === "active");
 
   return (
     <div className="ffsa-screen">
@@ -125,11 +130,14 @@ export function VehiclesBoard({
         {FILTERS.map((f) => (
           <Link
             key={f.key}
-            href={
-              f.key === "all"
-                ? "/bookings/vehicles/board"
-                : `/bookings/vehicles/board?status=${f.key}`
-            }
+            href={(() => {
+              // Keep the calendar's month when switching the table filter.
+              const q = new URLSearchParams();
+              if (f.key !== "all") q.set("status", f.key);
+              if (month) q.set("month", month);
+              const qs = q.toString();
+              return `/bookings/vehicles/board${qs ? `?${qs}` : ""}`;
+            })()}
             className="chip -ml-px bg-white"
             data-active={statusFilter === f.key ? "true" : undefined}
           >
@@ -142,30 +150,13 @@ export function VehiclesBoard({
       </div>
 
       <div className="space-y-5 px-8 py-7">
-      {/* Fleet roster */}
-      <div className="border border-ink bg-white">
-        <SectionBar
-          title="The fleet"
-          meta={`${activeFleet.length} active`}
-        />
-        <div className="flex flex-wrap gap-x-5 gap-y-2 p-5">
-          {activeFleet.length === 0 && (
-            <span className="text-sm text-[color:var(--text-secondary)]">No active vehicles yet.</span>
-          )}
-          {activeFleet.map((v) => (
-            <span key={v.id} className="inline-flex items-center gap-2 text-sm">
-              <ColorDot color={v.color} />
-              <span>{v.name}</span>
-              <span className="text-xs capitalize text-[color:var(--text-tertiary)]">{v.vehicle_type}</span>
-              {v.registration_plate && (
-                <span className="font-mono text-[10px] tabular-nums text-[color:var(--text-tertiary)]">
-                  {v.registration_plate}
-                </span>
-              )}
-            </span>
-          ))}
-        </div>
-      </div>
+      {/* Fleet calendar — one row per vehicle, the month left to right. */}
+      <FleetCalendar
+        vehicles={vehicles}
+        bookings={calendarBookings}
+        month={month}
+        status={statusFilter}
+      />
 
       {/* Bookings */}
       {bookings.length === 0 ? (
