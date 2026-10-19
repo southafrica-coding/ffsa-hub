@@ -121,6 +121,7 @@ function ModulePanel({
 
   return (
     <aside
+      data-shell-panel
       className={cn(
         "flex flex-col bg-bone",
         inDrawer ? "min-h-0 flex-1" : "w-[212px] shrink-0 border-r border-ink"
@@ -155,6 +156,7 @@ function ModulePanel({
               key={mod.id}
               href={mod.href}
               onClick={onNavClick}
+              data-active={active ? "" : undefined}
               className={cn(
                 "flex items-center gap-2.5 px-2.5 py-2 text-[13px] font-semibold transition-colors",
                 active ? "bg-ink text-white" : "text-[#2A2822] hover:bg-bone-3"
@@ -251,7 +253,7 @@ export function AdminSidebar({ userRoles, permittedModules, menuLoadFailed, init
       </div>
 
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent side="left" className="w-[280px] border-r border-ink bg-bone p-0">
+        <SheetContent side="left" data-shell-panel className="w-[280px] border-r border-ink bg-bone p-0">
           <SheetTitle className="sr-only">Navigation</SheetTitle>
           <div className="flex h-full flex-col">
             <div className="flex gap-1 bg-ink p-2">

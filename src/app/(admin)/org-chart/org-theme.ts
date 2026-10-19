@@ -71,4 +71,19 @@ export const ORG_CSS = `
 .org-theme input::placeholder, .org-theme textarea::placeholder { color: var(--org-mono) !important; }
 .org-theme select option { background: var(--org-surface); color: var(--org-ink); }
 .org-theme h1, .org-theme h2, .org-theme h3 { color: var(--org-ink) !important; }
+
+/* While the dark chart is on the page, the Hub's own shell goes dark with it
+   (Jack, 2026-10-19). :has() rather than a script, so there is no flash of
+   cream on load and nothing to undo on the way out: leave the page and the
+   rule no longer matches. */
+body:has(.org-theme) [data-shell-main] { background: ${P.frame} !important; }
+body:has(.org-theme) [data-shell-panel] { background: ${P.drawer} !important; color: ${P.ink}; }
+body:has(.org-theme) [data-shell-panel] * { border-color: ${P.border} !important; }
+body:has(.org-theme) [data-shell-panel] :is(.text-ink, [class*="text-[#2A2822]"], [class*="text-[#45423B]"]) { color: ${P.ink} !important; }
+body:has(.org-theme) [data-shell-panel] .mono-label { color: ${P.mono} !important; }
+body:has(.org-theme) [data-shell-panel] [class*="text-[color:var(--text-secondary)]"] { color: ${P.sub} !important; }
+body:has(.org-theme) [data-shell-panel] a:not([data-active]):hover,
+body:has(.org-theme) [data-shell-panel] button:hover { background: ${P.hover} !important; }
+body:has(.org-theme) [data-shell-panel] a[data-active] { background: ${P.yellow} !important; color: ${P.onYellow} !important; }
+body:has(.org-theme) [data-shell-panel] .bg-ink { background: ${P.head} !important; }
 `;
