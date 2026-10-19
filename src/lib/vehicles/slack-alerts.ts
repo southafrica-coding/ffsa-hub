@@ -194,6 +194,7 @@ function factsLine(b: VehicleBookingWithRefs): string {
     b.requester_name,
     b.num_people ? `${b.num_people} people` : null,
     `${purposeLabel(b.purpose)}${b.purpose_note ? ` — ${b.purpose_note}` : ""}`,
+    b.destination ? `📍 ${b.destination}` : null,
     b.source === "public" ? "via public link" : null,
   ]
     .filter(Boolean)

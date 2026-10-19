@@ -54,6 +54,7 @@ export function PublicVehicleRequestForm({
   const [form, setForm] = useState({
     booking_name: "",
     point_person: "",
+    destination: "",
     purpose: "ministry",
     purpose_note: "",
     requester_name: "",
@@ -101,6 +102,7 @@ export function PublicVehicleRequestForm({
     if (!form.requester_email.trim()) return "Please enter your email address.";
     if (!form.booking_name.trim()) return "Please give the booking a name.";
     if (!form.point_person.trim()) return "Please give the point person for this booking.";
+    if (!form.destination.trim()) return "Please tell us where you plan to go with the vehicle.";
     if (!form.checkout_date || !form.return_date)
       return "Please choose collection and return dates.";
     if (form.return_date < form.checkout_date)
@@ -135,6 +137,7 @@ export function PublicVehicleRequestForm({
       JSON.stringify({
         booking_name: form.booking_name.trim(),
         point_person: form.point_person.trim(),
+        destination: form.destination.trim(),
         purpose: form.purpose,
         purpose_note: form.purpose === "other" ? form.purpose_note.trim() : null,
         requester_name: form.requester_name.trim(),
@@ -235,6 +238,17 @@ export function PublicVehicleRequestForm({
           value={form.point_person}
           onChange={(e) => update("point_person", e.target.value)}
           placeholder="Who we should contact about this booking"
+          required
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="destination">Destination *</Label>
+        <Input
+          id="destination"
+          value={form.destination}
+          onChange={(e) => update("destination", e.target.value)}
+          placeholder="Where you plan to go, e.g. Cape Town airport, then Stellenbosch"
           required
         />
       </div>

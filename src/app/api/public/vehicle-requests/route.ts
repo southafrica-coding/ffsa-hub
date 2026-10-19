@@ -115,6 +115,9 @@ export async function POST(request: Request) {
   if (!bookingName) {
     return NextResponse.json({ error: "Please give the booking a name." }, { status: 400 });
   }
+  if (!nn(payload.destination)) {
+    return NextResponse.json({ error: "Please tell us where you plan to go with the vehicle." }, { status: 400 });
+  }
   if (!nn(payload.point_person)) {
     return NextResponse.json({ error: "Please give the point person for this booking." }, { status: 400 });
   }
@@ -219,6 +222,7 @@ export async function POST(request: Request) {
   const { data: booking, error } = await insertVehicleBooking(admin, {
     booking_name: bookingName,
     point_person: nn(payload.point_person),
+    destination: nn(payload.destination),
     purpose,
     purpose_note: purpose === "other" ? nn(payload.purpose_note) : null,
     requester_name: requesterName,

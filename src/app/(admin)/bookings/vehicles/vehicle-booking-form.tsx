@@ -66,6 +66,7 @@ export function VehicleBookingForm({
   const [form, setForm] = useState({
     booking_name: "",
     point_person: "",
+    destination: "",
     purpose: "ministry",
     purpose_note: "",
     requester_name: defaultRequesterName,
@@ -186,6 +187,7 @@ export function VehicleBookingForm({
   function validate(): string | null {
     if (!form.booking_name.trim()) return "Please enter a booking name (team or person).";
     if (!form.point_person.trim()) return "Please enter the point person for this booking.";
+    if (!form.destination.trim()) return "Please say where you plan to go with the vehicle.";
     if (!form.checkout_date || !form.return_date) return "Please choose collection and return dates.";
     if (form.return_date < form.checkout_date) return "The return date must be on or after the collection date.";
     if (form.purpose === "other" && !form.purpose_note.trim())
@@ -235,6 +237,7 @@ export function VehicleBookingForm({
       body: JSON.stringify({
         booking_name: form.booking_name.trim(),
         point_person: form.point_person.trim(),
+        destination: form.destination.trim(),
         purpose: form.purpose,
         purpose_note: form.purpose === "other" ? form.purpose_note.trim() : null,
         requester_name: form.requester_name.trim() || null,
@@ -407,6 +410,18 @@ export function VehicleBookingForm({
               value={form.point_person}
               onChange={(e) => update("point_person", e.target.value)}
               placeholder="Who the coordinator should contact about this booking"
+              required
+            />
+          </div>
+
+          {/* Destination — where the vehicle is going. */}
+          <div className="space-y-2 max-w-md">
+            <Label htmlFor="destination">Destination *</Label>
+            <Input
+              id="destination"
+              value={form.destination}
+              onChange={(e) => update("destination", e.target.value)}
+              placeholder="Where you plan to go, e.g. Cape Town airport, then Stellenbosch"
               required
             />
           </div>

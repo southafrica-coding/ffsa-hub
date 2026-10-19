@@ -288,6 +288,9 @@ export default async function VehicleBookingDetail({
         <div className="grid grid-cols-1 gap-5 p-6 sm:grid-cols-2">
           <Field label="Requested by">{b.requester_name ?? "—"}</Field>
           <Field label="Point person">{b.point_person ?? "—"}</Field>
+          <div className="sm:col-span-2">
+            <Field label="Destination">{b.destination ?? "—"}</Field>
+          </div>
           <Field label="Email">{b.requester_email ?? "—"}</Field>
           <Field label="WhatsApp">{b.requester_phone ?? "—"}</Field>
           <Field label="People">{b.num_people ?? "—"}</Field>
@@ -318,6 +321,7 @@ export default async function VehicleBookingDetail({
                 initial={{
                   booking_name: b.booking_name ?? "",
                   point_person: b.point_person ?? "",
+                  destination: b.destination ?? "",
                   purpose: b.purpose ?? "",
                   purpose_note: b.purpose_note ?? "",
                   requester_phone: b.requester_phone ?? "",

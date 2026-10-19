@@ -33,6 +33,7 @@ type DriverInput = {
 type PatchBody = {
   booking_name?: string;
   point_person?: string;
+  destination?: string;
   purpose?: string;
   purpose_note?: string;
   requester_phone?: string;
@@ -63,6 +64,7 @@ function nn(v: string | null | undefined): string | null {
 const DETAIL_FIELDS = [
   "booking_name",
   "point_person",
+  "destination",
   "purpose",
   "purpose_note",
   "requester_phone",
@@ -94,6 +96,7 @@ function describeChanges(
     lines.push(`Purpose: ${purposeLabel(String(before.purpose ?? ""))} → ${purposeLabel(String(after.purpose ?? ""))}`);
   if (changed("purpose_note")) lines.push(`Purpose detail: ${show(before.purpose_note)} → ${show(after.purpose_note)}`);
   if (changed("num_people")) lines.push(`People: ${show(before.num_people)} → ${show(after.num_people)}`);
+  if (changed("destination")) lines.push(`Destination: ${show(before.destination)} → ${show(after.destination)}`);
   if (changed("point_person")) lines.push(`Point person: ${show(before.point_person)} → ${show(after.point_person)}`);
   if (changed("requester_phone")) lines.push(`WhatsApp: ${show(before.requester_phone)} → ${show(after.requester_phone)}`);
   if (changed("notes")) lines.push(`Notes: ${show(after.notes)}`);
@@ -130,6 +133,12 @@ export async function PATCH(
 
   // Fields anyone with edit rights may change.
   if (body.booking_name !== undefined) update.booking_name = nn(body.booking_name);
+  if (body.destination !== undefined) {
+    update.destination = nn(body.destination);
+    if (!update.destination) {
+      return NextResponse.json({ error: "A destination is required" }, { status: 400 });
+    }
+  }
   if (body.point_person !== undefined) {
     update.point_person = nn(body.point_person);
     if (!update.point_person) {

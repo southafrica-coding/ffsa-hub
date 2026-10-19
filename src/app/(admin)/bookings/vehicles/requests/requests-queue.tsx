@@ -70,6 +70,11 @@ function RequestRow({ booking }: { booking: VehicleBookingWithRefs }) {
             External
           </span>
         )}
+        {booking.destination && (
+          <div className="mt-0.5 text-[11px] text-[color:var(--text-tertiary)]">
+            Going to: {booking.destination}
+          </div>
+        )}
         {booking.point_person && (
           <div className="mt-0.5 text-[11px] text-[color:var(--text-tertiary)]">
             Point person: {booking.point_person}

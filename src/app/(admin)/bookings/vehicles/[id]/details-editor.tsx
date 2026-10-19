@@ -20,6 +20,7 @@ import { PURPOSE_OPTIONS } from "@/services/vehicles";
 export type EditableDetails = {
   booking_name: string;
   point_person: string;
+  destination: string;
   purpose: string;
   purpose_note: string;
   requester_phone: string;
@@ -54,6 +55,7 @@ export function DetailsEditor({
   async function save() {
     if (!form.booking_name.trim()) return toast.error("Give the booking a name.");
     if (!form.point_person.trim()) return toast.error("A point person is required.");
+    if (!form.destination.trim()) return toast.error("A destination is required.");
     if (!form.checkout_date || !form.return_date) return toast.error("Both dates are needed.");
     if (form.return_date < form.checkout_date)
       return toast.error("The return date must be on or after the collection date.");
@@ -145,6 +147,14 @@ export function DetailsEditor({
             <Input id="ed-purpose-note" value={form.purpose_note} onChange={(e) => set("purpose_note", e.target.value)} />
           </div>
         )}
+        <div className="space-y-1 sm:col-span-2">
+          <Label htmlFor="ed-destination">Destination *</Label>
+          <Input
+            id="ed-destination"
+            value={form.destination}
+            onChange={(e) => set("destination", e.target.value)}
+          />
+        </div>
         <div className="space-y-1">
           <Label htmlFor="ed-point">Point person *</Label>
           <Input id="ed-point" value={form.point_person} onChange={(e) => set("point_person", e.target.value)} />

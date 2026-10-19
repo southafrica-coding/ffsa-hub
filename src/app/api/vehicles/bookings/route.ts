@@ -28,6 +28,7 @@ type CreateBody = {
   dryRun?: boolean;
   booking_name?: string;
   point_person?: string;
+  destination?: string;
   purpose?: string;
   purpose_note?: string;
   requester_name?: string;
@@ -83,6 +84,9 @@ export async function POST(request: Request) {
 
   if (!bookingName) {
     return NextResponse.json({ error: "A booking name is required" }, { status: 400 });
+  }
+  if (!nn(body.destination)) {
+    return NextResponse.json({ error: "A destination is required" }, { status: 400 });
   }
   if (!nn(body.point_person)) {
     return NextResponse.json({ error: "A point person is required" }, { status: 400 });
@@ -220,6 +224,7 @@ export async function POST(request: Request) {
   const { data: booking, error } = await insertVehicleBooking(supabase, {
     booking_name: bookingName,
     point_person: nn(body.point_person),
+    destination: nn(body.destination),
     purpose,
     purpose_note: purpose === "other" ? nn(body.purpose_note) : null,
     requester_name: requesterName,

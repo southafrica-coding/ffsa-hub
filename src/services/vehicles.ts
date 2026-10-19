@@ -44,6 +44,8 @@ export type VehicleBooking = {
   id: string;
   booking_name: string;
   point_person: string | null;
+  /** Where they plan to drive (migration 253). Required on new requests. */
+  destination: string | null;
   purpose: VehiclePurpose;
   purpose_note: string | null;
   requester_name: string | null;
