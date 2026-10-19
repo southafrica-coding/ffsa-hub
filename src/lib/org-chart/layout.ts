@@ -44,29 +44,46 @@ export type Layout = {
 
 const ZONE_ORDER: OrgCluster[] = ["outward", "inward", "backbone", "parttime", "unplaced"];
 
-/** A team table's rows: lead, one per objective (at least one), people. */
+/** How many people a team's table names before "+N more" — leads first. */
+export const PEOPLE_SHOWN = 6;
+
+/**
+ * What a team's table shows, people first: its lead(s), then others, up to
+ * PEOPLE_SHOWN names in all, then the "+N more · OPEN" row. A child ministry adds a
+ * "within" row. Objectives are NOT on the canvas — they are one click away,
+ * in the drawer and the team view.
+ */
+export function teamTableRows(t: OrgTeam) {
+  const allLeads = t.members.filter((m) => m.isLead);
+  const others = t.members.filter((m) => !m.isLead);
+  // Every card names at most PEOPLE_SHOWN, so a team with many leaders does
+  // not tower over the rest; whoever is left is counted in "+N more".
+  const leads = allLeads.slice(0, PEOPLE_SHOWN);
+  const shown = others.slice(0, Math.max(0, PEOPLE_SHOWN - leads.length));
+  return { leads, shown, more: t.members.length - leads.length - shown.length };
+}
+
 export function teamRows(t: OrgTeam): number {
-  return Math.max(t.objectives.length, 1) + 2;
+  const { leads, shown } = teamTableRows(t);
+  return (t.parentId ? 1 : 0) + Math.max(leads.length, 1) + shown.length + 1;
 }
 
 export function computeLayout(model: OrgModel, overrides: Record<string, { x: number; y: number }> = {}): Layout {
-  const { LX, LW, ZX, CW, CG, HEAD, ROW, DIR_Y, DIR_H, PER_ROW } = GEO;
+  const { LX, LW, ZX, CW, CG, HEAD, ROW, DIR_Y, PER_ROW } = GEO;
   const pos: Record<string, Placed> = {};
   const zones: Zone[] = [];
   const byId = new Map(model.teams.map((t) => [t.id, t]));
 
-  // ── Left column ──
-  const dirH = HEAD + DIR_H * model.directions.length;
-  pos.dir = { x: LX, y: DIR_Y, w: LW, h: dirH, cluster: "leadership" };
-
+  // ── Left column: the Leadership team, then Missio ──
+  // (The FFSA direction table and OKR lines are no longer drawn on the main
+  // canvas — Jack, 2026-10-19: people first, objectives one click in.)
   const leadership = model.leadershipId ? byId.get(model.leadershipId) : undefined;
-  const leadY = DIR_Y + dirH + 18;
-  const leadObjRows = Math.max(leadership?.objectives.length ?? 0, 1);
+  const leadY = DIR_Y;
   const leadRowY: Record<string, number> = {};
   if (leadership) {
-    const h = HEAD + ROW * (leadObjRows + Math.max(model.leaders.length, 1));
+    const h = HEAD + ROW * Math.max(model.leaders.length, 1);
     pos[leadership.id] = { x: LX, y: leadY, w: LW, h, cluster: "leadership" };
-    model.leaders.forEach((l, i) => (leadRowY[l.userId] = leadY + HEAD + ROW * (leadObjRows + i) + ROW / 2));
+    model.leaders.forEach((l, i) => (leadRowY[l.userId] = leadY + HEAD + ROW * i + ROW / 2));
   }
   const afterLead = leadership ? pos[leadership.id].y + pos[leadership.id].h + 30 : leadY;
 
@@ -135,20 +152,6 @@ export function computeLayout(model: OrgModel, overrides: Record<string, { x: nu
   const edges: Edge[] = [];
   const left = (id: string): [number, number, number] => [pos[id].x, pos[id].y + HEAD / 2, -1];
   const right = (id: string): [number, number, number] => [pos[id].x + pos[id].w, pos[id].y + HEAD / 2, 1];
-  const dirIdx = new Map(model.directions.map((d, i) => [d.key, i]));
-
-  for (const t of model.teams) {
-    if (!pos[t.id]) continue;
-    t.objectives.forEach((o, j) => {
-      if (!o.direction) return;
-      const from: [number, number, number] = [LX + LW, DIR_Y + HEAD + DIR_H * dirIdx.get(o.direction)! + DIR_H / 2, 1];
-      const to: [number, number, number] =
-        t.id === model.leadershipId
-          ? [LX + LW, pos[t.id].y + HEAD + ROW * j + ROW / 2, 1]
-          : [pos[t.id].x, pos[t.id].y + HEAD + ROW * (1 + j) + ROW / 2, -1];
-      edges.push({ a: "dir:" + o.direction, b: "team:" + t.id, kind: "okr", state: o.state, from, to });
-    });
-  }
 
   for (const t of model.teams) {
     if (!pos[t.id] || t.id === model.leadershipId) continue;

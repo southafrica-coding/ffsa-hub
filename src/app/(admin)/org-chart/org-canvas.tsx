@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { GraduationCap, Heart, LayoutDashboard, Network, Search, UsersRound } from "lucide-react";
+import { GraduationCap, Heart, Network, Search, UsersRound } from "lucide-react";
 import {
   CLUSTER_LABEL,
   STATE_LABEL,
@@ -16,7 +16,7 @@ import {
   type OrgState,
   type OrgTeam,
 } from "@/lib/org-chart/model";
-import { GEO, bezier, computeLayout, litSet, type NodeId } from "@/lib/org-chart/layout";
+import { GEO, bezier, computeLayout, litSet, teamTableRows, type NodeId } from "@/lib/org-chart/layout";
 import { OrgEditPanel, useOrgSave } from "./org-edit-panel";
 
 // ── Theme: ORG_THEME.light from the design file ──────────────────────────
@@ -48,7 +48,6 @@ const MONO = "font-mono font-bold";
 const COND = "font-[family-name:var(--font-roboto-condensed)] font-black";
 const ZOOM_SCALE = 2.6;
 
-type Layer = "both" | "okrs" | "reporting";
 type View = { s: number; tx: number; ty: number };
 
 // ── Small pieces ─────────────────────────────────────────────────────────
@@ -146,7 +145,6 @@ export function OrgCanvas({
   const leaderIds = useMemo(() => new Set(model.leaders.map((l) => l.userId)), [model]);
 
   const [sel, setSel] = useState<NodeId | null>(null);
-  const [layer, setLayer] = useState<Layer>("both");
   const [zoomTeam, setZoomTeam] = useState<string | null>(null);
   const [lastZoom, setLastZoom] = useState<string | null>(model.teams[0]?.id ?? null);
   const [person, setPerson] = useState<string | null>(null);
@@ -262,7 +260,7 @@ export function OrgCanvas({
   };
 
   // ── What is lit ──
-  const shown = layout.edges.filter((e) => layer === "both" || (layer === "okrs" ? e.kind === "okr" : e.kind !== "okr"));
+  const shown = layout.edges;
   const extra: NodeId[] = [];
   if (sel?.startsWith("lead:") && model.leadershipId) extra.push("team:" + model.leadershipId);
   if (sel === "team:" + model.leadershipId) model.leaders.forEach((l) => extra.push("lead:" + l.userId));
@@ -496,7 +494,7 @@ export function OrgCanvas({
   }
 
   // ── Tables ──
-  const { ROW, LW, DIR_H } = GEO;
+  const { ROW, LW } = GEO;
   // Edit mode: drag a team's table to move it. Positions are in canvas units,
   // so the pointer's travel is divided by the current zoom.
   const startTableDrag = (id: string) => (e: React.PointerEvent) => {
@@ -574,6 +572,7 @@ export function OrgCanvas({
     ink,
     rightInk,
     height = ROW,
+    bold,
     onClick,
   }: {
     nid?: NodeId;
@@ -584,6 +583,7 @@ export function OrgCanvas({
     ink?: string;
     rightInk?: string;
     height?: number;
+    bold?: boolean;
     onClick?: () => void;
   }) {
     const on = !!nid && nid === sel;
@@ -595,13 +595,15 @@ export function OrgCanvas({
           height,
           borderTop: `1px solid ${T.rowBorder}`,
           background: on ? T.yellow : "transparent",
-          opacity: nid && dim(nid) ? 0.3 : 1,
+          // A person row dims only while someone is being looked for; otherwise
+          // it rises and falls with its team's card.
+          opacity: nid && dim(nid) && (!nid.startsWith("person:") || sel?.startsWith("person:")) ? 0.3 : 1,
           cursor: onClick || nid ? "pointer" : "default",
         }}
       >
         {mono ? <span className={`${MONO} shrink-0 text-[8px] tracking-[0.08em]`} style={{ color: on ? T.ink : T.mono }}>{mono}</span> : null}
         {dot ? <span className="h-[7px] w-[7px] shrink-0" style={{ background: dot }} /> : null}
-        <span className="min-w-0 flex-1 truncate text-[11.5px] font-medium leading-[1.25]" style={{ color: ink ?? T.ink }}>
+        <span className={`min-w-0 flex-1 truncate text-[11.5px] leading-[1.25] ${bold ? "font-bold" : "font-medium"}`} style={{ color: ink ?? T.ink }}>
           {text}
         </span>
         {right ? (
@@ -613,37 +615,17 @@ export function OrgCanvas({
     );
   }
 
-  const objRows = (objs: OrgObjective[]) =>
-    objs.length
-      ? objs.map((o) => (
-          <Row key={o.id} dot={T.st[o.state].dot} text={o.title} right={o.pct !== null ? `${o.pct}%` : undefined} rightInk={T.ink} />
-        ))
-      : [<Row key="none" mono="OKR" text={`No ${model.cycleName ?? ""} objective yet`.replace("  ", " ")} ink={T.mono} />];
-
   const icon = (I: typeof Network) => <I size={13} strokeWidth={2.2} />;
   const leadership = model.leadershipId ? team.get(model.leadershipId) : undefined;
   const missio = model.missioId ? team.get(model.missioId) : undefined;
 
   const tables: React.ReactNode[] = [];
-  {
-    const p = layout.pos.dir;
-    const s = tableShell(null, p);
-    tables.push(
-      <div key="dir" className="absolute" style={s.style}>
-        <Head nid={null} on={false} icon={icon(LayoutDashboard)} name={`FFSA ${model.cycleName ?? ""} direction`} count="THE RHYTHM" />
-        {model.directions.map((d) => (
-          <Row key={d.key} nid={"dir:" + d.key} mono={d.code} dot={T.st[d.state].dot} text={d.title} right={d.pct !== null ? `${d.pct}%` : undefined} height={DIR_H} />
-        ))}
-      </div>
-    );
-  }
   if (leadership && layout.pos[leadership.id]) {
     const nid = "team:" + leadership.id;
     const s = tableShell(nid, { ...layout.pos[leadership.id], w: LW });
     tables.push(
       <div key={leadership.id} className="absolute" style={{ ...s.style, cursor: editMode ? "move" : undefined }} onPointerDown={startTableDrag(leadership.id)}>
         <Head nid={nid} on={s.on} icon={icon(Network)} name={leadership.name} count={String(leadership.headcount)} />
-        {objRows(leadership.objectives)}
         {model.leaders.length ? (
           model.leaders.map((l) => (
             <Row key={l.userId} nid={"lead:" + l.userId} text={l.name} right={l.tag} rightInk={l.tag === "INTEGRATOR" ? T.ink : T.mono} />
@@ -673,19 +655,31 @@ export function OrgCanvas({
     const nid = "team:" + t.id;
     const s = tableShell(nid, layout.pos[t.id]);
     const parent = t.parentId ? team.get(t.parentId) : undefined;
+    const rows = teamTableRows(t);
     tables.push(
       <div key={t.id} className="absolute" style={{ ...s.style, cursor: editMode ? "move" : undefined }} onPointerDown={startTableDrag(t.id)}>
         <Head nid={nid} on={s.on} icon={icon(UsersRound)} name={t.name} count={String(t.headcount)} />
+        {parent ? <Row mono="WITHIN" text={parent.name} ink={T.mono} /> : null}
+        {rows.leads.length ? (
+          rows.leads.map((m) => (
+            <Row key={m.userId} nid={"person:" + m.userId} mono="LEAD" text={m.name} bold />
+          ))
+        ) : (
+          <Row mono="LEAD" text="Not named yet" ink={T.openInk} />
+        )}
+        {rows.shown.map((m) => (
+          <Row key={m.userId} nid={"person:" + m.userId} text={m.name} />
+        ))}
         <Row
-          mono={parent ? "WITHIN" : "LEAD"}
-          text={parent ? parent.name : t.leads.length ? t.leads.join(" & ") : "Not named yet"}
-          ink={!parent && !t.leads.length ? T.openInk : T.ink}
-        />
-        {objRows(t.objectives)}
-        <Row
-          text={`${t.headcount} ${t.headcount === 1 ? "person" : "people"}`}
+          text={
+            rows.more > 0
+              ? `+ ${rows.more} more`
+              : t.headcount === 0
+                ? "Nobody on the roster yet"
+                : `${t.headcount} ${t.headcount === 1 ? "person" : "people"}`
+          }
           right="OPEN ›"
-          ink={T.mono}
+          ink={t.headcount === 0 ? T.openInk : T.mono}
           rightInk={T.ink}
           onClick={() => openTeam(t.id)}
         />
@@ -814,30 +808,6 @@ export function OrgCanvas({
               </div>
             )}
           </div>
-          <div className="flex">
-            {(
-              [
-                ["both", "BOTH"],
-                ["okrs", "OKRS"],
-                ["reporting", "REPORTING"],
-              ] as [Layer, string][]
-            ).map(([k, label], i) => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => setLayer(k)}
-                className={`${MONO} flex h-11 items-center border px-3.5 text-[9.5px] tracking-[0.1em] lg:h-10`}
-                style={{
-                  marginLeft: i ? -1 : 0,
-                  background: layer === k ? T.ink : "transparent",
-                  color: layer === k ? "#fff" : T.sub,
-                  borderColor: layer === k ? T.ink : T.btnBorder,
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
           {canManage && (
             <button
               type="button"
@@ -919,14 +889,6 @@ export function OrgCanvas({
               </button>
             </div>
             <div className="hidden flex-wrap items-center gap-[18px] border border-ink bg-white px-3.5 py-2.5 md:flex">
-              {(Object.keys(STATE_LABEL) as OrgState[]).map((s) => (
-                <span key={s} className={`${MONO} flex items-center gap-[7px] text-[8.5px] tracking-[0.1em]`} style={{ color: T.sub }}>
-                  <span className="h-[7px] w-[7px]" style={{ background: T.st[s].dot }} />
-                  {STATE_LABEL[s]}
-                </span>
-              ))}
-              <span className="w-px self-stretch" style={{ background: T.rowBorder }} />
-              <Legend line={`2.5px solid ${T.st.moving.dot}`} label="OKR" />
               <Legend line={`1.5px solid ${T.ink}`} label="REPORTS TO" />
               <Legend line={`1.5px dashed ${T.ink}`} label="SHARED PERSON" />
             </div>

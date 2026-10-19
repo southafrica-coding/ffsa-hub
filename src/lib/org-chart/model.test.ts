@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildOrgModel, meanPct, rollUpState, updateMonthStart, type OrgInput, type RawKr } from "./model";
-import { computeLayout, litSet } from "./layout";
+import { PEOPLE_SHOWN, computeLayout, litSet, teamRows, teamTableRows } from "./layout";
 
 const kr = (over: Partial<RawKr> = {}): RawKr => ({
   id: Math.random().toString(36).slice(2),
@@ -151,8 +151,52 @@ describe("computeLayout", () => {
     expect(l.pos.schools).toBeDefined();
   });
 
-  it("draws an OKR line only for an objective with a direction", () => {
-    expect(l.edges.filter((e) => e.kind === "okr")).toHaveLength(1);
+  it("keeps OKRs off the canvas: no OKR lines, even for an objective with a direction", () => {
+    expect(l.edges.filter((e) => e.kind === "okr")).toHaveLength(0);
+    expect(l.pos.dir).toBeUndefined();
+  });
+
+  it("sizes a team's table by its people, not its objectives", () => {
+    const media = m.teams.find((t) => t.id === "media")!;
+    // 1 lead row (Tosca) + 0 others + the "+N more · OPEN" row
+    expect(teamTableRows(media)).toMatchObject({ more: 0 });
+    expect(teamRows(media)).toBe(2);
+    const events = m.teams.find((t) => t.id === "events")!;
+    // no lead ("Not named yet") + 2 people + OPEN row
+    expect(teamRows(events)).toBe(4);
+    const rca = m.teams.find((t) => t.id === "rca")!;
+    // "within Training" + no lead + OPEN row
+    expect(teamRows(rca)).toBe(3);
+  });
+
+  it("shows at most PEOPLE_SHOWN people and counts the rest", () => {
+    const big = buildOrgModel(
+      input({
+        members: Array.from({ length: 9 }, (_, i) => ({
+          id: "b" + i, staff_ministry_id: "media", user_id: "u" + i, member_role: i === 0 ? "leader" : "member",
+          is_point_leader: i === 0, role_title: null, responsibilities: [], share_pct: null, staff_kind: null, subcategories: [],
+        })),
+      })
+    ).teams.find((t) => t.id === "media")!;
+    const r = teamTableRows(big);
+    expect(r.leads).toHaveLength(1);
+    expect(r.leads.length + r.shown.length).toBe(PEOPLE_SHOWN);
+    expect(r.more).toBe(9 - PEOPLE_SHOWN);
+  });
+
+  it("caps a team with many leaders at the same size, leads first", () => {
+    const leaders = buildOrgModel(
+      input({
+        members: Array.from({ length: 10 }, (_, i) => ({
+          id: "c" + i, staff_ministry_id: "media", user_id: "u" + i, member_role: i < 8 ? "leader" : "member",
+          is_point_leader: i === 0, role_title: null, responsibilities: [], share_pct: null, staff_kind: null, subcategories: [],
+        })),
+      })
+    ).teams.find((t) => t.id === "media")!;
+    const r = teamTableRows(leaders);
+    expect(r.leads).toHaveLength(PEOPLE_SHOWN);
+    expect(r.shown).toHaveLength(0);
+    expect(r.more).toBe(10 - PEOPLE_SHOWN);
   });
 
   it("draws a reporting line from a Leadership-team row, and a dotted line for a shared person", () => {
