@@ -6,6 +6,7 @@ import { AutoRefresh } from "@/components/auto-refresh";
 import { BackButton } from "@/components/back-button";
 import { getSidebarAccess } from "@/lib/sidebar-access";
 import { getUserInitials } from "@/lib/user-initials";
+import { AssistantMount } from "@/components/assistant/assistant-mount";
 
 export default async function AdminLayout({
   children,
@@ -35,6 +36,7 @@ export default async function AdminLayout({
         </div>
       </main>
       <MobileTabBar />
+      <AssistantMount userRoles={userRoles} />
     </div>
   );
 }
