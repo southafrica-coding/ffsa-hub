@@ -421,6 +421,7 @@ export function TeamDetail({
         <TabsContent value="expenses" className="mt-4">
           <ExpensesTab
             teamId={team.id}
+            teamName={team.team_name}
             expenses={expenses}
             categories={categories}
             cashBatches={cashBatches}

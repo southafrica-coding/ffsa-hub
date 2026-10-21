@@ -97,6 +97,7 @@ const PAYMENT_METHODS = [
 
 export function ExpensesTab({
   teamId,
+  teamName,
   expenses,
   categories: initialCategories,
   cashBatches,
@@ -104,6 +105,8 @@ export function ExpensesTab({
   readOnly = false,
 }: {
   teamId: string;
+  /** Shown on the form, so someone on several teams knows which budget it goes to. */
+  teamName: string;
   expenses: Expense[];
   categories: Category[];
   cashBatches: CashBatch[];
@@ -376,6 +379,9 @@ export function ExpensesTab({
               <DialogTitle>
                 {editingId ? "Edit Expense" : "Add Expense"}
               </DialogTitle>
+              <p className="text-sm text-muted-foreground">
+                {editingId ? "On" : "Logging to"} <strong className="text-ink">{teamName}</strong>
+              </p>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">

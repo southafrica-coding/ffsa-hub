@@ -5,8 +5,10 @@ import {
   duplicateWarning,
   fileKind,
   fmtNum,
+  logButtonText,
   missingForLog,
   parseChange,
+  parseTeamOption,
   parseTypedAmount,
   pickCategory,
   pickCurrency,
@@ -15,6 +17,7 @@ import {
   rateFromLive,
   receiptCardBlocks,
   safeFileName,
+  teamOptionValue,
   toZar,
   type ReceiptReading,
 } from "./receipt-logic";
@@ -199,7 +202,7 @@ describe("Slack card", () => {
   });
 
   it("carries the draft id on all three buttons", () => {
-    const blocks = receiptCardBlocks({ draftId: "d1", senderName: "Ana", proposal, categoryName: "Food", warnings: [] });
+    const blocks = receiptCardBlocks({ draftId: "d1", senderName: "Ana", proposal, categoryName: "Food", warnings: [], team: null });
     const actions = blocks.find((b) => (b as { type: string }).type === "actions") as {
       elements: { action_id: string; value: string }[];
     };
@@ -208,6 +211,62 @@ describe("Slack card", () => {
       ["receipt_change", "d1"],
       ["receipt_cancel", "d1"],
     ]);
+  });
+
+  const ESW = { id: "t1", name: "Eswatini Leadership Track 26'" };
+  const BOTS = { id: "t2", name: "Botswana" };
+  const text = (b: unknown) => JSON.stringify(b);
+
+  it("names the team on the card and on the Log button", () => {
+    const blocks = receiptCardBlocks({ draftId: "d1", senderName: "Jack", proposal, categoryName: "Food", warnings: [], team: ESW });
+    expect(text(blocks[0])).toContain("for *Eswatini Leadership Track 26'*");
+    const actions = blocks.find((b) => (b as { type: string }).type === "actions") as {
+      elements: { text: { text: string } }[];
+    };
+    expect(actions.elements[0].text.text).toBe("✅ Log to Eswatini Leadership Track 26'");
+  });
+
+  it("asks which team when none is chosen, with a menu of the sender's teams", () => {
+    const blocks = receiptCardBlocks({
+      draftId: "d1", senderName: "Jack", proposal, categoryName: "Food", warnings: [], team: null, teamChoices: [ESW, BOTS],
+    });
+    expect(text(blocks[0])).toContain("which team is this for?");
+    const menu = blocks.find((b) => (b as { block_id?: string }).block_id === "receipt_team:d1") as {
+      accessory: { action_id: string; options: { value: string }[]; initial_option?: unknown };
+    };
+    expect(menu.accessory.action_id).toBe("receipt_team");
+    expect(menu.accessory.options.map((o) => o.value)).toEqual(["d1|t1", "d1|t2"]);
+    expect(menu.accessory.initial_option).toBeUndefined();
+  });
+
+  it("pre-selects the guessed team in the menu", () => {
+    const blocks = receiptCardBlocks({
+      draftId: "d1", senderName: "Jack", proposal, categoryName: "Food", warnings: [], team: BOTS, teamChoices: [ESW, BOTS],
+    });
+    const menu = blocks.find((b) => (b as { block_id?: string }).block_id === "receipt_team:d1") as {
+      accessory: { initial_option?: { value: string } };
+    };
+    expect(menu.accessory.initial_option?.value).toBe("d1|t2");
+  });
+
+  it("shows no menu when there's only one team to pick", () => {
+    const blocks = receiptCardBlocks({
+      draftId: "d1", senderName: "Jack", proposal, categoryName: "Food", warnings: [], team: ESW, teamChoices: [ESW],
+    });
+    expect(blocks.some((b) => (b as { block_id?: string }).block_id === "receipt_team:d1")).toBe(false);
+  });
+});
+
+describe("team menu values", () => {
+  it("round-trips draft and team", () => {
+    expect(parseTeamOption(teamOptionValue("d1", "t1"))).toEqual({ draftId: "d1", teamId: "t1" });
+    expect(parseTeamOption("junk")).toBeNull();
+    expect(parseTeamOption(undefined)).toBeNull();
+  });
+
+  it("keeps the Log button within Slack's 75 characters", () => {
+    expect(logButtonText(null)).toBe("✅ Log it");
+    expect(logButtonText("x".repeat(100)).length).toBeLessThanOrEqual(75);
   });
 });
 

@@ -1,7 +1,7 @@
 /**
  * POST /api/slack/outreach/interactions — button clicks and form submits
- * on Outreach Finance messages: the receipt card's [Log it] [Change]
- * [Cancel], and the Change form (lib/slack/outreach/receipts).
+ * on Outreach Finance messages: the receipt card's Team menu, [Log to …]
+ * [Change] [Cancel], and the Change form (lib/slack/outreach/receipts).
  *
  * Slack wants an answer within 3s, so the work runs in after(). The
  * Change form is the exception: its trigger_id expires in 3s, so it is
@@ -18,12 +18,15 @@ import {
   ACTION_CANCEL,
   ACTION_CHANGE,
   ACTION_LOG,
+  ACTION_TEAM,
   VIEW_CHANGE,
   parseChange,
+  parseTeamOption,
 } from "@/lib/slack/outreach/receipt-logic";
 import {
   applyChangeAndLog,
   cancelReceipt,
+  chooseTeam,
   logReceipt,
   openChangeForm,
   type Reply,
@@ -39,7 +42,7 @@ type Payload = {
   trigger_id?: string;
   response_url?: string;
   channel?: { id: string };
-  actions?: { action_id: string; value?: string }[];
+  actions?: { action_id: string; value?: string; selected_option?: { value: string } }[];
   view?: {
     callback_id: string;
     private_metadata: string;
@@ -93,6 +96,16 @@ export async function POST(request: Request) {
 
   if (payload.type === "block_actions") {
     const action = payload.actions?.[0];
+    if (action?.action_id === ACTION_TEAM) {
+      const picked = parseTeamOption(action.selected_option?.value);
+      if (picked) {
+        const reply = ephemeral(payload.response_url);
+        after(() =>
+          chooseTeam(picked.draftId, picked.teamId, slackUserId, reply).catch((e) => console.error("[slack/outreach] team", e))
+        );
+      }
+      return new NextResponse(null, { status: 200 });
+    }
     const draftId = action?.value;
     if (!action || !draftId) return new NextResponse(null, { status: 200 });
     const reply = ephemeral(payload.response_url);

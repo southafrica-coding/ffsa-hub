@@ -170,6 +170,9 @@ export type Proposal = {
   cash_batch_id: string | null;
   payment_method: PaymentMethod;
   receipt_code: string | null;
+  /** Notes from reading the receipt, kept so the card can be redrawn
+   *  (e.g. after the team changes). Duplicate checks are redone per team. */
+  read_warnings?: string[];
 };
 
 export const KNOWN_CURRENCIES = new Set<string>(SUPPORTED_CURRENCIES.map((c) => c.code));
@@ -311,6 +314,24 @@ export const ACTION_LOG = "receipt_log";
 export const ACTION_CHANGE = "receipt_change";
 export const ACTION_CANCEL = "receipt_cancel";
 export const VIEW_CHANGE = "receipt_change_view";
+export const ACTION_TEAM = "receipt_team";
+
+/** The team dropdown's option value: which draft, and which team. */
+export function teamOptionValue(draftId: string, teamId: string): string {
+  return `${draftId}|${teamId}`;
+}
+
+export function parseTeamOption(value: string | undefined): { draftId: string; teamId: string } | null {
+  const [draftId, teamId] = (value ?? "").split("|");
+  return draftId && teamId ? { draftId, teamId } : null;
+}
+
+/** Slack caps a button's text at 75 characters. */
+export function logButtonText(teamName: string | null): string {
+  if (!teamName) return "✅ Log it";
+  const label = `✅ Log to ${teamName}`;
+  return label.length <= 75 ? label : `${label.slice(0, 74)}…`;
+}
 
 /** 22800.5 → "22 800.50" — the same everywhere, whatever the server's locale. */
 export function fmtNum(n: number): string {
@@ -343,8 +364,13 @@ export function receiptCardBlocks(args: {
   proposal: Proposal;
   categoryName: string | null;
   warnings: string[];
+  /** The team it will be logged to; null until the sender picks one. */
+  team: { id: string; name: string } | null;
+  /** Teams to choose between. Shown as a dropdown when there's more than one. */
+  teamChoices?: { id: string; name: string }[];
 }): unknown[] {
   const p = args.proposal;
+  const choices = args.teamChoices ?? [];
   const fields = [
     `*Shop*\n${p.vendor ?? "—"}`,
     `*Date*\n${p.expense_date}`,
@@ -356,7 +382,12 @@ export function receiptCardBlocks(args: {
   const blocks: unknown[] = [
     {
       type: "section",
-      text: { type: "mrkdwn", text: `🧾 *Receipt from ${args.senderName}* — check it, then tap *Log it*.` },
+      text: {
+        type: "mrkdwn",
+        text: args.team
+          ? `🧾 *Receipt from ${args.senderName}* for *${args.team.name}* — check the team and the details, then tap *Log to ${args.team.name}*.`
+          : `🧾 *Receipt from ${args.senderName}* — *which team is this for?* Pick it below, then check the details.`,
+      },
     },
     { type: "section", fields: fields.map((t) => ({ type: "mrkdwn", text: t })) },
   ];
@@ -366,11 +397,33 @@ export function receiptCardBlocks(args: {
       elements: [{ type: "mrkdwn", text: args.warnings.join("\n") }],
     });
   }
+  if (choices.length > 1) {
+    const options = choices.slice(0, 100).map((t) => opt(t.name, teamOptionValue(args.draftId, t.id)));
+    const current = args.team ? options.find((o) => o.value === teamOptionValue(args.draftId, args.team!.id)) : undefined;
+    blocks.push({
+      type: "section",
+      block_id: `receipt_team:${args.draftId}`,
+      text: { type: "mrkdwn", text: "*Team*" },
+      accessory: {
+        type: "static_select",
+        action_id: ACTION_TEAM,
+        placeholder: { type: "plain_text", text: "Choose the team" },
+        options,
+        ...(current ? { initial_option: current } : {}),
+      },
+    });
+  }
   blocks.push({
     type: "actions",
     block_id: `receipt:${args.draftId}`,
     elements: [
-      { type: "button", style: "primary", action_id: ACTION_LOG, value: args.draftId, text: { type: "plain_text", text: "✅ Log it" } },
+      {
+        type: "button",
+        style: "primary",
+        action_id: ACTION_LOG,
+        value: args.draftId,
+        text: { type: "plain_text", text: logButtonText(args.team?.name ?? null) },
+      },
       { type: "button", action_id: ACTION_CHANGE, value: args.draftId, text: { type: "plain_text", text: "✏️ Change" } },
       {
         type: "button",
