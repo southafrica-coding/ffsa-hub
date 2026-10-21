@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { invoiceDueDate, suggestItemCode, xeroRegionForOrder } from "./pay-later-rules";
+import { invoiceDueDate, suggestItemCode, xeroRegionForOrder, missingItemOrgs } from "./pay-later-rules";
+import { invoiceFailureAlertText } from "./pay-later-alerts";
 
 describe("pay-later helpers", () => {
   it("invoices USA buyers from the US org and everyone else from SA, whatever the currency", () => {
@@ -25,5 +26,29 @@ describe("pay-later helpers", () => {
     expect(suggestItemCode("FF Global Leaders Gathering")).toBe("FFGLG");
     expect(suggestItemCode("Preachers 2026")).toBe("PREACHERS26");
     expect(suggestItemCode("Wild Ones Youth Camp")).toBe("WOYC");
+  });
+
+  it("finds the Xero orgs missing an event's item (the FF Global failure)", () => {
+    expect(missingItemOrgs("FFGBLG", { za: ["OTHER"], us: ["FFGBLG"] })).toEqual(["za"]);
+    expect(missingItemOrgs("ffgblg", { za: ["FFGBLG"], us: ["FFGBLG"] })).toEqual([]);
+    expect(missingItemOrgs(null, { za: ["X"], us: ["Y"] })).toEqual(["za", "us"]);
+  });
+
+  it("doesn't report an org it couldn't read as missing", () => {
+    expect(missingItemOrgs("FFGBLG", { za: null, us: ["FFGBLG"] })).toEqual([]);
+  });
+
+  it("tells staff who, why and where to retry", () => {
+    const text = invoiceFailureAlertText({
+      eventId: "ev1",
+      eventTitle: "FF Global",
+      buyerName: "Layton MacCabe",
+      buyerEmail: "layton@ffhalifax.com",
+      country: "Canada",
+      error: "SA Xero has no item FFGBLG",
+    });
+    expect(text).toContain("Layton MacCabe (layton@ffhalifax.com, Canada)");
+    expect(text).toContain("SA Xero has no item FFGBLG");
+    expect(text).toContain("/events/ev1?tab=orders");
   });
 });

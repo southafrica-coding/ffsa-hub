@@ -34,13 +34,15 @@ export default async function ThanksPage({
     status: string;
     buyer_email: string;
     payment_provider: string | null;
+    /** Pay later: null while the invoice is on hold (our side failed to make it). */
+    xero_invoice_id?: string | null;
   } | null = null;
   if (orderId) {
     const supabase = createAdminClient();
     const { data } = await supabase
       .from("orders")
       .select(
-        "id, status, buyer_email, payment_provider, total_cents, provider_reference"
+        "id, status, buyer_email, payment_provider, total_cents, provider_reference, xero_invoice_id"
       )
       .eq("id", orderId)
       .maybeSingle();
@@ -115,6 +117,20 @@ export default async function ThanksPage({
               <p className="text-xs text-muted-foreground normal-case tracking-normal pt-2">
                 Can't see it? Check your spam folder, or reply to the email to
                 reach us.
+              </p>
+            </>
+          ) : status === "invoiced" && !order?.xero_invoice_id ? (
+            <>
+              <p className="page-eyebrow">Invoice on its way</p>
+              <h1 className="page-title">Your seats are held</h1>
+              <p className="text-sm text-foreground/80 normal-case tracking-normal pt-2">
+                We&apos;re preparing your invoice and will email it to{" "}
+                <span className="font-semibold text-foreground">{buyerEmail}</span> shortly. You don&apos;t need to do
+                anything else.
+              </p>
+              <p className="text-xs text-muted-foreground normal-case tracking-normal pt-2">
+                You can pay it online in full or in parts, and your tickets (with QR codes for the door) are emailed as
+                soon as it&apos;s fully paid. Questions? Reply to the invoice email to reach us.
               </p>
             </>
           ) : status === "invoiced" ? (

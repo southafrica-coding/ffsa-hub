@@ -5,17 +5,21 @@ import { getAuthedUser, canManageEvents } from "@/lib/api-auth";
 import {
   cancelInvoicedOrder,
   emailOrderInvoice,
+  holdPayLaterOrder,
+  invoicePayLaterOrder,
   syncTicketInvoicePayments,
 } from "@/lib/ticketing/pay-later";
 
 // POST /api/events/[id]/orders/[orderId]/invoice
-// Body: { action: "resend" | "check" | "cancel" }
+// Body: { action: "resend" | "check" | "cancel" | "retry" }
 //
 // Staff actions on a pay-later (invoiced) order:
 //   resend — email the Xero invoice to the buyer again
 //   check  — ask Xero now (instead of waiting for the webhook / daily sync);
 //            a fully paid invoice settles the order and issues the tickets
 //   cancel — void the Xero invoice and free the held seats (unpaid only)
+//   retry  — make the invoice for an order on hold (our side failed at
+//            checkout); it stays on hold with the new reason if it fails again
 export async function POST(
   request: Request,
   context: { params: Promise<{ id: string; orderId: string }> }
@@ -53,6 +57,16 @@ export async function POST(
       .eq("id", orderId)
       .single();
     return NextResponse.json({ ok: true, status: after?.status, invoice_paid_cents: after?.invoice_paid_cents });
+  }
+  if (body.action === "retry") {
+    if (order.xero_invoice_id) return NextResponse.json({ error: "This order already has its invoice." }, { status: 400 });
+    const r = await invoicePayLaterOrder(admin, orderId);
+    if (!r.ok) {
+      await holdPayLaterOrder(admin, orderId, r.error);
+      return NextResponse.json({ error: r.error }, { status: 502 });
+    }
+    const { data: after } = await admin.from("orders").select("xero_invoice_number").eq("id", orderId).single();
+    return NextResponse.json({ ok: true, invoiceNumber: after?.xero_invoice_number ?? null, emailed: r.emailed });
   }
   if (body.action === "cancel") {
     const r = await cancelInvoicedOrder(admin, orderId);

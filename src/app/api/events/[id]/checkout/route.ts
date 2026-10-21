@@ -25,7 +25,8 @@ import {
 } from "@/lib/ticketing/buyer-fields";
 import { TICKET_CONSENT_VERSION } from "@/lib/ticketing/consent-terms";
 import { settlePaidOrder } from "@/lib/ticketing/settle";
-import { invoicePayLaterOrder } from "@/lib/ticketing/pay-later";
+import { invoicePayLaterOrder, holdPayLaterOrder } from "@/lib/ticketing/pay-later";
+import { alertInvoiceFailure } from "@/lib/ticketing/pay-later-alerts";
 import {
   buildWaiverSignatureGroups,
   type TierWaiver,
@@ -652,21 +653,22 @@ export async function POST(
   // ── Pay later: raise + email the Xero invoice ───────────────
   // The seats stay held; tickets are issued when Xero shows it paid
   // (webhook / daily sync → the same settle path). If Xero can't make the
-  // invoice, cancel the order and free the seats so the buyer can retry
-  // or pay by card.
+  // invoice, that's our setup, not the buyer: the order is held (seats kept,
+  // "your invoice is on its way"), staff are alerted, and it's retried —
+  // never cancelled under them (FF Global, Oct 2026).
   if (payLater) {
     const invoiced = await invoicePayLaterOrder(supabase, order.id);
     if (!invoiced.ok) {
       console.error("[checkout] pay-later invoice failed for order", order.id, invoiced.error);
-      await supabase
-        .from("orders")
-        .update({ status: "cancelled", cancelled_at: new Date().toISOString(), invoice_error: invoiced.error })
-        .eq("id", order.id);
-      await rollbackReservations();
-      return NextResponse.json(
-        { error: "We couldn't create your invoice just now. Please try again, or pay by card." },
-        { status: 502 }
-      );
+      await holdPayLaterOrder(supabase, order.id, invoiced.error);
+      await alertInvoiceFailure({
+        eventId,
+        eventTitle: event.title,
+        buyerName: `${firstName} ${lastName}`.trim() || emailRaw,
+        buyerEmail: emailRaw,
+        country: invoiceCountry || null,
+        error: invoiced.error,
+      });
     }
     return NextResponse.json({ redirectUrl: thanksUrl });
   }

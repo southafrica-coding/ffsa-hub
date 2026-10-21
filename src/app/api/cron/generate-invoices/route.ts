@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateDueInvoices } from "@/services/billing-generation";
 import { syncInvoicePayments } from "@/services/billing-payments";
-import { syncTicketInvoicePayments } from "@/lib/ticketing/pay-later";
+import { syncTicketInvoicePayments, payLaterHealthCheck } from "@/lib/ticketing/pay-later";
+import { alertPayLaterHealth } from "@/lib/ticketing/pay-later-alerts";
 
 export const maxDuration = 60;
 
@@ -42,6 +43,13 @@ export async function GET(request: Request) {
       errors: [err instanceof Error ? err.message : "ticket invoice sync failed"],
     }));
     console.log(`[cron/generate-invoices] ticket invoices: ${JSON.stringify(tickets)}`);
+
+    // Pay-later health: items in both Xero orgs, and another try for any
+    // order whose invoice is on hold. Anything wrong goes to Slack.
+    const health = await payLaterHealthCheck(supabase).catch((err) => [
+      `Pay-later check failed: ${err instanceof Error ? err.message : "error"}`,
+    ]);
+    await alertPayLaterHealth(health);
 
     const result = await generateDueInvoices(supabase, {
       asOf,

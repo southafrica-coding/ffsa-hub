@@ -28,8 +28,8 @@ import { wordingFor } from "@/lib/email/event-email-wording";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
-export { xeroRegionForOrder, todayYmd, invoiceDueDate, suggestItemCode } from "./pay-later-rules";
-import { xeroRegionForOrder, invoiceDueDate } from "./pay-later-rules";
+export { xeroRegionForOrder, todayYmd, invoiceDueDate, suggestItemCode, missingItemOrgs } from "./pay-later-rules";
+import { xeroRegionForOrder, invoiceDueDate, missingItemOrgs } from "./pay-later-rules";
 
 type OrderLine = { ticket_type_id: string; qty: number; per_ticket_cents: number };
 
@@ -103,10 +103,11 @@ export async function emailOrderInvoice(
 }
 
 /**
- * Raise the Xero invoice for a freshly created pay-later order, move it to
- * "invoiced" and email it. A Xero failure is returned so checkout can
- * cancel the order and free the seats; an email failure is NOT fatal (the
- * invoice exists — staff can resend from the orders tab).
+ * Raise the Xero invoice for a pay-later order, move it to "invoiced" and
+ * email it. Safe to call again on an order that's on hold (no invoice yet):
+ * an order that already has its Xero invoice is never invoiced twice. A
+ * Xero failure is returned so the caller can hold the order; an email
+ * failure is NOT fatal (the invoice exists — staff can resend).
  */
 export async function invoicePayLaterOrder(
   supabase: AdminClient,
@@ -115,11 +116,15 @@ export async function invoicePayLaterOrder(
   const { data: order } = await supabase
     .from("orders")
     .select(
-      "id, status, currency, buyer_country, buyer_email, buyer_first_name, buyer_last_name, lines, discount_cents, donation_cents, total_cents, events(id, title, start_date, xero_item_code, pay_later_due_date)"
+      "id, status, currency, buyer_country, buyer_email, buyer_first_name, buyer_last_name, lines, discount_cents, donation_cents, total_cents, xero_invoice_id, events(id, title, start_date, xero_item_code, pay_later_due_date)"
     )
     .eq("id", orderId)
     .maybeSingle();
   if (!order) return { ok: false, error: "Order not found" };
+  if (order.xero_invoice_id) return { ok: true, emailed: false };
+  if (order.status !== "pending" && order.status !== "invoiced") {
+    return { ok: false, error: `The order is ${order.status}, so it can't be invoiced.` };
+  }
   const event = order.events as unknown as {
     id: string;
     title: string;
@@ -202,6 +207,7 @@ export async function invoicePayLaterOrder(
       xero_invoice_number: created.invoiceNumber ?? null,
       xero_region: region,
       invoice_due_date: dueDate,
+      invoice_error: null,
       provider_reference: created.invoiceNumber ?? created.invoiceId,
     })
     .eq("id", orderId);
@@ -209,6 +215,49 @@ export async function invoicePayLaterOrder(
   const emailed = await emailOrderInvoice(supabase, orderId);
   if (!emailed.ok) console.error("[pay-later] invoice email failed for order", orderId, emailed.error);
   return { ok: true, emailed: emailed.ok };
+}
+
+/**
+ * Our side couldn't make the invoice (Xero not connected, the item missing
+ * in that org…). The buyer did nothing wrong, so the order is NOT cancelled:
+ * it waits as "invoiced" with no invoice yet, seats held, the error kept so
+ * staff can see why — and it's retried (Retry invoice, after the event's
+ * item is linked, and daily).
+ */
+export async function holdPayLaterOrder(supabase: AdminClient, orderId: string, error: string) {
+  await supabase
+    .from("orders")
+    .update({ status: "invoiced", expires_at: null, invoice_error: error })
+    .eq("id", orderId)
+    .is("xero_invoice_id", null);
+}
+
+export type HeldRetryResult = { tried: number; invoiced: number; stillHeld: Array<{ orderId: string; error: string }> };
+
+/** Try again every pay-later order still waiting for its invoice (one event, or all). */
+export async function retryHeldInvoices(
+  supabase: AdminClient,
+  opts: { eventId?: string } = {}
+): Promise<HeldRetryResult> {
+  let q = supabase
+    .from("orders")
+    .select("id")
+    .eq("status", "invoiced")
+    .eq("payment_provider", "invoice")
+    .is("xero_invoice_id", null);
+  if (opts.eventId) q = q.eq("event_id", opts.eventId);
+  const { data } = await q;
+  const result: HeldRetryResult = { tried: 0, invoiced: 0, stillHeld: [] };
+  for (const o of data ?? []) {
+    result.tried++;
+    const r = await invoicePayLaterOrder(supabase, o.id);
+    if (r.ok) result.invoiced++;
+    else {
+      await holdPayLaterOrder(supabase, o.id, r.error);
+      result.stillHeld.push({ orderId: o.id, error: r.error });
+    }
+  }
+  return result;
 }
 
 async function releaseSeats(supabase: AdminClient, lines: OrderLine[]) {
@@ -316,4 +365,46 @@ export async function syncTicketInvoicePayments(
     }
   }
   return result;
+}
+
+/**
+ * The daily pay-later check: every event offering it has its item in both
+ * Xero orgs, and every order on hold gets another try. Returns the lines
+ * worth telling staff about.
+ */
+export async function payLaterHealthCheck(supabase: AdminClient): Promise<string[]> {
+  const lines: string[] = [];
+  const { data: events } = await supabase
+    .from("events")
+    .select("id, title, xero_item_code")
+    .eq("pay_later_enabled", true);
+  if ((events ?? []).length > 0) {
+    const codes = {} as Record<XeroRegion, string[] | null>;
+    for (const r of ["za", "us"] as XeroRegion[]) {
+      try {
+        codes[r] = (await listXeroItems(supabase, r)).map((i) => i.code);
+      } catch (err) {
+        codes[r] = null;
+        lines.push(`Couldn't read the ${r === "us" ? "US" : "SA"} Xero items: ${err instanceof Error ? err.message : "error"}`);
+      }
+    }
+    for (const e of events ?? []) {
+      const missing = missingItemOrgs(e.xero_item_code, codes);
+      if (missing.length) {
+        lines.push(
+          `${e.title}: offers "Invoice me" but item ${e.xero_item_code ?? "(none set)"} is missing in ${missing
+            .map((r) => (r === "us" ? "US" : "SA"))
+            .join(" + ")} Xero — buyers from there can't be invoiced. Fix it under the event's Tickets → Pay later.`
+        );
+      }
+    }
+  }
+  const retried = await retryHeldInvoices(supabase);
+  if (retried.invoiced) lines.push(`${retried.invoiced} invoice(s) that were on hold have now been created and emailed.`);
+  if (retried.stillHeld.length) {
+    lines.push(
+      `${retried.stillHeld.length} pay-later order(s) still on hold — first reason: ${retried.stillHeld[0].error}`
+    );
+  }
+  return lines;
 }

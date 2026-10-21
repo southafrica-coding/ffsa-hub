@@ -45,3 +45,19 @@ export function suggestItemCode(title: string): string {
       : words.map((w) => (/^[A-Z]{2,}$/.test(w) ? w : w[0].toUpperCase())).join("");
   return `${base}${yearMatch ? yearMatch[1].slice(2) : ""}`.slice(0, 30) || "EVENT";
 }
+
+/**
+ * Which Xero orgs are missing an event's item. Buyers are invoiced in their
+ * own country's org, so an event offering pay-later needs it in BOTH.
+ */
+export function missingItemOrgs(
+  itemCode: string | null | undefined,
+  codesByOrg: Record<XeroRegion, string[] | null>
+): XeroRegion[] {
+  const want = itemCode?.trim().toLowerCase();
+  return (["za", "us"] as XeroRegion[]).filter((r) => {
+    const codes = codesByOrg[r];
+    if (codes === null) return false; // couldn't read that org — don't cry wolf
+    return !want || !codes.some((c) => c.trim().toLowerCase() === want);
+  });
+}

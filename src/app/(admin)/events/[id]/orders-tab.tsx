@@ -301,12 +301,14 @@ export function OrdersTab({
   }
 
   // Pay-later orders: resend the invoice, ask Xero now, or cancel (void).
-  async function invoiceAction(order: Order, action: "resend" | "check" | "cancel") {
+  async function invoiceAction(order: Order, action: "resend" | "check" | "cancel" | "retry") {
     const prompts = {
       resend: `Email invoice ${order.xero_invoice_number ?? ""} to ${order.buyer_email} again?`,
-      cancel: `Cancel order #${order.id.slice(0, 8)}? This voids invoice ${order.xero_invoice_number ?? ""} in Xero and frees the held seats.`,
+      cancel: order.xero_invoice_number
+        ? `Cancel order #${order.id.slice(0, 8)}? This voids invoice ${order.xero_invoice_number} in Xero and frees the held seats.`
+        : `Cancel order #${order.id.slice(0, 8)}? No invoice was made yet; this frees the held seats.`,
     } as const;
-    if (action !== "check" && !confirm(prompts[action])) return;
+    if (action !== "check" && action !== "retry" && !confirm(prompts[action])) return;
     setBusyId(order.id);
     setErr(null);
     const res = await fetch(`/api/events/${eventId}/orders/${order.id}/invoice`, {
@@ -321,7 +323,8 @@ export function OrdersTab({
       return;
     }
     if (action === "resend") toast.success("Invoice sent");
-    if (action === "cancel") toast.success("Order cancelled and invoice voided");
+    if (action === "cancel") toast.success(order.xero_invoice_number ? "Order cancelled and invoice voided" : "Order cancelled");
+    if (action === "retry") toast.success(`Invoice ${(data as { invoiceNumber?: string }).invoiceNumber ?? ""} created and emailed`);
     if (action === "check") {
       toast.success(data.status === "paid" ? "Paid in full. Tickets are on their way." : "Not fully paid yet");
     }
@@ -482,7 +485,12 @@ export function OrdersTab({
                       </TableCell>
                       <TableCell>
                         <div className="text-sm">{money(o.total_cents, o.currency)}</div>
-                        {o.status === "invoiced" && (
+                        {o.status === "invoiced" && !o.xero_invoice_number && (
+                          <div className="text-xs font-semibold text-amber">
+                            Invoice on hold — not created yet. Seats held; fix the cause, then Retry invoice.
+                          </div>
+                        )}
+                        {o.status === "invoiced" && o.xero_invoice_number && (
                           <div className="text-xs text-muted-foreground">
                             Invoice {o.xero_invoice_number ?? "—"}
                             {o.xero_region && (
@@ -541,7 +549,27 @@ export function OrdersTab({
                                   : "Resend email"}
                             </button>
                           )}
-                          {o.status === "invoiced" && (
+                          {o.status === "invoiced" && !o.xero_invoice_number && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => invoiceAction(o, "retry")}
+                                disabled={busyId === o.id}
+                                className="text-xs font-semibold text-foreground hover:underline disabled:opacity-50 normal-case tracking-normal"
+                              >
+                                {busyId === o.id ? "Working…" : "Retry invoice"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => invoiceAction(o, "cancel")}
+                                disabled={busyId === o.id}
+                                className="text-xs text-destructive hover:underline disabled:opacity-50 normal-case tracking-normal"
+                              >
+                                Cancel
+                              </button>
+                            </>
+                          )}
+                          {o.status === "invoiced" && o.xero_invoice_number && (
                             <>
                               <button
                                 type="button"

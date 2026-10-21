@@ -23,6 +23,7 @@ type State = {
   item_code: string | null;
   orgs: OrgState[];
   suggested_code: string;
+  held_orders: number;
 };
 
 const ORG_LABEL = {
@@ -86,7 +87,12 @@ export function PayLaterSettings({
       setErr(data.error ?? "Failed to save");
       return false;
     }
-    setHint(done);
+    const r = data.retried as { tried: number; invoiced: number; stillHeld: unknown[] } | null | undefined;
+    setHint(
+      r && r.tried > 0
+        ? `${done} ${r.invoiced} of ${r.tried} held invoice${r.tried === 1 ? "" : "s"} created and emailed${r.stillHeld.length ? ` — ${r.stillHeld.length} still on hold` : ""}.`
+        : done
+    );
     await load();
     router.refresh();
     return true;
@@ -115,6 +121,35 @@ export function PayLaterSettings({
 
         {state && (
           <>
+            {state.enabled && !linkedEverywhere && (
+              <div className="border-2 border-destructive bg-destructive/5 p-3 text-sm">
+                <p className="font-semibold text-destructive">
+                  Buyers from {state.orgs.filter((o) => !o.item).map((o) => (o.region === "us" ? "the USA" : "outside the USA")).join(" and ")} can&apos;t be invoiced right now
+                </p>
+                <p className="text-xs">
+                  &ldquo;Invoice me&rdquo; is on, but the item isn&apos;t in{" "}
+                  {state.orgs.filter((o) => !o.item).map((o) => (o.region === "us" ? "US" : "SA")).join(" + ")} Xero. Their
+                  orders are held (seats kept) until it is — use Link or create in both below. If Xero says the Hub
+                  isn&apos;t allowed, reconnect that org under Finance first.
+                </p>
+              </div>
+            )}
+            {state.held_orders > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-2 border border-amber bg-amber/10 p-3 text-sm">
+                <span>
+                  <strong>{state.held_orders}</strong> order{state.held_orders === 1 ? " is" : "s are"} waiting for an
+                  invoice (seats held).
+                </span>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => patch({ retry_held: true }, "Retried.")}
+                  className="px-2.5 py-1 bg-ink text-white text-xs hover:bg-[#262622] disabled:opacity-50"
+                >
+                  Retry held invoices
+                </button>
+              </div>
+            )}
             <div className="border border-border bg-muted/40 p-3 space-y-2 text-sm">
               <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                 Xero sales item · invoiced by the buyer&apos;s country
