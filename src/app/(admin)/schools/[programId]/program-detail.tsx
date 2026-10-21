@@ -540,7 +540,6 @@ export function ProgramDetail({
       track,
       courseIds: mine.map((c) => c.id),
       arrivals: Object.fromEntries(arrivals),
-      gradedCourseIds: gradedOnTrack.map((c) => c.id),
     };
   });
   const [tab, setTab] = useState(

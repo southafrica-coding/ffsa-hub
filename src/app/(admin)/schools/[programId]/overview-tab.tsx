@@ -27,8 +27,6 @@ export type OverviewRow = RosterRow & {
   courseIds: string[];
   /** Per-course arrival marks (migration 259), legacy arrivals filled in. */
   arrivals: Record<string, "arrived" | "no_show">;
-  /** Ids of the courses this student already has a letter grade for. */
-  gradedCourseIds: string[];
 };
 
 const DAY = 86_400_000;
@@ -172,7 +170,7 @@ export function OverviewTab({
       />
       <div className="overflow-x-auto px-5 pb-2 md:px-8">
         {split ? (
-          <table className="w-full min-w-[560px] border-collapse">
+          <table className="w-full min-w-[480px] border-collapse">
             <thead>
               <tr className="border-b border-ink">
                 <th className={cn(th, "text-left")}>Course</th>
@@ -180,7 +178,6 @@ export function OverviewTab({
                 <th className={th}>Arrived</th>
                 <th className={th}>Not arrived</th>
                 <th className={th}>No-show</th>
-                <th className={th}>Grades in</th>
               </tr>
             </thead>
             <tbody>
@@ -189,7 +186,6 @@ export function OverviewTab({
                 const arrived = on.filter((r) => r.arrivals[c.id] === "arrived").length;
                 const noShow = on.filter((r) => r.arrivals[c.id] === "no_show").length;
                 const started = courseTiming(c, today) !== "upcoming";
-                const graded = on.filter((r) => r.gradedCourseIds.includes(c.id)).length;
                 return (
                   <tr key={c.id} className="border-b border-rule last:border-b-0">
                     <td className={cn(td, "text-left font-bold")}>{c.code}</td>
@@ -199,9 +195,6 @@ export function OverviewTab({
                       {started ? on.length - arrived - noShow : "—"}
                     </td>
                     <td className={cn(td, noShow > 0 && "font-bold text-destructive")}>{started ? noShow : "—"}</td>
-                    <td className={cn(td, !c.graded && "text-[color:var(--text-secondary)]")}>
-                      {!c.graded ? "Not graded" : `${graded} of ${on.length - noShow}`}
-                    </td>
                   </tr>
                 );
               })}
