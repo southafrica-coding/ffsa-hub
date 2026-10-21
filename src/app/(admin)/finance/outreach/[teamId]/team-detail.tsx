@@ -64,6 +64,7 @@ type Team = {
   slack_channel_id?: string | null;
   cash_alert_low_pct?: number | null;
   cash_alert_critical_pct?: number | null;
+  cash_alert_user_id?: string | null;
   programs: { id: string; name: string; code: string } | null;
 };
 
@@ -216,6 +217,7 @@ export function TeamDetail({
   closeout,
   receiptCounts = {},
   viewer,
+  alertRecipient,
 }: {
   team: Team;
   members: Member[];
@@ -230,6 +232,7 @@ export function TeamDetail({
   closeout: Closeout | null;
   receiptCounts?: Record<string, number>;
   viewer: Viewer;
+  alertRecipient: (UserOption & { slack_user_id: string | null }) | null;
 }) {
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat("en-ZA", { style: "currency", currency: "ZAR" }).format(amount);
@@ -399,12 +402,19 @@ export function TeamDetail({
             teamId={team.id}
             lowPct={team.cash_alert_low_pct ?? 30}
             criticalPct={team.cash_alert_critical_pct ?? 15}
-            leaders={members
-              .filter((m) => OUTREACH_LEADER_ROLES.includes(m.role))
-              .map((m) => ({
-                name: [m.users?.first_name, m.users?.last_name].filter(Boolean).join(" ") || "Unnamed",
-                slackLinked: Boolean(m.users?.slack_user_id),
-              }))}
+            recipientId={team.cash_alert_user_id ?? null}
+            recipient={
+              alertRecipient
+                ? {
+                    name:
+                      [alertRecipient.first_name, alertRecipient.last_name].filter(Boolean).join(" ") ||
+                      alertRecipient.email ||
+                      "Unnamed",
+                    slackLinked: Boolean(alertRecipient.slack_user_id),
+                  }
+                : null
+            }
+            people={allUsers}
           />
         </TabsContent>
 

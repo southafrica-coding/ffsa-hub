@@ -92,8 +92,9 @@ export default async function OutreachTeamDetailPage({
     getTeamCloseout(supabase, teamId),
   ]);
 
-  // Get all users for member assignment + receipt counts per expense
-  const [{ data: allUsers }, { data: receiptRows }] = await Promise.all([
+  // Get all users for member assignment + receipt counts per expense, and
+  // the school leader named for money alerts (migration 261).
+  const [{ data: allUsers }, { data: receiptRows }, { data: alertRecipient }] = await Promise.all([
     people
       .from("users")
       .select("id, first_name, last_name, preferred_name, email")
@@ -106,6 +107,13 @@ export default async function OutreachTeamDetailPage({
         "expense_id",
         (expenses ?? []).map((e: { id: string }) => e.id)
       ),
+    team.cash_alert_user_id
+      ? people
+          .from("users")
+          .select("id, first_name, last_name, preferred_name, email, slack_user_id")
+          .eq("id", team.cash_alert_user_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
 
   // Build receipt count map
@@ -131,6 +139,8 @@ export default async function OutreachTeamDetailPage({
       closeout={closeout ?? null}
       receiptCounts={receiptCounts}
       viewer={{ role: myRole, staffEditor: staffEditor === true }}
+      // Generated types predate users.slack_user_id.
+      alertRecipient={(alertRecipient ?? null) as Parameters<typeof TeamDetail>[0]["alertRecipient"]}
     />
   );
 }

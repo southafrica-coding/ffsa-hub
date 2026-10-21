@@ -1,7 +1,7 @@
 /**
  * "Running low" alerts: when the money still with an outreach team drops
  * to its low level (default 30% of what was sent) and again at critical
- * (15%), the team's owner and co-leaders get a Slack DM so base can send more
+ * (15%), the team's assigned school leader gets a Slack DM so base can send more
  * in time. See lib/finance/outreach-cash.ts for the maths.
  *
  * Call checkCashAlert(teamId) after anything that changes a team's money:
@@ -90,7 +90,7 @@ export async function checkCashAlert(teamId: string): Promise<void> {
     const { data: moved } = await q.select("id");
     if (!moved?.length || !send) return;
 
-    await notifyLeaders(admin, teamId, alertText({
+    await notifyRecipient(admin, teamId, alertText({
       team: team.team_name,
       level: send,
       left: c.left,
@@ -105,28 +105,34 @@ export async function checkCashAlert(teamId: string): Promise<void> {
   }
 }
 
-/** The team's owner and co-leaders, who get alerts, and whether each can be reached. */
+/** The one person named to get this team's alerts (migration 261), and whether Slack can reach them. */
 export async function alertRecipients(admin: Admin, teamId: string) {
-  const { data } = await admin
-    .from("outreach_team_members")
-    .select("users(id, first_name, last_name, slack_user_id)")
-    .eq("team_id", teamId)
-    .in("role", ["owner", "co_leader"]);
-  return ((data ?? []) as { users: { id: string; first_name: string | null; last_name: string | null; slack_user_id: string | null } | null }[])
-    .map((r) => r.users)
-    .filter((u): u is NonNullable<typeof u> => Boolean(u))
-    .map((u) => ({
+  const { data: team } = await admin
+    .from("outreach_teams")
+    .select("cash_alert_user_id")
+    .eq("id", teamId)
+    .maybeSingle();
+  if (!team?.cash_alert_user_id) return [];
+  const { data: u } = await admin
+    .from("users")
+    .select("id, first_name, last_name, slack_user_id")
+    .eq("id", team.cash_alert_user_id)
+    .maybeSingle();
+  if (!u) return [];
+  return [
+    {
       name: [u.first_name, u.last_name].filter(Boolean).join(" ") || "Unnamed",
-      slackUserId: u.slack_user_id,
-    }));
+      slackUserId: u.slack_user_id as string | null,
+    },
+  ];
 }
 
-async function notifyLeaders(admin: Admin, teamId: string, text: string) {
+async function notifyRecipient(admin: Admin, teamId: string, text: string) {
   const bot: SlackBotId = isBotConfigured("outreach") ? "outreach" : "hub";
   const people = await alertRecipients(admin, teamId);
   const reachable = people.filter((p) => p.slackUserId);
   if (!reachable.length) {
-    console.warn("[outreach/cash-alerts] no owner or co-leader with Slack linked on team", teamId);
+    console.warn("[outreach/cash-alerts] no alert recipient with Slack linked on team", teamId);
     return;
   }
   await Promise.all(

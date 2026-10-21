@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Money changed: maybe tell the team's leaders it is running low.
+  // Money changed: maybe tell the team's school leader it is running low.
   after(() => checkCashAlert(body.team_id));
   return NextResponse.json({ success: true, data });
 }
