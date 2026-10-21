@@ -211,19 +211,22 @@ export default async function ProgramDetailPage({
         continue;
       }
       const b = mine.balance;
+      const amounts = { paid: b.paid, total: b.total };
       feesByEnrollment[e.id] =
         b.outstanding <= 0
-          ? { label: "PAID", owed: false, progress: { percentPaid: 100, overdue: 0 } }
+          ? { label: "PAID", owed: false, progress: { percentPaid: 100, overdue: 0 }, amounts }
           : b.overdue > 0
             ? {
                 label: `R ${Math.round(b.overdue).toLocaleString("en-ZA")} OVERDUE`,
                 owed: true,
                 progress: { percentPaid: b.percentPaid, overdue: b.overdue },
+                amounts,
               }
             : {
                 label: `${b.percentPaid}% PAID`,
                 owed: false,
                 progress: { percentPaid: b.percentPaid, overdue: 0 },
+                amounts,
               };
     }
   }
@@ -268,10 +271,34 @@ export default async function ProgramDetailPage({
     .eq("program_id", programId)
     .order("sequence", { ascending: true });
 
-  const withCredits = await courseQuery(`${BASE_COURSE_COLS}, credit_hours`);
-  let billingCourses = withCredits.data;
-  if (withCredits.error) {
-    ({ data: billingCourses } = await courseQuery(BASE_COURSE_COLS));
+  // `graded` arrives with migration 259 — same fall-back-and-carry-on rule.
+  let billingCourses = null;
+  for (const cols of [
+    `${BASE_COURSE_COLS}, credit_hours, graded`,
+    `${BASE_COURSE_COLS}, credit_hours`,
+    BASE_COURSE_COLS,
+  ]) {
+    const res = await courseQuery(cols);
+    if (!res.error) {
+      billingCourses = res.data;
+      break;
+    }
+  }
+
+  // Arrival per course (migration 259). Read on its own rather than embedded in
+  // the enrolment query, so a deploy that lands before the migration loses only
+  // these marks — never the whole roster.
+  const courseArrivals: Record<string, Array<{ billing_course_id: string; status: "arrived" | "no_show" }>> = {};
+  const enrollmentIds = enrollments.map((e: any) => e.id);
+  for (let i = 0; i < enrollmentIds.length; i += 200) {
+    const { data: marks, error: marksError } = await admin
+      .from("enrollment_course_arrivals")
+      .select("enrollment_id, billing_course_id, status")
+      .in("enrollment_id", enrollmentIds.slice(i, i + 200));
+    if (marksError) break;
+    for (const m of marks ?? []) {
+      (courseArrivals[m.enrollment_id] ??= []).push({ billing_course_id: m.billing_course_id, status: m.status });
+    }
   }
   const { data: courseStaff } = await admin
     .from("users")
@@ -345,6 +372,8 @@ export default async function ProgramDetailPage({
         emailTemplates={emailTemplates ?? []}
         grades={grades ?? []}
         feesByEnrollment={feesByEnrollment}
+        feesBilledOutside={program.billing_mode === "external"}
+        courseArrivals={courseArrivals}
         feesPanel={<SchoolFeesPanel programId={programId} />}
         gradesLastEdit={gradesLastEdit}
         allUsers={allUsers ?? []}
