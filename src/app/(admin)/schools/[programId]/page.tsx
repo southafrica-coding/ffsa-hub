@@ -291,7 +291,8 @@ export default async function ProgramDetailPage({
   const courseArrivals: Record<string, Array<{ billing_course_id: string; status: "arrived" | "no_show" }>> = {};
   const enrollmentIds = enrollments.map((e: any) => e.id);
   for (let i = 0; i < enrollmentIds.length; i += 200) {
-    const { data: marks, error: marksError } = await admin
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- table is newer than the generated types
+    const { data: marks, error: marksError } = await (admin as any)
       .from("enrollment_course_arrivals")
       .select("enrollment_id, billing_course_id, status")
       .in("enrollment_id", enrollmentIds.slice(i, i + 200));

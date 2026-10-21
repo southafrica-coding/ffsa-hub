@@ -12,10 +12,20 @@ import { StudentsExportPanel } from "./students-export-panel";
 import { ENROLLMENT_STATUS_LABELS } from "@/lib/schools/student-export-columns";
 import type { ArrivalInsuranceInfo } from "@/lib/schools/arrival-insurance";
 import { Badge } from "@/components/ui/badge";
-import { Masthead, StatusPill } from "@/components/ffsa";
+import { Chip, Masthead, StatusPill } from "@/components/ffsa";
 import { TrackTab } from "./track-tab";
 import type { PipelinePerson, TrackSummary } from "@/lib/schools/track-pipeline";
-import { RosterTab, AddStudentButton, type RosterRow, type RosterFee, type RosterTrack, type PhaseCourseRow } from "./roster-tab";
+import { RosterTab, AddStudentButton, type RosterFee, type RosterFilter, type RosterTrack } from "./roster-tab";
+import { OverviewTab, type OverviewRow } from "./overview-tab";
+import {
+  arrivalsFor,
+  coursesOnTrack,
+  focusCourse,
+  studentStatus,
+  type CourseArrivalStatus,
+  type SchoolCourse,
+} from "@/lib/schools/course-arrival";
+import { todayInSouthAfrica } from "@/lib/finance/student-balance";
 import { GradesMatrix } from "./grades-matrix";
 import { ApplicantReview, type PipelineStage, type ReviewCheck } from "./applicant-review";
 import { FormBuilder, FormPreview } from "./form-builder";
@@ -337,7 +347,7 @@ type RefRequestSummary = {
 /** Tabs this screen knows. `enrollments` is the pre-14a name for Students and
  *  is still in the wild as ?tab=enrollments, so it maps rather than 404s. */
 const TAB_KEYS = [
-  "students", "courses", "track", "grades", "applicants", "application", "arrival", "leaders", "emails", "fees",
+  "overview", "students", "courses", "track", "grades", "applicants", "application", "arrival", "leaders", "emails", "fees",
   "staff_decision",
 ];
 function normaliseTab(tab: string): string {
@@ -387,6 +397,8 @@ export function ProgramDetail({
   emailTemplates,
   grades,
   feesByEnrollment,
+  feesBilledOutside,
+  courseArrivals,
   feesPanel,
   gradesLastEdit,
   allUsers,
@@ -420,6 +432,10 @@ export function ProgramDetail({
   }[];
   grades: GradeRow[];
   feesByEnrollment: Record<string, RosterFee>;
+  /** billing_mode = 'external': fees live outside the Hub, so there are no numbers. */
+  feesBilledOutside: boolean;
+  /** Arrival marks per course (migration 259), by enrolment id. */
+  courseArrivals: Record<string, Array<{ billing_course_id: string; status: CourseArrivalStatus }>>;
   /** The school's fee settings (server-rendered SchoolFeesPanel), shown as
    *  the Fees tab so they can be managed without leaving Training. */
   feesPanel: React.ReactNode;
@@ -485,20 +501,52 @@ export function ProgramDetail({
       .filter((p) => p.enrollmentId && p.track.kind !== "unknown")
       .map((p) => [p.enrollmentId as string, { kind: p.track.kind, codes: p.track.codes }])
   );
-  const rosterRows: RosterRow[] = enrollments.map((e) => ({
-    enrollmentId: e.id,
-    userId: e.user_id,
-    name: displayName(e.users),
-    from: e.users.nationality ?? null,
-    status: e.status,
-    staffId: e.assigned_staff_id,
-    staffName: e.assigned_staff ? displayName(e.assigned_staff) : null,
-    fee: feesByEnrollment[e.id] ?? { label: "—", owed: false },
-    // A grade row with no letter is a placeholder, not a grade.
-    gradedCount: grades.filter((g) => g.enrollment_id === e.id && g.letter_grade).length,
-    removed: !!e.removed_at,
-    track: rosterTrack(e.enrollment_segments, pipelineTrack.get(e.id)),
+  // ── Per-course status (migration 259) ──
+  // Only a school split into courses (FFX) marks arrival per course; every
+  // other school keeps its single school-wide status.
+  const today = todayInSouthAfrica();
+  const schoolCourses: SchoolCourse[] = billingCourses.map((c) => ({
+    id: c.id,
+    code: c.code,
+    name: c.name,
+    sequence: c.sequence,
+    start_date: c.start_date,
+    end_date: c.end_date,
+    graded: (c as { graded?: boolean }).graded ?? true,
   }));
+  const segmentCodes = new Set(trackSegments.map((s) => s.code));
+  const segmentCourses = schoolCourses.filter((c) => segmentCodes.has(c.code));
+  const overviewRows: OverviewRow[] = enrollments.map((e) => {
+    const track = rosterTrack(e.enrollment_segments, pipelineTrack.get(e.id));
+    const mine = coursesOnTrack(track, segmentCourses);
+    const arrivals = arrivalsFor(e.status, courseArrivals[e.id] ?? [], mine, today);
+    const letters = new Map(
+      grades
+        .filter((g) => g.enrollment_id === e.id && g.letter_grade)
+        .map((g) => [g.course_id, g.letter_grade as string])
+    );
+    const gradedOnTrack = mine.filter((c) => c.graded && letters.has(c.id));
+    return {
+      enrollmentId: e.id,
+      userId: e.user_id,
+      name: displayName(e.users),
+      from: e.users.nationality ?? null,
+      status: studentStatus({ enrollmentStatus: e.status, track, courses: segmentCourses, arrivals, today }),
+      staffId: e.assigned_staff_id,
+      staffName: e.assigned_staff ? displayName(e.assigned_staff) : null,
+      fee: feesByEnrollment[e.id] ?? { label: "—", owed: false },
+      grades: gradedOnTrack.map((c) => ({ code: c.code, letter: letters.get(c.id)! })),
+      removed: !!e.removed_at,
+      track,
+      courseIds: mine.map((c) => c.id),
+      arrivals: Object.fromEntries(arrivals),
+      gradedCourseIds: gradedOnTrack.map((c) => c.id),
+    };
+  });
+  const [tab, setTab] = useState(
+    initialTab && TAB_KEYS.includes(normaliseTab(initialTab)) ? normaliseTab(initialTab) : "overview"
+  );
+  const [rosterFilter, setRosterFilter] = useState<RosterFilter>("all");
   const rosterStaffOptions = staffOptions
     .map((s) => ({ id: s.id, name: displayName(s) }))
     .sort((a, b) =>
@@ -627,15 +675,10 @@ export function ProgramDetail({
         </DialogContent>
       </Dialog>
 
-      <Tabs
-        defaultValue={
-          initialTab && TAB_KEYS.includes(normaliseTab(initialTab))
-            ? normaliseTab(initialTab)
-            : "students"
-        }
-      >
+      <Tabs value={tab} onValueChange={setTab}>
         <div className="border-b border-ink bg-white px-5 pt-4 md:px-8">
           <TabsList>
+            <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="students">Students ({activeEnrollments.length})</TabsTrigger>
             <TabsTrigger value="courses">Courses ({billingCourses.length})</TabsTrigger>
             {trackSegments.length > 0 && (
@@ -654,15 +697,29 @@ export function ProgramDetail({
           </TabsList>
         </div>
 
-        {/* Frame 14a — full bleed: the phase run runs to the edge of the screen. */}
+        <TabsContent value="overview" className="mt-0">
+          <OverviewTab
+            rows={overviewRows.filter((r) => !r.removed)}
+            courses={segmentCourses.length > 0 ? segmentCourses : schoolCourses}
+            trackSegments={trackSegments}
+            staffOnSchool={staffOnSchool}
+            feesBilledOutside={feesBilledOutside}
+            today={today}
+            onOpenStudents={(f) => {
+              setRosterFilter(f);
+              setTab("students");
+            }}
+          />
+        </TabsContent>
+
         <TabsContent value="students" className="mt-0">
           <RosterTab
-            phaseCourses={billingCourses as PhaseCourseRow[]}
-            rows={rosterRows}
+            rows={overviewRows}
             staffOptions={rosterStaffOptions}
-            courseCount={billingCourses.length}
-            staffOnSchool={staffOnSchool}
             trackSegments={trackSegments}
+            filter={rosterFilter}
+            onFilterChange={setRosterFilter}
+            feesBilledOutside={feesBilledOutside}
             actions={
               <StudentsExportPanel programId={program.id} enrollments={enrollments} />
             }
@@ -697,7 +754,8 @@ export function ProgramDetail({
           <GradesMatrix
             programId={program.id}
             programCode={program.code}
-            courses={billingCourses.map((c) => ({
+            // Only graded courses get a column — FFX is never graded.
+            courses={billingCourses.filter((c) => (c as { graded?: boolean }).graded !== false).map((c) => ({
               id: c.id,
               code: c.code,
               name: c.name,
@@ -755,6 +813,9 @@ export function ProgramDetail({
           <ArrivalTab
             enrollments={enrollments}
             arrivalInsurance={arrivalInsurance}
+            courses={segmentCourses}
+            focusCourseId={focusCourse(segmentCourses, today)?.id ?? null}
+            studentCourses={Object.fromEntries(overviewRows.map((r) => [r.enrollmentId, { courseIds: r.courseIds, arrivals: r.arrivals }]))}
           />
         </TabsContent>
 
@@ -1011,11 +1072,23 @@ function InsuranceBadge({ info }: { info: ArrivalInsuranceInfo | undefined }) {
 function ArrivalTab({
   enrollments,
   arrivalInsurance,
+  courses,
+  focusCourseId,
+  studentCourses,
 }: {
   enrollments: Enrollment[];
   arrivalInsurance: Record<string, ArrivalInsuranceInfo>;
+  /** A school split into courses (FFX) marks arrival per course; empty = one school-wide status. */
+  courses: SchoolCourse[];
+  /** The course running now, else the next one — what the picker opens on. */
+  focusCourseId: string | null;
+  /** Each student's courses and per-course marks. */
+  studentCourses: Record<string, { courseIds: string[]; arrivals: Record<string, CourseArrivalStatus> }>;
 }) {
   const router = useRouter();
+  const perCourse = courses.length > 0;
+  const [courseId, setCourseId] = useState<string | null>(focusCourseId);
+  const course = courses.find((c) => c.id === courseId) ?? null;
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [attentionOnly, setAttentionOnly] = useState(false);
@@ -1043,8 +1116,15 @@ function ArrivalTab({
     return !profileDone || !insuranceOk;
   };
 
-  const roster = enrollments.filter(
-    (e) => !e.removed_at && ARRIVAL_STATUSES.includes(e.status)
+  // Per course: everyone whose track includes the picked course and who is
+  // still with the school. Otherwise the school-wide waiting/arrived list.
+  const roster = enrollments.filter((e) =>
+    perCourse
+      ? !e.removed_at &&
+        !["graduated", "dismissed", "decided_to_leave"].includes(e.status) &&
+        !!courseId &&
+        (studentCourses[e.id]?.courseIds ?? []).includes(courseId)
+      : !e.removed_at && ARRIVAL_STATUSES.includes(e.status)
   );
   // Orphans are excluded from both counters: they aren't students who haven't
   // filled a profile in, they're records with no account at all.
@@ -1082,6 +1162,28 @@ function ArrivalTab({
     waiting_for_arrival: "secondary",
     arrived: "default",
   };
+
+  async function handleCourseArrival(enrollmentId: string, mark: string) {
+    if (!courseId) return;
+    setUpdatingStatus(enrollmentId);
+    try {
+      const res = await fetch("/api/schools/enrollments/course-arrival", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enrollmentId, courseId, status: mark }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || "Failed to update arrival");
+        return;
+      }
+      router.refresh();
+    } catch {
+      alert("Failed to update arrival");
+    } finally {
+      setUpdatingStatus(null);
+    }
+  }
 
   async function handleStatusChange(enrollmentId: string, newStatus: string) {
     setUpdatingStatus(enrollmentId);
@@ -1180,6 +1282,21 @@ function ArrivalTab({
 
   return (
     <div className="space-y-4">
+      {perCourse && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="mr-1 text-[13px] text-[color:var(--text-secondary)]">Marking arrival for</span>
+          {courses.map((c) => (
+            <button key={c.id} type="button" onClick={() => setCourseId(c.id)}>
+              <Chip active={c.id === courseId}>{c.code}</Chip>
+            </button>
+          ))}
+          {course && (
+            <span className="ml-2 text-[13px] text-[color:var(--text-secondary)]">
+              {roster.filter((e) => studentCourses[e.id]?.arrivals[course.id] === "arrived").length} of {roster.length} arrived
+            </span>
+          )}
+        </div>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5 border border-border px-2.5 py-1">
@@ -1224,7 +1341,7 @@ function ArrivalTab({
             <TableRow>
               <TableHead>Student</TableHead>
               <TableHead>Profile</TableHead>
-              <TableHead>Arrival</TableHead>
+              <TableHead>{perCourse && course ? `Arrival · ${course.code}` : "Arrival"}</TableHead>
               <TableHead>Insurance</TableHead>
               <TableHead>Details</TableHead>
               <TableHead className="text-center">Checked on arrival</TableHead>
@@ -1235,7 +1352,9 @@ function ArrivalTab({
               <TableRow>
                 <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                   {roster.length === 0
-                    ? "No students waiting for arrival or arrived yet."
+                    ? perCourse
+                      ? "No students are signed up for this course."
+                      : "No students waiting for arrival or arrived yet."
                     : query
                     ? `No students match \u201c${arrivalSearch.trim()}\u201d.`
                     : "No students match the current filter."}
@@ -1301,6 +1420,19 @@ function ArrivalTab({
                       )}
                     </TableCell>
                     <TableCell>
+                      {perCourse && courseId ? (
+                        <select
+                          value={studentCourses[enrollment.id]?.arrivals[courseId] ?? "waiting"}
+                          disabled={updatingStatus === enrollment.id || removingId === enrollment.id}
+                          onChange={(e) => handleCourseArrival(enrollment.id, e.target.value)}
+                          aria-label={`Arrival for ${userName(enrollment.users)}`}
+                          className="h-9 w-[160px]"
+                        >
+                          <option value="waiting">Waiting</option>
+                          <option value="arrived">Arrived</option>
+                          <option value="no_show">No-show</option>
+                        </select>
+                      ) : (
                       <Select
                         value={enrollment.status}
                         onValueChange={(val) => handleStatusChange(enrollment.id, val)}
@@ -1318,6 +1450,7 @@ function ArrivalTab({
                           <SelectItem value="arrived">Arrived</SelectItem>
                         </SelectContent>
                       </Select>
+                      )}
                     </TableCell>
                     <TableCell>
                       {orphaned ? (

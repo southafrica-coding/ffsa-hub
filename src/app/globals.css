@@ -302,6 +302,7 @@
     font-size: 13.5px !important;
     padding: 7px 10px !important;
   }
+  .roster-filters .chip { font-size: 11px; padding: 6px 10px; }
   .roster-head {
     font-family: var(--font-mono-brand);
     font-size: 11px;

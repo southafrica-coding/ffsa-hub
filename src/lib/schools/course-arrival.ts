@@ -10,8 +10,6 @@
 // all call it, so they always agree.
 // ────────────────────────────────────────────────────────────
 
-import { ENROLLMENT_STATUS_LABELS } from "@/lib/schools/student-export-columns";
-
 export type CourseArrivalStatus = "arrived" | "no_show";
 
 export type SchoolCourse = {
@@ -104,7 +102,7 @@ export function studentStatus(input: {
   if (courses.length === 0) {
     return enrollmentStatus === "arrived"
       ? { key: "arrived", label: "Arrived", tone: "here" }
-      : { key: "waiting", label: ENROLLMENT_STATUS_LABELS.waiting_for_arrival ?? "Waiting for arrival", tone: "waiting" };
+      : { key: "waiting", label: "Waiting for arrival", tone: "waiting" };
   }
 
   const mine = coursesOnTrack(track, courses);

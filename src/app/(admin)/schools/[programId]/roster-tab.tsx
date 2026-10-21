@@ -325,7 +325,7 @@ export function RosterTab({
 
   return (
     <div className="flex min-w-0 flex-col">
-      <div className="flex flex-wrap items-center gap-1.5 border-b border-rule px-5 py-3 md:px-8">
+      <div className="roster-filters flex flex-wrap items-center gap-1.5 border-b border-rule px-5 py-3 md:px-8">
         <button type="button" onClick={() => onFilterChange("all")}>
           <Chip active={filter === "all"}>All {active.length}</Chip>
         </button>

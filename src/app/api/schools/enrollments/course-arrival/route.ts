@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { userCanManageProgram } from "@/lib/auth/check-schools-access";
 import { createAuditLog } from "@/services/audit";
 
 // PUT { enrollmentId, courseId, status: "waiting" | "arrived" | "no_show" }
@@ -26,14 +25,28 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: "enrollmentId, courseId and a valid status are required" }, { status: 400 });
   }
 
-  const admin = createAdminClient();
+  // billing_courses and enrollment_course_arrivals are newer than the generated types.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin: any = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db: any = supabase;
   const { data: enrollment } = await admin
     .from("enrollments")
     .select("id, program_id, status")
     .eq("id", b.enrollmentId)
     .single();
   if (!enrollment) return NextResponse.json({ error: "Student not found" }, { status: 404 });
-  if (!(await userCanManageProgram(supabase, user.id, enrollment.program_id))) {
+  // The same rule that lets someone change arrival on the enrolment itself
+  // (enrollments UPDATE policy, migration 040) — asked of the database as the
+  // signed-in user, so whoever marks arrivals today can mark them per course.
+  const [access, perm] = await Promise.all([
+    db.rpc("has_schools_access", { target_program_id: enrollment.program_id }),
+    db.rpc("has_permission_for", {
+      required_permission: "schools.manage_enrollments",
+      target_program_id: enrollment.program_id,
+    }),
+  ]);
+  if (access.data !== true && perm.data !== true) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
