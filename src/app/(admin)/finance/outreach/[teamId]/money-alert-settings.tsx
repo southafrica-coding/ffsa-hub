@@ -8,19 +8,19 @@ import { Input } from "@/components/ui/input";
 
 /**
  * When the money still with the team drops to these levels, the team's
- * school leaders get a Slack DM (lib/outreach/cash-alerts). Once per level;
+ * owner and co-leaders get a Slack DM (lib/outreach/cash-alerts). Once per level;
  * sending more money resets it.
  */
 export function MoneyAlertSettings({
   teamId,
   lowPct: initialLow,
   criticalPct: initialCritical,
-  schoolLeaders,
+  leaders,
 }: {
   teamId: string;
   lowPct: number;
   criticalPct: number;
-  schoolLeaders: { name: string; slackLinked: boolean }[];
+  leaders: { name: string; slackLinked: boolean }[];
 }) {
   const router = useRouter();
   const [low, setLow] = useState(String(initialLow));
@@ -54,15 +54,15 @@ export function MoneyAlertSettings({
     }
   }
 
-  const reachable = schoolLeaders.filter((s) => s.slackLinked);
-  const unreachable = schoolLeaders.filter((s) => !s.slackLinked);
+  const reachable = leaders.filter((s) => s.slackLinked);
+  const unreachable = leaders.filter((s) => !s.slackLinked);
 
   return (
     <div className="space-y-3 border border-ink px-4 py-4">
       <div>
         <h3 className="font-medium">Money alerts</h3>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          When the money still with the team drops to these levels (of what was sent), the team&apos;s school leaders get a
+          When the money still with the team drops to these levels (of what was sent), the team&apos;s owner and co-leaders get a
           Slack message so base can send more in time.
         </p>
       </div>
@@ -89,9 +89,9 @@ export function MoneyAlertSettings({
       {!valid && <p className="text-xs text-destructive">Urgent must be the same as or lower than running low, between 0 and 100.</p>}
 
       <p className="text-sm">
-        {schoolLeaders.length === 0 ? (
+        {leaders.length === 0 ? (
           <span className="text-amber">
-            No school leader on this team yet — add one above (role <strong>School Leader</strong>) to get these alerts.
+            No owner or co-leader on this team yet — add a <strong>Co-leader</strong> above to get these alerts.
           </span>
         ) : (
           <>

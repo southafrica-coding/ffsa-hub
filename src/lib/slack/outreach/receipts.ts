@@ -14,8 +14,8 @@
  * the photo is still kept and the card says so.
  *
  * Everything runs with the service-role client, so every write re-checks
- * who may do it: logging is for the team's outreach leader, finance
- * student, school leader or finance admin, and finance staff.
+ * who may do it: logging is for the team's owner and co-leaders, and
+ * finance staff.
  */
 
 import crypto from "node:crypto";
@@ -26,6 +26,7 @@ import * as slack from "@/lib/slack/client";
 import { checkCashAlert } from "@/lib/outreach/cash-alerts";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { BudgetCategory } from "@/lib/finance/outreach-budget";
+import { OUTREACH_LEADER_ROLES } from "@/lib/finance/outreach-roles";
 import { isFinanceStaff, pickTeam, sastDate, summarise, type OutreachScope, type OutreachTeamRef } from "@/lib/slack/assistant/outreach";
 import {
   buildProposal,
@@ -60,7 +61,7 @@ type Admin = any;
 
 const BUCKET = "outreach-receipts";
 const MODEL = "claude-opus-5-5";
-const EDITOR_ROLES = ["outreach_leader", "finance_student", "school_leader", "finance_admin"];
+const EDITOR_ROLES = OUTREACH_LEADER_ROLES;
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://www.ffsahub.com";
 const MAX_FILES_PER_MESSAGE = 4;
 

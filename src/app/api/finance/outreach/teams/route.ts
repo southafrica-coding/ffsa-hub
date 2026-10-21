@@ -13,17 +13,17 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-  const { program_id, team_name } = body;
+  const { team_name } = body;
 
-  if (!program_id || !team_name) {
-    return NextResponse.json(
-      { error: "program_id and team_name are required" },
-      { status: 400 }
-    );
+  if (!team_name) {
+    return NextResponse.json({ error: "team_name is required" }, { status: 400 });
   }
 
+  // Anyone may start an outreach; they become its owner (migration 260).
+  // A school is optional.
   const { data, error } = await createOutreachTeam(supabase, {
     ...body,
+    program_id: body.program_id || null,
     created_by: user.id,
   });
 

@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic";
 
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isFinanceStaff } from "@/lib/slack/assistant/outreach";
@@ -14,6 +15,7 @@ import {
   getTeamFundReleases,
   getTeamCashBatches,
   getTeamCloseout,
+  OUTREACH_LEADER_ROLES,
 } from "@/services/outreach-finance";
 import { TeamDetail } from "./team-detail";
 
@@ -24,11 +26,30 @@ export default async function OutreachTeamDetailPage({
 }) {
   const { teamId } = await params;
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // Your role on this team. Plain members can't read the team row (it
+  // carries the budget), so they go to the money-free view instead.
+  const { data: membership } = user
+    ? await supabase
+        .from("outreach_team_members")
+        .select("role")
+        .eq("team_id", teamId)
+        .eq("user_id", user.id)
+        .maybeSingle()
+    : { data: null };
+  const myRole: string | null = membership?.role ?? null;
 
   const { data: team, error: teamError } = await getOutreachTeamById(
     supabase,
     teamId
   );
+
+  if ((teamError || !team) && myRole === "team_member") {
+    redirect(`/my-finance/outreach/${teamId}`);
+  }
 
   if (teamError || !team) {
     return (
@@ -39,15 +60,15 @@ export default async function OutreachTeamDetailPage({
   }
 
   // People's names. The users table only lets admins read everyone, so a
-  // finance admin managing a team saw nobody to add (and blank names for
-  // existing members). Finance staff get names + emails via the service
-  // role — nothing else about anyone; everyone else reads through RLS.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // leader inviting people saw nobody to add (and blank names for existing
+  // members). Finance staff and the team's leaders get names + emails via
+  // the service role — nothing else about anyone.
   const admin = createAdminClient();
   const staff = user ? await isFinanceStaff(admin, user.id) : false;
-  const people = staff ? admin : supabase;
+  const leader = myRole !== null && OUTREACH_LEADER_ROLES.includes(myRole);
+  const people = staff || leader ? admin : supabase;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: staffEditor } = await (supabase as any).rpc("is_outreach_staff_editor");
 
   const [
     { data: members },
@@ -109,6 +130,7 @@ export default async function OutreachTeamDetailPage({
       cashBatches={cashBatches ?? []}
       closeout={closeout ?? null}
       receiptCounts={receiptCounts}
+      viewer={{ role: myRole, staffEditor: staffEditor === true }}
     />
   );
 }

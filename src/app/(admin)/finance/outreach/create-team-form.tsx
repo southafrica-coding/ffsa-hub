@@ -28,6 +28,9 @@ type Program = {
   code: string;
 };
 
+// Radix Select can't hold an empty value, so "no school" gets a stand-in.
+const NO_SCHOOL = "__none__";
+
 export function CreateTeamForm({ programs }: { programs: Program[] }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -53,7 +56,7 @@ export function CreateTeamForm({ programs }: { programs: Program[] }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          program_id: programId,
+          program_id: programId || null,
           team_name: teamName,
           location: location || null,
           country: country || null,
@@ -112,12 +115,16 @@ export function CreateTeamForm({ programs }: { programs: Program[] }) {
               />
             </div>
             <div className="col-span-2">
-              <Label>School / Program *</Label>
-              <Select value={programId} onValueChange={setProgramId} required>
+              <Label>School / Program</Label>
+              <Select
+                value={programId || NO_SCHOOL}
+                onValueChange={(v) => setProgramId(v === NO_SCHOOL ? "" : v)}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select a school..." />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value={NO_SCHOOL}>No school (independent outreach)</SelectItem>
                   {programs.map((p) => (
                     <SelectItem key={p.id} value={p.id}>
                       {p.name} ({p.code})
@@ -189,7 +196,7 @@ export function CreateTeamForm({ programs }: { programs: Program[] }) {
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={loading || !programId}>
+            <Button type="submit" disabled={loading || !teamName.trim()}>
               {loading ? "Creating..." : "Create Team"}
             </Button>
           </div>

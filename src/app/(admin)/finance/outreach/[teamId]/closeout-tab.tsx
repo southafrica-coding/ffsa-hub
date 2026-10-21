@@ -53,11 +53,14 @@ export function CloseoutTab({
   expenses,
   fundReleases,
   closeout: initialCloseout,
+  canApprove = true,
 }: {
   teamId: string;
   expenses: Expense[];
   fundReleases: FundRelease[];
   closeout: Closeout | null;
+  /** Approving or rejecting a >2% variance is finance staff's call (migration 260). */
+  canApprove?: boolean;
 }) {
   const router = useRouter();
   const [closeout, setCloseout] = useState<Closeout | null>(initialCloseout);
@@ -398,8 +401,15 @@ export function CloseoutTab({
         </div>
       )}
 
+      {isPending && !canApprove && (
+        <p className="border border-rule-strong p-4 text-sm text-muted-foreground">
+          Variance is {Number(closeout.variance_pct).toFixed(2)}% (above the 2% threshold), so finance
+          staff need to approve or reject this closeout.
+        </p>
+      )}
+
       {/* Pending: Admin actions */}
-      {isPending && (
+      {isPending && canApprove && (
         <div className="border border-rule-strong p-4 space-y-4">
           <h4 className="font-medium">Admin Decision</h4>
           <p className="text-sm text-muted-foreground">

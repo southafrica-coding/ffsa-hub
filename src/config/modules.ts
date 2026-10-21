@@ -113,8 +113,10 @@ export const ADMIN_MODULES: ModuleDefinition[] = [
     label: "Finance",
     href: "/finance",
     icon: Wallet,
-    description: "Fees, rent, support levels",
-    requiredRoles: ["super_admin", "admin", "finance_admin"],
+    description: "Outreach budgets, fees, rent, support levels",
+    // Open to everyone: anyone can run an outreach budget. The Finance page
+    // shows the other finance modules only to finance staff.
+    requiredRoles: [],
   },
   {
     id: "prayer-room",

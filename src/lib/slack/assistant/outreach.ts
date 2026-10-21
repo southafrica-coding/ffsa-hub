@@ -21,6 +21,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { guessCategory, type BudgetCategory } from "@/lib/finance/outreach-budget";
 import { mondayOf, plannerDays, pot, shiftDate } from "@/lib/finance/outreach-plan";
+import { OUTREACH_LEADER_ROLES } from "@/lib/finance/outreach-roles";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AdminClient = any;
@@ -110,11 +111,16 @@ export async function resolveOutreachScope(
         reason: "I don't know who you are yet — link your Slack on your Hub profile, then ask again.",
       };
     }
-    const role = await membershipRole(admin, team.id, args.hubUserId);
+    // The budget is for the team's owner and co-leaders (migration 260);
+    // plain members see the trip, not the money.
+    const memberRole = await membershipRole(admin, team.id, args.hubUserId);
+    const role = memberRole && OUTREACH_LEADER_ROLES.includes(memberRole) ? memberRole : null;
     if (role === null && !(await isFinanceStaff(admin, args.hubUserId))) {
       return {
         kind: "refuse",
-        reason: `This channel is for *${team.team_name}*'s budget, and you're not on that team in the Hub.`,
+        reason: memberRole
+          ? `*${team.team_name}*'s budget is run by its owner and co-leaders, so I can't share it with team members.`
+          : `This channel is for *${team.team_name}*'s budget, and you're not on that team in the Hub.`,
       };
     }
     return {
@@ -135,6 +141,7 @@ export async function resolveOutreachScope(
     .from("outreach_team_members")
     .select("role, outreach_teams!inner(id, team_name, country, slack_enabled, status)")
     .eq("user_id", args.hubUserId)
+    .in("role", OUTREACH_LEADER_ROLES)
     .eq("outreach_teams.slack_enabled", true);
   const mine: OutreachTeamRef[] = ((rows ?? []) as { role: string; outreach_teams: TeamRow }[]).map(
     (r) => ({

@@ -117,6 +117,7 @@ export function OutreachDashboardClient({
   aggregates,
   movements,
   unmatched,
+  isStaff,
 }: {
   teams: Team[];
   programs: Program[];
@@ -126,6 +127,8 @@ export function OutreachDashboardClient({
   // team filter is set would misread as "this money did not happen".
   movements: MoneyMovement[];
   unmatched: { count: number; rows: UnmatchedPayment[] };
+  /** Finance staff see every team; everyone else only the outreaches they lead. */
+  isStaff: boolean;
 }) {
   const router = useRouter();
   const [schoolFilter, setSchoolFilter] = useState("all");
@@ -250,11 +253,11 @@ export function OutreachDashboardClient({
     <div className="ffsa-screen">
       <Masthead
         context="Outreach finance"
-        title="Organisation Dashboard"
+        title={isStaff ? "Organisation Dashboard" : "Your outreaches"}
         actions={<CreateTeamForm programs={programs ?? []} />}
       />
 
-      {pendingCloseouts > 0 && (
+      {isStaff && pendingCloseouts > 0 && (
         <NeedsYou>
           {pendingCloseouts === 1
             ? "1 team closeout is waiting on your review"
@@ -350,8 +353,9 @@ export function OutreachDashboardClient({
           />
           {filteredTeams.length === 0 ? (
             <p className="px-6 py-10 text-center text-[13px] text-[color:var(--text-tertiary)]">
-              No outreach teams match your filters. Create your first team to get
-              started.
+              {isStaff
+                ? "No outreach teams match your filters. Create your first team to get started."
+                : "No outreaches yet. Start one with New Team: you'll be its owner and can invite co-leaders to run the budget with you."}
             </p>
           ) : (
             <div className="overflow-x-auto">

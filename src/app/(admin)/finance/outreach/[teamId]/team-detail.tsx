@@ -41,6 +41,7 @@ import { SlackSettings } from "./slack-settings";
 import { MoneyAlertSettings } from "./money-alert-settings";
 import { BudgetLines, type BudgetLine } from "./budget-lines";
 import { Planner } from "./planner";
+import { OUTREACH_LEADER_ROLES, OUTREACH_ROLE_LABELS } from "@/lib/finance/outreach-roles";
 
 // ────────────────────────────────────────────────────────────
 // TYPES
@@ -63,8 +64,11 @@ type Team = {
   slack_channel_id?: string | null;
   cash_alert_low_pct?: number | null;
   cash_alert_critical_pct?: number | null;
-  programs: { id: string; name: string; code: string };
+  programs: { id: string; name: string; code: string } | null;
 };
+
+/** Who is looking: their role on this team, and whether they're finance staff who can edit. */
+type Viewer = { role: string | null; staffEditor: boolean };
 
 type Member = {
   id: string;
@@ -180,12 +184,11 @@ type Closeout = {
   } | null;
 };
 
+// Roles you can give someone. Owner is never picked: it's whoever created
+// the outreach, or whoever they hand it over to.
 const TEAM_ROLES = [
-  { value: "outreach_leader", label: "Outreach Leader" },
-  { value: "finance_student", label: "Finance Student" },
-  { value: "school_leader", label: "School Leader" },
-  { value: "finance_admin", label: "Finance Admin" },
-  { value: "team_member", label: "Team Member" },
+  { value: "co_leader", label: "Co-leader — runs the budget and finances" },
+  { value: "team_member", label: "Team member — on the trip, no money access" },
 ];
 
 const statusTones: Record<string, "good" | "warn" | "quiet" | "bad"> = {
@@ -212,6 +215,7 @@ export function TeamDetail({
   cashBatches,
   closeout,
   receiptCounts = {},
+  viewer,
 }: {
   team: Team;
   members: Member[];
@@ -225,6 +229,7 @@ export function TeamDetail({
   cashBatches: CashBatch[];
   closeout: Closeout | null;
   receiptCounts?: Record<string, number>;
+  viewer: Viewer;
 }) {
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat("en-ZA", { style: "currency", currency: "ZAR" }).format(amount);
@@ -383,6 +388,7 @@ export function TeamDetail({
             teamId={team.id}
             members={members}
             allUsers={allUsers}
+            viewer={viewer}
           />
           <SlackSettings
             teamId={team.id}
@@ -393,8 +399,8 @@ export function TeamDetail({
             teamId={team.id}
             lowPct={team.cash_alert_low_pct ?? 30}
             criticalPct={team.cash_alert_critical_pct ?? 15}
-            schoolLeaders={members
-              .filter((m) => m.role === "school_leader")
+            leaders={members
+              .filter((m) => OUTREACH_LEADER_ROLES.includes(m.role))
               .map((m) => ({
                 name: [m.users?.first_name, m.users?.last_name].filter(Boolean).join(" ") || "Unnamed",
                 slackLinked: Boolean(m.users?.slack_user_id),
@@ -439,6 +445,7 @@ export function TeamDetail({
             expenses={expenses}
             fundReleases={fundReleases}
             closeout={closeout}
+            canApprove={viewer.staffEditor}
           />
         </TabsContent>
         </Tabs>
@@ -455,16 +462,28 @@ function MembersTab({
   teamId,
   members,
   allUsers,
+  viewer,
 }: {
   teamId: string;
   members: Member[];
   allUsers: UserOption[];
+  viewer: Viewer;
 }) {
   const router = useRouter();
   const [addOpen, setAddOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState("");
   const [selectedRole, setSelectedRole] = useState("team_member");
   const [addLoading, setAddLoading] = useState(false);
+
+  // Mirrors the RLS in migration 260, which is what actually enforces it:
+  // only the owner (or finance staff) adds, changes and removes co-leaders
+  // and hands the outreach over; co-leaders add and remove team members.
+  const canManageLeaders = viewer.role === "owner" || viewer.staffEditor;
+  const canManageMembers =
+    canManageLeaders || (viewer.role !== null && OUTREACH_LEADER_ROLES.includes(viewer.role));
+  const roleOptions = canManageLeaders
+    ? TEAM_ROLES
+    : TEAM_ROLES.filter((r) => r.value === "team_member");
 
   const memberUserIds = new Set(members.map((m) => m.user_id));
   const availableUsers = allUsers.filter((u) => !memberUserIds.has(u.id));
@@ -475,6 +494,11 @@ function MembersTab({
       return `${u.first_name} ${u.last_name ?? ""}`.trim();
     }
     return u.email ?? "Unknown";
+  }
+
+  function canRemove(m: Member) {
+    if (m.role === "owner") return false;
+    return m.role === "team_member" ? canManageMembers : canManageLeaders;
   }
 
   async function handleAddMember(e: React.FormEvent) {
@@ -508,14 +532,42 @@ function MembersTab({
 
   async function handleRoleChange(memberId: string, newRole: string) {
     try {
-      await fetch("/api/finance/outreach/team-members", {
+      const res = await fetch("/api/finance/outreach/team-members", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: memberId, role: newRole }),
       });
+      if (!res.ok) {
+        const data = await res.json();
+        toast.error(data.error || "Failed to update role");
+      }
       router.refresh();
     } catch {
       toast.error("Failed to update role");
+    }
+  }
+
+  async function handleMakeOwner(m: Member) {
+    if (
+      !confirm(
+        `Make ${userName(m.users)} the owner of this outreach? ` +
+          "They'll be the one who adds co-leaders, and the current owner becomes a co-leader."
+      )
+    )
+      return;
+    try {
+      const res = await fetch("/api/finance/outreach/team-members", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: m.id, team_id: teamId, make_owner: true }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        toast.error(data.error || "Failed to hand over the outreach");
+      }
+      router.refresh();
+    } catch {
+      toast.error("Failed to hand over the outreach");
     }
   }
 
@@ -526,6 +578,10 @@ function MembersTab({
         method: "DELETE",
       });
       if (res.ok) router.refresh();
+      else {
+        const data = await res.json();
+        toast.error(data.error || "Failed to remove member");
+      }
     } catch {
       toast.error("Failed to remove member");
     }
@@ -534,7 +590,13 @@ function MembersTab({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="font-medium">Team Members</h3>
+        <div>
+          <h3 className="font-medium">Team Members</h3>
+          <p className="text-xs text-muted-foreground">
+            The owner and co-leaders run the budget. Team members are on the trip but can&apos;t see the money.
+          </p>
+        </div>
+        {canManageMembers && (
         <Dialog open={addOpen} onOpenChange={setAddOpen}>
           <DialogTrigger asChild>
             <Button size="sm">
@@ -571,13 +633,18 @@ function MembersTab({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {TEAM_ROLES.map((r) => (
+                    {roleOptions.map((r) => (
                       <SelectItem key={r.value} value={r.value}>
                         {r.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {!canManageLeaders && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Only the outreach&apos;s owner can add co-leaders.
+                  </p>
+                )}
               </div>
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="outline" onClick={() => setAddOpen(false)}>
@@ -590,6 +657,7 @@ function MembersTab({
             </form>
           </DialogContent>
         </Dialog>
+        )}
       </div>
 
       {members.length === 0 ? (
@@ -604,11 +672,13 @@ function MembersTab({
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
-                <TableHead className="w-[60px]" />
+                <TableHead className="w-[150px]" />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {members.map((m) => (
+              {[...members]
+                .sort((a, b) => roleRank(a.role) - roleRank(b.role))
+                .map((m) => (
                 <TableRow key={m.id}>
                   <TableCell className="font-medium">
                     {userName(m.users)}
@@ -617,31 +687,51 @@ function MembersTab({
                     {m.users?.email ?? "—"}
                   </TableCell>
                   <TableCell>
-                    <Select
-                      value={m.role}
-                      onValueChange={(val) => handleRoleChange(m.id, val)}
-                    >
-                      <SelectTrigger className="w-[160px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {TEAM_ROLES.map((r) => (
-                          <SelectItem key={r.value} value={r.value}>
-                            {r.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    {m.role !== "owner" && canManageLeaders ? (
+                      <Select
+                        value={m.role}
+                        onValueChange={(val) => handleRoleChange(m.id, val)}
+                      >
+                        <SelectTrigger className="w-[160px]">
+                          <SelectValue>{OUTREACH_ROLE_LABELS[m.role] ?? m.role}</SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {TEAM_ROLES.map((r) => (
+                            <SelectItem key={r.value} value={r.value}>
+                              {r.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <StatusPill tone={m.role === "team_member" ? "quiet" : "good"}>
+                        {OUTREACH_ROLE_LABELS[m.role] ?? m.role}
+                      </StatusPill>
+                    )}
                   </TableCell>
                   <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                      onClick={() => handleRemoveMember(m.id)}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
+                    <div className="flex items-center justify-end gap-1">
+                      {m.role !== "owner" && canManageLeaders && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2 text-xs"
+                          onClick={() => handleMakeOwner(m)}
+                        >
+                          Make owner
+                        </Button>
+                      )}
+                      {canRemove(m) && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          onClick={() => handleRemoveMember(m.id)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -651,4 +741,8 @@ function MembersTab({
       )}
     </div>
   );
+}
+
+function roleRank(role: string) {
+  return role === "owner" ? 0 : role === "co_leader" ? 1 : 2;
 }

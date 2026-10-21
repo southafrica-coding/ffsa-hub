@@ -17,8 +17,8 @@ const CATS = ["Flights", "Accommodation", "Food", "Transport", "Emergency Fund",
 }));
 const cat = (t: string) => resolveCategory(t, CATS)?.name ?? null;
 
-const BOTS = { id: "t1", team_name: "Botswana", country: "Botswana", role: "finance_student" };
-const HULC = { id: "t2", team_name: "HULC Hartenbos 2026", country: "South Africa", role: "team_member" };
+const BOTS = { id: "t1", team_name: "Botswana", country: "Botswana", role: "co_leader" };
+const HULC = { id: "t2", team_name: "HULC Hartenbos 2026", country: "South Africa", role: "owner" };
 
 const scope = (over: Partial<OutreachScope>): OutreachScope => ({
   hubUserId: "u",

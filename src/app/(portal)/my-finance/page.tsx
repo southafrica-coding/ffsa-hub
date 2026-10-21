@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { getMyOutreachTeams } from "@/services/outreach-finance";
+import { getMyOutreachTeams, OUTREACH_ROLE_LABELS } from "@/services/outreach-finance";
 import { getMyStudentFees } from "@/services/school-fees";
 import Link from "next/link";
 import {
@@ -50,8 +50,7 @@ type TeamMembership = {
     team_name: string;
     location: string | null;
     status: string;
-    people_count: number;
-    programs: { name: string; code: string };
+    programs: { name: string; code: string } | null;
   };
 };
 
@@ -87,7 +86,7 @@ export default async function MyFinancePage() {
   }
 
   const [{ data: teamMemberships }, { data: studentFees }, { accounts }] = await Promise.all([
-    getMyOutreachTeams(supabase, user.id),
+    getMyOutreachTeams(supabase),
     getMyStudentFees(supabase, user.id),
     // The Hub's school billing (payment schedules + payments read back from
     // Xero). student_fees above is the older system, kept for any history.
@@ -216,7 +215,7 @@ export default async function MyFinancePage() {
                       {/* Line two: everything else, on ONE line. */}
                       <div className="mono-label mt-1.5 truncate">
                         {team.programs?.name ?? "Programme TBC"} ·{" "}
-                        {team.location ?? "Location TBC"} · {titleCase(m.role)}
+                        {team.location ?? "Location TBC"} · {OUTREACH_ROLE_LABELS[m.role] ?? titleCase(m.role)}
                       </div>
                     </div>
                     <StatusPill tone={TEAM_TONE[team.status] ?? "quiet"}>

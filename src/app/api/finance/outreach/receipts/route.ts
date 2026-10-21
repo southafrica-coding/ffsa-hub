@@ -97,24 +97,27 @@ export async function DELETE(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
-  const filePath = searchParams.get("file_path");
 
   if (!id) {
     return NextResponse.json({ error: "id is required" }, { status: 400 });
   }
 
-  // Delete the storage file if path provided
-  if (filePath) {
-    const adminClient = createAdminClient();
-    await adminClient.storage.from("outreach-receipts").remove([filePath]);
-  }
-
-  // Delete the metadata record
-  const { error } = await deleteReceipt(supabase, id);
+  // Delete the record through RLS first; only a row this person was allowed
+  // to delete releases its file, and the path comes from that row — never
+  // from the request.
+  const { data, error } = await deleteReceipt(supabase, id);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+  if (!data?.length) {
+    return NextResponse.json({ error: "You can't delete this receipt" }, { status: 403 });
+  }
+
+  const adminClient = createAdminClient();
+  await adminClient.storage
+    .from("outreach-receipts")
+    .remove(data.map((r: { file_path: string }) => r.file_path));
 
   return NextResponse.json({ success: true });
 }

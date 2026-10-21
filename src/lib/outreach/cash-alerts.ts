@@ -1,7 +1,7 @@
 /**
  * "Running low" alerts: when the money still with an outreach team drops
  * to its low level (default 30% of what was sent) and again at critical
- * (15%), the team's school leaders get a Slack DM so base can send more
+ * (15%), the team's owner and co-leaders get a Slack DM so base can send more
  * in time. See lib/finance/outreach-cash.ts for the maths.
  *
  * Call checkCashAlert(teamId) after anything that changes a team's money:
@@ -90,7 +90,7 @@ export async function checkCashAlert(teamId: string): Promise<void> {
     const { data: moved } = await q.select("id");
     if (!moved?.length || !send) return;
 
-    await notifySchoolLeaders(admin, teamId, alertText({
+    await notifyLeaders(admin, teamId, alertText({
       team: team.team_name,
       level: send,
       left: c.left,
@@ -105,13 +105,13 @@ export async function checkCashAlert(teamId: string): Promise<void> {
   }
 }
 
-/** The team's school leaders who will get alerts, and whether each can be reached. */
+/** The team's owner and co-leaders, who get alerts, and whether each can be reached. */
 export async function alertRecipients(admin: Admin, teamId: string) {
   const { data } = await admin
     .from("outreach_team_members")
     .select("users(id, first_name, last_name, slack_user_id)")
     .eq("team_id", teamId)
-    .eq("role", "school_leader");
+    .in("role", ["owner", "co_leader"]);
   return ((data ?? []) as { users: { id: string; first_name: string | null; last_name: string | null; slack_user_id: string | null } | null }[])
     .map((r) => r.users)
     .filter((u): u is NonNullable<typeof u> => Boolean(u))
@@ -121,12 +121,12 @@ export async function alertRecipients(admin: Admin, teamId: string) {
     }));
 }
 
-async function notifySchoolLeaders(admin: Admin, teamId: string, text: string) {
+async function notifyLeaders(admin: Admin, teamId: string, text: string) {
   const bot: SlackBotId = isBotConfigured("outreach") ? "outreach" : "hub";
   const people = await alertRecipients(admin, teamId);
   const reachable = people.filter((p) => p.slackUserId);
   if (!reachable.length) {
-    console.warn("[outreach/cash-alerts] no school leader with Slack linked on team", teamId);
+    console.warn("[outreach/cash-alerts] no owner or co-leader with Slack linked on team", teamId);
     return;
   }
   await Promise.all(

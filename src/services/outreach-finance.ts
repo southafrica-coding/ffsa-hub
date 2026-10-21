@@ -1,4 +1,5 @@
 import { TEAM_CASH_METHODS } from "@/lib/finance/outreach-cash";
+export { OUTREACH_LEADER_ROLES, OUTREACH_ROLE_LABELS } from "@/lib/finance/outreach-roles";
 import {
   getRecentStudentPayments,
   getUnreferencedBankPayments,
@@ -46,7 +47,7 @@ export async function getOutreachTeamById(supabase: Client, teamId: string) {
 export async function createOutreachTeam(
   supabase: Client,
   data: {
-    program_id: string;
+    program_id: string | null;
     team_name: string;
     location?: string | null;
     country?: string | null;
@@ -60,7 +61,13 @@ export async function createOutreachTeam(
     created_by: string;
   }
 ) {
-  return supabase.from("outreach_teams").insert(data).select().single();
+  // Inserted without RETURNING: the creator can only read the team once the
+  // trigger has made them its owner (migration 260), which happens after the
+  // row is written. So pick the id here and read it back afterwards.
+  const id = crypto.randomUUID();
+  const { error } = await supabase.from("outreach_teams").insert({ ...data, id });
+  if (error) return { data: null, error };
+  return supabase.from("outreach_teams").select().eq("id", id).single();
 }
 
 export async function updateOutreachTeam(
@@ -115,7 +122,7 @@ export async function updateTeamMemberRole(
 }
 
 export async function removeTeamMember(supabase: Client, id: string) {
-  return supabase.from("outreach_team_members").delete().eq("id", id);
+  return supabase.from("outreach_team_members").delete().eq("id", id).select("id");
 }
 
 // ────────────────────────────────────────────────────────────
@@ -330,7 +337,7 @@ export async function createReceipt(
 }
 
 export async function deleteReceipt(supabase: Client, id: string) {
-  return supabase.from("outreach_receipts").delete().eq("id", id);
+  return supabase.from("outreach_receipts").delete().eq("id", id).select("file_path");
 }
 
 // ────────────────────────────────────────────────────────────
@@ -721,14 +728,69 @@ export async function getUnmatchedFeePayments(
 // PORTAL — MY TEAMS
 // ────────────────────────────────────────────────────────────
 
-export async function getMyOutreachTeams(supabase: Client, userId: string) {
-  return supabase
-    .from("outreach_team_members")
-    .select(
-      "*, outreach_teams(*, programs(id, name, code))"
-    )
-    .eq("user_id", userId)
-    .order("joined_at", { ascending: false });
+/**
+ * The teams you're on, with no money in them — plain members can't read
+ * outreach_teams (it carries the budget), so this goes through
+ * my_outreach_teams() (migration 260).
+ */
+export async function getMyOutreachTeams(supabase: Client) {
+  const { data, error } = await supabase.rpc("my_outreach_teams");
+  return {
+    error,
+    data: ((data ?? []) as MyOutreachTeamRow[]).map((r) => ({
+      id: r.membership_id,
+      role: r.role,
+      outreach_teams: {
+        id: r.team_id,
+        team_name: r.team_name,
+        location: r.location,
+        country: r.country,
+        status: r.status,
+        start_date: r.start_date,
+        end_date: r.end_date,
+        programs: r.program_name ? { name: r.program_name, code: r.program_code ?? "" } : null,
+      },
+    })),
+  };
+}
+
+type MyOutreachTeamRow = {
+  membership_id: string;
+  role: string;
+  team_id: string;
+  team_name: string;
+  location: string | null;
+  country: string | null;
+  status: string;
+  start_date: string | null;
+  end_date: string | null;
+  program_name: string | null;
+  program_code: string | null;
+};
+
+
+export type OutreachTeamOverview = {
+  id: string;
+  team_name: string;
+  location: string | null;
+  country: string | null;
+  status: string;
+  start_date: string | null;
+  end_date: string | null;
+  people_count: number;
+  program_name: string | null;
+  my_role: string | null;
+  roster: { id: string; role: string; name: string | null }[];
+};
+
+/** Where, when and who's going — for anyone on the team. Null if you can't see it. */
+export async function getOutreachTeamOverview(supabase: Client, teamId: string) {
+  const { data } = await supabase.rpc("outreach_team_overview", { p_team: teamId });
+  return (data ?? null) as OutreachTeamOverview | null;
+}
+
+export async function transferOutreachOwnership(supabase: Client, teamId: string, memberId: string) {
+  return supabase.rpc("transfer_outreach_ownership", { p_team: teamId, p_member_id: memberId });
 }
 
 /** The team lead's day plans (food / accommodation planner, migration 252). */
