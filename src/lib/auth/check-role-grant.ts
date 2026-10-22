@@ -2,6 +2,9 @@
 //
 // Model:
 //   - super_admin can do anything.
+//   - admin (General Admin) can do everything a super_admin can EXCEPT the
+//     Records Library: it cannot hand out super_admin or
+//     records_library.manage (either would open the library).
 //   - A holder of `administration.manage_roles` can create/edit/assign roles,
 //     BUT only ones whose capabilities are a subset of what they themselves
 //     hold ("can only grant what you hold") — prevents privilege escalation.
@@ -17,15 +20,24 @@ function keyOf(row: KeyRow): string | undefined {
 }
 
 /**
- * Roles that only a super_admin may grant or revoke.
- *
- * `admin` (General Admin) belongs here for two reasons: it carries
- * super-admin-equivalent access through the hardcoded is_admin() bypass, and
- * it has NO role_permissions rows — so the "can only grant what you hold"
- * guardrail below would see an empty key list and pass vacuously, letting any
- * administration.manage_roles holder mint a full admin.
+ * Roles that only a super_admin may grant or revoke. super_admin is the one
+ * role that opens the Records Library, so a General Admin can't mint it.
  */
-export const SUPER_ADMIN_ONLY_ROLES = ["super_admin", "admin"];
+export const SUPER_ADMIN_ONLY_ROLES = ["super_admin"];
+
+/**
+ * Top-tier roles that a plain administration.manage_roles holder may never
+ * grant or revoke. `admin` has NO role_permissions rows, so the "can only
+ * grant what you hold" guardrail would pass vacuously for it — only
+ * super_admin/admin callers may hand it out.
+ */
+export const ADMIN_TIER_ROLES = ["super_admin", "admin"];
+
+/**
+ * Permission keys only a super_admin may grant (directly or inside a role
+ * bundle). Mirrors SUPER_ADMIN_ONLY_MODULES in src/config/modules.ts.
+ */
+export const SUPER_ADMIN_ONLY_PERMISSION_KEYS = new Set(["records_library.manage"]);
 
 export async function callerIsSuperAdmin(
   supabase: Client,
@@ -36,6 +48,20 @@ export async function callerIsSuperAdmin(
     .select("roles!inner(name)")
     .eq("user_id", userId)
     .eq("roles.name", "super_admin")
+    .limit(1);
+  return ((data as unknown[] | null)?.length ?? 0) > 0;
+}
+
+/** super_admin OR admin (General Admin). */
+export async function callerIsAdmin(
+  supabase: Client,
+  userId: string
+): Promise<boolean> {
+  const { data } = await supabase
+    .from("user_roles")
+    .select("roles!inner(name)")
+    .eq("user_id", userId)
+    .in("roles.name", ["super_admin", "admin"])
     .limit(1);
   return ((data as unknown[] | null)?.length ?? 0) > 0;
 }
@@ -78,14 +104,15 @@ export async function callerCanManageRoles(
   supabase: Client,
   userId: string
 ): Promise<boolean> {
-  if (await callerIsSuperAdmin(supabase, userId)) return true;
+  if (await callerIsAdmin(supabase, userId)) return true;
   const keys = await getEffectivePermissionKeys(supabase, userId);
   return keys.has("administration.manage_roles");
 }
 
 /**
  * Can the caller create/assign a role carrying exactly `permissionKeys`?
- * super_admin: always. manage_roles holder: only if every key is one they hold.
+ * super_admin: always. admin: anything except the super-admin-only keys.
+ * manage_roles holder: only if every key is one they hold.
  */
 export async function callerCanGrantPermissionKeys(
   supabase: Client,
@@ -93,6 +120,9 @@ export async function callerCanGrantPermissionKeys(
   permissionKeys: string[]
 ): Promise<boolean> {
   if (await callerIsSuperAdmin(supabase, userId)) return true;
+  if (await callerIsAdmin(supabase, userId)) {
+    return !permissionKeys.some((k) => SUPER_ADMIN_ONLY_PERMISSION_KEYS.has(k));
+  }
   const held = await getEffectivePermissionKeys(supabase, userId);
   if (!held.has("administration.manage_roles")) return false;
   return permissionKeys.every((k) => held.has(k));

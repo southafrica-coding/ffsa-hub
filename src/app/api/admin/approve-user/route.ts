@@ -12,12 +12,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  // Only super_admin can approve users
+  // super_admin or admin can approve users
   const { data: superCheck } = await supabase
     .from("user_roles")
     .select("roles!inner(name)")
     .eq("user_id", authUser.id)
-    .eq("roles.name", "super_admin")
+    .in("roles.name", ["super_admin", "admin"])
     .limit(1);
 
   if (!superCheck || superCheck.length === 0) {

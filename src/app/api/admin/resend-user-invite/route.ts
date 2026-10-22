@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     .from("user_roles")
     .select("roles!inner(name)")
     .eq("user_id", authUser.id)
-    .in("roles.name", ["super_admin"])
+    .in("roles.name", ["super_admin", "admin"])
     .limit(1);
 
   if (!adminCheck || adminCheck.length === 0) {

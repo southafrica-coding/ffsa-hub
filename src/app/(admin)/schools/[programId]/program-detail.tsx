@@ -778,7 +778,7 @@ export function ProgramDetail({
           {applicationExpiry.expired && (
             <p className="mb-4 border border-ink bg-muted px-4 py-3 text-[13px]">
               {applicationExpiry.canAccess
-                ? `Archived on ${formatExpiryDate(applicationExpiry.expiresOn)} — only super admins and the Training team can see these applications.`
+                ? `Archived on ${formatExpiryDate(applicationExpiry.expiresOn)} — only admins and the Training team can see these applications.`
                 : `Applications for this school were archived on ${formatExpiryDate(applicationExpiry.expiresOn)}. Contact the Training team for access.`}
             </p>
           )}

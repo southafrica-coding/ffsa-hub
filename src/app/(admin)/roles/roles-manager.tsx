@@ -69,6 +69,7 @@ export function RolesManager({
   bundles,
   callerKeys,
   isSuperAdmin,
+  canGrantRecordsLibrary = true,
 }: {
   roles: Role[];
   permissionsByModule: PermissionsByModule;
@@ -78,6 +79,7 @@ export function RolesManager({
   bundles: Record<string, string[]>;
   callerKeys: string[];
   isSuperAdmin: boolean;
+  canGrantRecordsLibrary?: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -132,7 +134,12 @@ export function RolesManager({
   }
 
   function canUse(p: Permission) {
-    return isSuperAdmin || callerKeySet.has(p.key);
+    // A General Admin can bundle every capability except Records Library
+    // access, which stays with the super admin.
+    if (isSuperAdmin && (canGrantRecordsLibrary || p.key !== "records_library.manage")) {
+      return true;
+    }
+    return callerKeySet.has(p.key);
   }
 
   async function save() {

@@ -6,12 +6,14 @@
 //     granted/revoked with scope_type='program'. A global grant is
 //     rejected no matter who the caller is — a user is only assignable
 //     as a point of contact for the exact program(s) granted.
-//   - super_admin can do anything else.
+//   - super_admin can do anything else; admin (General Admin) too, except
+//     the Records Library permission.
 //   - A schools.manage holder can grant/revoke ONLY
 //     `schools.assignable_as_contact`, scoped to a program they
 //     themselves have `schools.manage` on. (Global schools.manage
 //     means any program.)
 
+import { SUPER_ADMIN_ONLY_PERMISSION_KEYS } from "./check-role-grant";
 import { getSchoolsManageScopes, canManageAssignmentsOnProgram } from "./schools-manage-scopes";
 
 type Client = {
@@ -41,14 +43,20 @@ export async function callerCanGrantPermission(
     return false;
   }
 
-  // super_admin can grant anything that passed the guard above.
+  // super_admin can grant anything that passed the guard above. admin
+  // (General Admin) can too, except the super-admin-only keys (Records Library).
   const { data: roleRows } = await supabase
     .from("user_roles")
     .select("roles!inner(name)")
     .eq("user_id", callerUserId)
-    .eq("roles.name", "super_admin")
-    .limit(1);
-  if (roleRows && roleRows.length > 0) return true;
+    .in("roles.name", ["super_admin", "admin"]);
+  const tiers = new Set(
+    ((roleRows ?? []) as { roles: { name: string } | { name: string }[] }[]).map(
+      (r) => (Array.isArray(r.roles) ? r.roles[0]?.name : r.roles?.name)
+    )
+  );
+  if (tiers.has("super_admin")) return true;
+  if (tiers.has("admin")) return !SUPER_ADMIN_ONLY_PERMISSION_KEYS.has(permKey ?? "");
 
   // Non-super-admins: only schools.assignable_as_contact, only on a
   // program they manage.

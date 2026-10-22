@@ -24,7 +24,7 @@ export default async function EvangelismPage() {
           </h2>
           <p className="mt-5 text-[15px] leading-relaxed text-[color:var(--text-secondary)]">
             This is a placeholder for the Evangelism module. Nothing is built
-            here yet, and only super admins can see it while it&apos;s in
+            here yet, and only admins can see it while it&apos;s in
             progress.
           </p>
         </div>

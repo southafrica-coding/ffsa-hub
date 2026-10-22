@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { callerIsSuperAdmin } from "@/lib/auth/check-role-grant";
+import { callerIsAdmin, callerIsSuperAdmin } from "@/lib/auth/check-role-grant";
 import { syncCalendarAccess } from "@/lib/google/calendar";
 
 // Converts a person to a community member — the "they've left staff" action.
@@ -158,7 +158,7 @@ async function authorize(userId: string | null) {
   if (!authUser) {
     return { error: NextResponse.json({ error: "Not authenticated" }, { status: 401 }) };
   }
-  if (!(await callerIsSuperAdmin(supabase, authUser.id))) {
+  if (!(await callerIsAdmin(supabase, authUser.id))) {
     return { error: NextResponse.json({ error: "Not authorized" }, { status: 403 }) };
   }
   if (!userId) {
@@ -172,7 +172,8 @@ async function authorize(userId: string | null) {
       ),
     };
   }
-  return { authUser };
+  const isSuper = await callerIsSuperAdmin(supabase, authUser.id);
+  return { authUser, isSuper };
 }
 
 export async function GET(request: Request) {
@@ -223,6 +224,13 @@ export async function POST(request: Request) {
   // Never leave the org without a super admin — only relevant if we are
   // actually taking super_admin away.
   if (removeRoles.some((r) => r.name === "super_admin")) {
+    // Taking super_admin away is a super admin's call (General Admins can't).
+    if (!auth.isSuper) {
+      return NextResponse.json(
+        { error: "Only a super admin can convert a super admin." },
+        { status: 403 }
+      );
+    }
     const { data: supers } = await admin
       .from("user_roles")
       .select("user_id, roles!inner(name)")

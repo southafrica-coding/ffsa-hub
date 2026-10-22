@@ -5,6 +5,7 @@ import { getRoleMemberCounts, getRoleMembers } from "@/services/roles";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   callerIsSuperAdmin,
+  callerIsAdmin,
   callerCanManageRoles,
   getEffectivePermissionKeys,
 } from "@/lib/auth/check-role-grant";
@@ -17,12 +18,13 @@ export default async function RolesPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  // Only super_admin or holders of administration.manage_roles may manage roles.
+  // super_admin, admin or holders of administration.manage_roles may manage roles.
   if (!(await callerCanManageRoles(supabase, user.id))) {
     redirect("/dashboard");
   }
 
   const isSuperAdmin = await callerIsSuperAdmin(supabase, user.id);
+  const isAdmin = isSuperAdmin || (await callerIsAdmin(supabase, user.id));
   const callerKeys = Array.from(await getEffectivePermissionKeys(supabase, user.id));
 
   const [rolesRes, permissionsByModule, memberCounts] = await Promise.all([
@@ -45,11 +47,11 @@ export default async function RolesPage() {
     (bundles[rp.role_id] ||= []).push(rp.permission_id);
   }
 
-  // Who holds each role. Super admins only — this is the one list that answers
-  // "who can see everything?", and it carries staff names and emails, so a
-  // manage_roles holder (who may have no other access to user identities)
-  // keeps the plain counts.
-  const roleMembers = isSuperAdmin
+  // Who holds each role. Super admins and admins only — this is the one list
+  // that answers "who can see everything?", and it carries staff names and
+  // emails, so a manage_roles holder (who may have no other access to user
+  // identities) keeps the plain counts.
+  const roleMembers = isAdmin
     ? await getRoleMembers(supabase, createAdminClient())
     : {};
 
@@ -61,7 +63,8 @@ export default async function RolesPage() {
       roleMembers={roleMembers}
       bundles={bundles}
       callerKeys={callerKeys}
-      isSuperAdmin={isSuperAdmin}
+      isSuperAdmin={isAdmin}
+      canGrantRecordsLibrary={isSuperAdmin}
     />
   );
 }

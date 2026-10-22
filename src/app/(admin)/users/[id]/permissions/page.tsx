@@ -29,23 +29,30 @@ export default async function UserPermissionsPage({
   } = await supabase.auth.getUser();
   if (!authUser) redirect("/login");
 
-  // super_admin or anyone with schools.manage may view this page.
-  const { data: superCheck } = await supabase
+  // super_admin, admin (General Admin) or anyone with schools.manage may view
+  // this page. Admins get the full editor; only a super_admin can hand out
+  // Super Admin or Records Library access.
+  const { data: adminTierRows } = await supabase
     .from("user_roles")
     .select("roles!inner(name)")
     .eq("user_id", authUser.id)
-    .eq("roles.name", "super_admin")
-    .limit(1);
-  const isSuperAdmin = (superCheck?.length ?? 0) > 0;
+    .in("roles.name", ["super_admin", "admin"]);
+  const callerTiers = new Set(
+    ((adminTierRows ?? []) as { roles: { name: string } | { name: string }[] }[]).map(
+      (r) => (Array.isArray(r.roles) ? r.roles[0]?.name : r.roles?.name)
+    )
+  );
+  const isSuperAdmin = callerTiers.has("super_admin");
+  const isAdmin = isSuperAdmin || callerTiers.has("admin");
 
-  const manageScopes = isSuperAdmin
+  const manageScopes = isAdmin
     ? { hasGlobal: true, programIds: [] }
     : await getSchoolsManageScopes(supabase, authUser.id);
 
   const hasAnySchoolsManage =
     manageScopes.hasGlobal || manageScopes.programIds.length > 0;
 
-  if (!isSuperAdmin && !hasAnySchoolsManage) redirect(`/users/${id}`);
+  if (!isAdmin && !hasAnySchoolsManage) redirect(`/users/${id}`);
 
   const [{ data: targetUser, error }, authLastSignInAt] = await Promise.all([
     getUserById(supabase, id),
@@ -171,8 +178,8 @@ export default async function UserPermissionsPage({
         assignable={assignable}
         scopeLabels={scopeLabels}
         programOptions={programOptions}
-        canManage={isSuperAdmin || canManageRoles}
-        canConvertToCommunity={isSuperAdmin && !isSelf}
+        canManage={isAdmin || canManageRoles}
+        canConvertToCommunity={isAdmin && !isSelf}
         personName={personName}
       />
 
@@ -184,7 +191,8 @@ export default async function UserPermissionsPage({
           permissionsByModule={curated}
           userPermissions={userPermissions}
           scopeOptions={scopeOptions}
-          isSuperAdmin={isSuperAdmin}
+          isSuperAdmin={isAdmin}
+          canGrantSuperAdmin={isSuperAdmin}
           managedProgramIds={manageScopes.hasGlobal ? null : manageScopes.programIds}
           isTargetSuperAdmin={isTargetSuperAdmin}
           isTargetGeneralAdmin={isTargetGeneralAdmin}

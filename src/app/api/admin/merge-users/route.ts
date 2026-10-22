@@ -6,7 +6,7 @@
 // screen; "dryRun" performs the whole merge and rolls it back, which is what
 // actually proves it will work; "merge" commits.
 //
-// super_admin only — stricter than delete-user's [super_admin, admin].
+// super_admin or admin (General Admin) — same as delete-user.
 // A merge touches billing, consent, roles and enrolments across every
 // subsystem at once and there is no unmerge.
 
@@ -34,12 +34,12 @@ export async function POST(request: Request) {
     .from("user_roles")
     .select("roles!inner(name)")
     .eq("user_id", authUser.id)
-    .in("roles.name", ["super_admin"])
+    .in("roles.name", ["super_admin", "admin"])
     .limit(1);
 
   if (!adminCheck || adminCheck.length === 0) {
     return NextResponse.json(
-      { error: "Only a super admin can merge accounts" },
+      { error: "Only an admin can merge accounts" },
       { status: 403 }
     );
   }

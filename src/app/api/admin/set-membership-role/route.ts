@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { callerIsSuperAdmin } from "@/lib/auth/check-role-grant";
+import { callerIsAdmin } from "@/lib/auth/check-role-grant";
 import {
   MEMBERSHIP_ROLE_KEYS,
   setMembershipRole,
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
   if (!authUser) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
-  if (!(await callerIsSuperAdmin(supabase, authUser.id))) {
+  if (!(await callerIsAdmin(supabase, authUser.id))) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 

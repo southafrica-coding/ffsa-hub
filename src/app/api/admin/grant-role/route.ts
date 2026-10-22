@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   callerIsSuperAdmin,
+  callerIsAdmin,
+  ADMIN_TIER_ROLES,
   callerCanManageRoles,
   callerCanGrantPermissionKeys,
   SUPER_ADMIN_ONLY_ROLES,
@@ -43,11 +45,17 @@ export async function POST(request: Request) {
 
   // Authorize
   const isSuper = await callerIsSuperAdmin(supabase, authUser.id);
+  const isAdmin = isSuper || (await callerIsAdmin(supabase, authUser.id));
   if (SUPER_ADMIN_ONLY_ROLES.includes(role.name)) {
-    // super_admin and admin (General Admin) are top-tier: only a super admin
-    // hands them out. The subset guardrail below cannot police them — neither
-    // role has any role_permissions rows, so it would pass vacuously.
+    // super_admin opens the Records Library, so only a super admin hands it out.
     if (!isSuper) {
+      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+    }
+  } else if (ADMIN_TIER_ROLES.includes(role.name)) {
+    // General Admin: super_admin or admin may grant it. The subset guardrail
+    // below can't police it (no role_permissions rows), so manage_roles
+    // holders are refused.
+    if (!isAdmin) {
       return NextResponse.json({ error: "Not authorized" }, { status: 403 });
     }
   } else if (!isSuper) {

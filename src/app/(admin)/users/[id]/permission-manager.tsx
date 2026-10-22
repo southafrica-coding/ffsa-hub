@@ -448,6 +448,9 @@ export function PermissionManager({
   userPermissions,
   scopeOptions,
   isSuperAdmin = true,
+  // Only a real super_admin may grant Super Admin or Records Library access;
+  // a General Admin gets the full editor minus those two.
+  canGrantSuperAdmin = true,
   // When the caller is not a super_admin, this controls what they can edit:
   //   null  → can manage assignable-contact for every program (global schools.manage)
   //   array → can manage only these specific program ids
@@ -464,6 +467,7 @@ export function PermissionManager({
   userPermissions: UserPermission[];
   scopeOptions: ScopeOption[];
   isSuperAdmin?: boolean;
+  canGrantSuperAdmin?: boolean;
   managedProgramIds?: string[] | null;
   isTargetSuperAdmin?: boolean;
   isTargetGeneralAdmin?: boolean;
@@ -521,7 +525,14 @@ export function PermissionManager({
   // `schools.assignable_as_contact` permission, scoped to programs they
   // themselves have `schools.manage` on.
   const effectivePermissionsByModule: PermissionsByModule = isSuperAdmin
-    ? permissionsByModule
+    ? canGrantSuperAdmin
+      ? permissionsByModule
+      : Object.fromEntries(
+          Object.entries(permissionsByModule).map(([mod, perms]) => [
+            mod,
+            perms.filter((p) => p.key !== "records_library.manage"),
+          ])
+        )
     : {
         schools: (permissionsByModule.schools ?? []).filter(
           (p) => p.key === "schools.assignable_as_contact"
@@ -691,10 +702,11 @@ export function PermissionManager({
 
   return (
     <div className="space-y-6">
-      {/* The two admin tiers, most-restricted first — super_admin only.
-          They differ in exactly one thing (the Records Library), so they are
-          shown together and say so. Granting either is super-admin-only in the
-          API too: SUPER_ADMIN_ONLY_ROLES in lib/auth/check-role-grant.ts. */}
+      {/* The two admin tiers, most-restricted first. They differ in exactly
+          one thing (the Records Library), so they are shown together and say
+          so. General Admin: super_admin or admin. Super Admin: super_admin
+          only (canGrantSuperAdmin) — the API enforces both, see
+          SUPER_ADMIN_ONLY_ROLES / ADMIN_TIER_ROLES in lib/auth/check-role-grant.ts. */}
       {isSuperAdmin && (
         <>
           <TierPanel
@@ -713,6 +725,8 @@ export function PermissionManager({
             onAction={() => handleToggleTier("admin")}
           />
 
+          {canGrantSuperAdmin && (
+          <>
           <TierPanel
             heading={
               isTargetSuperAdmin
@@ -738,10 +752,12 @@ export function PermissionManager({
             open={superAdminPrompt !== null}
             onOpenChange={(o) => !o && setSuperAdminPrompt(null)}
           />
+          </>
+          )}
         </>
       )}
 
-      {/* Job title + approve section — super_admin only */}
+      {/* Job title + approve section — super_admin and admin */}
       {isSuperAdmin && (
         <div
           style={{

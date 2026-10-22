@@ -180,8 +180,8 @@ export const ADMIN_MODULES: ModuleDefinition[] = [
     label: "Evangelism",
     href: "/evangelism",
     icon: Megaphone,
-    description: "In progress — super admin only for now",
-    requiredRoles: ["super_admin"],
+    description: "In progress — super admins and admins for now",
+    requiredRoles: ["super_admin", "admin"],
   },
 ];
 
@@ -277,12 +277,10 @@ export const PORTAL_TABS: PortalTab[] = [
  * personal data, so it takes super_admin or an explicit
  * `records_library.manage` grant (direct or via a job title's bundle).
  *
- * Mirrors public.can_access_records_library() in migration 212.
- *
- * "evangelism" is a second carve-out: a brand-new, still-empty module that
- * should only be visible to super_admin while it's being built out.
+ * Mirrors public.can_access_records_library() in migration 212. It is the
+ * ONLY difference between super_admin and admin — keep it that way.
  */
-export const SUPER_ADMIN_ONLY_MODULES = new Set(["records-library", "evangelism"]);
+export const SUPER_ADMIN_ONLY_MODULES = new Set(["records-library"]);
 
 /**
  * Modules shown by role alone — admins don't get them for free and no

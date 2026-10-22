@@ -64,7 +64,7 @@ async function isSuperAdmin(supabase: Client, userId: string): Promise<boolean> 
     .from("user_roles")
     .select("roles!inner(name)")
     .eq("user_id", userId)
-    .eq("roles.name", "super_admin")
+    .in("roles.name", ["super_admin", "admin"])
     .limit(1);
   return !!(data && data.length > 0);
 }

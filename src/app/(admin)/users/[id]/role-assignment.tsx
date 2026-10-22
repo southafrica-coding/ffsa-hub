@@ -36,7 +36,7 @@ export function RoleAssignment({
   scopeLabels: Record<string, string>;
   programOptions?: { id: string; label: string }[];
   canManage: boolean;
-  // Super admins only, and never on your own account — the endpoint enforces
+  // Super admins and admins only, and never on your own account — the endpoint enforces
   // both, this just hides a button that would always fail.
   canConvertToCommunity?: boolean;
   personName?: string;

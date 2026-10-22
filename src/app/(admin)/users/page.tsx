@@ -138,7 +138,7 @@ export default async function UsersPage() {
       .from("user_roles")
       .select("roles!inner(name)")
       .eq("user_id", authUser.id)
-      .eq("roles.name", "super_admin")
+      .in("roles.name", ["super_admin", "admin"])
       .limit(1);
     isSuperAdmin = (superCheck?.length ?? 0) > 0;
   }

@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   callerIsSuperAdmin,
+  callerIsAdmin,
+  ADMIN_TIER_ROLES,
   callerCanManageRoles,
   SUPER_ADMIN_ONLY_ROLES,
 } from "@/lib/auth/check-role-grant";
@@ -39,10 +41,15 @@ export async function POST(request: Request) {
   // need manage-roles. (Removing a role only ever reduces access, so the
   // subset guardrail isn't needed here.)
   const isSuper = await callerIsSuperAdmin(supabase, authUser.id);
+  const isAdmin = isSuper || (await callerIsAdmin(supabase, authUser.id));
   if (SUPER_ADMIN_ONLY_ROLES.includes(role.name)) {
-    // Top-tier roles are a super admin's call in both directions — a
-    // manage_roles holder should not be able to strip a General Admin either.
+    // Removing a super admin is a super admin's call.
     if (!isSuper) {
+      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+    }
+  } else if (ADMIN_TIER_ROLES.includes(role.name)) {
+    // General Admin: super_admin or admin — never a plain manage_roles holder.
+    if (!isAdmin) {
       return NextResponse.json({ error: "Not authorized" }, { status: 403 });
     }
   }
@@ -63,7 +70,7 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-  } else if (!isSuper && !(await callerCanManageRoles(supabase, authUser.id))) {
+  } else if (!isAdmin && !(await callerCanManageRoles(supabase, authUser.id))) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
