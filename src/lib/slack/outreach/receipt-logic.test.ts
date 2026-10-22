@@ -32,6 +32,7 @@ const CATS = ["Food", "Transport", "Accommodation", "Airport Meals", "Gifts"].ma
 const TODAY = "2026-10-22";
 
 const reading = (over: Partial<ReceiptReading> = {}): ReceiptReading => ({
+  document_kind: "receipt",
   is_receipt: true,
   legibility: "clear",
   vendor: "Choppies",
@@ -44,6 +45,10 @@ const reading = (over: Partial<ReceiptReading> = {}): ReceiptReading => ({
   suggested_category: "Food",
   paid_by: "cash",
   notes: null,
+  bank_zar_total: null,
+  bank_zar_fee: null,
+  bank_foreign_amount: null,
+  bank_foreign_currency: null,
   ...over,
 });
 

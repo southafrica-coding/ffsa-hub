@@ -33,7 +33,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Plus, Trash2, Edit2 } from "lucide-react";
-import { pullPrice, summarisePulls, uncoveredCash, type AllocationRow } from "@/lib/finance/outreach-pulls";
+import { pullPrice, rateText, summarisePulls, uncoveredCash, type AllocationRow } from "@/lib/finance/outreach-pulls";
+import { createClient } from "@/lib/supabase/client";
 
 // ────────────────────────────────────────────────────────────
 // TYPES
@@ -61,6 +62,7 @@ type CashBatch = {
   local_currency_received: number | null;
   exchange_rate: number | null;
   notes: string | null;
+  proof_path?: string | null;
 };
 
 // ────────────────────────────────────────────────────────────
@@ -466,6 +468,7 @@ function CashBatchesSection({
     notes: "",
   };
   const [form, setForm] = useState(emptyForm);
+  const [proofFile, setProofFile] = useState<File | null>(null);
 
   function updateField(field: string, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -490,8 +493,18 @@ function CashBatchesSection({
     setLoading(true);
 
     try {
+      // The bank screenshot, if they attached one (optional).
+      let proofPath: string | undefined;
+      if (proofFile) {
+        const path = `${teamId}/pulls/${Date.now()}_${proofFile.name.replace(/[^A-Za-z0-9._-]+/g, "_")}`;
+        const { error: upErr } = await createClient().storage.from("outreach-receipts").upload(path, proofFile);
+        if (upErr) toast.error("The screenshot didn't upload — saving the pull without it");
+        else proofPath = path;
+      }
+
       const payload = {
         team_id: teamId,
+        ...(proofPath ? { proof_path: proofPath } : {}),
         batch_date: form.batch_date,
         zar_withdrawn: Number(form.zar_withdrawn),
         bank_fee: form.bank_fee ? Number(form.bank_fee) : 0,
@@ -518,6 +531,7 @@ function CashBatchesSection({
       setAddOpen(false);
       setEditingId(null);
       setForm(emptyForm);
+      setProofFile(null);
       router.refresh();
     } catch {
       setError("Network error");
@@ -579,6 +593,7 @@ function CashBatchesSection({
             if (!v) {
               setEditingId(null);
               setForm(emptyForm);
+              setProofFile(null);
               setError(null);
             }
           }}
@@ -651,9 +666,7 @@ function CashBatchesSection({
                   {price.localPerZar !== null && price.zarPerLocal !== null ? (
                     <>
                       <span className="text-muted-foreground">This pull&apos;s rate: </span>
-                      <strong className="font-mono">
-                        {localFmt(Number(price.localPerZar.toFixed(4)))} {form.local_currency || "local"} per R1
-                      </strong>
+                      <strong className="font-mono">{rateText(price.localPerZar, form.local_currency || "local")}</strong>
                       <span className="text-muted-foreground">
                         {" "}
                         · cash cost {formatCurrency(price.cost)}
@@ -665,6 +678,17 @@ function CashBatchesSection({
                       The rate is worked out from the cash you got and the rand that left the account.
                     </span>
                   )}
+                </div>
+                <div className="col-span-2">
+                  <Label>Bank notification screenshot</Label>
+                  <Input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={(e) => setProofFile(e.target.files?.[0] ?? null)}
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Optional — kept as proof. Or send it to the Outreach Finance bot in Slack.
+                  </p>
                 </div>
                 <div className="col-span-2">
                   <Label>Notes</Label>
@@ -740,7 +764,19 @@ function CashBatchesSection({
                       {Number(b.bank_fee) ? formatCurrency(Number(b.bank_fee)) : "—"}
                     </TableCell>
                     <TableCell className="text-right font-mono text-sm whitespace-nowrap">
-                      {rate ? `${localFmt(Number(rate.toFixed(4)))} per R1` : "—"}
+                      {rate ? rateText(rate, cur) : "—"}
+                      {b.proof_path && (
+                        <div>
+                          <a
+                            href={`/api/finance/outreach/cash-batches/proof?id=${b.id}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs text-electric underline"
+                          >
+                            📎 Screenshot
+                          </a>
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell className="text-right font-mono text-sm whitespace-nowrap">
                       {sum ? (

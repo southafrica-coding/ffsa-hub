@@ -40,6 +40,19 @@ export function pullPrice(args: { zarOut: number; fee: number; localReceived: nu
   };
 }
 
+const fmt2 = (n: number) => {
+  const [whole, dec] = Math.abs(n).toFixed(2).split(".");
+  return `${n < 0 ? "-" : ""}${whole.replace(/\B(?=(\d{3})+(?!\d))/g, " ")}.${dec}`;
+};
+
+/**
+ * A rate people can read: weak currencies as "178.04 BIF per R1", strong
+ * ones the other way round, "R18.42 per USD", so neither shows as 0.05.
+ */
+export function rateText(localPerZar: number, currency: string): string {
+  return localPerZar >= 1 ? `${fmt2(localPerZar)} ${currency} per R1` : `R${fmt2(1 / localPerZar)} per ${currency}`;
+}
+
 export type PullSummary = {
   id: string;
   cost: number;

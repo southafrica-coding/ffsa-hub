@@ -33,6 +33,10 @@ function pullFields(body: Record<string, unknown>): { ok: true; fields: Record<s
       local_currency_received: local,
       exchange_rate: 0, // worked out by the database
       notes: body.notes ?? null,
+      // The bank screenshot, uploaded under the team's own folder.
+      ...(typeof body.proof_path === "string" && body.team_id && body.proof_path.startsWith(`${body.team_id}/pulls/`)
+        ? { proof_path: body.proof_path }
+        : {}),
     },
   };
 }

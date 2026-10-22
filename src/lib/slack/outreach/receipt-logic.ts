@@ -58,6 +58,11 @@ export function safeFileName(f: SlackFile): string {
 // ────────────────────────────────────────────────────────────
 
 export const ReceiptReadingSchema = z.object({
+  document_kind: z
+    .enum(["receipt", "atm_withdrawal_notification", "card_payment_notification", "other"])
+    .describe(
+      "receipt: a receipt, invoice or till slip. atm_withdrawal_notification: a bank app notification, SMS or banking screenshot for a cash/ATM withdrawal. card_payment_notification: a bank notification for a card purchase. other: anything else."
+    ),
   is_receipt: z.boolean().describe("False if this is not a receipt, invoice or till slip at all."),
   legibility: z.enum(["clear", "partial", "unreadable"]),
   vendor: z.string().nullable().describe("Shop or supplier name as printed."),
@@ -76,6 +81,25 @@ export const ReceiptReadingSchema = z.object({
     .describe("Best matching category name from the provided list, exactly as written there, or null."),
   paid_by: z.enum(["cash", "card", "unknown"]),
   notes: z.string().nullable().describe("Anything the person should double-check, in one short sentence."),
+  // Bank notifications only (null otherwise).
+  bank_zar_total: z
+    .number()
+    .nullable()
+    .describe(
+      "Bank notifications only: the total rand (ZAR) that left the account for this transaction, INCLUDING any fees — add a separately listed fee to it. Null if no rand amount is shown."
+    ),
+  bank_zar_fee: z
+    .number()
+    .nullable()
+    .describe("Bank notifications only: a fee in rand shown as its own line or amount (ATM/withdrawal/foreign fee). Null if none is shown separately."),
+  bank_foreign_amount: z
+    .number()
+    .nullable()
+    .describe("Bank notifications only: the amount in the foreign currency (e.g. 500000 for BIF 500,000.00), if shown."),
+  bank_foreign_currency: z
+    .string()
+    .nullable()
+    .describe("Bank notifications only: ISO 4217 code of the foreign amount, if shown."),
 });
 
 export type ReceiptReading = z.infer<typeof ReceiptReadingSchema>;
@@ -88,7 +112,8 @@ export function readingPrompt(args: {
   userNote: string | null;
 }): string {
   return [
-    "Read this receipt for an outreach team's bookkeeping. Report only what is on the receipt; use null for anything you can't see.",
+    "Read this image for an outreach team's bookkeeping. It is usually a receipt, but may be a bank notification (app push, SMS or banking screenshot) for an ATM cash withdrawal or a card payment — say which in document_kind. Report only what is shown; use null for anything you can't see.",
+    "For a bank notification, fill the bank_* fields: the rand that left the account (including any fee), any fee shown separately, and the foreign amount and currency if shown. Ignore the account balance and account number.",
     `Today is ${args.today}.`,
     args.teamCountry ? `The team is on outreach in ${args.teamCountry}.` : "",
     args.likelyCurrency
@@ -397,22 +422,8 @@ export function receiptCardBlocks(args: {
       elements: [{ type: "mrkdwn", text: args.warnings.join("\n") }],
     });
   }
-  if (choices.length > 1) {
-    const options = choices.slice(0, 100).map((t) => opt(t.name, teamOptionValue(args.draftId, t.id)));
-    const current = args.team ? options.find((o) => o.value === teamOptionValue(args.draftId, args.team!.id)) : undefined;
-    blocks.push({
-      type: "section",
-      block_id: `receipt_team:${args.draftId}`,
-      text: { type: "mrkdwn", text: "*Team*" },
-      accessory: {
-        type: "static_select",
-        action_id: ACTION_TEAM,
-        placeholder: { type: "plain_text", text: "Choose the team" },
-        options,
-        ...(current ? { initial_option: current } : {}),
-      },
-    });
-  }
+  const menu = teamSelectBlock(args.draftId, args.team, choices);
+  if (menu) blocks.push(menu);
   blocks.push({
     type: "actions",
     block_id: `receipt:${args.draftId}`,
@@ -443,6 +454,29 @@ export function receiptCardBlocks(args: {
   return blocks;
 }
 
+/** The Team menu on a card, when there's more than one team to choose from. */
+export function teamSelectBlock(
+  draftId: string,
+  team: { id: string; name: string } | null,
+  choices: { id: string; name: string }[]
+): unknown | null {
+  if (choices.length <= 1) return null;
+  const options = choices.slice(0, 100).map((t) => opt(t.name, teamOptionValue(draftId, t.id)));
+  const current = team ? options.find((o) => o.value === teamOptionValue(draftId, team.id)) : undefined;
+  return {
+    type: "section",
+    block_id: `receipt_team:${draftId}`,
+    text: { type: "mrkdwn", text: "*Team*" },
+    accessory: {
+      type: "static_select",
+      action_id: ACTION_TEAM,
+      placeholder: { type: "plain_text", text: "Choose the team" },
+      options,
+      ...(current ? { initial_option: current } : {}),
+    },
+  };
+}
+
 /** The card after a decision: no buttons, just what happened. */
 export function decidedBlocks(text: string, detail?: string): unknown[] {
   const blocks: unknown[] = [{ type: "section", text: { type: "mrkdwn", text } }];
@@ -454,7 +488,7 @@ export function decidedBlocks(text: string, detail?: string): unknown[] {
 // The Change form (a Slack modal)
 // ────────────────────────────────────────────────────────────
 
-const opt = (text: string, value: string) => ({ text: { type: "plain_text", text: text.slice(0, 75) }, value });
+export const opt = (text: string, value: string) => ({ text: { type: "plain_text", text: text.slice(0, 75) }, value });
 
 /**
  * Slack menus hold at most 100 options, fewer than the currencies we
@@ -543,7 +577,7 @@ export function changeModal(args: {
   };
 }
 
-type ViewValues = Record<string, Record<string, { value?: string | null; selected_date?: string | null; selected_option?: { value: string } | null }>>;
+export type ViewValues = Record<string, Record<string, { value?: string | null; selected_date?: string | null; selected_option?: { value: string } | null }>>;
 
 export type ChangeInput = {
   vendor: string | null;

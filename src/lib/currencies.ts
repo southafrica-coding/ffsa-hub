@@ -255,3 +255,22 @@ export function providersForCurrency(
     ? (["payfast", "stripe"] as const)
     : (["stripe"] as const);
 }
+
+// ────────────────────────────────────────────────────────────
+// Country → currency (a guess for outreach cash; always editable)
+// ────────────────────────────────────────────────────────────
+
+const COUNTRY_CURRENCY: Record<string, string> = {
+  "south africa": "ZAR", botswana: "BWP", burundi: "BIF", kenya: "KES", lesotho: "LSL",
+  madagascar: "MGA", malawi: "MWK", mozambique: "MZN", namibia: "NAD", eswatini: "SZL",
+  swaziland: "SZL", tanzania: "TZS", uganda: "UGX", zambia: "ZMW", zimbabwe: "USD",
+  rwanda: "RWF", "democratic republic of the congo": "CDF", drc: "CDF", congo: "XAF",
+  ethiopia: "ETB", ghana: "GHS", nigeria: "NGN", angola: "AOA", "south sudan": "SSP",
+  cambodia: "KHR", paraguay: "PYG", thailand: "THB", "united kingdom": "GBP", uk: "GBP",
+  "united states": "USD", usa: "USD",
+};
+
+/** The currency a team is most likely spending, from its country as typed. */
+export function currencyForCountry(country: string | null | undefined): string | null {
+  return COUNTRY_CURRENCY[(country ?? "").trim().toLowerCase()] ?? null;
+}
