@@ -9,7 +9,7 @@
  */
 
 import { z } from "zod";
-import { SUPPORTED_CURRENCIES } from "@/lib/currencies";
+import { COMMON_OUTREACH_CURRENCIES, SUPPORTED_CURRENCIES } from "@/lib/currencies";
 import type { BudgetCategory } from "@/lib/finance/outreach-budget";
 import { resolveCategory } from "@/lib/slack/assistant/outreach";
 
@@ -456,6 +456,30 @@ export function decidedBlocks(text: string, detail?: string): unknown[] {
 
 const opt = (text: string, value: string) => ({ text: { type: "plain_text", text: text.slice(0, 75) }, value });
 
+/**
+ * Slack menus hold at most 100 options, fewer than the currencies we
+ * support: the receipt's own currency, then the usual outreach ones, then
+ * the rest by name. Anything cut off can still be set in the Hub.
+ */
+export function currencyMenu(current: string | null) {
+  const byCode = new Map(SUPPORTED_CURRENCIES.map((c) => [c.code as string, c]));
+  const order = [
+    ...(current ? [current] : []),
+    ...COMMON_OUTREACH_CURRENCIES,
+    ...SUPPORTED_CURRENCIES.map((c) => c.code as string),
+  ];
+  const seen = new Set<string>();
+  const out: { code: string; name: string }[] = [];
+  for (const code of order) {
+    const c = byCode.get(code);
+    if (!c || seen.has(code)) continue;
+    seen.add(code);
+    out.push(c);
+    if (out.length === 100) break;
+  }
+  return out;
+}
+
 export function changeModal(args: {
   draftId: string;
   proposal: Proposal;
@@ -464,7 +488,7 @@ export function changeModal(args: {
   const p = args.proposal;
   const cats = [...args.categories].sort((a, b) => a.name.localeCompare(b.name)).slice(0, 100);
   const catOpts = cats.map((c) => opt(c.name, c.id));
-  const curOpts = SUPPORTED_CURRENCIES.map((c) => opt(`${c.code} — ${c.name}`, c.code));
+  const curOpts = currencyMenu(p.local_currency).map((c) => opt(`${c.code} — ${c.name}`, c.code));
   const payOpts = (Object.keys(PAY_LABEL) as PaymentMethod[]).map((k) => opt(PAY_LABEL[k], k));
   const initial = <T extends { value: string }>(opts: T[], v: string | null) => opts.find((o) => o.value === v);
 

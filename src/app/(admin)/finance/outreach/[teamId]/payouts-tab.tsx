@@ -1,5 +1,6 @@
 "use client";
 
+import { CurrencySelect } from "@/components/ui/currency-select";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -625,12 +626,9 @@ function CashBatchesSection({
                 </div>
                 <div>
                   <Label>Local Currency</Label>
-                  <Input
+                  <CurrencySelect
                     value={form.local_currency}
-                    onChange={(e) =>
-                      updateField("local_currency", e.target.value)
-                    }
-                    placeholder="e.g. BIF"
+                    onChange={(v) => updateField("local_currency", v)}
                   />
                 </div>
                 <div>

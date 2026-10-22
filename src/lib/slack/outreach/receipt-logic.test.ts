@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   amountLine,
   buildProposal,
+  currencyMenu,
   duplicateWarning,
   fileKind,
   fmtNum,
@@ -320,5 +321,20 @@ describe("parseChange", () => {
     const r = parseChange(values({ amount: { v: { value: "" } }, category: { v: { selected_option: null } } }));
     expect(r.ok).toBe(false);
     if (!r.ok) expect(Object.keys(r.errors).sort()).toEqual(["amount", "category"]);
+  });
+});
+
+describe("currencyMenu", () => {
+  it("fits Slack's 100-option cap and leads with the receipt's currency", () => {
+    const menu = currencyMenu("XOF");
+    expect(menu.length).toBe(100);
+    expect(menu[0].code).toBe("XOF");
+    expect(menu.slice(1, 4).map((c) => c.code)).toEqual(["ZAR", "BWP", "BIF"]);
+    expect(new Set(menu.map((c) => c.code)).size).toBe(100);
+  });
+
+  it("always offers the usual outreach currencies", () => {
+    const codes = currencyMenu(null).map((c) => c.code);
+    for (const c of ["ZMW", "SZL", "LSL", "USD"]) expect(codes).toContain(c);
   });
 });

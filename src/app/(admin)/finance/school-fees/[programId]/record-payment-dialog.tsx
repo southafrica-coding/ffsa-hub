@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DollarSign, Loader2 } from "lucide-react";
-import { SUPPORTED_CURRENCIES } from "@/lib/currencies";
+import { CurrencySelect } from "@/components/ui/currency-select";
 
 const PAYMENT_METHODS = [
   { value: "eft", label: "EFT / Bank Transfer" },
@@ -230,26 +230,13 @@ export function RecordPaymentDialog({
             </Label>
             <div className="grid grid-cols-3 gap-2">
               <div>
-                <Select
-                  value={form.currency_paid || "none"}
-                  onValueChange={(v) =>
-                    updateField("currency_paid", v === "none" ? "" : v)
-                  }
-                >
-                  <SelectTrigger className="text-xs">
-                    <SelectValue placeholder="Currency" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    {SUPPORTED_CURRENCIES.filter((c) => c.code !== "ZAR").map(
-                      (c) => (
-                        <SelectItem key={c.code} value={c.code}>
-                          {c.code}
-                        </SelectItem>
-                      )
-                    )}
-                  </SelectContent>
-                </Select>
+                <CurrencySelect
+                  allowNone
+                  exclude={["ZAR"]}
+                  placeholder="Currency"
+                  value={form.currency_paid}
+                  onChange={(v) => updateField("currency_paid", v)}
+                />
               </div>
               <div>
                 <Input

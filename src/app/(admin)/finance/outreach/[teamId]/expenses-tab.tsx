@@ -32,7 +32,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Plus, Trash2, Edit2, Loader2, Upload, X } from "lucide-react";
-import { SUPPORTED_CURRENCIES } from "@/lib/currencies";
+import { CurrencySelect } from "@/components/ui/currency-select";
 import { ReceiptGallery } from "./receipt-gallery";
 import { createClient } from "@/lib/supabase/client";
 import { ExpenseImport } from "./expense-import";
@@ -467,24 +467,11 @@ export function ExpensesTab({
                 </div>
                 <div>
                   <Label>Local Currency</Label>
-                  <Select
-                    value={form.local_currency || "none"}
-                    onValueChange={(v) =>
-                      updateField("local_currency", v === "none" ? "" : v)
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select currency..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">None</SelectItem>
-                      {SUPPORTED_CURRENCIES.map((c) => (
-                        <SelectItem key={c.code} value={c.code}>
-                          {c.code} — {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <CurrencySelect
+                    allowNone
+                    value={form.local_currency}
+                    onChange={(v) => updateField("local_currency", v)}
+                  />
                 </div>
                 <div>
                   <Label>Local Amount</Label>
