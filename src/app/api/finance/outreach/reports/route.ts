@@ -153,7 +153,7 @@ export async function GET(request: Request) {
         b.local_currency_received != null
           ? Number(b.local_currency_received).toFixed(2)
           : "",
-        b.exchange_rate != null ? Number(b.exchange_rate).toFixed(6) : "",
+        b.exchange_rate != null ? Number(b.exchange_rate).toFixed(10) : "",
       ].join(",")
     );
   }

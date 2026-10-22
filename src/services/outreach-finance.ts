@@ -306,8 +306,18 @@ export async function updateCashBatch(
     .single();
 }
 
+/** Which pull each piece of cash spending was charged to (oldest first, migration 263). */
+export async function getTeamCashAllocations(supabase: Client, teamId: string) {
+  return supabase
+    .from("outreach_cash_allocations")
+    .select("expense_id, batch_id, local_currency, local_amount, zar_amount, seq")
+    .eq("team_id", teamId)
+    .order("seq", { ascending: true })
+    .range(0, 9999);
+}
+
 export async function deleteCashBatch(supabase: Client, id: string) {
-  return supabase.from("outreach_cash_batches").delete().eq("id", id);
+  return supabase.from("outreach_cash_batches").delete().eq("id", id).select("team_id");
 }
 
 // ────────────────────────────────────────────────────────────

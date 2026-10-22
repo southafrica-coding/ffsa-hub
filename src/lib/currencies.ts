@@ -166,6 +166,8 @@ export const SUPPORTED_CURRENCIES = [
   { code: "ZWG", name: "Zimbabwean Gold", symbol: "ZWG" },
 ] as const;
 
+export const KNOWN_CURRENCY_CODES = new Set<string>(SUPPORTED_CURRENCIES.map((c) => c.code));
+
 /** Where outreach teams usually go — listed first where a picker has to be short (Slack caps menus at 100). */
 export const COMMON_OUTREACH_CURRENCIES = [
   "ZAR", "BWP", "BIF", "KES", "LSL", "MGA", "MWK", "MZN", "NAD", "SZL", "TZS", "UGX", "ZMW",

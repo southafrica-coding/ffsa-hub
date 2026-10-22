@@ -589,6 +589,11 @@ export async function logReceipt(draftId: string, slackUserId: string, reply: Re
       })
       .eq("id", draftId);
 
+    // Foreign cash is re-priced by the database from the team's cash pulls,
+    // oldest first (migration 263) — show that figure, not the card's estimate.
+    const { data: saved } = await admin.from("outreach_expenses").select("zar_amount").eq("id", expense.id).maybeSingle();
+    const zarFinal = saved?.zar_amount != null ? Number(saved.zar_amount) : p.zar_amount;
+    const fromPulls = p.payment_method === "cash" && p.local_currency !== "ZAR";
     const left = await categoryLeft(admin, teamId, p.category_id!);
     await checkCashAlert(teamId);
     const { data: teamRow } = await admin.from("outreach_teams").select("team_name").eq("id", teamId).maybeSingle();
@@ -596,7 +601,7 @@ export async function logReceipt(draftId: string, slackUserId: string, reply: Re
       const amount =
         p.local_currency === "ZAR"
           ? money(p.zar_amount, "ZAR")
-          : `${money(p.local_amount, p.local_currency)} (${money(p.zar_amount, "ZAR")})`;
+          : `${money(p.local_amount, p.local_currency)} (${money(zarFinal, "ZAR")}${fromPulls ? " from your cash pulls" : ""})`;
       const text = `✅ *Logged to ${teamRow?.team_name ?? "the team"} by ${logger}* — ${p.vendor ?? "Receipt"} · ${p.expense_date} · ${amount} · ${left.category}`;
       const detail = `${left.category} now has *${left.left < 0 ? `over by R${fmtNum(-left.left)}` : `R${fmtNum(left.left)} left`}* of R${fmtNum(left.planned)} · receipt saved · <${SITE}/finance/outreach/${teamId}|View in the Hub>`;
       await update(draft.channel_id, draft.card_ts, text.replace(/\*/g, ""), decidedBlocks(text, detail));

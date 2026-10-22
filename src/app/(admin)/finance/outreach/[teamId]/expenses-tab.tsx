@@ -142,6 +142,17 @@ export function ExpensesTab({
   };
   const [form, setForm] = useState(emptyForm);
 
+  // Cash in a foreign currency is charged to the team's cash pulls, oldest
+  // first (migration 263) — nobody picks a batch or types a rate for it.
+  const pricedByPulls = (f: { payment_method: string; local_currency: string }) =>
+    f.payment_method === "cash" && Boolean(f.local_currency) && f.local_currency !== "ZAR";
+  const newestPull = (currency: string) =>
+    [...cashBatches]
+      .filter((b) => b.local_currency === currency && Number(b.exchange_rate) > 0)
+      .sort((a, b) => b.batch_date.localeCompare(a.batch_date))[0];
+  const fromPulls = pricedByPulls(form);
+  const pullForCurrency = fromPulls ? newestPull(form.local_currency) : undefined;
+
   function updateField(field: string, value: string) {
     setForm((prev) => {
       const next = { ...prev, [field]: value };
@@ -156,14 +167,13 @@ export function ExpensesTab({
           Number(next.local_amount) / Number(next.zar_amount)
         ).toFixed(6);
       }
-      // Pre-fill exchange rate from cash batch
-      if (field === "cash_batch_id" && value) {
-        const batch = cashBatches.find((b) => b.id === value);
-        if (batch?.exchange_rate) {
-          next.exchange_rate = String(batch.exchange_rate);
-          if (batch.local_currency) {
-            next.local_currency = batch.local_currency;
-          }
+      // Foreign cash: estimate from the newest pull in that currency. The
+      // database replaces it with the exact oldest-first figure on save.
+      if (["local_amount", "local_currency", "payment_method"].includes(field) && pricedByPulls(next)) {
+        const pull = newestPull(next.local_currency);
+        if (pull && Number(next.local_amount) > 0) {
+          next.exchange_rate = String(pull.exchange_rate);
+          next.zar_amount = (Number(next.local_amount) / Number(pull.exchange_rate)).toFixed(2);
         }
       }
       return next;
@@ -236,7 +246,8 @@ export function ExpensesTab({
         local_amount: form.local_amount ? Number(form.local_amount) : null,
         zar_amount: Number(form.zar_amount),
         exchange_rate: form.exchange_rate ? Number(form.exchange_rate) : null,
-        cash_batch_id: form.cash_batch_id || null,
+        // Set by the database for foreign cash (oldest pull first).
+        cash_batch_id: null,
         notes: form.notes || null,
       };
 
@@ -487,12 +498,13 @@ export function ExpensesTab({
                   />
                 </div>
                 <div>
-                  <Label>ZAR Amount *</Label>
+                  <Label>{fromPulls && pullForCurrency ? "ZAR Amount (estimate)" : "ZAR Amount *"}</Label>
                   <Input
                     type="number"
                     min="0"
                     step="0.01"
                     required
+                    disabled={fromPulls && Boolean(pullForCurrency)}
                     value={form.zar_amount}
                     onChange={(e) => updateField("zar_amount", e.target.value)}
                     placeholder="0.00"
@@ -532,29 +544,13 @@ export function ExpensesTab({
                     </Button>
                   </div>
                 </div>
-                <div>
-                  <Label>Cash Batch</Label>
-                  <Select
-                    value={form.cash_batch_id}
-                    onValueChange={(v) =>
-                      updateField("cash_batch_id", v === "none" ? "" : v)
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="None" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">None</SelectItem>
-                      {cashBatches.map((b) => (
-                        <SelectItem key={b.id} value={b.id}>
-                          {new Date(b.batch_date).toLocaleDateString()} — R
-                          {Number(b.zar_withdrawn).toLocaleString()}
-                          {b.local_currency && ` → ${b.local_currency}`}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                {fromPulls && (
+                  <p className="col-span-2 border border-rule px-3 py-2 text-xs text-muted-foreground">
+                    {pullForCurrency
+                      ? `Cash in ${form.local_currency} is charged to your cash pulls, oldest first. The exact rand amount is worked out when you save.`
+                      : `No cash pull in ${form.local_currency} yet — add one in Payouts so this can be priced exactly. Until then, fetch a rate as an estimate.`}
+                  </p>
+                )}
                 <div className="col-span-2">
                   <Label>Notes</Label>
                   <Textarea

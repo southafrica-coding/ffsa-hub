@@ -42,6 +42,7 @@ import { MoneyAlertSettings } from "./money-alert-settings";
 import { BudgetLines, type BudgetLine } from "./budget-lines";
 import { Planner } from "./planner";
 import { OUTREACH_LEADER_ROLES, OUTREACH_ROLE_LABELS } from "@/lib/finance/outreach-roles";
+import { uncoveredCash, type AllocationRow } from "@/lib/finance/outreach-pulls";
 
 // ────────────────────────────────────────────────────────────
 // TYPES
@@ -218,6 +219,7 @@ export function TeamDetail({
   receiptCounts = {},
   viewer,
   alertRecipient,
+  cashAllocations = [],
 }: {
   team: Team;
   members: Member[];
@@ -233,6 +235,7 @@ export function TeamDetail({
   receiptCounts?: Record<string, number>;
   viewer: Viewer;
   alertRecipient: (UserOption & { slack_user_id: string | null }) | null;
+  cashAllocations?: AllocationRow[];
 }) {
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat("en-ZA", { style: "currency", currency: "ZAR" }).format(amount);
@@ -279,6 +282,9 @@ export function TeamDetail({
           variance broke 2% and an admin has to approve or reject it. */}
       {closeout?.status === "pending" && (
         <NeedsYou>This team&apos;s closeout is waiting on your review</NeedsYou>
+      )}
+      {closeout?.status !== "pending" && uncoveredCash(cashAllocations).length > 0 && (
+        <NeedsYou>Some cash spending has no cash pull to cover it — check Payouts</NeedsYou>
       )}
 
       <div className="space-y-6 px-8 py-7">
@@ -435,6 +441,7 @@ export function TeamDetail({
             teamId={team.id}
             fundReleases={fundReleases}
             cashBatches={cashBatches}
+            allocations={cashAllocations}
             readOnly={isFinanceLocked}
           />
         </TabsContent>

@@ -15,6 +15,7 @@ import {
   getTeamFundReleases,
   getTeamCashBatches,
   getTeamCloseout,
+  getTeamCashAllocations,
   OUTREACH_LEADER_ROLES,
 } from "@/services/outreach-finance";
 import { TeamDetail } from "./team-detail";
@@ -80,6 +81,7 @@ export default async function OutreachTeamDetailPage({
     { data: fundReleases },
     { data: cashBatches },
     { data: closeout },
+    { data: cashAllocations },
   ] = await Promise.all([
     getTeamMembers(people, teamId),
     getTeamBudgets(supabase, teamId),
@@ -90,6 +92,7 @@ export default async function OutreachTeamDetailPage({
     getTeamFundReleases(supabase, teamId),
     getTeamCashBatches(supabase, teamId),
     getTeamCloseout(supabase, teamId),
+    getTeamCashAllocations(supabase, teamId),
   ]);
 
   // Get all users for member assignment + receipt counts per expense, and
@@ -138,6 +141,7 @@ export default async function OutreachTeamDetailPage({
       cashBatches={cashBatches ?? []}
       closeout={closeout ?? null}
       receiptCounts={receiptCounts}
+      cashAllocations={cashAllocations ?? []}
       viewer={{ role: myRole, staffEditor: staffEditor === true }}
       // Generated types predate users.slack_user_id.
       alertRecipient={(alertRecipient ?? null) as Parameters<typeof TeamDetail>[0]["alertRecipient"]}
