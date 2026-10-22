@@ -871,8 +871,10 @@ export async function listActiveMinistries(supabase: Client) {
 
 /**
  * Everyone who should hear about a ministry request or a problem: holders of
- * equipment.manage (direct or via a role). If nobody holds it yet, the super
- * admins hear instead, so a request never goes to no one. Admin client.
+ * equipment.manage (direct or via a role). Nobody else — an earlier fallback
+ * to every super admin sent a test request to five people. If nobody holds
+ * it, this returns [] and the caller logs it; the request still shows on
+ * the Orders page. Admin client.
  */
 export async function getEquipmentManagerEmails(admin: Client): Promise<string[]> {
   const userIds = new Set<string>();
@@ -887,10 +889,6 @@ export async function getEquipmentManagerEmails(admin: Client): Promise<string[]
       const { data: holders } = await admin.from("user_roles").select("user_id").in("role_id", roleIds);
       for (const r of holders ?? []) userIds.add(r.user_id as string);
     }
-  }
-  if (userIds.size === 0) {
-    const { data: supers } = await admin.from("user_roles").select("user_id, roles!inner(name)").eq("roles.name", "super_admin");
-    for (const r of supers ?? []) userIds.add(r.user_id as string);
   }
   if (userIds.size === 0) return [];
   const { data: users } = await admin.from("users").select("email").in("id", [...userIds]).eq("is_active", true);

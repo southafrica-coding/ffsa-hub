@@ -54,6 +54,10 @@ async function send(to: string, subject: string, html: string, category: string,
 async function toManagers(subject: string, html: string, category: string, orderId: string, reason: string) {
   try {
     const emails = await getEquipmentManagerEmails(createAdminClient());
+    if (emails.length === 0) {
+      console.warn(`[equipment/emails] nobody holds equipment.manage; "${subject}" went to no one`);
+      return;
+    }
     await Promise.all(emails.map((e) => send(e, subject, html, category, orderId, reason)));
   } catch (e) {
     console.error("[equipment/emails] manager lookup failed:", e instanceof Error ? e.message : e);

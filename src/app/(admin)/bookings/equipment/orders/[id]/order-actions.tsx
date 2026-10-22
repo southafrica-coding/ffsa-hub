@@ -22,6 +22,8 @@ export function OrderActions({
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // What just happened, shown at once while the page re-renders behind it.
+  const [done, setDone] = useState<string | null>(null);
 
   async function act(body: Record<string, unknown>) {
     setBusy(String(body.action));
@@ -38,10 +40,24 @@ export function OrderActions({
       return;
     }
     setDeclining(false);
+    setDone(
+      body.action === "approve"
+        ? "Approved. They've been emailed."
+        : body.action === "decline"
+          ? "Declined. The gear is released and they've been emailed."
+          : "Extended."
+    );
     router.refresh();
   }
 
   const requested = status === "requested";
+  if (done) {
+    return (
+      <div className="sticky bottom-[72px] z-10 border-t border-[color:var(--hire-line)] bg-[color:var(--hire-surface)] px-[18px] py-4 text-[15px] text-[color:var(--hire-ok)] md:bottom-0 md:px-9">
+        {done}
+      </div>
+    );
+  }
   if (!requested && !pendingExtension) return null;
 
   return (
