@@ -105,7 +105,7 @@ export async function checkCashAlert(teamId: string): Promise<void> {
   }
 }
 
-/** The one person named to get this team's alerts (migration 261), and whether Slack can reach them. */
+/** The one person named to get this team's alerts (migration 263), and whether Slack can reach them. */
 export async function alertRecipients(admin: Admin, teamId: string) {
   const { data: team } = await admin
     .from("outreach_teams")

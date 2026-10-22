@@ -20,6 +20,8 @@ import { sastNow } from "@/lib/prayer-room/practice";
 import { callerIsAdmin } from "@/lib/auth/check-ministry-access";
 import { isPrayerRoomStaff } from "@/lib/auth/prayer-room-access";
 import { getBookingSuggestions } from "./prayer-room-booking-suggestions";
+import { getHubFeedbackAccess } from "./hub-feedback";
+import { STATUS_META, KIND_META, isFeedbackKind, isFeedbackStatus } from "@/lib/hub-feedback/constants";
 import { staffSignupNotifyEmails } from "@/lib/email/send-new-staff-notice";
 import {
   getInsuranceStatus,
@@ -34,7 +36,7 @@ type Client = any;
 
 export type AppNotification = {
   key: string; // stable identity, e.g. "booking:<uuid>"
-  kind: "booking" | "user" | "records" | "vehicle" | "insurance" | "practice";
+  kind: "booking" | "user" | "records" | "vehicle" | "insurance" | "practice" | "feedback";
   title: string;
   body: string;
   href: string;
@@ -602,11 +604,73 @@ async function insuranceExpiryNotifs(supabase: Client, userId: string): Promise<
   return [...expiryNotifs, ...confirmOverdue.values()].slice(0, CAP);
 }
 
+// ── Hub feedback ───────────────────────────────────────────
+// The submitter hears when their item moves (keyed by status, so each move
+// is a fresh notice); triagers see what's waiting in the inbox.
+async function hubFeedbackNotifs(supabase: Client, userId: string): Promise<AppNotification[]> {
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const [mine, access] = await Promise.all([
+    supabase
+      .from("hub_feedback")
+      .select("id, ref, title, status, status_note, status_changed_at")
+      .eq("submitted_by", userId)
+      .neq("status", "new")
+      .gte("status_changed_at", since)
+      .order("status_changed_at", { ascending: false })
+      .limit(CAP),
+    getHubFeedbackAccess(supabase),
+  ]);
+
+  const out: AppNotification[] = [];
+  for (const f of (mine.data ?? []) as {
+    id: string; title: string; status: string; status_note: string | null; status_changed_at: string;
+  }[]) {
+    if (!isFeedbackStatus(f.status)) continue;
+    const { label, ts } = timeAgo(f.status_changed_at);
+    out.push({
+      key: `hub-feedback:${f.id}:${f.status}`,
+      kind: "feedback",
+      title: `Your feedback: ${STATUS_META[f.status].forSubmitter}`,
+      body: f.status_note ? `${f.title} — ${f.status_note}` : f.title,
+      href: `/my-feedback?item=${f.id}`,
+      when: label,
+      ts,
+      read: false,
+    });
+  }
+
+  if (access.canTriage) {
+    const { data: fresh } = await supabase
+      .from("hub_feedback")
+      .select("id, ref, kind, title, severity, created_at")
+      .eq("status", "new")
+      .order("created_at", { ascending: false })
+      .limit(CAP);
+    for (const f of (fresh ?? []) as {
+      id: string; ref: number; kind: string; title: string; severity: string | null; created_at: string;
+    }[]) {
+      const { label, ts } = timeAgo(f.created_at);
+      const kind = isFeedbackKind(f.kind) ? KIND_META[f.kind].label : "Feedback";
+      out.push({
+        key: `hub-feedback-new:${f.id}`,
+        kind: "feedback",
+        title: `New Hub ${kind.toLowerCase()}${f.severity === "blocking" ? " · blocking" : ""}`,
+        body: `#${f.ref} ${f.title}`,
+        href: `/hub-feedback?item=${f.id}`,
+        when: label,
+        ts,
+        read: false,
+      });
+    }
+  }
+  return out.slice(0, CAP * 2);
+}
+
 // ── Inactive staff (admin-only) ─────────────────────────────
 // Surfaces staff accounts that haven't logged in for 3+ months so admins
 // can manually offboard leavers without relying on memory. Only visible to
 // admin / super_admin — not shown to ministry leaders or regular staff.
-const PROVIDERS = [bookingNotifs, prayerRoomBookingNotifs, bookingDecisionNotifs, staffApprovalNotifs, newStaffOnboardedNotifs, vehicleRequestNotifs, recordsMatchNotifs, insuranceExpiryNotifs, practiceNotifs];
+const PROVIDERS = [bookingNotifs, prayerRoomBookingNotifs, bookingDecisionNotifs, staffApprovalNotifs, newStaffOnboardedNotifs, vehicleRequestNotifs, recordsMatchNotifs, insuranceExpiryNotifs, practiceNotifs, hubFeedbackNotifs];
 
 // ── Public API ─────────────────────────────────────────────
 

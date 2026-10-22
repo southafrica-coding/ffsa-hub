@@ -22,6 +22,7 @@ import {
   Target,
   Megaphone,
   UserCheck,
+  MessageSquarePlus,
   type LucideIcon,
 } from "lucide-react";
 
@@ -227,6 +228,14 @@ export const SYSTEM_MODULES: ModuleDefinition[] = [
     description: "Who the Hub can message",
     requiredRoles: ["super_admin", "admin"],
   },
+  {
+    id: "hub-feedback",
+    label: "Hub feedback",
+    href: "/hub-feedback",
+    icon: MessageSquarePlus,
+    description: "Problems, ideas and vision staff send about the Hub",
+    requiredRoles: ["super_admin"], // the dev team via feedback.view / feedback.triage — see SUPER_ADMIN_ONLY_MODULES
+  },
 ];
 
 /** Personal portal tabs — always visible to any logged-in user. */
@@ -267,6 +276,12 @@ export const PORTAL_TABS: PortalTab[] = [
     href: "/my-history",
     icon: History,
   },
+  {
+    id: "my-feedback",
+    label: "My feedback",
+    href: "/my-feedback",
+    icon: MessageSquarePlus,
+  },
 ];
 
 /**
@@ -281,8 +296,12 @@ export const PORTAL_TABS: PortalTab[] = [
  *
  * "evangelism" is a second carve-out: a brand-new, still-empty module that
  * should only be visible to super_admin while it's being built out.
+ *
+ * "hub-feedback" is the third: the board is for the dev team, granted by
+ * feedback.view / feedback.triage, not for every general admin. Mirrors
+ * public.can_view_hub_feedback() in migration 263.
  */
-export const SUPER_ADMIN_ONLY_MODULES = new Set(["records-library", "evangelism"]);
+export const SUPER_ADMIN_ONLY_MODULES = new Set(["records-library", "evangelism", "hub-feedback"]);
 
 /**
  * Modules shown by role alone — admins don't get them for free and no

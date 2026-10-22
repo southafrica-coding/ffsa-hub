@@ -93,7 +93,7 @@ export default async function OutreachTeamDetailPage({
   ]);
 
   // Get all users for member assignment + receipt counts per expense, and
-  // the school leader named for money alerts (migration 261).
+  // the school leader named for money alerts (migration 263).
   const [{ data: allUsers }, { data: receiptRows }, { data: alertRecipient }] = await Promise.all([
     people
       .from("users")

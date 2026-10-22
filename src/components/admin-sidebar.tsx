@@ -21,6 +21,7 @@ import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils/cn";
 import { LogOut, Menu, KeyRound, RefreshCw, Briefcase, User, Settings } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { FeedbackButton } from "@/components/hub-feedback/feedback-button";
 import {
   ADMIN_MODULES,
   SYSTEM_MODULES,
@@ -82,6 +83,7 @@ function Rail({
 
       <div className="flex-1" />
 
+      <FeedbackButton variant="rail" />
       <Link href="/profile"
             className="flex h-[34px] w-[34px] items-center justify-center bg-bone-2 font-display text-[13px] font-black text-ink">
         {initials}
@@ -247,9 +249,12 @@ export function AdminSidebar({ userRoles, permittedModules, menuLoadFailed, init
       <div className="fixed left-0 right-0 top-0 z-50 flex h-14 items-center justify-between bg-ink px-4 md:hidden">
         <Image src="/brand/ff-wordmark-white.png" alt="Fire & Fragrance" width={120} height={14}
                style={{ objectFit: "contain" }} priority />
-        <button onClick={() => setMobileOpen(true)} className="p-2 text-white">
-          <Menu className="h-5 w-5" />
-        </button>
+        <div className="flex items-center gap-1">
+          <FeedbackButton variant="topbar" />
+          <button onClick={() => setMobileOpen(true)} className="p-2 text-white">
+            <Menu className="h-5 w-5" />
+          </button>
+        </div>
       </div>
 
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
