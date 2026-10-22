@@ -150,7 +150,13 @@ export async function loadFeedbackDetail(
     })),
     events: eventRows.map((e) => ({
       id: e.id,
-      actor_name: e.actor_id ? names[e.actor_id] ?? null : null,
+      // Answering "needs info" is written by the service role (no actor);
+      // it's always the sender.
+      actor_name: e.actor_id
+        ? names[e.actor_id] ?? null
+        : e.kind === "status" && e.from_status === "needs_info" && e.to_status === "new"
+          ? names[item.submitted_by] ?? null
+          : null,
       kind: e.kind,
       from_status: e.from_status,
       to_status: e.to_status,

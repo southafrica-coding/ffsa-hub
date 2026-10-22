@@ -168,14 +168,23 @@ export function FeedbackDialog({
             </DialogHeader>
 
             <div className="space-y-4">
-              <div className="grid grid-cols-3 border border-ink">
+              {/* Radios, not <button>s: the global button rule would set the hints in mono caps. */}
+              <div role="radiogroup" aria-label="What is it?" className="grid grid-cols-3 border border-ink">
                 {FEEDBACK_KINDS.map((k, i) => (
-                  <button
+                  <div
                     key={k}
-                    type="button"
+                    role="radio"
+                    aria-checked={kind === k}
+                    tabIndex={0}
                     onClick={() => setKind(k)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setKind(k);
+                      }
+                    }}
                     className={cn(
-                      "px-2 py-2.5 text-left",
+                      "cursor-pointer px-2 py-2.5 text-left",
                       i > 0 && "border-l border-ink",
                       kind === k ? "bg-ink text-white" : "bg-white text-ink hover:bg-bone"
                     )}
@@ -186,7 +195,7 @@ export function FeedbackDialog({
                     <div className={cn("mt-0.5 text-[11.5px] leading-snug", kind === k ? "text-[#C9C5B8]" : "text-[#7C786C]")}>
                       {KIND_META[k].hint}
                     </div>
-                  </button>
+                  </div>
                 ))}
               </div>
 
@@ -225,7 +234,7 @@ export function FeedbackDialog({
                         onClick={() => setSeverity(severity === s ? null : s)}
                         className="chip"
                         data-active={severity === s ? "true" : undefined}
-                        title={SEVERITY_META[s].hint}
+                        aria-pressed={severity === s}
                       >
                         {SEVERITY_META[s].label}
                       </button>
