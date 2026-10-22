@@ -28,12 +28,14 @@ import {
   applyPullChangeAndLog,
   cancelReceipt,
   chooseTeam,
+  confirmCardPayment,
   logReceipt,
   openChangeForm,
   type Reply,
 } from "@/lib/slack/outreach/receipts";
 import * as slack from "@/lib/slack/client";
 import { parsePullChange, VIEW_PULL_CHANGE } from "@/lib/slack/outreach/pull-logic";
+import { ACTION_CARD_CONFIRM } from "@/lib/slack/outreach/card-logic";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -104,6 +106,17 @@ export async function POST(request: Request) {
         const reply = ephemeral(payload.response_url);
         after(() =>
           chooseTeam(picked.draftId, picked.teamId, slackUserId, reply).catch((e) => console.error("[slack/outreach] team", e))
+        );
+      }
+      return new NextResponse(null, { status: 200 });
+    }
+    if (action?.action_id === ACTION_CARD_CONFIRM) {
+      // A button carries "draft|expense" in value, the menu in selected_option.
+      const [draftId, expenseId] = (action.value ?? action.selected_option?.value ?? "").split("|");
+      if (draftId && expenseId) {
+        const reply = ephemeral(payload.response_url);
+        after(() =>
+          confirmCardPayment(draftId, expenseId, slackUserId, reply).catch((e) => console.error("[slack/outreach] card confirm", e))
         );
       }
       return new NextResponse(null, { status: 200 });

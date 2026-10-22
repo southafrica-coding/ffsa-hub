@@ -198,6 +198,12 @@ export type Proposal = {
   /** Notes from reading the receipt, kept so the card can be redrawn
    *  (e.g. after the team changes). Duplicate checks are redone per team. */
   read_warnings?: string[];
+  /** Card payment whose rand came from the bank notification (migration 265). */
+  zar_confirmed?: boolean;
+  /** A fee the bank showed separately — its own Bank Costs expense. */
+  bank_fee_zar?: number;
+  /** The notification screenshot sent with the receipt. */
+  bank_proof?: { path: string; name: string; mime: string | null; size: number | null } | null;
 };
 
 export const KNOWN_CURRENCIES = new Set<string>(SUPPORTED_CURRENCIES.map((c) => c.code));
@@ -376,7 +382,10 @@ export function money(n: number | null, currency: string): string {
 const PAY_LABEL: Record<PaymentMethod, string> = { cash: "Cash", card: "Card", bank_transfer: "Bank transfer" };
 
 export function amountLine(p: Proposal): string {
-  if (p.local_currency === "ZAR") return `*${money(p.local_amount, "ZAR")}*`;
+  if (p.local_currency === "ZAR") return `*${money(p.local_amount, "ZAR")}*${p.zar_confirmed && p.bank_proof ? " ✅ confirmed by bank" : ""}`;
+  if (p.zar_confirmed) {
+    return `${money(p.local_amount, p.local_currency)} → *${zarFmt(p.zar_amount ?? 0)}* ✅ rand confirmed by bank`;
+  }
   const zar = p.zar_amount != null ? `*${zarFmt(p.zar_amount)}*` : "*R ?*";
   const rate =
     p.exchange_rate && p.rate_label ? ` (${p.rate_label}: ${money(1 / p.exchange_rate, "ZAR")} per ${p.local_currency})` : "";
@@ -416,10 +425,15 @@ export function receiptCardBlocks(args: {
     },
     { type: "section", fields: fields.map((t) => ({ type: "mrkdwn", text: t })) },
   ];
-  if (args.warnings.length) {
+  const notes = [...args.warnings];
+  if ((p.bank_fee_zar ?? 0) > 0) notes.push(`The bank's ${zarFmt(p.bank_fee_zar!)} fee will be logged in *Bank Costs*.`);
+  if (p.payment_method === "card" && p.local_currency !== "ZAR" && !p.zar_confirmed) {
+    notes.push("💳 Card payment: send the bank notification screenshot when you get it, so I can record the real rand.");
+  }
+  if (notes.length) {
     blocks.push({
       type: "context",
-      elements: [{ type: "mrkdwn", text: args.warnings.join("\n") }],
+      elements: [{ type: "mrkdwn", text: notes.join("\n") }],
     });
   }
   const menu = teamSelectBlock(args.draftId, args.team, choices);
