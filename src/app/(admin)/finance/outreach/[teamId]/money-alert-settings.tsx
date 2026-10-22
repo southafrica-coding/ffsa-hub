@@ -22,7 +22,7 @@ function personName(p: Person) {
 /**
  * When the money still with the team drops to these levels, the school
  * leader named here — and nobody else — gets a Slack DM
- * (lib/outreach/cash-alerts, migration 261). Once per level; sending more
+ * (lib/outreach/cash-alerts, migration 263). Once per level; sending more
  * money resets it.
  */
 export function MoneyAlertSettings({

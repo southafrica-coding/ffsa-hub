@@ -1,6 +1,6 @@
 // Hub feedback — the vocabulary shared by the form, the board and the
 // submitter's own list. Pure data so client components can import it.
-// The SQL CHECKs in migration 261 are the source of truth; keep in step.
+// The SQL CHECKs in migration 263 are the source of truth; keep in step.
 
 import type { Tone } from "@/components/ffsa";
 

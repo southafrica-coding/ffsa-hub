@@ -1,5 +1,5 @@
 // Hub feedback — problems, ideas and vision about the Hub itself
-// (migration 261). Pure data access; the rules live in RLS and in the
+// (migration 263). Pure data access; the rules live in RLS and in the
 // route handlers under src/app/api/hub-feedback/.
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

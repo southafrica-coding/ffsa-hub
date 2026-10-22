@@ -299,7 +299,7 @@ export const PORTAL_TABS: PortalTab[] = [
  *
  * "hub-feedback" is the third: the board is for the dev team, granted by
  * feedback.view / feedback.triage, not for every general admin. Mirrors
- * public.can_view_hub_feedback() in migration 261.
+ * public.can_view_hub_feedback() in migration 263.
  */
 export const SUPER_ADMIN_ONLY_MODULES = new Set(["records-library", "evangelism", "hub-feedback"]);
 
