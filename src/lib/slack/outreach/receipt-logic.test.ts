@@ -205,6 +205,10 @@ describe("Slack card", () => {
     expect(fmtNum(22800.5)).toBe("22 800.50");
     expect(fmtNum(455.1)).toBe("455.10");
     expect(amountLine(proposal)).toBe("P 342.50 → *R455.10* (your cash rate from 20 Oct: R1.33 per BWP)");
+    // Weak currencies read as units per rand, not "R0.01 per BIF".
+    expect(amountLine({ ...proposal, local_currency: "BIF", local_amount: 45000, exchange_rate: 178.0436563, zar_amount: 252.75 })).toBe(
+      "FBu 45 000.00 → *R252.75* (your cash rate from 20 Oct: 178.04 BIF per R1)"
+    );
   });
 
   it("carries the draft id on all three buttons", () => {

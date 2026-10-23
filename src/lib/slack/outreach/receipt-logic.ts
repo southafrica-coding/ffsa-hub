@@ -10,6 +10,7 @@
 
 import { z } from "zod";
 import { COMMON_OUTREACH_CURRENCIES, SUPPORTED_CURRENCIES } from "@/lib/currencies";
+import { rateText } from "@/lib/finance/outreach-pulls";
 import type { BudgetCategory } from "@/lib/finance/outreach-budget";
 import { resolveCategory } from "@/lib/slack/assistant/outreach";
 
@@ -387,8 +388,9 @@ export function amountLine(p: Proposal): string {
     return `${money(p.local_amount, p.local_currency)} → *${zarFmt(p.zar_amount ?? 0)}* ✅ rand confirmed by bank`;
   }
   const zar = p.zar_amount != null ? `*${zarFmt(p.zar_amount)}*` : "*R ?*";
-  const rate =
-    p.exchange_rate && p.rate_label ? ` (${p.rate_label}: ${money(1 / p.exchange_rate, "ZAR")} per ${p.local_currency})` : "";
+  // "178.04 BIF per R1" for weak currencies, "R18.42 per USD" for strong —
+  // never "R0.01 per BIF".
+  const rate = p.exchange_rate && p.rate_label ? ` (${p.rate_label}: ${rateText(p.exchange_rate, p.local_currency)})` : "";
   return `${money(p.local_amount, p.local_currency)} → ${zar}${rate}`;
 }
 
