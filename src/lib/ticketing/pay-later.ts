@@ -21,6 +21,7 @@ import {
   type XeroRegion,
 } from "@/services/xero";
 import { sendSchoolInvoiceEmail, type StoredTemplate } from "@/services/invoice-email-delivery";
+import { releaseTicketHolds } from "@/services/ticketing";
 import { settlePaidOrder } from "./settle";
 import { resolveEventBrand } from "./fulfillment";
 import { resolveEventSender, type EventEmailEvent } from "@/lib/email/event-sender";
@@ -260,14 +261,6 @@ export async function retryHeldInvoices(
   return result;
 }
 
-async function releaseSeats(supabase: AdminClient, lines: OrderLine[]) {
-  for (const l of lines) {
-    if (l.qty > 0) {
-      await supabase.rpc("release_ticket_inventory", { p_ticket_type_id: l.ticket_type_id, p_qty: l.qty });
-    }
-  }
-}
-
 /** Cancel an unpaid invoiced order: void the Xero invoice and free its seats. */
 export async function cancelInvoicedOrder(
   supabase: AdminClient,
@@ -295,7 +288,8 @@ export async function cancelInvoicedOrder(
     .eq("status", "invoiced")
     .select("id")
     .maybeSingle();
-  if (flipped) await releaseSeats(supabase, (order.lines as unknown as OrderLine[] | null) ?? []);
+  // Recorded on the order, so the seats can only come back once.
+  if (flipped) await releaseTicketHolds(supabase, { orderId });
   return { ok: true };
 }
 

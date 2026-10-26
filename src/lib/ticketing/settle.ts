@@ -1,4 +1,5 @@
 import type { createAdminClient } from "@/lib/supabase/admin";
+import { reclaimOrderInventory } from "@/services/ticketing";
 import { fulfillOrder } from "./fulfillment";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
@@ -59,6 +60,23 @@ export async function settlePaidOrder(
   if (!updated) {
     // Another path already moved it out of pending.
     return { outcome: "already" };
+  }
+
+  // Paid after its checkout window closed (a delayed webhook, or a Stripe
+  // reconcile days later): the sweep may already have given its seats
+  // back. The buyer has paid, so take them again — a no-op otherwise.
+  const { data: fits, error: reclaimErr } = await reclaimOrderInventory(
+    supabase,
+    params.orderId
+  );
+  if (reclaimErr) {
+    console.error("[settle] reclaim failed for order", params.orderId, reclaimErr.message);
+  } else if (fits === false) {
+    console.error(
+      "[settle] order",
+      params.orderId,
+      "was paid after its seats were resold; the tier is now oversold"
+    );
   }
 
   const fulfilment = await fulfillOrder(supabase, params.orderId);

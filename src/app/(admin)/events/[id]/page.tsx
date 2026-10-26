@@ -38,6 +38,10 @@ import { EventLogo } from "./event-logo";
 import { EventStatusControl } from "./event-status-control";
 import { EventDetailsForm } from "./event-details-form";
 import { TicketsTab } from "./tickets-tab";
+import {
+  tallyTierInventory,
+  type InventoryOrder,
+} from "@/lib/ticketing/tier-inventory";
 import { OrdersTab } from "./orders-tab";
 import { listRefundsForOrders } from "@/services/order-refunds";
 import { CheckInTab } from "./check-in-tab";
@@ -258,6 +262,11 @@ export default async function EventDetailPage({
             ticketingEnabled={event.ticketing_enabled ?? false}
             publicSlug={event.public_slug ?? null}
             ticketTypes={ticketTypes ?? []}
+            // Sold / held per tier, counted from the orders so it agrees
+            // with the Orders tab (quantity_sold also includes holds).
+            tierCounts={Object.fromEntries(
+              tallyTierInventory((orders ?? []) as InventoryOrder[])
+            )}
             promoCodes={promoCodes ?? []}
             feeProfiles={feeProfiles}
             currency={event.currency}

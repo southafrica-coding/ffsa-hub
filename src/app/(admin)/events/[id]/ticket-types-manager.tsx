@@ -7,6 +7,7 @@ import { grossUpToCover, type FeeProfile } from "@/lib/payments/pricing";
 import { currencySymbol, formatMoney } from "@/lib/currencies";
 import type { FormField } from "@/lib/forms/schema";
 import type { TierWaiver } from "@/lib/ticketing/waivers";
+import { formatTierCount, type TierCount } from "@/lib/ticketing/tier-inventory";
 import { QuestionsBuilder } from "./questions-builder";
 import { TierWaiverEditor } from "./tier-waiver-editor";
 
@@ -18,6 +19,8 @@ type TicketType = {
   target_net_cents: number;
   display_price_cents: number;
   capacity: number | null;
+  // Seats committed (sold + live holds) — capacity bookkeeping, not the
+  // figure shown as "sold".
   quantity_sold: number;
   max_per_order: number | null;
   sales_start_at: string | null;
@@ -50,11 +53,15 @@ function toIsoOrNull(dtLocal: string): string | null {
 export function TicketTypesManager({
   eventId,
   ticketTypes,
+  tierCounts,
   feeProfiles,
   currency,
 }: {
   eventId: string;
   ticketTypes: TicketType[];
+  // Sold / held per tier, from the orders (tier-inventory.ts). Not
+  // quantity_sold, which counts holds too.
+  tierCounts: Record<string, TierCount>;
   feeProfiles: FeeProfile[];
   currency: string;
 }) {
@@ -213,9 +220,10 @@ export function TicketTypesManager({
                     Net {money(t.target_net_cents)} → buyer pays{" "}
                     {money(t.display_price_cents)}
                     {" · "}
-                    {t.capacity == null
-                      ? `${t.quantity_sold} sold`
-                      : `${t.quantity_sold} / ${t.capacity} sold`}
+                    {formatTierCount(
+                      tierCounts[t.id] ?? { sold: 0, held: 0 },
+                      t.capacity
+                    )}
                     {t.max_per_order ? ` · max ${t.max_per_order}/order` : ""}
                   </p>
                   {(t.sales_start_at || t.sales_end_at) && (

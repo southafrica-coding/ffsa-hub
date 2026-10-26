@@ -213,7 +213,7 @@ export async function listOrdersWithTicketAnswersByEvent(
   return supabase
     .from("orders")
     .select(
-      "*, tickets(id, code, ticket_type_id, custom_answers, waiver_signature, waived_steps, ticket_types(name))"
+      "*, tickets(id, code, status, ticket_type_id, custom_answers, waiver_signature, waived_steps, ticket_types(name))"
     )
     .eq("event_id", eventId)
     .order("created_at", { ascending: false });
@@ -439,8 +439,10 @@ export async function reserveTicketInventory(
 }
 
 /**
- * Atomically decrement quantity_sold (clamped to 0). Used when a
- * pending checkout expires or a paid order is refunded.
+ * Atomically decrement quantity_sold (clamped to 0). Only for undoing a
+ * reservation that never became an order (checkout rollback). Once an
+ * order exists, use releaseTicketHolds so the release is recorded on the
+ * order and can't run twice.
  */
 export async function releaseTicketInventory(
   supabase: Client,
@@ -451,6 +453,32 @@ export async function releaseTicketInventory(
     p_ticket_type_id: ticketTypeId,
     p_qty: qty,
   });
+}
+
+/**
+ * Give back the seats of orders that no longer hold them — expired,
+ * cancelled, refunded, or pending past their checkout window (migration
+ * 270). Idempotent: each order is released once. Never frees an order that
+ * still holds seats. Pass an order id to release just that order, an
+ * event id for one event, or neither for every event.
+ */
+export async function releaseTicketHolds(
+  supabase: Client,
+  scope: { eventId?: string; orderId?: string } = {}
+) {
+  return supabase.rpc("release_ticket_holds", {
+    ...(scope.eventId ? { p_event_id: scope.eventId } : {}),
+    ...(scope.orderId ? { p_order_id: scope.orderId } : {}),
+  });
+}
+
+/**
+ * A payment that lands after its order's seats were released takes them
+ * back (clamped to capacity). data === false means a tier was already full
+ * and the order is oversold. Service-role only.
+ */
+export async function reclaimOrderInventory(supabase: Client, orderId: string) {
+  return supabase.rpc("reclaim_order_inventory", { p_order_id: orderId });
 }
 
 /**

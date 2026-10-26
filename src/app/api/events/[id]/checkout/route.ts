@@ -43,7 +43,7 @@ import {
   waiverAfterPromo,
   type PromoTerms,
 } from "@/lib/ticketing/promo-codes";
-import { findActivePromoCode } from "@/services/ticketing";
+import { findActivePromoCode, releaseTicketHolds } from "@/services/ticketing";
 
 // POST /api/events/[id]/checkout
 //
@@ -634,7 +634,9 @@ export async function POST(
           cancelled_at: new Date().toISOString(),
         })
         .eq("id", order.id);
-      await rollbackReservations();
+      // The order exists now, so release through it: recorded once, and
+      // the sweep won't give the same seats back a second time.
+      await releaseTicketHolds(supabase, { orderId: order.id });
       return NextResponse.json(
         {
           error: "That promo code was just fully redeemed by another buyer.",
@@ -713,7 +715,8 @@ export async function POST(
     });
   } catch (e) {
     // Provider misconfigured (env missing) or similar. The order is
-    // still pending; expires_at will sweep its inventory.
+    // still pending; once expires_at passes, release_ticket_holds gives
+    // its seats back (migration 270).
     return NextResponse.json(
       {
         error:

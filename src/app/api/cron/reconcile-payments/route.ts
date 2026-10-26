@@ -4,6 +4,7 @@ import {
   reconcileStripeOrder,
   type ReconcileOrder,
 } from "@/lib/ticketing/reconcile-stripe";
+import { releaseTicketHolds } from "@/services/ticketing";
 
 export const maxDuration = 60;
 
@@ -71,5 +72,19 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({ checked, settled, stillPending, errors });
+  // Backstop for the seat-hold sweep (checkout and the storefront also
+  // run it per event): give back seats held by every abandoned or
+  // cancelled checkout across all events (migration 270).
+  const { data: released, error: releaseErr } = await releaseTicketHolds(admin);
+  if (releaseErr) {
+    console.error("[cron/reconcile-payments] release_ticket_holds failed", releaseErr.message);
+  }
+
+  return NextResponse.json({
+    checked,
+    settled,
+    stillPending,
+    errors,
+    holdsReleased: released ?? 0,
+  });
 }

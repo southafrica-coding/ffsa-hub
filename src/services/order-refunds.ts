@@ -29,11 +29,6 @@ import { formatMoney } from "@/lib/currencies";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
 
-type OrderLine = {
-  ticket_type_id: string;
-  qty: number;
-};
-
 export type RefundMethod = "provider" | "manual";
 
 export type RefundInput = {
@@ -294,13 +289,10 @@ export async function refundOrder(
       .update({ status: "void" })
       .eq("order_id", order.id);
 
-    const lines = (order.lines as OrderLine[] | null) ?? [];
-    for (const line of lines) {
-      await supabase.rpc("release_ticket_inventory", {
-        p_ticket_type_id: line.ticket_type_id,
-        p_qty: line.qty,
-      });
-    }
+    // Recorded on the order, so the seats come back exactly once — and
+    // SECURITY DEFINER, so it works for finance staff too (the old
+    // per-line release_ticket_inventory call was blocked by RLS for them).
+    await supabase.rpc("release_ticket_holds", { p_order_id: order.id });
   }
 
   // ── Buyer email + CRM timeline (never fail the refund) ───────

@@ -2748,6 +2748,7 @@ export type Database = {
           invoice_paid_cents: number
           invoice_emailed_at: string | null
           invoice_error: string | null
+          inventory_released_at: string | null
           buyer_contact_id: string | null
           buyer_email: string
           buyer_first_name: string
@@ -2793,6 +2794,7 @@ export type Database = {
           invoice_paid_cents?: number
           invoice_emailed_at?: string | null
           invoice_error?: string | null
+          inventory_released_at?: string | null
           buyer_contact_id?: string | null
           buyer_email: string
           buyer_first_name: string
@@ -2838,6 +2840,7 @@ export type Database = {
           invoice_paid_cents?: number
           invoice_emailed_at?: string | null
           invoice_error?: string | null
+          inventory_released_at?: string | null
           buyer_contact_id?: string | null
           buyer_email?: string
           buyer_first_name?: string
@@ -5205,6 +5208,14 @@ export type Database = {
         Args: { p_person_id: string; p_user_id: string }
         Returns: undefined
       }
+      order_holds_inventory: {
+        Args: { p_expires_at: string; p_status: string }
+        Returns: boolean
+      }
+      reclaim_order_inventory: {
+        Args: { p_order_id: string }
+        Returns: boolean
+      }
       redeem_promo_code: {
         Args: { p_promo_code_id: string }
         Returns: {
@@ -5233,6 +5244,10 @@ export type Database = {
       reject_library_match: {
         Args: { p_notes?: string; p_queue_id: string }
         Returns: undefined
+      }
+      release_ticket_holds: {
+        Args: { p_event_id?: string; p_order_id?: string }
+        Returns: number
       }
       release_ticket_inventory: {
         Args: { p_qty: number; p_ticket_type_id: string }
