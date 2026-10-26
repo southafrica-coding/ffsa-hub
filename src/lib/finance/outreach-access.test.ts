@@ -7,6 +7,7 @@ import {
   canManageGroupTeams,
   groupsOfTeam,
   resolveTeamAccess,
+  teamsVisibleTo,
   type OutreachViewer,
 } from "./outreach-access";
 import { loadOutreachViewer } from "./outreach-viewer";
@@ -50,7 +51,16 @@ function freshWorld(): World {
   };
 }
 
-function viewerFor(world: World, who: string): OutreachViewer {
+// `opts.limited` is the person's "limited to own teams" flag (migration
+// 274); `opts.roleStaff` says their staff access comes from an admin tier
+// or finance_admin rather than a finance.view / finance.edit grant. The
+// staff flags are passed in as the pre-274 database would answer them, so
+// these tests also check the app holds the line on its own.
+function viewerFor(
+  world: World,
+  who: string,
+  opts: { limited?: boolean; roleStaff?: boolean } = {}
+): OutreachViewer {
   const memberships = Object.entries(world.roster)
     .filter(([, people]) => people[who])
     .map(([team_id, people]) => ({ team_id, role: people[who] }));
@@ -59,12 +69,21 @@ function viewerFor(world: World, who: string): OutreachViewer {
   const staffViewer = staffEditor || world.staffViewers.has(who);
   const leads = (team: string) => ["owner", "co_leader"].includes(world.roster[team]?.[who] ?? "");
 
-  // RLS on outreach_group_teams ("Read group teams").
+  // RLS on outreach_group_teams ("Read group teams"), with 274's staff rule.
+  const rlsStaff = staffViewer && (!opts.limited || !!opts.roleStaff);
   const groupTeamLinks = Object.entries(world.groupTeams)
-    .filter(([g, teams]) => staffViewer || managedGroupIds.includes(g) || teams.some(leads))
+    .filter(([g, teams]) => rlsStaff || managedGroupIds.includes(g) || teams.some(leads))
     .flatMap(([group_id, teams]) => teams.map((team_id) => ({ group_id, team_id })));
 
-  return buildOutreachViewer({ staffViewer, staffEditor, memberships, managedGroupIds, groupTeamLinks });
+  return buildOutreachViewer({
+    staffViewer,
+    staffEditor,
+    memberships,
+    managedGroupIds,
+    groupTeamLinks,
+    limitedToOwnTeams: opts.limited,
+    roleStaff: opts.roleStaff,
+  });
 }
 
 const access = (world: World, who: string, team: string) => resolveTeamAccess(viewerFor(world, who), team);
@@ -235,34 +254,53 @@ describe("admins and finance staff keep everything", () => {
 });
 
 describe("loadOutreachViewer", () => {
-  // A stand-in client answering the five reads the loader makes.
+  // A stand-in client answering the reads the loader makes.
   function client(answers: {
     viewer?: boolean;
     editor?: boolean;
     memberships?: { team_id: string; role: string }[];
     managed?: string[] | "error";
     links?: { group_id: string; team_id: string }[] | "error";
+    /** The caller's own outreach_user_restrictions row (migration 274). */
+    limited?: boolean | "error";
+    isAdmin?: boolean;
+    financeAdmin?: boolean;
   }) {
     const result = (data: unknown) => {
+      const settle = () =>
+        Promise.resolve(
+          data === "error" ? { data: null, error: { message: "relation does not exist" } } : { data, error: null }
+        );
       const q = {
         select: () => q,
         eq: () => q,
-        then: (res: (v: unknown) => unknown) =>
-          Promise.resolve(
-            data === "error" ? { data: null, error: { message: "relation does not exist" } } : { data, error: null }
-          ).then(res),
+        maybeSingle: settle,
+        then: (res: (v: unknown) => unknown) => settle().then(res),
       };
       return q;
     };
     return {
-      rpc: async (fn: string) => ({
-        data: fn === "is_outreach_staff_editor" ? !!answers.editor : !!answers.viewer,
-        error: null,
-      }),
+      rpc: async (fn: string) => {
+        const answer: Record<string, boolean> = {
+          is_outreach_staff_editor: !!answers.editor,
+          is_outreach_staff_viewer: !!answers.viewer,
+          is_admin: !!answers.isAdmin,
+          has_role: !!answers.financeAdmin,
+        };
+        return { data: answer[fn] ?? false, error: null };
+      },
       from: (table: string) => {
         if (table === "outreach_team_members") return result(answers.memberships ?? []);
         if (table === "outreach_group_managers")
           return result(answers.managed === "error" ? "error" : (answers.managed ?? []).map((group_id) => ({ group_id })));
+        if (table === "outreach_user_restrictions")
+          return result(
+            answers.limited === "error"
+              ? "error"
+              : answers.limited === undefined
+                ? null
+                : { user_id: "me", limited_to_own_teams: answers.limited }
+          );
         return result(answers.links ?? []);
       },
     };
@@ -297,5 +335,119 @@ describe("loadOutreachViewer", () => {
     const v = await loadOutreachViewer(client({ editor: true }), "fin");
     expect(v.staffViewer).toBe(true);
     expect(v.staffEditor).toBe(true);
+  });
+
+  it("a flagged finance.edit holder is not staff, even if the database still says so", async () => {
+    // e.g. the app deployed before migration 274 is applied to the helpers.
+    const v = await loadOutreachViewer(
+      client({
+        viewer: true,
+        editor: true,
+        limited: true,
+        memberships: [{ team_id: "botswana", role: "co_leader" }],
+      }),
+      "stefan"
+    );
+    expect(v.limitedToOwnTeams).toBe(true);
+    expect(v.staffViewer).toBe(false);
+    expect(v.staffEditor).toBe(false);
+    expect(resolveTeamAccess(v, "botswana")).toEqual({ level: "edit", via: "leader" });
+    expect(resolveTeamAccess(v, "kenya").level).toBeNull();
+  });
+
+  it("a flagged admin or finance_admin keeps staff access", async () => {
+    for (const role of [{ isAdmin: true }, { financeAdmin: true }]) {
+      const v = await loadOutreachViewer(client({ viewer: true, editor: true, limited: true, ...role }), "x");
+      expect(v.staffEditor).toBe(true);
+      expect(v.staffViewer).toBe(true);
+    }
+  });
+
+  it("the flag switched off, or unreadable, changes nothing", async () => {
+    for (const limited of [false, "error" as const]) {
+      const v = await loadOutreachViewer(client({ viewer: true, limited }), "viewer");
+      expect(v.limitedToOwnTeams).toBe(false);
+      expect(v.staffViewer).toBe(true);
+    }
+  });
+});
+
+describe("outreach limited to own teams (migration 274)", () => {
+  // stefan holds finance.view and finance.edit and co-leads botswana, which
+  // sits in NATIONS. With the flag on he is outreach staff no longer.
+  function stefanWorld(opts: { limited: boolean; manages?: string[] }) {
+    const w = freshWorld();
+    w.roster.botswana = { stefan: "co_leader" };
+    w.groupTeams.nations.push("botswana");
+    w.staffEditors.add("stefan");
+    for (const g of opts.manages ?? []) w.managers[g].push("stefan");
+    return { w, v: () => viewerFor(w, "stefan", { limited: opts.limited }) };
+  }
+
+  const ALL = ["kenya", "nepal", "local", "solo", "botswana"].map((id) => ({ id }));
+
+  it("a restricted finance.view / finance.edit holder sees only their own team", () => {
+    const { w } = stefanWorld({ limited: true });
+    w.groupTeams.nations = w.groupTeams.nations.filter((t) => t !== "botswana");
+    const v = viewerFor(w, "stefan", { limited: true });
+    expect(v.staffViewer).toBe(false);
+    expect(v.staffEditor).toBe(false);
+    expect(resolveTeamAccess(v, "botswana")).toEqual({ level: "edit", via: "leader" });
+    for (const team of ["kenya", "nepal", "local", "solo"]) {
+      expect(resolveTeamAccess(v, team).level).toBeNull();
+    }
+    expect(teamsVisibleTo(v, ALL).map((t) => t.id)).toEqual(["botswana"]);
+  });
+
+  it("keeps the read-only view of other teams in his own team's groups", () => {
+    const { v } = stefanWorld({ limited: true });
+    expect(resolveTeamAccess(v(), "kenya")).toEqual({ level: "view", via: "group_peer" });
+    expect(resolveTeamAccess(v(), "local").level).toBeNull();
+    expect(teamsVisibleTo(v(), ALL).map((t) => t.id).sort()).toEqual(["botswana", "kenya", "nepal"]);
+  });
+
+  it("still edits every team in the groups he manages", () => {
+    const { v } = stefanWorld({ limited: true, manages: ["youth"] });
+    expect(resolveTeamAccess(v(), "local")).toEqual({ level: "edit", via: "manager" });
+    expect(resolveTeamAccess(v(), "nepal")).toEqual({ level: "edit", via: "manager" });
+    expect(resolveTeamAccess(v(), "solo").level).toBeNull();
+    expect(canManageGroupTeams(v(), "youth")).toBe(true);
+    expect(canManageGroupTeams(v(), "nations")).toBe(false);
+  });
+
+  it("loses the administrator-only group powers his finance.edit gave him", () => {
+    const { v } = stefanWorld({ limited: true });
+    expect(canEditGroups(v())).toBe(false);
+  });
+
+  it("without the flag the same person still sees and edits every team", () => {
+    const { v } = stefanWorld({ limited: false });
+    for (const team of ["kenya", "nepal", "local", "solo", "botswana"]) {
+      expect(resolveTeamAccess(v(), team).level).toBe("edit");
+    }
+    expect(teamsVisibleTo(v(), ALL)).toEqual(ALL);
+  });
+
+  it("an unrestricted finance.view reader still sees every team", () => {
+    const w = freshWorld();
+    const v = viewerFor(w, "viewer");
+    expect(v.limitedToOwnTeams).toBe(false);
+    for (const team of ["kenya", "nepal", "local", "solo"]) {
+      expect(resolveTeamAccess(v, team)).toEqual({ level: "view", via: "staff" });
+    }
+    expect(teamsVisibleTo(v, ALL)).toEqual(ALL);
+  });
+
+  it("a restricted finance.view reader with no team sees nothing", () => {
+    const w = freshWorld();
+    const v = viewerFor(w, "viewer", { limited: true });
+    expect(teamsVisibleTo(v, ALL)).toEqual([]);
+  });
+
+  it("does not limit an admin or finance_admin", () => {
+    const w = freshWorld();
+    const v = viewerFor(w, "sa", { limited: true, roleStaff: true });
+    expect(v.staffEditor).toBe(true);
+    expect(teamsVisibleTo(v, ALL)).toEqual(ALL);
   });
 });

@@ -178,10 +178,154 @@ describe("migration 273 — safe to run twice", () => {
     expect(sql).not.toMatch(/CREATE FUNCTION/);
   });
 
-  it("is the newest migration and its number is not shared", () => {
+  it("its number is not shared", () => {
+    const files = readdirSync(DIR).filter((f) => /^\d{3}_.*\.sql$/.test(f));
+    expect(files.filter((f) => f.startsWith("273_"))).toEqual([FILE]);
+  });
+});
+
+// ────────────────────────────────────────────────────────────
+// Migration 274 — "outreach limited to own teams"
+// ────────────────────────────────────────────────────────────
+
+const FILE_274 = "274_outreach_limited_to_own_teams.sql";
+const sql274 = read(FILE_274);
+const p274 = policies(sql274);
+// The same SQL with comments stripped, for "does not do X" checks.
+const code274 = sql274.replace(/--.*$/gm, "");
+
+describe("migration 274 — the flag closes only the finance.view / finance.edit path", () => {
+  it("the staff viewer keeps admins and finance_admin unconditionally", () => {
+    const body = fnBody(sql274, "is_outreach_staff_viewer");
+    expect(body).toMatch(/^\s*SELECT public\.is_admin\(\)\s+OR public\.has_role\('finance_admin'\)\s+OR \(/);
+    expect(body).toMatch(
+      /\(public\.has_permission\('finance\.view'\) OR public\.has_permission\('finance\.edit'\)\)\s+AND NOT public\.is_outreach_limited_to_own_teams\(\)/
+    );
+  });
+
+  it("the staff editor keeps admins and finance_admin unconditionally", () => {
+    const body = fnBody(sql274, "is_outreach_staff_editor");
+    expect(body).toMatch(/^\s*SELECT public\.is_admin\(\)\s+OR public\.has_role\('finance_admin'\)\s+OR \(/);
+    expect(body).toMatch(/public\.has_permission\('finance\.edit'\)\s+AND NOT public\.is_outreach_limited_to_own_teams\(\)/);
+  });
+
+  it("without the flag both helpers answer exactly as migration 260's did", () => {
+    // Drop the carve-out and compare against 260's bodies, whitespace-blind.
+    const norm = (s: string) => s.replace(/\s+/g, " ").replace(/\( /g, "(").replace(/ \)/g, ")").trim();
+    const strip = (s: string) =>
+      norm(s)
+        .replace(/OR \(\((.*)\) AND NOT public\.is_outreach_limited_to_own_teams\(\)\);$/, "OR $1;")
+        .replace(/OR \((public\.has_permission\('finance\.edit'\)) AND NOT public\.is_outreach_limited_to_own_teams\(\)\);$/, "OR $1;");
+    const sql260 = read("260_outreach_owner_coleaders.sql");
+    for (const fn of ["is_outreach_staff_viewer", "is_outreach_staff_editor"]) {
+      expect(strip(fnBody(sql274, fn)), fn).toBe(norm(fnBody(sql260, fn)));
+    }
+  });
+
+  it("the flag is read for the caller only", () => {
+    const body = fnBody(sql274, "is_outreach_limited_to_own_teams");
+    expect(body).toContain("outreach_user_restrictions");
+    expect(body).toContain("user_id = auth.uid()");
+    expect(body).toContain("limited_to_own_teams");
+  });
+
+  it("has_permission itself is left alone, so the rest of Finance is unaffected", () => {
+    expect(code274).not.toMatch(/FUNCTION public\.has_permission/);
+    expect(code274).not.toMatch(/FUNCTION public\.has_role/);
+    expect(code274).not.toMatch(/FUNCTION public\.is_admin/);
+  });
+
+  it("every other outreach helper still reaches staff access only through the two staff helpers", () => {
+    // The newest definition of each outreach helper (273) must not test
+    // finance permissions itself, or the flag would not reach it.
+    for (const fn of [
+      "can_view_outreach_team",
+      "can_edit_outreach_team",
+      "can_edit_outreach_budget",
+      "is_outreach_finance_admin",
+      "can_add_outreach_category",
+      "can_manage_outreach_group",
+    ]) {
+      expect(fnBody(sql, fn), fn).not.toMatch(/has_permission|finance_admin'/);
+    }
+  });
+
+  it("rebuilds no outreach policy", () => {
+    expect(p274.every((p) => p.table === "outreach_user_restrictions")).toBe(true);
+  });
+});
+
+describe("migration 274 — the restriction table", () => {
+  it("has RLS on", () => {
+    expect(sql274).toContain("ALTER TABLE public.outreach_user_restrictions ENABLE ROW LEVEL SECURITY;");
+  });
+
+  it("admins read everyone's row; a person reads only their own", () => {
+    const read = p274.find((p) => p.name === "Read outreach restrictions")!;
+    expect(read.body).toMatch(/FOR SELECT\s+USING \(public\.is_admin\(\) OR user_id = auth\.uid\(\)\)/);
+  });
+
+  it.each(["Add outreach restrictions", "Change outreach restrictions", "Remove outreach restrictions"])(
+    "%s is admins only",
+    (name) => {
+      const body = p274.find((p) => p.name === name)!.body;
+      expect(body.replace(/public\.is_admin\(\)/g, "")).not.toMatch(/auth\.uid|public\.\w+\(/);
+      expect(body).toContain("public.is_admin()");
+    }
+  );
+
+  it("helpers are SECURITY DEFINER with a fixed search_path", () => {
+    const fns = [...sql274.matchAll(/CREATE OR REPLACE FUNCTION public\.(\w+)\([\s\S]*?AS \$\$/g)];
+    expect(fns.map((f) => f[1]).sort()).toEqual([
+      "is_outreach_limited_to_own_teams",
+      "is_outreach_staff_editor",
+      "is_outreach_staff_viewer",
+    ]);
+    for (const f of fns) {
+      expect(f[0], f[1]).toContain("SECURITY DEFINER");
+      expect(f[0], f[1]).toContain("SET search_path = public");
+    }
+  });
+});
+
+describe("migration 274 — data", () => {
+  it("does not touch roles or permissions", () => {
+    expect(code274).not.toMatch(/\b(INSERT INTO|UPDATE|DELETE FROM)\s+public\.(user_roles|user_permissions|role_permissions|permissions|roles)\b/i);
+  });
+
+  it("writes only one row, for stephankuhn05@gmail.com looked up by email", () => {
+    const inserts = [...code274.matchAll(/INSERT INTO\s+([\w.]+)/g)].map((m) => m[1]);
+    expect(inserts).toEqual(["public.outreach_user_restrictions"]);
+    expect(code274).not.toMatch(/\bUPDATE\s+public\./);
+    expect(code274).not.toMatch(/\bDELETE\s+FROM/i);
+    const seed = code274.slice(code274.indexOf("INSERT INTO public.outreach_user_restrictions"));
+    expect(seed).toMatch(/FROM auth\.users au\s+JOIN public\.users u ON u\.id = au\.id/);
+    expect(seed).toMatch(/WHERE lower\(au\.email\) = lower\('stephankuhn05@gmail\.com'\)/);
+    expect(seed).toMatch(/SELECT u\.id, true/);
+    expect(seed).toMatch(/ON CONFLICT \(user_id\) DO NOTHING;/);
+  });
+});
+
+describe("migration 274 — safe to run twice and in order", () => {
+  it("every policy is dropped by name before it is created", () => {
+    for (const p of p274) {
+      const drop = `DROP POLICY IF EXISTS "${p.name}" ON public.${p.table};`;
+      expect(sql274.indexOf(drop), drop).toBeGreaterThanOrEqual(0);
+      expect(sql274.indexOf(drop)).toBeLessThan(sql274.indexOf(`CREATE POLICY "${p.name}"`));
+    }
+  });
+
+  it("tables, indexes and functions are all re-runnable", () => {
+    expect(code274).not.toMatch(/CREATE TABLE (?!IF NOT EXISTS)/);
+    expect(code274).not.toMatch(/CREATE (UNIQUE )?INDEX (?!IF NOT EXISTS)/);
+    expect(code274).not.toMatch(/CREATE FUNCTION/);
+    expect(code274).not.toMatch(/\bDROP (TABLE|FUNCTION)\b/);
+  });
+
+  it("is the newest migration, right after 273, and its number is not shared", () => {
     const files = readdirSync(DIR).filter((f) => /^\d{3}_.*\.sql$/.test(f));
     const numbers = files.map((f) => Number(f.slice(0, 3)));
-    expect(Math.max(...numbers)).toBe(273);
-    expect(files.filter((f) => f.startsWith("273_"))).toEqual([FILE]);
+    expect(Math.max(...numbers)).toBe(274);
+    expect(files.filter((f) => f.startsWith("274_"))).toEqual([FILE_274]);
   });
 });

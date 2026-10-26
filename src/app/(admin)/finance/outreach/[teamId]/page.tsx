@@ -69,6 +69,16 @@ export default async function OutreachTeamDetailPage({
   // same group. Decided on the server from fresh reads, every request.
   const outreachViewer = user ? await loadOutreachViewer(supabase, user.id) : null;
   const access = outreachViewer ? resolveTeamAccess(outreachViewer, teamId) : NO_ACCESS;
+  // Flagged "limited to own teams" (migration 274): only teams their own
+  // roles and groups give them, whatever the team read above returned.
+  if (outreachViewer?.limitedToOwnTeams && access.level !== "edit" && access.level !== "view") {
+    if (access.level === "member") redirect(`/my-finance/outreach/${teamId}`);
+    return (
+      <div className="ffsa-screen">
+        <p className="px-5 py-8 text-sm text-destructive md:px-8">Team not found.</p>
+      </div>
+    );
+  }
   const canEdit = access.level === "edit";
   const staffEditor = outreachViewer?.staffEditor === true;
 

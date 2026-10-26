@@ -52,7 +52,12 @@ export type OutreachResolution =
 const FINANCE_STAFF_ROLES = ["super_admin", "admin", "finance_admin"];
 const FINANCE_STAFF_PERMISSIONS = ["finance.view", "finance.edit"];
 
-/** Admins and finance staff see every outreach team, as in the Hub. */
+/**
+ * Admins and finance staff see every outreach team, as in the Hub. Someone
+ * flagged "outreach limited to own teams" (migration 274) only counts
+ * through an admin tier or finance_admin — their finance.view / finance.edit
+ * grants don't make them outreach staff, mirroring is_outreach_staff_viewer().
+ */
 export async function isFinanceStaff(admin: AdminClient, hubUserId: string): Promise<boolean> {
   const { data: roles } = await admin
     .from("user_roles")
@@ -61,6 +66,8 @@ export async function isFinanceStaff(admin: AdminClient, hubUserId: string): Pro
   const roleRows = (roles ?? []) as { role_id: string; roles: { name: string } | { name: string }[] }[];
   const names = roleRows.flatMap((r) => (Array.isArray(r.roles) ? r.roles : [r.roles]).map((x) => x.name));
   if (names.some((n) => FINANCE_STAFF_ROLES.includes(n))) return true;
+
+  if (await isLimitedToOwnTeams(admin, hubUserId)) return false;
 
   const { data: direct } = await admin
     .from("user_permissions")
@@ -79,6 +86,16 @@ export async function isFinanceStaff(admin: AdminClient, hubUserId: string): Pro
     .in("permissions.key", FINANCE_STAFF_PERMISSIONS)
     .limit(1);
   return !!(viaRole && viaRole.length > 0);
+}
+
+/** The "outreach limited to own teams" flag (migration 274). Unreadable → off. */
+async function isLimitedToOwnTeams(admin: AdminClient, hubUserId: string): Promise<boolean> {
+  const { data, error } = await admin
+    .from("outreach_user_restrictions")
+    .select("limited_to_own_teams")
+    .eq("user_id", hubUserId)
+    .maybeSingle();
+  return !error && (data as { limited_to_own_teams: boolean } | null)?.limited_to_own_teams === true;
 }
 
 type TeamRow = { id: string; team_name: string; country: string | null; slack_enabled: boolean };

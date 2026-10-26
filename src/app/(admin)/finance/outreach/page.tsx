@@ -21,6 +21,7 @@ import {
   accessLabel,
   groupsOfTeam,
   resolveTeamAccess,
+  teamsVisibleTo,
 } from "@/lib/finance/outreach-access";
 import { loadOutreachViewer } from "@/lib/finance/outreach-viewer";
 import { OutreachDashboardClient } from "./dashboard-client";
@@ -63,8 +64,10 @@ export default async function OutreachFinancePage() {
   ]);
 
   // How this viewer reaches each team they can see: RLS already limited the
-  // list, this only says whether they can change it and why.
-  const visibleTeams = (teams ?? []) as { id: string }[];
+  // list, this only says whether they can change it and why. Someone
+  // flagged "limited to own teams" (migration 274) is also cut down here to
+  // the teams their own roles and groups give them.
+  const visibleTeams = teamsVisibleTo(viewer, (teams ?? []) as { id: string }[]);
   const teamAccess = Object.fromEntries(
     visibleTeams.map((t) => {
       const access = viewer ? resolveTeamAccess(viewer, t.id) : NO_ACCESS;
@@ -96,7 +99,7 @@ export default async function OutreachFinancePage() {
   // screen's root.
   return (
     <OutreachDashboardClient
-      teams={(teams ?? []) as Parameters<typeof OutreachDashboardClient>[0]["teams"]}
+      teams={visibleTeams as Parameters<typeof OutreachDashboardClient>[0]["teams"]}
       programs={(programs ?? []) as Parameters<typeof OutreachDashboardClient>[0]["programs"]}
       aggregates={aggregates}
       movements={movements}

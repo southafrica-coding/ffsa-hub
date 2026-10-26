@@ -13,6 +13,11 @@ import { callerCanManageRoles } from "@/lib/auth/check-role-grant";
 import { PermissionManager } from "../permission-manager";
 import { RoleAssignment, type AssignedRole } from "../role-assignment";
 import { AdvancedAccess } from "../advanced-access";
+import { OutreachRestriction } from "../outreach-restriction";
+import {
+  getOutreachRestriction,
+  getRolePermissionsWithKeys,
+} from "@/services/outreach-restrictions";
 import { UserTabs } from "../user-tabs";
 import { UserHeader } from "../user-header";
 import { SUPER_ADMIN_LOCKED_NOTE } from "@/components/super-admin-badge";
@@ -109,6 +114,26 @@ export default async function UserPermissionsPage({
   // A super admin's titles, tiers and standing are a super admin's to change.
   const targetLocked = isTargetSuperAdmin && !isSuperAdmin;
 
+  // "Outreach: own teams only" (migration 274) — admins only. Whether the
+  // person holds finance.view / finance.edit directly or through a title,
+  // so the panel can say when the flag has nothing to limit yet.
+  const FINANCE_KEYS = ["finance.view", "finance.edit"];
+  let outreachLimited = false;
+  let hasFinanceGrant = false;
+  if (isAdmin) {
+    const roleIds = (assignedRolesRes.data ?? []).map((r) => r.role_id as string);
+    const [{ data: restriction }, { data: viaRole }] = await Promise.all([
+      getOutreachRestriction(supabase, id),
+      roleIds.length
+        ? getRolePermissionsWithKeys(supabase, roleIds, FINANCE_KEYS)
+        : Promise.resolve({ data: [] }),
+    ]);
+    outreachLimited = restriction?.limited_to_own_teams === true;
+    hasFinanceGrant =
+      userPermissions.some((p) => FINANCE_KEYS.includes(p.permissions?.key)) ||
+      (viaRole ?? []).length > 0;
+  }
+
   // Granular grid uses the curated catalog (legacy duplicates hidden).
   const curated = curatePermissions(permissionsByModule);
 
@@ -187,6 +212,15 @@ export default async function UserPermissionsPage({
         lockedNote={targetLocked ? SUPER_ADMIN_LOCKED_NOTE : undefined}
         personName={personName}
       />
+
+      {isAdmin && (
+        <OutreachRestriction
+          userId={id}
+          personName={personName}
+          limited={outreachLimited}
+          hasFinanceGrant={hasFinanceGrant}
+        />
+      )}
 
       <AdvancedAccess>
         <PermissionManager

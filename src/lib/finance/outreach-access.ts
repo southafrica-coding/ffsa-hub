@@ -16,6 +16,11 @@
  * side of the app: pages decide what to render from it and never trust the
  * browser. Group membership is read on every request, so a team taken out
  * of a group drops out of its managers' access on their next page load.
+ *
+ * A person flagged "outreach limited to own teams" (migration 274) is not
+ * outreach staff through finance.view / finance.edit: they get only what
+ * their own teams and the groups they manage give them. Admins and the
+ * finance_admin role are unaffected by the flag.
  */
 
 import { OUTREACH_LEADER_ROLES } from "@/lib/finance/outreach-roles";
@@ -40,6 +45,8 @@ export type OutreachViewer = {
   managedGroupIds: string[];
   /** group_id → the team ids in it, for every group the viewer can see. */
   groupTeams: Record<string, string[]>;
+  /** Flagged "outreach limited to own teams" (migration 274). */
+  limitedToOwnTeams: boolean;
 };
 
 export const NO_ACCESS: OutreachAccess = { level: null, via: null };
@@ -96,6 +103,17 @@ export function canEditGroups(viewer: OutreachViewer): boolean {
   return viewer.staffEditor;
 }
 
+/**
+ * The teams in `teams` this viewer may open at all. RLS already limits the
+ * list; for a viewer flagged "limited to own teams" the app also drops
+ * anything the resolver does not grant, so the flag holds even if the
+ * database answer is behind.
+ */
+export function teamsVisibleTo<T extends { id: string }>(viewer: OutreachViewer | null, teams: T[]): T[] {
+  if (!viewer || !viewer.limitedToOwnTeams) return teams;
+  return teams.filter((t) => resolveTeamAccess(viewer, t.id).level !== null);
+}
+
 /** Short label for how the viewer reaches a team, or null for nothing to say. */
 export function accessLabel(access: OutreachAccess): string | null {
   switch (access.via) {
@@ -120,6 +138,10 @@ export function buildOutreachViewer(input: {
   memberships: { team_id: string; role: string }[];
   managedGroupIds: string[];
   groupTeamLinks: { group_id: string; team_id: string }[];
+  /** The viewer's own "limited to own teams" flag (migration 274). */
+  limitedToOwnTeams?: boolean;
+  /** is_admin() or the finance_admin role — the staff paths the flag leaves open. */
+  roleStaff?: boolean;
 }): OutreachViewer {
   const roles: Record<string, string> = {};
   for (const m of input.memberships) roles[m.team_id] = m.role;
@@ -128,12 +150,19 @@ export function buildOutreachViewer(input: {
   for (const l of input.groupTeamLinks) {
     (groupTeams[l.group_id] ??= []).push(l.team_id);
   }
+  // A flagged viewer is staff only through an admin tier or finance_admin,
+  // never through finance.view / finance.edit — the same carve-out as
+  // is_outreach_staff_viewer() / _editor() in migration 274. Applied here
+  // too so the app holds the line even where the database answer is stale.
+  const limited = input.limitedToOwnTeams === true;
+  const staffAllowed = !limited || input.roleStaff === true;
   return {
-    staffViewer: input.staffViewer || input.staffEditor,
-    staffEditor: input.staffEditor,
+    staffViewer: (input.staffViewer || input.staffEditor) && staffAllowed,
+    staffEditor: input.staffEditor && staffAllowed,
     roles,
     managedGroupIds: [...new Set(input.managedGroupIds)],
     groupTeams,
+    limitedToOwnTeams: limited,
   };
 }
 
