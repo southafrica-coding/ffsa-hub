@@ -15,6 +15,12 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { MastheadButton } from "@/components/ffsa";
+import {
+  DEFAULT_MINISTRY_TYPE,
+  MINISTRY_TYPES,
+  MINISTRY_TYPE_LABELS,
+  type MinistryType,
+} from "@/lib/ministries/ministry-type";
 
 /**
  * Creates a ministry from the OKR wall.
@@ -33,6 +39,8 @@ export function NewMinistryButton({ cycleSlug }: { cycleSlug: string }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [ministryType, setMinistryType] =
+    useState<MinistryType>(DEFAULT_MINISTRY_TYPE);
   const [duplicate, setDuplicate] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -44,7 +52,11 @@ export function NewMinistryButton({ cycleSlug }: { cycleSlug: string }) {
     const res = await fetch("/api/ministries", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: name.trim(), description: description.trim() || null }),
+      body: JSON.stringify({
+        name: name.trim(),
+        description: description.trim() || null,
+        ministry_type: ministryType,
+      }),
     });
     const body = await res.json().catch(() => ({}));
     setBusy(false);
@@ -64,6 +76,7 @@ export function NewMinistryButton({ cycleSlug }: { cycleSlug: string }) {
     setOpen(false);
     setName("");
     setDescription("");
+    setMinistryType(DEFAULT_MINISTRY_TYPE);
     router.push(`/okrs/${body.ministry.id}?cycle=${cycleSlug}`);
   }
 
@@ -97,6 +110,24 @@ export function NewMinistryButton({ cycleSlug }: { cycleSlug: string }) {
                   That ministry already exists — close this and pick it from the wall.
                 </p>
               )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="okr-ministry-type">Type</Label>
+              {/* Native <select> on purpose — Radix popover selects don't open
+                  in Safari (PR #193). */}
+              <select
+                id="okr-ministry-type"
+                className="h-10 w-full"
+                value={ministryType}
+                onChange={(e) => setMinistryType(e.target.value as MinistryType)}
+              >
+                {MINISTRY_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {MINISTRY_TYPE_LABELS[t]}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="space-y-1.5">

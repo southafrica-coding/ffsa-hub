@@ -14,6 +14,11 @@ import { Masthead, KpiStrip, Kpi, MastheadAction, SectionBar, StatusPill } from 
 import { statusLabel, statusTone } from "@/lib/okrs/progress";
 import { callerIsAdmin, getLedMinistryIds } from "@/lib/auth/check-ministry-access";
 import { callerCanManageCycles, isLeadershipTeam } from "@/lib/auth/check-okr-access";
+import {
+  MINISTRY_TYPES,
+  MINISTRY_TYPE_SECTION_LABELS,
+  ministryTypeOf,
+} from "@/lib/ministries/ministry-type";
 import type { OkrCycle, OkrObjective, OkrOwnerSummary } from "@/types/okrs";
 import { CycleSwitcher } from "./cycle-switcher";
 import { NewMinistryButton } from "./new-ministry-button";
@@ -84,6 +89,7 @@ export default async function OkrsPage({
     name: string;
     slug: string;
     is_active: boolean;
+    ministry_type: string | null;
   }[];
 
   // Anything with objectives in this cycle stays on the wall no matter what —
@@ -118,6 +124,21 @@ export default async function OkrsPage({
   // On a closed cycle "not started" is a permanent historical fact, not a
   // to-do, and canEdit is false on every one of those pages anyway.
   const showNotStarted = seesGaps && cycle.is_current && notStarted.length > 0;
+
+  // Split into Main / Part-time sections, the same grouping as the Ministry
+  // tab. Each section keeps its own started / not-started split, so the
+  // to-do list for leaders still reads per kind of ministry. A section with
+  // nothing to show is dropped, and the headings only appear once there is
+  // more than one section.
+  const typeById = new Map(ministries.map((m) => [m.id, ministryTypeOf(m.ministry_type)]));
+  const sections = MINISTRY_TYPES.map((type) => ({
+    type,
+    label: MINISTRY_TYPE_SECTION_LABELS[type],
+    total: summaries.filter((s) => typeById.get(s.id) === type).length,
+    started: started.filter((s) => typeById.get(s.id) === type),
+    notStarted: showNotStarted ? notStarted.filter((s) => typeById.get(s.id) === type) : [],
+  })).filter((s) => s.started.length > 0 || s.notStarted.length > 0);
+  const showHeadings = sections.length > 1;
 
   const completePct = t.keyResults > 0 ? (t.byStatus.complete / t.keyResults) * 100 : 0;
 
@@ -173,31 +194,55 @@ export default async function OkrsPage({
             Nothing has been entered for the {cycle.name} cycle yet.
           </p>
         ) : (
-          <>
-            {started.length > 0 && (
-              <div className="border-t border-rule">
-                {started.map((m) => (
-                  <OwnerRow
-                    key={m.id}
-                    owner={m}
-                    cycleSlug={cycle.slug}
-                    retired={retiredIds.has(m.id)}
-                  />
-                ))}
-              </div>
-            )}
+          sections.map((section, i) => (
+            <div key={section.type} className={i > 0 ? "mt-10" : undefined}>
+              {showHeadings && (
+                <SectionBar
+                  title={section.label}
+                  meta={`${section.started.length} of ${section.total} started`}
+                />
+              )}
 
-            {showNotStarted && (
-              <div className={started.length > 0 ? "mt-8" : undefined}>
-                <SectionBar title="Not started yet" meta={`${notStarted.length}`} />
+              {section.started.length > 0 && (
                 <div className="border-t border-rule">
-                  {notStarted.map((m) => (
-                    <OwnerRow key={m.id} owner={m} cycleSlug={cycle.slug} retired={false} />
+                  {section.started.map((m) => (
+                    <OwnerRow
+                      key={m.id}
+                      owner={m}
+                      cycleSlug={cycle.slug}
+                      retired={retiredIds.has(m.id)}
+                    />
                   ))}
                 </div>
-              </div>
-            )}
-          </>
+              )}
+
+              {section.notStarted.length > 0 &&
+                (showHeadings ? (
+                  // Under a section heading a second section bar would read as
+                  // a sibling section, so the not-started list gets the
+                  // quieter sub-heading band the Ministry tab uses.
+                  <div className={section.started.length > 0 ? "mt-4" : undefined}>
+                    <div className="mono-label border-t border-rule bg-[#F7F5EE] px-4 py-2 md:px-5">
+                      Not started yet · {section.notStarted.length}
+                    </div>
+                    <div className="border-t border-rule">
+                      {section.notStarted.map((m) => (
+                        <OwnerRow key={m.id} owner={m} cycleSlug={cycle.slug} retired={false} />
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className={section.started.length > 0 ? "mt-8" : undefined}>
+                    <SectionBar title="Not started yet" meta={`${section.notStarted.length}`} />
+                    <div className="border-t border-rule">
+                      {section.notStarted.map((m) => (
+                        <OwnerRow key={m.id} owner={m} cycleSlug={cycle.slug} retired={false} />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          ))
         )}
       </div>
     </div>
