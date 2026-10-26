@@ -18,6 +18,7 @@ import {
   type CheckoutAnswerSnapshot,
 } from "@/lib/ticketing/checkout-questions";
 import type { WaiverSignatureRecord } from "@/lib/ticketing/waivers";
+import type { TicketWaivedSteps } from "@/lib/ticketing/promo-codes";
 import { OrdersExportPanel } from "./orders-export-panel";
 import { RefundDialog } from "./refund-dialog";
 import { RefundAllButton } from "./refund-all-button";
@@ -36,6 +37,9 @@ type Order = {
   created_at: string;
   contact_resolution: string;
   custom_answers?: unknown;
+  discount_cents?: number;
+  // Promo code as redeemed (migration 269).
+  promo_code?: string | null;
   // Issued tickets + their per-ticket answers (migration 137). Present
   // once the order is paid and fulfilled.
   tickets?: TicketWithAnswers[] | null;
@@ -62,8 +66,29 @@ type TicketWithAnswers = {
   custom_answers?: unknown;
   // Signed waiver record drained onto the ticket (migration 163).
   waiver_signature?: WaiverSignatureRecord | null;
+  // What a promo code waived for this ticket (migration 269).
+  waived_steps?: TicketWaivedSteps | null;
   ticket_types?: { name: string } | null;
 };
+
+// "waiver skipped on 2 tickets · 3 questions skipped" — what the order's
+// promo code waived across its issued tickets. Null when nothing was.
+function describeOrderWaivers(o: Order): string | null {
+  const tickets = o.tickets ?? [];
+  const waivers = tickets.filter((t) => t.waived_steps?.waiver).length;
+  const questions = tickets.reduce(
+    (n, t) => n + (t.waived_steps?.question_ids?.length ?? 0),
+    0
+  );
+  const parts: string[] = [];
+  if (waivers > 0) {
+    parts.push(`waiver skipped on ${waivers} ticket${waivers === 1 ? "" : "s"}`);
+  }
+  if (questions > 0) {
+    parts.push(`${questions} question${questions === 1 ? "" : "s"} skipped`);
+  }
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
 
 // Latest ticket-confirmation email delivery state per order (migration
 // 141). status advances queued → sent → delivered / opened, or lands on
@@ -512,6 +537,14 @@ export function OrdersTab({
                         {o.refund_cents > 0 && (
                           <div className="text-xs text-muted-foreground">
                             − {money(o.refund_cents, o.currency)} refunded
+                          </div>
+                        )}
+                        {o.promo_code && (
+                          <div className="text-xs text-muted-foreground">
+                            Code <span className="font-mono">{o.promo_code}</span>
+                            {(o.discount_cents ?? 0) > 0 &&
+                              ` · −${money(o.discount_cents ?? 0, o.currency)}`}
+                            {describeOrderWaivers(o) && ` · ${describeOrderWaivers(o)}`}
                           </div>
                         )}
                       </TableCell>

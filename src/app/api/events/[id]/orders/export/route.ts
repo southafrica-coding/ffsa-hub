@@ -42,6 +42,8 @@ type OrderRow = {
   cancelled_at: string | null;
   lines: unknown;
   promo_code_id: string | null;
+  // Code text as redeemed (migration 269); older orders only have the id.
+  promo_code: string | null;
   // Event-level checkout questions (migration 094) and the per-ticket
   // tier answers captured at checkout (migration 138).
   custom_answers: unknown;
@@ -203,7 +205,7 @@ export async function GET(
     tickets: (o) => ticketsSummary(o.lines, typeNames),
     payment_provider: (o) => o.payment_provider ?? "",
     provider_reference: (o) => o.provider_reference ?? "",
-    promo_code: (o) => o.promo_code_id ?? "",
+    promo_code: (o) => o.promo_code ?? o.promo_code_id ?? "",
     marketing_consent: (o) => (o.marketing_consent ? "Yes" : "No"),
     created_at: (o) => formatDate(o.created_at),
     paid_at: (o) => formatDate(o.paid_at),

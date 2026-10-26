@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { findActivePromoCode } from "@/services/ticketing";
+import { promoUnavailableReason, toPromoTerms } from "@/lib/ticketing/promo-codes";
 
 // POST /api/events/[id]/promo/validate
-// Public, non-committing preview of a promo code. Returns the code's discount
-// terms (kind / percent_off / amount_off / tier restriction) so the storefront
-// can show the buyer their discount live. The authoritative discount is still
-// re-validated and re-computed at /checkout — this route never increments
-// redemption_count or touches reservations.
+// Public, non-committing preview of a promo code. Returns the code's terms
+// (discount, tier restriction and the steps it waives) so the storefront can
+// show the buyer their discount live and hide the waiver / questions the
+// code skips. The authoritative discount and waivers are re-validated and
+// re-computed at /checkout — this route never increments redemption_count
+// or touches reservations.
 //
 // Uses the service-role client, like /checkout does: promo_codes is
 // readable only by staff under RLS, so an anon client would tell every
@@ -50,13 +53,7 @@ export async function POST(
     ? body.ticket_type_ids.filter((s): s is string => typeof s === "string")
     : [];
 
-  const { data: promo, error } = await supabase
-    .from("promo_codes")
-    .select("*")
-    .eq("event_id", eventId)
-    .ilike("code", code)
-    .eq("is_active", true)
-    .maybeSingle();
+  const { data: promo, error } = await findActivePromoCode(supabase, eventId, code);
 
   if (error) {
     return NextResponse.json(
@@ -68,21 +65,9 @@ export async function POST(
     return NextResponse.json({ ok: false, error: "That code isn't valid." });
   }
 
-  const now = new Date();
-  if (promo.valid_from && new Date(promo.valid_from) > now) {
-    return NextResponse.json({ ok: false, error: "That code isn't active yet." });
-  }
-  if (promo.valid_until && new Date(promo.valid_until) <= now) {
-    return NextResponse.json({ ok: false, error: "That code has expired." });
-  }
-  if (
-    promo.max_redemptions != null &&
-    promo.redemption_count >= promo.max_redemptions
-  ) {
-    return NextResponse.json({
-      ok: false,
-      error: "That code has been fully redeemed.",
-    });
+  const unavailable = promoUnavailableReason(promo, new Date());
+  if (unavailable) {
+    return NextResponse.json({ ok: false, error: unavailable });
   }
   if (
     promo.applies_to_ticket_type_id &&
@@ -96,12 +81,5 @@ export async function POST(
     });
   }
 
-  return NextResponse.json({
-    ok: true,
-    code: promo.code,
-    kind: promo.kind as "percent" | "fixed_amount" | "comp",
-    percent_off: promo.percent_off ?? null,
-    amount_off_cents: promo.amount_off_cents ?? null,
-    applies_to_ticket_type_id: promo.applies_to_ticket_type_id ?? null,
-  });
+  return NextResponse.json({ ok: true, ...toPromoTerms(promo) });
 }

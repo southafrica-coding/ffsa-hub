@@ -5,6 +5,11 @@
 // style. See FFSA_Hub_Events_Ticketing_Spec.md.
 
 import { DEFAULT_EVENT_CURRENCY } from "@/lib/currencies";
+import {
+  escapeLikePattern,
+  type PromoKind,
+  type WaivedQuestionRef,
+} from "@/lib/ticketing/promo-codes";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
@@ -112,6 +117,7 @@ export async function getPromoCode(supabase: Client, id: string) {
  * Look up an active promo code for an event by its (case-insensitive) code.
  * Returns null when none matches — the caller decides how to message the buyer.
  * Does NOT increment redemption_count; the atomic redeem happens at checkout.
+ * LIKE wildcards in the input are escaped, so "%" can't match every code.
  */
 export async function findActivePromoCode(
   supabase: Client,
@@ -122,7 +128,7 @@ export async function findActivePromoCode(
     .from("promo_codes")
     .select("*")
     .eq("event_id", eventId)
-    .ilike("code", code.trim())
+    .ilike("code", escapeLikePattern(code.trim()))
     .eq("is_active", true)
     .maybeSingle();
 }
@@ -132,7 +138,7 @@ export async function createPromoCode(
   data: {
     event_id: string;
     code: string;
-    kind: "percent" | "fixed_amount" | "comp";
+    kind: PromoKind;
     percent_off?: number | null;
     amount_off_cents?: number | null;
     applies_to_ticket_type_id?: string | null;
@@ -140,14 +146,20 @@ export async function createPromoCode(
     valid_from?: string | null;
     valid_until?: string | null;
     is_active?: boolean;
+    // Steps the code waives on in-scope tickets (migration 269).
+    waives_waiver?: boolean;
+    waived_questions?: WaivedQuestionRef[];
     created_by?: string | null;
   }
 ) {
   return supabase.from("promo_codes").insert(data).select().single();
 }
 
+// Scoped to the event so a code id from another event can't be edited
+// through this event's routes.
 export async function updatePromoCode(
   supabase: Client,
+  eventId: string,
   id: string,
   data: Record<string, unknown>
 ) {
@@ -155,12 +167,13 @@ export async function updatePromoCode(
     .from("promo_codes")
     .update(data)
     .eq("id", id)
+    .eq("event_id", eventId)
     .select()
     .single();
 }
 
-export async function deletePromoCode(supabase: Client, id: string) {
-  return supabase.from("promo_codes").delete().eq("id", id);
+export async function deletePromoCode(supabase: Client, eventId: string, id: string) {
+  return supabase.from("promo_codes").delete().eq("id", id).eq("event_id", eventId);
 }
 
 // ────────────────────────────────────────────────────────────
@@ -200,7 +213,7 @@ export async function listOrdersWithTicketAnswersByEvent(
   return supabase
     .from("orders")
     .select(
-      "*, tickets(id, code, ticket_type_id, custom_answers, waiver_signature, ticket_types(name))"
+      "*, tickets(id, code, ticket_type_id, custom_answers, waiver_signature, waived_steps, ticket_types(name))"
     )
     .eq("event_id", eventId)
     .order("created_at", { ascending: false });

@@ -8,6 +8,7 @@ import {
   type CheckoutAnswerSnapshot,
 } from "@/lib/ticketing/checkout-questions";
 import type { FormField } from "@/lib/forms/schema";
+import type { TicketWaivedSteps } from "@/lib/ticketing/promo-codes";
 
 // GET /api/events/[id]/attendees/export
 //
@@ -21,8 +22,11 @@ type TicketRow = {
   code: string;
   status: string;
   checked_in_at: string | null;
+  ticket_type_id: string;
   custom_answers: unknown;
   waiver_signature: unknown;
+  // What a promo code waived for this ticket (migration 269).
+  waived_steps: TicketWaivedSteps | null;
   ticket_types: { name: string } | null;
   orders: {
     id: string;
@@ -85,7 +89,7 @@ export async function GET(
     supabase
       .from("tickets")
       .select(
-        "code, status, checked_in_at, custom_answers, waiver_signature, ticket_types(name), orders!inner(id, buyer_first_name, buyer_last_name, buyer_email, status)"
+        "code, status, checked_in_at, ticket_type_id, custom_answers, waiver_signature, waived_steps, ticket_types(name), orders!inner(id, buyer_first_name, buyer_last_name, buyer_email, status)"
       )
       .eq("event_id", eventId)
       .in("status", ["valid", "checked_in"])
@@ -119,6 +123,20 @@ export async function GET(
     process.env.NEXT_PUBLIC_SITE_URL || "https://www.ffsahub.com"
   ).replace(/\/$/, "");
 
+  const ticketRows = (tickets ?? []) as unknown as TicketRow[];
+
+  // A promo code can waive a ticket's waiver and some of its questions
+  // (migration 269). Those cells read "Waived (CODE)" instead of blank so
+  // staff can tell skipped from missing; the Promo Code column only
+  // appears when some ticket was sold with a code.
+  const hasPromo = ticketRows.some((t) => t.waived_steps?.promo_code);
+  const questionLabelById = new Map<string, string>();
+  for (const t of (ticketTypes ?? []) as Array<{ id: string; questions?: FormField[] | null }>) {
+    for (const q of t.questions ?? []) {
+      questionLabelById.set(`${t.id}:${q.id}`, q.label?.trim() ?? "");
+    }
+  }
+
   const baseHeaders = [
     "Order Reference",
     "First Name",
@@ -128,11 +146,12 @@ export async function GET(
     "Ticket Code",
     "Status",
     "Checked In At",
+    ...(hasPromo ? ["Promo Code"] : []),
   ];
   const headers = [...baseHeaders, ...questionColumns, ...waiverHeaders];
   const lines = [headers.map(escapeCsvValue).join(",")];
 
-  for (const t of ((tickets ?? []) as unknown as TicketRow[])) {
+  for (const t of ticketRows) {
     const answers = Array.isArray(t.custom_answers)
       ? (t.custom_answers as CheckoutAnswerSnapshot[])
       : [];
@@ -140,6 +159,13 @@ export async function GET(
     // this only matters across tiers, and the column already merged them.
     const byLabel = new Map<string, unknown>();
     for (const a of answers) byLabel.set(a.label, a.value);
+    const waived = t.waived_steps;
+    const waivedNote = waived ? `Waived (${waived.promo_code})` : "";
+    const waivedLabels = new Set(
+      (waived?.question_ids ?? [])
+        .map((id) => questionLabelById.get(`${t.ticket_type_id}:${id}`))
+        .filter((l): l is string => !!l)
+    );
 
     const base = [
       t.orders?.id.slice(0, 8) ?? "",
@@ -150,9 +176,14 @@ export async function GET(
       t.code,
       t.status,
       formatDate(t.checked_in_at),
+      ...(hasPromo ? [waived?.promo_code ?? ""] : []),
     ];
     const questionCells = questionColumns.map((label) =>
-      byLabel.has(label) ? formatAnswerValue(byLabel.get(label)) : ""
+      byLabel.has(label)
+        ? formatAnswerValue(byLabel.get(label))
+        : waivedLabels.has(label)
+          ? waivedNote
+          : ""
     );
     let waiverCells: string[] = [];
     if (hasWaiver) {
@@ -170,7 +201,9 @@ export async function GET(
               ? `${siteBase}/api/tickets/${t.code}/waiver`
               : "",
           ]
-        : ["", "", "", ""];
+        : waived?.waiver
+          ? [waivedNote, "", "", ""]
+          : ["", "", "", ""];
     }
     lines.push(
       [...base, ...questionCells, ...waiverCells].map(escapeCsvValue).join(",")

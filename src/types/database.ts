@@ -2770,6 +2770,7 @@ export type Database = {
           marketing_consent: boolean
           paid_at: string | null
           payment_provider: string | null
+          promo_code: string | null
           promo_code_id: string | null
           provider_payment_id: string | null
           provider_reference: string | null
@@ -2779,6 +2780,7 @@ export type Database = {
           status: string
           subtotal_cents: number
           ticket_answers: Json
+          waived_steps: Json
           waiver_signatures: Json | null
           total_cents: number
           updated_at: string
@@ -2813,6 +2815,7 @@ export type Database = {
           marketing_consent?: boolean
           paid_at?: string | null
           payment_provider?: string | null
+          promo_code?: string | null
           promo_code_id?: string | null
           provider_payment_id?: string | null
           provider_reference?: string | null
@@ -2822,6 +2825,7 @@ export type Database = {
           status?: string
           subtotal_cents?: number
           ticket_answers?: Json
+          waived_steps?: Json
           waiver_signatures?: Json | null
           total_cents?: number
           updated_at?: string
@@ -2856,6 +2860,7 @@ export type Database = {
           marketing_consent?: boolean
           paid_at?: string | null
           payment_provider?: string | null
+          promo_code?: string | null
           promo_code_id?: string | null
           provider_payment_id?: string | null
           provider_reference?: string | null
@@ -2865,6 +2870,7 @@ export type Database = {
           status?: string
           subtotal_cents?: number
           ticket_answers?: Json
+          waived_steps?: Json
           waiver_signatures?: Json | null
           total_cents?: number
           updated_at?: string
@@ -3911,6 +3917,8 @@ export type Database = {
           redemption_count: number
           valid_from: string | null
           valid_until: string | null
+          waived_questions: Json
+          waives_waiver: boolean
         }
         Insert: {
           amount_off_cents?: number | null
@@ -3927,6 +3935,8 @@ export type Database = {
           redemption_count?: number
           valid_from?: string | null
           valid_until?: string | null
+          waived_questions?: Json
+          waives_waiver?: boolean
         }
         Update: {
           amount_off_cents?: number | null
@@ -3943,6 +3953,8 @@ export type Database = {
           redemption_count?: number
           valid_from?: string | null
           valid_until?: string | null
+          waived_questions?: Json
+          waives_waiver?: boolean
         }
         Relationships: [
           {
@@ -4551,8 +4563,10 @@ export type Database = {
           event_id: string
           id: string
           order_id: string
+          promo_code_id: string | null
           status: string
           ticket_type_id: string
+          waived_steps: Json | null
         }
         Insert: {
           checked_in_at?: string | null
@@ -4566,8 +4580,10 @@ export type Database = {
           event_id: string
           id?: string
           order_id: string
+          promo_code_id?: string | null
           status?: string
           ticket_type_id: string
+          waived_steps?: Json | null
         }
         Update: {
           checked_in_at?: string | null
@@ -4581,8 +4597,10 @@ export type Database = {
           event_id?: string
           id?: string
           order_id?: string
+          promo_code_id?: string | null
           status?: string
           ticket_type_id?: string
+          waived_steps?: Json | null
         }
         Relationships: [
           {
