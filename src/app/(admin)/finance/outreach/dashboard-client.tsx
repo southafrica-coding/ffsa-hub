@@ -21,6 +21,7 @@ import {
 import { ChevronDown, ChevronRight } from "lucide-react";
 import {
   Masthead,
+  MastheadAction,
   NeedsYou,
   SectionBar,
   StatusPill,
@@ -68,6 +69,15 @@ type Program = {
   name: string;
   code: string;
 };
+
+type OutreachGroup = {
+  id: string;
+  name: string;
+  category: string | null;
+};
+
+// Radix Select can't hold an empty value; this stands for "no group".
+const NO_GROUP = "__none__";
 
 type BudgetDetail = {
   category_id: string;
@@ -130,6 +140,10 @@ export function OutreachDashboardClient({
   isStaff,
   canManage,
   archivedTeams,
+  groups,
+  teamGroups,
+  teamAccess,
+  showGroupsLink,
 }: {
   teams: Team[];
   programs: Program[];
@@ -145,8 +159,17 @@ export function OutreachDashboardClient({
   canManage: boolean;
   /** Only loaded for outreach administrators. */
   archivedTeams: ArchivedTeam[];
+  /** Outreach groups this viewer can see (migration 273). */
+  groups: OutreachGroup[];
+  /** team id → the ids of the visible groups it is in. */
+  teamGroups: Record<string, string[]>;
+  /** team id → whether this viewer may change it, and why ("Group manager", "View only"). */
+  teamAccess: Record<string, { canEdit: boolean; label: string | null }>;
+  /** Staff and group managers get the Groups screen. */
+  showGroupsLink: boolean;
 }) {
   const router = useRouter();
+  const [groupFilter, setGroupFilter] = useState("all");
   const [schoolFilter, setSchoolFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [expandedTeams, setExpandedTeams] = useState<Set<string>>(new Set());
@@ -163,6 +186,11 @@ export function OutreachDashboardClient({
 
   const filteredTeams = useMemo(() => {
     let result = teams;
+    if (groupFilter === NO_GROUP) {
+      result = result.filter((t) => !(teamGroups[t.id] ?? []).length);
+    } else if (groupFilter !== "all") {
+      result = result.filter((t) => (teamGroups[t.id] ?? []).includes(groupFilter));
+    }
     if (schoolFilter !== "all") {
       result = result.filter((t) => t.programs?.id === schoolFilter);
     }
@@ -182,7 +210,18 @@ export function OutreachDashboardClient({
       return ra - rb || pa - pb;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [teams, schoolFilter, statusFilter, aggregates]);
+  }, [teams, groupFilter, schoolFilter, statusFilter, aggregates, teamGroups]);
+
+  const groupName = useMemo(
+    () => Object.fromEntries(groups.map((g) => [g.id, g.name])) as Record<string, string>,
+    [groups]
+  );
+  const sectionTitle =
+    groupFilter === "all"
+      ? "Outreach teams"
+      : groupFilter === NO_GROUP
+        ? "Not in a group"
+        : groupName[groupFilter] ?? "Outreach teams";
 
   // Compute aggregates from filtered teams
   const filteredAggregates = useMemo(() => {
@@ -271,7 +310,14 @@ export function OutreachDashboardClient({
       <Masthead
         context="Outreach finance"
         title={isStaff ? "Organisation Dashboard" : "Your outreaches"}
-        actions={<CreateTeamForm programs={programs ?? []} />}
+        actions={
+          <>
+            {showGroupsLink && (
+              <MastheadAction href="/finance/outreach/groups">Groups</MastheadAction>
+            )}
+            <CreateTeamForm programs={programs ?? []} />
+          </>
+        }
       />
 
       {isStaff && pendingCloseouts > 0 && (
@@ -285,6 +331,23 @@ export function OutreachDashboardClient({
       {/* Filter strip — bone, sits directly under the masthead */}
       <div className="flex flex-wrap items-center gap-2 border-b border-rule bg-bone px-8 py-3">
         <span className="mono-label mr-1">Filter</span>
+        {groups.length > 0 && (
+          <Select value={groupFilter} onValueChange={setGroupFilter}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="All Groups" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Groups</SelectItem>
+              {groups.map((g) => (
+                <SelectItem key={g.id} value={g.id}>
+                  {g.name}
+                  {g.category ? ` · ${g.category}` : ""}
+                </SelectItem>
+              ))}
+              <SelectItem value={NO_GROUP}>Not in a group</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
         <Select value={schoolFilter} onValueChange={setSchoolFilter}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="All Programs" />
@@ -365,7 +428,7 @@ export function OutreachDashboardClient({
         >
         <div className="border border-ink">
           <SectionBar
-            title="Outreach teams"
+            title={sectionTitle}
             meta={`${agg.teamCount} teams · ${agg.totalPeople} people`}
           />
           {filteredTeams.length === 0 ? (
@@ -408,6 +471,7 @@ export function OutreachDashboardClient({
                       aggregates.budgetDetailsByTeam[team.id] || [];
                     const categoryExpenses =
                       aggregates.expenseDetailsByTeam[team.id] || {};
+                    const access = teamAccess[team.id] ?? { canEdit: false, label: null };
 
                     return (
                       <Fragment key={team.id}>
@@ -445,6 +509,19 @@ export function OutreachDashboardClient({
                                   {team.programs?.name ? ` · ${team.programs.name}` : ""}
                                   {team.location ? ` · ${team.location}` : ""}
                                 </p>
+                                {(teamGroups[team.id] ?? []).length > 0 && (
+                                  <p className="mono-label mt-1 text-[color:var(--text-tertiary)]">
+                                    {(teamGroups[team.id] ?? [])
+                                      .map((g) => groupName[g])
+                                      .filter(Boolean)
+                                      .join(" · ")}
+                                  </p>
+                                )}
+                                {access.label && (
+                                  <div className="mt-1.5">
+                                    <StatusPill tone="quiet">{access.label}</StatusPill>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </TableCell>
@@ -521,6 +598,7 @@ export function OutreachDashboardClient({
                               <StatusPill tone={statusTones[team.status] ?? "quiet"}>
                                 {team.status}
                               </StatusPill>
+                              {access.canEdit && (
                               <Select
                                 value={team.status}
                                 onValueChange={(val) =>
@@ -538,6 +616,7 @@ export function OutreachDashboardClient({
                                   ))}
                                 </SelectContent>
                               </Select>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>

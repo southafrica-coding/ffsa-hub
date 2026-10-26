@@ -42,7 +42,7 @@ import { SlackSettings } from "./slack-settings";
 import { MoneyAlertSettings } from "./money-alert-settings";
 import { BudgetLines, type BudgetLine } from "./budget-lines";
 import { Planner } from "./planner";
-import { OUTREACH_LEADER_ROLES, OUTREACH_ROLE_LABELS } from "@/lib/finance/outreach-roles";
+import { OUTREACH_ROLE_LABELS } from "@/lib/finance/outreach-roles";
 import { uncoveredCash, type AllocationRow } from "@/lib/finance/outreach-pulls";
 
 // ────────────────────────────────────────────────────────────
@@ -71,8 +71,18 @@ type Team = {
   programs: { id: string; name: string; code: string } | null;
 };
 
-/** Who is looking: their role on this team, and whether they're finance staff who can edit. */
-type Viewer = { role: string | null; staffEditor: boolean };
+/**
+ * Who is looking: their role on this team, whether they're finance staff who
+ * can edit, and whether they may change this team at all (leader, group
+ * manager or staff editor — migration 273). `accessLabel` says why when it's
+ * not obvious ("Group manager", "View only").
+ */
+type Viewer = {
+  role: string | null;
+  staffEditor: boolean;
+  canEdit: boolean;
+  accessLabel: string | null;
+};
 
 type Member = {
   id: string;
@@ -253,6 +263,9 @@ export function TeamDetail({
   // Closeout lock — prevent edits when finances are closed
   const isFinanceLocked =
     closeout?.status === "auto_closed" || closeout?.status === "admin_override";
+  // Read-only for finance viewers and for leaders looking at another team in
+  // their group. RLS refuses their writes anyway; this keeps the controls away.
+  const readOnly = isFinanceLocked || !viewer.canEdit;
 
   // Build spent-per-category map for budget tab
   const spentByCategory: Record<string, number> = {};
@@ -278,6 +291,7 @@ export function TeamDetail({
         title={team.team_name}
         actions={
           <div className="flex flex-wrap items-center justify-end gap-2">
+            {viewer.accessLabel && <StatusPill tone="quiet">{viewer.accessLabel}</StatusPill>}
             {team.archived_at && <StatusPill tone="quiet">Archived</StatusPill>}
             <StatusPill tone={statusTones[team.status] ?? "quiet"}>
               {team.status}
@@ -393,7 +407,7 @@ export function TeamDetail({
             lines={budgetLines}
             categories={categories}
             spentByCategory={spentByCategory}
-            canEdit={!isFinanceLocked}
+            canEdit={!readOnly}
           />
         </TabsContent>
 
@@ -407,7 +421,7 @@ export function TeamDetail({
             expenses={expenses}
             categories={categories}
             dayPlans={dayPlans}
-            canEdit={!isFinanceLocked}
+            canEdit={!readOnly}
           />
         </TabsContent>
 
@@ -418,11 +432,14 @@ export function TeamDetail({
             allUsers={allUsers}
             viewer={viewer}
           />
+          {viewer.canEdit && (
           <SlackSettings
             teamId={team.id}
             enabled={team.slack_enabled ?? false}
             channelId={team.slack_channel_id ?? null}
           />
+          )}
+          {viewer.canEdit && (
           <MoneyAlertSettings
             teamId={team.id}
             lowPct={team.cash_alert_low_pct ?? 30}
@@ -441,6 +458,7 @@ export function TeamDetail({
             }
             people={allUsers}
           />
+          )}
         </TabsContent>
 
         <TabsContent value="expenses" className="mt-4">
@@ -451,7 +469,7 @@ export function TeamDetail({
             categories={categories}
             cashBatches={cashBatches}
             receiptCounts={receiptCounts}
-            readOnly={isFinanceLocked}
+            readOnly={readOnly}
           />
         </TabsContent>
 
@@ -461,7 +479,7 @@ export function TeamDetail({
             fundReleases={fundReleases}
             cashBatches={cashBatches}
             allocations={cashAllocations}
-            readOnly={isFinanceLocked}
+            readOnly={readOnly}
           />
         </TabsContent>
 
@@ -483,6 +501,7 @@ export function TeamDetail({
             fundReleases={fundReleases}
             closeout={closeout}
             canApprove={viewer.staffEditor}
+            readOnly={!viewer.canEdit}
           />
         </TabsContent>
         </Tabs>
@@ -512,12 +531,13 @@ function MembersTab({
   const [selectedRole, setSelectedRole] = useState("team_member");
   const [addLoading, setAddLoading] = useState(false);
 
-  // Mirrors the RLS in migration 260, which is what actually enforces it:
-  // only the owner (or finance staff) adds, changes and removes co-leaders
-  // and hands the outreach over; co-leaders add and remove team members.
+  // Mirrors the RLS in migrations 260 and 273, which is what actually
+  // enforces it: only the owner (or finance staff) adds, changes and removes
+  // co-leaders and hands the outreach over; co-leaders and group managers add
+  // and remove team members.
   const canManageLeaders = viewer.role === "owner" || viewer.staffEditor;
-  const canManageMembers =
-    canManageLeaders || (viewer.role !== null && OUTREACH_LEADER_ROLES.includes(viewer.role));
+  // canEdit covers the team's own leaders as well as group managers.
+  const canManageMembers = canManageLeaders || viewer.canEdit;
   const roleOptions = canManageLeaders
     ? TEAM_ROLES
     : TEAM_ROLES.filter((r) => r.value === "team_member");

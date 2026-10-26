@@ -20,6 +20,8 @@ import {
   getOutreachTeamDeleteBlockers,
 } from "@/services/outreach-finance";
 import { describeDeleteBlockers } from "@/lib/finance/outreach-team-admin";
+import { NO_ACCESS, accessLabel, resolveTeamAccess } from "@/lib/finance/outreach-access";
+import { loadOutreachViewer } from "@/lib/finance/outreach-viewer";
 import { TeamDetail } from "./team-detail";
 
 export default async function OutreachTeamDetailPage({
@@ -62,20 +64,27 @@ export default async function OutreachTeamDetailPage({
     );
   }
 
+  // What this viewer may do here (migration 273): edit as staff, leader or
+  // group manager; read only as finance viewer or a leader of a team in the
+  // same group. Decided on the server from fresh reads, every request.
+  const outreachViewer = user ? await loadOutreachViewer(supabase, user.id) : null;
+  const access = outreachViewer ? resolveTeamAccess(outreachViewer, teamId) : NO_ACCESS;
+  const canEdit = access.level === "edit";
+  const staffEditor = outreachViewer?.staffEditor === true;
+
   // People's names. The users table only lets admins read everyone, so a
   // leader inviting people saw nobody to add (and blank names for existing
-  // members). Finance staff and the team's leaders get names + emails via
-  // the service role — nothing else about anyone.
+  // members). Finance staff, the team's leaders and anyone else who can see
+  // its money get names + emails via the service role — nothing else about
+  // anyone. Only people who can edit get the full list to add from.
   const admin = createAdminClient();
   const staff = user ? await isFinanceStaff(admin, user.id) : false;
   const leader = myRole !== null && OUTREACH_LEADER_ROLES.includes(myRole);
-  const people = staff || leader ? admin : supabase;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: staffEditor } = await (supabase as any).rpc("is_outreach_staff_editor");
+  const people = staff || leader || access.level === "edit" || access.level === "view" ? admin : supabase;
   // Outreach administrators get Archive / Delete; Delete needs to know what
   // it would destroy (migration 272).
   const { data: deleteBlockers } =
-    staffEditor === true
+    staffEditor
       ? await getOutreachTeamDeleteBlockers(supabase, teamId)
       : { data: null };
 
@@ -106,11 +115,13 @@ export default async function OutreachTeamDetailPage({
   // Get all users for member assignment + receipt counts per expense, and
   // the school leader named for money alerts (migration 261).
   const [{ data: allUsers }, { data: receiptRows }, { data: alertRecipient }] = await Promise.all([
-    people
-      .from("users")
-      .select("id, first_name, last_name, preferred_name, email")
-      .eq("is_active", true)
-      .order("last_name", { ascending: true }),
+    canEdit
+      ? people
+          .from("users")
+          .select("id, first_name, last_name, preferred_name, email")
+          .eq("is_active", true)
+          .order("last_name", { ascending: true })
+      : Promise.resolve({ data: [] }),
     supabase
       .from("outreach_receipts")
       .select("expense_id")
@@ -150,7 +161,7 @@ export default async function OutreachTeamDetailPage({
       closeout={closeout ?? null}
       receiptCounts={receiptCounts}
       cashAllocations={cashAllocations ?? []}
-      viewer={{ role: myRole, staffEditor: staffEditor === true }}
+      viewer={{ role: myRole, staffEditor, canEdit, accessLabel: accessLabel(access) }}
       deleteBlockers={deleteBlockers ? describeDeleteBlockers(deleteBlockers) : ["linked records"]}
       // Generated types predate users.slack_user_id.
       alertRecipient={(alertRecipient ?? null) as Parameters<typeof TeamDetail>[0]["alertRecipient"]}

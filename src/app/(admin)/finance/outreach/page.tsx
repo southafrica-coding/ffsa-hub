@@ -15,6 +15,14 @@ import {
   describeDeleteBlockers,
 } from "@/lib/finance/outreach-team-admin";
 import { getPrograms } from "@/services/schools";
+import { getOutreachGroups } from "@/services/outreach-groups";
+import {
+  NO_ACCESS,
+  accessLabel,
+  groupsOfTeam,
+  resolveTeamAccess,
+} from "@/lib/finance/outreach-access";
+import { loadOutreachViewer } from "@/lib/finance/outreach-viewer";
 import { OutreachDashboardClient } from "./dashboard-client";
 
 export default async function OutreachFinancePage() {
@@ -23,23 +31,50 @@ export default async function OutreachFinancePage() {
     data: { user },
   } = await supabase.auth.getUser();
   // Open to everyone: RLS hands finance staff every team and everyone else
-  // only the outreaches they own or co-lead. School-fee payments are staff
-  // business, so only staff read them.
+  // the outreaches they own or co-lead, the teams in groups they manage, and
+  // (read-only) the other teams in their own team's groups. School-fee
+  // payments are staff business, so only staff read them.
   const staff = user ? await isFinanceStaff(createAdminClient(), user.id) : false;
   // Outreach administrators archive, unarchive and delete teams (migration 272).
   const canManage = user ? await canManageOutreachTeams(supabase) : false;
   // Same RLS-bound client as the rest of the page: the ledger shows exactly the
   // movements this viewer is already entitled to see, and each source inside
   // these two calls settles on its own so one blocked table cannot 500 the page.
-  const [{ data: teams }, { data: programs }, aggregates, movements, unmatched, archivedRes] =
-    await Promise.all([
-      getOutreachTeams(supabase),
-      getPrograms(supabase),
-      getAggregateFinancials(supabase),
-      getRecentMoneyMovements(supabase),
-      staff ? getUnmatchedFeePayments(supabase) : Promise.resolve({ count: 0, rows: [] }),
-      canManage ? getOutreachTeams(supabase, { archived: true }) : Promise.resolve({ data: [] }),
-    ]);
+  const [
+    { data: teams },
+    { data: programs },
+    aggregates,
+    movements,
+    unmatched,
+    archivedRes,
+    viewer,
+    { data: groups },
+  ] = await Promise.all([
+    getOutreachTeams(supabase),
+    getPrograms(supabase),
+    getAggregateFinancials(supabase),
+    getRecentMoneyMovements(supabase),
+    staff ? getUnmatchedFeePayments(supabase) : Promise.resolve({ count: 0, rows: [] }),
+    canManage ? getOutreachTeams(supabase, { archived: true }) : Promise.resolve({ data: [] }),
+    user ? loadOutreachViewer(supabase, user.id) : Promise.resolve(null),
+    // Groups this viewer can see (migration 273): staff all, managers theirs,
+    // leaders the ones their team is in.
+    getOutreachGroups(supabase),
+  ]);
+
+  // How this viewer reaches each team they can see: RLS already limited the
+  // list, this only says whether they can change it and why.
+  const visibleTeams = (teams ?? []) as { id: string }[];
+  const teamAccess = Object.fromEntries(
+    visibleTeams.map((t) => {
+      const access = viewer ? resolveTeamAccess(viewer, t.id) : NO_ACCESS;
+      return [t.id, { canEdit: access.level === "edit", label: accessLabel(access) }];
+    })
+  );
+  const teamGroups = Object.fromEntries(
+    visibleTeams.map((t) => [t.id, viewer ? groupsOfTeam(viewer, t.id) : []])
+  );
+  const showGroupsLink = !!viewer && (viewer.staffViewer || viewer.managedGroupIds.length > 0);
 
   // Archived teams, each with what a delete would destroy.
   const archivedTeams = await Promise.all(
@@ -69,6 +104,10 @@ export default async function OutreachFinancePage() {
       isStaff={staff}
       canManage={canManage}
       archivedTeams={archivedTeams}
+      groups={(groups ?? []) as { id: string; name: string; category: string | null }[]}
+      teamGroups={teamGroups}
+      teamAccess={teamAccess}
+      showGroupsLink={showGroupsLink}
     />
   );
 }

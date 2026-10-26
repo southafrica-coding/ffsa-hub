@@ -7,9 +7,10 @@ import {
   transferOutreachOwnership,
 } from "@/services/outreach-finance";
 
-// Who may do what is decided by RLS (migration 260): the owner adds and
-// changes co-leaders, co-leaders add plain team members, finance staff can
-// do either. A refused write comes back as an RLS error or zero rows.
+// Who may do what is decided by RLS (migrations 260, 273): the owner adds and
+// changes co-leaders, co-leaders and group managers add plain team members,
+// finance staff can do either. A refused write comes back as an RLS error or
+// zero rows.
 const ROLES = ["co_leader", "team_member"];
 
 export async function POST(request: Request) {
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
           error:
             role === "co_leader"
               ? "Only the outreach's owner can add co-leaders"
-              : "Only the owner and co-leaders can add team members",
+              : "Only the owner, co-leaders and group managers can add team members",
         },
         { status: 403 }
       );

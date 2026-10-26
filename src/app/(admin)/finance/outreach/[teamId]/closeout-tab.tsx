@@ -54,6 +54,7 @@ export function CloseoutTab({
   fundReleases,
   closeout: initialCloseout,
   canApprove = true,
+  readOnly = false,
 }: {
   teamId: string;
   expenses: Expense[];
@@ -61,6 +62,8 @@ export function CloseoutTab({
   closeout: Closeout | null;
   /** Approving or rejecting a >2% variance is finance staff's call (migration 260). */
   canApprove?: boolean;
+  /** Viewers who can't change this team (migration 273) only read the closeout. */
+  readOnly?: boolean;
 }) {
   const router = useRouter();
   const [closeout, setCloseout] = useState<Closeout | null>(initialCloseout);
@@ -161,6 +164,13 @@ export function CloseoutTab({
   // ────────────────────────────────────────────────────────────
   // RENDER: No closeout yet — show form
   // ────────────────────────────────────────────────────────────
+  if (!closeout && readOnly) {
+    return (
+      <p className="border border-rule-strong p-4 text-sm text-muted-foreground">
+        This team hasn&apos;t closed out yet.
+      </p>
+    );
+  }
   if (!closeout) {
     return (
       <div className="space-y-6">
@@ -445,7 +455,7 @@ export function CloseoutTab({
       )}
 
       {/* Rejected: Re-initiate option */}
-      {isRejected && (
+      {isRejected && !readOnly && (
         <div>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <Button
