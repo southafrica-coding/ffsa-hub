@@ -7,7 +7,7 @@ import {
   listPickableUsers,
   listSubcategories,
 } from "@/services/ministries";
-import { deriveUserLifecycle } from "@/lib/users/lifecycle";
+import { missingProfileSections } from "@/lib/ministries/roster-eligibility";
 import { callerIsAdmin, callerLeadsMinistry } from "@/lib/auth/check-ministry-access";
 import { isLeadershipTeam } from "@/lib/auth/check-okr-access";
 import { MinistryDetail } from "./ministry-detail";
@@ -49,10 +49,11 @@ export default async function MinistryDetailPage({
 
   // Only people whose profile is FULLY SET UP (the profile-completion gate
   // would pass — no missing required fields) may be added to a ministry or
-  // made a leader. Project to the minimal fields the picker needs.
+  // made a leader. Everyone else is still listed, with what they're missing,
+  // so the picker can show them greyed out instead of silently leaving them
+  // out. Project to the minimal fields the picker needs.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const eligiblePickable = ((pickable ?? []) as any[])
-    .filter((u) => deriveUserLifecycle(u).missingFields.length === 0)
     .map((u) => ({
       id: u.id,
       first_name: u.first_name,
@@ -60,6 +61,7 @@ export default async function MinistryDetailPage({
       display_name: u.display_name,
       preferred_name: u.preferred_name,
       email: u.email,
+      missing: missingProfileSections(u),
     }));
 
   return (

@@ -92,23 +92,40 @@ function PersonPicker({
           <CommandList>
             <CommandEmpty>No one found.</CommandEmpty>
             <CommandGroup>
-              {options.map((u) => (
-                <CommandItem
-                  key={u.id}
-                  value={`${nameOf(u)} ${u.email ?? ""}`}
-                  onSelect={() => {
-                    setOpen(false);
-                    onPick(u.id);
-                  }}
-                >
-                  <span className="truncate">{nameOf(u)}</span>
-                  {u.email && (
-                    <span className="ml-2 truncate text-xs text-muted-foreground">
-                      {u.email}
-                    </span>
-                  )}
-                </CommandItem>
-              ))}
+              {options.map((u) => {
+                // Unfinished profiles are listed so people can be found, but
+                // can't be picked until the profile is complete (the API
+                // enforces the same rule).
+                const missing: string[] = u.missing ?? [];
+                const blocked = missing.length > 0;
+                return (
+                  <CommandItem
+                    key={u.id}
+                    value={`${nameOf(u)} ${u.email ?? ""}`}
+                    disabled={blocked}
+                    onSelect={() => {
+                      if (blocked) return;
+                      setOpen(false);
+                      onPick(u.id);
+                    }}
+                    className={blocked ? "flex-col items-start gap-0.5 opacity-60" : undefined}
+                  >
+                    <div className="flex w-full min-w-0 items-center">
+                      <span className="truncate">{nameOf(u)}</span>
+                      {u.email && (
+                        <span className="ml-2 truncate text-xs text-muted-foreground">
+                          {u.email}
+                        </span>
+                      )}
+                    </div>
+                    {blocked && (
+                      <span className="text-[11px] text-muted-foreground">
+                        Profile incomplete — missing: {missing.join(", ")}
+                      </span>
+                    )}
+                  </CommandItem>
+                );
+              })}
             </CommandGroup>
           </CommandList>
         </Command>

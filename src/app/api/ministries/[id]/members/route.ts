@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { callerLeadsMinistry } from "@/lib/auth/check-ministry-access";
+import { rosterBlockReason } from "@/lib/ministries/roster-eligibility";
 
 // Add a staff member to a ministry. Admins (any ministry) or a Ministry
 // Leader (their own). Admin/leader adds land active immediately.
@@ -25,6 +26,8 @@ export async function POST(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin: any = createAdminClient();
+  const blocked = await rosterBlockReason(admin, targetUserId);
+  if (blocked) return NextResponse.json({ error: blocked }, { status: 400 });
   const { error } = await admin.from("staff_ministry_members").insert({
     staff_ministry_id: id,
     user_id: targetUserId,
