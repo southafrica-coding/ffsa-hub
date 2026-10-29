@@ -4,7 +4,7 @@
 -- ============================================================
 -- APPLY ORDER: 275 (PR #474), 277, 278, then this file.
 --
--- Two flat, read-only views over the budget tables, for the finance
+-- Flat, read-only views over the budget tables, for the finance
 -- screens, exports and (later) the AI assistant:
 --
 --   v_budget_lines_flat — one row per live (not archived) budget line, with
@@ -14,26 +14,32 @@
 --                         and tracking option names.
 --   v_budget_summary    — one row per budget × section × category: number
 --                         of lines, total in cents, lines needing coding.
+--   v_budget_yoy        — year-over-year: every budget that continues an
+--                         earlier one (budgets.source_budget_id, set by
+--                         copy_budget_to_period and by saved templates),
+--                         per category: this budget's total, the earlier
+--                         budget's total and the change.
 --
--- Both are security_invoker = true (PG15+, precedent 174): they run with
+-- All three are security_invoker = true (PG15+, precedent 174): they run with
 -- the CALLER's rights, so RLS on the underlying tables decides what each
 -- person sees. Finance sees every budget. A member sees only their own
 -- budgets, and the Xero columns come back empty for them because the
 -- coding and mirror tables are finance-only. Nothing here bypasses RLS.
 -- The mirror's raw payloads and the audit log are not exposed.
 --
--- Only adds two views; no table or row is touched.
+-- Only adds three views; no table or row is touched.
 --
 -- Safe to re-run: each view is dropped and created again, so the
 -- security_invoker option is always re-applied.
 --
--- ROLLBACK: drop the two views (block at the end of this file).
+-- ROLLBACK: drop the three views (block at the end of this file).
 -- ============================================================
 
 
 -- ────────────────────────────────────────────────────────────
 -- 1. v_budget_lines_flat
 -- ────────────────────────────────────────────────────────────
+DROP VIEW IF EXISTS public.v_budget_yoy;
 DROP VIEW IF EXISTS public.v_budget_summary;
 DROP VIEW IF EXISTS public.v_budget_lines_flat;
 
@@ -69,6 +75,7 @@ SELECT
   l.line_total_cents,
   l.coding_status,
   l.sort,
+  l.source_line_id,
   za.account_id             AS za_account_id,
   za_acc.code               AS za_account_code,
   za_acc.name               AS za_account_name,
@@ -134,14 +141,66 @@ GROUP BY b.id, b.name, b.status, b.currency, b.owner_kind,
 
 
 -- ────────────────────────────────────────────────────────────
--- 3. Grants + comments
+-- 3. v_budget_yoy
+-- ────────────────────────────────────────────────────────────
+-- A category that exists in only one of the pair shows 0 for the other.
+-- A pair with no lines on either side still shows one row (category NULL).
+-- Someone who can see the new budget but not the earlier one gets
+-- source_* columns empty and source_total_cents 0 (RLS on the earlier one).
+CREATE VIEW public.v_budget_yoy
+WITH (security_invoker = true) AS
+WITH totals AS (
+  SELECT l.budget_id, l.category_id, sum(l.line_total_cents)::bigint AS total_cents
+    FROM public.budget_lines l
+   WHERE l.archived_at IS NULL
+   GROUP BY l.budget_id, l.category_id
+)
+SELECT
+  b.id                                           AS budget_id,
+  b.name                                         AS budget_name,
+  b.period_id,
+  fp.label                                       AS period_label,
+  b.currency,
+  b.owner_kind,
+  coalesce(b.staff_ministry_id, b.subcategory_id, b.program_id, b.event_id, b.outreach_team_id)
+                                                 AS owner_id,
+  b.source_budget_id,
+  b.source_template_id,
+  sb.name                                        AS source_budget_name,
+  sb.period_id                                   AS source_period_id,
+  sfp.label                                      AS source_period_label,
+  sb.currency                                    AS source_currency,
+  x.category_id,
+  c.name                                         AS category_name,
+  coalesce(x.cur_cents, 0)::bigint               AS total_cents,
+  coalesce(x.src_cents, 0)::bigint               AS source_total_cents,
+  (coalesce(x.cur_cents, 0) - coalesce(x.src_cents, 0))::bigint
+                                                 AS change_cents
+FROM public.budgets b
+LEFT JOIN public.fiscal_periods fp  ON fp.id = b.period_id
+LEFT JOIN public.budgets sb         ON sb.id = b.source_budget_id
+LEFT JOIN public.fiscal_periods sfp ON sfp.id = sb.period_id
+LEFT JOIN LATERAL (
+  SELECT category_id, cur.total_cents AS cur_cents, src.total_cents AS src_cents
+    FROM (SELECT t.category_id, t.total_cents FROM totals t WHERE t.budget_id = b.id) cur
+    FULL JOIN (SELECT t.category_id, t.total_cents FROM totals t WHERE t.budget_id = sb.id) src
+   USING (category_id)
+) x ON true
+LEFT JOIN public.budget_categories c ON c.id = x.category_id
+WHERE b.source_budget_id IS NOT NULL;
+
+
+-- ────────────────────────────────────────────────────────────
+-- 4. Grants + comments
 -- ────────────────────────────────────────────────────────────
 -- The views open only for signed-in users; rows are still filtered by RLS
 -- on the underlying tables (security_invoker).
 REVOKE ALL ON public.v_budget_lines_flat FROM PUBLIC, anon;
 REVOKE ALL ON public.v_budget_summary    FROM PUBLIC, anon;
+REVOKE ALL ON public.v_budget_yoy        FROM PUBLIC, anon;
 GRANT SELECT ON public.v_budget_lines_flat TO authenticated, service_role;
 GRANT SELECT ON public.v_budget_summary    TO authenticated, service_role;
+GRANT SELECT ON public.v_budget_yoy        TO authenticated, service_role;
 
 COMMENT ON VIEW public.v_budget_lines_flat IS
   'One row per live budget line with budget, owner, period, section, friendly category, cents and per-organisation Xero coding (za_* / us_*). security_invoker: the caller''s RLS applies, so members see only their budgets and get NULL Xero columns.';
@@ -163,17 +222,25 @@ COMMENT ON COLUMN public.v_budget_summary.total_cents IS
 COMMENT ON COLUMN public.v_budget_summary.needs_coding_count IS
   'Live lines in this group whose coding_status is needs_coding.';
 
+COMMENT ON VIEW public.v_budget_yoy IS
+  'Year-over-year: each budget that continues an earlier one (source_budget_id), per category, with this total, the earlier total and the change, in cents. Currencies are shown, never converted. security_invoker: the caller''s RLS applies to both budgets.';
+COMMENT ON COLUMN public.v_budget_yoy.source_total_cents IS
+  'The earlier budget''s live total for this category. 0 when the category is new, or when the caller cannot see the earlier budget.';
+COMMENT ON COLUMN public.v_budget_yoy.change_cents IS
+  'total_cents − source_total_cents. Only meaningful when currency = source_currency.';
+
 
 -- ============================================================
 -- Verify:
 --   SELECT relname, reloptions FROM pg_class
---    WHERE relname IN ('v_budget_lines_flat', 'v_budget_summary');
---                                         -- both {security_invoker=true}
+--    WHERE relname IN ('v_budget_lines_flat', 'v_budget_summary', 'v_budget_yoy');
+--                                         -- all {security_invoker=true}
 --   SELECT * FROM public.v_budget_summary LIMIT 5;   -- empty until lines exist
 -- ============================================================
 
 -- ------------------------------------------------------------
 -- ROLLBACK:
+--   DROP VIEW IF EXISTS public.v_budget_yoy;
 --   DROP VIEW IF EXISTS public.v_budget_summary;
 --   DROP VIEW IF EXISTS public.v_budget_lines_flat;
 -- ------------------------------------------------------------

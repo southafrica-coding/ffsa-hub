@@ -61,11 +61,25 @@ describe("migrations 277–279 — the decisions they encode", () => {
   const m278 = all[1].code;
   const m279 = all[2].code;
 
-  it("adds the four budget.* keys to the finance_admin bundle and assigns nothing to a person", () => {
+  it("gives finance_admin view/edit/codes, and budget.approve ONLY to the budget_approver role", () => {
     for (const key of ["budget.view_all", "budget.edit_all", "budget.manage_codes", "budget.approve"]) {
       expect(m277).toContain(`'${key}'`);
     }
-    expect(m277).toMatch(/INSERT INTO public\.role_permissions[\s\S]*WHERE r\.name = 'finance_admin'/);
+    const grants = [...m277.matchAll(/INSERT INTO public\.role_permissions[\s\S]*?WHERE r\.name = '(\w+)'[\s\S]*?;/g)];
+    const byRole = Object.fromEntries(grants.map((g) => [g[1], g[0]]));
+    expect(Object.keys(byRole).sort()).toEqual(["budget_approver", "finance_admin"]);
+    expect(byRole.finance_admin).not.toContain("budget.approve");
+    expect(byRole.budget_approver).toContain("p.key = 'budget.approve'");
+    expect(m277).toMatch(/INSERT INTO public\.roles \(name, display_name, description, is_system\)\s+VALUES \(\s+'budget_approver'/);
+  });
+
+  it("approval checks the permission alone, and the trigger enforces it", () => {
+    expect(m277).toMatch(/FUNCTION public\.can_approve_budgets\(\)[\s\S]*?AS \$\$\s+SELECT public\.has_permission\('budget\.approve'\);\s+\$\$/);
+    expect(m278).toMatch(/IF NEW\.status = 'approved' AND OLD\.status IS DISTINCT FROM 'approved' THEN\s+IF v_uid IS NOT NULL AND NOT public\.can_approve_budgets\(\)/);
+    expect(m278).toMatch(/NEW\.approved_by := v_uid;/);
+  });
+
+  it("assigns no role or permission to a person", () => {
     for (const m of all) {
       expect(m.code).not.toMatch(/INSERT INTO public\.(user_roles|user_permissions)/);
       expect(m.code).not.toMatch(/@[a-z0-9.-]+\.[a-z]{2,}/i); // no email addresses
@@ -81,11 +95,11 @@ describe("migrations 277–279 — the decisions they encode", () => {
     }
   });
 
-  it("the template has the six sheet sections and no lines table", () => {
+  it("the standard template has the six sheet sections and no lines", () => {
     for (const key of ["overview", "dashboard", "variable", "fixed", "expense_tracker", "notes"]) {
       expect(m278).toMatch(new RegExp(`\\('${key}',`));
     }
-    expect(m278).not.toMatch(/budget_template_lines/);
+    expect(all[1].top).not.toMatch(/INSERT INTO public\.budget_template_lines/);
     expect(m278).toMatch(/holds_lines\s+boolean GENERATED ALWAYS AS \(key IN \('fixed', 'variable'\)\) STORED/);
   });
 
@@ -94,14 +108,21 @@ describe("migrations 277–279 — the decisions they encode", () => {
     expect(m278).toMatch(/amount_cents\s+bigint NOT NULL/);
   });
 
-  it("create_budget_from_template runs as the caller and anon cannot call it", () => {
-    expect(m278).toMatch(/FUNCTION public\.create_budget_from_template\([\s\S]*?SECURITY INVOKER/);
-    expect(m278).toMatch(/REVOKE ALL ON FUNCTION public\.create_budget_from_template\([^)]*\) FROM PUBLIC, anon;/);
+  it.each(["create_budget_from_template", "copy_budget_to_period", "save_budget_as_template"])(
+    "%s runs as the caller and anon cannot call it",
+    (fn) => {
+      expect(m278).toMatch(new RegExp(`FUNCTION public\\.${fn}\\([^$]*?SECURITY INVOKER`));
+      expect(m278).toMatch(new RegExp(`REVOKE ALL ON FUNCTION public\\.${fn}\\([^)]*\\) FROM PUBLIC, anon;`));
+    }
+  );
+
+  it("the copied-coding helper (finance data) is not callable by app users", () => {
+    expect(m278).toMatch(/REVOKE ALL ON FUNCTION public\.budget_source_coding\(uuid, uuid\) FROM PUBLIC, anon, authenticated;/);
   });
 
   it("no hard deletes: no DELETE policy on budgets, sections or lines", () => {
     const deletePolicies = [...m278.matchAll(/CREATE POLICY "[^"]+"\s+ON public\.(\w+) FOR (DELETE|ALL)/g)].map((x) => x[1]);
-    expect(deletePolicies.sort()).toEqual(["budget_category_coding", "budget_line_coding", "budget_members"]);
+    expect(deletePolicies.sort()).toEqual(["budget_category_coding", "budget_line_coding", "budget_members", "budget_template_line_coding"]);
   });
 
   it("the audit log cannot be changed", () => {
@@ -110,9 +131,9 @@ describe("migrations 277–279 — the decisions they encode", () => {
     expect(m277).toMatch(/BEFORE TRUNCATE ON public\.finance_audit_log/);
   });
 
-  it("both views run as the caller", () => {
+  it("every view runs as the caller", () => {
     expect([...m279.matchAll(/CREATE VIEW public\.(\w+)\s+WITH \(security_invoker = true\)/g)].map((x) => x[1]))
-      .toEqual(["v_budget_lines_flat", "v_budget_summary"]);
+      .toEqual(["v_budget_lines_flat", "v_budget_summary", "v_budget_yoy"]);
   });
 
   it("hard-codes no ids: owners are looked up, never pasted in", () => {

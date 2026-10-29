@@ -15,10 +15,13 @@
 --        budget.edit_all      — change any budget, its lines and members
 --        budget.manage_codes  — friendly categories and Xero coding
 --        budget.approve       — approve a submitted budget
---      All four are added to the Finance Admin role's bundle
---      (role_permissions, pattern from 183/248). Coreen gets them by
---      holding the finance_admin role. NO role or permission is assigned
---      to any person here — that stays a Roles-page decision.
+--      The first three are added to the Finance Admin role's bundle
+--      (role_permissions, pattern from 183/248).
+--      budget.approve is NOT: only Coreen approves. It is held by exactly
+--      one new role, budget_approver ("Budget Approver", pattern from 248),
+--      and approval checks has_permission('budget.approve') ONLY — not
+--      is_admin(), not finance_admin. NO role or permission is assigned to
+--      any person here; Jack gives Coreen the role by hand (see the PR).
 --
 --   2. Four SQL helpers the policies use: can_view_all_budgets(),
 --      can_edit_all_budgets(), can_manage_budget_codes(),
@@ -26,7 +29,8 @@
 --      can_manage_donor_statements() in 245.
 --      can_view_all_budgets() includes finance.view on purpose: finance
 --      sees every budget, independent of the outreach-only "own teams"
---      flag from 274.
+--      flag from 274. It also includes budget.approve: the approver must
+--      be able to read what she approves.
 --
 --   3. fiscal_periods — the period a budget covers ('2027', a term, an
 --      event). NO periods are seeded: the SA and US year-end dates are
@@ -50,7 +54,8 @@
 -- they are created, seed rows are ON CONFLICT DO NOTHING.
 --
 -- ROLLBACK (summary): drop the triggers, the two tables, the helper
--- functions, the role_permissions rows and the four permission keys.
+-- functions, the role_permissions rows, the four permission keys and the
+-- budget_approver role (which also removes it from whoever holds it).
 -- Full block at the end of this file. Roll back 279 and 278 first.
 -- ============================================================
 
@@ -65,12 +70,31 @@ INSERT INTO public.permissions (module, key, display_name, sort_order) VALUES
   ('finance', 'budget.approve',      'Approve budgets',                    100)
 ON CONFLICT (key) DO NOTHING;
 
+-- Finance Admin: see, edit and code every budget — but NOT approve.
 INSERT INTO public.role_permissions (role_id, permission_id)
 SELECT r.id, p.id
   FROM public.roles r
   JOIN public.permissions p
-    ON p.key IN ('budget.view_all', 'budget.edit_all', 'budget.manage_codes', 'budget.approve')
+    ON p.key IN ('budget.view_all', 'budget.edit_all', 'budget.manage_codes')
  WHERE r.name = 'finance_admin'
+ON CONFLICT (role_id, permission_id) DO NOTHING;
+
+-- Budget Approver: the only holder of budget.approve. Assigned to Coreen by
+-- hand, never by a migration. is_system = false so it shows on the Roles page.
+INSERT INTO public.roles (name, display_name, description, is_system)
+VALUES (
+  'budget_approver',
+  'Budget Approver',
+  'Approves submitted budgets (and can reopen an approved one). The only role that holds budget.approve. Finance Admin can see, edit and code budgets but cannot approve them.',
+  false
+)
+ON CONFLICT (name) DO NOTHING;
+
+INSERT INTO public.role_permissions (role_id, permission_id)
+SELECT r.id, p.id
+  FROM public.roles r
+  JOIN public.permissions p ON p.key = 'budget.approve'
+ WHERE r.name = 'budget_approver'
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 
@@ -92,7 +116,8 @@ RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   SELECT public.can_edit_all_budgets()
       OR public.has_permission('finance.view')
-      OR public.has_permission('budget.view_all');
+      OR public.has_permission('budget.view_all')
+      OR public.has_permission('budget.approve');
 $$;
 
 CREATE OR REPLACE FUNCTION public.can_manage_budget_codes()
@@ -103,12 +128,11 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
       OR public.has_permission('budget.manage_codes');
 $$;
 
+-- Deliberately ONLY the permission: no is_admin(), no finance_admin.
 CREATE OR REPLACE FUNCTION public.can_approve_budgets()
 RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
-  SELECT public.is_admin()
-      OR public.has_role('finance_admin')
-      OR public.has_permission('budget.approve');
+  SELECT public.has_permission('budget.approve');
 $$;
 
 
@@ -148,7 +172,7 @@ CREATE TABLE IF NOT EXISTS public.finance_audit_log (
   actor_user_id  uuid,
   actor_kind     text NOT NULL CHECK (actor_kind IN ('user', 'system', 'xero_sync', 'ai')),
   action         text NOT NULL
-                 CHECK (action IN ('insert', 'update', 'delete', 'archive', 'create_from_template')),
+                 CHECK (action IN ('insert', 'update', 'delete', 'archive', 'create_from_template', 'copy_to_period')),
   entity_type    text NOT NULL,           -- the table name, e.g. 'budget_lines'
   entity_id      uuid,
   budget_id      uuid,
@@ -204,8 +228,10 @@ BEGIN
   IF TG_OP = 'UPDATE' AND v_old ? 'archived_at'
      AND v_old->>'archived_at' IS NULL AND v_new->>'archived_at' IS NOT NULL THEN
     v_action := 'archive';
-  ELSIF TG_OP = 'INSERT' AND TG_TABLE_NAME = 'budgets' AND v_new->>'template_id' IS NOT NULL THEN
-    v_action := 'create_from_template';
+  ELSIF TG_OP = 'INSERT' AND TG_TABLE_NAME = 'budgets' THEN
+    -- A direct copy has a source budget and no source template.
+    v_action := CASE WHEN v_new->>'source_budget_id' IS NOT NULL AND v_new->>'source_template_id' IS NULL
+                     THEN 'copy_to_period' ELSE 'create_from_template' END;
   END IF;
 
   IF TG_TABLE_NAME = 'budgets' THEN
@@ -304,13 +330,13 @@ CREATE POLICY "Finance reads the audit log"
 -- 7. Comments
 -- ────────────────────────────────────────────────────────────
 COMMENT ON FUNCTION public.can_view_all_budgets() IS
-  'True for anyone who sees every budget: admin, finance_admin, finance.view, budget.view_all, or anyone who can edit all budgets. Independent of the outreach-only restriction in migration 274.';
+  'True for anyone who sees every budget: admin, finance_admin, finance.view, budget.view_all, budget.approve, or anyone who can edit all budgets. Independent of the outreach-only restriction in migration 274.';
 COMMENT ON FUNCTION public.can_edit_all_budgets() IS
   'True for anyone who may change any budget, its lines and members: admin, finance_admin or budget.edit_all.';
 COMMENT ON FUNCTION public.can_manage_budget_codes() IS
   'True for anyone who may manage friendly budget categories and Xero coding on budget lines: admin, finance_admin or budget.manage_codes.';
 COMMENT ON FUNCTION public.can_approve_budgets() IS
-  'True for anyone who may approve a submitted budget: admin, finance_admin or budget.approve.';
+  'True ONLY for holders of budget.approve (the Budget Approver role). Admins and finance_admin are deliberately not included: only Coreen approves.';
 COMMENT ON FUNCTION public.finance_audit_row() IS
   'Generic audit trigger: writes one finance_audit_log row per inserted, updated, archived or deleted row (no row when nothing changed). Strips the Xero raw payload.';
 
@@ -332,7 +358,7 @@ COMMENT ON COLUMN public.finance_audit_log.actor_user_id IS
 COMMENT ON COLUMN public.finance_audit_log.actor_kind IS
   'user when a signed-in person made the change, system otherwise. xero_sync and ai are reserved for later phases.';
 COMMENT ON COLUMN public.finance_audit_log.action IS
-  'insert, update, delete, archive (archived_at was set) or create_from_template (a budget created by create_budget_from_template).';
+  'insert, update, delete, archive (archived_at was set), create_from_template (a budget created from a template) or copy_to_period (a budget copied from an earlier one).';
 COMMENT ON COLUMN public.finance_audit_log.entity_type IS
   'Name of the table the changed row lives in, e.g. budget_lines.';
 COMMENT ON COLUMN public.finance_audit_log.entity_id IS
@@ -352,7 +378,8 @@ COMMENT ON COLUMN public.finance_audit_log.after IS
 --   SELECT r.name, p.key FROM public.role_permissions rp
 --     JOIN public.roles r ON r.id = rp.role_id
 --     JOIN public.permissions p ON p.id = rp.permission_id
---    WHERE p.key LIKE 'budget.%' ORDER BY 1, 2;   -- finance_admin x4
+--    WHERE p.key LIKE 'budget.%' ORDER BY 1, 2;   -- budget_approver x1 (approve),
+--                                                  -- finance_admin x3 (no approve)
 --   SELECT relname, relrowsecurity FROM pg_class
 --    WHERE relname IN ('fiscal_periods', 'finance_audit_log');  -- both true
 --   SELECT count(*) FROM public.fiscal_periods;   -- 0 (finance adds the first)
@@ -378,4 +405,7 @@ COMMENT ON COLUMN public.finance_audit_log.after IS
 --   DELETE FROM public.user_permissions
 --    WHERE permission_id IN (SELECT id FROM public.permissions WHERE key LIKE 'budget.%');
 --   DELETE FROM public.permissions WHERE key LIKE 'budget.%';
+--   DELETE FROM public.user_roles
+--    WHERE role_id IN (SELECT id FROM public.roles WHERE name = 'budget_approver');
+--   DELETE FROM public.roles WHERE name = 'budget_approver';
 -- ------------------------------------------------------------
