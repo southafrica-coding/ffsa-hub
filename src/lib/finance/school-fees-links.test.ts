@@ -32,7 +32,9 @@ const FINANCE_VIEW_ONLY: PermissionWorld = {
   direct: [{ module: "finance", key: "finance.view" }],
 };
 const FINANCE_BUNDLE: PermissionWorld = {
-  roles: [{ id: "r-fin", name: "finance_office" }],
+  // A custom role, not the seeded finance_office (which bundles only
+  // finance.donor_statements, migration 248).
+  roles: [{ id: "r-fin", name: "finance_team" }],
   direct: [],
   bundles: { "r-fin": [{ module: "finance", key: "finance.manage" }] },
 };
