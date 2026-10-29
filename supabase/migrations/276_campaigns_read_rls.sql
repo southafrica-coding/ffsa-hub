@@ -1,4 +1,4 @@
--- Migration 254: campaigns / campaign_recipients reads limited to Communications
+-- Migration 276: campaigns / campaign_recipients reads limited to Communications
 --
 -- Migration 045 opened SELECT on both tables to any authenticated user
 -- ("auth.uid() IS NOT NULL"), and 091 left those read policies alone. So any
