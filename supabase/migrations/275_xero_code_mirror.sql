@@ -14,6 +14,8 @@
 -- ids differ, so every mirror row is keyed by org_region + tenant_id + the
 -- Xero id. If the organisation behind a region ever changes, the old rows
 -- are marked missing and new rows are added beside them — never mixed.
+-- A tracking option's category must be in the same org_region + tenant_id;
+-- a composite foreign key enforces this.
 --
 -- Rows are NEVER hard-deleted. When Xero stops returning a row the sync
 -- sets missing_since; when Xero archives it, status = 'archived'.
@@ -40,7 +42,8 @@
 --
 -- Only adds new objects; no existing table or row is touched.
 --
--- Safe to re-run: tables and indexes are IF NOT EXISTS, every policy is
+-- Safe to re-run: tables and indexes are IF NOT EXISTS, the two constraints
+-- added with ALTER TABLE are guarded by a pg_constraint check, every policy is
 -- dropped by name before it is created again, and the two seeded rows are
 -- ON CONFLICT DO NOTHING (an admin's later edit is never overwritten).
 --
@@ -103,6 +106,21 @@ CREATE TABLE IF NOT EXISTS public.xero_tracking_categories (
     UNIQUE (org_region, tenant_id, xero_category_id)
 );
 
+-- Target for the options' composite FK (section 3): lets an option name its
+-- category together with the region + tenant it must share.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'xero_tracking_categories_id_org_tenant_key'
+      AND conrelid = 'public.xero_tracking_categories'::regclass
+  ) THEN
+    ALTER TABLE public.xero_tracking_categories
+      ADD CONSTRAINT xero_tracking_categories_id_org_tenant_key
+      UNIQUE (id, org_region, tenant_id);
+  END IF;
+END $$;
+
 
 -- ────────────────────────────────────────────────────────────
 -- 3. Tracking options
@@ -112,7 +130,7 @@ CREATE TABLE IF NOT EXISTS public.xero_tracking_options (
   org_region       text NOT NULL CHECK (org_region IN ('za', 'us')),
   tenant_id        text NOT NULL,
   xero_option_id   text NOT NULL,
-  category_id      uuid NOT NULL REFERENCES public.xero_tracking_categories(id) ON DELETE RESTRICT,
+  category_id      uuid NOT NULL,         -- FK below, together with org_region + tenant_id
   name             text NOT NULL,
   -- Case/space-insensitive name, for matching names typed elsewhere.
   match_key        text GENERATED ALWAYS AS (lower(btrim(name))) STORED,
@@ -129,6 +147,25 @@ CREATE TABLE IF NOT EXISTS public.xero_tracking_options (
   CONSTRAINT xero_tracking_options_org_tenant_xero_id_key
     UNIQUE (org_region, tenant_id, xero_option_id)
 );
+
+-- An option must belong to a category in the SAME organisation: the FK
+-- carries org_region + tenant_id, so a 'us' option can never point at a 'za'
+-- category (or one from another tenant). The database enforces it, not the
+-- sync. Deleting a category that still has options is blocked.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'xero_tracking_options_category_org_tenant_fkey'
+      AND conrelid = 'public.xero_tracking_options'::regclass
+  ) THEN
+    ALTER TABLE public.xero_tracking_options
+      ADD CONSTRAINT xero_tracking_options_category_org_tenant_fkey
+      FOREIGN KEY (category_id, org_region, tenant_id)
+      REFERENCES public.xero_tracking_categories (id, org_region, tenant_id)
+      ON DELETE RESTRICT;
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_xero_tracking_options_category
   ON public.xero_tracking_options(category_id);
@@ -352,6 +389,13 @@ COMMENT ON COLUMN public.xero_tracking_options.friendly_name IS
 COMMENT ON COLUMN public.xero_tracking_options.is_hidden IS
   'Hub-owned, never overwritten by the Xero sync. Hides the option from Hub pickers; does not affect Xero.';
 
+COMMENT ON COLUMN public.xero_tracking_options.category_id IS
+  'The mirrored category this option belongs to. The foreign key also matches org_region and tenant_id, so the category is always in the same organisation as the option.';
+COMMENT ON CONSTRAINT xero_tracking_options_category_org_tenant_fkey ON public.xero_tracking_options IS
+  'Option and category must share org_region and tenant_id (no ZA option under a US category). ON DELETE RESTRICT: a category with options cannot be deleted.';
+COMMENT ON CONSTRAINT xero_tracking_categories_id_org_tenant_key ON public.xero_tracking_categories IS
+  'Exists only as the target of xero_tracking_options_category_org_tenant_fkey. id alone is already unique.';
+
 COMMENT ON COLUMN public.xero_tracking_options.match_key IS
   'Generated: lower(btrim(name)). Used to match option names typed elsewhere (e.g. "Gap Year 2027") regardless of case or stray spaces.';
 
@@ -423,6 +467,10 @@ COMMENT ON COLUMN public.xero_mirror_changes.entity_id IS
 --   by running the sync again, but the Hub-owned friendly_name / is_hidden
 --   values, the sync-run log, the change history and any edit to
 --   xero_tracking_roles are lost for good.
+--
+--   The two region-match constraints (xero_tracking_categories_id_org_tenant_key
+--   and xero_tracking_options_category_org_tenant_fkey) go with their tables.
+--   The options table is dropped first, so its FK never blocks the drop.
 --
 --   DROP TABLE IF EXISTS public.xero_mirror_changes CASCADE;
 --   DROP TABLE IF EXISTS public.xero_sync_runs CASCADE;

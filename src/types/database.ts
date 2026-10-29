@@ -5416,11 +5416,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "xero_tracking_options_category_id_fkey"
-            columns: ["category_id"]
+            foreignKeyName: "xero_tracking_options_category_org_tenant_fkey"
+            columns: ["category_id", "org_region", "tenant_id"]
             isOneToOne: false
             referencedRelation: "xero_tracking_categories"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "org_region", "tenant_id"]
           },
         ]
       }
