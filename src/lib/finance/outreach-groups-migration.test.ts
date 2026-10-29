@@ -322,12 +322,10 @@ describe("migration 274 — safe to run twice and in order", () => {
     expect(code274).not.toMatch(/\bDROP (TABLE|FUNCTION)\b/);
   });
 
-  // Later migrations (275+) may follow, so this checks order, not "newest".
-  it("comes right after 273, and its number is not shared", () => {
+  it("is the newest migration, right after 273, and its number is not shared", () => {
     const files = readdirSync(DIR).filter((f) => /^\d{3}_.*\.sql$/.test(f));
     const numbers = files.map((f) => Number(f.slice(0, 3)));
-    expect(numbers).toContain(273);
-    expect(Math.max(...numbers)).toBeGreaterThanOrEqual(274);
+    expect(Math.max(...numbers)).toBe(274);
     expect(files.filter((f) => f.startsWith("274_"))).toEqual([FILE_274]);
   });
 });
