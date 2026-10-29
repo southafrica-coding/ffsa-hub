@@ -1185,6 +1185,16 @@ function ArrivalTab({
   }
 
   async function handleStatusChange(enrollmentId: string, newStatus: string) {
+    if (newStatus === "dismissed") {
+      const e = enrollments.find((x) => x.id === enrollmentId);
+      const ok = confirm(
+        `Dismiss ${e ? userName(e.users) : "this student"}?\n\n` +
+          "They come off the arrival list and show as Dismissed on the " +
+          "Students tab. Their Hub login is switched off (staff and admin " +
+          "accounts are never touched)."
+      );
+      if (!ok) return;
+    }
     setUpdatingStatus(enrollmentId);
     try {
       const res = await fetch("/api/schools/enrollments", {
@@ -1194,7 +1204,12 @@ function ArrivalTab({
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        alert(data.error || "Failed to update status");
+        alert(
+          res.status === 403 && newStatus === "dismissed"
+            ? "Dismissing a student needs a schools admin or program leader. " +
+                "Ask one of them to dismiss this student."
+            : data.error || "Failed to update status"
+        );
         return;
       }
       router.refresh();
@@ -1423,13 +1438,18 @@ function ArrivalTab({
                         <select
                           value={studentCourses[enrollment.id]?.arrivals[courseId] ?? "waiting"}
                           disabled={updatingStatus === enrollment.id || removingId === enrollment.id}
-                          onChange={(e) => handleCourseArrival(enrollment.id, e.target.value)}
+                          onChange={(e) =>
+                            e.target.value === "dismissed"
+                              ? handleStatusChange(enrollment.id, "dismissed")
+                              : handleCourseArrival(enrollment.id, e.target.value)
+                          }
                           aria-label={`Arrival for ${userName(enrollment.users)}`}
                           className="h-9 w-[160px]"
                         >
                           <option value="waiting">Waiting</option>
                           <option value="arrived">Arrived</option>
                           <option value="no_show">No-show</option>
+                          <option value="dismissed">Dismissed</option>
                         </select>
                       ) : (
                       <Select
@@ -1447,6 +1467,7 @@ function ArrivalTab({
                         <SelectContent>
                           <SelectItem value="waiting_for_arrival">Waiting for Arrival</SelectItem>
                           <SelectItem value="arrived">Arrived</SelectItem>
+                          <SelectItem value="dismissed">Dismissed</SelectItem>
                         </SelectContent>
                       </Select>
                       )}
