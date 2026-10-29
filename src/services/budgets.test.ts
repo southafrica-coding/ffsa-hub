@@ -1,11 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { addLine, archiveLine, createBudgetFromTemplate, pickEditableLineFields, updateLine } from "./budgets";
+import {
+  addLine,
+  archiveLine,
+  copyBudgetToPeriod,
+  createBudgetFromTemplate,
+  getBudgetTemplates,
+  pickEditableLineFields,
+  saveBudgetAsTemplate,
+  updateLine,
+} from "./budgets";
 
 // A stand-in for the Supabase client that records every call in order.
 function recorder() {
   const calls: [string, ...unknown[]][] = [];
   const builder: Record<string, unknown> = {};
-  for (const m of ["from", "select", "insert", "update", "eq", "is", "order", "single"]) {
+  for (const m of ["from", "select", "insert", "update", "eq", "is", "or", "order", "single"]) {
     builder[m] = (...args: unknown[]) => {
       calls.push([m, ...args]);
       return builder;
@@ -62,9 +71,31 @@ describe("budget service calls", () => {
           p_currency: null,
           p_driver_label: null,
           p_driver_value: null,
+          p_submit: false,
         },
       ],
     ]);
+  });
+
+  it("copyBudgetToPeriod passes the source, period, optional name and submit flag", async () => {
+    const { client, calls } = recorder();
+    await copyBudgetToPeriod(client, { sourceBudgetId: "b2026", periodId: "p2027", submit: true });
+    expect(calls).toEqual([
+      ["rpc", "copy_budget_to_period", { p_source_budget_id: "b2026", p_period_id: "p2027", p_name: null, p_submit: true }],
+    ]);
+  });
+
+  it("saveBudgetAsTemplate passes the budget and name", async () => {
+    const { client, calls } = recorder();
+    await saveBudgetAsTemplate(client, "b1", "Sound – yearly");
+    expect(calls).toEqual([["rpc", "save_budget_as_template", { p_budget_id: "b1", p_name: "Sound – yearly" }]]);
+  });
+
+  it("getBudgetTemplates narrows to the standard templates plus one owner's", async () => {
+    const { client, calls } = recorder();
+    await getBudgetTemplates(client, { ownerKind: "program", ownerId: "som" });
+    expect(calls).toContainEqual(["is", "archived_at", null]);
+    expect(calls).toContainEqual(["or", "owner_kind.is.null,program_id.eq.som"]);
   });
 
   it("addLine never sends a total or a coding status", async () => {

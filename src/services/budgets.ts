@@ -10,6 +10,13 @@ type Client = any;
 
 export type BudgetOwnerKind = "staff_ministry" | "ministry_subcategory" | "program" | "event";
 
+const OWNER_COLUMN: Record<BudgetOwnerKind, string> = {
+  staff_ministry: "staff_ministry_id",
+  ministry_subcategory: "subcategory_id",
+  program: "program_id",
+  event: "event_id",
+};
+
 // Explicit FK names: budget_lines links budgets to budget_sections, so a
 // bare embed would be ambiguous to PostgREST.
 const BUDGET_DETAIL_SELECT = `
@@ -26,12 +33,33 @@ const BUDGET_DETAIL_SELECT = `
 // TEMPLATES
 // ────────────────────────────────────────────────────────────
 
-export async function getBudgetTemplates(supabase: Client) {
-  return supabase
+/**
+ * Templates the user can see: the standard ones, plus saved ones for owners
+ * they belong to (RLS). Pass an owner to narrow to standard + that owner's.
+ */
+export async function getBudgetTemplates(
+  supabase: Client,
+  options?: { ownerKind?: BudgetOwnerKind; ownerId?: string }
+) {
+  let query = supabase
     .from("budget_templates")
     .select("*, budget_template_sections(id, key, label, help_text, sort, holds_lines)")
     .eq("is_active", true)
+    .is("archived_at", null)
     .order("name");
+  if (options?.ownerKind && options.ownerId) {
+    query = query.or(`owner_kind.is.null,${OWNER_COLUMN[options.ownerKind]}.eq.${options.ownerId}`);
+  }
+  return query;
+}
+
+/**
+ * "Save as template": sections, live lines, driver, categories and Xero
+ * coding — no approvals, history, actuals or receipts. Scoped to the
+ * budget's owner. Returns `{ data: templateId }`.
+ */
+export async function saveBudgetAsTemplate(supabase: Client, budgetId: string, name: string) {
+  return supabase.rpc("save_budget_as_template", { p_budget_id: budgetId, p_name: name });
 }
 
 // ────────────────────────────────────────────────────────────
@@ -47,9 +75,15 @@ export type CreateBudgetInput = {
   currency?: "ZAR" | "USD";
   driverLabel?: string;
   driverValue?: number;
+  /** Submit for approval straight away. Never approves. */
+  submit?: boolean;
 };
 
-/** Creates an EMPTY budget (sections, zero lines). Returns `{ data: budgetId }`. */
+/**
+ * A new draft (or submitted) budget from a template. The standard template
+ * gives an EMPTY budget; a saved template also brings its lines and coding.
+ * Returns `{ data: budgetId }`.
+ */
 export async function createBudgetFromTemplate(supabase: Client, input: CreateBudgetInput) {
   return supabase.rpc("create_budget_from_template", {
     p_template_id: input.templateId,
@@ -60,7 +94,35 @@ export async function createBudgetFromTemplate(supabase: Client, input: CreateBu
     p_currency: input.currency ?? null,
     p_driver_label: input.driverLabel ?? null,
     p_driver_value: input.driverValue ?? null,
+    p_submit: input.submit ?? false,
   });
+}
+
+export type CopyBudgetInput = {
+  sourceBudgetId: string;
+  periodId: string;
+  /** Defaults to the source budget's name. */
+  name?: string;
+  submit?: boolean;
+};
+
+/**
+ * Copies a budget into another period (next year / quarter / occurrence) for
+ * the same owner. Draft, or submitted; never approved. Coding is re-checked
+ * against Xero. Returns `{ data: budgetId }`.
+ */
+export async function copyBudgetToPeriod(supabase: Client, input: CopyBudgetInput) {
+  return supabase.rpc("copy_budget_to_period", {
+    p_source_budget_id: input.sourceBudgetId,
+    p_period_id: input.periodId,
+    p_name: input.name ?? null,
+    p_submit: input.submit ?? false,
+  });
+}
+
+/** Year-over-year rows for a budget: per category, this total vs its source budget's. */
+export async function getBudgetYearOverYear(supabase: Client, budgetId: string) {
+  return supabase.from("v_budget_yoy").select("*").eq("budget_id", budgetId).order("category_name");
 }
 
 /** One budget with its period, sections and live (not archived) lines, in order. */
