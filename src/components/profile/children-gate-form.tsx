@@ -24,6 +24,11 @@ import { isChildComplete, missingChildFields } from "@/lib/users/profile-fields"
 //      (multiple allowed). Mandatory: at least one complete child before the
 //      Hub unblocks. No -> clears the gate.
 //
+// Marital status decides which questions are asked (familyGatePlan in
+// lib/users/marital-status): only a married person (or one with no status on
+// record) is asked about a spouse; single, divorced and widowed people go
+// straight to the children question.
+//
 // Spouse is optional and never blocks; the complete-child requirement only
 // applies when they actually have children. The children yes/no answer is the
 // only piece persisted server-side here — it lives on the HOUSEHOLD since
@@ -39,18 +44,24 @@ export function ChildrenGateForm({
   hasChildren,
   members,
   selfDefaults,
+  askSpouse = true,
 }: {
   hasChildren: boolean | null;
   members: HouseholdMember[];
   selfDefaults?: SelfDefaults;
+  // False for single / divorced / widowed people: skip straight to the children
+  // question and never offer the spouse steps.
+  askSpouse?: boolean;
 }) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // If they've already said "yes" to children (record incomplete), open on the
-  // add-children step; otherwise start at the spouse question.
+  // add-children step; otherwise start at the spouse question (or the
+  // children question when there's no spouse to ask about).
+  const firstStep: Step = askSpouse ? "spouse-ask" : "children-ask";
   const [step, setStep] = useState<Step>(
-    hasChildren === true ? "children-add" : "spouse-ask"
+    hasChildren === true ? "children-add" : firstStep
   );
 
   const spouseMembers = members.filter((m) => m.relationship === "spouse");
@@ -129,7 +140,7 @@ export function ChildrenGateForm({
   }
 
   // ── Step 1a: Do you have a spouse? ───────────────────────────
-  if (step === "spouse-ask") {
+  if (step === "spouse-ask" && askSpouse) {
     return (
       <Card className="w-full max-w-md shadow-2xl">
         <CardHeader className="text-center">
@@ -157,7 +168,7 @@ export function ChildrenGateForm({
   }
 
   // ── Step 1b: Add spouse (first / last / email) ───────────────
-  if (step === "spouse-add") {
+  if (step === "spouse-add" && askSpouse) {
     return (
       <Card className="w-full max-w-2xl shadow-2xl">
         <CardHeader className="text-center">
@@ -193,7 +204,8 @@ export function ChildrenGateForm({
   }
 
   // ── Step 2a: Do you have children? ───────────────────────────
-  if (step === "children-ask") {
+  // (The spouse steps fall through to here when askSpouse is false.)
+  if (step === "children-ask" || step === "spouse-ask" || step === "spouse-add") {
     return (
       <Card className="w-full max-w-md shadow-2xl">
         <CardHeader className="text-center">
@@ -222,14 +234,16 @@ export function ChildrenGateForm({
             </Button>
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
-          <Button
-            variant="ghost"
-            className="w-full"
-            onClick={() => setStep("spouse-ask")}
-            disabled={saving}
-          >
-            ← Back
-          </Button>
+          {askSpouse && (
+            <Button
+              variant="ghost"
+              className="w-full"
+              onClick={() => setStep("spouse-ask")}
+              disabled={saving}
+            >
+              ← Back
+            </Button>
+          )}
         </CardContent>
       </Card>
     );

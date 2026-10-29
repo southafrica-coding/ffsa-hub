@@ -5,7 +5,11 @@ import {
   updateHouseholdMember,
   deleteHouseholdMember,
 } from "@/services/household";
-import { sanitizeHouseholdInput } from "@/lib/users/household-input";
+import {
+  sanitizeHouseholdInput,
+  getOwnMaritalStatus,
+} from "@/lib/users/household-input";
+import { householdRelationshipError } from "@/lib/users/marital-status";
 
 // PUT /api/profile/household/[id] — update one of the caller's members.
 export async function PUT(
@@ -19,12 +23,25 @@ export async function PUT(
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const body = await request.json();
+  const body = await request.json().catch(() => null);
+  if (!body || typeof body !== "object") {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
   const { input, error: validationError } = sanitizeHouseholdInput(body, {
     requireCore: false,
   });
   if (validationError) {
     return NextResponse.json({ error: validationError }, { status: 400 });
+  }
+
+  // Spouse data isn't stored for someone who isn't married. Removing an
+  // existing spouse row (DELETE below) is always allowed.
+  const relationshipError = householdRelationshipError(
+    input.relationship,
+    await getOwnMaritalStatus(supabase, user.id)
+  );
+  if (relationshipError) {
+    return NextResponse.json({ error: relationshipError }, { status: 400 });
   }
   if (Object.keys(input).length === 0) {
     return NextResponse.json(

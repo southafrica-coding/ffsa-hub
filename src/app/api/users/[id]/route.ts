@@ -4,6 +4,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getAuthedUser, hasAnyRole } from "@/lib/api-auth";
 import { validateDepartment } from "@/lib/users/validate-department";
 import { normalizeInsuranceWrite } from "@/lib/users/insurance-write";
+import { callerIsSuperAdmin } from "@/lib/auth/check-role-grant";
+import {
+  anyIsSuperAdmin,
+  SUPER_ADMIN_TARGET_ERROR,
+} from "@/lib/auth/super-admin-target";
 
 const ADMIN_ROLES = ["super_admin", "admin"];
 
@@ -80,6 +85,29 @@ export async function PATCH(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin: any = createAdminClient();
+
+  // On a super admin, a General Admin may still fix profile details, but not
+  // the job title or the login email (changing the email hands over the
+  // account). The edit dialog sends every field, so only refuse a real change.
+  if (
+    ("job_title" in updateData || newEmail) &&
+    (await anyIsSuperAdmin(admin, [id])) &&
+    !(await callerIsSuperAdmin(supabase, user.id))
+  ) {
+    const { data: current } = await admin
+      .from("users")
+      .select("email, job_title")
+      .eq("id", id)
+      .maybeSingle();
+    const same = (a: unknown, b: unknown) =>
+      String(a ?? "").trim().toLowerCase() === String(b ?? "").trim().toLowerCase();
+    const titleChanged =
+      "job_title" in updateData && !same(updateData.job_title, current?.job_title);
+    const emailChanged = !!newEmail && !same(newEmail, current?.email);
+    if (titleChanged || emailChanged) {
+      return NextResponse.json({ error: SUPER_ADMIN_TARGET_ERROR }, { status: 403 });
+    }
+  }
 
   // Email change — treated as an immediate, admin-initiated update (no
   // verification link, unlike the self-service flow in confirm-email). Update

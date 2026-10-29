@@ -54,6 +54,8 @@ export async function POST(request: Request) {
     arrival_date: body.arrival_date || null,
     enroll_lead_days: body.enroll_lead_days ?? 30,
     created_by: user!.id,
+    // Only sent when switched off, so the column's default covers the rest.
+    ...(body.graded === false ? { graded: false } : {}),
   });
 
   if (error) {
@@ -87,6 +89,7 @@ export async function PUT(request: Request) {
     if (key in body) update[key] = body[key];
   }
   if ("lead_staff_id" in body) update.lead_staff_id = body.lead_staff_id || null;
+  if (typeof body.graded === "boolean") update.graded = body.graded;
   // Date fields: empty string → null
   for (const key of ["start_date", "end_date", "arrival_date"]) {
     if (key in body) update[key] = body[key] || null;

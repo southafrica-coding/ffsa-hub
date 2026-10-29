@@ -18,6 +18,14 @@ import {
   type WaiverSlotValues,
 } from "@/lib/ticketing/waivers";
 import {
+  cartPromoDiscount,
+  describeWaivedForCart,
+  questionsAfterPromo,
+  toPromoTerms,
+  waiverAfterPromo,
+  type PromoTerms,
+} from "@/lib/ticketing/promo-codes";
+import {
   buyerFieldMap,
   type BuyerFieldConfig,
 } from "@/lib/ticketing/buyer-fields";
@@ -121,13 +129,8 @@ type LineItem = {
   pwywAmountCents: number | null;
 };
 
-type AppliedPromo = {
-  code: string;
-  kind: "percent" | "fixed_amount" | "comp";
-  percent_off: number | null;
-  amount_off_cents: number | null;
-  applies_to_ticket_type_id: string | null;
-};
+// Discount + the steps the code skips (see promo-codes.ts).
+type AppliedPromo = PromoTerms;
 
 function isWindowOpen(t: TicketType, now: Date): boolean {
   if (t.sales_start_at && new Date(t.sales_start_at) > now) return false;
@@ -207,9 +210,12 @@ export function FfsaStorefront({
 
   const questionsByTier = useMemo(() => {
     const m: Record<string, FormField[]> = {};
-    for (const t of ticketTypes) m[t.id] = t.questions ?? [];
+    // An applied promo code can skip some of a tier's questions.
+    for (const t of ticketTypes) {
+      m[t.id] = questionsAfterPromo(t.questions ?? [], appliedPromo, t.id);
+    }
     return m;
-  }, [ticketTypes]);
+  }, [ticketTypes, appliedPromo]);
   const ticketSlots = useMemo(
     () =>
       computeTicketSlots(
@@ -231,9 +237,10 @@ export function FfsaStorefront({
   >({});
   const waiverByTier = useMemo(() => {
     const m: Record<string, TierWaiver | null | undefined> = {};
-    for (const t of ticketTypes) m[t.id] = t.waiver;
+    // An applied promo code can skip a tier's waiver.
+    for (const t of ticketTypes) m[t.id] = waiverAfterPromo(t.waiver, appliedPromo, t.id);
     return m;
-  }, [ticketTypes]);
+  }, [ticketTypes, appliedPromo]);
   const waiverSlots = useMemo(
     () =>
       computeWaiverSlots(
@@ -295,24 +302,17 @@ export function FfsaStorefront({
     Math.round((Number.parseFloat(donationRands) || 0) * 100)
   );
 
-  const promoDiscountCents = useMemo(() => {
-    if (!appliedPromo) return 0;
-    const tierIds = Object.values(lines).map((l) => l.ticketTypeId);
-    if (
-      appliedPromo.applies_to_ticket_type_id &&
-      !tierIds.includes(appliedPromo.applies_to_ticket_type_id)
-    ) {
-      return 0;
-    }
-    if (appliedPromo.kind === "percent") {
-      return Math.round((subtotalCents * (appliedPromo.percent_off ?? 0)) / 100);
-    }
-    if (appliedPromo.kind === "fixed_amount") {
-      return Math.min(subtotalCents, appliedPromo.amount_off_cents ?? 0);
-    }
-    if (appliedPromo.kind === "comp") return subtotalCents;
-    return 0;
-  }, [appliedPromo, subtotalCents, lines]);
+  // The code's discount on its in-scope tickets, recomputed as the cart
+  // changes. Checkout re-validates and re-computes server-side.
+  const promoDiscountCents = useMemo(
+    () => cartPromoDiscount(appliedPromo, Object.values(lines), ticketTypes),
+    [appliedPromo, lines, ticketTypes]
+  );
+  // What the code skips for this cart ("Skips the waiver"), if anything.
+  const promoWaivedNote = useMemo(
+    () => describeWaivedForCart(appliedPromo, Object.values(lines), ticketTypes),
+    [appliedPromo, lines, ticketTypes]
+  );
 
   const totalCents =
     Math.max(0, subtotalCents - promoDiscountCents) + donationCents;
@@ -357,13 +357,7 @@ export function FfsaStorefront({
         setPromoError(data.error ?? "Couldn't apply code.");
         return;
       }
-      setAppliedPromo({
-        code: data.code,
-        kind: data.kind,
-        percent_off: data.percent_off,
-        amount_off_cents: data.amount_off_cents,
-        applies_to_ticket_type_id: data.applies_to_ticket_type_id,
-      });
+      setAppliedPromo(toPromoTerms(data));
       setPromoError(null);
     } catch {
       setCheckingPromo(false);
@@ -818,10 +812,12 @@ export function FfsaStorefront({
                       </p>
                       <p className="ffe-promo-ok-sub">
                         {promoDiscountCents > 0
-                          ? `−${money(promoDiscountCents)} off your order`
-                          : appliedPromo.applies_to_ticket_type_id
-                            ? "Add the matching tier to use this code."
-                            : "No discount on the current cart."}
+                          ? `−${money(promoDiscountCents)} off your order${promoWaivedNote ? ` · ${promoWaivedNote}` : ""}`
+                          : promoWaivedNote
+                            ? promoWaivedNote
+                            : appliedPromo.applies_to_ticket_type_id
+                              ? "Add the matching tier to use this code."
+                              : "No discount on the current cart."}
                       </p>
                     </div>
                     <button

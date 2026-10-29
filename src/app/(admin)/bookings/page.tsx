@@ -1,6 +1,7 @@
 // The bookings hub: what there is to book, and nothing else. Each type is its
 // own module with its own permission, its own screens and its own shape —
-// spaces are a timetable, vehicles are a rental process — so this page routes
+// spaces are a timetable, vehicles are a rental process, equipment is an asset
+// register with a hire shop on top — so this page routes
 // rather than visualising. Only the types the viewer can actually open are
 // listed; a card that would just redirect them out is worse than no card.
 
@@ -11,7 +12,7 @@ import {
   requireAnyModuleAccess,
   hasModuleAccess,
 } from "@/lib/require-permission";
-import { Building2, Car, ArrowUpRight } from "lucide-react";
+import { Building2, Car, Speaker, ArrowUpRight } from "lucide-react";
 import { Masthead } from "@/components/ffsa";
 
 const BOOKING_TYPES = [
@@ -33,6 +34,15 @@ const BOOKING_TYPES = [
     module: "vehicles",
     shape: "Rental process",
   },
+  {
+    title: "Equipment",
+    description:
+      "The sound, visual and stage gear we own: every unit by its tag, what can be booked and what's in for repair.",
+    href: "/bookings/equipment",
+    icon: Speaker,
+    module: "equipment",
+    shape: "Asset register",
+  },
 ];
 
 export default async function BookingsHubPage() {
@@ -41,7 +51,7 @@ export default async function BookingsHubPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
-  await requireAnyModuleAccess(supabase, user.id, ["bookings", "vehicles"]);
+  await requireAnyModuleAccess(supabase, user.id, ["bookings", "vehicles", "equipment"]);
 
   // Each type is asked for independently, on the same module access that gates
   // the screens behind it.

@@ -33,6 +33,8 @@ export async function middleware(request: NextRequest) {
     "/fb", // public event-feedback runtime (/fb/[slug])
     "/scan", // public door scanner (/scan/[token]) — the welcome team has no Hub account, which is the point
     "/vr", // public vehicle request form (/vr/[token]) — shipped in 342 but never listed here, so every outsider was bounced to /login
+    "/hire", // public equipment-hire storefront (/hire, /hire/c/[slug], /hire/p/[slug]) — browsing needs no account
+    "/t", // public tag landing (/t/[tag]) — the QR on every equipment tag; staff are sent on to the register
     "/track-intent", // public FFX track-intent survey (/track-intent/[token], migration 222) — same gotcha as /vr above
     "/api/scan", // public door scanner actions — authorised by the token in the path, not session cookies
     "/api/upload/sign", // public applicants upload photos from /apply
@@ -103,22 +105,46 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Refresh session (important for Server Components)
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
   // Check if the account has been deactivated. A PK lookup on every protected
   // request is acceptable — it is a single indexed read and the only way to
   // reliably block a still-valid Supabase session. Skip this check on public
   // routes (already bypassed above) to keep them fast.
-  let isDeactivated = false;
-  if (user) {
-    const { data: userRow } = await supabase
+  const readIsActive = async (id: string) => {
+    const { data } = await supabase
       .from("users")
       .select("is_active")
-      .eq("id", user.id)
+      .eq("id", id)
       .single();
+    return data as { is_active: boolean | null } | null;
+  };
+
+  // Refresh session (important for Server Components). getSession() reads the
+  // cookie and refreshes an expired token — the same first step getUser()
+  // takes — so the token can then be validated with the Auth server while
+  // the is_active lookup runs alongside it, rather than one after the other.
+  // getUser(token) still has the Auth server vouch for the user; the token's
+  // own claim is only used to start the lookup early, and is thrown away
+  // unless it matches the validated user.
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const accessToken = session?.access_token;
+  const claimedUserId = accessToken ? jwtSubject(accessToken) : null;
+
+  const [
+    {
+      data: { user },
+    },
+    claimedRow,
+  ] = await Promise.all([
+    accessToken ? supabase.auth.getUser(accessToken) : supabase.auth.getUser(),
+    claimedUserId ? readIsActive(claimedUserId) : Promise.resolve(null),
+  ]);
+
+  let isDeactivated = false;
+  if (user) {
+    const userRow =
+      user.id === claimedUserId ? claimedRow : await readIsActive(user.id);
     isDeactivated = userRow?.is_active === false;
   }
 
@@ -152,6 +178,21 @@ export async function middleware(request: NextRequest) {
   }
 
   return supabaseResponse;
+}
+
+// The `sub` claim of a JWT, unverified. Only ever used as a hint to start a
+// query early — see above; the Auth server's answer is what's trusted.
+function jwtSubject(token: string): string | null {
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return null;
+    const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+    const sub = JSON.parse(atob(padded))?.sub;
+    return typeof sub === "string" && sub ? sub : null;
+  } catch {
+    return null;
+  }
 }
 
 export const config = {

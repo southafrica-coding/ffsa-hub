@@ -154,6 +154,17 @@ export async function getRoleDerivedPermissionRows(
     .eq("user_id", userId);
 
   const roleIds = (roleRows ?? []).map((r: { role_id: string }) => r.role_id);
+  return getPermissionRowsForRoles(supabase, roleIds);
+}
+
+/**
+ * Same as getRoleDerivedPermissionRows, for callers that already hold the
+ * user's role ids (saves re-reading user_roles).
+ */
+export async function getPermissionRowsForRoles(
+  supabase: Client,
+  roleIds: string[]
+): Promise<{ module: string; key: string }[]> {
   if (roleIds.length === 0) return [];
 
   const { data: permRows } = await supabase

@@ -24,7 +24,7 @@ export default async function MergeUsersPage({
     .from("user_roles")
     .select("roles!inner(name)")
     .eq("user_id", user.id)
-    .in("roles.name", ["super_admin"])
+    .in("roles.name", ["super_admin", "admin"])
     .limit(1);
 
   if (!adminCheck || adminCheck.length === 0) redirect("/users");

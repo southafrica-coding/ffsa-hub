@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { callerIsSuperAdmin } from "@/lib/auth/check-role-grant";
+import { callerIsAdmin } from "@/lib/auth/check-role-grant";
+import { refuseSuperAdminTarget } from "@/lib/auth/super-admin-target";
 import { syncCalendarAccess } from "@/lib/google/calendar";
 
 // Converts a person to a community member — the "they've left staff" action.
@@ -158,7 +159,7 @@ async function authorize(userId: string | null) {
   if (!authUser) {
     return { error: NextResponse.json({ error: "Not authenticated" }, { status: 401 }) };
   }
-  if (!(await callerIsSuperAdmin(supabase, authUser.id))) {
+  if (!(await callerIsAdmin(supabase, authUser.id))) {
     return { error: NextResponse.json({ error: "Not authorized" }, { status: 403 }) };
   }
   if (!userId) {
@@ -172,6 +173,16 @@ async function authorize(userId: string | null) {
       ),
     };
   }
+  // A super admin's account is only a super admin's to convert — even when
+  // the super_admin role itself would be kept, the conversion strips every
+  // other title, grant and ministry they hold.
+  const refused = await refuseSuperAdminTarget(
+    supabase,
+    authUser.id,
+    createAdminClient(),
+    userId
+  );
+  if (refused) return { error: refused };
   return { authUser };
 }
 
@@ -222,6 +233,7 @@ export async function POST(request: Request) {
 
   // Never leave the org without a super admin — only relevant if we are
   // actually taking super_admin away.
+  // (authorize() has already refused a General Admin converting a super admin.)
   if (removeRoles.some((r) => r.name === "super_admin")) {
     const { data: supers } = await admin
       .from("user_roles")

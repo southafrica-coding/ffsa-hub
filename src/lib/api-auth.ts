@@ -148,8 +148,12 @@ export async function canManageFinance(
   supabase: Client,
   userId: string
 ): Promise<boolean> {
-  if (await hasAnyRole(supabase, userId, FINANCE_MANAGE_ROLES)) return true;
-  return hasAnyPermission(supabase, userId, FINANCE_MANAGE_PERMS);
+  // Independent reads — ask both at once rather than one after the other.
+  const [byRole, byPermission] = await Promise.all([
+    hasAnyRole(supabase, userId, FINANCE_MANAGE_ROLES),
+    hasAnyPermission(supabase, userId, FINANCE_MANAGE_PERMS),
+  ]);
+  return byRole || byPermission;
 }
 
 // Granular communications permissions that imply "can manage / can send".

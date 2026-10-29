@@ -14,7 +14,17 @@ import { Label } from "@/components/ui/label";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { HouseholdMembers } from "@/components/profile/household-members";
-import { REQUIRED_CONSENTS } from "@/services/consent";
+import {
+  MARITAL_STATUS_OPTIONS,
+  addableRelationships,
+  familyQuestionsFor,
+} from "@/lib/users/marital-status";
+import {
+  completeOnboardingRequest,
+  recordAgreements,
+  withTimeout,
+  type SaveOutcome,
+} from "@/lib/onboarding/save-agreements";
 import {
   COUNTRY_OPTIONS,
   SA_PROVINCES,
@@ -105,12 +115,22 @@ export default function OnboardingPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordSet, setPasswordSet] = useState(false);
-  // Required policy agreements for this signup type (privacy + child protection
-  // for everyone; + NDA for staff). Each must be ticked to finish.
+  // Required policy agreements (privacy + child protection for everyone; +
+  // NDA for staff — by signup type OR the staff role, same as the gate).
+  // Each must be ticked to finish. `accepted` = already signed on the
+  // server, so a reload shows it as signed instead of asking again.
   const [requiredAgreements, setRequiredAgreements] = useState<
-    { kind: string; version: string; title: string }[]
+    {
+      kind: string;
+      version: string;
+      title: string;
+      accepted: boolean;
+      accepted_at: string | null;
+    }[]
   >([]);
   const [consentChecked, setConsentChecked] = useState<Record<string, boolean>>({});
+  // Set once everything has saved: shows the confirmation and moves on.
+  const [completed, setCompleted] = useState(false);
   const [programName, setProgramName] = useState<string | null>(null);
   const [signupType, setSignupType] = useState<string | null>(null);
 
@@ -207,27 +227,26 @@ export default function OnboardingPage() {
       });
       setSignupType(appUser.signup_type ?? null);
 
-      // Fetch every policy this signup type must accept (privacy + child
-      // protection for all; + NDA for staff). We record each at finish.
+      // Every policy this person must sign, and which they already have.
+      // The server decides (same rule as the profile-completion gate), so
+      // invited staff — staff role, no signup_type — sign the NDA here
+      // rather than meeting it on its own after setup. We record the
+      // unsigned ones at finish.
       try {
-        const isStaffSignup = appUser.signup_type === "staff";
-        const kinds = REQUIRED_CONSENTS.filter(
-          (r) => r.audience === "all" || (r.audience === "staff" && isStaffSignup)
-        ).map((r) => r.kind);
-        const fetched: { kind: string; version: string; title: string }[] = [];
-        for (const kind of kinds) {
-          const res = await fetch(`/api/consent?kind=${kind}`);
-          if (!res.ok) continue;
-          const { agreement } = await res.json();
-          if (agreement?.version) {
-            fetched.push({
-              kind,
-              version: agreement.version,
-              title: agreement.title,
-            });
+        const res = await fetch("/api/consent/required");
+        if (res.ok) {
+          const { agreements } = await res.json();
+          if (Array.isArray(agreements)) {
+            setRequiredAgreements(agreements);
+            setConsentChecked(
+              Object.fromEntries(
+                agreements
+                  .filter((a: { accepted: boolean }) => a.accepted)
+                  .map((a: { kind: string }) => [a.kind, true])
+              )
+            );
           }
         }
-        setRequiredAgreements(fetched);
       } catch {
         // Non-fatal; the consent step will display an error if none loaded.
       }
@@ -317,38 +336,71 @@ export default function OnboardingPage() {
     return null;
   }
 
+  // Once everything is saved, move on. router.replace normally unmounts this
+  // page; if it hasn't after a few seconds, a hard navigation makes sure the
+  // person is never left sitting on the finished wizard.
+  useEffect(() => {
+    if (!completed) return;
+    router.replace("/dashboard");
+    const t = setTimeout(() => window.location.assign("/dashboard"), 5000);
+    return () => clearTimeout(t);
+  }, [completed, router]);
+
   async function handleFinish() {
-    if (!userId) return;
+    if (!userId || saving) return;
     if (requiredAgreements.length === 0) {
       setError("Unable to load the required agreements. Please refresh and try again.");
       return;
     }
-    if (!requiredAgreements.every((a) => consentChecked[a.kind])) {
+    if (!requiredAgreements.every((a) => a.accepted || consentChecked[a.kind])) {
       setError("You must read and agree to every policy to complete onboarding.");
       return;
     }
     setSaving(true); setError(null);
-    try {
-      for (const agreement of requiredAgreements) {
-        const consentRes = await fetch("/api/consent", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            kind: agreement.kind,
-            agreement_version: agreement.version,
-            source: "onboarding",
-          }),
-        });
-        if (!consentRes.ok) {
-          const result = await consentRes.json().catch(() => ({}));
-          throw new Error(result.error ?? `Failed to record consent for ${agreement.title}`);
-        }
-      }
+    // Every step below resolves (ok or a plain error) within a time limit,
+    // so "Saving…" always ends — in the confirmation or in an error with
+    // "Try again". Retrying is safe: signing is idempotent server-side.
+    const outcome = await saveAndFinish(userId);
+    setSaving(false);
+    if (!outcome.ok) {
+      setError(outcome.error);
+      return;
+    }
+    setCompleted(true);
+  }
 
-      // health_insurance_no_expiry / _confirmed_at (migration 211) aren't in
-      // the generated DB types yet — same loose-cast convention used
-      // elsewhere for not-yet-generated columns.
-      const { error: profileError } = await updateUserProfile(supabase, userId, {
+  async function saveAndFinish(id: string): Promise<SaveOutcome> {
+    const signed = await recordAgreements(
+      requiredAgreements.filter((a) => !a.accepted)
+    );
+    if (!signed.ok) return signed;
+    // Show them as signed straight away, and don't re-send on a retry.
+    setRequiredAgreements((prev) =>
+      prev.map((a) => ({
+        ...a,
+        accepted: true,
+        accepted_at: a.accepted_at ?? new Date().toISOString(),
+      }))
+    );
+
+    const profile = await withTimeout(saveProfile(id));
+    if (!profile.ok) return profile;
+    if (profile.value.error) {
+      return {
+        ok: false,
+        error: `Your agreements are signed, but we couldn't save your profile details (${profile.value.error.message}). Please try again.`,
+      };
+    }
+
+    // Completion runs server-side so it can also notify the people admins.
+    return completeOnboardingRequest();
+  }
+
+  function saveProfile(id: string) {
+    // health_insurance_no_expiry / _confirmed_at (migration 211) aren't in
+    // the generated DB types yet — same loose-cast convention used
+    // elsewhere for not-yet-generated columns.
+    return updateUserProfile(supabase, id, {
         first_name: form.first_name.trim(), last_name: form.last_name.trim(),
         date_of_birth: nullify(form.date_of_birth),
         gender: nullify(form.gender), marital_status: nullify(form.marital_status),
@@ -379,18 +431,6 @@ export default function OnboardingPage() {
           : null,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
-      if (profileError) throw new Error(profileError.message);
-      // Completion runs server-side so it can also notify the people admins.
-      const res = await fetch("/api/onboarding/complete", { method: "POST" });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error ?? "Could not finish setting up your account.");
-      }
-      router.push("/dashboard");
-    } catch (err: any) {
-      setError(err.message ?? "Something went wrong. Please try again.");
-      setSaving(false);
-    }
   }
 
   if (loading) {
@@ -408,7 +448,17 @@ export default function OnboardingPage() {
   // Province isn't collected for the self-signup membership types.
   const hideProvince =
     signupType === "staff" || signupType === "student" || signupType === "community";
-  const activeSteps = STEP_DEFS.filter((d) => !(isCommunity && d.key === "passport"));
+  // Marital status drives the Family step: married → spouse + children,
+  // single / divorced / widowed → children only. (skipFamily only applies
+  // if a status ever asks neither.)
+  const familyQs = familyQuestionsFor(form.marital_status);
+  const familyRelationships = addableRelationships(form.marital_status);
+  const skipFamily = !familyQs.spouse && !familyQs.children;
+  const activeSteps = STEP_DEFS.filter(
+    (d) =>
+      !(isCommunity && d.key === "passport") &&
+      !(skipFamily && d.key === "family")
+  );
   const activeNums = activeSteps.map((d) => d.num);
   const currentPos = Math.max(0, activeNums.indexOf(step));
   const totalSteps = activeSteps.length;
@@ -519,7 +569,41 @@ export default function OnboardingPage() {
             </div>
           )}
 
-          {/* Step card */}
+          {completed ? (
+            // Finished: everything is saved. Say so plainly, then move on
+            // (see the `completed` effect); the button is the manual way.
+            <div
+              role="status"
+              style={{ background: "var(--surface-1)", border: "1px solid var(--rule)", borderRadius: "0" }}
+            >
+              <div style={{ padding: "1.75rem 2rem 1.25rem", borderBottom: "1px solid var(--rule)" }}>
+                <p className="page-eyebrow" style={{ marginBottom: "6px" }}>Setup complete</p>
+                <h2 style={{ fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase", fontSize: "2rem", letterSpacing: "0.04em", color: "var(--text-primary)", lineHeight: 1 }}>
+                  You&rsquo;re all set
+                </h2>
+              </div>
+              <div style={{ padding: "1.5rem 2rem" }} className="space-y-3">
+                <p style={{ fontSize: "13px", color: "var(--text-secondary)", lineHeight: 1.55 }}>
+                  Your profile is saved and your signatures are on record:
+                </p>
+                <ul className="space-y-1">
+                  {requiredAgreements.map((a) => (
+                    <li key={a.kind} style={{ fontSize: "13px", color: "var(--text-primary)" }}>
+                      <span style={{ color: "var(--green-text)", fontWeight: 700 }}>✓</span> {a.title}
+                    </li>
+                  ))}
+                </ul>
+                <p style={{ fontSize: "13px", color: "var(--text-secondary)" }}>
+                  Taking you to the Hub…
+                </p>
+              </div>
+              <div style={{ padding: "1rem 2rem", borderTop: "1px solid var(--rule)" }} className="flex justify-end">
+                <Button onClick={() => window.location.assign("/dashboard")}>
+                  Go to the Hub →
+                </Button>
+              </div>
+            </div>
+          ) : (
           <div
             style={{
               background: "var(--surface-1)",
@@ -570,14 +654,19 @@ export default function OnboardingPage() {
                 <h2 style={{ fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase", fontSize: "2rem", letterSpacing: "0.04em", color: "var(--text-primary)", lineHeight: 1 }}>
                   Your Family
                 </h2>
-                <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>Do you have a spouse or children? Add them here. This is optional — you can skip it and add them later from your profile.</p>
+                <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>
+                  {familyQs.spouse
+                    ? "Do you have a spouse or children? Add them here."
+                    : "Do you have children? Add them here."}{" "}
+                  This is optional — you can skip it and add them later from your profile.
+                </p>
               </>}
               {step === 7 && <>
                 <p className="page-eyebrow" style={{ marginBottom: "6px" }}>Step {currentPos + 1} of {totalSteps}</p>
                 <h2 style={{ fontFamily: "var(--font-condensed)", fontWeight: 900, textTransform: "uppercase", fontSize: "2rem", letterSpacing: "0.04em", color: "var(--text-primary)", lineHeight: 1 }}>
                   Privacy &amp; Consent
                 </h2>
-                <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>Please review and accept our data processing agreement.</p>
+                <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>Please read and sign each policy below.</p>
               </>}
             </div>
 
@@ -642,10 +731,9 @@ export default function OnboardingPage() {
                       <select id="marital_status" value={form.marital_status} onChange={(e) => set("marital_status", e.target.value)}
                         className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" required>
                         <option value="">Select…</option>
-                        <option value="single">Single</option>
-                        <option value="married">Married</option>
-                        <option value="divorced">Divorced</option>
-                        <option value="widowed">Widowed</option>
+                        {MARITAL_STATUS_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
                       </select>
                     </div>
                     <div className="space-y-2">
@@ -925,21 +1013,37 @@ export default function OnboardingPage() {
               {/* ── Step 6: Family ── */}
               {step === 6 && (
                 <>
-                  <p style={{ fontSize: "13px", color: "var(--text-secondary)", lineHeight: 1.55 }}>
-                    Do you have a spouse or children? Add them here. For a spouse we
-                    just need their name and email; for children we&rsquo;ll ask for
-                    their passport, visa and health-insurance details. This is
-                    optional and can be updated any time from your profile.
-                  </p>
-                  <p style={{ fontSize: "13px", color: "var(--text-secondary)", lineHeight: 1.55 }}>
-                    If your spouse signs up for the Hub with the email you enter
-                    here, they&rsquo;ll be joined to this same family record
-                    &mdash; only one of you needs to fill in the children.
-                  </p>
+                  {familyQs.spouse ? (
+                    <>
+                      <p style={{ fontSize: "13px", color: "var(--text-secondary)", lineHeight: 1.55 }}>
+                        Do you have a spouse or children? Add them here. For a spouse we
+                        just need their name and email; for children we&rsquo;ll ask for
+                        their passport, visa and health-insurance details. This is
+                        optional and can be updated any time from your profile.
+                      </p>
+                      <p style={{ fontSize: "13px", color: "var(--text-secondary)", lineHeight: 1.55 }}>
+                        If your spouse signs up for the Hub with the email you enter
+                        here, they&rsquo;ll be joined to this same family record
+                        &mdash; only one of you needs to fill in the children.
+                      </p>
+                    </>
+                  ) : (
+                    <p style={{ fontSize: "13px", color: "var(--text-secondary)", lineHeight: 1.55 }}>
+                      Do you have children? Add them here &mdash; we&rsquo;ll ask for
+                      their passport, visa and health-insurance details. This is
+                      optional and can be updated any time from your profile.
+                    </p>
+                  )}
+                  {/* Keyed by status so the add form resets if they go back
+                      and change it. A spouse added before switching away
+                      from Married is hidden here and removed on finish. */}
                   <HouseholdMembers
+                    key={form.marital_status}
                     initialMembers={[]}
                     loadOnMount
                     refreshRouterOnChange={false}
+                    allowedRelationships={familyRelationships}
+                    hideOtherRelationships
                     selfDefaults={{
                       is_international: form.is_international,
                       visa_category: form.visa_category,
@@ -963,7 +1067,7 @@ export default function OnboardingPage() {
                     each to read the full text, then tick the box to confirm.
                   </p>
                   {requiredAgreements.map((a) => {
-                    const on = consentChecked[a.kind] ?? false;
+                    const on = a.accepted || (consentChecked[a.kind] ?? false);
                     return (
                       <div
                         key={a.kind}
@@ -994,10 +1098,11 @@ export default function OnboardingPage() {
                             Open to read →
                           </a>
                         </div>
-                        <label className="flex items-start gap-3 cursor-pointer">
+                        <label className={`flex items-start gap-3 ${a.accepted ? "" : "cursor-pointer"}`}>
                           <input
                             type="checkbox"
                             checked={on}
+                            disabled={a.accepted || saving}
                             onChange={(e) =>
                               setConsentChecked((prev) => ({ ...prev, [a.kind]: e.target.checked }))
                             }
@@ -1009,6 +1114,13 @@ export default function OnboardingPage() {
                         </label>
                         <p style={{ fontSize: "11px", color: "var(--text-tertiary)" }}>
                           Version <span style={{ fontFamily: "monospace" }}>{a.version}</span>
+                          {a.accepted && (
+                            <span style={{ marginLeft: "8px", color: "var(--green-text)", fontWeight: 600 }}>
+                              ✓ Signed
+                              {a.accepted_at &&
+                                ` ${new Date(a.accepted_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}`}
+                            </span>
+                          )}
                         </p>
                       </div>
                     );
@@ -1031,7 +1143,7 @@ export default function OnboardingPage() {
               <Button
                 variant="outline"
                 onClick={() => { setError(null); setStep(prevStep()); }}
-                disabled={step === 1}
+                disabled={step === 1 || saving}
                 style={{ visibility: step === 1 ? "hidden" : "visible" }}
               >
                 ← Back
@@ -1062,11 +1174,12 @@ export default function OnboardingPage() {
                 </Button>
               ) : (
                 <Button onClick={handleFinish} disabled={saving}>
-                  {saving ? "Saving…" : "Complete Setup"}
+                  {saving ? "Saving…" : error ? "Try again" : "Complete Setup"}
                 </Button>
               )}
             </div>
           </div>
+          )}
 
           {/* Slogan footer */}
           <p style={{ textAlign: "center", marginTop: "2rem", fontSize: "9px", letterSpacing: "0.25em", color: "var(--text-tertiary)", textTransform: "uppercase" }}>

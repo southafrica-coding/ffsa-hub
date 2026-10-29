@@ -1,7 +1,7 @@
 /**
  * POST /api/slack/outreach/interactions — button clicks and form submits
- * on Outreach Finance messages: the receipt card's [Log it] [Change]
- * [Cancel], and the Change form (lib/slack/outreach/receipts).
+ * on Outreach Finance messages: the receipt / cash-pull card's Team menu,
+ * [Log …] [Change] [Cancel], and both Change forms (lib/slack/outreach).
  *
  * Slack wants an answer within 3s, so the work runs in after(). The
  * Change form is the exception: its trigger_id expires in 3s, so it is
@@ -18,17 +18,24 @@ import {
   ACTION_CANCEL,
   ACTION_CHANGE,
   ACTION_LOG,
+  ACTION_TEAM,
   VIEW_CHANGE,
   parseChange,
+  parseTeamOption,
 } from "@/lib/slack/outreach/receipt-logic";
 import {
   applyChangeAndLog,
+  applyPullChangeAndLog,
   cancelReceipt,
+  chooseTeam,
+  confirmCardPayment,
   logReceipt,
   openChangeForm,
   type Reply,
 } from "@/lib/slack/outreach/receipts";
 import * as slack from "@/lib/slack/client";
+import { parsePullChange, VIEW_PULL_CHANGE } from "@/lib/slack/outreach/pull-logic";
+import { ACTION_CARD_CONFIRM } from "@/lib/slack/outreach/card-logic";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -39,7 +46,7 @@ type Payload = {
   trigger_id?: string;
   response_url?: string;
   channel?: { id: string };
-  actions?: { action_id: string; value?: string }[];
+  actions?: { action_id: string; value?: string; selected_option?: { value: string } }[];
   view?: {
     callback_id: string;
     private_metadata: string;
@@ -93,6 +100,27 @@ export async function POST(request: Request) {
 
   if (payload.type === "block_actions") {
     const action = payload.actions?.[0];
+    if (action?.action_id === ACTION_TEAM) {
+      const picked = parseTeamOption(action.selected_option?.value);
+      if (picked) {
+        const reply = ephemeral(payload.response_url);
+        after(() =>
+          chooseTeam(picked.draftId, picked.teamId, slackUserId, reply).catch((e) => console.error("[slack/outreach] team", e))
+        );
+      }
+      return new NextResponse(null, { status: 200 });
+    }
+    if (action?.action_id === ACTION_CARD_CONFIRM) {
+      // A button carries "draft|expense" in value, the menu in selected_option.
+      const [draftId, expenseId] = (action.value ?? action.selected_option?.value ?? "").split("|");
+      if (draftId && expenseId) {
+        const reply = ephemeral(payload.response_url);
+        after(() =>
+          confirmCardPayment(draftId, expenseId, slackUserId, reply).catch((e) => console.error("[slack/outreach] card confirm", e))
+        );
+      }
+      return new NextResponse(null, { status: 200 });
+    }
     const draftId = action?.value;
     if (!action || !draftId) return new NextResponse(null, { status: 200 });
     const reply = ephemeral(payload.response_url);
@@ -120,6 +148,18 @@ export async function POST(request: Request) {
     after(() =>
       applyChangeAndLog(draftId, parsed.input, slackUserId, dmReply(slackUserId)).catch((e) =>
         console.error("[slack/outreach] change", e)
+      )
+    );
+    return NextResponse.json({ response_action: "clear" });
+  }
+
+  if (payload.type === "view_submission" && payload.view?.callback_id === VIEW_PULL_CHANGE) {
+    const parsed = parsePullChange(payload.view.state.values);
+    if (!parsed.ok) return NextResponse.json({ response_action: "errors", errors: parsed.errors });
+    const draftId = payload.view.private_metadata;
+    after(() =>
+      applyPullChangeAndLog(draftId, parsed.proposal, slackUserId, dmReply(slackUserId)).catch((e) =>
+        console.error("[slack/outreach] pull change", e)
       )
     );
     return NextResponse.json({ response_action: "clear" });

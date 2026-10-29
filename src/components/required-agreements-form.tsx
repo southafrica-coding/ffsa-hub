@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { recordAgreements } from "@/lib/onboarding/save-agreements";
 import {
   Card,
   CardContent,
@@ -30,9 +31,20 @@ export function RequiredAgreementsForm({
   const router = useRouter();
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const allChecked = agreements.every((a) => checked[a.kind]);
+
+  // Once signed, the gate clears on the next server render. router.refresh()
+  // normally does that; if it hasn't swapped this panel out after a few
+  // seconds, a full reload re-runs the gate for certain.
+  useEffect(() => {
+    if (!done) return;
+    router.refresh();
+    const t = setTimeout(() => window.location.reload(), 4000);
+    return () => clearTimeout(t);
+  }, [done, router]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -42,33 +54,36 @@ export function RequiredAgreementsForm({
       return;
     }
     setLoading(true);
-    try {
-      // Record each acceptance. Any failure stops and surfaces the error;
-      // already-recorded ones are harmless (the gate just re-asks for the rest).
-      for (const a of agreements) {
-        const res = await fetch("/api/consent", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            kind: a.kind,
-            agreement_version: a.version,
-            source: "onboarding",
-          }),
-        });
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          setError(
-            data.error || `Could not record your acceptance of “${a.title}”.`
-          );
-          setLoading(false);
-          return;
-        }
-      }
-      router.refresh();
-    } catch {
-      setError("Network error. Please try again.");
-      setLoading(false);
+    // Never hangs: resolves to ok or a plain error. Already-recorded
+    // signatures are kept, and re-sending one is a no-op on the server.
+    const outcome = await recordAgreements(agreements);
+    setLoading(false);
+    if (!outcome.ok) {
+      setError(outcome.error);
+      return;
     }
+    setDone(true);
+  }
+
+  if (done) {
+    return (
+      <Card className="w-full max-w-lg mx-4 shadow-2xl">
+        <CardHeader className="text-center">
+          <CardTitle className="text-xl">Thank you — you&rsquo;ve signed</CardTitle>
+          <CardDescription>
+            {agreements.length === 1
+              ? `Your signature on the ${agreements[0].title} is saved.`
+              : "Your signatures are saved."}{" "}
+            Taking you into the Hub…
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button className="w-full" onClick={() => window.location.reload()}>
+            Continue
+          </Button>
+        </CardContent>
+      </Card>
+    );
   }
 
   const heading =
@@ -121,7 +136,7 @@ export function RequiredAgreementsForm({
           {error && <p className="text-sm text-destructive">{error}</p>}
 
           <Button type="submit" className="w-full" disabled={loading || !allChecked}>
-            {loading ? "Saving…" : "Accept & Continue"}
+            {loading ? "Saving…" : error ? "Try again" : "Accept & Continue"}
           </Button>
         </form>
       </CardContent>

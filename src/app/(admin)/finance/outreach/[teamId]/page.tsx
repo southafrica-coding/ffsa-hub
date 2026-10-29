@@ -1,8 +1,7 @@
 export const dynamic = "force-dynamic";
 
-import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { requireModuleAccess } from "@/lib/require-permission";
+import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isFinanceStaff } from "@/lib/slack/assistant/outreach";
 import {
@@ -16,7 +15,13 @@ import {
   getTeamFundReleases,
   getTeamCashBatches,
   getTeamCloseout,
+  getTeamCashAllocations,
+  OUTREACH_LEADER_ROLES,
+  getOutreachTeamDeleteBlockers,
 } from "@/services/outreach-finance";
+import { describeDeleteBlockers } from "@/lib/finance/outreach-team-admin";
+import { NO_ACCESS, accessLabel, resolveTeamAccess } from "@/lib/finance/outreach-access";
+import { loadOutreachViewer } from "@/lib/finance/outreach-viewer";
 import { TeamDetail } from "./team-detail";
 
 export default async function OutreachTeamDetailPage({
@@ -30,12 +35,27 @@ export default async function OutreachTeamDetailPage({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
-  await requireModuleAccess(supabase, user.id, "finance");
+
+  // Your role on this team. Plain members can't read the team row (it
+  // carries the budget), so they go to the money-free view instead.
+  const { data: membership } = user
+    ? await supabase
+        .from("outreach_team_members")
+        .select("role")
+        .eq("team_id", teamId)
+        .eq("user_id", user.id)
+        .maybeSingle()
+    : { data: null };
+  const myRole: string | null = membership?.role ?? null;
 
   const { data: team, error: teamError } = await getOutreachTeamById(
     supabase,
     teamId
   );
+
+  if ((teamError || !team) && myRole === "team_member") {
+    redirect(`/my-finance/outreach/${teamId}`);
+  }
 
   if (teamError || !team) {
     return (
@@ -45,13 +65,39 @@ export default async function OutreachTeamDetailPage({
     );
   }
 
+  // What this viewer may do here (migration 273): edit as staff, leader or
+  // group manager; read only as finance viewer or a leader of a team in the
+  // same group. Decided on the server from fresh reads, every request.
+  const outreachViewer = user ? await loadOutreachViewer(supabase, user.id) : null;
+  const access = outreachViewer ? resolveTeamAccess(outreachViewer, teamId) : NO_ACCESS;
+  // Flagged "limited to own teams" (migration 274): only teams their own
+  // roles and groups give them, whatever the team read above returned.
+  if (outreachViewer?.limitedToOwnTeams && access.level !== "edit" && access.level !== "view") {
+    if (access.level === "member") redirect(`/my-finance/outreach/${teamId}`);
+    return (
+      <div className="ffsa-screen">
+        <p className="px-5 py-8 text-sm text-destructive md:px-8">Team not found.</p>
+      </div>
+    );
+  }
+  const canEdit = access.level === "edit";
+  const staffEditor = outreachViewer?.staffEditor === true;
+
   // People's names. The users table only lets admins read everyone, so a
-  // finance admin managing a team saw nobody to add (and blank names for
-  // existing members). Finance staff get names + emails via the service
-  // role — nothing else about anyone; everyone else reads through RLS.
+  // leader inviting people saw nobody to add (and blank names for existing
+  // members). Finance staff, the team's leaders and anyone else who can see
+  // its money get names + emails via the service role — nothing else about
+  // anyone. Only people who can edit get the full list to add from.
   const admin = createAdminClient();
-  const staff = await isFinanceStaff(admin, user.id);
-  const people = staff ? admin : supabase;
+  const staff = user ? await isFinanceStaff(admin, user.id) : false;
+  const leader = myRole !== null && OUTREACH_LEADER_ROLES.includes(myRole);
+  const people = staff || leader || access.level === "edit" || access.level === "view" ? admin : supabase;
+  // Outreach administrators get Archive / Delete; Delete needs to know what
+  // it would destroy (migration 272).
+  const { data: deleteBlockers } =
+    staffEditor
+      ? await getOutreachTeamDeleteBlockers(supabase, teamId)
+      : { data: null };
 
   const [
     { data: members },
@@ -63,6 +109,7 @@ export default async function OutreachTeamDetailPage({
     { data: fundReleases },
     { data: cashBatches },
     { data: closeout },
+    { data: cashAllocations },
   ] = await Promise.all([
     getTeamMembers(people, teamId),
     getTeamBudgets(supabase, teamId),
@@ -73,15 +120,19 @@ export default async function OutreachTeamDetailPage({
     getTeamFundReleases(supabase, teamId),
     getTeamCashBatches(supabase, teamId),
     getTeamCloseout(supabase, teamId),
+    getTeamCashAllocations(supabase, teamId),
   ]);
 
-  // Get all users for member assignment + receipt counts per expense
-  const [{ data: allUsers }, { data: receiptRows }] = await Promise.all([
-    people
-      .from("users")
-      .select("id, first_name, last_name, preferred_name, email")
-      .eq("is_active", true)
-      .order("last_name", { ascending: true }),
+  // Get all users for member assignment + receipt counts per expense, and
+  // the school leader named for money alerts (migration 261).
+  const [{ data: allUsers }, { data: receiptRows }, { data: alertRecipient }] = await Promise.all([
+    canEdit
+      ? people
+          .from("users")
+          .select("id, first_name, last_name, preferred_name, email")
+          .eq("is_active", true)
+          .order("last_name", { ascending: true })
+      : Promise.resolve({ data: [] }),
     supabase
       .from("outreach_receipts")
       .select("expense_id")
@@ -89,6 +140,13 @@ export default async function OutreachTeamDetailPage({
         "expense_id",
         (expenses ?? []).map((e: { id: string }) => e.id)
       ),
+    team.cash_alert_user_id
+      ? people
+          .from("users")
+          .select("id, first_name, last_name, preferred_name, email, slack_user_id")
+          .eq("id", team.cash_alert_user_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
 
   // Build receipt count map
@@ -113,6 +171,11 @@ export default async function OutreachTeamDetailPage({
       cashBatches={cashBatches ?? []}
       closeout={closeout ?? null}
       receiptCounts={receiptCounts}
+      cashAllocations={cashAllocations ?? []}
+      viewer={{ role: myRole, staffEditor, canEdit, accessLabel: accessLabel(access) }}
+      deleteBlockers={deleteBlockers ? describeDeleteBlockers(deleteBlockers) : ["linked records"]}
+      // Generated types predate users.slack_user_id.
+      alertRecipient={(alertRecipient ?? null) as Parameters<typeof TeamDetail>[0]["alertRecipient"]}
     />
   );
 }

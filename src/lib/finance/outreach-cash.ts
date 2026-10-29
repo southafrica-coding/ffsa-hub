@@ -8,7 +8,7 @@
  *           reimbursements (someone's own pocket) never came out of it.
  *   left  = sent − spent
  *
- * Levels drive the colour and the Slack alert to school leaders: "low" at
+ * Levels drive the colour and the Slack alert to the team's school leader: "low" at
  * or under lowPct left (default 30%), "critical" at or under criticalPct
  * (default 15%) or overspent, "none" before any money has been sent.
  */
@@ -66,7 +66,7 @@ export function daysLeft(left: number, perDay: number): number | null {
 
 const RANK: Record<CashLevel, number> = { none: 0, ok: 1, low: 2, critical: 3 };
 
-/** Should crossing from `prev` to `now` alert school leaders? Once per level, worse only. */
+/** Should crossing from `prev` to `now` alert the team's school leader? Once per level, worse only. */
 export function alertToSend(prev: CashLevel | null | undefined, now: CashLevel): "low" | "critical" | null {
   if (now !== "low" && now !== "critical") return null;
   return RANK[now] > RANK[prev ?? "none"] ? now : null;

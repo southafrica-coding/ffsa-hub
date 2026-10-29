@@ -342,11 +342,12 @@ export async function resolveLayout(
   supabase: SupabaseClient,
   userId: string
 ): Promise<ResolvedLayout> {
-  const ctx = await buildDashboardContext(supabase, userId);
-  const [permitted, stored] = await Promise.all([
-    Promise.resolve(getPermittedWidgets(ctx)),
+  // The stored layout doesn't depend on the context — read both at once.
+  const [ctx, stored] = await Promise.all([
+    buildDashboardContext(supabase, userId),
     getStoredLayout(supabase, userId),
   ]);
+  const permitted = getPermittedWidgets(ctx);
 
   const raw = (stored.data?.layout ?? null) as unknown;
   const parsed = Array.isArray(raw)

@@ -9,7 +9,7 @@ import {
   type XeroItemSummary,
   type XeroRegion,
 } from "@/services/xero";
-import { suggestItemCode } from "@/lib/ticketing/pay-later";
+import { suggestItemCode, retryHeldInvoices } from "@/lib/ticketing/pay-later";
 
 // /api/events/[id]/pay-later — the "Invoice me, pay later" switch.
 //
@@ -81,7 +81,17 @@ export async function GET(_req: Request, context: { params: Promise<{ id: string
   let suggested = suggestItemCode(event.title);
   for (let n = 2; taken.has(norm(suggested)) && n < 100; n++) suggested = `${suggestItemCode(event.title)}-${n}`;
 
+  // Orders waiting for an invoice our side couldn't make (seats held).
+  const { count: held } = await createAdminClient()
+    .from("orders")
+    .select("id", { count: "exact", head: true })
+    .eq("event_id", id)
+    .eq("status", "invoiced")
+    .eq("payment_provider", "invoice")
+    .is("xero_invoice_id", null);
+
   return NextResponse.json({
+    held_orders: held ?? 0,
     enabled: event.pay_later_enabled,
     due_date: event.pay_later_due_date,
     item_code: event.xero_item_code,
@@ -101,6 +111,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     due_date?: string | null;
     item_code?: string | null;
     create_item?: boolean;
+    retry_held?: boolean;
   };
   const patch: Record<string, unknown> = {};
   if (body.due_date !== undefined) {
@@ -174,8 +185,11 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     patch.pay_later_enabled = body.enabled;
   }
 
-  if (Object.keys(patch).length === 0) return NextResponse.json({ ok: true, item: outcome });
-  const { error } = await updateEvent(supabase, id, patch);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, item: outcome });
+  if (Object.keys(patch).length > 0) {
+    const { error } = await updateEvent(supabase, id, patch);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  // Once the item is in place (or when asked), invoice anyone left on hold.
+  const retried = body.create_item || body.retry_held ? await retryHeldInvoices(admin, { eventId: id }) : null;
+  return NextResponse.json({ ok: true, item: outcome, retried });
 }

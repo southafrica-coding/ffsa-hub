@@ -100,6 +100,8 @@ export function HouseholdMembers({
   refreshRouterOnChange = true,
   requireComplete = false,
   defaultRelationship,
+  allowedRelationships,
+  hideOtherRelationships = false,
   selfDefaults,
 }: {
   initialMembers: HouseholdMember[];
@@ -117,6 +119,14 @@ export function HouseholdMembers({
   // Restrict the add flow to a single relationship (e.g. "child" in the
   // children gate). When unset, both "Add spouse" and "Add child" are offered.
   defaultRelationship?: string;
+  // Which "+ Add …" buttons to offer, from the person's marital status
+  // (addableRelationships in lib/users/marital-status). Unset = both.
+  allowedRelationships?: string[];
+  // Also hide existing members whose relationship isn't allowed — used in
+  // onboarding, where a spouse added before switching to "Single" is
+  // cleared on finish. The profile page keeps them visible so an existing
+  // member can still see and remove them.
+  hideOtherRelationships?: boolean;
   // The primary user's own visa + insurance, enabling the "same as me"
   // shortcut when adding a child. Omit to hide the shortcut.
   selfDefaults?: SelfDefaults;
@@ -326,14 +336,22 @@ export function HouseholdMembers({
     }
 
     const isNew = editing === "new";
-    const res = await fetch(
-      isNew ? "/api/profile/household" : `/api/profile/household/${editing}`,
-      {
-        method: isNew ? "POST" : "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      }
-    );
+    let res: Response;
+    try {
+      res = await fetch(
+        isNew ? "/api/profile/household" : `/api/profile/household/${editing}`,
+        {
+          method: isNew ? "POST" : "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
+    } catch {
+      // A dropped connection used to leave the button on "Saving…".
+      setSaving(false);
+      setError("We couldn't reach the Hub. Check your connection and try again.");
+      return;
+    }
     const json = await res.json().catch(() => ({}));
     setSaving(false);
     if (!res.ok) {
@@ -364,18 +382,31 @@ export function HouseholdMembers({
     if (refreshRouterOnChange) router.refresh();
   };
 
+  const addable = allowedRelationships ?? ["spouse", "child"];
+  const shown = hideOtherRelationships
+    ? members.filter((m) => addable.includes(m.relationship))
+    : members;
+  const addWhat =
+    addable.includes("spouse") && addable.includes("child")
+      ? "your spouse or children"
+      : addable.includes("child")
+        ? "your children"
+        : addable.includes("spouse")
+          ? "your spouse"
+          : null;
+
   return (
     <div className={className}>
-      {members.length === 0 && editing === null && (
+      {shown.length === 0 && editing === null && (
         <p className="text-sm text-muted-foreground">
-          No family members added yet. Add your spouse or children so we have
-          their details on record.
+          No family members added yet.
+          {addWhat && ` Add ${addWhat} so we have their details on record.`}
         </p>
       )}
 
-      {members.length > 0 && (
+      {shown.length > 0 && (
         <ul className="space-y-2">
-          {members.map((m) => (
+          {shown.map((m) => (
             <li
               key={m.id}
               className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm"
@@ -535,22 +566,26 @@ export function HouseholdMembers({
             </Button>
           ) : (
             <>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => beginAdd("spouse")}
-              >
-                + Add spouse
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => beginAdd("child")}
-              >
-                + Add child
-              </Button>
+              {addable.includes("spouse") && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => beginAdd("spouse")}
+                >
+                  + Add spouse
+                </Button>
+              )}
+              {addable.includes("child") && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => beginAdd("child")}
+                >
+                  + Add child
+                </Button>
+              )}
             </>
           )}
           {error && (

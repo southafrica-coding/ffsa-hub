@@ -110,7 +110,10 @@ export type OrgInput = {
 export type OrgKr = {
   id: string;
   text: string;
-  pct: number | null;
+  /** Always set: the measured % when there is one, else the status stand-in. */
+  pct: number;
+  /** True when pct is a real ratio from the KR's metric; false = estimated from status. */
+  measured: boolean;
   state: OrgState;
   ownerId: string | null;
   ownerName: string | null;
@@ -121,7 +124,9 @@ export type OrgObjective = {
   /** "Why this matters", when the objective has one. */
   description: string | null;
   direction: Direction | null;
+  /** Share of its key results that are complete — always a real ratio. Null with no KRs. */
   pct: number | null;
+  complete: number;
   state: OrgState;
   krs: OrgKr[];
 };
@@ -208,6 +213,34 @@ export function rollUpState(states: OrgState[]): OrgState {
   return "notstarted";
 }
 
+/**
+ * A key result's bar. The OKRs page keeps "no ratio, no bar"; the org chart
+ * does not (Jack, 2026-10-19 — the design draws a bar on every row). So: the
+ * measured % when the KR has a metric, otherwise a stand-in from its status,
+ * flagged `measured: false` so the chart draws it lighter and labels it "~".
+ */
+export const STATUS_ESTIMATE: Record<OkrStatus, number> = {
+  not_started: 0,
+  in_progress: 25,
+  stuck: 25,
+  moving_forward: 50,
+  complete: 100,
+};
+
+export function krPct(kr: Pick<RawKr, "metric_start" | "metric_target" | "current_value" | "metric_unit" | "current_status">): {
+  pct: number;
+  measured: boolean;
+} {
+  const real = krProgress(kr);
+  if (real) return { pct: Math.round(real.pct), measured: true };
+  return { pct: STATUS_ESTIMATE[kr.current_status] ?? 0, measured: false };
+}
+
+/** "86%" when measured, "~50%" when estimated from status. */
+export function pctLabel(pct: number, measured = true): string {
+  return `${measured ? "" : "~"}${pct}%`;
+}
+
 /** Mean of the percentages that exist; null when none do — no ratio, no bar. */
 export function meanPct(values: (number | null)[]): number | null {
   const real = values.filter((v): v is number => v !== null);
@@ -260,7 +293,7 @@ export function buildOrgModel(input: OrgInput): OrgModel {
         return {
           id: kr.id,
           text: kr.description,
-          pct: krProgress(kr) ? Math.round(krProgress(kr)!.pct) : null,
+          ...krPct(kr),
           state: toOrgState(kr.current_status),
           ownerId: kr.owner_user_id,
           ownerName: kr.owner_user_id ? nameOf(kr.owner_user_id) : kr.owner_note?.trim() || null,
@@ -271,7 +304,8 @@ export function buildOrgModel(input: OrgInput): OrgModel {
       title: o.title,
       description: o.description?.trim() || null,
       direction: o.direction && DIRECTION_KEYS.has(o.direction as Direction) ? (o.direction as Direction) : null,
-      pct: meanPct(krs.map((k) => k.pct)),
+      pct: krs.length ? Math.round((krs.filter((k) => k.state === "complete").length / krs.length) * 100) : null,
+      complete: krs.filter((k) => k.state === "complete").length,
       state: rollUpState(krs.map((k) => k.state)),
       krs,
     };

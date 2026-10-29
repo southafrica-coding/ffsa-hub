@@ -32,7 +32,7 @@ type AdminClient = any;
 
 const SAST_OFFSET_MS = 2 * 60 * 60 * 1000; // UTC+2, no DST
 
-type Period = "today" | "this_week" | "this_month" | "all";
+export type Period = "today" | "this_week" | "this_month" | "all";
 
 /** UTC instant of the start of the current SAST calendar day. */
 function sastDayStartUtc(now: Date): Date {
@@ -172,11 +172,15 @@ function unresolved(r: Resolved, kind: string) {
 // Tool implementations
 // ────────────────────────────────────────────────────────────
 
-async function countContactsByLabel(input: {
+export async function countContactsByLabel(input: {
   label: string;
   include_names?: boolean;
-}) {
-  const admin = createAdminClient();
+},
+  // Slack passes nothing (service role); the in-app assistant passes the
+  // signed-in user's client so RLS applies.
+  db?: AdminClient
+) {
+  const admin = db ?? createAdminClient();
   const r = await resolveLabel(admin, input.label);
   if (r.kind !== "ok") return unresolved(r, "label");
 
@@ -197,8 +201,13 @@ async function countContactsByLabel(input: {
   return result;
 }
 
-async function ticketSales(input: { event?: string; period?: Period }) {
-  const admin = createAdminClient();
+export async function ticketSales(
+  input: { event?: string; period?: Period },
+  // Slack passes nothing (service role); the in-app assistant passes the
+  // signed-in user's client so RLS applies.
+  db?: AdminClient
+) {
+  const admin = db ?? createAdminClient();
   let eventId: string | null = null;
   let eventName = "all events";
   if (input.event) {
@@ -249,8 +258,13 @@ async function ticketSales(input: { event?: string; period?: Period }) {
   };
 }
 
-async function checkinCount(input: { event?: string; period?: Period }) {
-  const admin = createAdminClient();
+export async function checkinCount(
+  input: { event?: string; period?: Period },
+  // Slack passes nothing (service role); the in-app assistant passes the
+  // signed-in user's client so RLS applies.
+  db?: AdminClient
+) {
+  const admin = db ?? createAdminClient();
   let eventId: string | null = null;
   let eventName = "all events";
   if (input.event) {
@@ -290,7 +304,7 @@ async function checkinCount(input: { event?: string; period?: Period }) {
   return result;
 }
 
-const APPLICATION_STATUSES = [
+export const APPLICATION_STATUSES = [
   "submitted",
   "references_received",
   "interview_scheduled",
@@ -300,12 +314,16 @@ const APPLICATION_STATUSES = [
   "cancelled",
 ] as const;
 
-async function applicationStats(input: {
+export async function applicationStats(input: {
   program?: string;
   status?: string;
   period?: Period;
-}) {
-  const admin = createAdminClient();
+},
+  // Slack passes nothing (service role); the in-app assistant passes the
+  // signed-in user's client so RLS applies.
+  db?: AdminClient
+) {
+  const admin = db ?? createAdminClient();
   let programId: string | null = null;
   let programName = "all programs";
   if (input.program) {

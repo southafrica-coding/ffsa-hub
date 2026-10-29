@@ -131,16 +131,24 @@ export default async function UsersPage() {
     email_suppressed: accountFlags.get(u.id)?.emailSuppressed ?? false,
   }));
 
-  // Check if current user is super_admin
+  // Admin tier of the current user. `isSuperAdmin` here means either tier
+  // (super_admin or General Admin) — both manage users. Only a real
+  // super_admin may change a super admin's account.
   let isSuperAdmin = false;
+  let canChangeSuperAdmins = false;
   if (authUser) {
-    const { data: superCheck } = await supabase
+    const { data: tierRows } = await supabase
       .from("user_roles")
       .select("roles!inner(name)")
       .eq("user_id", authUser.id)
-      .eq("roles.name", "super_admin")
-      .limit(1);
-    isSuperAdmin = (superCheck?.length ?? 0) > 0;
+      .in("roles.name", ["super_admin", "admin"]);
+    const tiers = new Set(
+      ((tierRows ?? []) as { roles: { name: string } | { name: string }[] }[]).map(
+        (r) => (Array.isArray(r.roles) ? r.roles[0]?.name : r.roles?.name)
+      )
+    );
+    isSuperAdmin = tiers.size > 0;
+    canChangeSuperAdmins = tiers.has("super_admin");
   }
 
   type SignupLink = { type: "staff" | "student" | "community"; code: string; enabled: boolean };
@@ -225,6 +233,7 @@ export default async function UsersPage() {
         schoolByUser={schoolByUser}
         awaitingArrivalByUser={awaitingArrivalByUser}
         isSuperAdmin={isSuperAdmin}
+        canChangeSuperAdmins={canChangeSuperAdmins}
       />
       </div>
     </div>

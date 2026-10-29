@@ -65,9 +65,9 @@ export function SlackSettings({
       <div>
         <h3 className="font-medium">Slack</h3>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          Team members can ask the <strong>Outreach Finance</strong> Slack bot about this budget (&ldquo;how much is
-          left in food?&rdquo;) by DM, or by @mentioning it in the team&apos;s channel. They need their Slack linked on
-          their Hub profile.
+          The owner and co-leaders can ask the <strong>Outreach Finance</strong> Slack bot about this budget (&ldquo;how
+          much is left in food?&rdquo;) by DM, or by @mentioning it in the team&apos;s channel. They need their Slack
+          linked on their Hub profile. Team members can&apos;t see the budget, so the bot won&apos;t answer them.
         </p>
       </div>
 

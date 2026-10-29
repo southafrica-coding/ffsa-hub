@@ -155,8 +155,10 @@ export async function updateObjective(
   return supabase.from("okr_objectives").update(patch).eq("id", id).select(OBJECTIVE_FIELDS).single();
 }
 
+// The deletes return the removed ids: RLS refuses a delete by matching no
+// rows rather than by erroring, so an empty `data` is how a caller tells.
 export async function deleteObjective(supabase: Client, id: string) {
-  return supabase.from("okr_objectives").delete().eq("id", id);
+  return supabase.from("okr_objectives").delete().eq("id", id).select("id");
 }
 
 /** Next free position within a ministry's objectives for this cycle. */
@@ -220,7 +222,7 @@ export async function updateKeyResult(
 }
 
 export async function deleteKeyResult(supabase: Client, id: string) {
-  return supabase.from("okr_key_results").delete().eq("id", id);
+  return supabase.from("okr_key_results").delete().eq("id", id).select("id");
 }
 
 export async function nextKeyResultPosition(
@@ -306,7 +308,7 @@ export async function updateCheckin(
 }
 
 export async function deleteCheckin(supabase: Client, id: string) {
-  return supabase.from("okr_checkins").delete().eq("id", id);
+  return supabase.from("okr_checkins").delete().eq("id", id).select("id");
 }
 
 /* ── Identity hydration ─────────────────────────────── */

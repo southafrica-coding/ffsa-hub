@@ -2,16 +2,16 @@ import { NextResponse } from "next/server";
 
 import { createClient } from "@/lib/supabase/server";
 import { getAuthedUser } from "@/lib/api-auth";
+import { callerCanAmendCheckin } from "@/lib/auth/check-okr-access";
 import { deleteCheckin, updateCheckin } from "@/services/okrs";
 import { OKR_STATUSES } from "@/types/okrs";
 
 type Params = { params: Promise<{ id: string }> };
 
 /**
- * A check-in is a log entry, not a field. Only its author, leadership or an
- * admin may amend or remove one — that boundary is enforced by the RLS
- * policies on okr_checkins, so these handlers pass the caller's own client
- * straight through and let a refusal surface as an empty result.
+ * A check-in is a log entry, not a field. Only its author or an admin may
+ * amend or remove one — enforced by the RLS policies on okr_checkins
+ * (migration 271), and asked up front here so a refusal is a clean 403.
  */
 export async function PATCH(request: Request, { params }: Params) {
   const supabase = await createClient();
@@ -19,6 +19,9 @@ export async function PATCH(request: Request, { params }: Params) {
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const { id } = await params;
+  if (!(await callerCanAmendCheckin(supabase, user.id, id))) {
+    return NextResponse.json({ error: "You cannot edit this check-in" }, { status: 403 });
+  }
   const body = await request.json();
 
   const patch: Record<string, unknown> = {};
@@ -56,8 +59,16 @@ export async function DELETE(_request: Request, { params }: Params) {
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const { id } = await params;
-  const { error } = await deleteCheckin(supabase, id);
+  if (!(await callerCanAmendCheckin(supabase, user.id, id))) {
+    return NextResponse.json({ error: "You cannot delete this check-in" }, { status: 403 });
+  }
+
+  const { data, error } = await deleteCheckin(supabase, id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  // RLS refuses a delete by matching no rows, not by erroring.
+  if (!data?.length) {
+    return NextResponse.json({ error: "You cannot delete this check-in" }, { status: 403 });
+  }
 
   // Removing the last check-in resets the key result to "not started" — the
   // refresh_okr_key_result_state trigger handles that.

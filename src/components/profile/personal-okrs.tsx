@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 
 type OkrKeyResult = {
   id: string;
@@ -34,9 +35,9 @@ const STATUS_LABEL: Record<string, string> = {
 // Personal (individual-scope) OKRs on the staff CV card — a thin UI over the
 // real OKR system (migration 182): objectives only for now, no key-result /
 // metric authoring here yet. RLS on okr_objectives is the actual gate (self
-// owns their own; a ministry leader, leadership_team or admin can manage
-// too), so `canManage` here only decides which controls to render — a
-// disallowed action still comes back as a clean 403 from the API.
+// owns their own; their ministry leader or an admin can manage too — not the
+// Leadership Team, since 271), so `canManage` here only decides which
+// controls to render — a disallowed action still comes back as a clean 403.
 export function PersonalOkrs({
   targetUserId,
   cycle,
@@ -60,6 +61,7 @@ export function PersonalOkrs({
   const [draftMinistryId, setDraftMinistryId] = useState(ministries[0]?.id ?? "");
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   function beginAdd() {
     setAdding(true);
@@ -151,18 +153,20 @@ export function PersonalOkrs({
     router.refresh();
   }
 
-  async function removeObjective(id: string) {
-    setBusy(true);
+  async function removeObjective(id: string): Promise<boolean> {
     setFormError(null);
     const res = await fetch(`/api/okrs/objectives/${id}`, { method: "DELETE" });
-    setBusy(false);
     if (!res.ok) {
       const json = await res.json().catch(() => ({}));
-      setFormError(json.error ?? "Could not remove this objective.");
-      return;
+      setFormError(json.error ?? "Could not delete this objective.");
+      return false;
     }
     setObjectives((prev) => prev.filter((o) => o.id !== id));
+    setEditingId(null);
+    return true;
   }
+
+  const editing = editingId ? objectives.find((o) => o.id === editingId) ?? null : null;
 
   if (!cycle) {
     return <p className="text-sm text-muted-foreground">No OKR cycle is open right now.</p>;
@@ -211,6 +215,20 @@ export function PersonalOkrs({
         <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={cancelForm}>
           Cancel
         </Button>
+        {/* Delete lives in the edit form, at the far end in danger styling,
+            and only opens a confirmation that names the objective. */}
+        {editing && (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="ml-auto border-destructive/40 text-destructive hover:bg-destructive hover:text-white"
+            disabled={busy}
+            onClick={() => setConfirmingDelete(true)}
+          >
+            <Trash2 className="mr-1 h-4 w-4" aria-hidden /> Delete objective
+          </Button>
+        )}
       </div>
     </div>
   );
@@ -259,27 +277,16 @@ export function PersonalOkrs({
                   )}
                 </div>
                 {canManage && (
-                  <div className="flex shrink-0 items-center gap-1">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      aria-label="Edit"
-                      onClick={() => beginEdit(o)}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      aria-label="Remove"
-                      disabled={busy}
-                      onClick={() => removeObjective(o.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="shrink-0"
+                    aria-label="Edit"
+                    onClick={() => beginEdit(o)}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
                 )}
               </li>
             )
@@ -288,6 +295,28 @@ export function PersonalOkrs({
       )}
 
       {adding && form}
+
+      {editing && confirmingDelete && (
+        <ConfirmDeleteDialog
+          open
+          onOpenChange={(o) => !o && setConfirmingDelete(false)}
+          title="Delete this objective?"
+          itemName={editing.title}
+          consequence={(() => {
+            const n = editing.okr_key_results?.length ?? 0;
+            return n > 0
+              ? `Its ${n} key result${n === 1 ? "" : "s"} and their check-ins will be deleted with it. This can't be undone.`
+              : "This can't be undone.";
+          })()}
+          confirmLabel="Delete objective"
+          // Close either way: a refusal is shown as formError in the edit form
+          // underneath, which the dialog would otherwise cover.
+          onConfirm={async () => {
+            await removeObjective(editing.id);
+            return true;
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -2,8 +2,11 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { requireModuleAccess } from "@/lib/require-permission";
 import { Masthead } from "@/components/ffsa";
+import { isHiddenFromNav } from "@/config/modules";
 
 export default async function TeamsPage() {
+  // Unbuilt placeholder — out of the menu, so send direct visits home.
+  if (isHiddenFromNav("teams")) redirect("/dashboard");
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");

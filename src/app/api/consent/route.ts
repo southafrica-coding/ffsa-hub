@@ -4,6 +4,7 @@ import {
   getCurrentConsentAgreement,
   recordConsent,
   asConsentKind,
+  getUserAcceptance,
 } from "@/services/consent";
 
 // GET /api/consent?kind=privacy|child_protection|nda — the current agreement
@@ -32,7 +33,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const body = await request.json();
+  const body = await request.json().catch(() => null);
+  if (!body || typeof body !== "object") {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
   const { agreement_version, source } = body;
   const kind = asConsentKind(body.kind);
 
@@ -55,11 +59,28 @@ export async function POST(request: Request) {
     );
   }
 
+  // Idempotent: already signed this exact version → report the existing
+  // signature instead of adding a duplicate. Makes "Try again" after a
+  // timed-out save safe.
+  const { data: existing } = await getUserAcceptance(
+    supabase,
+    user.id,
+    agreement_version
+  );
+  if (existing) {
+    return NextResponse.json({
+      success: true,
+      version: agreement_version,
+      accepted_at: existing.accepted_at,
+      alreadyAccepted: true,
+    });
+  }
+
   const forwardedFor = request.headers.get("x-forwarded-for");
   const ipAddress = forwardedFor ? forwardedFor.split(",")[0].trim() : null;
   const userAgent = request.headers.get("user-agent");
 
-  const { error } = await recordConsent(supabase, {
+  const { data: record, error } = await recordConsent(supabase, {
     agreement_version,
     source,
     user_id: user.id,
@@ -71,5 +92,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ success: true, version: agreement_version });
+  return NextResponse.json({
+    success: true,
+    version: agreement_version,
+    accepted_at: record?.accepted_at ?? null,
+  });
 }

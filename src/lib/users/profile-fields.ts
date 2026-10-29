@@ -14,6 +14,7 @@ import {
   RELATIONSHIP_OPTIONS,
   INSURANCE_PROVIDERS,
 } from "@/lib/profile/options";
+import { MARITAL_STATUS_OPTIONS } from "@/lib/users/marital-status";
 
 export type FieldConfig = {
   field: string;
@@ -54,12 +55,8 @@ export const REQUIRED_PROFILE_FIELDS: FieldConfig[] = [
     field: "marital_status",
     label: "Marital Status",
     type: "select",
-    options: [
-      { value: "single", label: "Single" },
-      { value: "married", label: "Married" },
-      { value: "divorced", label: "Divorced" },
-      { value: "widowed", label: "Widowed" },
-    ],
+    // Shared with the family-question rules (marital-status.ts).
+    options: [...MARITAL_STATUS_OPTIONS],
   },
   { field: "date_of_birth", label: "Date of Birth", type: "date" },
   // Nationality uses country NAMES (not adjectives) on purpose: the school

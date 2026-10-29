@@ -1,6 +1,10 @@
+import { redirect } from "next/navigation";
 import { Masthead } from "@/components/ffsa";
+import { isHiddenFromNav } from "@/config/modules";
 
 export default function MyMissionPage() {
+  // Unbuilt placeholder — out of the menu, so send direct visits home.
+  if (isHiddenFromNav("my-mission")) redirect("/dashboard");
   return (
     <div className="ffsa-screen">
       <Masthead context="Outreach &amp; impact" title="My mission" />

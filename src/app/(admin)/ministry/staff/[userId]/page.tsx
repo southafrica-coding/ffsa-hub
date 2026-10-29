@@ -64,7 +64,10 @@ export default async function StaffCvPage({
       })
     : { data: [] };
   const { data: targetMinistries } = await listUserMinistries(admin, userId);
-  const canManageOkrs = Boolean(currentCycle) && (isAdmin || isLeadership || leadsMinistry);
+  // Not Leadership Team: they can read anyone's personal OKRs, but changing
+  // them is the person's own, their ministry leader's, or an admin's call
+  // (can_create_okr / can_edit_okr_objective, migration 271).
+  const canManageOkrs = Boolean(currentCycle) && (isAdmin || leadsMinistry);
 
   return (
     <div className="ffsa-screen">

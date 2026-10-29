@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { stripeProvider } from "@/lib/payments/stripe";
 import { settlePaidOrder } from "@/lib/ticketing/settle";
+import { releaseTicketHolds } from "@/services/ticketing";
 
 // POST /api/integrations/stripe/notify
 //
@@ -100,6 +101,8 @@ export async function POST(request: Request) {
         })
         .eq("id", order.id)
         .eq("status", "pending");
+      // Give the seats back now rather than at the next sweep.
+      await releaseTicketHolds(supabase, { orderId: order.id });
     }
   }
   // status === "pending" → no-op (e.g. an async-payment-pending event).

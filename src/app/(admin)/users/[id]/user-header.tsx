@@ -1,5 +1,6 @@
 import { AvatarUploader } from "@/components/avatar-uploader";
 import { StatusPill, type Tone } from "@/components/ffsa";
+import { SuperAdminBadge } from "@/components/super-admin-badge";
 import {
   deriveUserLifecycle,
   type UserLifecycleInput,
@@ -19,6 +20,7 @@ export function UserHeader({
   eyebrow,
   authLastSignInAt,
   derivedTitle,
+  isSuperAdmin = false,
 }: {
   user: UserLifecycleInput & {
     id: string;
@@ -35,6 +37,8 @@ export function UserHeader({
   authLastSignInAt?: string | null;
   /** Title derived from role + department/ministry (falls back to job_title). */
   derivedTitle?: string | null;
+  /** This account holds super_admin — flagged so nobody edits it unawares. */
+  isSuperAdmin?: boolean;
 }) {
   const name =
     user.display_name ??
@@ -89,6 +93,7 @@ export function UserHeader({
           <StatusPill tone={STAGE_TONE[lifecycle.stage]}>
             {lifecycle.label}
           </StatusPill>
+          {isSuperAdmin && <SuperAdminBadge />}
         </div>
       </div>
     </div>

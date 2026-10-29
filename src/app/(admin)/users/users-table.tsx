@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useReducer, useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { PersonQuickView } from "@/components/people/person-quick-view";
 import type { PersonRef } from "@/services/person-quick-view";
 import {
@@ -18,6 +19,7 @@ import {
   Link as LinkIcon,
   MailWarning,
   UserMinus,
+  Lock,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -56,6 +58,20 @@ import { deriveJobTitle, type MinistryRole } from "@/lib/users/derive-title";
 import { ConvertToCommunityDialog } from "./convert-to-community-dialog";
 import { SetDepartmentDialog } from "./set-department-dialog";
 import { formatInviteDate } from "@/lib/schools/setup-invite-schedule";
+import {
+  SuperAdminBadge,
+  SUPER_ADMIN_LOCKED_NOTE,
+} from "@/components/super-admin-badge";
+import { ConfirmAccessDialog } from "@/components/confirm-access-dialog";
+import {
+  accessChangeReducer,
+  isConfirming,
+  membershipChangeTitle,
+  postAccessChange,
+  shownValue,
+  IDLE,
+  type AccessChangeState,
+} from "@/lib/users/access-change";
 
 type UserRow = {
   id: string;
@@ -102,9 +118,18 @@ const MEMBERSHIP_OPTIONS = [
   { value: "community", label: "Community" },
 ] as const;
 
+type Membership = "staff" | "student" | "community" | "none";
+
+/** Wording for the confirm dialog and toasts ("—" reads badly in a sentence). */
+function membershipLabel(value: Membership): string {
+  return value === "none"
+    ? "no membership role"
+    : MEMBERSHIP_OPTIONS.find((o) => o.value === value)?.label ?? value;
+}
+
 // The single membership role shown/edited in the Users list. Staff wins over
 // student, student over community (mirrors the app's precedence).
-function currentMembership(user: UserRow): "staff" | "student" | "community" | "none" {
+function currentMembership(user: UserRow): Membership {
   const names = new Set(
     user.user_roles.map((ur) => ur.roles?.name).filter((n): n is string => !!n)
   );
@@ -124,6 +149,10 @@ function elevatedRoleCount(user: UserRow): number {
   return user.user_roles.filter(
     (ur) => ur.roles?.name && !COMMUNITY_FLOOR_ROLES.has(ur.roles.name)
   ).length;
+}
+
+function holdsSuperAdmin(user: UserRow): boolean {
+  return user.user_roles.some((ur) => ur.roles?.name === "super_admin");
 }
 
 /** Already a plain community member as far as the list can tell. */
@@ -245,6 +274,7 @@ export function UsersTable({
   schoolByUser,
   awaitingArrivalByUser,
   isSuperAdmin = false,
+  canChangeSuperAdmins = false,
 }: {
   users: UserRow[];
   currentUserId: string;
@@ -261,6 +291,9 @@ export function UsersTable({
   awaitingArrivalByUser?: Record<string, { school: string; startsOn: string | null }>;
   // Super admins get the inline membership-role picker in the Role column.
   isSuperAdmin?: boolean;
+  // Only a real super_admin may change a super admin's account; a General
+  // Admin sees those rows locked. The API refuses it either way.
+  canChangeSuperAdmins?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
@@ -278,49 +311,76 @@ export function UsersTable({
     department: string | null;
   } | null>(null);
 
-  async function handleSetMembership(userId: string, role: string) {
-    // This control only swaps the membership role — it leaves job titles,
-    // permission grants and ministry rosters untouched. Say so rather than
-    // letting "Community" look like a demotion it isn't.
-    if (role === "community") {
-      const user = users.find((u) => u.id === userId);
-      const elevated = user ? elevatedRoleCount(user) : 0;
-      if (elevated > 0) {
-        const ok = confirm(
-          `This only changes the membership label. ${displayName(user!)} still ` +
-            `holds ${elevated} other role${elevated === 1 ? "" : "s"}, plus any ` +
-            `permissions and ministry memberships — all of which keep working.\n\n` +
-            `To actually remove staff access, cancel and use ` +
-            `"Convert to community member" in the ⋯ menu.\n\n` +
-            `Change the label anyway?`
-        );
-        if (!ok) {
-          router.refresh(); // put the select back where it was
-          return;
-        }
-      }
+  // The membership dropdown never saves on change: picking a value opens a
+  // confirmation, and the select keeps showing the saved value until Confirm
+  // (and falls back to it if the save fails). See lib/users/access-change.ts.
+  const [membershipChange, dispatchMembership] = useReducer(
+    accessChangeReducer<Membership>,
+    IDLE as AccessChangeState<Membership>
+  );
+  const membershipUser =
+    membershipChange.status === "idle"
+      ? null
+      : users.find((u) => u.id === membershipChange.key) ?? null;
+
+  async function confirmMembership() {
+    if (membershipChange.status !== "confirming" || !membershipUser) return;
+    const { to, from } = membershipChange;
+    const name = displayName(membershipUser);
+    dispatchMembership({ type: "confirm" });
+    const result = await postAccessChange(
+      "/api/admin/set-membership-role",
+      { user_id: membershipUser.id, role: to },
+      `Could not change ${name}'s membership role`
+    );
+    if (!result.ok) {
+      toast.error(result.error);
+      dispatchMembership({ type: "fail", error: result.error });
+      return;
     }
-    setBusy(userId);
-    try {
-      const res = await fetch("/api/admin/set-membership-role", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: userId, role }),
+    toast.success(
+      to === "none"
+        ? `${name}'s membership role was cleared`
+        : `${name} is now ${membershipLabel(to)}`
+    );
+    dispatchMembership({ type: "succeed" });
+    if (to === "staff" && from !== "staff") {
+      setPickingDepartment({
+        userId: membershipUser.id,
+        name,
+        department: membershipUser.department,
       });
-      if (res.ok) {
-        const user = users.find((u) => u.id === userId);
-        if (role === "staff" && user && currentMembership(user) !== "staff") {
-          setPickingDepartment({
-            userId,
-            name: displayName(user),
-            department: user.department,
-          });
-        }
-        router.refresh();
-      }
-    } finally {
-      setBusy(null);
     }
+    router.refresh();
+  }
+
+  // Mark inactive / Reactivate: same confirm-then-toast treatment.
+  const [activeChange, setActiveChange] = useState<{
+    user: UserRow;
+    is_active: boolean;
+  } | null>(null);
+  const [activeSaving, setActiveSaving] = useState(false);
+
+  async function confirmSetActive() {
+    if (!activeChange) return;
+    const { user, is_active } = activeChange;
+    const name = displayName(user);
+    setActiveSaving(true);
+    setBusy(user.id);
+    const result = await postAccessChange(
+      "/api/admin/set-user-active",
+      { user_id: user.id, is_active },
+      is_active ? `Could not reactivate ${name}` : `Could not mark ${name} inactive`
+    );
+    setActiveSaving(false);
+    setBusy(null);
+    setActiveChange(null);
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success(is_active ? `${name} reactivated` : `${name} marked inactive`);
+    router.refresh();
   }
   const [search, setSearch] = useState("");
   // Filter facets. Membership is multi-select (OR within); each category ANDs
@@ -558,15 +618,6 @@ export function UsersTable({
     setBusy(null);
   }
 
-  async function handleSetActive(user: UserRow, is_active: boolean) {
-    setBusy(user.id);
-    await callApi("/api/admin/set-user-active", {
-      user_id: user.id,
-      is_active,
-    });
-    setBusy(null);
-  }
-
   async function handleDelete(user: UserRow) {
     if (
       !confirm(
@@ -708,6 +759,8 @@ export function UsersTable({
               const stageStyle = STAGE_STYLES[lifecycle.stage];
               const isSelf = user.id === currentUserId;
               const isBusy = busy === user.id;
+              const targetIsSuper = holdsSuperAdmin(user);
+              const locked = targetIsSuper && !canChangeSuperAdmins;
 
               return (
                 <TableRow
@@ -725,6 +778,7 @@ export function UsersTable({
                         size={28}
                       />
                       <span className="truncate">{displayName(user)}</span>
+                      {targetIsSuper && <SuperAdminBadge />}
                     </div>
                   </TableCell>
                   <TableCell className="text-muted-foreground">
@@ -739,12 +793,27 @@ export function UsersTable({
                       : "—"}
                   </TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>
-                    {isSuperAdmin ? (
+                    {isSuperAdmin && !locked ? (
                       <select
                         className="h-8 border border-input bg-transparent px-2 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
-                        value={currentMembership(user)}
-                        disabled={isBusy}
-                        onChange={(e) => handleSetMembership(user.id, e.target.value)}
+                        value={shownValue(
+                          membershipChange,
+                          user.id,
+                          currentMembership(user)
+                        )}
+                        disabled={
+                          isBusy ||
+                          (membershipChange.status === "saving" &&
+                            membershipChange.key === user.id)
+                        }
+                        onChange={(e) =>
+                          dispatchMembership({
+                            type: "request",
+                            key: user.id,
+                            from: currentMembership(user),
+                            to: e.target.value as Membership,
+                          })
+                        }
                         aria-label="Membership role"
                       >
                         {MEMBERSHIP_OPTIONS.map((o) => (
@@ -932,9 +1001,19 @@ export function UsersTable({
                             </DropdownMenuItem>
                           )}
 
-                          {!isSelf && lifecycle.stage !== "inactive" && (
+                          {locked && (
                             <DropdownMenuItem
-                              onClick={() => handleSetActive(user, false)}
+                              disabled
+                              className="items-start whitespace-normal text-xs"
+                            >
+                              <Lock className="h-4 w-4 mr-2 mt-0.5 shrink-0" />
+                              {SUPER_ADMIN_LOCKED_NOTE}
+                            </DropdownMenuItem>
+                          )}
+
+                          {!isSelf && !locked && lifecycle.stage !== "inactive" && (
+                            <DropdownMenuItem
+                              onClick={() => setActiveChange({ user, is_active: false })}
                             >
                               <PowerOff className="h-4 w-4 mr-2" />
                               Mark inactive
@@ -943,14 +1022,14 @@ export function UsersTable({
 
                           {lifecycle.stage === "inactive" && (
                             <DropdownMenuItem
-                              onClick={() => handleSetActive(user, true)}
+                              onClick={() => setActiveChange({ user, is_active: true })}
                             >
                               <Power className="h-4 w-4 mr-2" />
                               Reactivate
                             </DropdownMenuItem>
                           )}
 
-                          {!isSelf && isSuperAdmin && !isCommunityOnly(user) && (
+                          {!isSelf && !locked && isSuperAdmin && !isCommunityOnly(user) && (
                             <DropdownMenuItem
                               onClick={() =>
                                 setConverting({
@@ -964,7 +1043,7 @@ export function UsersTable({
                             </DropdownMenuItem>
                           )}
 
-                          {!isSelf && (
+                          {!isSelf && !locked && (
                             <>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
@@ -992,6 +1071,64 @@ export function UsersTable({
         personRef={quickPerson}
         onClose={() => setQuickPerson(null)}
       />
+
+      {membershipUser && membershipChange.status !== "idle" && (
+        <ConfirmAccessDialog
+          open={isConfirming(membershipChange)}
+          title={membershipChangeTitle(
+            displayName(membershipUser),
+            membershipLabel(membershipChange.from),
+            membershipLabel(membershipChange.to)
+          )}
+          confirmLabel="Change role"
+          busy={membershipChange.status === "saving"}
+          onConfirm={confirmMembership}
+          onCancel={() => dispatchMembership({ type: "cancel" })}
+        >
+          <p>
+            This changes what {displayName(membershipUser)} can see and do in the
+            hub. Their job titles and permission grants are not touched; if they
+            hold no other titles, their department is cleared.
+          </p>
+          {/* Community only swaps the label — say so rather than letting it
+              look like the demotion it isn't. */}
+          {membershipChange.to === "community" &&
+            elevatedRoleCount(membershipUser) > 0 && (
+              <p>
+                <strong>
+                  {displayName(membershipUser)} still holds{" "}
+                  {elevatedRoleCount(membershipUser)} other role
+                  {elevatedRoleCount(membershipUser) === 1 ? "" : "s"}
+                </strong>
+                , plus any permissions and ministry memberships — all of which
+                keep working. To actually remove staff access, cancel and use
+                &ldquo;Convert to community member&rdquo; in the ⋯ menu.
+              </p>
+            )}
+        </ConfirmAccessDialog>
+      )}
+
+      {activeChange && (
+        <ConfirmAccessDialog
+          open
+          title={
+            activeChange.is_active
+              ? `Reactivate ${displayName(activeChange.user)}?`
+              : `Mark ${displayName(activeChange.user)} inactive?`
+          }
+          confirmLabel={activeChange.is_active ? "Reactivate" : "Mark inactive"}
+          destructive={!activeChange.is_active}
+          busy={activeSaving}
+          onConfirm={confirmSetActive}
+          onCancel={() => setActiveChange(null)}
+        >
+          <p>
+            {activeChange.is_active
+              ? `${displayName(activeChange.user)} will be marked active again, with the roles and permissions they already hold.`
+              : `${displayName(activeChange.user)} will be marked inactive. Their roles and profile are kept, so they can be reactivated later.`}
+          </p>
+        </ConfirmAccessDialog>
+      )}
 
       {converting && (
         <ConvertToCommunityDialog

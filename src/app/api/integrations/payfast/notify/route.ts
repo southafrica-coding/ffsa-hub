@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { payfastProvider } from "@/lib/payments/payfast";
-import { fulfillOrder } from "@/lib/ticketing/fulfillment";
+import { settlePaidOrder } from "@/lib/ticketing/settle";
+import { releaseTicketHolds } from "@/services/ticketing";
 
 // POST /api/integrations/payfast/notify
 //
@@ -16,8 +17,8 @@ import { fulfillOrder } from "@/lib/ticketing/fulfillment";
 // Behaviour:
 //  - signature/postback fail → log + return 200 (PayFast doesn't
 //    act on response codes; we just don't fulfil).
-//  - status = paid → markOrderPaid (idempotent via the eq("status",
-//    "pending") guard); on first transition, call fulfillOrder.
+//  - status = paid → settlePaidOrder (idempotent via the eq("status",
+//    "pending") guard); on first transition it fulfils the order.
 //  - status = cancelled/failed → cancel the pending order and
 //    release its inventory hold.
 
@@ -83,42 +84,23 @@ export async function POST(request: Request) {
   }
 
   if (result.status === "paid") {
-    // Idempotent: only flips pending → paid. Replayed webhooks land
-    // here with status already paid; maybeSingle returns null data,
-    // we treat it as already-handled and skip fulfilment.
-    const { data: updated, error: updateErr } = await supabase
-      .from("orders")
-      .update({
-        status: "paid",
-        paid_at: new Date().toISOString(),
-        provider_payment_id: result.providerPaymentId,
-      })
-      .eq("id", order.id)
-      .eq("status", "pending")
-      .select("id")
-      .maybeSingle();
-    if (updateErr) {
+    // Shared settle path (same as Stripe): idempotent pending → paid,
+    // seats re-taken if the window had closed, then fulfilment. A
+    // replayed ITN returns "already" and is skipped. Errors aren't
+    // surfaced to PayFast — the order is paid; staff handle a failed
+    // fulfilment out-of-band.
+    const settle = await settlePaidOrder(supabase, {
+      orderId: order.id,
+      expectedTotalCents: order.total_cents,
+      providerPaymentId: result.providerPaymentId,
+      amountCents: result.amountCents,
+    });
+    if (settle.outcome === "error") {
       console.error(
-        "[payfast/notify] mark-paid failed for order",
+        "[payfast/notify] settle failed for order",
         order.id,
-        updateErr.message
+        settle.error
       );
-      return new NextResponse("ok", { status: 200 });
-    }
-    if (updated) {
-      // First transition to paid — fire fulfilment. Ticket 10 fills
-      // in the real implementation (issue tickets + send email +
-      // trigger CRM resolution).
-      const fulfilment = await fulfillOrder(supabase, order.id);
-      if (!fulfilment.ok) {
-        console.error(
-          "[payfast/notify] fulfilment failed for order",
-          order.id,
-          fulfilment.error
-        );
-        // Don't surface to PayFast — the order is paid; staff handles
-        // the fulfilment failure out-of-band.
-      }
     }
   } else if (result.status === "cancelled" || result.status === "failed") {
     // Cancel + release inventory only if the order is still pending
@@ -138,11 +120,8 @@ export async function POST(request: Request) {
         })
         .eq("id", order.id)
         .eq("status", "pending");
-      // Release inventory for each line on the order. We don't store
-      // line items as a separate table in v1 — but we DO need to
-      // know what to release. For v1 we leave the inventory held;
-      // expires_at + a cron sweep (later) handles cleanup. A future
-      // line-items table makes the release exact.
+      // Give the seats back now rather than at the next sweep.
+      await releaseTicketHolds(supabase, { orderId: order.id });
     }
   }
   // status === "pending" → no-op (PayFast confirming receipt).

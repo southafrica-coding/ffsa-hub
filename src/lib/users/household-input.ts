@@ -98,3 +98,18 @@ export function sanitizeHouseholdInput(
 
   return { input };
 }
+
+// The caller's own marital status, for the spouse rule in marital-status.ts.
+// Null on a read error, which the rule treats as "unknown" (allowed) — a
+// transient blip must not stop someone saving their family.
+export async function getOwnMaritalStatus(
+  supabase: any, // eslint-disable-line @typescript-eslint/no-explicit-any
+  userId: string
+): Promise<string | null> {
+  const { data } = await supabase
+    .from("users")
+    .select("marital_status")
+    .eq("id", userId)
+    .maybeSingle();
+  return (data?.marital_status as string | null | undefined) ?? null;
+}

@@ -174,6 +174,26 @@ export async function updateHouseholdMember(
     .single();
 }
 
+// Remove spouse rows the caller added themselves that aren't linked to a Hub
+// account. Used only while finishing onboarding, when someone added a
+// spouse and then changed their marital status to one without a spouse —
+// so stale spouse details aren't kept. Never touches a row someone else
+// added or a spouse with their own account.
+export async function deleteOwnUnlinkedSpouses(
+  supabase: Client,
+  userId: string
+) {
+  const householdId = await getHouseholdId(supabase, userId);
+  if (!householdId) return { error: null };
+  return supabase
+    .from("household_members")
+    .delete()
+    .eq("household_id", householdId)
+    .eq("user_id", userId)
+    .eq("relationship", "spouse")
+    .is("linked_user_id", null);
+}
+
 // Delete a member from the caller's household.
 export async function deleteHouseholdMember(
   supabase: Client,

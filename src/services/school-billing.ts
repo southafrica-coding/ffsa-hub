@@ -159,6 +159,7 @@ export async function createBillingCourse(
     arrival_date?: string | null;
     enroll_lead_days?: number;
     created_by?: string | null;
+    graded?: boolean;
   }
 ) {
   return supabase.from("billing_courses").insert(data).select().single();

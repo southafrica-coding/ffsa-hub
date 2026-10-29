@@ -2,8 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { requireModuleAccess } from "@/lib/require-permission";
-import { canManageFinance } from "@/lib/api-auth";
+import { getFinanceHubAccess } from "@/lib/finance-access";
 import { Globe, Wallet, CreditCard, Home, HeartHandshake } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Masthead, SectionBar, StatusPill } from "@/components/ffsa";
@@ -51,14 +50,15 @@ export default async function FinancePage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
-  await requireModuleAccess(supabase, user.id, "finance");
-
-  // The Finance Office role (migration 248) only runs donor statements;
-  // everyone else with finance access sees every module and the Xero card.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: canView } = await (supabase as any).rpc("has_permission", { required_permission: "finance.view" });
-  const fullFinance = canView === true || (await canManageFinance(supabase, user.id));
-  const modules = fullFinance ? FINANCE_MODULES : FINANCE_MODULES.filter((m) => m.href === "/finance/donor-statements");
+  // Anyone can run an outreach budget, so Outreach Finance is open to all.
+  // The Finance Office role (migration 248) also runs donor statements;
+  // finance staff see every module and the Xero card.
+  const { fullFinance, financeOffice } = await getFinanceHubAccess(supabase, user.id);
+  const modules = fullFinance
+    ? FINANCE_MODULES
+    : FINANCE_MODULES.filter(
+        (m) => m.href === "/finance/outreach" || (financeOffice && m.href === "/finance/donor-statements")
+      );
   const liveCount = modules.filter((m) => m.ready).length;
 
   return (

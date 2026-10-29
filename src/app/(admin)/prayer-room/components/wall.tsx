@@ -25,7 +25,8 @@
 
 import { useMemo } from "react";
 import { cn } from "@/lib/utils/cn";
-import { displayName, type Person } from "./helpers";
+import { MapPin } from "lucide-react";
+import { displayName, offSiteLocation, type Person } from "./helpers";
 import { weekDays } from "@/lib/bookings/dates";
 import {
   boWin,
@@ -376,6 +377,7 @@ export default function Wall({
                 const curated = bandMinutes(toMin(s.start_time), toMin(s.end_time));
                 const title = s.title || s.theme || "Devo set";
                 const lead = leadName(s, leadSeatIds);
+                const location = offSiteLocation(s);
 
                 // Card density by duration. Column is ~127px wide, so titles
                 // wrap easily — every layout constrains them.
@@ -386,7 +388,7 @@ export default function Wall({
                     key={s.id}
                     type="button"
                     onClick={onOpenSet ? () => onOpenSet(s.id) : undefined}
-                    title={`${hhmm(start)}–${hhmm(end)} · ${title}${lead ? ` — ${lead}` : ""}${live ? "" : " · needs a lead"}`}
+                    title={`${hhmm(start)}–${hhmm(end)} · ${title}${lead ? ` — ${lead}` : ""}${location ? ` · in ${location}` : ""}${live ? "" : " · needs a lead"}`}
                     className={cn(
                       "absolute left-0 right-0 overflow-hidden px-1.5 text-left",
                       // inset so no two blocks ever touch
@@ -411,9 +413,19 @@ export default function Wall({
                       paddingTop: full ? 4 : 2,
                     }}
                   >
-                    <div className="font-mono text-[8px] font-bold tracking-[0.08em] text-ink">
-                      {hhmm(start)}
-                      {full && <span className="ml-1 font-normal">· {durationLabel(mins)}</span>}
+                    <div className="flex min-w-0 items-center gap-1 font-mono text-[8px] font-bold tracking-[0.08em] text-ink">
+                      <span className="shrink-0">
+                        {hhmm(start)}
+                        {full && <span className="ml-1 font-normal">· {durationLabel(mins)}</span>}
+                      </span>
+                      {/* Not in the prayer room — said on the card itself, in
+                          the time row so even a 30-minute card carries it. */}
+                      {location && (
+                        <span className="flex min-w-0 items-center gap-0.5 bg-ink px-1 uppercase tracking-[0.06em] text-yellow">
+                          <MapPin className="h-2 w-2 shrink-0" aria-hidden />
+                          <span className="truncate">{location}</span>
+                        </span>
+                      )}
                     </div>
 
                     {/* The title, always. A card that swapped its name for
@@ -514,6 +526,12 @@ export default function Wall({
         <Key className="border-2 border-ink" style={{ background: BLOCKOUT_HATCH }}>
           Blocked out
         </Key>
+        <span className="flex items-center gap-1.5">
+          <span className="flex h-3 items-center bg-ink px-1 text-yellow">
+            <MapPin className="h-2 w-2" aria-hidden />
+          </span>
+          <span className="mono-label">Not in the prayer room</span>
+        </span>
       </div>
     </div>
   );

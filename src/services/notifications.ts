@@ -64,7 +64,7 @@ async function isSuperAdmin(supabase: Client, userId: string): Promise<boolean> 
     .from("user_roles")
     .select("roles!inner(name)")
     .eq("user_id", userId)
-    .eq("roles.name", "super_admin")
+    .in("roles.name", ["super_admin", "admin"])
     .limit(1);
   return !!(data && data.length > 0);
 }
@@ -74,19 +74,22 @@ async function hasModuleAccess(
   userId: string,
   module: string
 ): Promise<boolean> {
-  const { data: roleRows } = await supabase
-    .from("user_roles")
-    .select("roles!inner(name)")
-    .eq("user_id", userId)
-    .in("roles.name", ["super_admin", "admin"])
-    .limit(1);
+  // Either one is enough, and neither depends on the other — ask together.
+  const [{ data: roleRows }, { data: perm }] = await Promise.all([
+    supabase
+      .from("user_roles")
+      .select("roles!inner(name)")
+      .eq("user_id", userId)
+      .in("roles.name", ["super_admin", "admin"])
+      .limit(1),
+    supabase
+      .from("user_permissions")
+      .select("permissions!inner(module)")
+      .eq("user_id", userId)
+      .eq("permissions.module", module)
+      .limit(1),
+  ]);
   if (roleRows && roleRows.length > 0) return true;
-  const { data: perm } = await supabase
-    .from("user_permissions")
-    .select("permissions!inner(module)")
-    .eq("user_id", userId)
-    .eq("permissions.module", module)
-    .limit(1);
   return !!(perm && perm.length > 0);
 }
 
@@ -195,18 +198,21 @@ async function newStaffOnboardedNotifs(
   userId: string
 ): Promise<AppNotification[]> {
   const notifyList = staffSignupNotifyEmails();
-  let allowed = false;
-  if (notifyList.length > 0) {
-    const { data: me } = await supabase
-      .from("users")
-      .select("email")
-      .eq("id", userId)
-      .maybeSingle();
-    const myEmail = (me?.email ?? "").trim().toLowerCase();
-    allowed = !!myEmail && notifyList.includes(myEmail);
-  }
-  if (!allowed) allowed = await isSuperAdmin(supabase, userId);
-  if (!allowed) return [];
+  // On the notify list OR a super admin — two independent reads, asked together.
+  const [onList, superAdmin] = await Promise.all([
+    (async () => {
+      if (notifyList.length === 0) return false;
+      const { data: me } = await supabase
+        .from("users")
+        .select("email")
+        .eq("id", userId)
+        .maybeSingle();
+      const myEmail = (me?.email ?? "").trim().toLowerCase();
+      return !!myEmail && notifyList.includes(myEmail);
+    })(),
+    isSuperAdmin(supabase, userId),
+  ]);
+  if (!onList && !superAdmin) return [];
 
   const since = new Date(
     Date.now() - NEW_STAFF_WINDOW_DAYS * 24 * 60 * 60 * 1000
@@ -614,17 +620,20 @@ export async function getNotifications(
   supabase: Client,
   userId: string
 ): Promise<{ notifications: AppNotification[]; unreadCount: number }> {
-  const results = await Promise.all(
-    PROVIDERS.map((p) => p(supabase, userId).catch(() => [] as AppNotification[]))
-  );
+  // Read state is fetched alongside the providers rather than after them
+  // (table may not exist yet → everything reads as unread).
+  const [results, { data: readRows }] = await Promise.all([
+    Promise.all(
+      PROVIDERS.map((p) => p(supabase, userId).catch(() => [] as AppNotification[]))
+    ),
+    supabase
+      .from("notification_reads")
+      .select("notification_key")
+      .eq("user_id", userId),
+  ]);
   const all = results.flat();
   if (all.length === 0) return { notifications: [], unreadCount: 0 };
 
-  // Read state (table may not exist yet → everything reads as unread).
-  const { data: readRows } = await supabase
-    .from("notification_reads")
-    .select("notification_key")
-    .eq("user_id", userId);
   const readKeys = new Set<string>(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ((readRows ?? []) as any[]).map((r) => r.notification_key)

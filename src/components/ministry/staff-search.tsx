@@ -20,6 +20,23 @@ function nameOf(u: Staff): string {
   return [u.first_name, u.last_name].filter(Boolean).join(" ") || u.display_name || u.email || "Unknown";
 }
 
+// Lower-case, strip accents (é → e, ë → e, å → a) and spell out the letters
+// that don't decompose (ø → o, æ → ae, ß → ss), so typing a name the way it
+// sounds still finds it. A plain includes() on the raw text missed everyone
+// with an accent in their name.
+function fold(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ø/g, "o")
+    .replace(/æ/g, "ae")
+    .replace(/œ/g, "oe")
+    .replace(/ß/g, "ss")
+    .replace(/đ/g, "d")
+    .replace(/ł/g, "l");
+}
+
 // A free-text jump-to-person box for the Ministry list page, so finding
 // someone doesn't require clicking through every ministry first. Filters
 // the already-scoped staff list the server passed down (admin/leadership
@@ -27,13 +44,28 @@ function nameOf(u: Staff): string {
 export function StaffSearch({ staff }: { staff: Staff[] }) {
   const [query, setQuery] = useState("");
 
+  // Folded once per staff list rather than on every keystroke.
+  const haystacks = useMemo(
+    () =>
+      staff.map((u) => ({
+        u,
+        text: fold(
+          [u.first_name, u.last_name, u.display_name, u.email].filter(Boolean).join(" ")
+        ),
+      })),
+    [staff]
+  );
+
+  // Every typed word has to appear somewhere, in any order — so "anna smith"
+  // still finds "Anna Marie Smith", and "smith anna" works too.
   const matches = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return [];
-    return staff
-      .filter((u) => `${nameOf(u)} ${u.email ?? ""}`.toLowerCase().includes(q))
+    const words = fold(query).split(/\s+/).filter(Boolean);
+    if (words.length === 0) return [];
+    return haystacks
+      .filter(({ text }) => words.every((w) => text.includes(w)))
+      .map(({ u }) => u)
       .slice(0, 8);
-  }, [staff, query]);
+  }, [haystacks, query]);
 
   return (
     <div className="relative max-w-sm px-5 py-4 md:px-8">

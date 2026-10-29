@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { X, Plus, UserMinus } from "lucide-react";
 import { ConvertToCommunityDialog } from "../convert-to-community-dialog";
+import { ConfirmAccessDialog } from "@/components/confirm-access-dialog";
+import { postAccessChange } from "@/lib/users/access-change";
 
 export type AssignedRole = {
   id: string;
@@ -28,6 +30,7 @@ export function RoleAssignment({
   programOptions = [],
   canManage,
   canConvertToCommunity = false,
+  lockedNote,
   personName = "this person",
 }: {
   userId: string;
@@ -36,9 +39,12 @@ export function RoleAssignment({
   scopeLabels: Record<string, string>;
   programOptions?: { id: string; label: string }[];
   canManage: boolean;
-  // Super admins only, and never on your own account — the endpoint enforces
+  // Super admins and admins only, and never on your own account — the endpoint enforces
   // both, this just hides a button that would always fail.
   canConvertToCommunity?: boolean;
+  // Shown when titles are read-only because the person is a Super Admin and
+  // the viewer is not (pass canManage/canConvertToCommunity false as well).
+  lockedNote?: string;
   personName?: string;
 }) {
   const router = useRouter();
@@ -58,52 +64,81 @@ export function RoleAssignment({
     setScopingRole(null);
   }
 
-  async function addRole(
-    roleId: string,
+  // Adding or removing a title changes what this person can reach, so neither
+  // happens on click: it waits here for the confirmation dialog.
+  const [pending, setPending] = useState<
+    | {
+        kind: "add";
+        roleId: string;
+        label: string;
+        scopeType: string | null;
+        scopeId: string | null;
+      }
+    | { kind: "remove"; role: AssignedRole; label: string }
+    | null
+  >(null);
+
+  function titleLabel(displayName: string, scopeId: string | null) {
+    return scopeId && scopeLabels[scopeId]
+      ? `${displayName} · ${scopeLabels[scopeId]}`
+      : displayName;
+  }
+
+  function addRole(
+    role: AssignableRole,
     scopeType: string | null = null,
     scopeId: string | null = null
   ) {
-    setBusy(true);
     closeMenu();
-    const res = await fetch("/api/admin/grant-role", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        user_id: userId,
-        role_id: roleId,
-        scope_type: scopeType,
-        scope_id: scopeId,
-      }),
+    setPending({
+      kind: "add",
+      roleId: role.id,
+      label: titleLabel(role.display_name, scopeId),
+      scopeType,
+      scopeId,
     });
-    setBusy(false);
-    if (!res.ok) {
-      const b = await res.json().catch(() => ({}));
-      toast.error(b.error ?? "Could not add the title");
-      return;
-    }
-    toast.success("Title added");
-    router.refresh();
   }
 
-  async function removeRole(a: AssignedRole) {
+  function removeRole(a: AssignedRole) {
+    setPending({ kind: "remove", role: a, label: titleLabel(a.display_name, a.scope_id) });
+  }
+
+  async function confirmPending() {
+    if (!pending) return;
     setBusy(true);
-    const res = await fetch("/api/admin/revoke-role", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        user_id: userId,
-        role_id: a.role_id,
-        scope_type: a.scope_type,
-        scope_id: a.scope_id,
-      }),
-    });
+    const result =
+      pending.kind === "add"
+        ? await postAccessChange(
+            "/api/admin/grant-role",
+            {
+              user_id: userId,
+              role_id: pending.roleId,
+              scope_type: pending.scopeType,
+              scope_id: pending.scopeId,
+            },
+            "Could not add the title"
+          )
+        : await postAccessChange(
+            "/api/admin/revoke-role",
+            {
+              user_id: userId,
+              role_id: pending.role.role_id,
+              scope_type: pending.role.scope_type,
+              scope_id: pending.role.scope_id,
+            },
+            "Could not remove the title"
+          );
     setBusy(false);
-    if (!res.ok) {
-      const b = await res.json().catch(() => ({}));
-      toast.error(b.error ?? "Could not remove the title");
+    setPending(null);
+    if (!result.ok) {
+      toast.error(result.error);
       return;
     }
-    toast.success("Title removed");
+    toast.success(
+      pending.kind === "add"
+        ? `Added “${pending.label}” to ${personName}`
+        : `Removed “${pending.label}” from ${personName}`
+    );
     router.refresh();
   }
 
@@ -237,7 +272,7 @@ export function RoleAssignment({
                     {programOptions.map((p) => (
                       <button
                         key={p.id}
-                        onClick={() => addRole(scopingRole.id, "program", p.id)}
+                        onClick={() => addRole(scopingRole, "program", p.id)}
                         style={{
                           display: "block",
                           width: "100%",
@@ -257,7 +292,7 @@ export function RoleAssignment({
                   options.map((r) => (
                     <button
                       key={r.id}
-                      onClick={() => (r.scope_type === "program" ? setScopingRole(r) : addRole(r.id))}
+                      onClick={() => (r.scope_type === "program" ? setScopingRole(r) : addRole(r))}
                       style={{
                         display: "block",
                         width: "100%",
@@ -281,6 +316,34 @@ export function RoleAssignment({
           </div>
         )}
       </div>
+
+      {pending && (
+        <ConfirmAccessDialog
+          open
+          title={
+            pending.kind === "add"
+              ? `Add the title “${pending.label}” to ${personName}?`
+              : `Remove the title “${pending.label}” from ${personName}?`
+          }
+          confirmLabel={pending.kind === "add" ? "Add title" : "Remove title"}
+          destructive={pending.kind === "remove"}
+          busy={busy}
+          onConfirm={confirmPending}
+          onCancel={() => setPending(null)}
+        >
+          <p>
+            {pending.kind === "add"
+              ? `${personName} gets everything this title unlocks, on top of their other titles.`
+              : `${personName} loses whatever this title unlocks that none of their other titles or permissions also give.`}
+          </p>
+        </ConfirmAccessDialog>
+      )}
+
+      {lockedNote && (
+        <p style={{ fontSize: "12px", color: "#55524A", marginTop: "14px" }}>
+          {lockedNote}
+        </p>
+      )}
 
       {canConvertToCommunity && (
         <div

@@ -3,12 +3,14 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { Trash2 } from "lucide-react";
 
 import { Bar, Drawer, MastheadButton, SectionBar, StatusPill } from "@/components/ffsa";
 import { krProgress, metricCaption, statusLabel, statusTone } from "@/lib/okrs/progress";
 import { formatRelativeTime } from "@/lib/users/lifecycle";
 import type { OkrKeyResult, OkrObjective } from "@/types/okrs";
 import { Textarea } from "@/components/ui/textarea";
+import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 import { CheckinPanel } from "./checkin-panel";
 import { ObjectiveDialog } from "./objective-dialog";
 import { KeyResultDialog } from "./key-result-dialog";
@@ -49,15 +51,17 @@ export function OwnerOkrs({
   const openIndex = flatKrs.findIndex((e) => e.kr.id === openKrId);
   const open = openIndex >= 0 ? flatKrs[openIndex] : null;
 
-  async function deleteObjective(id: string, title: string) {
-    if (!confirm(`Delete “${title}” and all of its key results? This cannot be undone.`)) return;
+  const [deletingObjective, setDeletingObjective] = useState<OkrObjective | null>(null);
+
+  async function deleteObjective(id: string): Promise<boolean> {
     const res = await fetch(`/api/okrs/objectives/${id}`, { method: "DELETE" });
     if (!res.ok) {
       toast.error((await res.json().catch(() => ({}))).error ?? "Could not delete that objective");
-      return;
+      return false;
     }
     toast.success("Objective deleted");
     router.refresh();
+    return true;
   }
 
   return (
@@ -112,7 +116,7 @@ export function OwnerOkrs({
                 </div>
 
                 {canEdit && (
-                  <div className="mt-2 flex flex-wrap gap-3 font-mono text-[10px] font-bold uppercase tracking-[0.12em]">
+                  <div className="mt-2 flex flex-wrap items-center gap-3 font-mono text-[10px] font-bold uppercase tracking-[0.12em]">
                     <button
                       type="button"
                       className="text-[#55524A] underline hover:text-ink"
@@ -127,12 +131,15 @@ export function OwnerOkrs({
                     >
                       Edit objective
                     </button>
+                    {/* Pushed to the far end and set apart, so it is never
+                        the button next to Edit. It only opens a confirmation. */}
                     <button
                       type="button"
-                      className="text-destructive underline hover:opacity-70"
-                      onClick={() => deleteObjective(o.id, o.title)}
+                      className="ml-auto inline-flex items-center gap-1.5 border border-destructive/40 px-2 py-1 text-destructive hover:bg-destructive hover:text-white"
+                      onClick={() => setDeletingObjective(o)}
                     >
-                      Delete
+                      <Trash2 className="h-3 w-3" aria-hidden />
+                      Delete objective
                     </button>
                   </div>
                 )}
@@ -172,6 +179,23 @@ export function OwnerOkrs({
           ministryId={ministryId}
           teamId={teamId}
           onClose={() => setEditingObjective(null)}
+        />
+      )}
+
+      {deletingObjective !== null && (
+        <ConfirmDeleteDialog
+          open
+          onOpenChange={(o) => !o && setDeletingObjective(null)}
+          title="Delete this objective?"
+          itemName={deletingObjective.title}
+          consequence={(() => {
+            const n = deletingObjective.okr_key_results?.length ?? 0;
+            return n > 0
+              ? `Its ${n} key result${n === 1 ? "" : "s"} and all of their check-ins will be deleted with it. This can't be undone.`
+              : "This can't be undone.";
+          })()}
+          confirmLabel="Delete objective"
+          onConfirm={() => deleteObjective(deletingObjective.id)}
         />
       )}
 

@@ -2,7 +2,17 @@
  * Receipts from Slack — the I/O half (pure logic lives in receipt-logic.ts).
  *
  *   photo arrives ─► original stored (outreach-receipts bucket) + draft row
- *                 ─► Claude reads it ─► card [Log it] [Change] [Cancel]
+ *                 ─► Claude reads it ─► card [Log to <team>] [Change] [Cancel]
+ *   bank notice   ─► a screenshot of an ATM withdrawal becomes a CASH PULL
+ *                    card instead [Log pull to <team>] [Change] [Cancel] —
+ *                    priced exactly like the Hub form (migration 263/264)
+ *   receipt + bank notification in one message ─► paired: local from the
+ *                    receipt, rand from the bank, card confirmed (migration 265)
+ *   bank notice for a card payment on its own ─► matched to the sender's
+ *                    card payments still waiting for one [Yes, confirm]
+ *   Team          ─► in a DM, someone who can log for several teams picks
+ *                    (or corrects) the team on the card; nothing is logged
+ *                    until a team is chosen (migration 262)
  *   Log it        ─► outreach_expenses (source 'slack') + the ORIGINAL file
  *                    moved under the expense and recorded in
  *                    outreach_receipts, exactly like a Hub upload
@@ -14,8 +24,8 @@
  * the photo is still kept and the card says so.
  *
  * Everything runs with the service-role client, so every write re-checks
- * who may do it: logging is for the team's outreach leader, finance
- * student, school leader or finance admin, and finance staff.
+ * who may do it: logging is for the team's owner and co-leaders, and
+ * finance staff.
  */
 
 import crypto from "node:crypto";
@@ -26,8 +36,27 @@ import * as slack from "@/lib/slack/client";
 import { checkCashAlert } from "@/lib/outreach/cash-alerts";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { BudgetCategory } from "@/lib/finance/outreach-budget";
+import { OUTREACH_LEADER_ROLES } from "@/lib/finance/outreach-roles";
+import { currencyForCountry } from "@/lib/currencies";
+import {
+  bankAmounts,
+  cardConfirmBlocks,
+  confirmWithBank,
+  matchCardCandidates,
+  pairCardNotices,
+  type CardCandidate,
+} from "./card-logic";
+import {
+  buildPullProposal,
+  missingForPull,
+  pullCardBlocks,
+  pullChangeModal,
+  pullLine,
+  type PullProposal,
+} from "./pull-logic";
 import { isFinanceStaff, pickTeam, sastDate, summarise, type OutreachScope, type OutreachTeamRef } from "@/lib/slack/assistant/outreach";
 import {
+  ACTION_CANCEL,
   buildProposal,
   CLAUDE_IMAGE_TYPES,
   changeModal,
@@ -45,6 +74,7 @@ import {
   ReceiptReadingSchema,
   receiptCardBlocks,
   safeFileName,
+  logButtonText,
   toZar,
   type CashBatchRow,
   type ChangeInput,
@@ -60,7 +90,7 @@ type Admin = any;
 
 const BUCKET = "outreach-receipts";
 const MODEL = "claude-opus-5-5";
-const EDITOR_ROLES = ["outreach_leader", "finance_student", "school_leader", "finance_admin"];
+const EDITOR_ROLES = OUTREACH_LEADER_ROLES;
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://www.ffsahub.com";
 const MAX_FILES_PER_MESSAGE = 4;
 
@@ -98,6 +128,35 @@ export async function canLog(admin: Admin, teamId: string, hubUserId: string | n
   if (data && EDITOR_ROLES.includes(data.role)) return true;
   return isFinanceStaff(admin, hubUserId);
 }
+
+type TeamChoice = { id: string; name: string };
+
+/** Every team this person may log expenses for: all of them for finance staff, else the ones they lead. */
+async function loggableTeams(admin: Admin, hubUserId: string | null): Promise<TeamChoice[]> {
+  if (!hubUserId) return [];
+  if (await isFinanceStaff(admin, hubUserId)) {
+    const { data } = await admin
+      .from("outreach_teams")
+      .select("id, team_name")
+      .is("archived_at", null) // archived teams leave the pickers (migration 272)
+      .order("team_name");
+    return ((data ?? []) as { id: string; team_name: string }[]).map((t) => ({ id: t.id, name: t.team_name }));
+  }
+  const { data } = await admin
+    .from("outreach_team_members")
+    .select("outreach_teams!inner(id, team_name)")
+    .eq("user_id", hubUserId)
+    .in("role", EDITOR_ROLES)
+    // Same teams the bot answers them about in a DM (resolveOutreachScope).
+    .eq("outreach_teams.slack_enabled", true)
+    .is("outreach_teams.archived_at", null);
+  return ((data ?? []) as { outreach_teams: { id: string; team_name: string } }[])
+    .map((r) => ({ id: r.outreach_teams.id, name: r.outreach_teams.team_name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** A DM, where the sender picks the team. In a team's channel the team is the channel's. */
+const isDM = (channelId: string) => channelId.startsWith("D");
 
 async function editorNames(admin: Admin, teamId: string): Promise<string[]> {
   const { data } = await admin
@@ -192,8 +251,9 @@ async function liveRate(currency: string): Promise<RateChoice | null> {
   }
 }
 
-async function chooseRate(admin: Admin, teamId: string, currency: string, batches?: CashBatchRow[]) {
-  return rateFromCash(currency, batches ?? (await cashBatches(admin, teamId))) ?? (await liveRate(currency));
+async function chooseRate(admin: Admin, teamId: string | null, currency: string, batches?: CashBatchRow[]) {
+  const cash = batches ?? (teamId ? await cashBatches(admin, teamId) : []);
+  return rateFromCash(currency, cash) ?? (await liveRate(currency));
 }
 
 // ────────────────────────────────────────────────────────────
@@ -222,28 +282,26 @@ function teamFor(scope: OutreachScope, note: string | null): OutreachTeamRef | n
 export async function handleIncomingReceipts(m: IncomingReceipts): Promise<void> {
   const admin: Admin = createAdminClient();
   const team = teamFor(m.scope, m.userNote);
+  // No team yet: read it anyway and let them pick on the card — as long as
+  // there's a team they're allowed to log for.
+  const choices = await loggableTeams(admin, m.hubUserId);
   if (!team) {
-    const own = m.scope.teams.filter((t) => t.role !== null).map((t) => t.team_name);
-    await post(
-      m.channelId,
-      `Which team is this receipt for? Send it again with the team name in the message${own.length ? ` (${own.join(" or ")})` : ""}.`,
-      m.threadTs
-    );
-    return;
-  }
-
-  if (!(await canLog(admin, team.id, m.hubUserId))) {
+    if (!choices.length) {
+      await post(m.channelId, "You're not an owner or co-leader of any outreach team, so I can't log receipts for you.", m.threadTs);
+      return;
+    }
+  } else if (!(await canLog(admin, team.id, m.hubUserId))) {
     const names = await editorNames(admin, team.id);
     await post(
       m.channelId,
       names.length
         ? `Only ${names.join(" or ")} can log ${team.team_name}'s expenses — tag them here, or send them the photo.`
-        : `Only the team's outreach leader or finance student can log ${team.team_name}'s expenses.`,
+        : `Only ${team.team_name}'s owner and co-leaders can log its expenses.`,
       m.threadTs
     );
     return;
   }
-  if (await financeClosed(admin, team.id)) {
+  if (team && (await financeClosed(admin, team.id))) {
     await post(m.channelId, `${team.team_name}'s finances are closed, so I can't log new expenses. Talk to the finance team.`, m.threadTs);
     return;
   }
@@ -258,32 +316,126 @@ export async function handleIncomingReceipts(m: IncomingReceipts): Promise<void>
       m.threadTs
     );
   }
+  const ctx = await intakeContext(admin, team);
+  const failed = (file: SlackFile) => async (err: unknown) => {
+    console.error("[slack/outreach] receipt failed", file.id, err);
+    await post(m.channelId, `Something went wrong with *${file.name ?? "that file"}*. Try sending it again, or log it in the Hub.`, m.threadTs).catch(() => {});
+    return null;
+  };
+
+  // 1. Store and read every file first, so a receipt and its bank
+  //    notification sent together can be paired.
+  const got = (await Promise.all(files.map((file) => ingestFile(admin, team, file, m, ctx).catch(failed(file))))).filter(
+    (g): g is Ingested => g !== null
+  );
+
+  const receipts = got.filter((g) => g.reading.document_kind === "receipt" && g.reading.is_receipt);
+  const notices = got.filter((g) => g.reading.document_kind === "card_payment_notification");
+  const pairs = pairCardNotices(
+    receipts.map((r) => ({ total: r.reading.total, currency: pickCurrency(r.reading.currency, ctx.likely) })),
+    notices.map((n) => ({
+      foreignAmount: n.reading.bank_foreign_amount,
+      foreignCurrency: n.reading.bank_foreign_currency,
+      zarTotal: n.reading.bank_zar_total,
+    }))
+  );
+  const noticeFor = new Map(pairs.map((p) => [receipts[p.receipt], { notice: notices[p.notice], mismatch: p.mismatch }]));
+  const attached = new Set(pairs.map((p) => notices[p.notice]));
+
+  // 2. Propose each.
   await Promise.all(
-    files.map(async (file) => {
+    got.map(async (g) => {
       try {
-        await handleOneFile(admin, team, file, m);
+        if (g.reading.document_kind === "atm_withdrawal_notification") {
+          await proposePull(admin, {
+            draftId: g.draftId,
+            sha: g.sha,
+            reading: g.reading,
+            team,
+            choices,
+            m,
+            today: ctx.today,
+            fallbackCurrency: ctx.latestCash?.local_currency ?? currencyForCountry(ctx.teamRow?.country) ?? null,
+            say: g.say,
+          });
+        } else if (g.reading.document_kind === "card_payment_notification") {
+          if (attached.has(g)) await markAttached(admin, g);
+          else await proposeCardConfirm(admin, g, m, ctx.today);
+        } else if (g.reading.is_receipt) {
+          await proposeReceipt(admin, g, { team, choices, m, ctx, bank: noticeFor.get(g) ?? null });
+        } else {
+          await notAReceipt(admin, g);
+        }
       } catch (err) {
-        console.error("[slack/outreach] receipt failed", file.id, err);
-        await post(m.channelId, `Something went wrong with *${file.name ?? "that file"}*. Try sending it again, or log it in the Hub.`, m.threadTs).catch(() => {});
+        await failed(g.file)(err);
       }
     })
   );
 }
 
-async function handleOneFile(admin: Admin, team: OutreachTeamRef, file: SlackFile, m: IncomingReceipts) {
+type IntakeContext = {
+  categories: BudgetCategory[];
+  batches: CashBatchRow[];
+  teamRow: { country: string | null } | null;
+  latestCash: CashBatchRow | undefined;
+  likely: string | null;
+  today: string;
+};
+
+async function intakeContext(admin: Admin, team: OutreachTeamRef | null): Promise<IntakeContext> {
+  const [categories, batches, { data: teamRow }] = await Promise.all([
+    loadCategories(admin),
+    team ? cashBatches(admin, team.id) : Promise.resolve([] as CashBatchRow[]),
+    team
+      ? admin.from("outreach_teams").select("country").eq("id", team.id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+  const latestCash = [...batches].sort((a, b) => b.batch_date.localeCompare(a.batch_date))[0];
+  return {
+    categories,
+    batches,
+    teamRow: teamRow ?? null,
+    latestCash,
+    likely: latestCash?.local_currency ?? (teamRow?.country === "South Africa" ? "ZAR" : null),
+    today: sastDate(new Date()),
+  };
+}
+
+type Say = (text: string, blocks?: unknown[]) => Promise<unknown>;
+
+type Ingested = {
+  file: SlackFile;
+  draftId: string;
+  sha: string;
+  storagePath: string;
+  name: string;
+  mime: string | null;
+  size: number;
+  reading: ReceiptReading;
+  say: Say;
+};
+
+/** Store the original and read it. Null when it's already been answered (wrong type, unreadable). */
+async function ingestFile(
+  admin: Admin,
+  team: OutreachTeamRef | null,
+  file: SlackFile,
+  m: IncomingReceipts,
+  ctx: IntakeContext
+): Promise<Ingested | null> {
   if (fileKind(file) === "unsupported") {
     await post(m.channelId, `*${file.name ?? "That file"}* isn't a photo or PDF, so I can't read it as a receipt.`, m.threadTs);
-    return;
+    return null;
   }
   if ((file.size ?? 0) > MAX_RECEIPT_BYTES) {
     await post(m.channelId, `*${file.name ?? "That file"}* is over 20 MB — send a smaller photo.`, m.threadTs);
-    return;
+    return null;
   }
 
   // The card starts as a "reading" note and becomes the confirm card.
-  const card = await post(m.channelId, "📸 Got it — reading your receipt…", m.threadTs);
+  const card = await post(m.channelId, "📸 Got it — reading it…", m.threadTs);
   const cardTs = card.ok ? card.ts : undefined;
-  const say = (text: string, blocks?: unknown[]) =>
+  const say: Say = (text, blocks) =>
     cardTs ? update(m.channelId, cardTs, text, blocks ?? decidedBlocks(text)) : post(m.channelId, text, m.threadTs, blocks);
 
   // 1. Keep the original, before anything else can go wrong.
@@ -293,7 +445,8 @@ async function handleOneFile(admin: Admin, team: OutreachTeamRef, file: SlackFil
   const sha = crypto.createHash("sha256").update(original).digest("hex");
   const draftId = crypto.randomUUID();
   const name = safeFileName(file);
-  const storagePath = `${team.id}/slack/${draftId}/${name}`;
+  // Moved under the expense once logged, so a team-less draft can wait here.
+  const storagePath = `${team?.id ?? "unassigned"}/slack/${draftId}/${name}`;
 
   const { error: upErr } = await admin.storage
     .from(BUCKET)
@@ -302,7 +455,7 @@ async function handleOneFile(admin: Admin, team: OutreachTeamRef, file: SlackFil
 
   const { error: insErr } = await admin.from("outreach_receipt_drafts").insert({
     id: draftId,
-    team_id: team.id,
+    team_id: team?.id ?? null,
     hub_user_id: m.hubUserId,
     slack_user_id: m.slackUserId,
     channel_id: m.channelId,
@@ -320,27 +473,18 @@ async function handleOneFile(admin: Admin, team: OutreachTeamRef, file: SlackFil
   if (insErr) throw new Error(`Couldn't save the receipt: ${insErr.message}`);
 
   // 2. Read it.
-  const [categories, batches, { data: teamRow }] = await Promise.all([
-    loadCategories(admin),
-    cashBatches(admin, team.id),
-    admin.from("outreach_teams").select("country").eq("id", team.id).maybeSingle(),
-  ]);
-  const latestCash = [...batches].sort((a, b) => b.batch_date.localeCompare(a.batch_date))[0];
-  const likely = latestCash?.local_currency ?? (teamRow?.country === "South Africa" ? "ZAR" : null);
-  const today = sastDate(new Date());
-
-  let reading: ReceiptReading;
   try {
-    reading = await readReceipt(
+    const reading = await readReceipt(
       await readableCopy(file, original),
       readingPrompt({
-        categories: categories.map((c) => c.name),
-        teamCountry: teamRow?.country ?? null,
-        likelyCurrency: likely,
-        today,
+        categories: ctx.categories.map((c) => c.name),
+        teamCountry: ctx.teamRow?.country ?? null,
+        likelyCurrency: ctx.likely,
+        today: ctx.today,
         userNote: m.userNote,
       })
     );
+    return { file, draftId, sha, storagePath, name, mime: file.mimetype ?? null, size: original.length, reading, say };
   } catch (err) {
     await admin
       .from("outreach_receipt_drafts")
@@ -350,37 +494,461 @@ async function handleOneFile(admin: Admin, team: OutreachTeamRef, file: SlackFil
       "😕 I couldn't read that receipt. The photo is saved — send a clearer photo, or log it in the Hub.",
       decidedBlocks("😕 I couldn't read that receipt. The photo is saved — send a clearer photo, or log it in the Hub.")
     );
-    return;
+    return null;
+  }
+}
+
+async function notAReceipt(admin: Admin, g: Ingested) {
+  await admin.storage.from(BUCKET).remove([g.storagePath]);
+  await admin
+    .from("outreach_receipt_drafts")
+    .update({ status: "cancelled", extracted: g.reading, error: "not a receipt", updated_at: new Date().toISOString() })
+    .eq("id", g.draftId);
+  await g.say("That doesn't look like a receipt, so I haven't kept it. If it is one, send a clearer photo.");
+}
+
+/** A notification sent with its receipt: its file rides on the receipt's draft. */
+async function markAttached(admin: Admin, g: Ingested) {
+  await admin
+    .from("outreach_receipt_drafts")
+    .update({ status: "cancelled", extracted: g.reading, error: "attached to its receipt", updated_at: new Date().toISOString() })
+    .eq("id", g.draftId);
+  await g.say("📎 Bank notification — attached to its receipt, so the real rand is used.");
+}
+
+async function proposeReceipt(
+  admin: Admin,
+  g: Ingested,
+  a: {
+    team: OutreachTeamRef | null;
+    choices: TeamChoice[];
+    m: IncomingReceipts;
+    ctx: IntakeContext;
+    bank: { notice: Ingested; mismatch: boolean } | null;
+  }
+) {
+  const { team, ctx } = a;
+  const currency = pickCurrency(g.reading.currency, ctx.likely);
+  const rate = await chooseRate(admin, team?.id ?? null, currency, ctx.batches);
+  const built = buildProposal({ reading: g.reading, userNote: a.m.userNote, categories: ctx.categories, currency, rate, today: ctx.today });
+  let proposal: Proposal = { ...built.proposal, read_warnings: built.warnings };
+  const warnings = [...built.warnings];
+
+  if (a.bank) {
+    // Paired with its bank notification: the rand is the bank's.
+    const confirmed = confirmWithBank(proposal, a.bank.notice.reading);
+    const n = a.bank.notice;
+    proposal = {
+      ...confirmed.proposal,
+      bank_proof: { path: n.storagePath, name: n.name, mime: n.mime, size: n.size },
+      read_warnings: [...built.warnings.filter((w) => !w.startsWith("No exchange rate")), ...confirmed.warnings],
+    };
+    warnings.splice(0, warnings.length, ...(proposal.read_warnings ?? []));
+    if (a.bank.mismatch) {
+      const mis = "⚠️ The bank notification's amount doesn't match the receipt — check they belong together.";
+      warnings.unshift(mis);
+      proposal.read_warnings = [mis, ...(proposal.read_warnings ?? [])];
+    }
   }
 
-  if (!reading.is_receipt) {
-    await admin.storage.from(BUCKET).remove([storagePath]);
-    await admin
-      .from("outreach_receipt_drafts")
-      .update({ status: "cancelled", extracted: reading, error: "not a receipt", updated_at: new Date().toISOString() })
-      .eq("id", draftId);
-    await say("That doesn't look like a receipt, so I haven't kept it. If it is one, send a clearer photo.");
-    return;
-  }
-
-  // 3. Propose.
-  const currency = pickCurrency(reading.currency, likely);
-  const rate = await chooseRate(admin, team.id, currency, batches);
-  const { proposal, warnings } = buildProposal({ reading, userNote: m.userNote, categories, currency, rate, today });
-  const dup = duplicateWarning(sha, proposal, await priorReceipts(admin, team.id, draftId));
+  const dup = team ? duplicateWarning(g.sha, proposal, await priorReceipts(admin, team.id, g.draftId)) : null;
   if (dup) warnings.unshift(dup);
 
   await admin
     .from("outreach_receipt_drafts")
-    .update({ status: "pending", extracted: reading, proposal, updated_at: new Date().toISOString() })
-    .eq("id", draftId);
+    .update({ status: "pending", extracted: g.reading, proposal, updated_at: new Date().toISOString() })
+    .eq("id", g.draftId);
 
-  const sender = await displayName(admin, m.hubUserId);
-  const catName = categories.find((c) => c.id === proposal.category_id)?.name ?? null;
-  await say(
-    `Receipt from ${sender}: ${proposal.vendor ?? "?"} ${money(proposal.local_amount, proposal.local_currency)} — tap Log it to save it.`,
-    receiptCardBlocks({ draftId, senderName: sender, proposal, categoryName: catName, warnings })
+  const sender = await displayName(admin, a.m.hubUserId);
+  const catName = ctx.categories.find((c) => c.id === proposal.category_id)?.name ?? null;
+  const current = team ? { id: team.id, name: team.team_name } : null;
+  await g.say(
+    cardText(sender, proposal, current),
+    receiptCardBlocks({
+      draftId: g.draftId,
+      senderName: sender,
+      proposal,
+      categoryName: catName,
+      warnings,
+      team: current,
+      teamChoices: isDM(a.m.channelId) ? a.choices : [],
+    })
   );
+}
+
+function cardText(sender: string, p: Proposal, team: TeamChoice | null): string {
+  const what = `${p.vendor ?? "?"} ${money(p.local_amount, p.local_currency)}`;
+  return team
+    ? `Receipt from ${sender} for ${team.name}: ${what} — tap ${logButtonText(team.name).replace("✅ ", "")} to save it.`
+    : `Receipt from ${sender}: ${what} — pick which team it's for.`;
+}
+
+// ────────────────────────────────────────────────────────────
+// Cash pulls (a bank notification for an ATM withdrawal)
+// ────────────────────────────────────────────────────────────
+
+async function proposePull(
+  admin: Admin,
+  a: {
+    draftId: string;
+    sha: string;
+    reading: ReceiptReading;
+    team: OutreachTeamRef | null;
+    choices: TeamChoice[];
+    m: IncomingReceipts;
+    today: string;
+    fallbackCurrency: string | null;
+    say: (text: string, blocks?: unknown[]) => Promise<unknown>;
+  }
+) {
+  const built = buildPullProposal({ reading: a.reading, userNote: a.m.userNote, fallbackCurrency: a.fallbackCurrency, today: a.today });
+  const proposal: PullProposal = { ...built.proposal, read_warnings: built.warnings };
+  const warnings = [...built.warnings];
+  const dup = a.team ? await pullDuplicate(admin, a.team.id, a.sha, proposal, a.draftId) : null;
+  if (dup) warnings.unshift(dup);
+
+  await admin
+    .from("outreach_receipt_drafts")
+    .update({ kind: "cash_pull", status: "pending", extracted: a.reading, proposal, updated_at: new Date().toISOString() })
+    .eq("id", a.draftId);
+
+  const sender = await displayName(admin, a.m.hubUserId);
+  const current = a.team ? { id: a.team.id, name: a.team.team_name } : null;
+  await a.say(
+    pullCardText(sender, proposal, current),
+    pullCardBlocks({
+      draftId: a.draftId,
+      senderName: sender,
+      proposal,
+      warnings,
+      team: current,
+      teamChoices: isDM(a.m.channelId) ? a.choices : [],
+    })
+  );
+}
+
+function pullCardText(sender: string, p: PullProposal, team: TeamChoice | null): string {
+  const line = pullLine(p).replace(/\*/g, "");
+  return team ? `Cash pull from ${sender} for ${team.name}: ${line}` : `Cash pull from ${sender}: ${line} — pick which team it's for.`;
+}
+
+/** Same screenshot sent before, or a pull of the same rand on the same day. */
+async function pullDuplicate(admin: Admin, teamId: string, sha: string, p: PullProposal, excludeDraft: string): Promise<string | null> {
+  const [{ data: drafts }, { data: pulls }] = await Promise.all([
+    admin
+      .from("outreach_receipt_drafts")
+      .select("id, status")
+      .eq("team_id", teamId)
+      .eq("file_sha256", sha)
+      .neq("id", excludeDraft)
+      .in("status", ["pending", "logging", "logged"]),
+    p.zar_out != null
+      ? admin
+          .from("outreach_cash_batches")
+          .select("id")
+          .eq("team_id", teamId)
+          .eq("batch_date", p.batch_date)
+          .eq("zar_withdrawn", p.zar_out)
+      : Promise.resolve({ data: [] }),
+  ]);
+  if ((drafts ?? []).length) return "⚠️ This exact screenshot was sent before — check it isn't a duplicate.";
+  if ((pulls ?? []).length) return `⚠️ A pull of ${money(p.zar_out, "ZAR")} on ${p.batch_date} is already logged — check it isn't a duplicate.`;
+  return null;
+}
+
+/** ✅ Log pull — becomes an outreach_cash_batches row; the screenshot is kept as proof. */
+async function logPull(admin: Admin, draft: Draft, slackUserId: string, reply: Reply): Promise<void> {
+  if (!draft.team_id) return reply("Pick which team this cash pull is for first — use the *Team* menu on the card.");
+  const teamId: string = draft.team_id;
+  const userId = await clicker(admin, slackUserId, draft, reply);
+  if (!userId) return;
+
+  const p = draft.proposal as unknown as PullProposal;
+  const missing = missingForPull(p);
+  if (missing.length) return reply(`Before logging, tap *✏️ Change* and add ${missing.join(", ")}.`);
+  if (await financeClosed(admin, teamId)) return reply("This team's finances are closed, so I can't log a new cash pull.");
+
+  const { data: claimed } = await admin
+    .from("outreach_receipt_drafts")
+    .update({ status: "logging", updated_at: new Date().toISOString() })
+    .eq("id", draft.id)
+    .eq("status", "pending")
+    .select("id");
+  if (!claimed?.length) return reply("That cash pull has just been handled by someone else.");
+
+  try {
+    const logger = await displayName(admin, userId);
+    const { data: batch, error } = await admin
+      .from("outreach_cash_batches")
+      .insert({
+        team_id: teamId,
+        batch_date: p.batch_date,
+        zar_withdrawn: p.zar_out,
+        bank_fee: p.bank_fee,
+        local_currency: p.local_currency,
+        local_currency_received: p.local_amount,
+        exchange_rate: 0, // worked out by the database (migration 263)
+        notes: `Logged from Slack by ${logger}`,
+        created_by: userId,
+      })
+      .select("id")
+      .single();
+    if (error || !batch) throw new Error(error?.message ?? "cash pull insert failed");
+
+    // Keep the screenshot as the pull's proof. If the move fails the
+    // original stays where it is — never lose the proof.
+    let proof = draft.storage_path;
+    const target = `${teamId}/pulls/${batch.id}/${draft.file_name}`;
+    const { error: mvErr } = await admin.storage.from(BUCKET).move(draft.storage_path, target);
+    if (!mvErr) proof = target;
+    else console.error("[slack/outreach] pull proof move failed — keeping original path", mvErr);
+    await admin.from("outreach_cash_batches").update({ proof_path: proof }).eq("id", batch.id);
+
+    await admin
+      .from("outreach_receipt_drafts")
+      .update({
+        status: "logged",
+        cash_batch_id: batch.id,
+        storage_path: proof,
+        decided_by: userId,
+        decided_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", draft.id);
+
+    await checkCashAlert(teamId);
+    if (draft.card_ts) {
+      const { data: teamRow } = await admin.from("outreach_teams").select("team_name").eq("id", teamId).maybeSingle();
+      const text = `✅ *Cash pull logged to ${teamRow?.team_name ?? "the team"} by ${logger}* — ${pullLine(p)}`;
+      const detail = `${p.bank_fee > 0 ? `${money(p.bank_fee, "ZAR")} fee logged in Bank Costs · ` : ""}cash spending in ${p.local_currency} is charged to pulls oldest first · <${SITE}/finance/outreach/${teamId}|View in the Hub>`;
+      await update(draft.channel_id, draft.card_ts, text.replace(/\*/g, ""), decidedBlocks(text, detail));
+    }
+  } catch (err) {
+    console.error("[slack/outreach] pull log failed", draft.id, err);
+    await admin
+      .from("outreach_receipt_drafts")
+      .update({ status: "pending", error: String(err instanceof Error ? err.message : err), updated_at: new Date().toISOString() })
+      .eq("id", draft.id);
+    await reply("Something went wrong logging that cash pull — nothing was saved. Try again in a moment.");
+  }
+}
+
+/** The pull's Change form was submitted: apply the edits, then log. */
+export async function applyPullChangeAndLog(
+  draftId: string,
+  input: Omit<PullProposal, "read_warnings">,
+  slackUserId: string,
+  reply: Reply
+): Promise<void> {
+  const admin: Admin = createAdminClient();
+  const draft = await getDraft(admin, draftId);
+  if (!draft || draft.status !== "pending" || draft.kind !== "cash_pull") {
+    return reply(ALREADY[draft?.status ?? ""] ?? "That cash pull has already been handled.");
+  }
+  if (!(await clicker(admin, slackUserId, draft, reply))) return;
+  const proposal = { ...(draft.proposal as unknown as PullProposal), ...input };
+  await admin
+    .from("outreach_receipt_drafts")
+    .update({ proposal, updated_at: new Date().toISOString() })
+    .eq("id", draftId)
+    .eq("status", "pending");
+  await logPull(admin, { ...draft, proposal: proposal as unknown as Proposal }, slackUserId, reply);
+}
+
+// ────────────────────────────────────────────────────────────
+// Card payments confirmed by the bank (migration 265)
+// ────────────────────────────────────────────────────────────
+
+/** File the bank notification under the expense, as one of its receipts. */
+async function fileBankProof(
+  admin: Admin,
+  teamId: string,
+  expenseId: string,
+  proof: { path: string; name: string; mime: string | null; size: number | null },
+  uploadedBy: string
+) {
+  let path = proof.path;
+  const target = `${teamId}/${expenseId}/${Date.now()}_bank_${proof.name}`;
+  const { error: mvErr } = await admin.storage.from(BUCKET).move(proof.path, target);
+  if (!mvErr) path = target;
+  else console.error("[slack/outreach] bank proof move failed — keeping original path", mvErr);
+  await admin.from("outreach_receipts").insert({
+    expense_id: expenseId,
+    file_path: path,
+    file_name: `Bank notification — ${proof.name}`,
+    file_size: proof.size,
+    mime_type: proof.mime,
+    uploaded_by: uploadedBy,
+  });
+  await admin.from("outreach_expenses").update({ bank_proof_path: path }).eq("id", expenseId);
+}
+
+/** A fee the bank listed separately: its own Bank Costs expense, like a cash pull's. */
+async function logCardFee(
+  admin: Admin,
+  a: { teamId: string; expenseId: string; fee: number; date: string; vendor: string | null; createdBy: string }
+) {
+  const { data: cat } = await admin.from("outreach_budget_categories").select("id").eq("slug", "bank-costs").maybeSingle();
+  if (!cat) {
+    console.error("[slack/outreach] no Bank Costs category — card fee not logged", a.expenseId);
+    return;
+  }
+  const { error } = await admin.from("outreach_expenses").upsert(
+    {
+      team_id: a.teamId,
+      category_id: cat.id,
+      expense_date: a.date,
+      vendor: "Bank",
+      description: `Card fee — ${a.vendor ?? "card payment"}`,
+      payment_method: "card",
+      local_currency: "ZAR",
+      local_amount: a.fee,
+      zar_amount: a.fee,
+      exchange_rate: 1,
+      zar_confirmed: true,
+      notes: "The bank's fee on a card payment, logged from its notification.",
+      created_by: a.createdBy,
+      fee_for_expense_id: a.expenseId,
+    },
+    { onConflict: "fee_for_expense_id" }
+  );
+  if (error) console.error("[slack/outreach] card fee failed", a.expenseId, error);
+}
+
+/** A card notification on its own: find which of the sender's payments it's for. */
+async function proposeCardConfirm(admin: Admin, g: Ingested, m: IncomingReceipts, today: string) {
+  const since = new Date(new Date(today + "T00:00:00Z").getTime() - 30 * 86_400_000).toISOString().slice(0, 10);
+  const { data } = m.hubUserId
+    ? await admin
+        .from("outreach_expenses")
+        .select("id, team_id, vendor, description, expense_date, local_amount, local_currency, zar_amount, outreach_teams!inner(team_name)")
+        .eq("created_by", m.hubUserId)
+        .eq("payment_method", "card")
+        .neq("local_currency", "ZAR")
+        .eq("zar_confirmed", false)
+        .gte("expense_date", since)
+        .order("expense_date", { ascending: false })
+        .limit(200)
+    : { data: [] };
+  const all: CardCandidate[] = ((data ?? []) as (Omit<CardCandidate, "team_name"> & { outreach_teams: { team_name: string } })[]).map((r) => ({
+    ...r,
+    local_amount: Number(r.local_amount),
+    zar_amount: Number(r.zar_amount),
+    team_name: r.outreach_teams.team_name,
+  }));
+  const candidates = matchCardCandidates(g.reading, all);
+
+  if (!candidates.length) {
+    await admin.storage.from(BUCKET).remove([g.storagePath]);
+    await admin
+      .from("outreach_receipt_drafts")
+      .update({ status: "cancelled", extracted: g.reading, error: "no card payment to confirm", updated_at: new Date().toISOString() })
+      .eq("id", g.draftId);
+    await g.say(
+      "🏦 That's a bank notification for a card payment, but none of your card payments is waiting for one. Send it in the same message as its receipt and I'll log both."
+    );
+    return;
+  }
+
+  await admin
+    .from("outreach_receipt_drafts")
+    .update({
+      kind: "card_confirm",
+      status: "pending",
+      extracted: g.reading,
+      proposal: { candidates: candidates.map((c) => c.id) },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", g.draftId);
+  const bank = bankAmounts(g.reading);
+  await g.say(
+    `Bank notification${bank ? ` for ${money(bank.total, "ZAR")}` : ""} — which card payment is it for?`,
+    cardConfirmBlocks({ draftId: g.draftId, notice: g.reading, candidates, cancelActionId: ACTION_CANCEL })
+  );
+}
+
+/**
+ * [Yes, confirm] / the payment menu: replace that card payment's estimate
+ * with the bank's rand, file the screenshot with it, log any fee.
+ */
+export async function confirmCardPayment(draftId: string, expenseId: string, slackUserId: string, reply: Reply): Promise<void> {
+  const admin: Admin = createAdminClient();
+  const draft = await getDraft(admin, draftId);
+  if (!draft || draft.kind !== "card_confirm") return reply("I can't find that bank notification any more.");
+  if (draft.status !== "pending") return reply(ALREADY[draft.status] ?? "That's already been handled.");
+  const candidates = ((draft.proposal as unknown as { candidates?: string[] }).candidates ?? []);
+  if (!candidates.includes(expenseId)) return reply("That payment isn't one of the matches.");
+
+  const { data: u } = await admin.from("users").select("id").eq("slack_user_id", slackUserId).maybeSingle();
+  const userId = (u as { id: string } | null)?.id ?? null;
+  if (!userId) return reply("Your Slack isn't linked to a Hub account yet — link it on your Hub profile.");
+  if (userId !== draft.hub_user_id) return reply("Only the person who sent this notification can confirm it.");
+
+  const { data: exp } = await admin
+    .from("outreach_expenses")
+    .select("id, team_id, vendor, description, expense_date, local_amount, local_currency, zar_amount, zar_confirmed, payment_method")
+    .eq("id", expenseId)
+    .maybeSingle();
+  if (!exp || exp.payment_method !== "card") return reply("I can't find that card payment any more.");
+  if (exp.zar_confirmed) return reply("That card payment is already confirmed.");
+  if (!(await canLog(admin, exp.team_id, userId))) return reply("You can't change that team's expenses.");
+  if (await financeClosed(admin, exp.team_id)) return reply("That team's finances are closed.");
+
+  const { data: row } = await admin.from("outreach_receipt_drafts").select("extracted").eq("id", draftId).maybeSingle();
+  const bank = row?.extracted ? bankAmounts(row.extracted as ReceiptReading) : null;
+  if (!bank) return reply("I couldn't read the rand on that notification — enter it in the Hub instead.");
+
+  const { data: claimed } = await admin
+    .from("outreach_receipt_drafts")
+    .update({ status: "logging", team_id: exp.team_id, updated_at: new Date().toISOString() })
+    .eq("id", draftId)
+    .eq("status", "pending")
+    .select("id");
+  if (!claimed?.length) return reply("That's just been handled.");
+
+  try {
+    const estimate = Number(exp.zar_amount);
+    const { error } = await admin
+      .from("outreach_expenses")
+      .update({
+        zar_amount: bank.purchase,
+        zar_estimate: estimate,
+        exchange_rate: Number(exp.local_amount) / bank.purchase,
+        zar_confirmed: true,
+        zar_confirmed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", expenseId)
+      .eq("zar_confirmed", false);
+    if (error) throw new Error(error.message);
+
+    await fileBankProof(admin, exp.team_id, expenseId, { path: draft.storage_path, name: draft.file_name, mime: draft.mime_type, size: draft.file_size }, userId);
+    if (bank.fee > 0) {
+      await logCardFee(admin, { teamId: exp.team_id, expenseId, fee: bank.fee, date: exp.expense_date, vendor: exp.vendor, createdBy: userId });
+    }
+    await admin
+      .from("outreach_receipt_drafts")
+      .update({
+        status: "logged",
+        confirmed_expense_id: expenseId,
+        decided_by: userId,
+        decided_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", draftId);
+    await checkCashAlert(exp.team_id);
+
+    if (draft.card_ts) {
+      const diff = bank.purchase - estimate;
+      const text = `✅ *Confirmed by the bank* — ${exp.vendor ?? exp.description} ${money(Number(exp.local_amount), exp.local_currency)} is *${money(bank.purchase, "ZAR")}*`;
+      const detail = `The estimate was ${money(estimate, "ZAR")} (${diff >= 0 ? "+" : "−"}${money(Math.abs(diff), "ZAR")})${bank.fee > 0 ? ` · ${money(bank.fee, "ZAR")} fee logged in Bank Costs` : ""} · <${SITE}/finance/outreach/${exp.team_id}|View in the Hub>`;
+      await update(draft.channel_id, draft.card_ts, text.replace(/\*/g, ""), decidedBlocks(text, detail));
+    }
+  } catch (err) {
+    console.error("[slack/outreach] card confirm failed", draftId, err);
+    await admin.from("outreach_receipt_drafts").update({ status: "pending", updated_at: new Date().toISOString() }).eq("id", draftId);
+    await reply("Something went wrong confirming that — nothing was changed. Try again in a moment.");
+  }
 }
 
 async function priorReceipts(admin: Admin, teamId: string, excludeDraft: string): Promise<PriorReceipt[]> {
@@ -402,7 +970,8 @@ async function priorReceipts(admin: Admin, teamId: string, excludeDraft: string)
 
 type Draft = {
   id: string;
-  team_id: string;
+  kind: "receipt" | "cash_pull" | "card_confirm";
+  team_id: string | null;
   hub_user_id: string | null;
   channel_id: string;
   card_ts: string | null;
@@ -411,6 +980,7 @@ type Draft = {
   file_size: number | null;
   file_sha256: string;
   storage_path: string;
+  /** A PullProposal when kind is cash_pull. */
   proposal: Proposal;
   status: string;
 };
@@ -427,6 +997,12 @@ async function clicker(admin: Admin, slackUserId: string, draft: Draft, reply: R
   const id = (data as { id: string } | null)?.id ?? null;
   if (!id) {
     await reply("Your Slack isn't linked to a Hub account yet — link it on your Hub profile.");
+    return null;
+  }
+  // No team chosen yet: it's the sender's receipt to sort out.
+  if (!draft.team_id) {
+    if (id === draft.hub_user_id) return id;
+    await reply("Only the person who sent this receipt can pick its team.");
     return null;
   }
   if (!(await canLog(admin, draft.team_id, id))) {
@@ -451,14 +1027,17 @@ export async function logReceipt(draftId: string, slackUserId: string, reply: Re
   const draft = await getDraft(admin, draftId);
   if (!draft) return reply("I can't find that receipt any more.");
   if (draft.status !== "pending") return reply(ALREADY[draft.status] ?? "That receipt has already been handled.");
+  if (draft.kind === "cash_pull") return logPull(admin, draft, slackUserId, reply);
 
+  if (!draft.team_id) return reply("Pick which team this receipt is for first — use the *Team* menu on the card.");
+  const teamId: string = draft.team_id;
   const userId = await clicker(admin, slackUserId, draft, reply);
   if (!userId) return;
 
   const p = draft.proposal;
   const missing = missingForLog(p);
   if (missing.length) return reply(`Before logging, tap *✏️ Change* and add ${missing.join(", ")}.`);
-  if (await financeClosed(admin, draft.team_id)) return reply("This team's finances are closed, so I can't log new expenses.");
+  if (await financeClosed(admin, teamId)) return reply("This team's finances are closed, so I can't log new expenses.");
 
   // Claim it, so a double tap can't create two expenses.
   const { data: claimed } = await admin
@@ -474,7 +1053,7 @@ export async function logReceipt(draftId: string, slackUserId: string, reply: Re
     const { data: expense, error } = await admin
       .from("outreach_expenses")
       .insert({
-        team_id: draft.team_id,
+        team_id: teamId,
         category_id: p.category_id,
         expense_date: p.expense_date,
         receipt_code: p.receipt_code,
@@ -487,6 +1066,11 @@ export async function logReceipt(draftId: string, slackUserId: string, reply: Re
         zar_amount: p.zar_amount,
         exchange_rate: p.exchange_rate,
         cash_batch_id: p.cash_batch_id,
+        // Card abroad: confirmed when the bank's rand came with it; else an
+        // estimate waiting for the notification (migration 265).
+        zar_confirmed: p.local_currency === "ZAR" || Boolean(p.zar_confirmed),
+        zar_estimate: p.payment_method === "card" && p.local_currency !== "ZAR" && !p.zar_confirmed ? p.zar_amount : null,
+        zar_confirmed_at: p.zar_confirmed ? new Date().toISOString() : null,
         source: "slack",
         notes: logger === sender ? `Logged from Slack by ${logger}` : `Sent from Slack by ${sender}, logged by ${logger}`,
         created_by: userId,
@@ -498,7 +1082,7 @@ export async function logReceipt(draftId: string, slackUserId: string, reply: Re
     // File it under the expense exactly like a Hub upload. If the move
     // fails the original stays where it is — never lose the photo.
     let filePath = draft.storage_path;
-    const target = `${draft.team_id}/${expense.id}/${Date.now()}_${draft.file_name}`;
+    const target = `${teamId}/${expense.id}/${Date.now()}_${draft.file_name}`;
     const { error: mvErr } = await admin.storage.from(BUCKET).move(draft.storage_path, target);
     if (!mvErr) filePath = target;
     else console.error("[slack/outreach] receipt move failed — keeping original path", mvErr);
@@ -514,6 +1098,13 @@ export async function logReceipt(draftId: string, slackUserId: string, reply: Re
     });
     if (rcErr) console.error("[slack/outreach] receipt row failed", rcErr);
 
+    if (p.bank_proof) {
+      await fileBankProof(admin, teamId, expense.id, p.bank_proof, draft.hub_user_id ?? userId);
+    }
+    if ((p.bank_fee_zar ?? 0) > 0) {
+      await logCardFee(admin, { teamId, expenseId: expense.id, fee: p.bank_fee_zar!, date: p.expense_date, vendor: p.vendor, createdBy: userId });
+    }
+
     await admin
       .from("outreach_receipt_drafts")
       .update({
@@ -526,15 +1117,21 @@ export async function logReceipt(draftId: string, slackUserId: string, reply: Re
       })
       .eq("id", draftId);
 
-    const left = await categoryLeft(admin, draft.team_id, p.category_id!);
-    await checkCashAlert(draft.team_id);
+    // Foreign cash is re-priced by the database from the team's cash pulls,
+    // oldest first (migration 263) — show that figure, not the card's estimate.
+    const { data: saved } = await admin.from("outreach_expenses").select("zar_amount").eq("id", expense.id).maybeSingle();
+    const zarFinal = saved?.zar_amount != null ? Number(saved.zar_amount) : p.zar_amount;
+    const fromPulls = p.payment_method === "cash" && p.local_currency !== "ZAR";
+    const left = await categoryLeft(admin, teamId, p.category_id!);
+    await checkCashAlert(teamId);
+    const { data: teamRow } = await admin.from("outreach_teams").select("team_name").eq("id", teamId).maybeSingle();
     if (draft.card_ts) {
       const amount =
         p.local_currency === "ZAR"
           ? money(p.zar_amount, "ZAR")
-          : `${money(p.local_amount, p.local_currency)} (${money(p.zar_amount, "ZAR")})`;
-      const text = `✅ *Logged by ${logger}* — ${p.vendor ?? "Receipt"} · ${p.expense_date} · ${amount} · ${left.category}`;
-      const detail = `${left.category} now has *${left.left < 0 ? `over by R${fmtNum(-left.left)}` : `R${fmtNum(left.left)} left`}* of R${fmtNum(left.planned)} · receipt saved · <${SITE}/my-finance/outreach/${draft.team_id}|View in the Hub>`;
+          : `${money(p.local_amount, p.local_currency)} (${money(zarFinal, "ZAR")}${fromPulls ? " from your cash pulls" : p.zar_confirmed ? " confirmed by bank" : p.payment_method === "card" ? " estimate — send the bank notification" : ""})`;
+      const text = `✅ *Logged to ${teamRow?.team_name ?? "the team"} by ${logger}* — ${p.vendor ?? "Receipt"} · ${p.expense_date} · ${amount} · ${left.category}`;
+      const detail = `${left.category} now has *${left.left < 0 ? `over by R${fmtNum(-left.left)}` : `R${fmtNum(left.left)} left`}* of R${fmtNum(left.planned)} · receipt saved · <${SITE}/finance/outreach/${teamId}|View in the Hub>`;
       await update(draft.channel_id, draft.card_ts, text.replace(/\*/g, ""), decidedBlocks(text, detail));
     }
   } catch (err) {
@@ -574,11 +1171,106 @@ export async function cancelReceipt(draftId: string, slackUserId: string, reply:
     .select("id");
   if (!claimed?.length) return reply("That receipt has just been handled by someone else.");
 
-  await admin.storage.from(BUCKET).remove([draft.storage_path]);
+  const proof = (draft.proposal as Proposal | undefined)?.bank_proof?.path;
+  await admin.storage.from(BUCKET).remove(proof ? [draft.storage_path, proof] : [draft.storage_path]);
   if (draft.card_ts) {
     const name = await displayName(admin, userId);
-    await update(draft.channel_id, draft.card_ts, `Receipt cancelled by ${name}`, decidedBlocks(`🗑️ Receipt cancelled by ${name} — nothing was logged.`));
+    const what = draft.kind === "cash_pull" ? "Cash pull" : draft.kind === "card_confirm" ? "Bank notification" : "Receipt";
+    await update(draft.channel_id, draft.card_ts, `${what} cancelled by ${name}`, decidedBlocks(`🗑️ ${what} cancelled by ${name} — nothing was logged.`));
   }
+}
+
+/**
+ * Team menu on the card: the sender picks (or corrects) which team the
+ * receipt is for. The rate and the duplicate check are redone against
+ * that team, and the card is redrawn so the button names it.
+ */
+export async function chooseTeam(draftId: string, teamId: string, slackUserId: string, reply: Reply): Promise<void> {
+  const admin: Admin = createAdminClient();
+  const draft = await getDraft(admin, draftId);
+  if (!draft) return reply("I can't find that receipt any more.");
+  if (draft.status !== "pending") return reply(ALREADY[draft.status] ?? "That receipt has already been handled.");
+
+  const { data: u } = await admin.from("users").select("id").eq("slack_user_id", slackUserId).maybeSingle();
+  const userId = (u as { id: string } | null)?.id ?? null;
+  if (!userId) return reply("Your Slack isn't linked to a Hub account yet — link it on your Hub profile.");
+  if (userId !== draft.hub_user_id && !(await isFinanceStaff(admin, userId))) {
+    return reply("Only the person who sent this receipt can change its team.");
+  }
+  if (!(await canLog(admin, teamId, userId))) return reply("You can't log expenses for that team.");
+  if (await financeClosed(admin, teamId)) return reply("That team's finances are closed, so I can't log new expenses to it.");
+
+  // Re-price against the new team's own cash (a typed rand amount never
+  // gets here: the Change form logs straight away).
+  const p = draft.proposal;
+  const rate =
+    draft.kind === "cash_pull" || p.local_currency === "ZAR" ? null : await chooseRate(admin, teamId, p.local_currency);
+  const proposal: Proposal =
+    draft.kind === "cash_pull" || p.local_currency === "ZAR"
+      ? p
+      : {
+          ...p,
+          exchange_rate: rate?.exchange_rate ?? null,
+          zar_amount: rate && p.local_amount != null ? toZar(p.local_amount, rate.exchange_rate) : null,
+          rate_label: rate?.label ?? "",
+          cash_batch_id: rate?.cash_batch_id ?? null,
+        };
+
+  const { data: moved } = await admin
+    .from("outreach_receipt_drafts")
+    .update({ team_id: teamId, proposal, updated_at: new Date().toISOString() })
+    .eq("id", draftId)
+    .eq("status", "pending")
+    .select("id");
+  if (!moved?.length) return reply("That receipt has just been handled by someone else.");
+
+  await redrawCard(admin, { ...draft, team_id: teamId, proposal });
+}
+
+/** Draw a pending draft's card again from what's stored. */
+async function redrawCard(admin: Admin, draft: Draft): Promise<void> {
+  if (!draft.card_ts) return;
+  const p = draft.proposal;
+  const [categories, sender, { data: teamRow }] = await Promise.all([
+    loadCategories(admin),
+    displayName(admin, draft.hub_user_id),
+    draft.team_id
+      ? admin.from("outreach_teams").select("id, team_name").eq("id", draft.team_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+  const team = teamRow ? { id: teamRow.id as string, name: teamRow.team_name as string } : null;
+  const choices = isDM(draft.channel_id) ? await loggableTeams(admin, draft.hub_user_id) : [];
+
+  if (draft.kind === "cash_pull") {
+    const pull = p as unknown as PullProposal;
+    const pullWarnings = [...(pull.read_warnings ?? [])];
+    const dup = team ? await pullDuplicate(admin, team.id, draft.file_sha256, pull, draft.id) : null;
+    if (dup) pullWarnings.unshift(dup);
+    await update(
+      draft.channel_id,
+      draft.card_ts,
+      pullCardText(sender, pull, team),
+      pullCardBlocks({ draftId: draft.id, senderName: sender, proposal: pull, warnings: pullWarnings, team, teamChoices: choices })
+    );
+    return;
+  }
+
+  const warnings = (p.read_warnings ?? []).filter((w) => !w.startsWith("No exchange rate"));
+  if (p.local_currency !== "ZAR" && !p.exchange_rate) {
+    warnings.push(`No exchange rate for ${p.local_currency} — tap *Change* to enter the rand amount.`);
+  }
+  if (team) {
+    const dup = duplicateWarning(draft.file_sha256, p, await priorReceipts(admin, team.id, draft.id));
+    if (dup) warnings.unshift(dup);
+  }
+
+  const catName = categories.find((c) => c.id === p.category_id)?.name ?? null;
+  await update(
+    draft.channel_id,
+    draft.card_ts,
+    cardText(sender, p, team),
+    receiptCardBlocks({ draftId: draft.id, senderName: sender, proposal: p, categoryName: catName, warnings, team, teamChoices: choices })
+  );
 }
 
 /** ✏️ Change — open the form. Must run within 3s of the click (trigger_id). */
@@ -588,6 +1280,15 @@ export async function openChangeForm(draftId: string, triggerId: string, slackUs
   if (!draft) return reply("I can't find that receipt any more.");
   if (draft.status !== "pending") return reply(ALREADY[draft.status] ?? "Already handled.");
   if (!(await clicker(admin, slackUserId, draft, reply))) return;
+  if (draft.kind === "cash_pull") {
+    const res = await slack.openView(
+      triggerId,
+      pullChangeModal({ draftId, proposal: draft.proposal as unknown as PullProposal }),
+      "outreach"
+    );
+    if (!res.ok) await reply(`Couldn't open the form (${res.error ?? "unknown error"}). Try again.`);
+    return;
+  }
   const categories = await loadCategories(admin);
   const res = await slack.openView(triggerId, changeModal({ draftId, proposal: draft.proposal, categories }), "outreach");
   if (!res.ok) await reply(`Couldn't open the form (${res.error ?? "unknown error"}). Try again.`);
@@ -611,6 +1312,15 @@ export async function applyChangeAndLog(draftId: string, input: ChangeInput, sla
   }
   if (!rate) return reply(`I couldn't find an exchange rate for ${input.local_currency} — tap *Change* again and fill in the rand amount.`);
 
+  // The bank's rand stays the rand when only receipt details changed.
+  const keepBank =
+    Boolean(p.zar_confirmed) && !input.zar_override && input.local_currency === p.local_currency && p.zar_amount != null;
+  const zar =
+    input.local_currency === "ZAR"
+      ? input.local_amount
+      : keepBank
+        ? p.zar_amount!
+        : input.zar_override ?? toZar(input.local_amount, rate.exchange_rate);
   const proposal: Proposal = {
     ...p,
     vendor: input.vendor,
@@ -620,10 +1330,12 @@ export async function applyChangeAndLog(draftId: string, input: ChangeInput, sla
     payment_method: input.payment_method,
     local_currency: input.local_currency,
     local_amount: input.local_amount,
-    exchange_rate: input.local_currency === "ZAR" ? 1 : rate.exchange_rate,
-    zar_amount: input.local_currency === "ZAR" ? input.local_amount : input.zar_override ?? toZar(input.local_amount, rate.exchange_rate),
-    rate_label: input.local_currency === "ZAR" ? "" : rate.label,
-    cash_batch_id: rate.cash_batch_id,
+    exchange_rate: input.local_currency === "ZAR" ? 1 : input.local_amount / zar,
+    zar_amount: zar,
+    rate_label: input.local_currency === "ZAR" ? "" : keepBank ? p.rate_label : rate.label,
+    cash_batch_id: keepBank ? null : rate.cash_batch_id,
+    // A rand amount typed from the bank app confirms a card payment too.
+    zar_confirmed: input.local_currency !== "ZAR" && input.payment_method === "card" && (keepBank || Boolean(input.zar_override)),
   };
   await admin
     .from("outreach_receipt_drafts")

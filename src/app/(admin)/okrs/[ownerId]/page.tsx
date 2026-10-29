@@ -60,7 +60,7 @@ export default async function OwnerOkrsPage({
       teamId: isTeam ? ownerId : undefined,
       scope: "ministry",
     }),
-    // A team has no roster, so `null` here asks the leadership/admin question.
+    // A team has no roster, so `null` here asks the admin-only question.
     callerCanEditMinistryOkrs(supabase, user.id, isTeam ? null : ownerId),
   ]);
 

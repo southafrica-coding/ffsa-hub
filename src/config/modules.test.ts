@@ -1,0 +1,67 @@
+import { describe, expect, it } from "vitest";
+import {
+  ADMIN_MODULES,
+  HIDDEN_FROM_NAV,
+  PORTAL_TABS,
+  SYSTEM_MODULES,
+  getAccessibleModules,
+  getVisiblePortalTabs,
+  isHiddenFromNav,
+} from "./modules";
+
+// The unbuilt placeholder pages (Teams, Mission, Evangelism, My Mission) stay
+// out of every menu for every role; everything that works stays put.
+
+const PLACEHOLDERS = ["teams", "mission", "evangelism", "my-mission"];
+
+const ids = (mods: { id: string }[]) => mods.map((m) => m.id);
+
+describe("placeholder pages are hidden from navigation", () => {
+  it("hides exactly the four placeholders", () => {
+    expect([...HIDDEN_FROM_NAV].sort()).toEqual([...PLACEHOLDERS].sort());
+    for (const id of PLACEHOLDERS) expect(isHiddenFromNav(id)).toBe(true);
+    expect(isHiddenFromNav("finance")).toBe(false);
+  });
+
+  it.each([
+    ["Super Admin", ["super_admin"]],
+    ["General Admin", ["admin"]],
+    ["Team Leader", ["team_leader"]],
+    ["Mission Leader", ["mission_leader"]],
+    ["Staff", ["staff"]],
+  ])("%s never sees them in the admin menu", (_label, roles) => {
+    // Even with a permission grant for every placeholder module.
+    const permitted = new Set(["teams", "mission", "evangelism"]);
+    const visible = ids(getAccessibleModules(ADMIN_MODULES, roles, permitted));
+    for (const id of PLACEHOLDERS) expect(visible).not.toContain(id);
+  });
+
+  it("leaves the personal menu without My Mission but with every working tab", () => {
+    const tabs = ids(getVisiblePortalTabs());
+    expect(tabs).not.toContain("my-mission");
+    expect(tabs).toEqual(ids(PORTAL_TABS).filter((id) => id !== "my-mission"));
+    expect(tabs).toEqual(
+      expect.arrayContaining(["profile", "my-events", "my-finance", "my-schools", "my-history"])
+    );
+  });
+
+  it("keeps every working module for a Super Admin", () => {
+    const visible = ids(getAccessibleModules(ADMIN_MODULES, ["super_admin"]));
+    const working = ids(ADMIN_MODULES).filter(
+      (id) => !PLACEHOLDERS.includes(id) && id !== "staff-decisions" // role-only
+    );
+    expect(visible).toEqual(working);
+    expect(ids(getAccessibleModules(SYSTEM_MODULES, ["super_admin"]))).toEqual(ids(SYSTEM_MODULES));
+  });
+
+  it("still gives everyone the always-open modules", () => {
+    const visible = ids(getAccessibleModules(ADMIN_MODULES, ["staff"], new Set()));
+    expect(visible).toEqual(expect.arrayContaining(["dashboard", "finance", "prayer-room", "okrs"]));
+  });
+
+  it("does not change permission-based access to working modules", () => {
+    const visible = ids(getAccessibleModules(ADMIN_MODULES, ["staff"], new Set(["events", "teams"])));
+    expect(visible).toContain("events");
+    expect(visible).not.toContain("teams");
+  });
+});

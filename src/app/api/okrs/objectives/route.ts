@@ -70,7 +70,7 @@ export async function POST(request: Request) {
     );
   }
 
-  // A team has no roster, so passing null asks the leadership/admin question —
+  // A team has no roster, so passing null asks the admin-only question —
   // the same answer the RLS policy gives via leads_staff_ministry(NULL).
   if (
     !(await callerCanCreateOkr(supabase, user.id, {
@@ -85,7 +85,7 @@ export async function POST(request: Request) {
           scope === "individual"
             ? "You can only add personal objectives for yourself, or for staff in a ministry you lead"
             : okr_team_id
-              ? "Only leadership can add objectives for an OKR team"
+              ? "Only an admin can add objectives for an OKR team"
               : "You can only add objectives to a ministry you lead",
       },
       { status: 403 }

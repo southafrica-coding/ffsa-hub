@@ -6,6 +6,8 @@ import { CheckoutQuestionsManager } from "./checkout-questions-manager";
 import { BuyerFieldsManager } from "./buyer-fields-manager";
 import type { FeeProfile } from "@/lib/payments/pricing";
 import type { FormField } from "@/lib/forms/schema";
+import { isWaiverActive } from "@/lib/ticketing/waivers";
+import type { TierCount } from "@/lib/ticketing/tier-inventory";
 
 // Composer for the Tickets tab on the event detail page. The
 // individual sub-managers handle their own CRUD via API routes;
@@ -21,6 +23,7 @@ export function TicketsTab({
   ticketingEnabled,
   publicSlug,
   ticketTypes,
+  tierCounts,
   promoCodes,
   feeProfiles,
   checkoutQuestions,
@@ -33,6 +36,7 @@ export function TicketsTab({
   ticketingEnabled: boolean;
   publicSlug: string | null;
   ticketTypes: TicketTypeRow[];
+  tierCounts: Record<string, TierCount>;
   promoCodes: PromoCodeRow[];
   feeProfiles: FeeProfile[];
   checkoutQuestions: FormField[];
@@ -55,13 +59,20 @@ export function TicketsTab({
       <TicketTypesManager
         eventId={eventId}
         ticketTypes={ticketTypes}
+        tierCounts={tierCounts}
         feeProfiles={feeProfiles}
         currency={currency}
       />
       <PromoCodesManager
         eventId={eventId}
         promoCodes={promoCodes}
-        ticketTypes={ticketTypes.map((t) => ({ id: t.id, name: t.name }))}
+        ticketTypes={ticketTypes.map((t) => ({
+          id: t.id,
+          name: t.name,
+          // What a code can waive on this tier (migration 269).
+          questions: Array.isArray(t.questions) ? t.questions : [],
+          hasWaiver: isWaiverActive(t.waiver),
+        }))}
         currency={currency}
       />
       <BuyerFieldsManager eventId={eventId} initialFields={buyerFields} />

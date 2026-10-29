@@ -32,7 +32,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Plus, Trash2, Edit2, Loader2, Upload, X } from "lucide-react";
-import { SUPPORTED_CURRENCIES } from "@/lib/currencies";
+import { CurrencySelect } from "@/components/ui/currency-select";
 import { ReceiptGallery } from "./receipt-gallery";
 import { createClient } from "@/lib/supabase/client";
 import { ExpenseImport } from "./expense-import";
@@ -61,6 +61,7 @@ type Expense = {
   receipt_path: string | null;
   notes: string | null;
   source?: "hub" | "import" | "slack" | null;
+  zar_confirmed?: boolean;
   outreach_budget_categories: {
     id: string;
     name: string;
@@ -97,6 +98,7 @@ const PAYMENT_METHODS = [
 
 export function ExpensesTab({
   teamId,
+  teamName,
   expenses,
   categories: initialCategories,
   cashBatches,
@@ -104,6 +106,8 @@ export function ExpensesTab({
   readOnly = false,
 }: {
   teamId: string;
+  /** Shown on the form, so someone on several teams knows which budget it goes to. */
+  teamName: string;
   expenses: Expense[];
   categories: Category[];
   cashBatches: CashBatch[];
@@ -136,12 +140,32 @@ export function ExpensesTab({
     exchange_rate: "",
     cash_batch_id: "",
     notes: "",
+    // Card abroad: the rand is from the bank app (migration 265).
+    zar_confirmed: false,
   };
   const [form, setForm] = useState(emptyForm);
+  const cardAbroad = (f: { payment_method: string; local_currency: string }) =>
+    f.payment_method === "card" && Boolean(f.local_currency) && f.local_currency !== "ZAR";
+  const unconfirmedCards = expenses.filter(
+    (e) => e.payment_method === "card" && e.local_currency && e.local_currency !== "ZAR" && !e.zar_confirmed
+  ).length;
 
-  function updateField(field: string, value: string) {
+  // Cash in a foreign currency is charged to the team's cash pulls, oldest
+  // first (migration 263) — nobody picks a batch or types a rate for it.
+  const pricedByPulls = (f: { payment_method: string; local_currency: string }) =>
+    f.payment_method === "cash" && Boolean(f.local_currency) && f.local_currency !== "ZAR";
+  const newestPull = (currency: string) =>
+    [...cashBatches]
+      .filter((b) => b.local_currency === currency && Number(b.exchange_rate) > 0)
+      .sort((a, b) => b.batch_date.localeCompare(a.batch_date))[0];
+  const fromPulls = pricedByPulls(form);
+  const pullForCurrency = fromPulls ? newestPull(form.local_currency) : undefined;
+
+  function updateField(field: string, value: string | boolean) {
     setForm((prev) => {
       const next = { ...prev, [field]: value };
+      // Typing the rand for a card payment abroad means it came from the bank app.
+      if (field === "zar_amount" && cardAbroad(next)) next.zar_confirmed = true;
       // Auto-calculate exchange rate
       if (
         (field === "local_amount" || field === "zar_amount") &&
@@ -153,14 +177,13 @@ export function ExpensesTab({
           Number(next.local_amount) / Number(next.zar_amount)
         ).toFixed(6);
       }
-      // Pre-fill exchange rate from cash batch
-      if (field === "cash_batch_id" && value) {
-        const batch = cashBatches.find((b) => b.id === value);
-        if (batch?.exchange_rate) {
-          next.exchange_rate = String(batch.exchange_rate);
-          if (batch.local_currency) {
-            next.local_currency = batch.local_currency;
-          }
+      // Foreign cash: estimate from the newest pull in that currency. The
+      // database replaces it with the exact oldest-first figure on save.
+      if (["local_amount", "local_currency", "payment_method"].includes(field) && pricedByPulls(next)) {
+        const pull = newestPull(next.local_currency);
+        if (pull && Number(next.local_amount) > 0) {
+          next.exchange_rate = String(pull.exchange_rate);
+          next.zar_amount = (Number(next.local_amount) / Number(pull.exchange_rate)).toFixed(2);
         }
       }
       return next;
@@ -233,7 +256,11 @@ export function ExpensesTab({
         local_amount: form.local_amount ? Number(form.local_amount) : null,
         zar_amount: Number(form.zar_amount),
         exchange_rate: form.exchange_rate ? Number(form.exchange_rate) : null,
-        cash_batch_id: form.cash_batch_id || null,
+        zar_confirmed: !cardAbroad(form) || form.zar_confirmed,
+        zar_estimate: cardAbroad(form) && !form.zar_confirmed ? Number(form.zar_amount) : null,
+        zar_confirmed_at: cardAbroad(form) && form.zar_confirmed ? new Date().toISOString() : null,
+        // Set by the database for foreign cash (oldest pull first).
+        cash_batch_id: null,
         notes: form.notes || null,
       };
 
@@ -325,6 +352,7 @@ export function ExpensesTab({
       exchange_rate: expense.exchange_rate != null ? String(expense.exchange_rate) : "",
       cash_batch_id: expense.cash_batch_id ?? "",
       notes: expense.notes ?? "",
+      zar_confirmed: Boolean(expense.zar_confirmed),
     });
     setAddOpen(true);
   }
@@ -342,6 +370,14 @@ export function ExpensesTab({
           <span className="text-muted-foreground font-normal">
             ({expenses.length})
           </span>
+          {unconfirmedCards > 0 && (
+            <span
+              className="ml-2 font-mono text-[11px] font-normal text-amber"
+              title="Send each bank notification to the Outreach Finance bot, or enter the rand from the bank app"
+            >
+              {unconfirmedCards} card {unconfirmedCards === 1 ? "payment" : "payments"} still an estimate
+            </span>
+          )}
           {missingReceipts > 0 && (
             <span className="ml-2 font-mono text-[11px] font-normal text-amber">
               {missingReceipts} without a receipt
@@ -376,6 +412,9 @@ export function ExpensesTab({
               <DialogTitle>
                 {editingId ? "Edit Expense" : "Add Expense"}
               </DialogTitle>
+              <p className="text-sm text-muted-foreground">
+                {editingId ? "On" : "Logging to"} <strong className="text-ink">{teamName}</strong>
+              </p>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -461,24 +500,11 @@ export function ExpensesTab({
                 </div>
                 <div>
                   <Label>Local Currency</Label>
-                  <Select
-                    value={form.local_currency || "none"}
-                    onValueChange={(v) =>
-                      updateField("local_currency", v === "none" ? "" : v)
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select currency..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">None</SelectItem>
-                      {SUPPORTED_CURRENCIES.map((c) => (
-                        <SelectItem key={c.code} value={c.code}>
-                          {c.code} — {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <CurrencySelect
+                    allowNone
+                    value={form.local_currency}
+                    onChange={(v) => updateField("local_currency", v)}
+                  />
                 </div>
                 <div>
                   <Label>Local Amount</Label>
@@ -494,16 +520,34 @@ export function ExpensesTab({
                   />
                 </div>
                 <div>
-                  <Label>ZAR Amount *</Label>
+                  <Label>
+                    {fromPulls && pullForCurrency
+                      ? "ZAR Amount (estimate)"
+                      : cardAbroad(form)
+                        ? "Rand charged (from your bank app) *"
+                        : "ZAR Amount *"}
+                  </Label>
                   <Input
                     type="number"
                     min="0"
                     step="0.01"
                     required
+                    disabled={fromPulls && Boolean(pullForCurrency)}
                     value={form.zar_amount}
                     onChange={(e) => updateField("zar_amount", e.target.value)}
                     placeholder="0.00"
                   />
+                  {cardAbroad(form) && (
+                    <label className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        checked={form.zar_confirmed}
+                        onChange={(e) => updateField("zar_confirmed", e.target.checked)}
+                      />
+                      This is the rand from my bank app
+                      {!form.zar_confirmed && " — otherwise it's an estimate until confirmed"}
+                    </label>
+                  )}
                 </div>
                 <div>
                   <Label>Exchange Rate</Label>
@@ -539,29 +583,13 @@ export function ExpensesTab({
                     </Button>
                   </div>
                 </div>
-                <div>
-                  <Label>Cash Batch</Label>
-                  <Select
-                    value={form.cash_batch_id}
-                    onValueChange={(v) =>
-                      updateField("cash_batch_id", v === "none" ? "" : v)
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="None" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">None</SelectItem>
-                      {cashBatches.map((b) => (
-                        <SelectItem key={b.id} value={b.id}>
-                          {new Date(b.batch_date).toLocaleDateString()} — R
-                          {Number(b.zar_withdrawn).toLocaleString()}
-                          {b.local_currency && ` → ${b.local_currency}`}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                {fromPulls && (
+                  <p className="col-span-2 border border-rule px-3 py-2 text-xs text-muted-foreground">
+                    {pullForCurrency
+                      ? `Cash in ${form.local_currency} is charged to your cash pulls, oldest first. The exact rand amount is worked out when you save.`
+                      : `No cash pull in ${form.local_currency} yet — add one in Payouts so this can be priced exactly. Until then, fetch a rate as an estimate.`}
+                  </p>
+                )}
                 <div className="col-span-2">
                   <Label>Notes</Label>
                   <Textarea
@@ -739,6 +767,15 @@ export function ExpensesTab({
                     <Badge variant="secondary" className="text-xs">
                       {exp.payment_method.replace(/_/g, " ")}
                     </Badge>
+                    {exp.payment_method === "card" && exp.local_currency && exp.local_currency !== "ZAR" && !exp.zar_confirmed && (
+                      <Badge
+                        variant="outline"
+                        className="ml-1 border-amber-border text-[10px] text-amber"
+                        title="The rand is an estimate until the bank notification confirms it"
+                      >
+                        Estimate
+                      </Badge>
+                    )}
                   </TableCell>
                   <TableCell className="text-right font-mono text-sm">
                     {exp.local_amount != null

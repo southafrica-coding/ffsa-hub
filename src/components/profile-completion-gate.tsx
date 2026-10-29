@@ -20,26 +20,8 @@ import { listActiveMinistries } from "@/services/ministries";
 import { getHouseholdMembers, getHousehold } from "@/services/household";
 import { getHouseholdLinkState } from "@/services/household-link";
 import { getOutstandingConsents } from "@/services/consent";
-
-// True if the user counts as staff — either their self-signup type is
-// 'staff' or they hold the 'staff' role. Scopes the children gate to staff.
-// Fail-closed (not staff) on a role-read error so students/community are
-// never wrongly prompted.
-async function userIsStaff(
-  supabase: any, // eslint-disable-line @typescript-eslint/no-explicit-any
-  userId: string,
-  row: Record<string, unknown>
-): Promise<boolean> {
-  if (row.signup_type === "staff") return true;
-  const { data, error } = await supabase
-    .from("user_roles")
-    .select("roles!inner(name)")
-    .eq("user_id", userId)
-    .eq("roles.name", "staff")
-    .limit(1);
-  if (error) return false;
-  return (data?.length ?? 0) > 0;
-}
+import { userIsStaff } from "@/lib/users/is-staff";
+import { familyGatePlan } from "@/lib/users/marital-status";
 
 // Full-screen blocking overlay: blurs and disables the page behind the panel.
 function BlockingOverlay({
@@ -194,24 +176,38 @@ export async function ProfileCompletionGate({
   //     community members are never prompted. Spouse/dependent records don't
   //     count and never block.
   const isStaff = await userIsStaff(supabase, user.id, row);
+
+  // Everything below is a read, so fetch it together and then apply the gates
+  // in their usual order. The consent check is needed by everyone who gets
+  // past the children gate; the household reads only by staff.
+  const [outstanding, householdResult, householdMembersResult] = await Promise.all([
+    getOutstandingConsents(supabase, user.id, isStaff),
+    isStaff ? getHousehold(supabase, user.id) : null,
+    isStaff
+      ? getHouseholdMembers(supabase, user.id, { excludeLinkedUserId: user.id })
+      : null,
+  ]);
+
   if (isStaff) {
     // has_children lives on the HOUSEHOLD since migration 181, so a spouse
     // who linked to an existing household inherits the answer and is never
     // asked again.
-    const { data: household } = await getHousehold(supabase, user.id);
+    const household = householdResult?.data ?? null;
     const hasChildren = ((household as { has_children?: boolean | null } | null)
       ?.has_children ?? null) as boolean | null;
-    const { data: householdRows } = await getHouseholdMembers(supabase, user.id, {
-      excludeLinkedUserId: user.id,
-    });
+    const householdRows = householdMembersResult?.data ?? null;
     const members = (householdRows ?? []) as Array<Record<string, unknown>>;
     const unanswered = hasChildren == null;
     const childrenBlock = getChildrenBlock(hasChildren, members);
-    if (unanswered || childrenBlock) {
+    // Marital status decides what's asked: children for everyone, the
+    // spouse steps only for married (or no status on record).
+    const plan = familyGatePlan(row.marital_status, hasChildren);
+    if (plan.askChildren && (unanswered || childrenBlock)) {
       return (
         <BlockingOverlay
           panel={
             <ChildrenGateForm
+              askSpouse={plan.askSpouse}
               hasChildren={hasChildren}
               members={(householdRows ?? []) as HouseholdMember[]}
               selfDefaults={{
@@ -237,7 +233,7 @@ export async function ProfileCompletionGate({
   //    Everyone signs Privacy + Child Protection; staff also sign the NDA.
   //    Each is version-keyed, so a NEW policy (or a new version) re-prompts
   //    the right people automatically. Fail-open if nothing is outstanding.
-  const outstanding = await getOutstandingConsents(supabase, user.id, isStaff);
+  //    (`outstanding` was fetched above, alongside the household reads.)
   if (outstanding.length > 0) {
     return (
       <BlockingOverlay

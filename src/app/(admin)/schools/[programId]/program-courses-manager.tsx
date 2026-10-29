@@ -46,6 +46,8 @@ export type PhaseCourse = {
   arrival_date: string | null;
   lead_staff_id: string | null;
   description: string | null;
+  /** Gets a grade (migration 259) — FFX doesn't, FFBX and FFWX do. */
+  graded?: boolean;
 };
 
 type Staff = {
@@ -167,6 +169,9 @@ export function ProgramCoursesManager({
                     <Badge variant={STATUS_COLORS[c.status] ?? "secondary"} className="text-[10px]">
                       {c.status}
                     </Badge>
+                    <Badge variant="outline" className="text-[10px]">
+                      {c.graded === false ? "Not graded" : "Graded"}
+                    </Badge>
                   </p>
                   <p className="text-xs text-muted-foreground flex items-center gap-3 mt-0.5">
                     {dates && (
@@ -230,6 +235,7 @@ function CourseDialog({
     arrival_date: course?.arrival_date ?? "",
     lead_staff_id: course?.lead_staff_id ?? "none",
     description: course?.description ?? "",
+    graded: course?.graded ?? true,
   });
   const set = (patch: Partial<typeof form>) => setForm((p) => ({ ...p, ...patch }));
 
@@ -256,6 +262,7 @@ function CourseDialog({
           arrival_date: form.arrival_date || null,
           lead_staff_id: form.lead_staff_id === "none" ? null : form.lead_staff_id,
           description: form.description || null,
+          graded: form.graded,
         }),
       });
       if (res.ok) {
@@ -353,6 +360,17 @@ function CourseDialog({
               </SelectContent>
             </Select>
           </div>
+          <label className="flex cursor-pointer items-center gap-2.5">
+            <input
+              type="checkbox"
+              checked={form.graded}
+              onChange={(e) => set({ graded: e.target.checked })}
+              className="h-4 w-4"
+            />
+            <span className="!font-sans text-[14px] !font-normal normal-case !tracking-normal !text-[color:var(--text-primary)]">
+              Students get a grade for this course
+            </span>
+          </label>
           <div>
             <Label>Description</Label>
             <Textarea rows={2} value={form.description} onChange={(e) => set({ description: e.target.value })} />

@@ -21,6 +21,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { guessCategory, type BudgetCategory } from "@/lib/finance/outreach-budget";
 import { mondayOf, plannerDays, pot, shiftDate } from "@/lib/finance/outreach-plan";
+import { OUTREACH_LEADER_ROLES } from "@/lib/finance/outreach-roles";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AdminClient = any;
@@ -51,7 +52,12 @@ export type OutreachResolution =
 const FINANCE_STAFF_ROLES = ["super_admin", "admin", "finance_admin"];
 const FINANCE_STAFF_PERMISSIONS = ["finance.view", "finance.edit"];
 
-/** Admins and finance staff see every outreach team, as in the Hub. */
+/**
+ * Admins and finance staff see every outreach team, as in the Hub. Someone
+ * flagged "outreach limited to own teams" (migration 274) only counts
+ * through an admin tier or finance_admin — their finance.view / finance.edit
+ * grants don't make them outreach staff, mirroring is_outreach_staff_viewer().
+ */
 export async function isFinanceStaff(admin: AdminClient, hubUserId: string): Promise<boolean> {
   const { data: roles } = await admin
     .from("user_roles")
@@ -60,6 +66,8 @@ export async function isFinanceStaff(admin: AdminClient, hubUserId: string): Pro
   const roleRows = (roles ?? []) as { role_id: string; roles: { name: string } | { name: string }[] }[];
   const names = roleRows.flatMap((r) => (Array.isArray(r.roles) ? r.roles : [r.roles]).map((x) => x.name));
   if (names.some((n) => FINANCE_STAFF_ROLES.includes(n))) return true;
+
+  if (await isLimitedToOwnTeams(admin, hubUserId)) return false;
 
   const { data: direct } = await admin
     .from("user_permissions")
@@ -78,6 +86,16 @@ export async function isFinanceStaff(admin: AdminClient, hubUserId: string): Pro
     .in("permissions.key", FINANCE_STAFF_PERMISSIONS)
     .limit(1);
   return !!(viaRole && viaRole.length > 0);
+}
+
+/** The "outreach limited to own teams" flag (migration 274). Unreadable → off. */
+async function isLimitedToOwnTeams(admin: AdminClient, hubUserId: string): Promise<boolean> {
+  const { data, error } = await admin
+    .from("outreach_user_restrictions")
+    .select("limited_to_own_teams")
+    .eq("user_id", hubUserId)
+    .maybeSingle();
+  return !error && (data as { limited_to_own_teams: boolean } | null)?.limited_to_own_teams === true;
 }
 
 type TeamRow = { id: string; team_name: string; country: string | null; slack_enabled: boolean };
@@ -110,11 +128,16 @@ export async function resolveOutreachScope(
         reason: "I don't know who you are yet — link your Slack on your Hub profile, then ask again.",
       };
     }
-    const role = await membershipRole(admin, team.id, args.hubUserId);
+    // The budget is for the team's owner and co-leaders (migration 260);
+    // plain members see the trip, not the money.
+    const memberRole = await membershipRole(admin, team.id, args.hubUserId);
+    const role = memberRole && OUTREACH_LEADER_ROLES.includes(memberRole) ? memberRole : null;
     if (role === null && !(await isFinanceStaff(admin, args.hubUserId))) {
       return {
         kind: "refuse",
-        reason: `This channel is for *${team.team_name}*'s budget, and you're not on that team in the Hub.`,
+        reason: memberRole
+          ? `*${team.team_name}*'s budget is run by its owner and co-leaders, so I can't share it with team members.`
+          : `This channel is for *${team.team_name}*'s budget, and you're not on that team in the Hub.`,
       };
     }
     return {
@@ -135,7 +158,9 @@ export async function resolveOutreachScope(
     .from("outreach_team_members")
     .select("role, outreach_teams!inner(id, team_name, country, slack_enabled, status)")
     .eq("user_id", args.hubUserId)
-    .eq("outreach_teams.slack_enabled", true);
+    .in("role", OUTREACH_LEADER_ROLES)
+    .eq("outreach_teams.slack_enabled", true)
+    .is("outreach_teams.archived_at", null); // migration 272
   const mine: OutreachTeamRef[] = ((rows ?? []) as { role: string; outreach_teams: TeamRow }[]).map(
     (r) => ({
       id: r.outreach_teams.id,
@@ -150,7 +175,10 @@ export async function resolveOutreachScope(
 
   let teams = mine;
   if (staff) {
-    const { data: all } = await admin.from("outreach_teams").select("id, team_name, country");
+    const { data: all } = await admin
+      .from("outreach_teams")
+      .select("id, team_name, country")
+      .is("archived_at", null);
     const mineIds = new Set(mine.map((t) => t.id));
     teams = [
       ...mine,

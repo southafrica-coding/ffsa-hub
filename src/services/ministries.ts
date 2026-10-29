@@ -179,5 +179,7 @@ export async function listPickableUsers(supabase: Client) {
   return supabase
     .from("users")
     .select("*")
+    // Deactivated accounts can't be put on a roster (266 removes them).
+    .eq("is_active", true)
     .order("first_name", { ascending: true });
 }

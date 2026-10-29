@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { SUPER_ADMIN_ONLY_MODULES } from "@/config/modules";
 
 /**
@@ -14,6 +13,67 @@ import { SUPER_ADMIN_ONLY_MODULES } from "@/config/modules";
 function bypassRoles(modules: string[]): string[] {
   const carvedOut = modules.some((m) => SUPER_ADMIN_ONLY_MODULES.has(m));
   return carvedOut ? ["super_admin"] : ["super_admin", "admin"];
+}
+
+/**
+ * The one access rule behind all three exports: true if the user holds a
+ * bypass role (see bypassRoles), a direct user_permission for any of the
+ * modules, or one through an assigned role's bundle
+ * (user_roles -> role_permissions -> permissions).
+ *
+ * The user's roles and their direct grant are independent reads, so they go
+ * out together; the bundle lookup only runs if neither settles it. That is two
+ * round trips at most — the checks used to run one after another (up to four).
+ * Any failed read counts as "no", exactly as before: an error never grants.
+ */
+async function canAccessAnyModule(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  userId: string,
+  modules: string[]
+): Promise<boolean> {
+  const directQuery = supabase
+    .from("user_permissions")
+    .select("permissions!inner(module)")
+    .eq("user_id", userId);
+
+  const [{ data: roleRows }, { data: permCheck }] = await Promise.all([
+    supabase.from("user_roles").select("role_id, roles(name)").eq("user_id", userId),
+    (modules.length === 1
+      ? directQuery.eq("permissions.module", modules[0])
+      : directQuery.in("permissions.module", modules)
+    ).limit(1),
+  ]);
+
+  const roles = (roleRows ?? []) as Array<{
+    role_id: string;
+    roles: { name: string } | { name: string }[] | null;
+  }>;
+  const roleNames = roles.flatMap((r) =>
+    Array.isArray(r.roles) ? r.roles.map((x) => x.name) : r.roles ? [r.roles.name] : []
+  );
+
+  // Blanket role bypass (see bypassRoles)
+  const bypass = bypassRoles(modules);
+  if (roleNames.some((name) => bypass.includes(name))) return true;
+
+  // Direct permission grant
+  if (permCheck && permCheck.length > 0) return true;
+
+  // Access granted through an assigned role's bundle
+  const roleIds = roles.map((r) => r.role_id);
+  if (roleIds.length === 0) return false;
+
+  const bundleQuery = supabase
+    .from("role_permissions")
+    .select("permissions!inner(module)")
+    .in("role_id", roleIds);
+  const { data: rolePermCheck } = await (modules.length === 1
+    ? bundleQuery.eq("permissions.module", modules[0])
+    : bundleQuery.in("permissions.module", modules)
+  ).limit(1);
+
+  return !!(rolePermCheck && rolePermCheck.length > 0);
 }
 
 /**
@@ -32,45 +92,7 @@ export async function requireModuleAccess(
   userId: string,
   module: string
 ) {
-  // Blanket role bypass first (see bypassRoles)
-  const { data: adminCheck } = await supabase
-    .from("user_roles")
-    .select("roles!inner(name)")
-    .eq("user_id", userId)
-    .in("roles.name", bypassRoles([module]))
-    .limit(1);
-
-  if ((adminCheck?.length ?? 0) > 0) return;
-
-  // Direct permission grant for this module
-  const { data: permCheck } = await supabase
-    .from("user_permissions")
-    .select("permissions!inner(module)")
-    .eq("user_id", userId)
-    .eq("permissions.module", module)
-    .limit(1);
-
-  if (permCheck && permCheck.length > 0) return;
-
-  // Or access granted through an assigned role's bundle
-  // (user_roles -> role_permissions -> permissions for this module)
-  const { data: roleRows } = await supabase
-    .from("user_roles")
-    .select("role_id")
-    .eq("user_id", userId);
-
-  const roleIds = (roleRows ?? []).map((r: { role_id: string }) => r.role_id);
-  if (roleIds.length > 0) {
-    const { data: rolePermCheck } = await supabase
-      .from("role_permissions")
-      .select("permissions!inner(module)")
-      .in("role_id", roleIds)
-      .eq("permissions.module", module)
-      .limit(1);
-
-    if (rolePermCheck && rolePermCheck.length > 0) return;
-  }
-
+  if (await canAccessAnyModule(supabase, userId, [module])) return;
   redirect("/dashboard");
 }
 
@@ -87,42 +109,7 @@ export async function hasModuleAccess(
   userId: string,
   module: string
 ): Promise<boolean> {
-  const { data: adminCheck } = await supabase
-    .from("user_roles")
-    .select("roles!inner(name)")
-    .eq("user_id", userId)
-    .in("roles.name", bypassRoles([module]))
-    .limit(1);
-
-  if ((adminCheck?.length ?? 0) > 0) return true;
-
-  const { data: permCheck } = await supabase
-    .from("user_permissions")
-    .select("permissions!inner(module)")
-    .eq("user_id", userId)
-    .eq("permissions.module", module)
-    .limit(1);
-
-  if (permCheck && permCheck.length > 0) return true;
-
-  const { data: roleRows } = await supabase
-    .from("user_roles")
-    .select("role_id")
-    .eq("user_id", userId);
-
-  const roleIds = (roleRows ?? []).map((r: { role_id: string }) => r.role_id);
-  if (roleIds.length > 0) {
-    const { data: rolePermCheck } = await supabase
-      .from("role_permissions")
-      .select("permissions!inner(module)")
-      .in("role_id", roleIds)
-      .eq("permissions.module", module)
-      .limit(1);
-
-    if (rolePermCheck && rolePermCheck.length > 0) return true;
-  }
-
-  return false;
+  return canAccessAnyModule(supabase, userId, [module]);
 }
 
 /**
@@ -136,40 +123,6 @@ export async function requireAnyModuleAccess(
   userId: string,
   modules: string[]
 ) {
-  const { data: adminCheck } = await supabase
-    .from("user_roles")
-    .select("roles!inner(name)")
-    .eq("user_id", userId)
-    .in("roles.name", bypassRoles(modules))
-    .limit(1);
-
-  if ((adminCheck?.length ?? 0) > 0) return;
-
-  const { data: permCheck } = await supabase
-    .from("user_permissions")
-    .select("permissions!inner(module)")
-    .eq("user_id", userId)
-    .in("permissions.module", modules)
-    .limit(1);
-
-  if (permCheck && permCheck.length > 0) return;
-
-  const { data: roleRows } = await supabase
-    .from("user_roles")
-    .select("role_id")
-    .eq("user_id", userId);
-
-  const roleIds = (roleRows ?? []).map((r: { role_id: string }) => r.role_id);
-  if (roleIds.length > 0) {
-    const { data: rolePermCheck } = await supabase
-      .from("role_permissions")
-      .select("permissions!inner(module)")
-      .in("role_id", roleIds)
-      .in("permissions.module", modules)
-      .limit(1);
-
-    if (rolePermCheck && rolePermCheck.length > 0) return;
-  }
-
+  if (await canAccessAnyModule(supabase, userId, modules)) return;
   redirect("/dashboard");
 }

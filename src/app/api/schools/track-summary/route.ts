@@ -33,18 +33,26 @@ export async function GET() {
 
   // Read via the service-role client: applicant rows and enrolments are not
   // all readable under the viewer's own RLS (see the schools detail page).
+  // Each school's pipeline is independent — load them side by side instead of
+  // one school after another (the widget waited on every school in turn).
+  // Programs keep their order; unsegmented schools drop out as before.
   const admin = createAdminClient();
-  const out = [];
-  for (const program of (programs ?? []) as Array<{ id: string; name: string; code: string }>) {
-    const { segments, people } = await loadTrackPipeline(admin, program.id);
-    if (segments.length === 0) continue;
-    out.push({
-      id: program.id,
-      name: program.name,
-      code: program.code,
-      ...summariseAcceptedTrack(people, segments),
-    });
-  }
+  const scoped = (programs ?? []) as Array<{ id: string; name: string; code: string }>;
+  const pipelines = await Promise.all(
+    scoped.map((program) => loadTrackPipeline(admin, program.id))
+  );
+  const out = scoped.flatMap((program, i) => {
+    const { segments, people } = pipelines[i];
+    if (segments.length === 0) return [];
+    return [
+      {
+        id: program.id,
+        name: program.name,
+        code: program.code,
+        ...summariseAcceptedTrack(people, segments),
+      },
+    ];
+  });
 
   return NextResponse.json({ programs: out });
 }

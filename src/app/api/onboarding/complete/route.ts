@@ -1,7 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { completeOnboarding } from "@/services/users";
+import { deleteOwnUnlinkedSpouses } from "@/services/household";
+import { canHaveSpouse } from "@/lib/users/marital-status";
 import { sendNewStaffOnboardedNotice } from "@/lib/email/send-new-staff-notice";
 import { addUserToBaseCalendar } from "@/lib/google/calendar";
 
@@ -24,7 +26,7 @@ export async function POST() {
 
   const { data: existing } = await supabase
     .from("users")
-    .select("id, accepted_at")
+    .select("id, accepted_at, marital_status")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -32,24 +34,43 @@ export async function POST() {
     return NextResponse.json({ success: true, alreadyComplete: true });
   }
 
+  // Someone who added a spouse in the Family step and then went back and
+  // chose Single / Divorced / Widowed: drop that spouse row so stale spouse
+  // details aren't kept. Only rows they added during this setup, never a
+  // linked spouse's own account, and only before accepted_at is set — an
+  // existing member's records are never touched here.
+  if (!canHaveSpouse(existing?.marital_status)) {
+    const { error: spouseError } = await deleteOwnUnlinkedSpouses(
+      supabase,
+      user.id
+    );
+    if (spouseError) {
+      return NextResponse.json({ error: spouseError.message }, { status: 500 });
+    }
+  }
+
   const { error } = await completeOnboarding(supabase, user.id);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Best-effort notice — onboarding must never fail because Resend is down.
-  try {
-    await notifyIfStaff(user.id);
-  } catch (err) {
-    console.error("[onboarding/complete] notify failed", err);
-  }
-
-  // Best-effort calendar share — must never fail onboarding.
-  try {
-    await shareCalendarIfStaff(user.id, user.email ?? "");
-  } catch (err) {
-    console.error("[onboarding/complete] calendar share failed", err);
-  }
+  // The staff notice and calendar share talk to Resend and Google with no
+  // time limit. They used to be awaited here, so a slow third party held the
+  // wizard on "Saving…" long after the account was already set up. after()
+  // runs them once the response has gone; both stay best-effort.
+  const email = user.email ?? "";
+  after(async () => {
+    try {
+      await notifyIfStaff(user.id);
+    } catch (err) {
+      console.error("[onboarding/complete] notify failed", err);
+    }
+    try {
+      await shareCalendarIfStaff(user.id, email);
+    } catch (err) {
+      console.error("[onboarding/complete] calendar share failed", err);
+    }
+  });
 
   return NextResponse.json({ success: true });
 }

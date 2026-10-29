@@ -25,19 +25,33 @@ import {
 } from "@/lib/ticketing/buyer-fields";
 import { TICKET_CONSENT_VERSION } from "@/lib/ticketing/consent-terms";
 import { settlePaidOrder } from "@/lib/ticketing/settle";
-import { invoicePayLaterOrder } from "@/lib/ticketing/pay-later";
+import { invoicePayLaterOrder, holdPayLaterOrder } from "@/lib/ticketing/pay-later";
+import { alertInvoiceFailure } from "@/lib/ticketing/pay-later-alerts";
 import {
   buildWaiverSignatureGroups,
+  isWaiverActive,
   type TierWaiver,
   type WaiverSignatureGroup,
   type WaiverSlotValues,
 } from "@/lib/ticketing/waivers";
+import {
+  computeOrderWaivedSteps,
+  computePromoDiscount,
+  promoUnavailableReason,
+  questionsAfterPromo,
+  toPromoTerms,
+  waiverAfterPromo,
+  type PromoTerms,
+} from "@/lib/ticketing/promo-codes";
+import { findActivePromoCode, releaseTicketHolds } from "@/services/ticketing";
 
 // POST /api/events/[id]/checkout
 //
 // Public endpoint — uses the service-role client to bypass RLS.
-// Steps: validate → reserve inventory atomically → apply promo →
-// create pending order → kick off PayFast → return { redirectUrl }.
+// Steps: validate (incl. the promo code, which can waive the waiver and
+// per-ticket questions) → reserve inventory atomically → apply discount →
+// create pending order → redeem promo → kick off PayFast → return
+// { redirectUrl }.
 //
 // Free / fully-comped orders (total_cents == 0) skip the provider
 // entirely: the order is created, marked paid and fulfilled inline,
@@ -358,16 +372,77 @@ export async function POST(
     resolved.push({ ticketType: tt, qty, perTicketCents });
   }
 
+  // ── Promo code (optional) ────────────────────────────────────
+  // Loaded and checked here, before the per-ticket questions and waivers,
+  // because a code can waive those steps (migration 269) — and before any
+  // inventory is held, so a bad code is a clean 409 with no rollback. The
+  // code is always re-read from the database: the client's copy of its
+  // terms is never trusted for price or waivers.
+  let promoTerms: PromoTerms | null = null;
+  let promoCodeId: string | null = null;
+  const codeInput = body.promo_code?.trim();
+  if (codeInput) {
+    const { data: promo, error: promoErr } = await findActivePromoCode(
+      supabase,
+      eventId,
+      codeInput
+    );
+    if (promoErr) {
+      return NextResponse.json(
+        { error: "Failed to validate promo code." },
+        { status: 500 }
+      );
+    }
+    if (!promo) {
+      return NextResponse.json(
+        { error: "That promo code isn't valid." },
+        { status: 409 }
+      );
+    }
+    const unavailable = promoUnavailableReason(promo, now);
+    if (unavailable) {
+      return NextResponse.json({ error: unavailable }, { status: 409 });
+    }
+    if (
+      promo.applies_to_ticket_type_id &&
+      !resolved.some((r) => r.ticketType.id === promo.applies_to_ticket_type_id)
+    ) {
+      return NextResponse.json(
+        {
+          error: "That promo code doesn't apply to any of the tiers in your order.",
+        },
+        { status: 409 }
+      );
+    }
+    promoTerms = toPromoTerms(promo);
+    promoCodeId = promo.id;
+  }
+
+  // What the code waives, per tier, recorded on the order (and later each
+  // ticket) so exports and the roster say "waived", not "missing".
+  const waivedSteps = computeOrderWaivedSteps(
+    promoTerms,
+    resolved.map((r) => ({
+      ticketTypeId: r.ticketType.id,
+      questions: (r.ticketType.questions as FormField[] | null) ?? [],
+      waiverActive: isWaiverActive(r.ticketType.waiver),
+    }))
+  );
+
   // ── Per-ticket tier questions (optional, migration 137) ──────
-  // Validated against each tier's own schema before any inventory is
-  // reserved — a bad/missing per-ticket answer returns a clean 400 with
-  // no rollback. The snapshot rides on the order until fulfilment drains
-  // it onto each issued ticket.
+  // Validated against each tier's own schema — minus any questions the
+  // promo code waives — before any inventory is reserved: a bad/missing
+  // per-ticket answer returns a clean 400 with no rollback. The snapshot
+  // rides on the order until fulfilment drains it onto each issued ticket.
   const ticketAnswerBuild = buildTicketAnswerGroups(
     resolved.map((r) => ({
       ticketTypeId: r.ticketType.id,
       qty: r.qty,
-      questions: (r.ticketType.questions as FormField[] | null) ?? [],
+      questions: questionsAfterPromo(
+        (r.ticketType.questions as FormField[] | null) ?? [],
+        promoTerms,
+        r.ticketType.id
+      ),
     })),
     Array.isArray(body.ticket_answers) ? body.ticket_answers : []
   );
@@ -380,18 +455,24 @@ export async function POST(
   const ticketAnswerGroups: TicketAnswerGroup[] = ticketAnswerBuild.groups;
 
   // ── Per-ticket signed waivers (optional, migration 163) ──────
-  // For any tier that requires a waiver, each ticket must carry a signed
-  // parent/guardian record. Validated + snapshotted against the tier's own
-  // waiver config before any inventory is reserved (clean 400, no
-  // rollback). The signed records ride on the order until fulfilment
-  // drains them onto each issued ticket and renders the certificate PDF.
+  // For any tier that requires a waiver — unless the promo code waives it
+  // for that tier — each ticket must carry a signed parent/guardian
+  // record. Validated + snapshotted against the tier's own waiver config
+  // before any inventory is reserved (clean 400, no rollback). The signed
+  // records ride on the order until fulfilment drains them onto each
+  // issued ticket and renders the certificate PDF. Signatures sent for a
+  // waived tier are ignored.
   const fwd = request.headers.get("x-forwarded-for") ?? "";
   const clientIp = fwd.split(",")[0]?.trim() || null;
   const waiverBuild = buildWaiverSignatureGroups(
     resolved.map((r) => ({
       ticketTypeId: r.ticketType.id,
       qty: r.qty,
-      waiver: (r.ticketType.waiver as TierWaiver | null) ?? null,
+      waiver: waiverAfterPromo(
+        (r.ticketType.waiver as TierWaiver | null) ?? null,
+        promoTerms,
+        r.ticketType.id
+      ),
     })),
     Array.isArray(body.waiver_signatures) ? body.waiver_signatures : [],
     { signedAt: now.toISOString(), ip: clientIp }
@@ -440,84 +521,20 @@ export async function POST(
     reserved.push({ ticketTypeId: line.ticketType.id, qty: line.qty });
   }
 
-  // ── Promo code (optional) ────────────────────────────────────
+  // ── Discount ─────────────────────────────────────────────────
+  // Only the code's in-scope tickets are discounted; the donation never is.
   const subtotalCents = resolved.reduce(
     (s, l) => s + l.qty * l.perTicketCents,
     0
   );
-  let discountCents = 0;
-  let promoCodeId: string | null = null;
-
-  const codeInput = body.promo_code?.trim();
-  if (codeInput) {
-    const { data: promo, error: promoErr } = await supabase
-      .from("promo_codes")
-      .select("*")
-      .eq("event_id", eventId)
-      .ilike("code", codeInput)
-      .eq("is_active", true)
-      .maybeSingle();
-    if (promoErr) {
-      await rollbackReservations();
-      return NextResponse.json(
-        { error: "Failed to validate promo code." },
-        { status: 500 }
-      );
-    }
-    if (!promo) {
-      await rollbackReservations();
-      return NextResponse.json(
-        { error: "That promo code isn't valid." },
-        { status: 409 }
-      );
-    }
-    if (promo.valid_from && new Date(promo.valid_from) > now) {
-      await rollbackReservations();
-      return NextResponse.json(
-        { error: "That promo code isn't active yet." },
-        { status: 409 }
-      );
-    }
-    if (promo.valid_until && new Date(promo.valid_until) <= now) {
-      await rollbackReservations();
-      return NextResponse.json(
-        { error: "That promo code has expired." },
-        { status: 409 }
-      );
-    }
-    if (
-      promo.max_redemptions != null &&
-      promo.redemption_count >= promo.max_redemptions
-    ) {
-      await rollbackReservations();
-      return NextResponse.json(
-        { error: "That promo code has been fully redeemed." },
-        { status: 409 }
-      );
-    }
-    if (
-      promo.applies_to_ticket_type_id &&
-      !resolved.some((r) => r.ticketType.id === promo.applies_to_ticket_type_id)
-    ) {
-      await rollbackReservations();
-      return NextResponse.json(
-        {
-          error: "That promo code doesn't apply to any of the tiers in your order.",
-        },
-        { status: 409 }
-      );
-    }
-    if (promo.kind === "percent") {
-      discountCents = Math.round(
-        (subtotalCents * (promo.percent_off ?? 0)) / 100
-      );
-    } else if (promo.kind === "fixed_amount") {
-      discountCents = Math.min(subtotalCents, promo.amount_off_cents ?? 0);
-    } else if (promo.kind === "comp") {
-      discountCents = subtotalCents;
-    }
-    promoCodeId = promo.id;
-  }
+  const discountCents = computePromoDiscount(
+    promoTerms,
+    resolved.map((r) => ({
+      ticketTypeId: r.ticketType.id,
+      qty: r.qty,
+      perTicketCents: r.perTicketCents,
+    }))
+  );
 
   // ── Totals ───────────────────────────────────────────────────
   const donationCents = Math.max(
@@ -569,6 +586,10 @@ export async function POST(
       donation_cents: donationCents,
       total_cents: totalCents,
       promo_code_id: promoCodeId,
+      // The code as stored (canonical casing), plus what it waived per
+      // tier — drained onto each ticket at fulfilment (migration 269).
+      promo_code: promoTerms?.code ?? null,
+      waived_steps: waivedSteps as unknown as Json,
       lines: resolved.map((r) => ({
         ticket_type_id: r.ticketType.id,
         qty: r.qty,
@@ -613,7 +634,9 @@ export async function POST(
           cancelled_at: new Date().toISOString(),
         })
         .eq("id", order.id);
-      await rollbackReservations();
+      // The order exists now, so release through it: recorded once, and
+      // the sweep won't give the same seats back a second time.
+      await releaseTicketHolds(supabase, { orderId: order.id });
       return NextResponse.json(
         {
           error: "That promo code was just fully redeemed by another buyer.",
@@ -652,21 +675,22 @@ export async function POST(
   // ── Pay later: raise + email the Xero invoice ───────────────
   // The seats stay held; tickets are issued when Xero shows it paid
   // (webhook / daily sync → the same settle path). If Xero can't make the
-  // invoice, cancel the order and free the seats so the buyer can retry
-  // or pay by card.
+  // invoice, that's our setup, not the buyer: the order is held (seats kept,
+  // "your invoice is on its way"), staff are alerted, and it's retried —
+  // never cancelled under them (FF Global, Oct 2026).
   if (payLater) {
     const invoiced = await invoicePayLaterOrder(supabase, order.id);
     if (!invoiced.ok) {
       console.error("[checkout] pay-later invoice failed for order", order.id, invoiced.error);
-      await supabase
-        .from("orders")
-        .update({ status: "cancelled", cancelled_at: new Date().toISOString(), invoice_error: invoiced.error })
-        .eq("id", order.id);
-      await rollbackReservations();
-      return NextResponse.json(
-        { error: "We couldn't create your invoice just now. Please try again, or pay by card." },
-        { status: 502 }
-      );
+      await holdPayLaterOrder(supabase, order.id, invoiced.error);
+      await alertInvoiceFailure({
+        eventId,
+        eventTitle: event.title,
+        buyerName: `${firstName} ${lastName}`.trim() || emailRaw,
+        buyerEmail: emailRaw,
+        country: invoiceCountry || null,
+        error: invoiced.error,
+      });
     }
     return NextResponse.json({ redirectUrl: thanksUrl });
   }
@@ -691,7 +715,8 @@ export async function POST(
     });
   } catch (e) {
     // Provider misconfigured (env missing) or similar. The order is
-    // still pending; expires_at will sweep its inventory.
+    // still pending; once expires_at passes, release_ticket_holds gives
+    // its seats back (migration 270).
     return NextResponse.json(
       {
         error:

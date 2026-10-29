@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-async function requireSuperAdmin() {
+async function requireAdmin() {
   const supabase = await createClient();
   const {
     data: { user: authUser },
@@ -16,7 +16,7 @@ async function requireSuperAdmin() {
     .from("user_roles")
     .select("roles!inner(name)")
     .eq("user_id", authUser.id)
-    .eq("roles.name", "super_admin")
+    .in("roles.name", ["super_admin", "admin"])
     .limit(1);
 
   if (!superCheck || superCheck.length === 0) {
@@ -34,7 +34,7 @@ function parseType(value: string | null): SignupType | null {
 }
 
 export async function GET(request: Request) {
-  const auth = await requireSuperAdmin();
+  const auth = await requireAdmin();
   if ("error" in auth) return auth.error;
 
   const type = parseType(new URL(request.url).searchParams.get("type"));
@@ -65,7 +65,7 @@ export async function GET(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const auth = await requireSuperAdmin();
+  const auth = await requireAdmin();
   if ("error" in auth) return auth.error;
 
   const body = await request.json().catch(() => ({}));

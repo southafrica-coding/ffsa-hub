@@ -457,11 +457,15 @@ export async function getBookingAccess(
     };
   }
 
-  const { data: permRows } = await supabase
-    .from("user_permissions")
-    .select("permissions!inner(key,module)")
-    .eq("user_id", userId)
-    .eq("permissions.module", "bookings");
+  // Direct grants and role-bundle grants are independent — read them together.
+  const [{ data: permRows }, roleDerived] = await Promise.all([
+    supabase
+      .from("user_permissions")
+      .select("permissions!inner(key,module)")
+      .eq("user_id", userId)
+      .eq("permissions.module", "bookings"),
+    getRoleDerivedPermissionRows(supabase, userId),
+  ]);
 
   const keys = new Set<string>();
   for (const row of permRows ?? []) {
@@ -474,7 +478,7 @@ export async function getBookingAccess(
   // Also honor permissions granted via an assigned role's bundle — e.g. the
   // self_service floor grants bookings.view to every user. Mirrors RLS's
   // role-aware has_permission so UI gating matches actual access.
-  for (const perm of await getRoleDerivedPermissionRows(supabase, userId)) {
+  for (const perm of roleDerived) {
     if (perm.module === "bookings") keys.add(perm.key);
   }
 

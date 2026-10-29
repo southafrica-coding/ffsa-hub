@@ -166,25 +166,76 @@ export async function hasAcceptedCurrent(
   return (data?.length ?? 0) > 0;
 }
 
+// The user's most recent acceptance of one exact agreement version, or null.
+// Used to make POST /api/consent idempotent: a retry after a dropped
+// response must not stack up duplicate signatures.
+export async function getUserAcceptance(
+  supabase: Client,
+  userId: string,
+  version: string
+) {
+  return supabase
+    .from("consent_records")
+    .select("id, accepted_at")
+    .eq("user_id", userId)
+    .eq("agreement_version", version)
+    .order("accepted_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+}
+
 export type OutstandingConsent = { kind: ConsentKind; agreement: ConsentAgreement };
 
-// The agreements this user must still accept — the REQUIRED_CONSENTS for their
-// audience whose current version they haven't accepted. Skips kinds with no
-// published row (never lock out). `isStaff` gates the staff-only policies.
+export type RequiredConsentStatus = OutstandingConsent & {
+  accepted: boolean;
+  accepted_at: string | null;
+};
+
+// Every policy this user must sign, with whether they already have — the
+// REQUIRED_CONSENTS for their audience. Skips kinds with no published row
+// (never lock out). `isStaff` gates the staff-only policies. Fail-open on a
+// read error, like hasAcceptedCurrent.
+export async function getRequiredConsentStatus(
+  supabase: Client,
+  userId: string,
+  isStaff: boolean
+): Promise<RequiredConsentStatus[]> {
+  const applicable = REQUIRED_CONSENTS.filter(
+    (r) => r.audience === "all" || (r.audience === "staff" && isStaff)
+  );
+  // Kinds are independent, so check them side by side (one agreement read
+  // and one acceptance read each). Order follows REQUIRED_CONSENTS.
+  const checks = await Promise.all(
+    applicable.map(async ({ kind }): Promise<RequiredConsentStatus | null> => {
+      const { data: agreement, error: agErr } = await getCurrentConsentAgreement(
+        supabase,
+        kind
+      );
+      if (agErr || !agreement) return null; // nothing published for this kind yet
+      const { data, error } = await getUserAcceptance(
+        supabase,
+        userId,
+        agreement.version
+      );
+      return {
+        kind,
+        agreement,
+        accepted: !!error || !!data,
+        accepted_at: data?.accepted_at ?? null,
+      };
+    })
+  );
+  return checks.filter((c): c is RequiredConsentStatus => c !== null);
+}
+
+// The agreements this user must still accept.
 export async function getOutstandingConsents(
   supabase: Client,
   userId: string,
   isStaff: boolean
 ): Promise<OutstandingConsent[]> {
-  const applicable = REQUIRED_CONSENTS.filter(
-    (r) => r.audience === "all" || (r.audience === "staff" && isStaff)
-  );
-  const outstanding: OutstandingConsent[] = [];
-  for (const { kind } of applicable) {
-    const { data: agreement } = await getCurrentConsentAgreement(supabase, kind);
-    if (!agreement) continue; // nothing published for this kind yet
-    const accepted = await hasAcceptedCurrent(supabase, userId, kind);
-    if (!accepted) outstanding.push({ kind, agreement });
-  }
-  return outstanding;
+  const status = await getRequiredConsentStatus(supabase, userId, isStaff);
+  return status
+    .filter((s) => !s.accepted)
+    .map(({ kind, agreement }) => ({ kind, agreement }));
 }

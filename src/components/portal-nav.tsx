@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils/cn";
 import { LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { PORTAL_TABS } from "@/config/modules";
+import { getVisiblePortalTabs } from "@/config/modules";
 
 export function PortalNav() {
   const pathname = usePathname();
@@ -41,7 +41,7 @@ export function PortalNav() {
         </Link>
 
         <nav className="flex items-center gap-1">
-          {PORTAL_TABS.map((tab) => {
+          {getVisiblePortalTabs().map((tab) => {
             const isActive = pathname === tab.href;
             return (
               <Link

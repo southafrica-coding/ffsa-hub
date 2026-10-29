@@ -162,5 +162,11 @@ export async function listStaffForSearch(
     return { data: [...seen.values()], error: null };
   }
 
-  return supabase.from("users").select(CARD_USER_FIELDS).order("first_name", { ascending: true });
+  // Active accounts only — a deactivated person is off every roster (266)
+  // and shouldn't turn up when searching for staff.
+  return supabase
+    .from("users")
+    .select(CARD_USER_FIELDS)
+    .eq("is_active", true)
+    .order("first_name", { ascending: true });
 }

@@ -202,7 +202,8 @@ async function getValidAccessToken(
 async function xeroGet(
   accessToken: string,
   tenantId: string,
-  endpoint: string
+  endpoint: string,
+  options: { timeoutMs?: number } = {}
 ) {
   const res = await fetch(`${XERO_API}/${endpoint}`, {
     headers: {
@@ -210,6 +211,7 @@ async function xeroGet(
       "xero-tenant-id": tenantId,
       Accept: "application/json",
     },
+    signal: options.timeoutMs ? AbortSignal.timeout(options.timeoutMs) : undefined,
   });
   if (!res.ok) {
     const text = await res.text();
@@ -928,6 +930,8 @@ export async function voidInvoice(
  * This verifies: obtain a valid access token (refreshing if needed), then make
  * one cheap real call. Anything less is a guess.
  */
+const XERO_STATUS_TIMEOUT_MS = 8_000;
+
 async function probeRegion(supabase: Client, region: XeroRegion) {
   const tokens = await getStoredTokens(supabase, region);
   if (!tokens) {
@@ -952,8 +956,12 @@ async function probeRegion(supabase: Client, region: XeroRegion) {
   }
 
   try {
-    // Smallest call that proves the token is accepted for this tenant.
-    await xeroGet(auth.accessToken, auth.tenantId, "Organisation");
+    // Smallest call that proves the token is accepted for this tenant. It is a
+    // read with nothing to lose, so it gets a deadline: a slow Xero should
+    // show as "could not be reached", not hang the Finance page's status card.
+    await xeroGet(auth.accessToken, auth.tenantId, "Organisation", {
+      timeoutMs: XERO_STATUS_TIMEOUT_MS,
+    });
     return { ...base, connected: true as const, live: true as const };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

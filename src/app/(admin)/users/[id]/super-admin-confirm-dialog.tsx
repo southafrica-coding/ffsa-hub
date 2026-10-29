@@ -20,8 +20,9 @@ import {
 // General Admin is the same reach minus the Records Library, which is the
 // distinction most of these decisions actually turn on.
 //
-// General Admin has no dialog by design: it is the ordinary choice of the two,
-// and it is already reversible from the same panel.
+// General Admin gets the plainer shared ConfirmAccessDialog (see
+// permission-manager.tsx): every access change asks first, but only this one
+// needs the Records Library explanation.
 
 export function SuperAdminConfirmDialog({
   userId,

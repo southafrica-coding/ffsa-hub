@@ -11,20 +11,22 @@ const STAFF_ROLES = ["super_admin", "admin", "prayer_room_admin"];
 
 /** Coordinator/staff: a managing role OR the prayer_room.manage permission. */
 export async function isPrayerRoomStaff(supabase: Client, userId: string): Promise<boolean> {
-  const { data: roles } = await supabase
-    .from("user_roles")
-    .select("roles!inner(name)")
-    .eq("user_id", userId)
-    .in("roles.name", STAFF_ROLES)
-    .limit(1);
+  // Either one is enough, and neither depends on the other — ask together.
+  const [{ data: roles }, { data: perms }] = await Promise.all([
+    supabase
+      .from("user_roles")
+      .select("roles!inner(name)")
+      .eq("user_id", userId)
+      .in("roles.name", STAFF_ROLES)
+      .limit(1),
+    supabase
+      .from("user_permissions")
+      .select("permissions!inner(key)")
+      .eq("user_id", userId)
+      .eq("permissions.key", "prayer_room.manage")
+      .limit(1),
+  ]);
   if (roles && roles.length > 0) return true;
-
-  const { data: perms } = await supabase
-    .from("user_permissions")
-    .select("permissions!inner(key)")
-    .eq("user_id", userId)
-    .eq("permissions.key", "prayer_room.manage")
-    .limit(1);
   return !!(perms && perms.length > 0);
 }
 

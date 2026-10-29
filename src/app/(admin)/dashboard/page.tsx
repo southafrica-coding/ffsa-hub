@@ -61,6 +61,7 @@ export default async function DashboardPage() {
     upcomingEvents,
     notifications,
     pendingApprovals,
+    slackLink,
   ] = await Promise.all([
     on("stat-cards")
       ? supabase.from("contacts").select("*", { count: "exact", head: true }).eq("status", "active")
@@ -95,6 +96,11 @@ export default async function DashboardPage() {
     // Drives the page's single yellow band. Best-effort: a failure here must
     // never take the dashboard down, it just means no band.
     getPendingApprovalCount(supabase).catch(() => 0),
+    // Nudge anyone who can't be DM'd yet. Best-effort — a failed read
+    // just means no nudge, never a broken dashboard.
+    authUser
+      ? getSlackLink(createAdminClient(), authUser.id).catch(() => null)
+      : null,
   ]);
 
   // Every widget the layout may reference. Client widgets that fetch their own
@@ -138,12 +144,6 @@ export default async function DashboardPage() {
     key,
     fullWidth: getWidget(key)?.fullWidth ?? true,
   }));
-
-  // Nudge anyone who can't be DM'd yet. Best-effort — a failed read
-  // just means no nudge, never a broken dashboard.
-  const slackLink = authUser
-    ? await getSlackLink(createAdminClient(), authUser.id).catch(() => null)
-    : null;
 
   return (
     <div className="ffsa-screen">

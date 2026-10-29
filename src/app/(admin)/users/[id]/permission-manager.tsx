@@ -9,6 +9,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { Permission, UserPermission, ScopeOption, PermissionsByModule } from "@/services/permissions";
 import { SuperAdminConfirmDialog } from "./super-admin-confirm-dialog";
+import { SUPER_ADMIN_LOCKED_NOTE } from "@/components/super-admin-badge";
+import { ConfirmAccessDialog } from "@/components/confirm-access-dialog";
+import {
+  diffGrants,
+  possessive,
+  postAccessChange,
+  type GrantRef,
+} from "@/lib/users/access-change";
 
 // Module display labels matching modules.ts ids
 const MODULE_LABELS: Record<string, string> = {
@@ -385,6 +393,7 @@ function TierPanel({
   busy,
   actionLabel,
   onAction,
+  lockedNote,
 }: {
   heading: string;
   active: boolean;
@@ -393,6 +402,8 @@ function TierPanel({
   busy: boolean;
   actionLabel: string;
   onAction: () => void;
+  /** Why the caller can't use the action (e.g. the target is a Super Admin). */
+  lockedNote?: string;
 }) {
   return (
     <div
@@ -422,10 +433,15 @@ function TierPanel({
               You cannot change your own admin status.
             </p>
           )}
+          {!isSelf && lockedNote && (
+            <p className="text-xs mt-2" style={{ color: "#7C786C" }}>
+              {lockedNote}
+            </p>
+          )}
         </div>
         <Button
           onClick={onAction}
-          disabled={busy || isSelf}
+          disabled={busy || isSelf || !!lockedNote}
           variant={active ? "outline" : "default"}
           style={
             active
@@ -448,6 +464,9 @@ export function PermissionManager({
   userPermissions,
   scopeOptions,
   isSuperAdmin = true,
+  // Only a real super_admin may grant Super Admin or Records Library access;
+  // a General Admin gets the full editor minus those two.
+  canGrantSuperAdmin = true,
   // When the caller is not a super_admin, this controls what they can edit:
   //   null  → can manage assignable-contact for every program (global schools.manage)
   //   array → can manage only these specific program ids
@@ -455,6 +474,9 @@ export function PermissionManager({
   isTargetSuperAdmin = false,
   isTargetGeneralAdmin = false,
   isSelf = false,
+  // The target is a Super Admin and the caller is not: admin tiers and the
+  // job title are read-only (the API refuses them too).
+  targetLocked = false,
   personName = "This person",
 }: {
   userId: string;
@@ -464,10 +486,12 @@ export function PermissionManager({
   userPermissions: UserPermission[];
   scopeOptions: ScopeOption[];
   isSuperAdmin?: boolean;
+  canGrantSuperAdmin?: boolean;
   managedProgramIds?: string[] | null;
   isTargetSuperAdmin?: boolean;
   isTargetGeneralAdmin?: boolean;
   isSelf?: boolean;
+  targetLocked?: boolean;
   personName?: string;
 }) {
   const router = useRouter();
@@ -482,11 +506,18 @@ export function PermissionManager({
     "grant" | "remove" | null
   >(null);
 
-  // General Admin toggles straight from the panel. Super Admin routes through
-  // SuperAdminConfirmDialog instead — see the tier rows below.
+  // General Admin asks first (generalAdminPrompt → ConfirmAccessDialog). Super
+  // Admin routes through SuperAdminConfirmDialog instead — see the tier rows below.
+  const [generalAdminPrompt, setGeneralAdminPrompt] = useState(false);
+  const possessiveName = possessive(personName);
+
   async function handleToggleTier(roleName: string) {
     if (isSelf) {
       toast.error("You cannot change your own admin status.");
+      return;
+    }
+    if (targetLocked) {
+      toast.error(SUPER_ADMIN_LOCKED_NOTE);
       return;
     }
 
@@ -508,12 +539,17 @@ export function PermissionManager({
         return;
       }
 
-      toast.success(grant ? "General Admin granted" : "General Admin removed");
+      toast.success(
+        grant
+          ? `${personName} is now a General Admin`
+          : `General Admin removed from ${personName}`
+      );
       startTransition(() => router.refresh());
     } catch {
       toast.error("Could not update this role.");
     } finally {
       setTogglingTier(null);
+      setGeneralAdminPrompt(false);
     }
   }
 
@@ -521,7 +557,14 @@ export function PermissionManager({
   // `schools.assignable_as_contact` permission, scoped to programs they
   // themselves have `schools.manage` on.
   const effectivePermissionsByModule: PermissionsByModule = isSuperAdmin
-    ? permissionsByModule
+    ? canGrantSuperAdmin
+      ? permissionsByModule
+      : Object.fromEntries(
+          Object.entries(permissionsByModule).map(([mod, perms]) => [
+            mod,
+            perms.filter((p) => p.key !== "records_library.manage"),
+          ])
+        )
     : {
         schools: (permissionsByModule.schools ?? []).filter(
           (p) => p.key === "schools.assignable_as_contact"
@@ -543,6 +586,21 @@ export function PermissionManager({
     )
   );
   const [granted, setGranted] = useState<Set<GrantedKey>>(initialGranted);
+
+  // Re-sync the ticks whenever the saved grants change (a router.refresh after
+  // a save), so the grid always ends up showing what the server holds — the
+  // whole point after a partly-failed save.
+  const savedSignature = [...initialGranted].sort().join("|");
+  const [syncedSignature, setSyncedSignature] = useState(savedSignature);
+  if (syncedSignature !== savedSignature) {
+    setSyncedSignature(savedSignature);
+    setGranted(initialGranted);
+  }
+
+  // The save waits on a confirmation listing exactly what will change.
+  const [reviewing, setReviewing] = useState<ReturnType<typeof collectChanges> | null>(
+    null
+  );
 
   // Build a map of key → permission_id for lookup
   const permIdByKey = new Map<GrantedKey, string>();
@@ -576,96 +634,114 @@ export function PermissionManager({
     });
   }
 
-  async function handleSave() {
+  // Labels for the confirmation list: "Finance · View budgets (DTS 2026)".
+  const permLabelById = new Map<string, string>();
+  for (const [mod, perms] of Object.entries(permissionsByModule)) {
+    for (const p of perms) {
+      permLabelById.set(p.id, `${MODULE_LABELS[mod] ?? mod} · ${p.display_name}`);
+    }
+  }
+  const scopeLabelById = new Map(scopeOptions.map((s) => [s.id, s.label]));
+  function grantLabel(g: GrantRef) {
+    const base = permLabelById.get(g.permission_id) ?? "Permission";
+    if (!g.scope_id) return `${base} (everywhere)`;
+    return `${base} (${scopeLabelById.get(g.scope_id) ?? g.scope_type ?? "scoped"})`;
+  }
+
+  function collectChanges() {
+    // Collect all possible keys we *could* have toggled. Using the
+    // filtered (effective) maps means non-super-admin grants never emit
+    // changes to permissions/scopes they shouldn't be touching.
+    const allKeys = new Map<GrantedKey, GrantRef>();
+    for (const perms of Object.values(effectivePermissionsByModule)) {
+      for (const p of perms) {
+        if (isSuperAdmin) {
+          allKeys.set(grantedKey(p.id, null, null), { permission_id: p.id, scope_type: null, scope_id: null });
+        }
+        for (const s of effectiveScopeOptions) {
+          allKeys.set(grantedKey(p.id, s.scope_type, s.id), {
+            permission_id: p.id,
+            scope_type: s.scope_type,
+            scope_id: s.id,
+          });
+        }
+      }
+    }
+    const { toGrant, toRevoke } = diffGrants(allKeys, initialGranted, granted);
+
+    // Job-title / approve flow is admin-tier only, and never on a Super
+    // Admin unless the caller is one.
+    const canEditAccount = isSuperAdmin && !targetLocked;
+    const approve = canEditAccount && status === "pending_approval";
+    const retitle = canEditAccount && !approve && jobTitle !== currentJobTitle;
+    return { toGrant, toRevoke, approve, retitle };
+  }
+
+  function handleSave() {
+    const changes = collectChanges();
+    const count =
+      changes.toGrant.length +
+      changes.toRevoke.length +
+      (changes.approve ? 1 : 0) +
+      (changes.retitle ? 1 : 0);
+    if (count === 0) {
+      toast("Nothing to save — no changes yet.");
+      return;
+    }
+    setReviewing(changes);
+  }
+
+  async function commitSave() {
+    if (!reviewing) return;
+    const { toGrant, toRevoke, approve, retitle } = reviewing;
     setSaving(true);
 
-    try {
-      // Diff: what was added and what was removed
-      const toGrant: Array<{ permission_id: string; scope_type: string | null; scope_id: string | null }> = [];
-      const toRevoke: Array<{ permission_id: string; scope_type: string | null; scope_id: string | null }> = [];
-
-      // Collect all possible keys we *could* have toggled. Using the
-      // filtered (effective) maps means non-super-admin grants never emit
-      // changes to permissions/scopes they shouldn't be touching.
-      const allKeys = new Map<GrantedKey, { permission_id: string; scope_type: string | null; scope_id: string | null }>();
-      for (const perms of Object.values(effectivePermissionsByModule)) {
-        for (const p of perms) {
-          if (isSuperAdmin) {
-            allKeys.set(grantedKey(p.id, null, null), { permission_id: p.id, scope_type: null, scope_id: null });
-          }
-          for (const s of effectiveScopeOptions) {
-            allKeys.set(grantedKey(p.id, s.scope_type, s.id), {
-              permission_id: p.id,
-              scope_type: s.scope_type,
-              scope_id: s.id,
-            });
-          }
-        }
-      }
-
-      for (const [key, meta] of allKeys) {
-        const wasGranted = initialGranted.has(key);
-        const isGranted = granted.has(key);
-        if (isGranted && !wasGranted) toGrant.push(meta);
-        if (!isGranted && wasGranted) toRevoke.push(meta);
-      }
-
-      // Execute grants
-      await Promise.all(
-        toGrant.map((g) =>
-          fetch("/api/admin/grant-permission", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              user_id: userId,
-              permission_id: g.permission_id,
-              scope_type: g.scope_type,
-              scope_id: g.scope_id,
-            }),
-          })
-        )
+    const grantBody = (g: GrantRef) => ({
+      user_id: userId,
+      permission_id: g.permission_id,
+      scope_type: g.scope_type,
+      scope_id: g.scope_id,
+    });
+    const results = await Promise.all([
+      ...toGrant.map((g) =>
+        postAccessChange("/api/admin/grant-permission", grantBody(g), `Could not grant ${grantLabel(g)}`)
+      ),
+      ...toRevoke.map((r) =>
+        postAccessChange("/api/admin/revoke-permission", grantBody(r), `Could not remove ${grantLabel(r)}`)
+      ),
+    ]);
+    if (approve || retitle) {
+      const res = await postAccessChange(
+        "/api/admin/approve-user",
+        { user_id: userId, job_title: jobTitle },
+        approve ? "Could not approve this account" : "Could not update the job title"
       );
-
-      // Execute revokes
-      await Promise.all(
-        toRevoke.map((r) =>
-          fetch("/api/admin/revoke-permission", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              user_id: userId,
-              permission_id: r.permission_id,
-              scope_type: r.scope_type,
-              scope_id: r.scope_id,
-            }),
-          })
-        )
-      );
-
-      // Job-title / approve flow is super-admin-only.
-      if (isSuperAdmin) {
-        if (status === "pending_approval") {
-          const res = await fetch("/api/admin/approve-user", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ user_id: userId, job_title: jobTitle }),
-          });
-          if (res.ok) setStatus("active");
-        } else if (jobTitle !== currentJobTitle) {
-          await fetch("/api/admin/approve-user", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ user_id: userId, job_title: jobTitle }),
-          });
-        }
-      }
-
-      startTransition(() => router.refresh());
-    } catch {
-      alert("Failed to save. Please try again.");
-    } finally {
-      setSaving(false);
+      if (res.ok && approve) setStatus("active");
+      if (!res.ok) setJobTitle(currentJobTitle);
+      results.push(res);
     }
+
+    setSaving(false);
+    setReviewing(null);
+
+    const failures = results.filter(
+      (r): r is { ok: false; error: string } => !r.ok
+    );
+    if (failures.length > 0) {
+      // Put the grid back to what was saved; the refresh below brings in
+      // anything that did go through, and the re-sync above picks it up.
+      setGranted(initialGranted);
+      toast.error(
+        failures.length === results.length
+          ? failures[0].error
+          : `${failures.length} of ${results.length} changes were not saved: ${failures[0].error}`
+      );
+    } else {
+      toast.success(
+        approve ? `${personName} approved and activated` : `Access updated for ${personName}`
+      );
+    }
+    startTransition(() => router.refresh());
   }
 
   // Preferred order for the modules we lay out deliberately; anything else in
@@ -691,10 +767,11 @@ export function PermissionManager({
 
   return (
     <div className="space-y-6">
-      {/* The two admin tiers, most-restricted first — super_admin only.
-          They differ in exactly one thing (the Records Library), so they are
-          shown together and say so. Granting either is super-admin-only in the
-          API too: SUPER_ADMIN_ONLY_ROLES in lib/auth/check-role-grant.ts. */}
+      {/* The two admin tiers, most-restricted first. They differ in exactly
+          one thing (the Records Library), so they are shown together and say
+          so. General Admin: super_admin or admin. Super Admin: super_admin
+          only (canGrantSuperAdmin) — the API enforces both, see
+          SUPER_ADMIN_ONLY_ROLES / ADMIN_TIER_ROLES in lib/auth/check-role-grant.ts. */}
       {isSuperAdmin && (
         <>
           <TierPanel
@@ -710,9 +787,49 @@ export function PermissionManager({
             actionLabel={
               isTargetGeneralAdmin ? "Remove General Admin" : "Make General Admin"
             }
-            onAction={() => handleToggleTier("admin")}
+            onAction={() => setGeneralAdminPrompt(true)}
+            lockedNote={targetLocked ? SUPER_ADMIN_LOCKED_NOTE : undefined}
           />
 
+          <ConfirmAccessDialog
+            open={generalAdminPrompt}
+            title={
+              isTargetGeneralAdmin
+                ? `Remove General Admin from ${personName}?`
+                : `Make ${personName} a General Admin?`
+            }
+            confirmLabel={
+              isTargetGeneralAdmin ? "Remove General Admin" : "Make General Admin"
+            }
+            destructive={isTargetGeneralAdmin}
+            busy={togglingTier === "admin"}
+            onConfirm={() => handleToggleTier("admin")}
+            onCancel={() => setGeneralAdminPrompt(false)}
+          >
+            <p>
+              {isTargetGeneralAdmin
+                ? `${personName} will lose admin access and fall back to their other titles and permissions.`
+                : `${personName} will be able to reach every module and record except the Records Library, and manage other people's access.`}
+            </p>
+          </ConfirmAccessDialog>
+
+          {/* A General Admin can't grant or remove Super Admin, but must still
+              see that this person holds it. */}
+          {!canGrantSuperAdmin && isTargetSuperAdmin && (
+            <TierPanel
+              heading="Super Admin — Active"
+              active
+              description="Bypasses all roles and permission checks — unrestricted access to every module and every record, the Records Library included."
+              isSelf={isSelf}
+              busy={false}
+              actionLabel="Remove Super Admin"
+              onAction={() => {}}
+              lockedNote={SUPER_ADMIN_LOCKED_NOTE}
+            />
+          )}
+
+          {canGrantSuperAdmin && (
+          <>
           <TierPanel
             heading={
               isTargetSuperAdmin
@@ -738,10 +855,12 @@ export function PermissionManager({
             open={superAdminPrompt !== null}
             onOpenChange={(o) => !o && setSuperAdminPrompt(null)}
           />
+          </>
+          )}
         </>
       )}
 
-      {/* Job title + approve section — super_admin only */}
+      {/* Job title + approve section — super_admin and admin */}
       {isSuperAdmin && (
         <div
           style={{
@@ -761,10 +880,16 @@ export function PermissionManager({
               <Input
                 id="job-title"
                 value={jobTitle}
+                disabled={targetLocked}
                 onChange={(e) => setJobTitle(e.target.value)}
                 placeholder="e.g. DTS Program Leader"
                 className="mt-1"
               />
+              {targetLocked && (
+                <p className="text-xs mt-2" style={{ color: "#7C786C" }}>
+                  {SUPER_ADMIN_LOCKED_NOTE}
+                </p>
+              )}
             </div>
 
             <div className="flex items-center gap-3">
@@ -809,7 +934,7 @@ export function PermissionManager({
               >
                 {saving
                   ? "Saving…"
-                  : status === "pending_approval"
+                  : status === "pending_approval" && !targetLocked
                   ? "Approve & Activate"
                   : "Save Changes"}
               </Button>
@@ -885,6 +1010,40 @@ export function PermissionManager({
           );
         })}
       </div>
+
+      {reviewing && (
+        <ConfirmAccessDialog
+          open
+          title={
+            reviewing.approve
+              ? `Approve and activate ${possessiveName} account?`
+              : `Change ${possessiveName} access?`
+          }
+          confirmLabel={reviewing.approve ? "Approve & save" : "Save changes"}
+          busy={saving}
+          onConfirm={commitSave}
+          onCancel={() => setReviewing(null)}
+        >
+          <ul className="max-h-[45vh] space-y-1 overflow-y-auto">
+            {reviewing.approve && <li>✓ Approve and activate their account</li>}
+            {reviewing.toGrant.map((g) => (
+              <li key={`+${grantedKey(g.permission_id, g.scope_type, g.scope_id)}`}>
+                <strong>Grant</strong> {grantLabel(g)}
+              </li>
+            ))}
+            {reviewing.toRevoke.map((r) => (
+              <li key={`-${grantedKey(r.permission_id, r.scope_type, r.scope_id)}`}>
+                <strong>Remove</strong> {grantLabel(r)}
+              </li>
+            ))}
+            {(reviewing.approve || reviewing.retitle) && jobTitle !== currentJobTitle && (
+              <li>
+                Job title: {currentJobTitle || "—"} → {jobTitle || "—"}
+              </li>
+            )}
+          </ul>
+        </ConfirmAccessDialog>
+      )}
     </div>
   );
 }

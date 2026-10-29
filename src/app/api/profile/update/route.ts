@@ -4,6 +4,7 @@ import { isExpiryDatePast } from "@/lib/users/profile-fields";
 import { normalizeInsuranceWrite } from "@/lib/users/insurance-write";
 import { getMinistryBySlug } from "@/services/ministries";
 import { setHouseholdHasChildren } from "@/services/household";
+import { normalizeMaritalStatus } from "@/lib/users/marital-status";
 
 export async function PUT(request: Request) {
   const supabase = await createClient();
@@ -51,6 +52,21 @@ export async function PUT(request: Request) {
 
   if (Object.keys(updateData).length === 0 && !hasChildrenGiven) {
     return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
+  }
+
+  // Marital status drives which family questions apply, so only the listed
+  // values are accepted. Changing it never deletes family records an
+  // existing member already has — they can remove a spouse themselves.
+  if ("marital_status" in updateData) {
+    const raw = updateData.marital_status;
+    const status = normalizeMaritalStatus(raw);
+    if (!status) {
+      return NextResponse.json(
+        { error: "Please choose a marital status from the list." },
+        { status: 400 }
+      );
+    }
+    updateData.marital_status = status;
   }
 
   // Health insurance must be valid and current — mirror the gate so the

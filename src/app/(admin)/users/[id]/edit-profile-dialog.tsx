@@ -16,6 +16,7 @@ import {
   DialogFooter,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { SUPER_ADMIN_LOCKED_NOTE } from "@/components/super-admin-badge";
 
 type EditableUser = {
   id: string;
@@ -92,11 +93,15 @@ export function EditProfileDialog({
   user,
   departmentOptions = [],
   departmentEditable = true,
+  lockAccountFields = false,
 }: {
   user: EditableUser;
   departmentOptions?: Option[];
   // Students & community members are department-less; hide the field for them.
   departmentEditable?: boolean;
+  // A General Admin editing a Super Admin: login email and job title are the
+  // super admin's own tier to change (the API refuses a change to either).
+  lockAccountFields?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -184,6 +189,7 @@ export function EditProfileDialog({
                       id={`edit-${row.key as string}`}
                       type={row.type ?? "text"}
                       value={form[row.key as string] ?? ""}
+                      disabled={lockAccountFields && row.key === "email"}
                       onChange={(e) =>
                         set(row.key as string, e.target.value)
                       }
@@ -200,6 +206,7 @@ export function EditProfileDialog({
               id="edit-job_title"
               type="text"
               value={form.job_title ?? ""}
+              disabled={lockAccountFields}
               onChange={(e) => set("job_title", e.target.value)}
               placeholder="Auto-generated from department & ministry role"
             />
@@ -208,6 +215,13 @@ export function EditProfileDialog({
               (e.g. “Media Ministry Leader”). Type a value to override it.
             </p>
           </div>
+
+          {lockAccountFields && (
+            <p className="text-xs text-muted-foreground">
+              {SUPER_ADMIN_LOCKED_NOTE} Their login email and job title are
+              locked.
+            </p>
+          )}
 
           {departmentEditable && (
           <div className="space-y-1.5">

@@ -1,4 +1,4 @@
-import { getRoleDerivedPermissionRows } from "@/services/permissions";
+import { getPermissionRowsForRoles } from "@/services/permissions";
 
 export interface SidebarAccess {
   /** Role names assigned to the user (e.g. "super_admin", "events_admin"). */
@@ -79,9 +79,11 @@ export async function getSidebarAccess(
   // 2) Load roles + permitted modules. If this fails for an authenticated user,
   //    flag it so the sidebar shows a refresh prompt, not a phantom empty menu.
   try {
+    // role_id rides along so the role-bundle lookup below can start straight
+    // away instead of re-reading user_roles.
     const roleRows = await readOrThrow<
-      Array<{ roles: { name: string } | { name: string }[] | null }>
-    >(() => supabase.from("user_roles").select("roles(name)").eq("user_id", userId));
+      Array<{ role_id?: string; roles: { name: string } | { name: string }[] | null }>
+    >(() => supabase.from("user_roles").select("role_id, roles(name)").eq("user_id", userId));
 
     result.userRoles = (roleRows ?? [])
       .map((r) => {
@@ -97,19 +99,29 @@ export async function getSidebarAccess(
     const isSuperAdmin = result.userRoles.includes("super_admin");
 
     if (!isSuperAdmin) {
-      const permRows = await readOrThrow<
-        Array<{
-          permissions:
-            | { module: string; key: string }
-            | { module: string; key: string }[]
-            | null;
-        }>
-      >(() =>
-        supabase
-          .from("user_permissions")
-          .select("permissions(module, key)")
-          .eq("user_id", userId)
-      );
+      // Direct grants and role-bundle grants are independent reads — fetch
+      // them together.
+      const roleIds = (roleRows ?? [])
+        .map((r) => r.role_id)
+        .filter((id): id is string => typeof id === "string");
+      const [permRows, roleDerived] = await Promise.all([
+        readOrThrow<
+          Array<{
+            permissions:
+              | { module: string; key: string }
+              | { module: string; key: string }[]
+              | null;
+          }>
+        >(() =>
+          supabase
+            .from("user_permissions")
+            .select("permissions(module, key)")
+            .eq("user_id", userId)
+        ),
+        // Best-effort, as before: a failed bundle read contributes nothing
+        // rather than flagging the whole menu.
+        getPermissionRowsForRoles(supabase, roleIds).catch(() => []),
+      ]);
 
       for (const row of permRows ?? []) {
         const perm = Array.isArray(row.permissions) ? row.permissions[0] : row.permissions;
@@ -117,17 +129,16 @@ export async function getSidebarAccess(
         // Users with schools.manage can delegate the assignable-contact
         // permission, so they need access to the Users page.
         if (perm?.key === "schools.manage") result.permittedModules.add("users");
-        // Rent a Vehicle lives under the Bookings hub — vehicle permissions
-        // must light up the single "Bookings" sidebar item.
-        if (perm?.module === "vehicles") result.permittedModules.add("bookings");
+        // Rent a Vehicle and Equipment hire live under the Bookings hub — their
+        // permissions must light up the single "Bookings" sidebar item.
+        if (perm?.module === "vehicles" || perm?.module === "equipment") result.permittedModules.add("bookings");
       }
 
       // Also count modules reachable through assigned roles' bundles.
-      // (This helper swallows its own errors and returns [] — best-effort.)
-      for (const perm of await getRoleDerivedPermissionRows(supabase, userId)) {
+      for (const perm of roleDerived) {
         result.permittedModules.add(perm.module);
         if (perm.key === "schools.manage") result.permittedModules.add("users");
-        if (perm.module === "vehicles") result.permittedModules.add("bookings");
+        if (perm.module === "vehicles" || perm.module === "equipment") result.permittedModules.add("bookings");
       }
     }
   } catch {

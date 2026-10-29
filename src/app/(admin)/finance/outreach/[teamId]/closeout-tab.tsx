@@ -53,11 +53,17 @@ export function CloseoutTab({
   expenses,
   fundReleases,
   closeout: initialCloseout,
+  canApprove = true,
+  readOnly = false,
 }: {
   teamId: string;
   expenses: Expense[];
   fundReleases: FundRelease[];
   closeout: Closeout | null;
+  /** Approving or rejecting a >2% variance is finance staff's call (migration 260). */
+  canApprove?: boolean;
+  /** Viewers who can't change this team (migration 273) only read the closeout. */
+  readOnly?: boolean;
 }) {
   const router = useRouter();
   const [closeout, setCloseout] = useState<Closeout | null>(initialCloseout);
@@ -158,6 +164,13 @@ export function CloseoutTab({
   // ────────────────────────────────────────────────────────────
   // RENDER: No closeout yet — show form
   // ────────────────────────────────────────────────────────────
+  if (!closeout && readOnly) {
+    return (
+      <p className="border border-rule-strong p-4 text-sm text-muted-foreground">
+        This team hasn&apos;t closed out yet.
+      </p>
+    );
+  }
   if (!closeout) {
     return (
       <div className="space-y-6">
@@ -398,8 +411,15 @@ export function CloseoutTab({
         </div>
       )}
 
+      {isPending && !canApprove && (
+        <p className="border border-rule-strong p-4 text-sm text-muted-foreground">
+          Variance is {Number(closeout.variance_pct).toFixed(2)}% (above the 2% threshold), so finance
+          staff need to approve or reject this closeout.
+        </p>
+      )}
+
       {/* Pending: Admin actions */}
-      {isPending && (
+      {isPending && canApprove && (
         <div className="border border-rule-strong p-4 space-y-4">
           <h4 className="font-medium">Admin Decision</h4>
           <p className="text-sm text-muted-foreground">
@@ -435,7 +455,7 @@ export function CloseoutTab({
       )}
 
       {/* Rejected: Re-initiate option */}
-      {isRejected && (
+      {isRejected && !readOnly && (
         <div>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <Button

@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getEventBySlug } from "@/services/events";
-import { listTicketTypesByEvent } from "@/services/ticketing";
+import { listTicketTypesByEvent, releaseTicketHolds } from "@/services/ticketing";
 import { FfsaStorefront } from "./ffsa-storefront";
 import { TheSendStorefront } from "./the-send-storefront";
 import { CampsStorefront } from "./camps-storefront";
@@ -141,6 +141,10 @@ export default async function PublicEventPage({
     );
   }
 
+  // Give back seats held by abandoned checkouts first, so a dead hold
+  // never shows a tier as sold out (migration 270). Best-effort: the
+  // page still renders if it fails, and checkout sweeps again anyway.
+  await releaseTicketHolds(supabase, { eventId: event.id });
   const { data: ticketTypes } = await listTicketTypesByEvent(
     supabase,
     event.id,

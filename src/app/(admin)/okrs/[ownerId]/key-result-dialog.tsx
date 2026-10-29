@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
+import { Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 import type { OkrKeyResult } from "@/types/okrs";
 
 /**
@@ -52,6 +54,7 @@ export function KeyResultDialog({
   const [addedCount, setAddedCount] = useState(0);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const metricInvalid =
     tracked &&
@@ -118,17 +121,31 @@ export function KeyResultDialog({
     router.refresh();
   }
 
-  async function remove() {
-    if (!keyResult) return;
-    if (!confirm("Delete this key result and its check-in history? This cannot be undone.")) return;
+  async function remove(): Promise<boolean> {
+    if (!keyResult) return false;
     const res = await fetch(`/api/okrs/key-results/${keyResult.id}`, { method: "DELETE" });
     if (!res.ok) {
       toast.error((await res.json().catch(() => ({}))).error ?? "Could not delete that key result");
-      return;
+      return false;
     }
     toast.success("Key result deleted");
     onClose();
     router.refresh();
+    return true;
+  }
+
+  if (keyResult && confirmingDelete) {
+    return (
+      <ConfirmDeleteDialog
+        open
+        onOpenChange={(o) => !o && setConfirmingDelete(false)}
+        title="Delete this key result?"
+        itemName={[keyResult.label, keyResult.description].filter(Boolean).join(" — ")}
+        consequence="Its check-in history will be deleted with it. This can't be undone."
+        confirmLabel="Delete key result"
+        onConfirm={remove}
+      />
+    );
   }
 
   return (
@@ -242,8 +259,16 @@ export function KeyResultDialog({
 
           <div className="flex flex-wrap items-center justify-between gap-2">
             {keyResult ? (
-              <Button type="button" variant="outline" onClick={remove}>
-                Delete
+              // Left-hand end, away from Save, in danger styling — and it only
+              // opens a confirmation that names the key result.
+              <Button
+                type="button"
+                variant="outline"
+                className="border-destructive/40 text-destructive hover:bg-destructive hover:text-white"
+                onClick={() => setConfirmingDelete(true)}
+              >
+                <Trash2 className="mr-1.5 h-4 w-4" aria-hidden />
+                Delete key result
               </Button>
             ) : addedCount > 0 ? (
               <span className="font-mono text-[10px] tracking-[0.08em] text-[#7C786C]">

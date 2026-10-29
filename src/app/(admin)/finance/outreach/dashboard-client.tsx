@@ -21,6 +21,7 @@ import {
 import { ChevronDown, ChevronRight } from "lucide-react";
 import {
   Masthead,
+  MastheadAction,
   NeedsYou,
   SectionBar,
   StatusPill,
@@ -32,6 +33,7 @@ import { LEVEL_COLOUR } from "./cash-in-hand";
 import { MoneyKpi, barTone } from "../money-kpi";
 import { CreateTeamForm } from "./create-team-form";
 import { MovementsPanel } from "./movements-panel";
+import { TeamAdminActions } from "./team-admin-actions";
 import type {
   MoneyMovement,
   UnmatchedPayment,
@@ -53,11 +55,29 @@ type Team = {
   programs: { id: string; name: string; code: string };
 };
 
+type ArchivedTeam = {
+  id: string;
+  team_name: string;
+  archived_at: string;
+  program_code: string | null;
+  /** What a delete would destroy ("12 expenses"); empty = safe to delete. */
+  deleteBlockers: string[];
+};
+
 type Program = {
   id: string;
   name: string;
   code: string;
 };
+
+type OutreachGroup = {
+  id: string;
+  name: string;
+  category: string | null;
+};
+
+// Radix Select can't hold an empty value; this stands for "no group".
+const NO_GROUP = "__none__";
 
 type BudgetDetail = {
   category_id: string;
@@ -117,6 +137,13 @@ export function OutreachDashboardClient({
   aggregates,
   movements,
   unmatched,
+  isStaff,
+  canManage,
+  archivedTeams,
+  groups,
+  teamGroups,
+  teamAccess,
+  showGroupsLink,
 }: {
   teams: Team[];
   programs: Program[];
@@ -126,11 +153,27 @@ export function OutreachDashboardClient({
   // team filter is set would misread as "this money did not happen".
   movements: MoneyMovement[];
   unmatched: { count: number; rows: UnmatchedPayment[] };
+  /** Finance staff see every team; everyone else only the outreaches they lead. */
+  isStaff: boolean;
+  /** Outreach administrators: archive, unarchive and delete teams. */
+  canManage: boolean;
+  /** Only loaded for outreach administrators. */
+  archivedTeams: ArchivedTeam[];
+  /** Outreach groups this viewer can see (migration 273). */
+  groups: OutreachGroup[];
+  /** team id → the ids of the visible groups it is in. */
+  teamGroups: Record<string, string[]>;
+  /** team id → whether this viewer may change it, and why ("Group manager", "View only"). */
+  teamAccess: Record<string, { canEdit: boolean; label: string | null }>;
+  /** Staff and group managers get the Groups screen. */
+  showGroupsLink: boolean;
 }) {
   const router = useRouter();
+  const [groupFilter, setGroupFilter] = useState("all");
   const [schoolFilter, setSchoolFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [expandedTeams, setExpandedTeams] = useState<Set<string>>(new Set());
+  const [showArchived, setShowArchived] = useState(false);
 
   // Filter teams
   const teamCash = (teamId: string) =>
@@ -143,6 +186,11 @@ export function OutreachDashboardClient({
 
   const filteredTeams = useMemo(() => {
     let result = teams;
+    if (groupFilter === NO_GROUP) {
+      result = result.filter((t) => !(teamGroups[t.id] ?? []).length);
+    } else if (groupFilter !== "all") {
+      result = result.filter((t) => (teamGroups[t.id] ?? []).includes(groupFilter));
+    }
     if (schoolFilter !== "all") {
       result = result.filter((t) => t.programs?.id === schoolFilter);
     }
@@ -162,7 +210,18 @@ export function OutreachDashboardClient({
       return ra - rb || pa - pb;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [teams, schoolFilter, statusFilter, aggregates]);
+  }, [teams, groupFilter, schoolFilter, statusFilter, aggregates, teamGroups]);
+
+  const groupName = useMemo(
+    () => Object.fromEntries(groups.map((g) => [g.id, g.name])) as Record<string, string>,
+    [groups]
+  );
+  const sectionTitle =
+    groupFilter === "all"
+      ? "Outreach teams"
+      : groupFilter === NO_GROUP
+        ? "Not in a group"
+        : groupName[groupFilter] ?? "Outreach teams";
 
   // Compute aggregates from filtered teams
   const filteredAggregates = useMemo(() => {
@@ -250,11 +309,18 @@ export function OutreachDashboardClient({
     <div className="ffsa-screen">
       <Masthead
         context="Outreach finance"
-        title="Organisation Dashboard"
-        actions={<CreateTeamForm programs={programs ?? []} />}
+        title={isStaff ? "Organisation Dashboard" : "Your outreaches"}
+        actions={
+          <>
+            {showGroupsLink && (
+              <MastheadAction href="/finance/outreach/groups">Groups</MastheadAction>
+            )}
+            <CreateTeamForm programs={programs ?? []} />
+          </>
+        }
       />
 
-      {pendingCloseouts > 0 && (
+      {isStaff && pendingCloseouts > 0 && (
         <NeedsYou>
           {pendingCloseouts === 1
             ? "1 team closeout is waiting on your review"
@@ -265,6 +331,23 @@ export function OutreachDashboardClient({
       {/* Filter strip — bone, sits directly under the masthead */}
       <div className="flex flex-wrap items-center gap-2 border-b border-rule bg-bone px-8 py-3">
         <span className="mono-label mr-1">Filter</span>
+        {groups.length > 0 && (
+          <Select value={groupFilter} onValueChange={setGroupFilter}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="All Groups" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Groups</SelectItem>
+              {groups.map((g) => (
+                <SelectItem key={g.id} value={g.id}>
+                  {g.name}
+                  {g.category ? ` · ${g.category}` : ""}
+                </SelectItem>
+              ))}
+              <SelectItem value={NO_GROUP}>Not in a group</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
         <Select value={schoolFilter} onValueChange={setSchoolFilter}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="All Programs" />
@@ -345,13 +428,14 @@ export function OutreachDashboardClient({
         >
         <div className="border border-ink">
           <SectionBar
-            title="Outreach teams"
+            title={sectionTitle}
             meta={`${agg.teamCount} teams · ${agg.totalPeople} people`}
           />
           {filteredTeams.length === 0 ? (
             <p className="px-6 py-10 text-center text-[13px] text-[color:var(--text-tertiary)]">
-              No outreach teams match your filters. Create your first team to get
-              started.
+              {isStaff
+                ? "No outreach teams match your filters. Create your first team to get started."
+                : "No outreaches yet. Start one with New Team: you'll be its owner and can invite co-leaders to run the budget with you."}
             </p>
           ) : (
             <div className="overflow-x-auto">
@@ -387,6 +471,7 @@ export function OutreachDashboardClient({
                       aggregates.budgetDetailsByTeam[team.id] || [];
                     const categoryExpenses =
                       aggregates.expenseDetailsByTeam[team.id] || {};
+                    const access = teamAccess[team.id] ?? { canEdit: false, label: null };
 
                     return (
                       <Fragment key={team.id}>
@@ -424,6 +509,19 @@ export function OutreachDashboardClient({
                                   {team.programs?.name ? ` · ${team.programs.name}` : ""}
                                   {team.location ? ` · ${team.location}` : ""}
                                 </p>
+                                {(teamGroups[team.id] ?? []).length > 0 && (
+                                  <p className="mono-label mt-1 text-[color:var(--text-tertiary)]">
+                                    {(teamGroups[team.id] ?? [])
+                                      .map((g) => groupName[g])
+                                      .filter(Boolean)
+                                      .join(" · ")}
+                                  </p>
+                                )}
+                                {access.label && (
+                                  <div className="mt-1.5">
+                                    <StatusPill tone="quiet">{access.label}</StatusPill>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </TableCell>
@@ -500,6 +598,7 @@ export function OutreachDashboardClient({
                               <StatusPill tone={statusTones[team.status] ?? "quiet"}>
                                 {team.status}
                               </StatusPill>
+                              {access.canEdit && (
                               <Select
                                 value={team.status}
                                 onValueChange={(val) =>
@@ -517,6 +616,7 @@ export function OutreachDashboardClient({
                                   ))}
                                 </SelectContent>
                               </Select>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>
@@ -578,6 +678,63 @@ export function OutreachDashboardClient({
           formatCurrency={formatCurrency}
         />
         </div>
+
+        {/* Archived teams: out of the list above, kept for admins to restore
+            or (when nothing is linked) delete. */}
+        {canManage && archivedTeams.length > 0 && (
+          <div className="border border-rule">
+            <button
+              type="button"
+              onClick={() => setShowArchived((o) => !o)}
+              className="flex w-full items-center justify-between px-5 py-3 text-left"
+            >
+              <span className="mono-label">Archived teams · {archivedTeams.length}</span>
+              {showArchived ? (
+                <ChevronDown className="h-4 w-4 text-[color:var(--text-tertiary)]" />
+              ) : (
+                <ChevronRight className="h-4 w-4 text-[color:var(--text-tertiary)]" />
+              )}
+            </button>
+            {showArchived && (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Team</TableHead>
+                    <TableHead>Archived</TableHead>
+                    <TableHead className="w-[230px]" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {archivedTeams.map((t) => (
+                    <TableRow key={t.id}>
+                      <TableCell>
+                        <Link
+                          href={`/finance/outreach/${t.id}`}
+                          className="font-display text-[16px] font-black uppercase leading-none hover:text-electric"
+                        >
+                          {t.team_name}
+                        </Link>
+                        {t.program_code && <p className="mono-label mt-1">{t.program_code}</p>}
+                      </TableCell>
+                      <TableCell className="tabular font-mono text-[12.5px]">
+                        {new Date(t.archived_at).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>
+                        <TeamAdminActions
+                          key={t.deleteBlockers.join("|")}
+                          teamId={t.id}
+                          teamName={t.team_name}
+                          archived
+                          deleteBlockers={t.deleteBlockers}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

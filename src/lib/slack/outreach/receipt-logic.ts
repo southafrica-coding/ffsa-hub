@@ -9,7 +9,8 @@
  */
 
 import { z } from "zod";
-import { SUPPORTED_CURRENCIES } from "@/lib/currencies";
+import { COMMON_OUTREACH_CURRENCIES, SUPPORTED_CURRENCIES } from "@/lib/currencies";
+import { rateText } from "@/lib/finance/outreach-pulls";
 import type { BudgetCategory } from "@/lib/finance/outreach-budget";
 import { resolveCategory } from "@/lib/slack/assistant/outreach";
 
@@ -58,6 +59,11 @@ export function safeFileName(f: SlackFile): string {
 // ────────────────────────────────────────────────────────────
 
 export const ReceiptReadingSchema = z.object({
+  document_kind: z
+    .enum(["receipt", "atm_withdrawal_notification", "card_payment_notification", "other"])
+    .describe(
+      "receipt: a receipt, invoice or till slip. atm_withdrawal_notification: a bank app notification, SMS or banking screenshot for a cash/ATM withdrawal. card_payment_notification: a bank notification for a card purchase. other: anything else."
+    ),
   is_receipt: z.boolean().describe("False if this is not a receipt, invoice or till slip at all."),
   legibility: z.enum(["clear", "partial", "unreadable"]),
   vendor: z.string().nullable().describe("Shop or supplier name as printed."),
@@ -76,6 +82,25 @@ export const ReceiptReadingSchema = z.object({
     .describe("Best matching category name from the provided list, exactly as written there, or null."),
   paid_by: z.enum(["cash", "card", "unknown"]),
   notes: z.string().nullable().describe("Anything the person should double-check, in one short sentence."),
+  // Bank notifications only (null otherwise).
+  bank_zar_total: z
+    .number()
+    .nullable()
+    .describe(
+      "Bank notifications only: the total rand (ZAR) that left the account for this transaction, INCLUDING any fees — add a separately listed fee to it. Null if no rand amount is shown."
+    ),
+  bank_zar_fee: z
+    .number()
+    .nullable()
+    .describe("Bank notifications only: a fee in rand shown as its own line or amount (ATM/withdrawal/foreign fee). Null if none is shown separately."),
+  bank_foreign_amount: z
+    .number()
+    .nullable()
+    .describe("Bank notifications only: the amount in the foreign currency (e.g. 500000 for BIF 500,000.00), if shown."),
+  bank_foreign_currency: z
+    .string()
+    .nullable()
+    .describe("Bank notifications only: ISO 4217 code of the foreign amount, if shown."),
 });
 
 export type ReceiptReading = z.infer<typeof ReceiptReadingSchema>;
@@ -88,7 +113,8 @@ export function readingPrompt(args: {
   userNote: string | null;
 }): string {
   return [
-    "Read this receipt for an outreach team's bookkeeping. Report only what is on the receipt; use null for anything you can't see.",
+    "Read this image for an outreach team's bookkeeping. It is usually a receipt, but may be a bank notification (app push, SMS or banking screenshot) for an ATM cash withdrawal or a card payment — say which in document_kind. Report only what is shown; use null for anything you can't see.",
+    "For a bank notification, fill the bank_* fields: the rand that left the account (including any fee), any fee shown separately, and the foreign amount and currency if shown. Ignore the account balance and account number.",
     `Today is ${args.today}.`,
     args.teamCountry ? `The team is on outreach in ${args.teamCountry}.` : "",
     args.likelyCurrency
@@ -170,6 +196,15 @@ export type Proposal = {
   cash_batch_id: string | null;
   payment_method: PaymentMethod;
   receipt_code: string | null;
+  /** Notes from reading the receipt, kept so the card can be redrawn
+   *  (e.g. after the team changes). Duplicate checks are redone per team. */
+  read_warnings?: string[];
+  /** Card payment whose rand came from the bank notification (migration 265). */
+  zar_confirmed?: boolean;
+  /** A fee the bank showed separately — its own Bank Costs expense. */
+  bank_fee_zar?: number;
+  /** The notification screenshot sent with the receipt. */
+  bank_proof?: { path: string; name: string; mime: string | null; size: number | null } | null;
 };
 
 export const KNOWN_CURRENCIES = new Set<string>(SUPPORTED_CURRENCIES.map((c) => c.code));
@@ -311,6 +346,24 @@ export const ACTION_LOG = "receipt_log";
 export const ACTION_CHANGE = "receipt_change";
 export const ACTION_CANCEL = "receipt_cancel";
 export const VIEW_CHANGE = "receipt_change_view";
+export const ACTION_TEAM = "receipt_team";
+
+/** The team dropdown's option value: which draft, and which team. */
+export function teamOptionValue(draftId: string, teamId: string): string {
+  return `${draftId}|${teamId}`;
+}
+
+export function parseTeamOption(value: string | undefined): { draftId: string; teamId: string } | null {
+  const [draftId, teamId] = (value ?? "").split("|");
+  return draftId && teamId ? { draftId, teamId } : null;
+}
+
+/** Slack caps a button's text at 75 characters. */
+export function logButtonText(teamName: string | null): string {
+  if (!teamName) return "✅ Log it";
+  const label = `✅ Log to ${teamName}`;
+  return label.length <= 75 ? label : `${label.slice(0, 74)}…`;
+}
 
 /** 22800.5 → "22 800.50" — the same everywhere, whatever the server's locale. */
 export function fmtNum(n: number): string {
@@ -330,10 +383,14 @@ export function money(n: number | null, currency: string): string {
 const PAY_LABEL: Record<PaymentMethod, string> = { cash: "Cash", card: "Card", bank_transfer: "Bank transfer" };
 
 export function amountLine(p: Proposal): string {
-  if (p.local_currency === "ZAR") return `*${money(p.local_amount, "ZAR")}*`;
+  if (p.local_currency === "ZAR") return `*${money(p.local_amount, "ZAR")}*${p.zar_confirmed && p.bank_proof ? " ✅ confirmed by bank" : ""}`;
+  if (p.zar_confirmed) {
+    return `${money(p.local_amount, p.local_currency)} → *${zarFmt(p.zar_amount ?? 0)}* ✅ rand confirmed by bank`;
+  }
   const zar = p.zar_amount != null ? `*${zarFmt(p.zar_amount)}*` : "*R ?*";
-  const rate =
-    p.exchange_rate && p.rate_label ? ` (${p.rate_label}: ${money(1 / p.exchange_rate, "ZAR")} per ${p.local_currency})` : "";
+  // "178.04 BIF per R1" for weak currencies, "R18.42 per USD" for strong —
+  // never "R0.01 per BIF".
+  const rate = p.exchange_rate && p.rate_label ? ` (${p.rate_label}: ${rateText(p.exchange_rate, p.local_currency)})` : "";
   return `${money(p.local_amount, p.local_currency)} → ${zar}${rate}`;
 }
 
@@ -343,8 +400,13 @@ export function receiptCardBlocks(args: {
   proposal: Proposal;
   categoryName: string | null;
   warnings: string[];
+  /** The team it will be logged to; null until the sender picks one. */
+  team: { id: string; name: string } | null;
+  /** Teams to choose between. Shown as a dropdown when there's more than one. */
+  teamChoices?: { id: string; name: string }[];
 }): unknown[] {
   const p = args.proposal;
+  const choices = args.teamChoices ?? [];
   const fields = [
     `*Shop*\n${p.vendor ?? "—"}`,
     `*Date*\n${p.expense_date}`,
@@ -356,21 +418,39 @@ export function receiptCardBlocks(args: {
   const blocks: unknown[] = [
     {
       type: "section",
-      text: { type: "mrkdwn", text: `🧾 *Receipt from ${args.senderName}* — check it, then tap *Log it*.` },
+      text: {
+        type: "mrkdwn",
+        text: args.team
+          ? `🧾 *Receipt from ${args.senderName}* for *${args.team.name}* — check the team and the details, then tap *Log to ${args.team.name}*.`
+          : `🧾 *Receipt from ${args.senderName}* — *which team is this for?* Pick it below, then check the details.`,
+      },
     },
     { type: "section", fields: fields.map((t) => ({ type: "mrkdwn", text: t })) },
   ];
-  if (args.warnings.length) {
+  const notes = [...args.warnings];
+  if ((p.bank_fee_zar ?? 0) > 0) notes.push(`The bank's ${zarFmt(p.bank_fee_zar!)} fee will be logged in *Bank Costs*.`);
+  if (p.payment_method === "card" && p.local_currency !== "ZAR" && !p.zar_confirmed) {
+    notes.push("💳 Card payment: send the bank notification screenshot when you get it, so I can record the real rand.");
+  }
+  if (notes.length) {
     blocks.push({
       type: "context",
-      elements: [{ type: "mrkdwn", text: args.warnings.join("\n") }],
+      elements: [{ type: "mrkdwn", text: notes.join("\n") }],
     });
   }
+  const menu = teamSelectBlock(args.draftId, args.team, choices);
+  if (menu) blocks.push(menu);
   blocks.push({
     type: "actions",
     block_id: `receipt:${args.draftId}`,
     elements: [
-      { type: "button", style: "primary", action_id: ACTION_LOG, value: args.draftId, text: { type: "plain_text", text: "✅ Log it" } },
+      {
+        type: "button",
+        style: "primary",
+        action_id: ACTION_LOG,
+        value: args.draftId,
+        text: { type: "plain_text", text: logButtonText(args.team?.name ?? null) },
+      },
       { type: "button", action_id: ACTION_CHANGE, value: args.draftId, text: { type: "plain_text", text: "✏️ Change" } },
       {
         type: "button",
@@ -390,6 +470,29 @@ export function receiptCardBlocks(args: {
   return blocks;
 }
 
+/** The Team menu on a card, when there's more than one team to choose from. */
+export function teamSelectBlock(
+  draftId: string,
+  team: { id: string; name: string } | null,
+  choices: { id: string; name: string }[]
+): unknown | null {
+  if (choices.length <= 1) return null;
+  const options = choices.slice(0, 100).map((t) => opt(t.name, teamOptionValue(draftId, t.id)));
+  const current = team ? options.find((o) => o.value === teamOptionValue(draftId, team.id)) : undefined;
+  return {
+    type: "section",
+    block_id: `receipt_team:${draftId}`,
+    text: { type: "mrkdwn", text: "*Team*" },
+    accessory: {
+      type: "static_select",
+      action_id: ACTION_TEAM,
+      placeholder: { type: "plain_text", text: "Choose the team" },
+      options,
+      ...(current ? { initial_option: current } : {}),
+    },
+  };
+}
+
 /** The card after a decision: no buttons, just what happened. */
 export function decidedBlocks(text: string, detail?: string): unknown[] {
   const blocks: unknown[] = [{ type: "section", text: { type: "mrkdwn", text } }];
@@ -401,7 +504,31 @@ export function decidedBlocks(text: string, detail?: string): unknown[] {
 // The Change form (a Slack modal)
 // ────────────────────────────────────────────────────────────
 
-const opt = (text: string, value: string) => ({ text: { type: "plain_text", text: text.slice(0, 75) }, value });
+export const opt = (text: string, value: string) => ({ text: { type: "plain_text", text: text.slice(0, 75) }, value });
+
+/**
+ * Slack menus hold at most 100 options, fewer than the currencies we
+ * support: the receipt's own currency, then the usual outreach ones, then
+ * the rest by name. Anything cut off can still be set in the Hub.
+ */
+export function currencyMenu(current: string | null) {
+  const byCode = new Map(SUPPORTED_CURRENCIES.map((c) => [c.code as string, c]));
+  const order = [
+    ...(current ? [current] : []),
+    ...COMMON_OUTREACH_CURRENCIES,
+    ...SUPPORTED_CURRENCIES.map((c) => c.code as string),
+  ];
+  const seen = new Set<string>();
+  const out: { code: string; name: string }[] = [];
+  for (const code of order) {
+    const c = byCode.get(code);
+    if (!c || seen.has(code)) continue;
+    seen.add(code);
+    out.push(c);
+    if (out.length === 100) break;
+  }
+  return out;
+}
 
 export function changeModal(args: {
   draftId: string;
@@ -411,7 +538,7 @@ export function changeModal(args: {
   const p = args.proposal;
   const cats = [...args.categories].sort((a, b) => a.name.localeCompare(b.name)).slice(0, 100);
   const catOpts = cats.map((c) => opt(c.name, c.id));
-  const curOpts = SUPPORTED_CURRENCIES.map((c) => opt(`${c.code} — ${c.name}`, c.code));
+  const curOpts = currencyMenu(p.local_currency).map((c) => opt(`${c.code} — ${c.name}`, c.code));
   const payOpts = (Object.keys(PAY_LABEL) as PaymentMethod[]).map((k) => opt(PAY_LABEL[k], k));
   const initial = <T extends { value: string }>(opts: T[], v: string | null) => opts.find((o) => o.value === v);
 
@@ -466,7 +593,7 @@ export function changeModal(args: {
   };
 }
 
-type ViewValues = Record<string, Record<string, { value?: string | null; selected_date?: string | null; selected_option?: { value: string } | null }>>;
+export type ViewValues = Record<string, Record<string, { value?: string | null; selected_date?: string | null; selected_option?: { value: string } | null }>>;
 
 export type ChangeInput = {
   vendor: string | null;

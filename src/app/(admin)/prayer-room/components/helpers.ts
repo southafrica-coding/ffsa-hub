@@ -68,6 +68,14 @@ export function formatDateLabel(dateStr: string): string {
   return `${DAYS_SHORT[d.getDay()]} ${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`;
 }
 
+/**
+ * Where a set is happening when it ISN'T the prayer room — the alternate space
+ * it was booked into, or where a block-out moved it. Null = the prayer room.
+ */
+export function offSiteLocation(s: { relocation_note?: string | null }): string | null {
+  return s.relocation_note?.trim() || null;
+}
+
 export const MEMBER_STATUS_LABELS: Record<string, string> = {
   active: "Active",
   on_break: "On a break",

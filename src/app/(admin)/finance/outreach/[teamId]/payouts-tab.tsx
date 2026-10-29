@@ -1,5 +1,6 @@
 "use client";
 
+import { CurrencySelect } from "@/components/ui/currency-select";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -32,6 +33,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Plus, Trash2, Edit2 } from "lucide-react";
+import { pullPrice, rateText, summarisePulls, uncoveredCash, type AllocationRow } from "@/lib/finance/outreach-pulls";
+import { createClient } from "@/lib/supabase/client";
 
 // ────────────────────────────────────────────────────────────
 // TYPES
@@ -59,6 +62,7 @@ type CashBatch = {
   local_currency_received: number | null;
   exchange_rate: number | null;
   notes: string | null;
+  proof_path?: string | null;
 };
 
 // ────────────────────────────────────────────────────────────
@@ -69,11 +73,14 @@ export function PayoutsTab({
   teamId,
   fundReleases,
   cashBatches,
+  allocations = [],
   readOnly = false,
 }: {
   teamId: string;
   fundReleases: FundRelease[];
   cashBatches: CashBatch[];
+  /** Cash spending charged to pulls, oldest first (migration 263). */
+  allocations?: AllocationRow[];
   readOnly?: boolean;
 }) {
   const formatCurrency = (amount: number) =>
@@ -93,6 +100,7 @@ export function PayoutsTab({
       <CashBatchesSection
         teamId={teamId}
         batches={cashBatches}
+        allocations={allocations}
         formatCurrency={formatCurrency}
         readOnly={readOnly}
       />
@@ -421,17 +429,27 @@ function FundReleasesSection({
 }
 
 // ────────────────────────────────────────────────────────────
-// CASH BATCHES SECTION
+// CASH PULLS SECTION
 // ────────────────────────────────────────────────────────────
 
+const localFmt = (n: number) => n.toLocaleString("en-ZA", { maximumFractionDigits: 2 });
+
+/**
+ * Each ATM pull is priced on its own (migration 263): the cash you got,
+ * the rand that left the account, and the part the bank showed as a fee.
+ * The rate is worked out, never typed. Cash spending is charged to pulls
+ * oldest first, so each row shows what's spent and what's left of it.
+ */
 function CashBatchesSection({
   teamId,
   batches,
+  allocations,
   formatCurrency,
   readOnly = false,
 }: {
   teamId: string;
   batches: CashBatch[];
+  allocations: AllocationRow[];
   formatCurrency: (amount: number) => string;
   readOnly?: boolean;
 }) {
@@ -447,42 +465,27 @@ function CashBatchesSection({
     bank_fee: "",
     local_currency: "",
     local_currency_received: "",
-    exchange_rate: "",
     notes: "",
   };
   const [form, setForm] = useState(emptyForm);
+  const [proofFile, setProofFile] = useState<File | null>(null);
 
   function updateField(field: string, value: string) {
-    setForm((prev) => {
-      const next = { ...prev, [field]: value };
-      // Auto-calculate exchange rate
-      if (
-        (field === "local_currency_received" ||
-          field === "zar_withdrawn" ||
-          field === "bank_fee") &&
-        next.local_currency_received &&
-        next.zar_withdrawn
-      ) {
-        const netZar =
-          Number(next.zar_withdrawn) - (Number(next.bank_fee) || 0);
-        if (netZar > 0) {
-          next.exchange_rate = (
-            Number(next.local_currency_received) / netZar
-          ).toFixed(6);
-        }
-      }
-      return next;
-    });
+    setForm((prev) => ({ ...prev, [field]: value }));
   }
 
-  const totalWithdrawn = batches.reduce(
-    (sum, b) => sum + Number(b.zar_withdrawn),
-    0
-  );
-  const totalFees = batches.reduce(
-    (sum, b) => sum + Number(b.bank_fee),
-    0
-  );
+  const price = pullPrice({
+    zarOut: Number(form.zar_withdrawn) || 0,
+    fee: Number(form.bank_fee) || 0,
+    localReceived: Number(form.local_currency_received) || 0,
+  });
+
+  // Oldest first, the order cash is spent in.
+  const ordered = [...batches].sort((a, b) => a.batch_date.localeCompare(b.batch_date));
+  const summaries = new Map(summarisePulls(ordered, allocations).map((p) => [p.id, p]));
+  const uncovered = uncoveredCash(allocations);
+  const totalWithdrawn = batches.reduce((sum, b) => sum + Number(b.zar_withdrawn), 0);
+  const totalFees = batches.reduce((sum, b) => sum + Number(b.bank_fee), 0);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -490,16 +493,23 @@ function CashBatchesSection({
     setLoading(true);
 
     try {
+      // The bank screenshot, if they attached one (optional).
+      let proofPath: string | undefined;
+      if (proofFile) {
+        const path = `${teamId}/pulls/${Date.now()}_${proofFile.name.replace(/[^A-Za-z0-9._-]+/g, "_")}`;
+        const { error: upErr } = await createClient().storage.from("outreach-receipts").upload(path, proofFile);
+        if (upErr) toast.error("The screenshot didn't upload — saving the pull without it");
+        else proofPath = path;
+      }
+
       const payload = {
         team_id: teamId,
+        ...(proofPath ? { proof_path: proofPath } : {}),
         batch_date: form.batch_date,
         zar_withdrawn: Number(form.zar_withdrawn),
         bank_fee: form.bank_fee ? Number(form.bank_fee) : 0,
-        local_currency: form.local_currency || null,
-        local_currency_received: form.local_currency_received
-          ? Number(form.local_currency_received)
-          : null,
-        exchange_rate: form.exchange_rate ? Number(form.exchange_rate) : null,
+        local_currency: form.local_currency,
+        local_currency_received: Number(form.local_currency_received),
         notes: form.notes || null,
       };
 
@@ -521,6 +531,7 @@ function CashBatchesSection({
       setAddOpen(false);
       setEditingId(null);
       setForm(emptyForm);
+      setProofFile(null);
       router.refresh();
     } catch {
       setError("Network error");
@@ -530,12 +541,16 @@ function CashBatchesSection({
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Delete this cash batch?")) return;
+    if (!confirm("Delete this cash pull? Cash spent from it moves to the next pull, or shows as not covered.")) return;
     try {
       const res = await fetch(`/api/finance/outreach/cash-batches?id=${id}`, {
         method: "DELETE",
       });
       if (res.ok) router.refresh();
+      else {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error || "Failed to delete");
+      }
     } catch {
       toast.error("Failed to delete");
     }
@@ -546,23 +561,31 @@ function CashBatchesSection({
     setForm({
       batch_date: b.batch_date,
       zar_withdrawn: String(b.zar_withdrawn),
-      bank_fee: String(b.bank_fee),
+      bank_fee: Number(b.bank_fee) ? String(b.bank_fee) : "",
       local_currency: b.local_currency ?? "",
       local_currency_received:
-        b.local_currency_received != null
-          ? String(b.local_currency_received)
-          : "",
-      exchange_rate:
-        b.exchange_rate != null ? String(b.exchange_rate) : "",
+        b.local_currency_received != null ? String(b.local_currency_received) : "",
       notes: b.notes ?? "",
     });
     setAddOpen(true);
   }
 
+  const canSave =
+    form.batch_date &&
+    form.local_currency &&
+    Number(form.local_currency_received) > 0 &&
+    Number(form.zar_withdrawn) > 0 &&
+    price.localPerZar !== null;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="font-medium">Cash Batches</h3>
+        <div>
+          <h3 className="font-medium">Cash pulls</h3>
+          <p className="text-xs text-muted-foreground">
+            Each ATM pull keeps its own rate. Cash spending is charged to the oldest pull first.
+          </p>
+        </div>
         <Dialog
           open={addOpen}
           onOpenChange={(v) => {
@@ -570,6 +593,7 @@ function CashBatchesSection({
             if (!v) {
               setEditingId(null);
               setForm(emptyForm);
+              setProofFile(null);
               setError(null);
             }
           }}
@@ -578,20 +602,18 @@ function CashBatchesSection({
             <DialogTrigger asChild>
               <Button size="sm">
                 <Plus className="mr-2 h-4 w-4" />
-                Add Cash Batch
+                Add cash pull
               </Button>
             </DialogTrigger>
           )}
           <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle>
-                {editingId ? "Edit Cash Batch" : "Add Cash Batch"}
-              </DialogTitle>
+              <DialogTitle>{editingId ? "Edit cash pull" : "Add cash pull"}</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>Batch Date *</Label>
+                  <Label>Date *</Label>
                   <DateInput
                     required
                     value={form.batch_date}
@@ -599,65 +621,74 @@ function CashBatchesSection({
                   />
                 </div>
                 <div>
-                  <Label>ZAR Withdrawn *</Label>
+                  <Label>Currency *</Label>
+                  <CurrencySelect
+                    value={form.local_currency}
+                    onChange={(v) => updateField("local_currency", v)}
+                  />
+                </div>
+                <div className="col-span-2">
+                  <Label>Cash you got *</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    required
+                    value={form.local_currency_received}
+                    onChange={(e) => updateField("local_currency_received", e.target.value)}
+                    placeholder={form.local_currency ? `Count it — in ${form.local_currency}` : "Count it"}
+                  />
+                </div>
+                <div>
+                  <Label>Rand that left the account *</Label>
                   <Input
                     type="number"
                     min="0"
                     step="0.01"
                     required
                     value={form.zar_withdrawn}
-                    onChange={(e) =>
-                      updateField("zar_withdrawn", e.target.value)
-                    }
-                    placeholder="0.00"
+                    onChange={(e) => updateField("zar_withdrawn", e.target.value)}
+                    placeholder="From your bank app"
                   />
                 </div>
                 <div>
-                  <Label>Bank Fee</Label>
+                  <Label>Of that, bank fee</Label>
                   <Input
                     type="number"
                     min="0"
                     step="0.01"
                     value={form.bank_fee}
                     onChange={(e) => updateField("bank_fee", e.target.value)}
-                    placeholder="0.00"
+                    placeholder="Only if shown separately"
                   />
                 </div>
-                <div>
-                  <Label>Local Currency</Label>
-                  <Input
-                    value={form.local_currency}
-                    onChange={(e) =>
-                      updateField("local_currency", e.target.value)
-                    }
-                    placeholder="e.g. BIF"
-                  />
+                <div className="col-span-2 border border-rule px-3 py-2 text-sm">
+                  {price.localPerZar !== null && price.zarPerLocal !== null ? (
+                    <>
+                      <span className="text-muted-foreground">This pull&apos;s rate: </span>
+                      <strong className="font-mono">{rateText(price.localPerZar, form.local_currency || "local")}</strong>
+                      <span className="text-muted-foreground">
+                        {" "}
+                        · cash cost {formatCurrency(price.cost)}
+                        {Number(form.bank_fee) > 0 && ` + ${formatCurrency(Number(form.bank_fee))} fee (logged in Bank Costs)`}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground">
+                      The rate is worked out from the cash you got and the rand that left the account.
+                    </span>
+                  )}
                 </div>
-                <div>
-                  <Label>Local Amount Received</Label>
+                <div className="col-span-2">
+                  <Label>Bank notification screenshot</Label>
                   <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={form.local_currency_received}
-                    onChange={(e) =>
-                      updateField("local_currency_received", e.target.value)
-                    }
-                    placeholder="0.00"
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={(e) => setProofFile(e.target.files?.[0] ?? null)}
                   />
-                </div>
-                <div>
-                  <Label>Exchange Rate</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.000001"
-                    value={form.exchange_rate}
-                    onChange={(e) =>
-                      updateField("exchange_rate", e.target.value)
-                    }
-                    placeholder="Auto-calculated"
-                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Optional — kept as proof. Or send it to the Outreach Finance bot in Slack.
+                  </p>
                 </div>
                 <div className="col-span-2">
                   <Label>Notes</Label>
@@ -665,6 +696,7 @@ function CashBatchesSection({
                     value={form.notes}
                     onChange={(e) => updateField("notes", e.target.value)}
                     rows={2}
+                    placeholder="e.g. Ecobank ATM, Bujumbura"
                   />
                 </div>
               </div>
@@ -672,24 +704,11 @@ function CashBatchesSection({
               {error && <p className="text-sm text-destructive">{error}</p>}
 
               <div className="flex justify-end gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setAddOpen(false)}
-                >
+                <Button type="button" variant="outline" onClick={() => setAddOpen(false)}>
                   Cancel
                 </Button>
-                <Button
-                  type="submit"
-                  disabled={
-                    loading || !form.batch_date || !form.zar_withdrawn
-                  }
-                >
-                  {loading
-                    ? "Saving..."
-                    : editingId
-                    ? "Update"
-                    : "Add Batch"}
+                <Button type="submit" disabled={loading || !canSave}>
+                  {loading ? "Saving..." : editingId ? "Update" : "Add pull"}
                 </Button>
               </div>
             </form>
@@ -697,9 +716,18 @@ function CashBatchesSection({
         </Dialog>
       </div>
 
+      {uncovered.length > 0 && (
+        <p className="border border-amber-border px-3 py-2 text-sm text-amber">
+          {uncovered
+            .map((u) => `${localFmt(u.local)} ${u.currency} of cash spending has no cash pull to cover it`)
+            .join(" · ")}{" "}
+          — is a pull missing? Until one is added it&apos;s priced at the newest pull&apos;s rate.
+        </p>
+      )}
+
       {batches.length === 0 ? (
         <p className="text-sm text-muted-foreground text-center py-4">
-          No cash batches recorded yet.
+          No cash pulls recorded yet.
         </p>
       ) : (
         <div className="overflow-x-auto border border-ink">
@@ -707,41 +735,64 @@ function CashBatchesSection({
             <TableHeader>
               <TableRow>
                 <TableHead>Date</TableHead>
-                <TableHead className="text-right">ZAR Withdrawn</TableHead>
-                <TableHead className="text-right">Bank Fee</TableHead>
-                <TableHead>Local Currency</TableHead>
-                <TableHead className="text-right">Local Received</TableHead>
-                <TableHead className="text-right">Exchange Rate</TableHead>
+                <TableHead className="text-right">Cash got</TableHead>
+                <TableHead className="text-right">Rand out</TableHead>
+                <TableHead className="text-right">Fee</TableHead>
+                <TableHead className="text-right">Rate</TableHead>
+                <TableHead className="text-right">Spent</TableHead>
+                <TableHead className="text-right">Left</TableHead>
                 {!readOnly && <TableHead className="w-[100px]" />}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {batches.map((b) => {
-                const netZar = Number(b.zar_withdrawn) - Number(b.bank_fee);
-                const effectiveRate =
-                  b.local_currency_received && netZar > 0
-                    ? Number(b.local_currency_received) / netZar
-                    : null;
-
+              {ordered.map((b) => {
+                const sum = summaries.get(b.id);
+                const cur = b.local_currency ?? "";
+                const rate = sum && sum.cost > 0 && sum.localReceived > 0 ? sum.localReceived / sum.cost : null;
                 return (
                   <TableRow key={b.id}>
-                    <TableCell>
+                    <TableCell className="whitespace-nowrap">
                       {new Date(b.batch_date).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell className="text-right font-mono whitespace-nowrap">
+                      {b.local_currency_received != null ? `${localFmt(Number(b.local_currency_received))} ${cur}` : "—"}
                     </TableCell>
                     <TableCell className="text-right font-mono">
                       {formatCurrency(Number(b.zar_withdrawn))}
                     </TableCell>
                     <TableCell className="text-right font-mono text-muted-foreground">
-                      {formatCurrency(Number(b.bank_fee))}
+                      {Number(b.bank_fee) ? formatCurrency(Number(b.bank_fee)) : "—"}
                     </TableCell>
-                    <TableCell>{b.local_currency ?? "—"}</TableCell>
-                    <TableCell className="text-right font-mono">
-                      {b.local_currency_received != null
-                        ? Number(b.local_currency_received).toLocaleString()
-                        : "—"}
+                    <TableCell className="text-right font-mono text-sm whitespace-nowrap">
+                      {rate ? rateText(rate, cur) : "—"}
+                      {b.proof_path && (
+                        <div>
+                          <a
+                            href={`/api/finance/outreach/cash-batches/proof?id=${b.id}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs text-electric underline"
+                          >
+                            📎 Screenshot
+                          </a>
+                        </div>
+                      )}
                     </TableCell>
-                    <TableCell className="text-right font-mono text-sm">
-                      {effectiveRate ? effectiveRate.toFixed(4) : "—"}
+                    <TableCell className="text-right font-mono text-sm whitespace-nowrap">
+                      {sum ? (
+                        <>
+                          {localFmt(sum.localSpent)} {cur}
+                          <div className="text-muted-foreground">{formatCurrency(sum.zarSpent)}</div>
+                        </>
+                      ) : "—"}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-sm whitespace-nowrap">
+                      {sum ? (
+                        <>
+                          {localFmt(sum.localLeft)} {cur}
+                          <div className="text-muted-foreground">{formatCurrency(sum.zarLeft)}</div>
+                        </>
+                      ) : "—"}
                     </TableCell>
                     {!readOnly && (
                       <TableCell>
@@ -769,14 +820,10 @@ function CashBatchesSection({
                 );
               })}
               <TableRow className="font-bold border-t-2">
-                <TableCell>Total</TableCell>
-                <TableCell className="text-right font-mono">
-                  {formatCurrency(totalWithdrawn)}
-                </TableCell>
-                <TableCell className="text-right font-mono text-muted-foreground">
-                  {formatCurrency(totalFees)}
-                </TableCell>
-                <TableCell colSpan={4} />
+                <TableCell colSpan={2}>Total</TableCell>
+                <TableCell className="text-right font-mono">{formatCurrency(totalWithdrawn)}</TableCell>
+                <TableCell className="text-right font-mono text-muted-foreground">{formatCurrency(totalFees)}</TableCell>
+                <TableCell colSpan={readOnly ? 3 : 4} />
               </TableRow>
             </TableBody>
           </Table>

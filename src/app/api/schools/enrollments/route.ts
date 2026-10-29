@@ -64,6 +64,13 @@ export async function PUT(request: Request) {
     );
   }
 
+  // Dismissing switches the student's Hub login off, so it needs the same
+  // schools-admin / program-leader rights as removing from the roster.
+  // Waiting/Arrived stay open to anyone who can work the Arrival tab.
+  if (status === "dismissed" && !(await userCanManageApplications(supabase, user.id))) {
+    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  }
+
   const { data, error } = await updateEnrollmentStatus(supabase, id, status);
 
   if (error) {
@@ -73,7 +80,14 @@ export async function PUT(request: Request) {
   // A dismissed student is deactivated. Guarded in the helper so staff/admin
   // accounts are never touched.
   if (status === "dismissed" && data?.user_id) {
-    await deactivateMembershipProfile(createAdminClient(), data.user_id, "enrollment_dismissed");
+    const admin = createAdminClient();
+    await deactivateMembershipProfile(admin, data.user_id, "enrollment_dismissed");
+    await admin.from("audit_logs").insert({
+      user_id: user.id,
+      action: "dismiss_enrollment",
+      resource_type: "enrollments",
+      resource_id: id,
+    });
   }
 
   return NextResponse.json({ success: true, enrollment: data });

@@ -72,7 +72,10 @@ export async function DELETE(_request: Request, { params }: Params) {
     return NextResponse.json({ error: "You cannot delete this objective" }, { status: 403 });
   }
 
-  const { error } = await deleteObjective(supabase, id);
+  const { data, error } = await deleteObjective(supabase, id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!data?.length) {
+    return NextResponse.json({ error: "You cannot delete this objective" }, { status: 403 });
+  }
   return NextResponse.json({ success: true });
 }

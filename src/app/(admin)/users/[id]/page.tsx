@@ -67,9 +67,13 @@ export default async function UserProfilePage({
     .from("user_roles")
     .select("roles!inner(name)")
     .eq("user_id", authUser.id)
-    .in("roles.name", ["super_admin", "admin"])
-    .limit(1);
+    .in("roles.name", ["super_admin", "admin"]);
   const isAdmin = (superCheck?.length ?? 0) > 0;
+  const callerIsSuper = (
+    (superCheck ?? []) as { roles: { name: string } | { name: string }[] }[]
+  ).some((r) =>
+    (Array.isArray(r.roles) ? r.roles : [r.roles]).some((x) => x?.name === "super_admin")
+  );
 
   // The Records Library is carved out of the admin bypass, so the linked CSV
   // source records below need their own check — a general `admin` without
@@ -215,6 +219,7 @@ export default async function UserProfilePage({
         user={targetUser}
         authLastSignInAt={authLastSignInAt}
         derivedTitle={derivedTitle}
+        isSuperAdmin={targetRoleNames.includes("super_admin")}
         eyebrow="Staff profile"
       />
       <UserTabs
@@ -237,6 +242,7 @@ export default async function UserProfilePage({
             user={targetUser}
             departmentOptions={departmentSelectOptions}
             departmentEditable={departmentEditable}
+            lockAccountFields={targetRoleNames.includes("super_admin") && !callerIsSuper}
           />
         </div>
       )}

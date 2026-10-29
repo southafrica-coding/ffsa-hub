@@ -5,7 +5,11 @@ import {
   getHouseholdMembers,
   createHouseholdMember,
 } from "@/services/household";
-import { sanitizeHouseholdInput } from "@/lib/users/household-input";
+import {
+  sanitizeHouseholdInput,
+  getOwnMaritalStatus,
+} from "@/lib/users/household-input";
+import { householdRelationshipError } from "@/lib/users/marital-status";
 
 // GET /api/profile/household — list the caller's family members.
 export async function GET() {
@@ -35,12 +39,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const body = await request.json();
+  const body = await request.json().catch(() => null);
+  if (!body || typeof body !== "object") {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
   const { input, error: validationError } = sanitizeHouseholdInput(body, {
     requireCore: true,
   });
   if (validationError) {
     return NextResponse.json({ error: validationError }, { status: 400 });
+  }
+
+  // No spouse record for someone who isn't married (marital-status.ts).
+  const relationshipError = householdRelationshipError(
+    input.relationship,
+    await getOwnMaritalStatus(supabase, user.id)
+  );
+  if (relationshipError) {
+    return NextResponse.json({ error: relationshipError }, { status: 400 });
   }
 
   const { data, error } = await createHouseholdMember(supabase, user.id, input);

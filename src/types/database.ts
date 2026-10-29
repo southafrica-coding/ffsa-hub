@@ -2748,6 +2748,7 @@ export type Database = {
           invoice_paid_cents: number
           invoice_emailed_at: string | null
           invoice_error: string | null
+          inventory_released_at: string | null
           buyer_contact_id: string | null
           buyer_email: string
           buyer_first_name: string
@@ -2770,6 +2771,7 @@ export type Database = {
           marketing_consent: boolean
           paid_at: string | null
           payment_provider: string | null
+          promo_code: string | null
           promo_code_id: string | null
           provider_payment_id: string | null
           provider_reference: string | null
@@ -2779,6 +2781,7 @@ export type Database = {
           status: string
           subtotal_cents: number
           ticket_answers: Json
+          waived_steps: Json
           waiver_signatures: Json | null
           total_cents: number
           updated_at: string
@@ -2791,6 +2794,7 @@ export type Database = {
           invoice_paid_cents?: number
           invoice_emailed_at?: string | null
           invoice_error?: string | null
+          inventory_released_at?: string | null
           buyer_contact_id?: string | null
           buyer_email: string
           buyer_first_name: string
@@ -2813,6 +2817,7 @@ export type Database = {
           marketing_consent?: boolean
           paid_at?: string | null
           payment_provider?: string | null
+          promo_code?: string | null
           promo_code_id?: string | null
           provider_payment_id?: string | null
           provider_reference?: string | null
@@ -2822,6 +2827,7 @@ export type Database = {
           status?: string
           subtotal_cents?: number
           ticket_answers?: Json
+          waived_steps?: Json
           waiver_signatures?: Json | null
           total_cents?: number
           updated_at?: string
@@ -2834,6 +2840,7 @@ export type Database = {
           invoice_paid_cents?: number
           invoice_emailed_at?: string | null
           invoice_error?: string | null
+          inventory_released_at?: string | null
           buyer_contact_id?: string | null
           buyer_email?: string
           buyer_first_name?: string
@@ -2856,6 +2863,7 @@ export type Database = {
           marketing_consent?: boolean
           paid_at?: string | null
           payment_provider?: string | null
+          promo_code?: string | null
           promo_code_id?: string | null
           provider_payment_id?: string | null
           provider_reference?: string | null
@@ -2865,6 +2873,7 @@ export type Database = {
           status?: string
           subtotal_cents?: number
           ticket_answers?: Json
+          waived_steps?: Json
           waiver_signatures?: Json | null
           total_cents?: number
           updated_at?: string
@@ -3911,6 +3920,8 @@ export type Database = {
           redemption_count: number
           valid_from: string | null
           valid_until: string | null
+          waived_questions: Json
+          waives_waiver: boolean
         }
         Insert: {
           amount_off_cents?: number | null
@@ -3927,6 +3938,8 @@ export type Database = {
           redemption_count?: number
           valid_from?: string | null
           valid_until?: string | null
+          waived_questions?: Json
+          waives_waiver?: boolean
         }
         Update: {
           amount_off_cents?: number | null
@@ -3943,6 +3956,8 @@ export type Database = {
           redemption_count?: number
           valid_from?: string | null
           valid_until?: string | null
+          waived_questions?: Json
+          waives_waiver?: boolean
         }
         Relationships: [
           {
@@ -4551,8 +4566,10 @@ export type Database = {
           event_id: string
           id: string
           order_id: string
+          promo_code_id: string | null
           status: string
           ticket_type_id: string
+          waived_steps: Json | null
         }
         Insert: {
           checked_in_at?: string | null
@@ -4566,8 +4583,10 @@ export type Database = {
           event_id: string
           id?: string
           order_id: string
+          promo_code_id?: string | null
           status?: string
           ticket_type_id: string
+          waived_steps?: Json | null
         }
         Update: {
           checked_in_at?: string | null
@@ -4581,8 +4600,10 @@ export type Database = {
           event_id?: string
           id?: string
           order_id?: string
+          promo_code_id?: string | null
           status?: string
           ticket_type_id?: string
+          waived_steps?: Json | null
         }
         Relationships: [
           {
@@ -5187,6 +5208,14 @@ export type Database = {
         Args: { p_person_id: string; p_user_id: string }
         Returns: undefined
       }
+      order_holds_inventory: {
+        Args: { p_expires_at: string; p_status: string }
+        Returns: boolean
+      }
+      reclaim_order_inventory: {
+        Args: { p_order_id: string }
+        Returns: boolean
+      }
       redeem_promo_code: {
         Args: { p_promo_code_id: string }
         Returns: {
@@ -5215,6 +5244,10 @@ export type Database = {
       reject_library_match: {
         Args: { p_notes?: string; p_queue_id: string }
         Returns: undefined
+      }
+      release_ticket_holds: {
+        Args: { p_event_id?: string; p_order_id?: string }
+        Returns: number
       }
       release_ticket_inventory: {
         Args: { p_qty: number; p_ticket_type_id: string }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { refuseSuperAdminTarget } from "@/lib/auth/super-admin-target";
 
 export async function POST(request: Request) {
   // Verify the calling user is an admin
@@ -44,6 +45,15 @@ export async function POST(request: Request) {
   }
 
   const adminSupabase = createAdminClient();
+
+  // Only a super admin can delete a super admin.
+  const refused = await refuseSuperAdminTarget(
+    supabase,
+    authUser.id,
+    adminSupabase,
+    user_id
+  );
+  if (refused) return refused;
 
   // Verify user exists
   const { data: targetUser } = await adminSupabase

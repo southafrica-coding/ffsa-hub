@@ -1,11 +1,19 @@
+import { cache } from "react";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import type { Database } from "@/types/database";
+import { lockFreeGetUser } from "./get-user";
 
-export async function createClient() {
+// One client per server-component render. React's cache() is scoped to a
+// single request, so the layout, the profile gate and the page — which each
+// call createClient() — share one client instead of building three. In route
+// handlers cache() does not memoise (no render in progress), so every call
+// still gets a fresh client, exactly as before. Nothing is shared across
+// requests or users.
+export const createClient = cache(async () => {
   const cookieStore = await cookies();
 
-  return createServerClient<Database>(
+  const client = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -26,4 +34,26 @@ export async function createClient() {
       },
     }
   );
-}
+
+  // auth.getUser() is called by the layout, the sidebar, the profile gate and
+  // nearly every page — each a round trip to Supabase Auth, and each holding
+  // the client's auth lock for that round trip, which stalls every query
+  // started alongside it. Route it through a per-request memo that still
+  // validates the token with the Auth server (once), but without the lock.
+  const auth = {
+    getSession: client.auth.getSession.bind(client.auth),
+    getUser: client.auth.getUser.bind(client.auth),
+  };
+  client.auth.getUser = ((jwt?: string) =>
+    jwt ? auth.getUser(jwt) : getUserForRequest(auth)) as typeof client.auth.getUser;
+
+  return client;
+});
+
+// Keyed on the client's (unpatched) auth methods: inside a render there is one
+// shared client, so the Auth server is asked once per request. Outside a
+// render (route handlers) cache() is a pass-through and every call goes to
+// Auth, as it always has.
+const getUserForRequest = cache((auth: Parameters<typeof lockFreeGetUser>[0]) =>
+  lockFreeGetUser(auth)
+);

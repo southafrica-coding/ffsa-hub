@@ -33,6 +33,7 @@ import {
   type WaiverSignatureRecord,
 } from "./waivers";
 import { renderWaiverCertificate } from "./render-waiver-certificate";
+import { ticketWaivedSteps, type OrderWaivedSteps } from "./promo-codes";
 
 export type EventBrand =
   | "ff"
@@ -110,7 +111,7 @@ export async function fulfillOrder(
   const { data: order, error: orderErr } = await supabase
     .from("orders")
     .select(
-      "id, status, total_cents, currency, buyer_first_name, buyer_last_name, buyer_email, buyer_contact_id, lines, ticket_answers, waiver_signatures, event_id, events(id, title, start_date, end_date, location, public_slug, brand, sending_identity_id, email_show_event_logo, logo_url, email_wording)"
+      "id, status, total_cents, currency, buyer_first_name, buyer_last_name, buyer_email, buyer_contact_id, lines, ticket_answers, waiver_signatures, promo_code_id, promo_code, waived_steps, event_id, events(id, title, start_date, end_date, location, public_slug, brand, sending_identity_id, email_show_event_logo, logo_url, email_wording)"
     )
     .eq("id", orderId)
     .maybeSingle();
@@ -156,6 +157,10 @@ export async function fulfillOrder(
     const drainWaiver = waiverSignatureDrainer(
       (order.waiver_signatures as WaiverSignatureGroup[] | null) ?? []
     );
+    // Every ticket records the promo code it was sold with and what that
+    // code waived for its tier (migration 269), so a skipped waiver or
+    // question reads as "waived" rather than missing.
+    const orderWaivedSteps = (order.waived_steps as OrderWaivedSteps[] | null) ?? [];
     const ticketRows = lines.flatMap((line) =>
       Array.from({ length: line.qty }, () => ({
         order_id: orderId,
@@ -164,6 +169,12 @@ export async function fulfillOrder(
         code: generateTicketCode(),
         custom_answers: drainAnswers(line.ticket_type_id),
         waiver_signature: drainWaiver(line.ticket_type_id),
+        promo_code_id: order.promo_code_id ?? null,
+        waived_steps: ticketWaivedSteps(
+          orderWaivedSteps,
+          order.promo_code,
+          line.ticket_type_id
+        ),
       }))
     );
     const { data: inserted, error: insertErr } = await supabase

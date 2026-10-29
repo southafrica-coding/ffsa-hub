@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildOrgModel, meanPct, rollUpState, updateMonthStart, type OrgInput, type RawKr } from "./model";
+import { STATUS_ESTIMATE, buildOrgModel, krPct, meanPct, pctLabel, rollUpState, updateMonthStart, type OrgInput, type RawKr } from "./model";
 import { PEOPLE_SHOWN, computeLayout, litSet, teamRows, teamTableRows } from "./layout";
 
 const kr = (over: Partial<RawKr> = {}): RawKr => ({
@@ -91,11 +91,34 @@ describe("buildOrgModel", () => {
     expect(m.teams.some((t) => t.id === "none")).toBe(false);
   });
 
-  it("reads progress only from real metrics", () => {
-    expect(media.objectives[0].krs[0].pct).toBe(50);
-    expect(media.objectives[0].krs[1].pct).toBeNull();
-    expect(media.objectives[0].pct).toBe(50);
+  it("measures a KR from its metric, and otherwise estimates from its status", () => {
+    expect(media.objectives[0].krs[0]).toMatchObject({ pct: 50, measured: true });
+    // stuck, no metric → the status stand-in, flagged as an estimate
+    expect(media.objectives[0].krs[1]).toMatchObject({ pct: STATUS_ESTIMATE.stuck, measured: false });
     expect(media.objectives[0].state).toBe("stuck");
+  });
+
+  it("makes an objective's bar the share of its key results that are complete", () => {
+    expect(media.objectives[0]).toMatchObject({ pct: 0, complete: 0 });
+    const done = buildOrgModel(
+      input({
+        objectives: [
+          { id: "o2", staff_ministry_id: "media", title: "x", description: null, direction: null, position: 1,
+            krs: [kr({ current_status: "complete" }), kr({ current_status: "complete" }), kr({ current_status: "moving_forward" }), kr()] },
+        ],
+      })
+    ).teams.find((t) => t.id === "media")!.objectives[0];
+    expect(done).toMatchObject({ pct: 50, complete: 2 });
+    const empty = buildOrgModel(
+      input({ objectives: [{ id: "o3", staff_ministry_id: "media", title: "y", description: null, direction: null, position: 1, krs: [] }] })
+    ).teams.find((t) => t.id === "media")!.objectives[0];
+    expect(empty.pct).toBeNull();
+  });
+
+  it("labels estimates with a ~ and measurements plainly", () => {
+    expect(pctLabel(86)).toBe("86%");
+    expect(pctLabel(50, false)).toBe("~50%");
+    expect(krPct({ metric_start: null, metric_target: null, current_value: null, metric_unit: null, current_status: "complete" })).toEqual({ pct: 100, measured: false });
   });
 
   it("counts an update as in when a check-in falls in the update month or later", () => {
@@ -151,9 +174,15 @@ describe("computeLayout", () => {
     expect(l.pos.schools).toBeDefined();
   });
 
-  it("keeps OKRs off the canvas: no OKR lines, even for an objective with a direction", () => {
-    expect(l.edges.filter((e) => e.kind === "okr")).toHaveLength(0);
-    expect(l.pos.dir).toBeUndefined();
+  it("works out OKR lines for objectives with a direction (the canvas shows them only on selection)", () => {
+    const okr = l.edges.filter((e) => e.kind === "okr");
+    expect(okr).toHaveLength(1);
+    expect(okr[0]).toMatchObject({ a: "dir:mission", b: "team:media", state: "stuck" });
+  });
+
+  it("reserves the direction column under the left-hand tables, so nothing shifts when it appears", () => {
+    expect(l.pos.dir).toBeDefined();
+    expect(l.pos.dir.y).toBeGreaterThan(l.pos.lt.y + l.pos.lt.h);
   });
 
   it("sizes a team's table by its people, not its objectives", () => {
