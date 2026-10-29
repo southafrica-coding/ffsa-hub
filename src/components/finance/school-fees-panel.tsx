@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { canManageFinance } from "@/lib/api-auth";
+import { canSeeSchoolFeesFinanceLinks, schoolFeesFinanceLinks } from "@/lib/finance/school-fees-links";
 import { FFX_2027_PROGRAM_TEMPLATE } from "@/lib/finance/billing";
 import { designFromCharges, parseDesign, type ChargeLike } from "@/lib/finance/payment-schedule";
 import type { Tier } from "@/services/school-billing";
@@ -38,7 +39,12 @@ export async function SchoolFeesPanel({
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const canEdit = user ? await canManageFinance(supabase, user.id) : false;
+  // The Finance links are hidden, not disabled, for anyone the finance pages
+  // would turn away (Schools staff without finance, for one).
+  const [canEdit, canOpenFinance] = await Promise.all([
+    user ? canManageFinance(supabase, user.id) : false,
+    showFinanceLinks ? canSeeSchoolFeesFinanceLinks(supabase, user?.id) : false,
+  ]);
 
   const [{ data: program }, { data: courses }, { data: schedules }, { data: programItems }, { data: courseItems }] =
     await Promise.all([
@@ -156,26 +162,21 @@ export async function SchoolFeesPanel({
         />
       ))}
 
-      {showFinanceLinks && (
+      {canOpenFinance && (
         <div className="flex flex-wrap gap-2">
-          <Link
-            href={`/finance/school-fees/${programId}/students`}
-            className="inline-block border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-white"
-          >
-            Student billing in Finance &rarr;
-          </Link>
-          <Link
-            href="/finance/school-fees"
-            className="inline-block border border-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em]"
-          >
-            Invoice run &rarr;
-          </Link>
-          <Link
-            href={`/finance/school-fees/${programId}/billing`}
-            className="inline-block border border-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em]"
-          >
-            All fee settings in Finance &rarr;
-          </Link>
+          {schoolFeesFinanceLinks(programId).map((l) => (
+            <Link
+              key={l.href}
+              href={l.href}
+              className={
+                l.primary
+                  ? "inline-block border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-white"
+                  : "inline-block border border-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em]"
+              }
+            >
+              {l.label} &rarr;
+            </Link>
+          ))}
         </div>
       )}
     </div>
