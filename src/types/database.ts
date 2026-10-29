@@ -679,6 +679,8 @@ export type Database = {
           notes: string | null
           section_id: string
           sort: number
+          source_line_id: string | null
+          source_template_line_id: string | null
           updated_at: string
           uses_driver: boolean
         }
@@ -699,6 +701,8 @@ export type Database = {
           notes?: string | null
           section_id: string
           sort?: number
+          source_line_id?: string | null
+          source_template_line_id?: string | null
           updated_at?: string
           uses_driver?: boolean
         }
@@ -719,6 +723,8 @@ export type Database = {
           notes?: string | null
           section_id?: string
           sort?: number
+          source_line_id?: string | null
+          source_template_line_id?: string | null
           updated_at?: string
           uses_driver?: boolean
         }
@@ -750,6 +756,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "budget_sections"
             referencedColumns: ["id", "budget_id", "key"]
+          },
+          {
+            foreignKeyName: "budget_lines_source_line_id_fkey"
+            columns: ["source_line_id"]
+            isOneToOne: false
+            referencedRelation: "budget_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_lines_source_template_line_id_fkey"
+            columns: ["source_template_line_id"]
+            isOneToOne: false
+            referencedRelation: "budget_template_lines"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -843,6 +863,161 @@ export type Database = {
           },
         ]
       }
+      budget_template_line_coding: {
+        Row: {
+          account_id: string | null
+          id: string
+          org_region: string
+          source: string
+          template_line_id: string
+          tracking_option_1_id: string | null
+          tracking_option_2_id: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          account_id?: string | null
+          id?: string
+          org_region: string
+          source?: string
+          template_line_id: string
+          tracking_option_1_id?: string | null
+          tracking_option_2_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          account_id?: string | null
+          id?: string
+          org_region?: string
+          source?: string
+          template_line_id?: string
+          tracking_option_1_id?: string | null
+          tracking_option_2_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_template_line_coding_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "xero_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_template_line_coding_template_line_id_fkey"
+            columns: ["template_line_id"]
+            isOneToOne: false
+            referencedRelation: "budget_template_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_template_line_coding_tracking_option_1_id_fkey"
+            columns: ["tracking_option_1_id"]
+            isOneToOne: false
+            referencedRelation: "xero_tracking_options"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_template_line_coding_tracking_option_2_id_fkey"
+            columns: ["tracking_option_2_id"]
+            isOneToOne: false
+            referencedRelation: "xero_tracking_options"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_template_line_coding_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_template_lines: {
+        Row: {
+          amount_cents: number
+          archived_at: string | null
+          category_id: string
+          coding_status: string
+          created_at: string
+          frequency: number
+          id: string
+          kind: string
+          multiplier: number
+          name: string
+          notes: string | null
+          sort: number
+          source_line_id: string | null
+          template_id: string
+          uses_driver: boolean
+        }
+        Insert: {
+          amount_cents?: number
+          archived_at?: string | null
+          category_id: string
+          coding_status?: string
+          created_at?: string
+          frequency?: number
+          id?: string
+          kind: string
+          multiplier?: number
+          name: string
+          notes?: string | null
+          sort?: number
+          source_line_id?: string | null
+          template_id: string
+          uses_driver?: boolean
+        }
+        Update: {
+          amount_cents?: number
+          archived_at?: string | null
+          category_id?: string
+          coding_status?: string
+          created_at?: string
+          frequency?: number
+          id?: string
+          kind?: string
+          multiplier?: number
+          name?: string
+          notes?: string | null
+          sort?: number
+          source_line_id?: string | null
+          template_id?: string
+          uses_driver?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_template_lines_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "budget_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_template_lines_section_fkey"
+            columns: ["template_id", "kind"]
+            isOneToOne: false
+            referencedRelation: "budget_template_sections"
+            referencedColumns: ["template_id", "key"]
+          },
+          {
+            foreignKeyName: "budget_template_lines_source_line_id_fkey"
+            columns: ["source_line_id"]
+            isOneToOne: false
+            referencedRelation: "budget_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_template_lines_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "budget_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       budget_template_sections: {
         Row: {
           help_text: string | null
@@ -884,41 +1059,124 @@ export type Database = {
       budget_templates: {
         Row: {
           applies_to: string[]
+          archived_at: string | null
           created_at: string
+          created_by: string | null
           default_currency: string
+          driver_label: string | null
+          driver_value: number | null
+          event_id: string | null
           funding_fields: Json
           id: string
           is_active: boolean
-          key: string
+          key: string | null
           name: string
+          outreach_team_id: string | null
+          owner_kind: string | null
+          program_id: string | null
+          source_budget_id: string | null
+          staff_ministry_id: string | null
+          subcategory_id: string | null
           updated_at: string
           version: number
         }
         Insert: {
           applies_to?: string[]
+          archived_at?: string | null
           created_at?: string
+          created_by?: string | null
           default_currency?: string
+          driver_label?: string | null
+          driver_value?: number | null
+          event_id?: string | null
           funding_fields?: Json
           id?: string
           is_active?: boolean
-          key: string
+          key?: string | null
           name: string
+          outreach_team_id?: string | null
+          owner_kind?: string | null
+          program_id?: string | null
+          source_budget_id?: string | null
+          staff_ministry_id?: string | null
+          subcategory_id?: string | null
           updated_at?: string
           version?: number
         }
         Update: {
           applies_to?: string[]
+          archived_at?: string | null
           created_at?: string
+          created_by?: string | null
           default_currency?: string
+          driver_label?: string | null
+          driver_value?: number | null
+          event_id?: string | null
           funding_fields?: Json
           id?: string
           is_active?: boolean
-          key?: string
+          key?: string | null
           name?: string
+          outreach_team_id?: string | null
+          owner_kind?: string | null
+          program_id?: string | null
+          source_budget_id?: string | null
+          staff_ministry_id?: string | null
+          subcategory_id?: string | null
           updated_at?: string
           version?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "budget_templates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_templates_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_templates_outreach_team_id_fkey"
+            columns: ["outreach_team_id"]
+            isOneToOne: false
+            referencedRelation: "outreach_teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_templates_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_templates_source_budget_id_fkey"
+            columns: ["source_budget_id"]
+            isOneToOne: false
+            referencedRelation: "budgets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_templates_staff_ministry_id_fkey"
+            columns: ["staff_ministry_id"]
+            isOneToOne: false
+            referencedRelation: "staff_ministries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_templates_subcategory_id_fkey"
+            columns: ["subcategory_id"]
+            isOneToOne: false
+            referencedRelation: "staff_ministry_subcategories"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       budgets: {
         Row: {
@@ -942,6 +1200,8 @@ export type Database = {
           owner_kind: string
           period_id: string
           program_id: string | null
+          source_budget_id: string | null
+          source_template_id: string | null
           staff_ministry_id: string | null
           status: string
           subcategory_id: string | null
@@ -970,6 +1230,8 @@ export type Database = {
           owner_kind: string
           period_id: string
           program_id?: string | null
+          source_budget_id?: string | null
+          source_template_id?: string | null
           staff_ministry_id?: string | null
           status?: string
           subcategory_id?: string | null
@@ -998,6 +1260,8 @@ export type Database = {
           owner_kind?: string
           period_id?: string
           program_id?: string | null
+          source_budget_id?: string | null
+          source_template_id?: string | null
           staff_ministry_id?: string | null
           status?: string
           subcategory_id?: string | null
@@ -1046,6 +1310,20 @@ export type Database = {
             columns: ["program_id"]
             isOneToOne: false
             referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budgets_source_budget_id_fkey"
+            columns: ["source_budget_id"]
+            isOneToOne: false
+            referencedRelation: "budgets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budgets_source_template_id_fkey"
+            columns: ["source_template_id"]
+            isOneToOne: false
+            referencedRelation: "budget_templates"
             referencedColumns: ["id"]
           },
           {
@@ -6321,6 +6599,7 @@ export type Database = {
           section_key: string | null
           section_label: string | null
           sort: number | null
+          source_line_id: string | null
           updated_at: string | null
           us_account_code: string | null
           us_account_id: string | null
@@ -6350,6 +6629,29 @@ export type Database = {
           owner_kind: string | null
           period_id: string | null
           section_key: string | null
+          total_cents: number | null
+        }
+        Relationships: []
+      }
+      v_budget_yoy: {
+        Row: {
+          budget_id: string | null
+          budget_name: string | null
+          category_id: string | null
+          category_name: string | null
+          change_cents: number | null
+          currency: string | null
+          owner_id: string | null
+          owner_kind: string | null
+          period_id: string | null
+          period_label: string | null
+          source_budget_id: string | null
+          source_budget_name: string | null
+          source_currency: string | null
+          source_period_id: string | null
+          source_period_label: string | null
+          source_template_id: string | null
+          source_total_cents: number | null
           total_cents: number | null
         }
         Relationships: []
@@ -6437,6 +6739,15 @@ export type Database = {
       can_edit_all_budgets: { Args: never; Returns: boolean }
       can_manage_budget_codes: { Args: never; Returns: boolean }
       can_view_all_budgets: { Args: never; Returns: boolean }
+      copy_budget_to_period: {
+        Args: {
+          p_name?: string
+          p_period_id: string
+          p_source_budget_id: string
+          p_submit?: boolean
+        }
+        Returns: string
+      }
       create_budget_from_template: {
         Args: {
           p_currency?: string
@@ -6446,6 +6757,7 @@ export type Database = {
           p_owner_id: string
           p_owner_kind: string
           p_period_id: string
+          p_submit?: boolean
           p_template_id: string
         }
         Returns: string
@@ -6589,6 +6901,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      save_budget_as_template: {
+        Args: { p_budget_id: string; p_name: string }
+        Returns: string
       }
       seed_default_reference_questions: {
         Args: { p_program_id: string }
