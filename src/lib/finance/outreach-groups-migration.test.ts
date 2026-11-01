@@ -322,10 +322,15 @@ describe("migration 274 — safe to run twice and in order", () => {
     expect(code274).not.toMatch(/\bDROP (TABLE|FUNCTION)\b/);
   });
 
-  it("is the newest migration, right after 273, and its number is not shared", () => {
-    const files = readdirSync(DIR).filter((f) => /^\d{3}_.*\.sql$/.test(f));
-    const numbers = files.map((f) => Number(f.slice(0, 3)));
-    expect(Math.max(...numbers)).toBe(274);
+  it("runs after the migrations it builds on, and its number is not shared", () => {
+    // 274 rewrites 260's staff helpers and relies on 273's group helpers, so
+    // it must sort after both. Later migrations are fine.
+    const files = readdirSync(DIR).filter((f) => /^\d{3}_.*\.sql$/.test(f)).sort();
+    const at = (name: string) => files.indexOf(name);
+    expect(at(FILE_274)).toBeGreaterThan(at("260_outreach_owner_coleaders.sql"));
+    expect(at(FILE_274)).toBeGreaterThan(at(FILE));
+    expect(at("260_outreach_owner_coleaders.sql")).toBeGreaterThanOrEqual(0);
+    expect(at(FILE)).toBeGreaterThanOrEqual(0);
     expect(files.filter((f) => f.startsWith("274_"))).toEqual([FILE_274]);
   });
 });
