@@ -1,8 +1,9 @@
 import { cache } from "react";
 import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import type { Database } from "@/types/database";
 import { lockFreeGetUser } from "./get-user";
+import { createBearerClient, getBearerToken } from "./bearer";
 
 // One client per server-component render. React's cache() is scoped to a
 // single request, so the layout, the profile gate and the page — which each
@@ -10,7 +11,19 @@ import { lockFreeGetUser } from "./get-user";
 // handlers cache() does not memoise (no render in progress), so every call
 // still gets a fresh client, exactly as before. Nothing is shared across
 // requests or users.
+//
+// Bearer callers (the phone app): if the request carries
+// `Authorization: Bearer <supabase jwt>`, the client runs as that token's
+// user instead of the cookie session, and auth.getUser() validates that
+// token. This is what lets every existing /api route serve the app without
+// being edited. The middleware strips the header from page requests, so it
+// only ever takes effect on /api/*; there it has already checked the token and
+// the account's is_active flag. With no bearer, this is the cookie client
+// exactly as before.
 export const createClient = cache(async () => {
+  const bearer = getBearerToken(await headers());
+  if (bearer) return createBearerClient(bearer) as unknown as CookieClient;
+
   const cookieStore = await cookies();
 
   const client = createServerClient<Database>(
@@ -49,6 +62,8 @@ export const createClient = cache(async () => {
 
   return client;
 });
+
+type CookieClient = ReturnType<typeof createServerClient<Database>>;
 
 // Keyed on the client's (unpatched) auth methods: inside a render there is one
 // shared client, so the Auth server is asked once per request. Outside a

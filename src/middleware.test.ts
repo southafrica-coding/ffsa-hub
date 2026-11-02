@@ -6,7 +6,25 @@ import { createFakeSupabase, filterValue, measure } from "@/lib/testing/fake-sup
 // Auth answers each test controls.
 let current: ReturnType<typeof makeClient>;
 vi.mock("@supabase/ssr", () => ({
-  createServerClient: () => current.client,
+  createServerClient: () => {
+    cookieClientsBuilt += 1;
+    return current.client;
+  },
+}));
+let cookieClientsBuilt = 0;
+
+// The bearer path (phone app) builds a plain supabase-js client carrying the
+// token. It is a separate fake, so a test can tell which path ran.
+let bearer: ReturnType<typeof makeBearerClient>;
+vi.mock("@supabase/supabase-js", () => ({
+  createClient: (
+    _url: string,
+    _key: string,
+    options: { global?: { headers?: Record<string, string> } }
+  ) => {
+    bearer.headersSent.push(options.global?.headers?.Authorization ?? null);
+    return bearer.client;
+  },
 }));
 
 import { middleware } from "@/middleware";
@@ -48,7 +66,30 @@ function makeClient(opts: {
   return { ...fake, getUserCalls };
 }
 
-const req = (path: string) => new NextRequest(new URL(path, "https://hub.test"));
+// Token → user id, as the Auth server would answer for a bearer token.
+function makeBearerClient(opts: { valid?: Record<string, string>; inactive?: string[] }) {
+  const fake = createFakeSupabase({
+    resolve: (q) => {
+      if (q.table === "users") {
+        const id = filterValue(q, "eq", "id") as string;
+        return { data: { is_active: !(opts.inactive ?? []).includes(id) } };
+      }
+      return { data: [] };
+    },
+  });
+  const getUserCalls: Array<string | undefined> = [];
+  fake.client.auth = {
+    async getUser(jwt?: string) {
+      getUserCalls.push(jwt);
+      const id = jwt ? opts.valid?.[jwt] : undefined;
+      return { data: { user: id ? { id } : null }, error: id ? null : { message: "bad jwt" } };
+    },
+  };
+  return { ...fake, getUserCalls, headersSent: [] as Array<string | null> };
+}
+
+const req = (path: string, headers: Record<string, string> = {}) =>
+  new NextRequest(new URL(path, "https://hub.test"), { headers });
 const location = (res: Response) => {
   const loc = res.headers.get("location");
   return loc ? new URL(loc) : null;
@@ -57,6 +98,8 @@ const location = (res: Response) => {
 describe("middleware", () => {
   beforeEach(() => {
     current = makeClient({});
+    bearer = makeBearerClient({});
+    cookieClientsBuilt = 0;
   });
 
   it("public routes skip Supabase entirely", async () => {
@@ -123,5 +166,152 @@ describe("middleware", () => {
     current = makeClient({ token: jwtFor("u1"), validUserId: "u1", latencyMs: 25 });
     const { roundTrips } = await measure(25, () => middleware(req("/finance")));
     expect(roundTrips).toBe(1);
+  });
+});
+
+// ────────────────────────────────────────────────────────────
+// /api/* without a session, and the phone app's bearer tokens
+// ────────────────────────────────────────────────────────────
+
+// What Next forwards to the route: the header names the middleware kept.
+const forwardedHeaders = (res: Response) =>
+  (res.headers.get("x-middleware-override-headers") ?? "").split(",").filter(Boolean);
+
+describe("middleware: /api/* answers in JSON", () => {
+  beforeEach(() => {
+    current = makeClient({});
+    bearer = makeBearerClient({});
+    cookieClientsBuilt = 0;
+  });
+
+  it("fetch() with no session → 401 JSON, not a redirect", async () => {
+    const res = await middleware(req("/api/people"));
+    expect(res.status).toBe(401);
+    expect(location(res)).toBeNull();
+    expect(await res.json()).toMatchObject({ error: "unauthenticated" });
+    expect(res.headers.get("cache-control")).toBe("no-store");
+  });
+
+  it("a browser navigation to /api/* (Accept: text/html) still goes to /login", async () => {
+    const res = await middleware(
+      req("/api/events/e1/attendees/export", { accept: "text/html,application/xhtml+xml,*/*;q=0.8" })
+    );
+    const loc = location(res)!;
+    expect(loc.pathname).toBe("/login");
+    expect(loc.searchParams.get("redirect")).toBe("/api/events/e1/attendees/export");
+  });
+
+  it("a deactivated cookie user calling /api/* → 403 JSON", async () => {
+    current = makeClient({ token: jwtFor("u1"), validUserId: "u1", inactive: ["u1"] });
+    const res = await middleware(req("/api/people"));
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ error: "deactivated" });
+  });
+
+  it("an active cookie user calling /api/* passes through as before", async () => {
+    current = makeClient({ token: jwtFor("u1"), validUserId: "u1" });
+    const res = await middleware(req("/api/people"));
+    expect(res.status).toBe(200);
+    expect(location(res)).toBeNull();
+  });
+
+  it("pages keep their redirect even when the client asks for JSON", async () => {
+    const res = await middleware(req("/finance", { accept: "application/json" }));
+    expect(location(res)?.pathname).toBe("/login");
+  });
+});
+
+describe("middleware: bearer tokens (phone app)", () => {
+  const T1 = jwtFor("u1");
+
+  beforeEach(() => {
+    current = makeClient({});
+    bearer = makeBearerClient({ valid: { [T1]: "u1" } });
+    cookieClientsBuilt = 0;
+  });
+
+  it("valid + active → continues, with the token forwarded and no cookie work", async () => {
+    const res = await middleware(req("/api/me", { authorization: `Bearer ${T1}` }));
+    expect(res.status).toBe(200);
+    expect(location(res)).toBeNull();
+    expect(bearer.getUserCalls).toEqual([T1]);
+    expect(bearer.headersSent).toEqual([`Bearer ${T1}`]);
+    // is_active read once, for the validated user, with the bearer client.
+    expect(bearer.queries.map((q) => filterValue(q, "eq", "id"))).toEqual(["u1"]);
+    expect(cookieClientsBuilt).toBe(0);
+    expect(forwardedHeaders(res)).toContain("authorization");
+  });
+
+  it("invalid or expired token → 401 JSON", async () => {
+    const res = await middleware(req("/api/me", { authorization: `Bearer ${jwtFor("nobody")}` }));
+    expect(res.status).toBe(401);
+    expect(await res.json()).toMatchObject({ error: "unauthenticated" });
+  });
+
+  it("malformed token → 401 JSON without asking the Auth server", async () => {
+    const res = await middleware(req("/api/me", { authorization: "Bearer not-a-jwt" }));
+    expect(res.status).toBe(401);
+    expect(bearer.getUserCalls).toHaveLength(0);
+  });
+
+  it("a browser-style Accept header never turns a bad bearer into a redirect", async () => {
+    const res = await middleware(
+      req("/api/me", { authorization: "Bearer junk", accept: "text/html" })
+    );
+    expect(res.status).toBe(401);
+    expect(location(res)).toBeNull();
+  });
+
+  it("deactivated → 403 JSON", async () => {
+    bearer = makeBearerClient({ valid: { [T1]: "u1" }, inactive: ["u1"] });
+    const res = await middleware(req("/api/me", { authorization: `Bearer ${T1}` }));
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ error: "deactivated" });
+  });
+
+  it("decides on the Auth-validated user, never the token's own claim", async () => {
+    const lying = jwtFor("u-active");
+    bearer = makeBearerClient({ valid: { [lying]: "u-off" }, inactive: ["u-off"] });
+    const res = await middleware(req("/api/me", { authorization: `Bearer ${lying}` }));
+    expect(res.status).toBe(403);
+  });
+
+  it("bearer wins over cookies: a bad bearer is 401 even with a good cookie session", async () => {
+    current = makeClient({ token: jwtFor("u2"), validUserId: "u2" });
+    const res = await middleware(req("/api/me", { authorization: "Bearer junk" }));
+    expect(res.status).toBe(401);
+    expect(cookieClientsBuilt).toBe(0);
+  });
+
+  it("a bearer never authenticates a page: no cookie → /login, and the header is dropped", async () => {
+    const res = await middleware(req("/finance", { authorization: `Bearer ${T1}` }));
+    expect(location(res)?.pathname).toBe("/login");
+    expect(bearer.getUserCalls).toHaveLength(0);
+  });
+
+  it("a page with a cookie session renders as the cookie user, with the bearer stripped", async () => {
+    current = makeClient({ token: jwtFor("u2"), validUserId: "u2" });
+    const res = await middleware(req("/finance", { authorization: `Bearer ${T1}` }));
+    expect(location(res)).toBeNull();
+    expect(forwardedHeaders(res)).not.toContain("authorization");
+  });
+
+  it("public pages also have the bearer stripped", async () => {
+    const res = await middleware(req("/e/some-event", { authorization: `Bearer ${T1}` }));
+    expect(forwardedHeaders(res)).not.toContain("authorization");
+  });
+
+  it("public /api routes are untouched: cron keeps its own Bearer secret", async () => {
+    const res = await middleware(req("/api/cron/send-scheduled", { authorization: "Bearer cron-secret" }));
+    expect(res.status).toBe(200);
+    expect(bearer.getUserCalls).toHaveLength(0);
+    expect(current.queries).toHaveLength(0);
+  });
+
+  it("/.well-known is public", async () => {
+    const res = await middleware(req("/.well-known/apple-app-site-association"));
+    expect(location(res)).toBeNull();
+    expect(res.status).toBe(200);
+    expect(current.getUserCalls).toHaveLength(0);
   });
 });
