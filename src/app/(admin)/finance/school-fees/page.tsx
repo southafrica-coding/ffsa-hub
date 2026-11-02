@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { requireModuleAccess } from "@/lib/require-permission";
+import { requireSchoolFeesAccess } from "@/lib/finance/school-fees-links";
 import { getProgramsForBilling } from "@/services/school-billing";
 import NeedsDecisionQueue from "./needs-decision-queue";
 import { getCountryTiers } from "@/services/school-fees";
@@ -36,7 +36,7 @@ export default async function SchoolFeesPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
-  await requireModuleAccess(supabase, user.id, "finance");
+  await requireSchoolFeesAccess(supabase, user.id);
 
   const [{ data: programs }, { data: countryTiers }] = await Promise.all([
     getProgramsForBilling(supabase),

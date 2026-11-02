@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { requireModuleAccess } from "@/lib/require-permission";
+import { requireSchoolFeesAccess } from "@/lib/finance/school-fees-links";
 import { getProgramById } from "@/services/schools";
 import { getEnrolledStudentsForProgram } from "@/services/school-billing";
 import {
@@ -38,7 +38,7 @@ export default async function ProgramStudentsPage({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
-  await requireModuleAccess(supabase, user.id, "finance");
+  await requireSchoolFeesAccess(supabase, user.id);
 
   const { data: program } = await getProgramById(supabase, programId);
   if (!program) {

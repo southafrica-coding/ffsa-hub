@@ -179,17 +179,9 @@ describe("Records Library import complete", () => {
 
 // Server pages are not rendered here; check the gate is in the source and runs
 // before anything reads data with the service-role client.
-describe("gated pages call requireModuleAccess before reading", () => {
+describe("gated pages check access before reading", () => {
   const ADMIN_APP = path.resolve(__dirname, "../../(admin)");
   const GATED: Array<[string, string]> = [
-    ["finance/school-fees/page.tsx", "finance"],
-    ["finance/school-fees/email-templates/page.tsx", "finance"],
-    ["finance/school-fees/[programId]/page.tsx", "finance"],
-    ["finance/school-fees/[programId]/billing/page.tsx", "finance"],
-    ["finance/school-fees/[programId]/billing/[courseId]/page.tsx", "finance"],
-    ["finance/school-fees/[programId]/match-xero/page.tsx", "finance"],
-    ["finance/school-fees/[programId]/students/page.tsx", "finance"],
-    ["finance/school-fees/[programId]/students/[enrollmentId]/page.tsx", "finance"],
     ["events/new/page.tsx", "events"],
     ["events/[id]/page.tsx", "events"],
     ["events/[id]/forms/[formId]/page.tsx", "events"],
@@ -204,6 +196,27 @@ describe("gated pages call requireModuleAccess before reading", () => {
     expect(src).toMatch(/if \(!user\) redirect\("\/login"\)/);
     const gate = src.indexOf(`requireModuleAccess(supabase, user.id, "${module}")`);
     expect(gate).toBeGreaterThan(-1);
+    const adminRead = src.indexOf("createAdminClient()");
+    if (adminRead > -1) expect(gate).toBeLessThan(adminRead);
+  });
+
+  // School fees use the Finance hub's full-finance check (Jack, 2026-11-01),
+  // not the finance module: Finance Office's donor-statements grant isn't enough.
+  it.each([
+    "finance/school-fees/page.tsx",
+    "finance/school-fees/email-templates/page.tsx",
+    "finance/school-fees/[programId]/page.tsx",
+    "finance/school-fees/[programId]/billing/page.tsx",
+    "finance/school-fees/[programId]/billing/[courseId]/page.tsx",
+    "finance/school-fees/[programId]/match-xero/page.tsx",
+    "finance/school-fees/[programId]/students/page.tsx",
+    "finance/school-fees/[programId]/students/[enrollmentId]/page.tsx",
+  ])("%s → full finance", (file: string) => {
+    const src = readFileSync(path.join(ADMIN_APP, file), "utf8");
+    expect(src).toMatch(/if \(!user\) redirect\("\/login"\)/);
+    const gate = src.indexOf("requireSchoolFeesAccess(supabase, user.id)");
+    expect(gate).toBeGreaterThan(-1);
+    expect(src).not.toMatch(/requireModuleAccess\([^)]*"finance"\)/);
     const adminRead = src.indexOf("createAdminClient()");
     if (adminRead > -1) expect(gate).toBeLessThan(adminRead);
   });

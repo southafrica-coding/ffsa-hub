@@ -1,8 +1,11 @@
-import { hasModuleAccess } from "@/lib/require-permission";
+import { redirect } from "next/navigation";
+import { getFinanceHubAccess } from "@/lib/finance-access";
 
-// The "into Finance" links on a school's Fees panel. Every destination runs
-// requireModuleAccess(…, "finance"), so the links are shown to exactly the
-// people that gate lets in: anyone else would only bounce to /dashboard.
+// Who may open the School Fees pages, and the "into Finance" links on a
+// school's Fees panel. Both use the Finance hub's full-finance check
+// (finance.view, or a finance-manage role/grant) — Jack's ruling, 2026-11-01.
+// The Finance Office role (finance.donor_statements only) is not enough: it
+// reaches donor statements, not student billing.
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
@@ -17,11 +20,16 @@ export function schoolFeesFinanceLinks(programId: string): FinanceLink[] {
   ];
 }
 
-/** Same rule as the destination pages' gate: the finance module, nothing wider. */
+/** True when the Finance hub would show this person full finance. */
 export async function canSeeSchoolFeesFinanceLinks(
   supabase: Client,
   userId: string | null | undefined
 ): Promise<boolean> {
   if (!userId) return false;
-  return hasModuleAccess(supabase, userId, "finance");
+  return (await getFinanceHubAccess(supabase, userId)).fullFinance;
+}
+
+/** Page gate for /finance/school-fees/**: anyone without full finance goes to /dashboard. */
+export async function requireSchoolFeesAccess(supabase: Client, userId: string): Promise<void> {
+  if (!(await canSeeSchoolFeesFinanceLinks(supabase, userId))) redirect("/dashboard");
 }

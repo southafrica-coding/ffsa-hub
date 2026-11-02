@@ -6,6 +6,7 @@ import {
   permissionWorldResolver,
   type PermissionWorld,
 } from "@/lib/testing/fake-supabase";
+import { getFinanceHubAccess } from "@/lib/finance-access";
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
@@ -13,14 +14,16 @@ vi.mock("next/navigation", () => ({
   },
 }));
 
-import { requireModuleAccess } from "@/lib/require-permission";
 import {
   canSeeSchoolFeesFinanceLinks,
+  requireSchoolFeesAccess,
   schoolFeesFinanceLinks,
 } from "@/lib/finance/school-fees-links";
 
-// The Schools → Fees panel's three "into Finance" links: shown to exactly the
-// people the destination pages' finance gate lets in, hidden for everyone else.
+// The School Fees pages and the Schools → Fees panel's three "into Finance"
+// links use the Finance hub's full-finance check (Jack, 2026-11-01):
+// finance.view, or a finance-manage role/grant. Finance Office's
+// donor-statements grant is not enough.
 
 const SCHOOLS_STAFF: PermissionWorld = {
   roles: [{ id: "r-staff", name: "staff" }],
@@ -31,28 +34,52 @@ const FINANCE_VIEW_ONLY: PermissionWorld = {
   roles: [{ id: "r-staff", name: "staff" }],
   direct: [{ module: "finance", key: "finance.view" }],
 };
+const FINANCE_ADMIN_ROLE: PermissionWorld = {
+  roles: [{ id: "r-fa", name: "finance_admin" }],
+  direct: [],
+};
 const FINANCE_BUNDLE: PermissionWorld = {
-  // A custom role, not the seeded finance_office (which bundles only
-  // finance.donor_statements, migration 248).
+  // A custom role bundling finance.manage.
   roles: [{ id: "r-fin", name: "finance_team" }],
   direct: [],
   bundles: { "r-fin": [{ module: "finance", key: "finance.manage" }] },
 };
+const FINANCE_OFFICE: PermissionWorld = {
+  // The seeded finance_office role: finance.donor_statements only (migration 248).
+  roles: [{ id: "r-fo", name: "finance_office" }],
+  direct: [],
+  bundles: { "r-fo": [{ module: "finance", key: "finance.donor_statements" }] },
+};
 const ADMIN: PermissionWorld = { roles: [{ id: "r-a", name: "admin" }], direct: [] };
+const SUPER_ADMIN: PermissionWorld = { roles: [{ id: "r-s", name: "super_admin" }], direct: [] };
 
+// has_permission is answered by the database; model migration 089: the key
+// directly or through a role bundle.
 const client = (world: PermissionWorld) =>
   createFakeSupabase({
     user: { id: "u1" },
-    resolve: (q) => permissionWorldResolver(world)(q) ?? { data: [] },
+    resolve: (q) => {
+      if (q.rpc?.name === "has_permission") {
+        const key = (q.rpc.args as { required_permission: string }).required_permission;
+        const viaBundle = world.roles.some((r) => world.bundles?.[r.id]?.some((p) => p.key === key));
+        return { data: world.direct.some((p) => p.key === key) || viaBundle };
+      }
+      return permissionWorldResolver(world)(q) ?? { data: [] };
+    },
   }).client;
 
+const WORLDS: Array<[string, PermissionWorld, boolean]> = [
+  ["finance.view only", FINANCE_VIEW_ONLY, true],
+  ["finance_admin role, no permissions", FINANCE_ADMIN_ROLE, true],
+  ["finance.manage via a role bundle", FINANCE_BUNDLE, true],
+  ["admin", ADMIN, true],
+  ["super_admin", SUPER_ADMIN, true],
+  ["Finance Office (finance.donor_statements only)", FINANCE_OFFICE, false],
+  ["Schools staff without finance", SCHOOLS_STAFF, false],
+];
+
 describe("canSeeSchoolFeesFinanceLinks", () => {
-  it.each([
-    ["Schools staff without finance", SCHOOLS_STAFF, false],
-    ["finance.view only (can open, can't edit)", FINANCE_VIEW_ONLY, true],
-    ["finance.manage via a role bundle", FINANCE_BUNDLE, true],
-    ["admin", ADMIN, true],
-  ])("%s → %s", async (_label: string, world: PermissionWorld, expected: boolean) => {
+  it.each(WORLDS)("%s → %s", async (_label: string, world: PermissionWorld, expected: boolean) => {
     expect(await canSeeSchoolFeesFinanceLinks(client(world), "u1")).toBe(expected);
   });
 
@@ -60,12 +87,14 @@ describe("canSeeSchoolFeesFinanceLinks", () => {
     expect(await canSeeSchoolFeesFinanceLinks(client(ADMIN), null)).toBe(false);
   });
 
-  it.each([SCHOOLS_STAFF, FINANCE_VIEW_ONLY, FINANCE_BUNDLE, ADMIN])(
-    "agrees with the destination gate (world %#)",
-    async (world: PermissionWorld) => {
+  it.each(WORLDS)(
+    "agrees with the page gate and the Finance hub: %s",
+    async (_label: string, world: PermissionWorld, expected: boolean) => {
       const shown = await canSeeSchoolFeesFinanceLinks(client(world), "u1");
-      const gate = requireModuleAccess(client(world), "u1", "finance");
-      if (shown) await expect(gate).resolves.toBeUndefined();
+      const hub = await getFinanceHubAccess(client(world), "u1");
+      expect(shown).toBe(hub.fullFinance);
+      const gate = requireSchoolFeesAccess(client(world), "u1");
+      if (expected) await expect(gate).resolves.toBeUndefined();
       else await expect(gate).rejects.toThrow("REDIRECT:/dashboard");
     }
   );
@@ -74,7 +103,7 @@ describe("canSeeSchoolFeesFinanceLinks", () => {
 describe("schoolFeesFinanceLinks", () => {
   const ADMIN_APP = path.resolve(__dirname, "../../app/(admin)");
 
-  it("every link lands on a page gated on the finance module", () => {
+  it("every link lands on a page behind the full-finance gate", () => {
     const links = schoolFeesFinanceLinks("PROGRAM");
     expect(links.map((l) => l.label)).toEqual([
       "Student billing in Finance",
@@ -83,9 +112,7 @@ describe("schoolFeesFinanceLinks", () => {
     ]);
     for (const l of links) {
       const file = path.join(ADMIN_APP, l.href.replace("PROGRAM", "[programId]"), "page.tsx");
-      expect(readFileSync(file, "utf8")).toContain(
-        'requireModuleAccess(supabase, user.id, "finance")'
-      );
+      expect(readFileSync(file, "utf8")).toContain("requireSchoolFeesAccess(supabase, user.id)");
     }
   });
 

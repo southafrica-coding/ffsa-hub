@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { requireModuleAccess } from "@/lib/require-permission";
+import { requireSchoolFeesAccess } from "@/lib/finance/school-fees-links";
 import { getProgramById } from "@/services/schools";
 import {
   getBillingCoursesByProgram,
@@ -33,7 +33,7 @@ export default async function StudentBillingPage({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
-  await requireModuleAccess(supabase, user.id, "finance");
+  await requireSchoolFeesAccess(supabase, user.id);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: enrollment } = await (supabase as any)
