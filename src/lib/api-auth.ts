@@ -205,3 +205,26 @@ export async function canManageSchools(
   if (await hasAnyRole(supabase, userId, SCHOOLS_MANAGE_ROLES)) return true;
   return hasAnyPermission(supabase, userId, perms);
 }
+
+/**
+ * canManageSchools for one program. canManageSchools counts a grant wherever
+ * it is scoped, so a leader scoped to program A passes it for program B too;
+ * call this once the target program is known. super_admin / admin pass;
+ * everyone else needs one of the keys for THIS program through SQL
+ * has_permission_for (migration 089): direct or via a role bundle, global or
+ * scoped to the program. Pass the USER client — it reads auth.uid().
+ */
+export async function canManageSchoolsForProgram(
+  supabase: Client,
+  userId: string,
+  programId: string,
+  perms: string[] = SCHOOLS_MANAGE_PERMS
+): Promise<boolean> {
+  if (await hasAnyRole(supabase, userId, ["super_admin", "admin"])) return true;
+  const results = await Promise.all(
+    perms.map((key) =>
+      supabase.rpc("has_permission_for", { required_permission: key, target_program_id: programId })
+    )
+  );
+  return results.some((r: { data: unknown }) => r.data === true);
+}

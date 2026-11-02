@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getReferenceRequestsByApplication } from "@/services/schools";
-import { canManageSchools } from "@/lib/api-auth";
+import { canManageSchools, canManageSchoolsForProgram } from "@/lib/api-auth";
 import {
   editReferenceContact,
   REFERENCE_EDIT_SELECT,
@@ -46,8 +46,9 @@ export async function GET(request: Request) {
 }
 
 // PATCH — swap out a pending reference's contact (name/email). Admin path:
-// gated by canManageSchools. A changed email regenerates the invite token
-// (old link dies) and re-sends the invite to the corrected address.
+// gated by canManageSchools, for the application's own program. A changed
+// email regenerates the invite token (old link dies) and re-sends the invite
+// to the corrected address.
 export async function PATCH(request: Request) {
   const supabase = await createClient();
   const {
@@ -83,6 +84,20 @@ export async function PATCH(request: Request) {
       { error: "Reference request not found" },
       { status: 404 }
     );
+  }
+
+  // canManageSchools ignores where a grant is scoped; the edit must be for a
+  // program the caller manages.
+  const { data: application } = await adminSupabase
+    .from("application_responses")
+    .select("program_id")
+    .eq("id", ref.application_id)
+    .single();
+  if (
+    !application?.program_id ||
+    !(await canManageSchoolsForProgram(supabase, user.id, application.program_id))
+  ) {
+    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
   if (!(await userCanReadApplication(supabase, ref.application_id))) {
