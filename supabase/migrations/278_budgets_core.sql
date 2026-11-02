@@ -478,7 +478,8 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   );
 $$;
 
--- Header, sections and members: finance, or the budget's owner.
+-- Header and members: finance, or the budget's owner (the header freeze is
+-- in the budgets trigger; sections use can_edit_budget_sections below).
 CREATE OR REPLACE FUNCTION public.can_manage_budget(p_budget_id uuid)
 RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
@@ -497,6 +498,21 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
        AND (public.can_edit_all_budgets()
             OR (b.status = 'draft' AND b.archived_at IS NULL
                 AND public.is_budget_member(p_budget_id, 'editor')))
+  );
+$$;
+
+-- Sections (label, order): never on an approved budget. Finance otherwise;
+-- owners only while the budget is a live draft. Same freeze as the header.
+CREATE OR REPLACE FUNCTION public.can_edit_budget_sections(p_budget_id uuid)
+RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.budgets b
+     WHERE b.id = p_budget_id
+       AND b.status <> 'approved'
+       AND (public.can_edit_all_budgets()
+            OR (b.status = 'draft' AND b.archived_at IS NULL
+                AND public.is_budget_member(p_budget_id, 'owner')))
   );
 $$;
 
@@ -1540,13 +1556,13 @@ CREATE POLICY "Finance and members read budget sections"
 DROP POLICY IF EXISTS "Budget managers add sections" ON public.budget_sections;
 CREATE POLICY "Budget managers add sections"
   ON public.budget_sections FOR INSERT
-  WITH CHECK (public.can_manage_budget(budget_id));
+  WITH CHECK (public.can_edit_budget_sections(budget_id));
 
 DROP POLICY IF EXISTS "Budget managers edit sections" ON public.budget_sections;
 CREATE POLICY "Budget managers edit sections"
   ON public.budget_sections FOR UPDATE
-  USING (public.can_manage_budget(budget_id))
-  WITH CHECK (public.can_manage_budget(budget_id));
+  USING (public.can_edit_budget_sections(budget_id))
+  WITH CHECK (public.can_edit_budget_sections(budget_id));
 
 -- Members.
 DROP POLICY IF EXISTS "Finance and members read budget members" ON public.budget_members;
@@ -1802,6 +1818,7 @@ COMMENT ON FUNCTION public.is_budget_member(uuid, text) IS
 --   DROP FUNCTION IF EXISTS public.can_see_budget_template(uuid);
 --   DROP FUNCTION IF EXISTS public.can_create_budget_row(text, uuid, uuid, uuid, uuid, uuid, uuid, uuid);
 --   DROP FUNCTION IF EXISTS public.can_create_budget_for(text, uuid, uuid);
+--   DROP FUNCTION IF EXISTS public.can_edit_budget_sections(uuid);
 --   DROP FUNCTION IF EXISTS public.can_edit_budget_lines(uuid);
 --   DROP FUNCTION IF EXISTS public.can_manage_budget(uuid);
 --   DROP FUNCTION IF EXISTS public.budget_has_owner(uuid, text, uuid);
