@@ -16,7 +16,9 @@
 --        budget.manage_codes  — friendly categories and Xero coding
 --        budget.approve       — approve a submitted budget
 --      The first three are added to the Finance Admin role's bundle
---      (role_permissions, pattern from 183/248).
+--      (role_permissions, pattern from 183/248). Finance Office (role from
+--      248) gets budget.view_all ONLY: it reads every budget and changes
+--      none. That row is skipped if the role does not exist.
 --      budget.approve is NOT: only Coreen approves. It is held by exactly
 --      one new role, budget_approver ("Budget Approver", pattern from 248),
 --      and approval checks has_permission('budget.approve') ONLY — not
@@ -27,6 +29,12 @@
 --      can_edit_all_budgets(), can_manage_budget_codes(),
 --      can_approve_budgets(). SECURITY DEFINER, like
 --      can_manage_donor_statements() in 245.
+--      They test the budget.* permissions, NOT the finance_admin role:
+--      Finance Admin people get in through the bundle above, so unticking
+--      a permission on the Roles page really takes it away. is_admin()
+--      (super_admin / admin) stays as the existing break-glass.
+--      has_permission() ignores scope and counts both direct grants and
+--      role bundles.
 --      can_view_all_budgets() includes finance.view on purpose: finance
 --      sees every budget, independent of the outreach-only "own teams"
 --      flag from 274. It also includes budget.approve: the approver must
@@ -47,7 +55,7 @@
 --      278 attaches the same trigger to every budget table.
 --
 -- Only adds new objects; no existing table, row, role grant or policy is
--- changed. The Hub never writes to Xero.
+-- changed (Finance Admin and Finance Office gain new budget.* rows only). The Hub never writes to Xero.
 --
 -- Safe to re-run: tables and indexes are IF NOT EXISTS, functions are
 -- CREATE OR REPLACE, triggers and policies are dropped by name before
@@ -79,6 +87,15 @@ SELECT r.id, p.id
  WHERE r.name = 'finance_admin'
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
+-- Finance Office: read-only. budget.view_all and nothing else (no
+-- finance.view, no edit, no codes, no approve). No row if the role is missing.
+INSERT INTO public.role_permissions (role_id, permission_id)
+SELECT r.id, p.id
+  FROM public.roles r
+  JOIN public.permissions p ON p.key = 'budget.view_all'
+ WHERE r.name = 'finance_office'
+ON CONFLICT (role_id, permission_id) DO NOTHING;
+
 -- Budget Approver: the only holder of budget.approve. Assigned to Coreen by
 -- hand, never by a migration. is_system = false so it shows on the Roles page.
 INSERT INTO public.roles (name, display_name, description, is_system)
@@ -101,13 +118,13 @@ ON CONFLICT (role_id, permission_id) DO NOTHING;
 -- ────────────────────────────────────────────────────────────
 -- 2. Access helpers
 -- ────────────────────────────────────────────────────────────
--- has_role('finance_admin') is listed as well as the bundle, matching every
--- other finance policy (236, 245, 275).
+-- Permissions only, no has_role('finance_admin'): Finance Admin holds these
+-- through its bundle (section 1), so the Roles page is the one place to
+-- change who has them. is_admin() is the existing break-glass.
 CREATE OR REPLACE FUNCTION public.can_edit_all_budgets()
 RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   SELECT public.is_admin()
-      OR public.has_role('finance_admin')
       OR public.has_permission('budget.edit_all');
 $$;
 
@@ -124,7 +141,6 @@ CREATE OR REPLACE FUNCTION public.can_manage_budget_codes()
 RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   SELECT public.is_admin()
-      OR public.has_role('finance_admin')
       OR public.has_permission('budget.manage_codes');
 $$;
 
@@ -330,11 +346,11 @@ CREATE POLICY "Finance reads the audit log"
 -- 7. Comments
 -- ────────────────────────────────────────────────────────────
 COMMENT ON FUNCTION public.can_view_all_budgets() IS
-  'True for anyone who sees every budget: admin, finance_admin, finance.view, budget.view_all, budget.approve, or anyone who can edit all budgets. Independent of the outreach-only restriction in migration 274.';
+  'True for anyone who sees every budget: admin, finance.view, budget.view_all (Finance Admin and Finance Office bundles), budget.approve, or anyone who can edit all budgets. Permissions only, never the finance_admin role itself. Independent of the outreach-only restriction in migration 274.';
 COMMENT ON FUNCTION public.can_edit_all_budgets() IS
-  'True for anyone who may change any budget, its lines and members: admin, finance_admin or budget.edit_all.';
+  'True for anyone who may change any budget, its lines and members: admin or budget.edit_all (in the Finance Admin bundle). Does not test the finance_admin role itself.';
 COMMENT ON FUNCTION public.can_manage_budget_codes() IS
-  'True for anyone who may manage friendly budget categories and Xero coding on budget lines: admin, finance_admin or budget.manage_codes.';
+  'True for anyone who may manage friendly budget categories and Xero coding on budget lines: admin or budget.manage_codes (in the Finance Admin bundle). Does not test the finance_admin role itself.';
 COMMENT ON FUNCTION public.can_approve_budgets() IS
   'True ONLY for holders of budget.approve (the Budget Approver role). Admins and finance_admin are deliberately not included: only Coreen approves.';
 COMMENT ON FUNCTION public.finance_audit_row() IS
@@ -379,7 +395,8 @@ COMMENT ON COLUMN public.finance_audit_log.after IS
 --     JOIN public.roles r ON r.id = rp.role_id
 --     JOIN public.permissions p ON p.id = rp.permission_id
 --    WHERE p.key LIKE 'budget.%' ORDER BY 1, 2;   -- budget_approver x1 (approve),
---                                                  -- finance_admin x3 (no approve)
+--                                                  -- finance_admin x3 (no approve),
+--                                                  -- finance_office x1 (view_all)
 --   SELECT relname, relrowsecurity FROM pg_class
 --    WHERE relname IN ('fiscal_periods', 'finance_audit_log');  -- both true
 --   SELECT count(*) FROM public.fiscal_periods;   -- 0 (finance adds the first)

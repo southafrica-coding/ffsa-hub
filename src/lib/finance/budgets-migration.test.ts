@@ -67,10 +67,24 @@ describe("migrations 277–279 — the decisions they encode", () => {
     }
     const grants = [...m277.matchAll(/INSERT INTO public\.role_permissions[\s\S]*?WHERE r\.name = '(\w+)'[\s\S]*?;/g)];
     const byRole = Object.fromEntries(grants.map((g) => [g[1], g[0]]));
-    expect(Object.keys(byRole).sort()).toEqual(["budget_approver", "finance_admin"]);
+    expect(Object.keys(byRole).sort()).toEqual(["budget_approver", "finance_admin", "finance_office"]);
     expect(byRole.finance_admin).not.toContain("budget.approve");
     expect(byRole.budget_approver).toContain("p.key = 'budget.approve'");
     expect(m277).toMatch(/INSERT INTO public\.roles \(name, display_name, description, is_system\)\s+VALUES \(\s+'budget_approver'/);
+  });
+
+  it("gives finance_office budget.view_all only, without creating the role", () => {
+    const grant = m277.split(";").find((s) => s.includes("WHERE r.name = 'finance_office'"));
+    expect(grant).toBeDefined();
+    expect(grant).toContain("p.key = 'budget.view_all'");
+    expect(grant).not.toMatch(/budget\.(edit_all|manage_codes|approve)|finance\.view/);
+    expect(m277).not.toMatch(/INSERT INTO public\.roles[\s\S]*?'finance_office'/);
+  });
+
+  it("budget access follows the budget.* permissions, never the finance_admin role", () => {
+    for (const m of all) expect(m.code).not.toMatch(/has_(any_)?role\(\s*'finance_admin'/);
+    expect(m277).toMatch(/FUNCTION public\.can_edit_all_budgets\(\)[\s\S]*?SELECT public\.is_admin\(\)\s+OR public\.has_permission\('budget\.edit_all'\);/);
+    expect(m277).toMatch(/FUNCTION public\.can_manage_budget_codes\(\)[\s\S]*?SELECT public\.is_admin\(\)\s+OR public\.has_permission\('budget\.manage_codes'\);/);
   });
 
   it("approval checks the permission alone, and the trigger enforces it", () => {
