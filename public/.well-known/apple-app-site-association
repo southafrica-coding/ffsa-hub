@@ -1,0 +1,15 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["TEAMID.com.REPLACE_ME.ffsahub"],
+        "components": [
+          { "/": "/auth/confirm*", "comment": "Email confirmation and magic links" },
+          { "/": "/setup/*", "comment": "30-day onboarding invites" },
+          { "/": "/reset-password*", "comment": "Password reset links" },
+          { "/": "/e/*", "comment": "Public event pages" }
+        ]
+      }
+    ]
+  }
+}
