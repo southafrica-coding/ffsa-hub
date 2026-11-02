@@ -6,11 +6,8 @@ import { Upload, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FieldWrapper } from "./field-wrapper";
 import type { FormQuestion, FileValue } from "@/lib/form-types";
-import {
-  compressImageToMaxBytes,
-  detectImageType,
-  sanitizeFilename,
-} from "@/lib/image";
+import { compressImageToMaxBytes, detectImageType } from "@/lib/image";
+import { buildApplicationUploadPath, UPLOAD_BUCKET } from "@/lib/upload-paths";
 
 const MAX_SIZE = 25 * 1024 * 1024; // 25MB raw — we'll compress before upload
 const COMPRESS_THRESHOLD = 2 * 1024 * 1024; // 2MB — compress anything bigger than this
@@ -70,16 +67,20 @@ export function FileUpload({
         }
 
         const contentType = detectImageType(file) || "image/jpeg";
-        const cleanName = sanitizeFilename(file.name);
-        const uuid = crypto.randomUUID();
-        const appId = applicationId || "draft";
-        const path = `applications/${appId}/${question.id}/${uuid}-${cleanName}`;
+        // Built by the same module /api/upload/sign validates with.
+        const path = buildApplicationUploadPath({
+          applicationId: applicationId || "draft",
+          questionId: question.id,
+          uuid: crypto.randomUUID(),
+          fileName: file.name,
+          contentType,
+        });
 
         const signRes = await fetch("/api/upload/sign", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            bucket: "application-uploads",
+            bucket: UPLOAD_BUCKET,
             path,
             contentType,
           }),
