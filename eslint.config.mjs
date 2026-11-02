@@ -21,7 +21,8 @@ const eslintConfig = [
     },
   },
   {
-    ignores: [".next/**", "node_modules/**", "src/types/database.ts"],
+    // apps/** holds independent apps (apps/mobile) with their own lint setup.
+    ignores: [".next/**", "node_modules/**", "src/types/database.ts", "apps/**"],
   },
 ];
 

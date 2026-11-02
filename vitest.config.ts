@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 import path from "node:path";
 
 // Vitest doesn't read tsconfig paths, so the "@/…" alias the app uses has to
@@ -7,5 +7,9 @@ import path from "node:path";
 export default defineConfig({
   resolve: {
     alias: { "@": path.resolve(__dirname, "src") },
+  },
+  test: {
+    // apps/mobile is a separate Expo app with its own Jest setup.
+    exclude: [...configDefaults.exclude, "apps/**"],
   },
 });

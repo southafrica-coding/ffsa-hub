@@ -44,3 +44,12 @@ next-env.d.ts
 
 # supabase local cli markers
 supabase/.temp/
+
+# mobile app (apps/mobile) — its own install and Expo/native build output.
+# apps/mobile/.gitignore covers these too; repeated here so a root
+# `git status` never shows them.
+/apps/mobile/node_modules
+/apps/mobile/.expo/
+/apps/mobile/dist/
+/apps/mobile/ios/
+/apps/mobile/android/
