@@ -1,10 +1,24 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { canManageFinance, hasAnyRole } from "@/lib/api-auth";
 import {
   recordPayment,
   updatePayment,
   deletePayment,
 } from "@/services/school-fees";
+
+// Recording, editing and deleting student payments. Mirrors the RLS on
+// student_payments (migration 009) so a caller RLS would refuse gets a clear
+// 403 here rather than a database error: insert / update for admins and
+// finance_admin (canManageFinance), delete for admins only. RLS stays the
+// final word either way.
+const PAYMENT_DELETE_ROLES = ["super_admin", "admin"];
+
+const forbidden = () =>
+  NextResponse.json(
+    { error: "You don't have permission to manage school-fee payments" },
+    { status: 403 }
+  );
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -15,6 +29,7 @@ export async function POST(request: Request) {
   if (!user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
+  if (!(await canManageFinance(supabase, user.id))) return forbidden();
 
   const body = await request.json();
   const { student_fee_id, amount_zar, payment_method } = body;
@@ -56,6 +71,7 @@ export async function PUT(request: Request) {
   if (!user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
+  if (!(await canManageFinance(supabase, user.id))) return forbidden();
 
   const body = await request.json();
   const { id, ...updateData } = body;
@@ -81,6 +97,9 @@ export async function DELETE(request: Request) {
 
   if (!user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+  if (!(await hasAnyRole(supabase, user.id, PAYMENT_DELETE_ROLES))) {
+    return forbidden();
   }
 
   const { searchParams } = new URL(request.url);
