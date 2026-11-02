@@ -8,6 +8,7 @@ import {
   listUnits,
   listLocations,
   listMinistries,
+  listUnitOwnerLabels,
   type EquipmentProductWithRefs,
   type EquipmentUnitState,
 } from "@/services/equipment";
@@ -16,7 +17,9 @@ import {
   checkedText,
   hasFault,
   hasNoSerial,
+  isUnverifiedImport,
   needsAttention,
+  NO_LOCATION,
   shortDate,
   summariseUnits,
 } from "@/lib/equipment/register";
@@ -30,10 +33,11 @@ export default async function RegisterPage({
   const { open } = await searchParams;
   const supabase = await createClient();
 
-  const [productsRes, unitsRes, locationsRes] = await Promise.all([
+  const [productsRes, unitsRes, locationsRes, ownerLabelsRes] = await Promise.all([
     listProducts(supabase),
     listUnits(supabase),
     listLocations(supabase),
+    listUnitOwnerLabels(supabase),
   ]);
 
   const loadError = productsRes.error || unitsRes.error;
@@ -50,8 +54,13 @@ export default async function RegisterPage({
 
   const products = (productsRes.data ?? []) as EquipmentProductWithRefs[];
   const units = (unitsRes.data ?? []) as EquipmentUnitState[];
-  const locations = new Map(
-    ((locationsRes.data ?? []) as { id: string; name: string }[]).map((l) => [l.id, l.name])
+  const locationRows = (locationsRes.data ?? []) as { id: string; name: string }[];
+  const locations = new Map(locationRows.map((l) => [l.id, l.name]));
+  // owner_label isn't in equipment_unit_state; an error here (285 not applied) just means none.
+  const ownerLabels = new Map(
+    ((ownerLabelsRes.error ? [] : ownerLabelsRes.data ?? []) as { id: string; owner_label: string | null }[]).map(
+      (r) => [r.id, r.owner_label]
+    )
   );
 
   // Who owns the gear: a unit's own owner, else its product's.
@@ -98,6 +107,10 @@ export default async function RegisterPage({
           status: u.live_status,
           checked: u.last_checked_on ? shortDate(u.last_checked_on) : "Never",
           checkedMissing: !u.last_checked_on,
+          ownerLabel: ownerLabels.get(u.id) ?? null,
+          locationId: u.location_id,
+          location: u.location_id ? (locations.get(u.location_id) ?? null) : null,
+          unverified: isUnverifiedImport(u),
         })),
       };
     });
@@ -105,12 +118,20 @@ export default async function RegisterPage({
   const where = [...new Set(units.map((u) => (u.location_id ? locations.get(u.location_id) : null)).filter(Boolean))];
   const context = ["Equipment", ...where, ...(ministries ?? []).map((m: { name: string }) => m.name)].join(" · ");
 
+  // Location filter: every location that has gear, plus "No location" for the unverified imports.
+  const locationOptions = locationRows
+    .map((l) => ({ key: l.id, label: l.name, n: units.filter((u) => u.location_id === l.id).length }))
+    .filter((l) => l.n > 0);
+  const unplaced = units.filter((u) => !u.location_id).length;
+  if (unplaced > 0) locationOptions.push({ key: NO_LOCATION, label: "No location", n: unplaced });
+
   return (
     <RegisterView
       context={context}
       products={rows}
       unitTotal={units.length}
       maintenanceTotal={units.filter((u) => u.status === "maintenance").length}
+      locations={locationOptions}
       initialOpenId={open ?? null}
     />
   );
