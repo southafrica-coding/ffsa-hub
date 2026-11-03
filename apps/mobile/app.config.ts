@@ -53,6 +53,19 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         resizeMode: "contain",
       },
     ],
+    // Receipt photos (finance). The camera is asked for just in time, after an
+    // in-app explanation; no microphone (stills only). The photo library uses
+    // the system picker, which needs no access on iOS 14+ / Android 13+.
+    [
+      "expo-image-picker",
+      {
+        cameraPermission:
+          "FFSA Hub uses the camera to photograph receipts for your outreach team's expenses.",
+        photosPermission:
+          "FFSA Hub lets you choose a photo of a receipt to attach to an outreach expense.",
+        microphonePermission: false,
+      },
+    ],
     // expo-notifications (with ./assets/notification-icon.png, color
     // BRAND_YELLOW) is added when push notifications are set up.
   ],
