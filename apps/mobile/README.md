@@ -150,6 +150,33 @@ The Supabase session is several KB. It's encrypted (AES-256-CTR plus an HMAC-SHA
 
 The website's `src/types/database.ts` (repo root) is the source of truth. This app keeps a copy with a "GENERATED COPY" header: `npm run types:sync` refreshes it, `npm run types:check` fails if it's stale. Don't use the Supabase CLI for this.
 
+## Push notifications
+
+Built with the **Expo push service** (one server call reaches Apple APNs and Google FCM). Push is optional: the app works the same without it.
+
+**How it works**
+- Me › Notification settings has a **"Push notifications on this phone"** switch, a status line in words, and one switch per category (stored on the server, `GET/PUT /api/devices/preferences`). The phone's own permission prompt only appears after our explanation sheet ("Turn on notifications?" / "Not now"). The sheet is also offered once on Home from the third launch, never earlier, and not again for a month after "Not now".
+- With push on and allowed, the app sends its Expo push token to `POST /api/devices` (again whenever the token or the app version changes). Sign out (Me) calls `DELETE /api/devices` first, so the phone stops getting that person's notifications.
+- The server pushes at two write points today: a **new booking request** (to the people who approve bookings) and a **booking decision** (to the person who asked). The text is always generic ("A new booking request is waiting for you"): never names, amounts or details (Apple 4.5.4).
+- Tapping a notification opens the matching app screen (same table as Home's feed), or the website page in the in-app browser. The app icon badge shows Home's unread count.
+- Android has one notification channel per category (`booking_requests`, `booking_updates`).
+- Code: `src/features/push/` (app), `src/lib/push/` + `src/app/api/devices/` (server, repo root).
+
+**What the status line means**
+| Status | Why |
+|---|---|
+| Notifications are not switched on for this build yet | No Expo project id in this build, a simulator, or Expo Go (push needs a development or store build). |
+| Notifications are not switched on for FFSA Hub yet | The server answered `503 push_not_enabled`: migration 288 isn't applied. The app asks again next launch, not before. |
+| Off in your phone's Settings | The person said no to the system prompt. "Open Settings" takes them there. |
+
+**Needs Jack** (nothing here can be done by an agent):
+1. **Apply the migration** `supabase/migrations/288_device_push_tokens.sql` in the Supabase SQL Editor. Until then the server answers `503 push_not_enabled` and sends nothing.
+2. **Create the Expo project** under the FFSA Expo org (`eas init` in `apps/mobile`, or on expo.dev), then set its id as `EXPO_PUBLIC_EAS_PROJECT_ID` (in `.env` for local builds and in the EAS build environment). `app.config.ts` copies it to `extra.eas.projectId`. It's a public id, not a secret, but keep it out of git like the other values.
+3. **iOS:** in EAS credentials, let EAS create (or upload) an **APNs key** for the bundle id `com.ffsouthafrica.hub` (Apple Developer account needed).
+4. **Android:** create a Firebase project for the package `com.ffsouthafrica.hub`, upload its **FCM V1 service-account key** to EAS credentials, and add the `google-services.json` path to `app.config.ts` (`android.googleServicesFile`).
+5. Optional: switch on "enhanced push security" for the Expo project and put the access token in the **website's** Vercel env as `EXPO_ACCESS_TOKEN` (server only; never in the app).
+6. Make a development or preview build (EAS) and check push on real phones (Expo Go can't receive remote pushes).
+
 ## Placeholders and known gaps
 
 - EAS project, Expo owner, store accounts: not set.
@@ -158,6 +185,6 @@ The website's `src/types/database.ts` (repo root) is the source of truth. This a
 - Pages opened in the in-app browser don't share the app's sign-in, so the website may ask people to sign in there once.
 - Home's offline copy is per user and wiped on sign-out from Me. A forced sign-out (expired session) leaves it on the phone, keyed to that user only.
 - Deep links: `scheme: ffsahub` and `applinks:www.ffsahub.com` are declared, but the app doesn't handle any links yet. "Forgot password?" opens the website in the browser.
-- No push notifications (Home refreshes on open, pull-to-refresh and return from background) (the `expo-notifications` plugin and `assets/notification-icon.png` are ready for when it's added), no biometrics, no camera, no offline outbox.
+- Push notifications are built (see "Push notifications" above) but stay off until Jack does the setup marked **needs Jack**. No biometrics yet.
 - Dark mode is a first pass; the web is light-only.
 - The web's tertiary grey (`#7C786C`) is 4.4:1 on white, just under WCAG AA for body text, so the app only uses it for large text and decoration.
