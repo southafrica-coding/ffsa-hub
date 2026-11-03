@@ -87,13 +87,18 @@ function barProps(routeNames: string[], index = 0) {
 describe("TabBar", () => {
   afterEach(() => act(() => setTabBadge("home", 0)));
 
-  it("shows the four labelled tabs in order, whatever the route names look like", async () => {
+  it("shows the five labelled tabs in order, whatever the route names look like", async () => {
     mockFetch.mockImplementation(apiRoutes({ "/api/me": makeMe() }));
     // Placeholder-style names ("finance/index") and real-slice names ("tickets") mixed, shuffled.
-    const { props } = barProps(["me", "tickets", "index", "finance/index"], 2);
+    const { props } = barProps(["me", "prayer", "tickets", "index", "finance/index"], 3);
     await render(<TabBar {...props} />, { wrapper });
     const tabs = screen.getAllByRole("tab");
-    expect(tabs.map((t) => t.props.accessibilityLabel)).toEqual(["Home", "Finance", "Tickets", "Me"]);
+    expect(tabs.map((t) => t.props.accessibilityLabel)).toEqual(["Home", "Finance", "Prayer", "Tickets", "Me"]);
+    expect(screen.getByRole("tab", { name: "Prayer" }).props.accessibilityHint).toBe("Tab 3 of 5");
+    // Large Dynamic Type: the label shrinks to fit its fifth of the bar rather than truncating.
+    const label = screen.getByText("Tickets");
+    expect(label.props.adjustsFontSizeToFit).toBe(true);
+    expect(label.props.numberOfLines).toBe(1);
     expect(screen.getByRole("tab", { name: "Home" }).props.accessibilityState).toMatchObject({ selected: true });
     expect(screen.getByRole("tab", { name: "Me" }).props.accessibilityState).toMatchObject({ selected: false });
   });

@@ -1,6 +1,7 @@
-// The four tabs and who sees them. Route-folder contract (README):
+// The five tabs and who sees them. Route-folder contract (README):
 //   Home    app/(app)/index.tsx
 //   Finance app/(app)/finance/   (slice 2)
+//   Prayer  app/(app)/prayer/    (Phase 2 slice 2)
 //   Tickets app/(app)/tickets/   (slice 3; check-in at tickets/check-in/…)
 //   Me      app/(app)/me/
 //
@@ -9,13 +10,13 @@
 // same tab. That lets the placeholders and the real slices swap in without
 // touching this file.
 
-import { CircleUser, House, Ticket, Wallet, type LucideIcon } from "lucide-react-native";
+import { CircleUser, Flame, House, Ticket, Wallet, type LucideIcon } from "lucide-react-native";
 
 import type { Me } from "@/lib/api";
 
 import { shellStrings } from "./strings";
 
-export type TabId = "home" | "finance" | "tickets" | "me";
+export type TabId = "home" | "finance" | "prayer" | "tickets" | "me";
 
 export type TabDef = {
   id: TabId;
@@ -36,6 +37,7 @@ export type TabDef = {
 export const TABS: readonly TabDef[] = [
   { id: "home", segment: "index", label: shellStrings.tabs.home, icon: House },
   { id: "finance", segment: "finance", label: shellStrings.tabs.finance, icon: Wallet },
+  { id: "prayer", segment: "prayer", label: shellStrings.tabs.prayer, icon: Flame },
   { id: "tickets", segment: "tickets", label: shellStrings.tabs.tickets, icon: Ticket },
   { id: "me", segment: "me", label: shellStrings.tabs.me, icon: CircleUser },
 ];

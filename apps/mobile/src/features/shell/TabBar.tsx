@@ -135,6 +135,10 @@ function TabButton({
         style={{ color: tint, letterSpacing: focused ? 1.6 : 1.4 }}
         numberOfLines={1}
         maxFontSizeMultiplier={1.6}
+        // Five tabs on a 320pt phone leave ~64pt each: at large text sizes
+        // shrink the label to fit rather than cutting it off.
+        adjustsFontSizeToFit
+        minimumFontScale={0.7}
       >
         {tab.label}
       </Text>
