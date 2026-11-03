@@ -9,6 +9,10 @@ const DEFAULT_APP_ID = "com.ffsouthafrica.hub";
 const iosBundleId = process.env.APP_BUNDLE_ID || DEFAULT_APP_ID;
 const androidPackage = process.env.APP_ANDROID_PACKAGE || DEFAULT_APP_ID;
 
+// Expo project id (public, not a secret). Unset until Jack creates the Expo
+// project; see README "Push notifications".
+const easProjectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID || process.env.EAS_PROJECT_ID || undefined;
+
 // Brand yellow: app icon background, Android adaptive background and splash.
 const BRAND_YELLOW = "#FFB801";
 
@@ -90,12 +94,23 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         microphonePermission: false,
       },
     ],
-    // expo-notifications (with ./assets/notification-icon.png, color
-    // BRAND_YELLOW) is added when push notifications are set up.
+    // Push notifications (Expo push service). Android small icon is the
+    // white FF mark; the tint is brand yellow. No custom sounds and no
+    // background pushes: notifications are shown by the system only.
+    [
+      "expo-notifications",
+      {
+        icon: "./assets/notification-icon.png",
+        color: BRAND_YELLOW,
+      },
+    ],
   ],
   extra: {
     ...config.extra,
-    // TODO(Jack): `eas init` adds eas.projectId here once the Expo
-    // account/org exists. Deliberately absent until then.
+    // TODO(Jack): the Expo project id (from `eas init`, once the Expo
+    // account/org exists) goes in EXPO_PUBLIC_EAS_PROJECT_ID or
+    // EAS_PROJECT_ID. Push notifications need it; without it the app says
+    // "Notifications are not switched on for this build yet".
+    ...(easProjectId ? { eas: { projectId: easProjectId } } : {}),
   },
 });
