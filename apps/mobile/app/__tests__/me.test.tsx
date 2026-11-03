@@ -100,11 +100,13 @@ describe("Me", () => {
     ]);
   });
 
-  it("account deletion is shown but disabled until a request route exists", async () => {
+  it("account deletion opens the in-app request screen", async () => {
     mockFetch.mockImplementation(apiRoutes({ "/api/me": ME }));
     await render(wrap(<MeScreen />));
     const row = await screen.findByTestId("request-deletion");
-    expect(row.props.accessibilityState).toMatchObject({ disabled: true });
+    expect(row.props.accessibilityState).toMatchObject({ disabled: false });
+    await fireEvent.press(screen.getByRole("button", { name: "Request account deletion" }));
+    expect(mockRouter.push).toHaveBeenCalledWith("/me/delete-account");
   });
 
   it("settings rows push their screens", async () => {
