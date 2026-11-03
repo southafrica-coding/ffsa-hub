@@ -39,7 +39,9 @@ function IconButton({ label, onPress, children }: { label: string; onPress: () =
         borderColor: palette.white,
       })}
     >
-      {children}
+      <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        {children}
+      </View>
     </Pressable>
   );
 }
@@ -63,7 +65,15 @@ export function ScannerView({ onScanned, paused, onClose, onTypeCode, overlay }:
   };
 
   if (!permission) {
-    return <View testID="scanner-loading" style={{ flex: 1, backgroundColor: colors.bg }} />;
+    return (
+      <View
+        testID="scanner-loading"
+        accessible
+        accessibilityRole="progressbar"
+        accessibilityLabel={strings.a11y.scannerStarting}
+        style={{ flex: 1, backgroundColor: colors.bg }}
+      />
+    );
   }
 
   if (!permission.granted) {
@@ -94,7 +104,10 @@ export function ScannerView({ onScanned, paused, onClose, onTypeCode, overlay }:
         barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
         onBarcodeScanned={paused ? undefined : handle}
         onMountError={() => setMountError(true)}
-        accessibilityLabel={strings.camera.aim}
+        accessible
+        accessibilityRole="image"
+        accessibilityLabel={strings.a11y.camera}
+        accessibilityIgnoresInvertColors
       />
       <SafeAreaView style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} pointerEvents="box-none">
         <View style={{ flexDirection: "row", justifyContent: "space-between", padding: 16 }} pointerEvents="box-none">
@@ -108,7 +121,11 @@ export function ScannerView({ onScanned, paused, onClose, onTypeCode, overlay }:
         <View style={{ flex: 1 }} pointerEvents="none" />
         <View style={{ padding: 16, gap: 12 }} pointerEvents="box-none">
           {overlay ?? (
-            <View style={{ backgroundColor: palette.ink, padding: 14, borderWidth: 2, borderColor: palette.white }}>
+            <View
+              accessibilityLiveRegion={mountError ? "assertive" : "none"}
+              accessibilityRole={mountError ? "alert" : undefined}
+              style={{ backgroundColor: palette.ink, padding: 14, borderWidth: 2, borderColor: palette.white }}
+            >
               <Text tone="onInverse" style={{ color: palette.white }}>
                 {mountError ? strings.camera.mountError : strings.camera.aim}
               </Text>

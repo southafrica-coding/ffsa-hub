@@ -21,7 +21,8 @@ export function TicketQr({ code, dimmed = false }: { code: string; dimmed?: bool
         testID="ticket-qr"
         accessible
         accessibilityRole="image"
-        accessibilityLabel={strings.ticket.qrLabel(code)}
+        accessibilityLabel={dimmed ? `${strings.a11y.qrCancelled}. ${strings.ticket.qrLabel(code)}` : strings.ticket.qrLabel(code)}
+        accessibilityIgnoresInvertColors
         style={{ padding: 16, backgroundColor: palette.white, borderWidth: 2, borderColor: palette.ink, opacity: dimmed ? 0.25 : 1 }}
       >
         <QRCode value={code} size={size} color={palette.ink} backgroundColor={palette.white} ecl="M" quietZone={8} />

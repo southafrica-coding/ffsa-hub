@@ -16,7 +16,8 @@ function DateBlock({ day }: { day: string }) {
     <View
       accessible={false}
       importantForAccessibility="no-hide-descendants"
-      style={{ width: 48, alignItems: "center", borderWidth: hairline, borderColor: colors.text, paddingVertical: 4 }}
+      // minWidth, not width: a large day number grows the box instead of clipping.
+      style={{ minWidth: 48, alignItems: "center", borderWidth: hairline, borderColor: colors.text, paddingVertical: 4 }}
     >
       <Text variant="title" style={{ fontVariant: ["tabular-nums"] }}>
         {b.day}

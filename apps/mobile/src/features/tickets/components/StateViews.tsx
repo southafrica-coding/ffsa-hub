@@ -39,7 +39,8 @@ export function SkeletonRows({ rows = 3, label }: { rows?: number; label: string
 
 export function EmptyState({ title, body, children }: { title: string; body: string; children?: ReactNode }) {
   return (
-    <View testID="empty-state" accessible={!children} style={{ paddingVertical: 32, gap: 8 }}>
+    // Not grouped: the title keeps its header role so screen-reader users can jump to it.
+    <View testID="empty-state" style={{ paddingVertical: 32, gap: 8 }}>
       <Text variant="title">{title}</Text>
       <Text tone="secondary">{body}</Text>
       {children}

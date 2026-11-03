@@ -1,5 +1,7 @@
 import { Check } from "lucide-react-native";
 import { useEffect, useState } from "react";
+
+import { announce } from "@/lib/a11y";
 import { ActivityIndicator, View } from "react-native";
 
 import { Button, Text, TextField } from "@/components";
@@ -56,6 +58,12 @@ export function GuestSearch({ door, online, busy, onCheckIn }: Props) {
     };
   }, [q, active, door, attempt]);
 
+  // Tell screen-reader users the search finished (the list appears silently).
+  const doneCount = results.state === "done" ? results.guests.length : null;
+  useEffect(() => {
+    if (doneCount !== null) announce(doneCount === 0 ? strings.checkIn.searchEmpty : strings.a11y.searchResults(doneCount));
+  }, [doneCount, q]);
+
   async function checkIn(g: Guest) {
     await onCheckIn(g.code);
     setAttempt((n) => n + 1); // refresh the list so the row shows "In at …"
@@ -73,7 +81,7 @@ export function GuestSearch({ door, online, busy, onCheckIn }: Props) {
         returnKeyType="search"
         editable={online}
       />
-      {results.state === "loading" ? <ActivityIndicator color={colors.text} accessibilityLabel={strings.checkIn.search} /> : null}
+      {results.state === "loading" ? <ActivityIndicator color={colors.text} accessibilityLabel={strings.a11y.searching} /> : null}
       {results.state === "error" ? (
         <Text tone="danger" accessibilityRole="alert">
           {strings.checkIn.searchError}
@@ -96,14 +104,26 @@ export function GuestSearch({ door, online, busy, onCheckIn }: Props) {
                   borderBottomColor: colors.rule,
                 }}
               >
-                <View style={{ flex: 1 }} accessible accessibilityLabel={[g.name, g.ticketTypeName, inAt ? strings.checkIn.guestIn(inAt) : null].filter(Boolean).join(". ")}>
+                <View style={{ flex: 1 }} accessible accessibilityLabel={[
+                    g.name,
+                    g.ticketTypeName,
+                    inAt ? strings.checkIn.guestIn(inAt) : g.status === "checked_in" ? strings.status.checked_in : null,
+                  ]
+                    .filter(Boolean)
+                    .join(". ")}
+                >
                   <Text variant="bodyStrong">{g.name}</Text>
                   <Text variant="caption" tone="secondary">
                     {g.ticketTypeName}
                   </Text>
                 </View>
                 {g.status === "checked_in" ? (
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  // Already in the row's label above, so not read twice.
+                  <View
+                    style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+                    accessibilityElementsHidden
+                    importantForAccessibility="no-hide-descendants"
+                  >
                     <Check size={16} color={colors.textSecondary} accessibilityElementsHidden importantForAccessibility="no" />
                     <Text variant="label" tone="secondary">
                       {inAt ? strings.checkIn.guestIn(inAt) : strings.status.checked_in}
