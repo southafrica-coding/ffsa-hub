@@ -9,8 +9,10 @@ export const FULL_PROFILE_PATH = "/profile";
 // (the stores also need a privacy policy URL).
 export const PRIVACY_POLICY_PATH = "/legal/consent?kind=privacy";
 
-// TODO(Jack): Apple guideline 5.1.1(v) expects an in-app way to start account
-// deletion. The Hub has no deletion-request mechanism yet (no route, no
-// mailbox), so the row is shown disabled. Set this to a web path or mailto:
-// once one exists.
-export const ACCOUNT_DELETION_URL: string | null = null;
+// Apple guideline 5.1.1(v) / Google Play: the Me row opens the in-app request
+// screen (me/delete-account). This public web page files the same request and
+// is the fallback the screen links to (and the URL for Google Play's form).
+export const ACCOUNT_DELETION_URL = "/legal/delete-account";
+
+/** The in-app request screen. */
+export const ACCOUNT_DELETION_ROUTE = "/me/delete-account";

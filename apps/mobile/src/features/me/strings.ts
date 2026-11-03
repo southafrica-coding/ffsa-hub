@@ -23,7 +23,7 @@ export const meStrings = {
     privacy: { title: "Privacy policy" },
     deletion: {
       title: "Request account deletion",
-      subtitle: "Not available in the app yet. Ask an FFSA Hub admin.",
+      subtitle: "Ask us to delete your account and data",
     },
   },
   appearance: {
