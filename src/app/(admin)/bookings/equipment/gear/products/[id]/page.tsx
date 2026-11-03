@@ -83,6 +83,9 @@ export default async function ListingEditorPage({ params }: { params: Promise<{ 
           included: product.included ?? [],
           specs: product.specs ?? {},
           store_category_id: product.store_category_id,
+          // undefined until migration 285 is applied
+          replacement_value_cents: product.replacement_value_cents ?? null,
+          sortly_sid: product.sortly_sid ?? null,
         }}
         bookable={units.filter((u) => u.status === "available").length}
         photos={((photosRes.data ?? []) as EquipmentProductPhoto[]).map((p) => ({

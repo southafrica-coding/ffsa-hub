@@ -57,6 +57,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       (patch as Record<string, unknown>)[f] = body[f];
     }
   }
+  // Internal guide for lost/damaged gear (285). Not a price: it never goes on
+  // the store and nothing charges it, so it doesn't touch the listing rules.
+  if ("replacement_value_cents" in body) {
+    if (!isCents(body.replacement_value_cents, true)) {
+      return NextResponse.json({ error: "Replacement value must be a whole number of cents" }, { status: 400 });
+    }
+    patch.replacement_value_cents = body.replacement_value_cents as number | null;
+  }
   if ("can_leave_building" in body) {
     if (typeof body.can_leave_building !== "boolean") {
       return NextResponse.json({ error: "can_leave_building must be true or false" }, { status: 400 });

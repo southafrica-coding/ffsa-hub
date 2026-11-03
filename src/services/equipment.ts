@@ -77,6 +77,10 @@ export type EquipmentProduct = {
   max_per_order: number | null;
   sort_order: number;
   is_kit: boolean;
+  /** Per-unit value from the first (Sortly) inventory, cents. INTERNAL: never on the store (285/287). */
+  replacement_value_cents?: number | null;
+  /** Sortly item id. INTERNAL. */
+  sortly_sid?: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -120,9 +124,23 @@ export type EquipmentUnit = {
   warranty_until: string | null;
   last_checked_on: string | null;
   tag_printed_at: string | null;
-  source: { sheet?: string; tab?: string; row?: number } | null;
+  source: EquipmentUnitSource | null;
+  /** The sheet's "Assigned to", verbatim (285). Not in equipment_unit_state: read from equipment_units. */
+  owner_label?: string | null;
   created_at: string;
   updated_at: string;
+};
+
+/** equipment_units.source: where an imported row came from. INTERNAL. */
+export type EquipmentUnitSource = {
+  sheet?: string;
+  tab?: string;
+  row?: number;
+  sheet_quantity_header?: number | null;
+  origin?: string;
+  unverified?: boolean;
+  sortly_row?: number;
+  sid?: string;
 };
 
 /** A row of the equipment_unit_state view. */
@@ -294,6 +312,43 @@ export type EquipmentProductWithRefs = EquipmentProduct & {
 const PRODUCT_EMBED =
   "owner:ministries!equipment_products_owner_ministry_id_fkey(id,name),store_category:equipment_categories(id,name,slug)";
 
+/**
+ * The product columns the public store reads, named one by one. Never `*`:
+ * replacement_value_cents and sortly_sid are internal, and after migration
+ * 287 anon may only select the columns granted there (a superset of these).
+ */
+export const STORE_PRODUCT_COLUMNS = [
+  "id",
+  "slug",
+  "name",
+  "brand",
+  "model",
+  "register_category",
+  "store_category_id",
+  "description",
+  "included",
+  "specs",
+  "can_leave_building",
+  "is_listed",
+  "listed_at",
+  "price_day_cents",
+  "price_weekend_cents",
+  "price_week_cents",
+  "deposit_cents",
+  "internal_day_cents",
+  "max_per_order",
+  "sort_order",
+  "is_kit",
+  "created_at",
+  "updated_at",
+] as const;
+
+/** Columns that must never reach the public site. */
+export const INTERNAL_PRODUCT_COLUMNS = ["replacement_value_cents", "sortly_sid"] as const;
+export const INTERNAL_UNIT_COLUMNS = ["owner_label", "source"] as const;
+
+const STORE_PRODUCT_SELECT = `${STORE_PRODUCT_COLUMNS.join(",")},store_category:equipment_categories(id,name,slug)`;
+
 // ── Access ─────────────────────────────────────────────────
 
 /** The SQL gate itself (has_equipment_access), so pages agree with RLS. */
@@ -355,13 +410,17 @@ export async function getEquipmentAccess(
 
 // ── Products ───────────────────────────────────────────────
 
+/**
+ * Products. `listedOnly` is the storefront's call, so it selects the named
+ * store columns only; the register (staff) gets everything.
+ */
 export async function listProducts(
   supabase: Client,
   opts?: { listedOnly?: boolean; registerCategory?: string }
 ) {
   let query = supabase
     .from("equipment_products")
-    .select(`*,${PRODUCT_EMBED}`)
+    .select(opts?.listedOnly ? STORE_PRODUCT_SELECT : `*,${PRODUCT_EMBED}`)
     .order("register_category", { ascending: true })
     .order("sort_order", { ascending: true })
     .order("name", { ascending: true });
@@ -370,10 +429,11 @@ export async function listProducts(
   return query;
 }
 
+/** The public item page (/hire/p/[slug]): store columns only. */
 export async function getProductBySlug(supabase: Client, slug: string) {
   return supabase
     .from("equipment_products")
-    .select(`*,${PRODUCT_EMBED}`)
+    .select(STORE_PRODUCT_SELECT)
     .eq("slug", slug)
     .maybeSingle();
 }
@@ -412,6 +472,38 @@ export async function getUnitByTag(supabase: Client, tag: string) {
     .select("*")
     .eq("tag", tag.toUpperCase())
     .maybeSingle();
+}
+
+/**
+ * owner_label for units (285). Read from equipment_units because the
+ * equipment_unit_state view was frozen at `u.*` before the column existed.
+ * Pass ids to narrow it; callers treat an error (285 not applied yet) as "none".
+ */
+export async function listUnitOwnerLabels(supabase: Client, unitIds?: string[]) {
+  let query = supabase.from("equipment_units").select("id,owner_label");
+  if (unitIds) query = query.in("id", unitIds);
+  return query;
+}
+
+/** One unit's editable row, straight from equipment_units (staff only, RLS). */
+export async function getUnitRowByTag(supabase: Client, tag: string) {
+  return supabase.from("equipment_units").select("*").eq("tag", tag.toUpperCase()).maybeSingle();
+}
+
+export async function updateUnit(supabase: Client, id: string, data: Partial<EquipmentUnit>) {
+  return supabase
+    .from("equipment_units")
+    .update({ ...data, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select()
+    .single();
+}
+
+export async function insertUnitEvent(
+  supabase: Client,
+  data: Pick<EquipmentEvent, "unit_id" | "kind" | "detail" | "actor_id">
+) {
+  return supabase.from("equipment_events").insert(data).select().single();
 }
 
 export async function listLocations(supabase: Client) {

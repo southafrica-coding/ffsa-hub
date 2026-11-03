@@ -29,9 +29,11 @@ type ProductFields = {
   included: string[];
   specs: Record<string, string>;
   store_category_id: string | null;
+  replacement_value_cents: number | null;
+  sortly_sid: string | null;
 };
 
-type MoneyKey = "day" | "weekend" | "week" | "deposit" | "internal";
+type MoneyKey = "day" | "weekend" | "week" | "deposit" | "internal" | "replacement";
 
 export function ListingEditor({
   canEdit,
@@ -56,6 +58,7 @@ export function ListingEditor({
     week: centsToInput(product.price_week_cents),
     deposit: centsToInput(product.deposit_cents),
     internal: centsToInput(product.internal_day_cents),
+    replacement: centsToInput(product.replacement_value_cents),
   });
   const [description, setDescription] = useState(product.description ?? "");
   const [included, setIncluded] = useState(product.included.join("\n"));
@@ -73,8 +76,9 @@ export function ListingEditor({
     const week = parseRands(money.week);
     const deposit = parseRands(money.deposit) ?? 0;
     const internal = parseRands(money.internal) ?? 0;
-    const bad = [day, weekend, week, deposit, internal].some((v) => Number.isNaN(v));
-    return { day, weekend, week, deposit, internal, bad };
+    const replacement = parseRands(money.replacement);
+    const bad = [day, weekend, week, deposit, internal, replacement].some((v) => Number.isNaN(v));
+    return { day, weekend, week, deposit, internal, replacement, bad };
   }, [money]);
 
   const fields = {
@@ -95,6 +99,10 @@ export function ListingEditor({
       description: description.trim() || null,
       included: parseLines(included),
       specs: parseSpecs(specs),
+      // Only when it changed, so saving never depends on it otherwise.
+      ...(parsed.replacement !== product.replacement_value_cents
+        ? { replacement_value_cents: parsed.replacement }
+        : {}),
     };
   }
 
@@ -188,6 +196,25 @@ export function ListingEditor({
           <div className="grid grid-cols-2 gap-2">
             <MoneyBox label="Deposit, each" value={money.deposit} onChange={(v) => setMoney({ ...money, deposit: v })} disabled={disabled} />
             <MoneyBox label="Ministry rate, a day" value={money.internal} onChange={(v) => setMoney({ ...money, internal: v })} disabled={disabled} />
+          </div>
+
+          {/* Internal: never on the store, never charged (migration 285). */}
+          <div className="rounded-[8px] border border-dashed border-[color:var(--hire-line-strong)] p-2.5">
+            <MoneyBox
+              label="Replacement value per unit (internal, not shown to customers)"
+              value={money.replacement}
+              onChange={(v) => setMoney({ ...money, replacement: v })}
+              disabled={disabled}
+            />
+            <p className="mt-1.5 px-1 text-[12px] text-[color:var(--hire-muted)]">
+              A guide for lost or damaged gear, from the first inventory. Not a hire price.
+              {product.sortly_sid && (
+                <>
+                  {" "}
+                  Sortly id <span className="hire-mono text-[color:var(--hire-body)]">{product.sortly_sid}</span>.
+                </>
+              )}
+            </p>
           </div>
 
           {/* Photos */}

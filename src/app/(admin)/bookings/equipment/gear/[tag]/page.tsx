@@ -1,7 +1,8 @@
 // One unit (frames 45c, 47e-2): everything the sheet knew about it, its
 // history from equipment_events, and the places a sheet can't fill
 // (orders, repairs, the store) — empty until the unit is actually used.
-// Read-only for now; Edit and "Log a repair" come with the warehouse stage.
+// Staff who can operate equipment get a small Edit form (unit-edit-form.tsx);
+// "Log a repair" comes with the warehouse stage.
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -11,6 +12,7 @@ import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils/cn";
 import {
   countProductUnits,
+  getEquipmentAccess,
   getProductById,
   getUnitByTag,
   listLocations,
@@ -18,15 +20,25 @@ import {
   listOpenMaintenance,
   listUnitEvents,
   listUnitOrders,
+  listUnitOwnerLabels,
   type EquipmentEvent,
   type EquipmentMaintenance,
   type EquipmentProductWithRefs,
   type EquipmentUnitState,
 } from "@/services/equipment";
 import { rands } from "@/lib/equipment/money";
-import { eventLabel, hasNoSerial, sastDate, shortDate } from "@/lib/equipment/register";
+import { centsToInput } from "@/lib/equipment/listing";
+import {
+  eventLabel,
+  hasNoSerial,
+  isUnverifiedImport,
+  sastDate,
+  shortDate,
+  sourceText,
+} from "@/lib/equipment/register";
 import { HIRE } from "@/lib/equipment/hire-theme";
-import { StatusPill } from "../register-view";
+import { StatusPill, UnverifiedBadge } from "../register-view";
+import { UnitEditForm } from "./unit-edit-form";
 
 type UnitOrderRow = {
   id: string;
@@ -39,19 +51,25 @@ export default async function UnitPage({ params }: { params: Promise<{ tag: stri
   const { tag: rawTag } = await params;
   const tag = decodeURIComponent(rawTag);
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const { data: unitData } = await getUnitByTag(supabase, tag);
   if (!unitData) notFound();
   const unit = unitData as EquipmentUnitState;
 
-  const [productRes, eventsRes, maintRes, ordersRes, siblingsRes, locationsRes] = await Promise.all([
-    getProductById(supabase, unit.product_id),
-    listUnitEvents(supabase, unit.id),
-    listOpenMaintenance(supabase, unit.id),
-    listUnitOrders(supabase, unit.id),
-    countProductUnits(supabase, unit.product_id),
-    listLocations(supabase),
-  ]);
+  const [productRes, eventsRes, maintRes, ordersRes, siblingsRes, locationsRes, ownerLabelRes, access] =
+    await Promise.all([
+      getProductById(supabase, unit.product_id),
+      listUnitEvents(supabase, unit.id),
+      listOpenMaintenance(supabase, unit.id),
+      listUnitOrders(supabase, unit.id),
+      countProductUnits(supabase, unit.product_id),
+      listLocations(supabase),
+      listUnitOwnerLabels(supabase, [unit.id]),
+      user ? getEquipmentAccess(supabase, user.id) : null,
+    ]);
 
   const product = productRes.data as EquipmentProductWithRefs | null;
   const events = (eventsRes.data ?? []) as EquipmentEvent[];
@@ -62,8 +80,13 @@ export default async function UnitPage({ params }: { params: Promise<{ tag: stri
   const ownerId = unit.owner_ministry_id ?? product?.owner_ministry_id ?? null;
   const { data: owners } = await listMinistries(supabase, ownerId ? [ownerId] : []);
   const ownerName = (owners as { name: string }[] | null)?.[0]?.name ?? null;
-  const locationName =
-    ((locationsRes.data ?? []) as { id: string; name: string }[]).find((l) => l.id === unit.location_id)?.name ?? null;
+  const locationRows = (locationsRes.data ?? []) as { id: string; name: string }[];
+  const locationName = locationRows.find((l) => l.id === unit.location_id)?.name ?? null;
+  // Not in equipment_unit_state (285 came later); an error means 285 isn't applied yet.
+  const ownerLabel =
+    ((ownerLabelRes.error ? [] : ownerLabelRes.data ?? []) as { owner_label: string | null }[])[0]?.owner_label ?? null;
+  const unverified = isUnverifiedImport(unit);
+  const provenance = sourceText(unit.source);
 
   const make = [product?.brand, product?.model].filter(Boolean).join(" ") + (unit.label ? ` · ${unit.label}` : "");
   const noSerial = hasNoSerial(unit);
@@ -101,6 +124,9 @@ export default async function UnitPage({ params }: { params: Promise<{ tag: stri
     { label: "Supplier", value: unit.supplier },
     { label: "Purchased · price", value: purchased },
     { label: "Warranty", value: unit.warranty_until ? `Until ${shortDate(unit.warranty_until)}` : null },
+    // Appended, not inserted: the phone grid's borders count children by position.
+    { label: "Assigned to", value: ownerLabel },
+    { label: "Came from", value: provenance },
   ];
 
   const onlyImport = events.every((e) => e.kind === "imported");
@@ -135,6 +161,12 @@ export default async function UnitPage({ params }: { params: Promise<{ tag: stri
             {product?.name ?? "Unknown product"} · {make}
           </div>
           <h1 className="hire-display mt-0.5 text-[60px] md:text-[88px]">{unit.tag}</h1>
+          {unverified && (
+            <p className="mt-1 flex flex-wrap items-center gap-2 text-[13px]">
+              <UnverifiedBadge />
+              <span>From the first Sortly inventory. Check it&apos;s on the shelf, then edit it or retire it.</span>
+            </p>
+          )}
         </div>
         <div className="hidden md:block">
           <span className="scale-125 inline-block origin-right">
@@ -153,7 +185,7 @@ export default async function UnitPage({ params }: { params: Promise<{ tag: stri
 
       <div className="grid md:grid-cols-[minmax(0,1fr)_400px]">
         <div className="md:border-r md:border-[color:var(--hire-line)] md:px-10 md:py-7">
-          {/* Facts: 2×2 on a phone (47e-2), the full set of nine on desktop (45c). */}
+          {/* Facts: 2×2 on a phone (47e-2), everything else on desktop (45c). */}
           <dl className="grid grid-cols-2 border-b border-[color:var(--hire-line)] md:grid-cols-3 md:border-b-0 md:border-t-2 md:border-t-[color:var(--hire-ink)]">
             {facts.map((f) => (
               <div
@@ -180,6 +212,27 @@ export default async function UnitPage({ params }: { params: Promise<{ tag: stri
               </div>
             ))}
           </dl>
+
+          {access?.canOperate && (
+            <UnitEditForm
+              tag={unit.tag}
+              locations={locationRows.map((l) => ({ id: l.id, name: l.name }))}
+              initial={{
+                label: unit.label ?? "",
+                serial: unit.serial ?? "",
+                condition: unit.condition ?? "",
+                condition_note: unit.condition_note ?? "",
+                supplier: unit.supplier ?? "",
+                purchase_date: unit.purchase_date ?? "",
+                purchase_price: centsToInput(unit.purchase_price_cents),
+                warranty_until: unit.warranty_until ?? "",
+                last_checked_on: unit.last_checked_on ?? "",
+                location_id: unit.location_id ?? "",
+                owner_label: ownerLabel ?? "",
+                status: unit.status,
+              }}
+            />
+          )}
 
           <section className="md:mt-7">
             <h2 className="hire-label px-[18px] pb-1 pt-4 md:bg-[color:var(--hire-surface)] md:px-4 md:py-2.5 md:font-bold md:!text-[color:var(--hire-ink)]">

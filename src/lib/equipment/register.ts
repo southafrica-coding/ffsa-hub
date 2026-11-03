@@ -1,7 +1,7 @@
 // Pure helpers for the asset register (frames 45b / 45c / 47e). Everything
 // shown as "needs attention" is read off the units themselves, never made up.
 
-import type { EquipmentLiveStatus, EquipmentUnitState } from "@/services/equipment";
+import type { EquipmentLiveStatus, EquipmentUnitSource, EquipmentUnitState } from "@/services/equipment";
 
 type UnitLike = Pick<
   EquipmentUnitState,
@@ -17,6 +17,88 @@ export function hasNoSerial(u: Pick<UnitLike, "serial">): boolean {
 /** Still bookable, but the condition notes a fault ("Internal wifi busted"). */
 export function hasFault(u: Pick<UnitLike, "status" | "condition">): boolean {
   return u.status === "available" && /busted|fault/i.test(u.condition ?? "");
+}
+
+/**
+ * An import nobody has checked on the shelf yet: the unmatched Sortly items
+ * (286) carry source.unverified and an SRT- tag. Staff check and retire.
+ */
+export function isUnverifiedImport(u: { tag: string; source?: EquipmentUnitSource | null }): boolean {
+  return u.source?.unverified === true || u.tag.toUpperCase().startsWith("SRT-");
+}
+
+/** "Sheet · Upstairs Classroom (DTS-DBS), row 4" — read-only provenance for the unit page. */
+export function sourceText(source: EquipmentUnitSource | null | undefined): string | null {
+  if (!source) return null;
+  if (source.origin === "sortly") {
+    const bits = ["First Sortly inventory", source.sid, source.sortly_row != null ? `row ${source.sortly_row}` : null];
+    return bits.filter(Boolean).join(" · ") + (source.unverified ? " · not yet verified" : "");
+  }
+  if (source.tab) {
+    const row = source.row != null ? `, row ${source.row}` : "";
+    return `${source.sheet ?? "Sheet"} · ${source.tab}${row}`;
+  }
+  return null;
+}
+
+// ── Register filter and search ──────────────────────────────
+
+/** Location filter value for units with no location (the unverified imports). */
+export const NO_LOCATION = "none";
+
+export type RegisterFilter = {
+  /** register_category, or "all". */
+  category: string;
+  /** equipment_locations.id, NO_LOCATION, or "all". */
+  location: string;
+  query: string;
+};
+
+type FilterUnit = {
+  tag: string;
+  serial: string | null;
+  label: string | null;
+  ownerLabel: string | null;
+  locationId: string | null;
+  location: string | null;
+  unverified: boolean;
+};
+type FilterProduct<U extends FilterUnit> = { name: string; make: string; category: string; units: U[] };
+
+function matches(q: string, ...fields: (string | null | undefined)[]) {
+  return fields.some((f) => f && f.toLowerCase().includes(q));
+}
+
+/**
+ * What the register shows. Category picks products; location picks units
+ * (a product with none left drops out). Search covers product name, make and
+ * category, and every unit's tag, serial, label, owner ("Assigned to") and
+ * location — "unverified" finds the unchecked imports. A product found only
+ * through its units opens to show just those.
+ */
+export function filterRegister<P extends FilterProduct<FilterUnit>>(
+  products: P[],
+  f: RegisterFilter
+): { product: P; units: P["units"]; viaUnits: boolean }[] {
+  const q = f.query.trim().toLowerCase();
+  const out: { product: P; units: P["units"]; viaUnits: boolean }[] = [];
+  for (const p of products) {
+    if (f.category !== "all" && p.category !== f.category) continue;
+    const here =
+      f.location === "all"
+        ? p.units
+        : p.units.filter((u) => (f.location === NO_LOCATION ? !u.locationId : u.locationId === f.location));
+    if (here.length === 0) continue;
+    if (!q || matches(q, p.name, p.make, p.category)) {
+      out.push({ product: p, units: here, viaUnits: false });
+      continue;
+    }
+    const us = here.filter((u) =>
+      matches(q, u.tag, u.serial, u.label, u.ownerLabel, u.location, u.unverified ? "unverified" : null)
+    );
+    if (us.length) out.push({ product: p, units: us, viaUnits: true });
+  }
+  return out;
 }
 
 export type ProductSummary = {
