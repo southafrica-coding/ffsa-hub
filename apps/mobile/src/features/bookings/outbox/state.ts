@@ -5,38 +5,37 @@
 // Why not the finance outbox? It is built around expenses and receipts (an
 // expense id, a team, a direct bucket upload then an API registration).
 // Vehicle photos go to a different API route as multipart, and the form is a
-// different call, so this is a small sibling queue. It reuses finance's
-// backoff and give-up rule so both outboxes behave the same way:
-//
-//   waiting ──run──▶ sending ──ok──▶ (removed: it's on the server)
-//      ▲                │
-//      └── backoff ◀────┤ network, timeout, 5xx; after MAX_ATTEMPTS it needs the person
-//                       └─ permanent (403, 4xx) ─▶ failed ── Retry ─▶ waiting
-//                                                    └── Remove (person only)
-//
-// Nothing is dropped without the person choosing "Remove".
+// different call, so this is a small sibling queue on the same shared core
+// (src/lib/outbox/queue.ts: backoff, give-up rule, diagram), so both
+// outboxes behave the same way. Nothing is dropped without the person
+// choosing "Remove".
 
-import { backoffMs, MAX_ATTEMPTS, type Failure } from "@/features/finance/outbox/state";
+import { MAX_ATTEMPTS } from "@/lib/outbox/backoff";
+import {
+  enqueueUnique,
+  markDoneItem,
+  markFailedItem,
+  markSendingItem,
+  nextWakeAtFor,
+  recoverItems,
+  retryItem,
+  wakeItems,
+  type BaseItem,
+  type Failure,
+  type ItemStatus,
+} from "@/lib/outbox/queue";
 
 import type { InspectionKind, PhotoKind } from "../logic";
 
 export { MAX_ATTEMPTS, type Failure };
 
-export type QueueStatus = "waiting" | "sending" | "failed";
+export type QueueStatus = ItemStatus;
 
-type Common = {
-  id: string;
-  /** Items only send while the same person is signed in. */
-  userId: string;
+type Common = BaseItem & {
   bookingId: string;
   /** Shown in the list: "Kombi trip · collection". */
   bookingName: string;
   inspectionKind: InspectionKind;
-  status: QueueStatus;
-  attempts: number;
-  nextAttemptAt: number;
-  lastError: string | null;
-  createdAt: number;
 };
 
 export type PhotoItem = Common & {
@@ -58,7 +57,7 @@ export type QueueItem = PhotoItem | FormItem;
 
 type NewMeta = { userId: string; bookingId: string; bookingName: string; inspectionKind: InspectionKind };
 
-const fresh = { status: "waiting" as const, attempts: 0, nextAttemptAt: 0, lastError: null };
+const fresh = { status: "waiting" as const, attempts: 0, nextAttemptAt: 0, lastError: null, lastTriedAt: null, holdUntil: null, maybeSent: false };
 
 /** Queue items for freshly taken photos (ids and clock passed in, so it stays pure). */
 export function newPhotoItems(
@@ -75,15 +74,30 @@ export function newFormItem(meta: NewMeta, payload: FormItem["payload"], now: nu
   return { kind: "form", id, ...meta, ...fresh, payload, createdAt: now };
 }
 
+/** A double tap: the same photo file, or the same form for the same check. */
+export function sameQueueItem(a: QueueItem, b: QueueItem): boolean {
+  if (a.kind === "photo" && b.kind === "photo") return a.localUri === b.localUri;
+  if (a.kind === "form" && b.kind === "form") {
+    return a.bookingId === b.bookingId && a.inspectionKind === b.inspectionKind && JSON.stringify(a.payload) === JSON.stringify(b.payload);
+  }
+  return false;
+}
+
 export function enqueue(items: QueueItem[], ...added: QueueItem[]): QueueItem[] {
-  const ids = new Set(added.map((a) => a.id));
-  return [...items.filter((i) => !ids.has(i.id)), ...added];
+  return enqueueUnique(items, added, sameQueueItem);
+}
+
+/** Stored-item shape check (on top of the shared base fields). */
+export function isQueueItem(v: BaseItem): boolean {
+  const i = v as Partial<QueueItem> & Record<string, unknown>;
+  if (typeof i.bookingId !== "string" || typeof i.bookingName !== "string" || typeof i.inspectionKind !== "string") return false;
+  if (i.kind === "photo") return typeof i.localUri === "string" && typeof i.fileName === "string" && typeof i.mimeType === "string" && typeof i.photoKind === "string";
+  if (i.kind === "form") return !!i.payload && typeof i.payload === "object";
+  return false;
 }
 
 /** After a restart nothing is mid-send. */
-export function recover(items: QueueItem[]): QueueItem[] {
-  return items.map((i) => (i.status === "sending" ? { ...i, status: "waiting" as const } : i));
-}
+export const recover = (items: QueueItem[]): QueueItem[] => recoverItems(items);
 
 /** What may go now, oldest first, for this person only. */
 export function runnable(items: QueueItem[], opts: { now: number; userId: string | null; online: boolean }): QueueItem[] {
@@ -93,47 +107,24 @@ export function runnable(items: QueueItem[], opts: { now: number; userId: string
     .sort((a, b) => a.createdAt - b.createdAt);
 }
 
-export function nextWakeAt(items: QueueItem[], userId: string | null): number | null {
-  const times = items.filter((i) => i.userId === userId && i.status === "waiting").map((i) => i.nextAttemptAt);
-  return times.length ? Math.min(...times) : null;
-}
+export const nextWakeAt = (items: QueueItem[], userId: string | null): number | null => nextWakeAtFor(items, userId);
 
-function patch(items: QueueItem[], id: string, fn: (i: QueueItem) => QueueItem): QueueItem[] {
-  return items.map((i) => (i.id === id ? fn(i) : i));
-}
+export const markSending = (items: QueueItem[], id: string, now?: number): QueueItem[] => markSendingItem(items, id, now);
 
-export function markSending(items: QueueItem[], id: string): QueueItem[] {
-  return patch(items, id, (i) => ({ ...i, status: "sending" }));
-}
+export const markDone = (items: QueueItem[], id: string): QueueItem[] => markDoneItem(items, id);
 
-export function markDone(items: QueueItem[], id: string): QueueItem[] {
-  return items.filter((i) => i.id !== id);
-}
+export const markFailed = (items: QueueItem[], id: string, failure: Failure, now: number, random?: number): QueueItem[] =>
+  markFailedItem(items, id, failure, now, random);
 
-export function markFailed(items: QueueItem[], id: string, failure: Failure, now: number): QueueItem[] {
-  return patch(items, id, (i) => {
-    const attempts = i.attempts + 1;
-    const giveUp = failure.permanent || attempts >= MAX_ATTEMPTS;
-    return {
-      ...i,
-      attempts,
-      lastError: failure.message,
-      status: giveUp ? "failed" : "waiting",
-      nextAttemptAt: giveUp ? i.nextAttemptAt : now + backoffMs(attempts),
-    };
-  });
-}
+export const retry = (items: QueueItem[], id: string): QueueItem[] => retryItem(items, id);
 
-export function retry(items: QueueItem[], id: string): QueueItem[] {
-  return patch(items, id, (i) => ({ ...i, status: "waiting", nextAttemptAt: 0, attempts: i.status === "failed" ? 0 : i.attempts }));
-}
+export const wakeAll = (items: QueueItem[]): QueueItem[] => wakeItems(items);
 
-export function wakeAll(items: QueueItem[]): QueueItem[] {
-  return items.map((i) => (i.status === "waiting" ? { ...i, nextAttemptAt: 0 } : i));
-}
-
+/** The person chose Remove (never mid-send). */
 export function discard(items: QueueItem[], id: string): { items: QueueItem[]; removed: QueueItem[] } {
-  return { items: items.filter((i) => i.id !== id), removed: items.filter((i) => i.id === id) };
+  const target = items.find((i) => i.id === id);
+  if (!target || target.status === "sending") return { items, removed: [] };
+  return { items: items.filter((i) => i.id !== id), removed: [target] };
 }
 
 // ── What the screens show ───────────────────────────────────────────────────
@@ -159,4 +150,22 @@ export function formQueued(items: QueueItem[], bookingId: string, kind: Inspecti
 
 export function referencedFiles(items: QueueItem[]): Set<string> {
   return new Set(items.filter((i): i is PhotoItem => i.kind === "photo").map((i) => i.localUri));
+}
+
+// ── Telling a re-sent photo apart ───────────────────────────────────────────
+
+/**
+ * The upload route stores photos under a path it makes up, so a retry after
+ * a lost answer can't overwrite the first copy. Instead the file name sent
+ * carries the item's id ("IMG_1__<id>.jpg"), and before re-sending a photo
+ * that may have arrived, the runner looks for that name on the booking.
+ */
+export function taggedFileName(fileName: string, id: string): string {
+  const m = /^(.*?)(\.[A-Za-z0-9]+)?$/.exec(fileName);
+  const stem = m?.[1] || "photo";
+  return `${stem}__${id}${m?.[2] ?? ""}`;
+}
+
+export function hasTaggedFile(names: (string | null | undefined)[], id: string): boolean {
+  return names.some((n) => !!n && n.includes(`__${id}`));
 }

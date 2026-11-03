@@ -1,161 +1,68 @@
-// Sends the vehicle-check outbox, one item at a time, writing the on-disk
-// copy after every change. All I/O is injected (live.ts wires the real
-// network, disk and session), so the send/retry/give-up flow is tested with
-// fakes. Same shape as the finance outbox's runner.
+// Sends the vehicle-check outbox, one item at a time, on the shared outbox
+// engine (src/lib/outbox/engine.ts: storage, retry and safety rules). All
+// I/O is injected (live.ts wires the real network, disk and session), so
+// the send/retry/give-up flow is tested with fakes.
+//
+// Repeat safety: the form is safe to repeat (the route answers a second
+// form for the same check with 409 "already recorded", which counts as
+// sent). A photo is NOT: the route stores every upload under a new path. So
+// a photo whose last try may have arrived (timeout, dropped connection,
+// server error, app killed mid-send) is looked for on the booking first and
+// only re-sent if it isn't there.
 
-import {
-  discard as discardItem,
-  enqueue,
-  markDone,
-  markFailed,
-  markSending,
-  nextWakeAt,
-  recover,
-  referencedFiles,
-  retry as retryItem,
-  runnable,
-  wakeAll,
-  type Failure,
-  type FormItem,
-  type PhotoItem,
-  type QueueItem,
-} from "./state";
+import { OutboxEngine, PermanentError, type EngineDeps } from "@/lib/outbox/engine";
+import type { QueueStorage as Storage } from "@/lib/outbox/file-store";
+import type { BaseItem } from "@/lib/outbox/queue";
 
-export type QueueStorage = {
-  read(): Promise<QueueItem[]>;
-  write(items: QueueItem[]): Promise<void>;
-  deleteFile(uri: string): void;
-  fileExists(uri: string): boolean;
-  listFiles(): { uri: string; modifiedAt: number }[];
-};
+import { discard as discardItems, isQueueItem, runnable, sameQueueItem, type FormItem, type PhotoItem, type QueueItem } from "./state";
 
-export type QueueDeps = {
-  storage: QueueStorage;
+export { PermanentError };
+
+export type QueueStorage = Storage<QueueItem>;
+
+export type QueueDeps = EngineDeps<QueueItem> & {
   uploadPhoto(item: PhotoItem): Promise<unknown>;
   sendForm(item: FormItem): Promise<unknown>;
-  classify(err: unknown): Failure;
   /** True when a failed form send means "already on FFSA Hub" (a retry after a lost answer). */
   isAlreadyRecorded(err: unknown): boolean;
-  getUserId(): Promise<string | null>;
-  isOnline(): Promise<boolean>;
-  now(): number;
+  /**
+   * Is this photo already on the booking (an earlier try got there)? Throw
+   * if that can't be checked right now. Left out: photos are re-sent as
+   * before.
+   */
+  wasReceived?(item: PhotoItem): Promise<boolean>;
 };
 
-const ORPHAN_AGE_MS = 24 * 60 * 60_000;
-
-export class PermanentError extends Error {
-  name = "PermanentError";
-  readonly permanent = true;
-}
-
-export class BookingsOutbox {
-  private items: QueueItem[] = [];
-  private listeners = new Set<() => void>();
-  private ready: Promise<void> | null = null;
-  private running: Promise<void> | null = null;
-  private again = false;
-
-  constructor(private deps: QueueDeps) {}
-
-  init(): Promise<void> {
-    this.ready ??= (async () => {
-      try {
-        this.items = recover(await this.deps.storage.read());
-      } catch {
-        this.items = [];
-      }
-      this.sweepOrphans();
-      this.emit();
-    })();
-    return this.ready;
+export class BookingsOutbox extends OutboxEngine<QueueItem> {
+  constructor(private deps: QueueDeps) {
+    super(deps);
   }
 
-  getItems = (): QueueItem[] => this.items;
-
-  subscribe = (fn: () => void): (() => void) => {
-    this.listeners.add(fn);
-    return () => {
-      this.listeners.delete(fn);
-    };
-  };
-
-  private emit() {
-    for (const fn of this.listeners) fn();
+  protected isItem(v: BaseItem) {
+    return isQueueItem(v);
   }
 
-  private async set(next: QueueItem[]) {
-    this.items = next;
-    this.emit();
-    await this.deps.storage.write(next);
+  protected pick(candidates: QueueItem[], ctx: { now: number; userId: string; online: boolean }) {
+    return runnable(candidates, ctx)[0];
   }
 
-  async add(...added: QueueItem[]): Promise<void> {
-    await this.init();
-    await this.set(enqueue(this.items, ...added));
+  protected files(item: QueueItem) {
+    return item.kind === "photo" ? [item.localUri] : [];
   }
 
-  async retry(id: string): Promise<void> {
-    await this.init();
-    await this.set(retryItem(this.items, id));
-    void this.process();
+  protected removeFrom(items: QueueItem[], id: string) {
+    return discardItems(items, id);
   }
 
-  async discard(id: string): Promise<void> {
-    await this.init();
-    const { items, removed } = discardItem(this.items, id);
-    await this.set(items);
-    for (const r of removed) if (r.kind === "photo") this.safeDelete(r.localUri);
+  protected sameAs(a: QueueItem, b: QueueItem) {
+    return sameQueueItem(a, b);
   }
 
-  async wake(): Promise<void> {
-    await this.init();
-    await this.set(wakeAll(this.items));
-    await this.process();
+  protected alreadyThere(item: QueueItem, err: unknown) {
+    return item.kind === "form" && this.deps.isAlreadyRecorded(err);
   }
 
-  async nextWake(): Promise<number | null> {
-    return nextWakeAt(this.items, await this.deps.getUserId());
-  }
-
-  process(): Promise<void> {
-    if (this.running) {
-      this.again = true;
-      return this.running;
-    }
-    this.running = (async () => {
-      await this.init();
-      do {
-        this.again = false;
-        await this.drain();
-      } while (this.again);
-    })().finally(() => {
-      this.running = null;
-    });
-    return this.running;
-  }
-
-  private async drain() {
-    for (;;) {
-      const [userId, online] = await Promise.all([this.deps.getUserId(), this.deps.isOnline()]);
-      const next = runnable(this.items, { now: this.deps.now(), userId, online })[0];
-      if (!next) return;
-      await this.set(markSending(this.items, next.id));
-      try {
-        await this.send(next);
-        await this.set(markDone(this.items, next.id));
-        if (next.kind === "photo") this.safeDelete(next.localUri);
-      } catch (err) {
-        if (next.kind === "form" && this.deps.isAlreadyRecorded(err)) {
-          // The first try reached the server but its answer was lost.
-          await this.set(markDone(this.items, next.id));
-          continue;
-        }
-        await this.set(markFailed(this.items, next.id, this.deps.classify(err), this.deps.now()));
-      }
-    }
-  }
-
-  private async send(item: QueueItem) {
+  protected async send(item: QueueItem) {
     if (item.kind === "form") {
       await this.deps.sendForm(item);
       return;
@@ -163,26 +70,7 @@ export class BookingsOutbox {
     if (!this.deps.storage.fileExists(item.localUri)) {
       throw new PermanentError("This photo is no longer on the phone. Remove it and take the photo again.");
     }
+    if (item.maybeSent && this.deps.wasReceived && (await this.deps.wasReceived(item))) return;
     await this.deps.uploadPhoto(item);
-  }
-
-  private safeDelete(uri: string) {
-    try {
-      this.deps.storage.deleteFile(uri);
-    } catch {
-      // A leftover file costs disk space, not data.
-    }
-  }
-
-  private sweepOrphans() {
-    try {
-      const keep = referencedFiles(this.items);
-      const cutoff = this.deps.now() - ORPHAN_AGE_MS;
-      for (const f of this.deps.storage.listFiles()) {
-        if (!keep.has(f.uri) && f.modifiedAt < cutoff) this.safeDelete(f.uri);
-      }
-    } catch {
-      // Tidying is best-effort.
-    }
   }
 }

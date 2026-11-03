@@ -19,6 +19,8 @@ export function fakeOutbox(initial: QueueItem[] = []) {
   const listeners = new Set<() => void>();
   const outbox = {
     getItems: () => items,
+    getProblem: () => null as "corrupt" | "partial" | null,
+    dismissProblem: jest.fn(),
     subscribe: (fn: () => void) => {
       listeners.add(fn);
       return () => listeners.delete(fn);

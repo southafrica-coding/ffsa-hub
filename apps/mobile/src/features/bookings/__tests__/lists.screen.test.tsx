@@ -166,8 +166,9 @@ describe("Bookings home", () => {
     ]);
     await render(inSafeArea(<BookingsHomeScreen />));
     expect(await screen.findByText(strings.queue.title)).toBeTruthy();
-    expect(screen.getByText(strings.queue.failed)).toBeTruthy();
-    expect(screen.getByText("This photo is too large to upload.")).toBeTruthy();
+    // Shared outbox wording: "Needs you", the reason, and (after 8 tries) the next step.
+    expect(screen.getByText("Needs you")).toBeTruthy();
+    expect(screen.getByText(/^This photo is too large to upload\. Couldn't send after 8 tries/)).toBeTruthy();
   });
 });
 
