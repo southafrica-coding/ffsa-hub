@@ -3,7 +3,11 @@ import { act, renderRouter, screen } from "expo-router/testing-library";
 import type { SessionState } from "@/auth/session-provider";
 
 import AppLayout from "../(app)/_layout";
+import FinancePlaceholder from "../(app)/finance/index";
 import HomeScreen from "../(app)/index";
+import MeLayout from "../(app)/me/_layout";
+import MeScreen from "../(app)/me/index";
+import TicketsPlaceholder from "../(app)/tickets/index";
 import AuthLayout from "../(auth)/_layout";
 import SignInScreen from "../(auth)/sign-in";
 import RootLayout from "../_layout";
@@ -32,6 +36,7 @@ jest.mock("@/auth/session-provider", () => {
 jest.mock("expo-font", () => ({ useFonts: () => [true, null] }));
 jest.mock("@/lib/supabase", () => ({ supabase: { auth: { signInWithPassword: jest.fn(), signOut: jest.fn() } } }));
 jest.mock("@/lib/api-client", () => ({ apiFetch: jest.fn(() => new Promise(() => {})) }));
+jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn() }));
 
 const routes = {
   _layout: RootLayout,
@@ -39,6 +44,10 @@ const routes = {
   "(auth)/sign-in": SignInScreen,
   "(app)/_layout": AppLayout,
   "(app)/index": HomeScreen,
+  "(app)/finance/index": FinancePlaceholder,
+  "(app)/tickets/index": TicketsPlaceholder,
+  "(app)/me/_layout": MeLayout,
+  "(app)/me/index": MeScreen,
 };
 
 const signedIn = { status: "signedIn", session: { access_token: "t" } } as unknown as SessionState;
@@ -48,7 +57,7 @@ describe("auth gate (app/_layout.tsx)", () => {
     mockSession = { status: "loading", session: null };
     await renderRouter(routes, { initialUrl: "/" });
     expect(screen.queryByRole("button", { name: "Sign in" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Sign out" })).toBeNull();
+    expect(screen.queryByRole("tab", { name: "Home" })).toBeNull();
   });
 
   it("sends a signed-out user to sign-in, even when opening Home", async () => {
@@ -56,21 +65,21 @@ describe("auth gate (app/_layout.tsx)", () => {
     await renderRouter(routes, { initialUrl: "/" });
     expect(screen).toHavePathname("/sign-in");
     expect(screen.getByRole("button", { name: "Sign in" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Sign out" })).toBeNull();
+    expect(screen.queryByRole("tab", { name: "Home" })).toBeNull();
   });
 
   it("keeps a signed-in user out of sign-in", async () => {
     mockSession = signedIn;
     await renderRouter(routes, { initialUrl: "/sign-in" });
     expect(screen).toHavePathname("/");
-    expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Home" })).toBeTruthy();
     expect(screen.queryByLabelText("Password")).toBeNull();
   });
 
   it("returns to sign-in when the session ends while the app is open (e.g. a 401)", async () => {
     setSession(signedIn);
     await renderRouter(routes, { initialUrl: "/" });
-    expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Home" })).toBeTruthy();
     await act(async () => setSession({ status: "signedOut", session: null }));
     expect(screen).toHavePathname("/sign-in");
     expect(screen.getByRole("button", { name: "Sign in" })).toBeTruthy();

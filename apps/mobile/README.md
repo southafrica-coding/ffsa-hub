@@ -6,18 +6,49 @@ It is an **independent app**: its own `package.json`, lockfile, `node_modules`, 
 
 > **Rule: never run `npm install` at the repo root for mobile work.** Always `cd apps/mobile` first. The root `package.json` is the website.
 
-## What's here today (scaffold)
+## What's here today
 
-- Sign-in (email + password), session restored on launch, sign-out.
-- A **placeholder Home** that calls `GET /api/me` and shows your name, roles, permission count and server time.
+- Sign-in (email + password), session restored on launch.
+- **Bottom tab bar**: Home · Finance · Tickets · Me (Finance and Tickets are built by their own Phase 1 slices; until they land they show "Coming soon").
+- **Home**: the "needs you" feed (`GET /api/notifications`, the same items as the web dashboard), one yellow band when something is unread, grouped list (Needs you / Earlier), mark read, pull-to-refresh, offline copy, shortcuts.
+- **Me**: name, email, roles; edit name and phone; notification settings; links to the full web profile and the privacy policy; app version; sign out (this phone only).
 - The design tokens and a small component kit (`Button`, `Text`, `Screen`, `TextField`, `Banner` incl. the yellow "needs you" band, `Divider`, `Masthead`).
 - Final app icon and splash (Option 1, "Signature": black FF mark on `#FFB801`).
 
-Real screens (needs-you feed, My Finance, receipts, tickets, check-in) come in Phase 1.
+Planning docs (plan, feature inventory, API surface, permissions, design tokens, store accounts) are in [`docs/`](docs/); decisions are at the end of [`docs/plan.md`](docs/plan.md).
+
+## App shell: route folders, `useMe`, `useCan`
+
+**Route-folder contract.** Each tab is a folder (or file) under `app/(app)/`, owned by one slice:
+
+| Tab | Route | Owner |
+|---|---|---|
+| Home | `app/(app)/index.tsx` | shell (slice 1) |
+| Finance | `app/(app)/finance/` (own `_layout.tsx` + `index.tsx`) | slice 2 |
+| Tickets | `app/(app)/tickets/` (own `_layout.tsx` + `index.tsx`; door check-in at `tickets/check-in/…`) | slice 3 |
+| Me | `app/(app)/me/` (`_layout.tsx`, `index.tsx`, `edit.tsx`, `notifications.tsx`) | shell (slice 1) |
+
+Only the shell edits `app/(app)/_layout.tsx` (the tab bar). The bar matches a route on its **first path segment**, so `finance` (folder with `_layout.tsx`) and `finance/index` (bare file) are the same tab, and nested routes like `tickets/check-in` keep their tab selected. Tab order, labels, icons and optional visibility rules live in `src/features/shell/tabs.ts`.
+
+**Hooks** (`import { … } from "@/features/shell"`), usable anywhere inside the signed-in area:
+
+| | |
+|---|---|
+| `useMe()` | `{ status: "loading" \| "ready" \| "error", me, error, refresh }` from `GET /api/me`, loaded once by the tab layout and refreshed when the app returns from the background (after 5 min). |
+| `useCan(permission)` | `true` if the person holds that permission key (any scope, direct or via a role) or is `admin`/`super_admin`. `false` while loading. |
+| `useHasRole(name)` | `true` if they hold that role (any scope). |
+| `setTabBadge(tab, n)` | Puts a count on a tab (`"home" \| "finance" \| "tickets" \| "me"`); `0` hides it. Home uses it for unread notifications. |
+| `openWebPage(path)` | Opens a website page in the in-app browser (for things the app doesn't have yet). |
+
+These gates are **for the interface only**. Hiding a button protects nothing: the API and Supabase RLS decide, and the app must handle a `403` gracefully (show a "not available on your account" state).
+
+Also exported for any slice: `SectionBar` (black section header), `BarAction`, `ListRow` (56dp row, push / opens-in-browser variants), `StateMessage` (empty / no-access), `SkeletonRows` (static loading placeholder, no motion).
+
+**Strings** live in one file per feature (`src/features/<feature>/strings.ts`) so translation can come later.
 
 ## Prerequisites
 
-- **Node 22.13+ or 24.3+** (Expo SDK 58's range: `^22.13 || ^24.3 || >=26`; Node 25 is outside it). `node -v` to check.
+- **Node 24** (`.nvmrc`; Node 22.13+ also works) (Expo SDK 58's range: `^22.13 || ^24.3 || >=26`; Node 25 is outside it). `node -v` to check.
 - A phone with **Expo Go** (App Store / Play Store), or a development build (below).
 - For the API calls: a deployment of the website that includes the **bearer-token API auth** change (web PR "mobile API bearer auth": `GET /api/me`, JSON 401/403). Until that's on `www.ffsahub.com`, use a Vercel preview URL of that PR.
 
@@ -67,7 +98,7 @@ Store builds use **EAS** (Expo's cloud build service). `eas.json` has three prof
 
 Not done yet, deliberately:
 - **No EAS project:** `eas init` (which adds `extra.eas.projectId` to the config) needs the FFSA Expo account/org first.
-- **No bundle ID / package name:** `app.config.ts` reads `APP_BUNDLE_ID` and `APP_ANDROID_PACKAGE`, defaulting to the placeholder `com.replace_me.ffsahub`. The real one can never change after store release, so it's Jack's call.
+- **Bundle ID / package name** default to `com.ffsouthafrica.hub` (Jack's pre-approved default, 3 Nov 2026; `APP_BUNDLE_ID` / `APP_ANDROID_PACKAGE` override it). It is not registered with Apple, Google or Expo yet, and can never change after store release.
 - No signing credentials, Apple IDs or store accounts are in the repo.
 
 Website deploys are unaffected: `vercel.json` skips the website build for commits that only touch `apps/mobile/` (`scripts/vercel-ignore-mobile.sh`).
@@ -78,9 +109,17 @@ Website deploys are unaffected: `vercel.json` skips the website build for commit
 app/                     routes (expo-router)
   _layout.tsx            fonts, splash, session restore, auth gate
   (auth)/sign-in.tsx     signed-out only
-  (app)/index.tsx        signed-in only: placeholder Home
+  (app)/_layout.tsx      signed-in only: bottom tabs + MeProvider
+  (app)/index.tsx        Home ("needs you" feed)
+  (app)/finance/         slice 2 (placeholder until it lands)
+  (app)/tickets/         slice 3 (placeholder until it lands)
+  (app)/me/              Me, edit profile, notification settings
+docs/                    planning docs and decisions
 src/
   auth/                  session provider, sign-in rules (cooldown, safe errors)
+  features/shell/        tab bar, useMe/useCan, badges, shared rows, in-app browser
+  features/home/         notifications API, offline cache, feed logic, strings
+  features/me/           profile + notification-preference API, validation, links, strings
   components/            the component kit
   lib/
     env.ts               EXPO_PUBLIC_* validation (zod)
@@ -113,9 +152,12 @@ The website's `src/types/database.ts` (repo root) is the source of truth. This a
 
 ## Placeholders and known gaps
 
-- Home is a placeholder (its yellow band says so).
-- Bundle ID / package name, EAS project, store accounts: not set.
+- EAS project, Expo owner, store accounts: not set.
+- **Dark mode** follows the phone's setting only; there's no in-app Light/Dark/System switch yet (Me shows Appearance as read-only).
+- **Account deletion request**: the Me row is shown disabled until a request mechanism exists (Apple 5.1.1(v); Jack's decision).
+- Pages opened in the in-app browser don't share the app's sign-in, so the website may ask people to sign in there once.
+- Home's offline copy is per user and wiped on sign-out from Me. A forced sign-out (expired session) leaves it on the phone, keyed to that user only.
 - Deep links: `scheme: ffsahub` and `applinks:www.ffsahub.com` are declared, but the app doesn't handle any links yet. "Forgot password?" opens the website in the browser.
-- No push notifications (the `expo-notifications` plugin and `assets/notification-icon.png` are ready for when it's added), no biometrics, no camera, no offline outbox.
+- No push notifications (Home refreshes on open, pull-to-refresh and return from background) (the `expo-notifications` plugin and `assets/notification-icon.png` are ready for when it's added), no biometrics, no camera, no offline outbox.
 - Dark mode is a first pass; the web is light-only.
 - The web's tertiary grey (`#7C786C`) is 4.4:1 on white, just under WCAG AA for body text, so the app only uses it for large text and decoration.
