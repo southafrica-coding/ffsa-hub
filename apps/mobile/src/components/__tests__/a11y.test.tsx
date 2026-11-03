@@ -102,3 +102,29 @@ describe("kit accessibility", () => {
     expect(band.props.accessible).toBe(true);
   });
 });
+
+describe("Banner announcements", () => {
+  const { AccessibilityInfo, Platform } = jest.requireActual<typeof import("react-native")>("react-native");
+
+  it("a danger banner with a retry keeps its alert role on the message, and the button stays reachable", async () => {
+    await render(
+      <Banner tone="danger" title="Couldn't load" action={<Button label="Try again" onPress={() => {}} />}>
+        Check your connection.
+      </Banner>,
+    );
+    const alert = screen.getByRole("alert");
+    expect(alert.props.accessibilityLiveRegion).toBe("assertive");
+    expect(alert).toHaveTextContent(/Couldn't load/);
+    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+  });
+
+  it("speaks danger banners on iOS (VoiceOver ignores live regions), not info ones", async () => {
+    const spy = jest.spyOn(AccessibilityInfo, "announceForAccessibilityWithOptions").mockImplementation(() => {});
+    Platform.OS = "ios";
+    await render(<Banner tone="info">Just so you know</Banner>);
+    expect(spy).not.toHaveBeenCalledWith(expect.stringContaining("Just so you know"), expect.anything());
+    await render(<Banner tone="danger" title="Couldn't save">Try again in a minute.</Banner>);
+    expect(spy).toHaveBeenCalledWith("Couldn't save. Try again in a minute", { queue: true });
+    spy.mockRestore();
+  });
+});
