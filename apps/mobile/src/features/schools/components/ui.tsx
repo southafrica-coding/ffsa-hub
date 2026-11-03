@@ -42,7 +42,11 @@ export function Freshness<T>({ state, onRetry }: { state: LoadState<T>; onRetry:
 /** The trailing chevron on rows that open another screen in the app. */
 export function Chevron() {
   const { colors } = useTheme();
-  return <ChevronRight size={20} color={colors.textSecondary} />;
+  return (
+    <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <ChevronRight size={20} color={colors.textSecondary} />
+    </View>
+  );
 }
 
 /** Day + month stacked in a bordered square, like the web's DateBlock. */

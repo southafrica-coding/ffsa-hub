@@ -58,13 +58,13 @@ export default function MeScreen() {
 
       {me ? (
         <View style={{ gap: 12 }} testID="profile-card">
-          <View style={{ gap: 2 }}>
+          <View accessible accessibilityLabel={s.a11y.field(s.email, me.user.email ?? "—")} style={{ gap: 2 }}>
             <Text variant="label" tone="secondary">
               {s.email}
             </Text>
             <Text selectable>{me.user.email ?? "—"}</Text>
           </View>
-          <View style={{ gap: 2 }}>
+          <View accessible accessibilityLabel={s.a11y.field(s.roles, roles.length ? roles.join(", ") : s.noRoles)} style={{ gap: 2 }}>
             <Text variant="label" tone="secondary">
               {s.roles}
             </Text>

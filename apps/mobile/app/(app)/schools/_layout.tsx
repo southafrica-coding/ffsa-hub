@@ -1,6 +1,6 @@
 import { Stack, useRouter } from "expo-router";
 import { ChevronLeft } from "lucide-react-native";
-import { Pressable } from "react-native";
+import { Pressable, View } from "react-native";
 
 import { Text } from "@/components";
 import { strings } from "@/features/schools/strings";
@@ -19,7 +19,9 @@ function HomeButton() {
       hitSlop={8}
       style={{ minHeight: touch.minTarget, minWidth: touch.minTarget, flexDirection: "row", alignItems: "center", gap: 2 }}
     >
-      <ChevronLeft size={24} color={colors.text} />
+      <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        <ChevronLeft size={24} color={colors.text} />
+      </View>
       <Text variant="bodyStrong">{strings.common.home}</Text>
     </Pressable>
   );

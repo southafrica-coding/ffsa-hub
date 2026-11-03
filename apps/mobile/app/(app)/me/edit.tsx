@@ -8,6 +8,7 @@ import { getProfileFields, updateProfile, type ProfileFields } from "@/features/
 import { meStrings } from "@/features/me/strings";
 import { hasErrors, validateProfile, type ProfileErrors } from "@/features/me/validation";
 import { SkeletonRows, useMe } from "@/features/shell";
+import { announce } from "@/lib/a11y";
 import { ApiError } from "@/lib/api";
 import { apiFetch } from "@/lib/api-client";
 import { supabase } from "@/lib/supabase";
@@ -57,10 +58,14 @@ export default function EditProfileScreen() {
     const found = validateProfile(fields);
     setErrors(found);
     setSaveError(null);
-    if (hasErrors(found)) return;
+    if (hasErrors(found)) {
+      announce(found.firstName ?? found.lastName ?? found.phone);
+      return;
+    }
     setSaving(true);
     try {
       await updateProfile(apiFetch, fields);
+      announce(meStrings.a11y.profileSaved);
       refresh();
       router.back();
     } catch (err) {

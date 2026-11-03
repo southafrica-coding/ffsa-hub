@@ -47,7 +47,10 @@ export default function AttendanceScreen() {
       {summary.pct !== null ? (
         <View
           accessible
-          accessibilityLabel={s.summaryA11y(summary.pct, summary.present, summary.total)}
+          accessibilityLabel={strings.a11y.withBreakdown(
+            s.summaryA11y(summary.pct, summary.present, summary.total),
+            summary.byStatus.map((b) => `${b.label} ${b.count}`).join(", "),
+          )}
           testID="summary"
           style={{ gap: 6, paddingBottom: 14, borderBottomWidth: hairline, borderBottomColor: colors.text }}
         >

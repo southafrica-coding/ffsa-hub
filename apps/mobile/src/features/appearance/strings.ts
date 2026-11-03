@@ -29,4 +29,11 @@ export const appearanceStrings = {
   /** One line for the Me screen row. */
   summary: (pref: AppearancePreference, scheme: ColorScheme) =>
     pref === "system" ? `Match phone (now ${schemeWord(scheme)})` : pref === "dark" ? "Dark" : "Light",
+
+  // Screen-reader-only wording. The radio role already says "selected", and
+  // the platform already says "double tap", so the hint is the option's
+  // description (otherwise the row label would hide it).
+  a11y: {
+    saveFailed: (title: string, body: string) => `${title}. ${body}`,
+  },
 };

@@ -13,6 +13,7 @@ import {
 } from "@/auth/sign-in-logic";
 import { clearSignOutReason, useSignOutReason } from "@/auth/sign-out-reason";
 import { Banner, Button, Screen, Text, TextField } from "@/components";
+import { announce } from "@/lib/a11y";
 import { DEACTIVATED_MESSAGE } from "@/lib/api";
 import { getEnv } from "@/lib/env";
 import { supabase } from "@/lib/supabase";
@@ -44,6 +45,10 @@ export default function SignInScreen() {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [cooldown.cooldownUntil]);
+
+  // Screen readers hear the first field that needs fixing (a failed sign-in
+  // is a danger Banner, which announces itself).
+  useEffect(() => announce(fieldErrors.email ?? fieldErrors.password), [fieldErrors]);
 
   async function onSubmit() {
     setFormError(null);
@@ -87,7 +92,11 @@ export default function SignInScreen() {
             resizeMode="contain"
             style={{ width: 220, height: 26 }}
           />
-          <View style={{ width: 16, height: 3, backgroundColor: colors.accent }} />
+          <View
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            style={{ width: 16, height: 3, backgroundColor: colors.accent }}
+          />
           <Text variant="display">Sign in</Text>
           <Text tone="secondary">Use the email and password you use for FFSA Hub on the web.</Text>
         </View>

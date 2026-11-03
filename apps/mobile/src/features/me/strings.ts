@@ -79,4 +79,10 @@ export const meStrings = {
     on: "On",
     off: "Off",
   },
+
+  // Screen-reader-only wording (accessibility labels and announcements).
+  a11y: {
+    field: (label: string, value: string) => `${label}: ${value}`,
+    profileSaved: "Profile saved.",
+  },
 } as const;

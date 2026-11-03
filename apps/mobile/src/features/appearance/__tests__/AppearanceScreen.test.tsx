@@ -109,13 +109,13 @@ describe("Appearance screen", () => {
     expect(apiFetch).not.toHaveBeenCalled();
   });
 
-  it("every choice is a radio with a hint that says what a tap does", async () => {
+  it("every choice is a radio whose hint is its description (state comes from the role)", async () => {
     await render(wrap(<AppearanceScreen />));
     for (const r of await screen.findAllByRole("radio")) {
       expect(r.props.accessibilityHint).toBeTruthy();
     }
-    expect(screen.getByTestId("appearance-light").props.accessibilityHint).toBe("Double tap to use this look");
-    expect(screen.getByTestId("appearance-system").props.accessibilityHint).toBe("Selected");
+    expect(screen.getByTestId("appearance-light").props.accessibilityHint).toBe("Always light, whatever your phone is set to.");
+    expect(screen.getByTestId("appearance-system").props.accessibilityState).toMatchObject({ checked: true });
   });
 });
 

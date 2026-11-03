@@ -217,7 +217,7 @@ describe("My Attendance", () => {
     await show(<AttendanceScreen />);
     expect(await screen.findByText("50%")).toBeTruthy();
     expect(screen.getByText(strings.attendance.summary(2, 4))).toBeTruthy();
-    expect(screen.getByLabelText(strings.attendance.summaryA11y(50, 2, 4))).toBeTruthy();
+    expect(screen.getByLabelText(strings.attendance.summaryA11y(50, 2, 4), { exact: false })).toBeTruthy();
     expect(screen.getByTestId("breakdown")).toHaveTextContent("Present 2 · Late 1 · Absent 1");
     expect(screen.getByText(strings.attendance.checkedIn("08:07"))).toBeTruthy();
     expect(screen.getByText(strings.attendance.eventRemoved)).toBeTruthy();

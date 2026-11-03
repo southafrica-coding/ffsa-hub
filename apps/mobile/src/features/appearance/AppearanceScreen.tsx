@@ -80,7 +80,7 @@ function Choice({
       testID={testID}
       accessibilityRole="radio"
       accessibilityLabel={label}
-      accessibilityHint={checked ? s.selectedHint : s.chooseHint}
+      accessibilityHint={body}
       accessibilityState={{ checked, selected: checked }}
       onPress={onPress}
       style={({ pressed }) => ({

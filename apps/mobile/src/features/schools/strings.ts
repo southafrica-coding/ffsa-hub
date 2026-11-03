@@ -87,4 +87,9 @@ export const strings = {
     checkedIn: (time: string) => `Checked in ${time}`,
     rowA11y: (title: string, date: string, status: string, line: string) => `${title}. ${date}. ${status}. ${line}`,
   },
+
+  // Screen-reader-only wording (accessibility labels and announcements).
+  a11y: {
+    withBreakdown: (summary: string, breakdown: string) => (breakdown ? `${summary}. ${breakdown}` : summary),
+  },
 } as const;
