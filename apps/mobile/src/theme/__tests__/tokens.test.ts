@@ -1,5 +1,14 @@
 import tailwindConfig, { themeColors } from "../../../tailwind.config";
-import { bannerStyle, buttonStyle, maxFontScale, textStyle, type TextVariant } from "../styles";
+import { navigationTheme } from "../navigation";
+import {
+  bannerStyle,
+  buttonStyle,
+  maxFontScale,
+  refreshControlColors,
+  switchColors,
+  textStyle,
+  type TextVariant,
+} from "../styles";
 import { colors, fontFamily, fontSize, MIN_LABEL_SIZE, palette, radius, touch } from "../tokens";
 
 // WCAG 2.x relative luminance / contrast ratio.
@@ -69,6 +78,86 @@ describe("contrast (WCAG AA, 4.5:1 for body text)", () => {
       expect(contrast(fg, bg)).toBeGreaterThanOrEqual(4.5);
     });
   }
+});
+
+describe("dark scheme: every semantic text colour on every background it sits on", () => {
+  const c = colors.dark;
+  // Body-size text tones x the backgrounds the app paints (page, bone panels,
+  // pressed/skeleton fills). textTertiary is checked for large text below.
+  const texts = ["text", "textSecondary", "textQuiet", "danger", "positive", "positiveText", "attention"] as const;
+  const backgrounds = ["bg", "surface"] as const;
+  for (const fg of texts) {
+    for (const bg of backgrounds) {
+      it(`${fg} on ${bg} >= 4.5:1`, () => {
+        expect(contrast(c[fg], c[bg])).toBeGreaterThanOrEqual(4.5);
+      });
+    }
+  }
+  it.each(["text", "textSecondary", "textTertiary", "danger", "positiveText", "attention"] as const)(
+    "%s on surfaceStrong >= 4.5:1",
+    (fg) => {
+      expect(contrast(c[fg], c.surfaceStrong)).toBeGreaterThanOrEqual(4.5);
+    },
+  );
+  it("text on the inverse bar (section headers, badges) >= 4.5:1", () => {
+    expect(contrast(c.onInverse, c.inverse)).toBeGreaterThanOrEqual(4.5);
+  });
+  it("the yellow band carries black text, and black on yellow >= 4.5:1", () => {
+    expect(c.onAccent).toBe(palette.ink);
+    expect(contrast(c.onAccent, c.accent)).toBeGreaterThanOrEqual(4.5);
+    // Light text on yellow would fail: never use it.
+    expect(contrast(c.text, c.accent)).toBeLessThan(4.5);
+  });
+  it("input / switch outlines (ruleStrong) are >= 3:1 on bg and surface (WCAG 1.4.11)", () => {
+    expect(contrast(c.ruleStrong, c.bg)).toBeGreaterThanOrEqual(3);
+    expect(contrast(c.ruleStrong, c.surface)).toBeGreaterThanOrEqual(3);
+  });
+  it("keeps the text hierarchy: text > secondary > tertiary > quiet", () => {
+    const order = [c.text, c.textSecondary, c.textTertiary, c.textQuiet].map((x) => contrast(x, c.bg));
+    expect([...order].sort((a, b) => b - a)).toEqual(order);
+  });
+});
+
+describe("native controls that take colours as props", () => {
+  it.each(["light", "dark"] as const)("%s: pull-to-refresh spinner is visible on its disc", (scheme) => {
+    const c = colors[scheme];
+    const r = refreshControlColors(c);
+    expect(r).toEqual({ tintColor: c.text, colors: [c.text], progressBackgroundColor: c.surface });
+    expect(contrast(r.colors[0], r.progressBackgroundColor)).toBeGreaterThanOrEqual(3);
+  });
+
+  it("light switches keep the white thumb (unchanged look)", () => {
+    for (const value of [true, false]) {
+      expect(switchColors(colors.light, "light", value)).toEqual({
+        trackColor: { false: colors.light.ruleStrong, true: colors.light.text },
+        ios_backgroundColor: colors.light.ruleStrong,
+        thumbColor: colors.light.bg,
+      });
+    }
+  });
+
+  it("dark switch thumbs stand out from the page and the track", () => {
+    const c = colors.dark;
+    const off = switchColors(c, "dark", false);
+    const on = switchColors(c, "dark", true);
+    expect(contrast(off.thumbColor, c.bg)).toBeGreaterThanOrEqual(3);
+    expect(contrast(off.thumbColor, off.trackColor.false)).toBeGreaterThanOrEqual(1.5);
+    expect(contrast(on.thumbColor, on.trackColor.true)).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+describe("navigation theme", () => {
+  it.each(["light", "dark"] as const)("%s: scenes, cards and headers use the token background", (scheme) => {
+    const t = navigationTheme({ scheme, colors: colors[scheme] });
+    expect(t.dark).toBe(scheme === "dark");
+    expect(t.colors).toMatchObject({
+      background: colors[scheme].bg,
+      card: colors[scheme].bg,
+      text: colors[scheme].text,
+      border: colors[scheme].rule,
+    });
+    expect(t.fonts).toBeDefined();
+  });
 });
 
 describe("contrast for large text / UI (3:1)", () => {
