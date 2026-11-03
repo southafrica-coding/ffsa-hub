@@ -6,6 +6,7 @@ import { AccessibilityInfo, FlatList, RefreshControl, View } from "react-native"
 import { Banner, Button, Masthead, Screen, Text } from "@/components";
 import { useSession } from "@/auth/session-provider";
 import { supabase } from "@/lib/supabase";
+import { refreshControlColors } from "@/theme/styles";
 import { useTheme } from "@/theme/use-theme";
 
 import { userMessage } from "../api";
@@ -215,7 +216,7 @@ function MoneyView({
         keyExtractor={(e) => e.id}
         ListHeaderComponent={header}
         contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 16 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.text} colors={[colors.text]} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} {...refreshControlColors(colors)} />}
         ListEmptyComponent={
           <Text tone="secondary" style={{ paddingVertical: 16 }}>
             {filter === ALL ? strings.team.noExpenses : strings.team.noExpensesInLine}
@@ -338,7 +339,7 @@ function MemberView({
         data={o.roster}
         keyExtractor={(p) => p.id}
         contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 16 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.text} colors={[colors.text]} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} {...refreshControlColors(colors)} />}
         ListHeaderComponent={
           <View style={{ gap: 16, paddingBottom: 8 }}>
             <Masthead context={[o.program_name, o.location ?? strings.home.locationTbc, o.country].filter(Boolean).join(" · ")} title={o.team_name} />

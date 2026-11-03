@@ -9,6 +9,7 @@ import { formatSavedAt } from "@/features/finance/cache";
 import { ErrorState, SectionBar, Skeleton, StaleNote } from "@/features/finance/components/ui";
 import { useCachedLoad } from "@/features/finance/use-cached-load";
 import { ListRow, StateMessage, useMe } from "@/features/shell";
+import { refreshControlColors } from "@/theme/styles";
 import { useTheme } from "@/theme/use-theme";
 
 import { bookingsAccess } from "../access";
@@ -105,7 +106,7 @@ export default function BookingsHomeScreen() {
     <Screen scroll={false} edges={[]} contentStyle={{ paddingHorizontal: 0, paddingVertical: 0 }}>
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 16, gap: 16, flexGrow: 1 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.text} colors={[colors.text]} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} {...refreshControlColors(colors)} />}
       >
         <Masthead context={s.context} title={s.title} />
 
