@@ -272,8 +272,10 @@ export function PushProvider({ children }: { children: ReactNode }) {
     if (!userId) return;
     setBusy(true);
     try {
-      await configureNotifications();
-      await requestPermission();
+      if (isPushSupported()) {
+        await configureNotifications();
+        await requestPermission();
+      }
       await updatePerson(userId, { enabled: true });
       await sync();
     } finally {
