@@ -67,6 +67,17 @@ describe("resolveTarget", () => {
     expect(resolveTarget("/bookings/spaces/abc")).toEqual({ kind: "app", path: "/bookings" });
   });
 
+  it("school items open My Schools; the apply form stays on the website", () => {
+    const id = "11111111-2222-4333-8444-555555555555";
+    expect(resolveTarget("/my-schools")).toEqual({ kind: "app", path: "/schools" });
+    expect(resolveTarget("/my-schools?tab=x")).toEqual({ kind: "app", path: "/schools" });
+    expect(resolveTarget(`/my-schools/${id}`)).toEqual({ kind: "app", path: `/schools/${id}` });
+    expect(resolveTarget(`/my-schools/${id}?from=email`)).toEqual({ kind: "app", path: `/schools/${id}` });
+    expect(resolveTarget("/my-attendance")).toEqual({ kind: "app", path: "/schools/attendance" });
+    expect(resolveTarget("/my-schools/apply/p1")).toEqual({ kind: "web", path: "/my-schools/apply/p1" });
+    expect(resolveTarget("/my-schools-old")).toEqual({ kind: "web", path: "/my-schools-old" });
+  });
+
   it("the browser for everything else (today's feed items all go here)", () => {
     for (const href of ["/users?filter=pending", "/prayer-room?tab=practice", "/records-library/match-queue"]) {
       expect(resolveTarget(href)).toEqual({ kind: "web", path: href });
