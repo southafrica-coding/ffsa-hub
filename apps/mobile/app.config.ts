@@ -68,7 +68,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       "expo-camera",
       {
         cameraPermission:
-          "FFSA Hub uses the camera to scan ticket QR codes at event check-in and to photograph receipts for your outreach team's expenses.",
+          "FFSA Hub uses the camera to scan ticket QR codes at event check-in, to photograph receipts for your outreach team's expenses, and to photograph a vehicle's condition when you collect or return it.",
         microphonePermission: false,
         recordAudioAndroid: false,
         barcodeScannerEnabled: true,
@@ -84,9 +84,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       "expo-image-picker",
       {
         cameraPermission:
-          "FFSA Hub uses the camera to scan ticket QR codes at event check-in and to photograph receipts for your outreach team's expenses.",
+          "FFSA Hub uses the camera to scan ticket QR codes at event check-in, to photograph receipts for your outreach team's expenses, and to photograph a vehicle's condition when you collect or return it.",
         photosPermission:
-          "FFSA Hub lets you choose a photo of a receipt to attach to an outreach expense.",
+          "FFSA Hub lets you choose a photo of a receipt to attach to an outreach expense, or a photo of a vehicle to attach to its collection or return check.",
         microphonePermission: false,
       },
     ],
