@@ -43,6 +43,7 @@ export const homeStrings = {
   shortcuts: {
     finance: { title: "My Finance", subtitle: "Outreach budgets, expenses and receipts" },
     tickets: { title: "My Tickets", subtitle: "Your event tickets" },
+    bookings: { title: "Bookings", subtitle: "Spaces and vehicles: request, check, approve" },
     me: { title: "Me", subtitle: "Profile, notifications and sign out" },
   },
   itemA11y: (title: string, body: string, read: boolean, when: string | null, web: boolean) =>

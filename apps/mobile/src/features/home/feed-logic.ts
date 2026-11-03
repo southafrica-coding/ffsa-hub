@@ -50,6 +50,10 @@ const IN_APP: { web: string; app: string }[] = [
   { web: "/my-events", app: "/tickets" },
   { web: "/profile", app: "/me" },
   { web: "/dashboard", app: "/" },
+  { web: "/bookings", app: "/bookings" },
+  { web: "/bookings/requests", app: "/bookings/approvals" },
+  { web: "/bookings/spaces/requests", app: "/bookings/approvals" },
+  { web: "/bookings/vehicles/requests", app: "/bookings/approvals" },
 ];
 
 function matchesPrefix(path: string, prefix: string) {
