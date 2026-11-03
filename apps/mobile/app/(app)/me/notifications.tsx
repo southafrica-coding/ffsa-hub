@@ -8,6 +8,7 @@ import { meStrings } from "@/features/me/strings";
 import { SkeletonRows, StateMessage } from "@/features/shell";
 import { ApiError } from "@/lib/api";
 import { apiFetch } from "@/lib/api-client";
+import { switchColors } from "@/theme/styles";
 import { hairline, touch } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
@@ -23,7 +24,7 @@ type Load =
 // the same setting as the "Notifications" section of the web profile.
 // A switch that's ON means "I get these messages".
 export default function NotificationPrefsScreen() {
-  const { colors } = useTheme();
+  const { colors, scheme } = useTheme();
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [attempt, setAttempt] = useState(0);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -135,9 +136,7 @@ export default function NotificationPrefsScreen() {
                   value={on}
                   disabled={saving !== null}
                   onValueChange={(v) => void toggle(m.key, v)}
-                  trackColor={{ false: colors.ruleStrong, true: colors.text }}
-                  thumbColor={colors.bg}
-                  ios_backgroundColor={colors.ruleStrong}
+                  {...switchColors(colors, scheme, on)}
                 />
               </View>
             );

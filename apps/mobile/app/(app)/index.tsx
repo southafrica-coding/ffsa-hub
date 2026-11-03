@@ -13,6 +13,7 @@ import { useSchoolsShortcut } from "@/features/schools/shortcut";
 import { strings as schoolsStrings } from "@/features/schools/strings";
 import { BarAction, ListRow, SectionBar, SkeletonRows, StateMessage, openWebPage, useMe } from "@/features/shell";
 import { displayName } from "@/lib/api";
+import { refreshControlColors } from "@/theme/styles";
 import { useTheme } from "@/theme/use-theme";
 
 // Home: the "needs you" feed (GET /api/notifications, the same items as the
@@ -45,9 +46,7 @@ export default function HomeScreen() {
           <RefreshControl
             refreshing={feed.refreshing}
             onRefresh={feed.refresh}
-            tintColor={colors.text}
-            colors={[colors.text]}
-            progressBackgroundColor={colors.bg}
+            {...refreshControlColors(colors)}
           />
         }
       >
