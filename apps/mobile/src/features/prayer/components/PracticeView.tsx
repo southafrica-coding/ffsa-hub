@@ -215,7 +215,7 @@ function PracticeRow({
         opacity: gone ? 0.6 : 1,
       })}
     >
-      <Text variant="bodyStrong" style={{ fontVariant: ["tabular-nums"], width: 104 }}>
+      <Text variant="bodyStrong" style={{ fontVariant: ["tabular-nums"], minWidth: 104 }}>
         {label}
       </Text>
       <Text tone={row.open > 0 && !row.band ? "positive" : "secondary"} style={{ flex: 1 }}>

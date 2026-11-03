@@ -16,6 +16,7 @@ import {
   setSentence,
   setTitle,
   timeRange,
+  toMin,
 } from "../logic";
 import { strings } from "../strings";
 
@@ -52,7 +53,10 @@ export function SetRow({
     <Pressable
       testID={`set-${set.id}`}
       accessibilityRole="button"
-      accessibilityLabel={setSentence(set, seatTypes, bands, userId)}
+      accessibilityLabel={`${setSentence(set, seatTypes, bands, userId)}. ${strings.a11y.setRowExtra(
+        strings.a11y.duration(Math.max(0, toMin(set.end_time) - toMin(set.start_time))),
+        lead,
+      )}`}
       accessibilityHint={strings.set.openHint}
       onPress={onPress}
       style={({ pressed }) => ({
@@ -87,7 +91,9 @@ export function SetRow({
       </Text>
       {set.relocation_note ? (
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-          <MapPin size={14} color={colors.textSecondary} />
+          <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+            <MapPin size={14} color={colors.textSecondary} />
+          </View>
           <Text variant="caption" tone="secondary">
             {strings.set.relocated(set.relocation_note)}
           </Text>

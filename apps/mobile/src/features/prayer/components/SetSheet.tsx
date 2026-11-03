@@ -280,7 +280,9 @@ function Lineup({
           <Text
             variant={lead ? "bodyStrong" : "label"}
             tone={lead ? "default" : "secondary"}
-            style={{ width: 104, textTransform: "uppercase" }}
+            // A floor, not a fixed width: at large text sizes the seat name
+            // may take more room instead of breaking mid-word.
+            style={{ minWidth: 104, maxWidth: "45%", flexShrink: 1, textTransform: "uppercase" }}
           >
             {label}
           </Text>
@@ -349,7 +351,11 @@ function Lineup({
       {set.slots.length === 0 ? <Text tone="secondary">{strings.set.noSeats}</Text> : null}
       {leads.map((s) => row(s, true))}
       {leads.length > 0 && others.length > 0 ? (
-        <View style={{ height: 2, backgroundColor: colors.text, marginVertical: 4 }} />
+        <View
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          style={{ height: 2, backgroundColor: colors.text, marginVertical: 4 }}
+        />
       ) : null}
       {others.map((s) => row(s, false))}
     </View>

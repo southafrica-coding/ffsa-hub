@@ -116,7 +116,9 @@ describe("Week", () => {
     // Mon–Fri always appear; a weekend with nothing on doesn't.
     expect(screen.getByTestId("day-2026-11-06")).toBeTruthy();
     expect(screen.queryByTestId("day-2026-11-07")).toBeNull();
-    expect(screen.getByLabelText("Tuesday 7 to 9 pm, Night watch, NIGHT band, 2 of 4 seats taken, you are on this set")).toBeTruthy();
+    expect(
+      screen.getByLabelText("Tuesday 7 to 9 pm, Night watch, NIGHT band, 2 of 4 seats taken, you are on this set. 2 hours. Led by Thabo"),
+    ).toBeTruthy();
     // "You" in words, not just a heavier border.
     expect(within(screen.getByTestId("set-s1")).getByText("You")).toBeTruthy();
     // The block-out says where sets move.

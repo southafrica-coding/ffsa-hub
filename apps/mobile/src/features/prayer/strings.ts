@@ -161,4 +161,19 @@ export const strings = {
     clash: "That clashes with something you're already on at that time. Pick another time or seat.",
     offlineAction: "You're offline. Connect to the internet and try again.",
   },
+  // Screen-reader-only words (accessibility slice). Keep at the end.
+  a11y: {
+    /** "2 hours", "30 minutes", "1 hour 30 minutes". */
+    duration: (mins: number) => {
+      const h = Math.floor(mins / 60);
+      const m = mins % 60;
+      const hours = h === 0 ? "" : `${h} ${h === 1 ? "hour" : "hours"}`;
+      const minutes = m === 0 ? "" : `${m} ${m === 1 ? "minute" : "minutes"}`;
+      return [hours, minutes].filter(Boolean).join(" ") || "0 minutes";
+    },
+    /** Appended to a set row's sentence: how long, and who leads. */
+    setRowExtra: (duration: string, lead: string | null) => `${duration}. ${lead ? `Led by ${lead}` : "No one in a lead seat yet"}`,
+    bandStation: (station: string, people: string) => `${station}, ${people}`,
+    bookBlockedHint: (reason: string) => `Can't book yet. ${reason}`,
+  },
 } as const;

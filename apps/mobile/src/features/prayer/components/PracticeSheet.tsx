@@ -143,8 +143,13 @@ function Body({
         {stations.map((s) => {
           const on = b.people.filter((p) => p.station_id === s.id);
           return (
-            <View key={s.id} style={{ flexDirection: "row", gap: 12, paddingVertical: 8, borderBottomWidth: hairline, borderBottomColor: colors.rule }}>
-              <Text variant="label" tone="secondary" style={{ width: 104 }}>
+            <View
+              key={s.id}
+              accessible
+              accessibilityLabel={strings.a11y.bandStation(s.label, on.length ? on.map((p) => p.full_name).join(", ") : strings.practice.nobody)}
+              style={{ flexDirection: "row", gap: 12, paddingVertical: 8, borderBottomWidth: hairline, borderBottomColor: colors.rule }}
+            >
+              <Text variant="label" tone="secondary" style={{ minWidth: 104, maxWidth: "45%", flexShrink: 1 }}>
                 {s.label}
               </Text>
               <Text style={{ flex: 1 }}>{on.length ? on.map((p) => p.full_name).join(", ") : strings.practice.nobody}</Text>
@@ -293,6 +298,7 @@ function Body({
             onPress={book}
             loading={busy === "book"}
             disabled={!!blocked || !!busy}
+            accessibilityHint={blocked ? strings.a11y.bookBlockedHint(blocked) : undefined}
             testID="book-station"
           />
         </View>

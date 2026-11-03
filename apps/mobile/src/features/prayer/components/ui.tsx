@@ -3,31 +3,19 @@
 // Sheet mirrors Finance's (worth promoting into the kit once a third needs it).
 
 import { ChevronLeft, ChevronRight } from "lucide-react-native";
-import { useEffect, useState, type ReactNode } from "react";
-import { AccessibilityInfo, Modal, Pressable, ScrollView, View } from "react-native";
+import { useEffect, type ReactNode } from "react";
+import { Modal, Platform, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Banner, Button, Text } from "@/components";
+import { announce, useReduceMotion } from "@/lib/a11y";
 import { hairline, palette, touch } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 import { strings } from "../strings";
 
-export function useReduceMotion() {
-  const [reduce, setReduce] = useState(false);
-  useEffect(() => {
-    let alive = true;
-    AccessibilityInfo.isReduceMotionEnabled()
-      .then((v) => alive && setReduce(v))
-      .catch(() => {});
-    const sub = AccessibilityInfo.addEventListener("reduceMotionChanged", setReduce);
-    return () => {
-      alive = false;
-      sub.remove();
-    };
-  }, []);
-  return reduce;
-}
+// Shared with the rest of the app (src/lib/a11y); re-exported for old imports.
+export { useReduceMotion };
 
 // ── Bottom sheet ────────────────────────────────────────────────────────────
 
@@ -64,9 +52,12 @@ export function Sheet({
     >
       <View style={{ flex: 1, justifyContent: "flex-end" }}>
         <Pressable
-          // The scrim is ink in both colour schemes.
+          // The scrim is ink in both colour schemes. Hidden from screen
+          // readers: the Close button and the back gesture do the same job.
           accessibilityRole="button"
           accessibilityLabel={strings.set.close}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
           onPress={onClose}
           style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: palette.ink, opacity: 0.45 }}
         />
@@ -215,7 +206,9 @@ export function WeekNav({
         backgroundColor: pressed ? colors.surfaceStrong : "transparent",
       })}
     >
-      {dir === "prev" ? <ChevronLeft size={22} color={colors.text} /> : <ChevronRight size={22} color={colors.text} />}
+      <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        {dir === "prev" ? <ChevronLeft size={22} color={colors.text} /> : <ChevronRight size={22} color={colors.text} />}
+      </View>
     </Pressable>
   );
   return (
@@ -243,6 +236,7 @@ export function WeekNav({
 // ── Error with a retry ──────────────────────────────────────────────────────
 
 export function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
+  // Danger banners announce themselves on iOS (src/components/Banner.tsx).
   return (
     <Banner
       tone="danger"
@@ -255,8 +249,20 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry: () 
   );
 }
 
+/**
+ * VoiceOver ignores Android's live regions, so a positive result speaks its
+ * message on iOS as it appears (Android's Banner live region already does).
+ */
+function useAnnounceOnIOS(message: string | null | undefined) {
+  useEffect(() => {
+    if (Platform.OS === "ios") announce(message);
+  }, [message]);
+}
+
 /** The result of the last action, announced to screen readers as it appears. */
 export function ActionNotice({ result }: { result: { ok: boolean; message: string } | null }) {
+  // Danger banners announce themselves on iOS; the positive result is spoken here.
+  useAnnounceOnIOS(result?.ok ? result.message : null);
   if (!result) return null;
   return (
     <Banner tone={result.ok ? "positive" : "danger"} testID={result.ok ? "action-ok" : "action-error"}>
