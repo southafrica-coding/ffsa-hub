@@ -53,6 +53,22 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         resizeMode: "contain",
       },
     ],
+    // Door check-in scans ticket QR codes. Camera only: no microphone (no
+    // video is recorded), so no RECORD_AUDIO on Android.
+    [
+      "expo-camera",
+      {
+        cameraPermission: "FFSA Hub uses the camera to scan ticket QR codes at event check-in.",
+        microphonePermission: false,
+        recordAudioAndroid: false,
+        barcodeScannerEnabled: true,
+      },
+    ],
+    // Opens the signed waiver PDF in an in-app browser.
+    "expo-web-browser",
+    // expo-brightness is used without its config plugin on purpose: the
+    // plugin only adds Android WRITE_SETTINGS (system-wide brightness), and
+    // the ticket screen only brightens its own window.
     // expo-notifications (with ./assets/notification-icon.png, color
     // BRAND_YELLOW) is added when push notifications are set up.
   ],
