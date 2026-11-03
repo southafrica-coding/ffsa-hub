@@ -30,8 +30,10 @@ export default function AppLayout() {
         >
           <Tabs.Screen name="index" options={{ title: "Home" }} />
           <Tabs.Screen name="finance" options={{ title: "Finance" }} />
+          <Tabs.Screen name="prayer" options={{ title: "Prayer" }} />
           <Tabs.Screen name="tickets" options={{ title: "Tickets" }} />
           <Tabs.Screen name="me" options={{ title: "Me" }} />
+          <Tabs.Screen name="bookings" options={{ href: null }} />
         </Tabs>
       </OutboxProvider>
       </PushProvider>

@@ -48,15 +48,24 @@ describe("access (UX gates from /api/me)", () => {
 });
 
 describe("tabs", () => {
-  it("are Home · Finance · Tickets · Me, for everyone", () => {
-    expect(TABS.map((t) => t.label)).toEqual(["Home", "Finance", "Tickets", "Me"]);
-    expect(visibleTabs(null).map((t) => t.id)).toEqual(["home", "finance", "tickets", "me"]);
+  it("are Home · Finance · Prayer · Tickets · Me, for everyone", () => {
+    expect(TABS.map((t) => t.label)).toEqual(["Home", "Finance", "Prayer", "Tickets", "Me"]);
+    expect(visibleTabs(null).map((t) => t.id)).toEqual(["home", "finance", "prayer", "tickets", "me"]);
     expect(visibleTabs(makeMe({ roles: [], permissions: [] })).map((t) => t.id)).toEqual([
       "home",
       "finance",
+      "prayer",
       "tickets",
       "me",
     ]);
+  });
+
+  it("five labels fit a 320pt-wide phone at the default text size", () => {
+    // Roboto Mono advances 0.6em per character; labels are 11pt caps with
+    // ~1.4pt tracking (TabBar). 320pt / 5 tabs = 64pt per tab. Larger text
+    // sizes shrink the label to fit (adjustsFontSizeToFit) instead of cutting it.
+    const width = (label: string) => label.length * (11 * 0.6 + 1.6);
+    for (const t of TABS) expect(width(t.label)).toBeLessThanOrEqual(320 / TABS.length);
   });
 
   it("match routes on the first segment, so placeholders and real slices are the same tab", () => {

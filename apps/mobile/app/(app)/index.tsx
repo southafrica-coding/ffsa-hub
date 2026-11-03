@@ -1,5 +1,5 @@
 import { useRouter, type Href } from "expo-router";
-import { Check, CircleUser, Ticket, Wallet } from "lucide-react-native";
+import { CalendarDays, Check, CircleUser, Ticket, Wallet } from "lucide-react-native";
 import { RefreshControl, ScrollView, View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
@@ -157,6 +157,12 @@ export default function HomeScreen() {
             title={s.shortcuts.tickets.title}
             subtitle={s.shortcuts.tickets.subtitle}
             onPress={() => router.navigate("/tickets")}
+          />
+          <ListRow
+            icon={CalendarDays}
+            title={s.shortcuts.bookings.title}
+            subtitle={s.shortcuts.bookings.subtitle}
+            onPress={() => router.navigate("/bookings")}
           />
           <ListRow
             icon={CircleUser}

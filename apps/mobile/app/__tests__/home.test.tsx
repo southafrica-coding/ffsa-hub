@@ -50,6 +50,15 @@ const FEED = {
       read: true,
       createdAt: new Date(NOW - 3 * 86_400_000).toISOString(),
     },
+    {
+      key: "practice:4",
+      kind: "practice",
+      title: "Practice room request",
+      body: "Keys · Wed 16:00",
+      href: "/prayer-room?tab=practice",
+      read: true,
+      createdAt: new Date(NOW - 4 * 86_400_000).toISOString(),
+    },
   ],
   unreadCount: 2,
 };
@@ -100,7 +109,9 @@ describe("Home", () => {
     expect(screen.getByText("Earlier")).toBeTruthy();
     expect(screen.getByText("2h ago")).toBeTruthy();
     // Items that open the website say so (text cue, not just an icon).
-    expect(screen.getByLabelText(/^Unread\. New booking request\. .*Opens in browser$/)).toBeTruthy();
+    expect(screen.getByLabelText(/^Practice room request\. .*Opens in browser$/)).toBeTruthy();
+    // Booking requests have a screen in the app now.
+    expect(screen.getByLabelText(/^Unread\. New booking request\. .*2h ago$/)).toBeTruthy();
     expect(getTabBadge("home")).toBe(2);
   });
 
@@ -171,13 +182,21 @@ describe("Home", () => {
     expect(screen.queryByText("Couldn't load your notifications")).toBeNull();
   });
 
-  it("tapping an item marks it read and opens the website page in the in-app browser", async () => {
+  it("tapping an item marks it read and opens its screen (booking requests: the in-app approvals)", async () => {
     mockFetch.mockImplementation(routes(FEED));
     await renderHome();
     await fireEvent.press(await screen.findByTestId("notification-booking:1"));
     expect(markReadCalls).toEqual([{ keys: ["booking:1"] }]);
-    expect(openBrowser).toHaveBeenCalledWith("https://hub.example.test/bookings/requests", expect.any(Object));
+    expect(mockRouter.navigate).toHaveBeenCalledWith("/bookings/approvals");
+    expect(openBrowser).not.toHaveBeenCalled();
     expect(await screen.findByText("1 thing needs you")).toBeTruthy();
+  });
+
+  it("items with no screen in the app open the website page in the in-app browser", async () => {
+    mockFetch.mockImplementation(routes(FEED));
+    await renderHome();
+    await fireEvent.press(await screen.findByTestId("notification-practice:4"));
+    expect(openBrowser).toHaveBeenCalledWith("https://hub.example.test/prayer-room?tab=practice", expect.any(Object));
   });
 
   it("items whose page exists in the app open inside the app", async () => {
@@ -192,7 +211,7 @@ describe("Home", () => {
     mockFetch.mockImplementation(routes(FEED));
     await renderHome();
     await fireEvent.press(await screen.findByRole("button", { name: "Open: New booking request" }));
-    expect(openBrowser).toHaveBeenCalledTimes(1);
+    expect(mockRouter.navigate).toHaveBeenCalledWith("/bookings/approvals");
   });
 
   it("mark all read: one request, band gone, badge cleared", async () => {
@@ -204,12 +223,13 @@ describe("Home", () => {
     expect(getTabBadge("home")).toBe(0);
   });
 
-  it("shortcuts go to Finance, Tickets and Me", async () => {
+  it("shortcuts go to Finance, Tickets, Bookings and Me", async () => {
     mockFetch.mockImplementation(routes({ items: [] }));
     await renderHome();
     await fireEvent.press(await screen.findByRole("button", { name: "My Finance" }));
     await fireEvent.press(screen.getByRole("button", { name: "My Tickets" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Bookings" }));
     await fireEvent.press(screen.getByRole("button", { name: "Me" }));
-    expect(mockRouter.navigate.mock.calls).toEqual([["/finance"], ["/tickets"], ["/me"]]);
+    expect(mockRouter.navigate.mock.calls).toEqual([["/finance"], ["/tickets"], ["/bookings"], ["/me"]]);
   });
 });

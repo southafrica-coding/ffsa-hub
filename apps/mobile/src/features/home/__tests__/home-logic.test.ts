@@ -59,8 +59,16 @@ describe("resolveTarget", () => {
     expect(resolveTarget("/profile")).toEqual({ kind: "app", path: "/me" });
   });
 
+  it("booking feed items open the Bookings screens", () => {
+    expect(resolveTarget("/bookings")).toEqual({ kind: "app", path: "/bookings" });
+    expect(resolveTarget("/bookings/requests")).toEqual({ kind: "app", path: "/bookings/approvals" });
+    expect(resolveTarget("/bookings/spaces/requests")).toEqual({ kind: "app", path: "/bookings/approvals" });
+    expect(resolveTarget("/bookings/vehicles/requests")).toEqual({ kind: "app", path: "/bookings/approvals" });
+    expect(resolveTarget("/bookings/spaces/abc")).toEqual({ kind: "app", path: "/bookings" });
+  });
+
   it("the browser for everything else (today's feed items all go here)", () => {
-    for (const href of ["/bookings/requests", "/users?filter=pending", "/prayer-room?tab=practice", "/records-library/match-queue"]) {
+    for (const href of ["/users?filter=pending", "/prayer-room?tab=practice", "/records-library/match-queue"]) {
       expect(resolveTarget(href)).toEqual({ kind: "web", path: href });
     }
   });

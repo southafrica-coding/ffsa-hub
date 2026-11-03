@@ -68,6 +68,14 @@ const landedTree = {
   "(app)/tickets/check-in/index": () => <Text>Door check-in</Text>,
 };
 
+// Phase 2: the Prayer tab's own folder.
+const PrayerLayout = () => <Stack screenOptions={{ headerShown: false }} />;
+const withPrayer = {
+  ...landedTree,
+  "(app)/prayer/_layout": PrayerLayout,
+  "(app)/prayer/index": () => <Text>Prayer room</Text>,
+};
+
 describe("tab layout", () => {
   it.each([
     ["placeholders", placeholderTree, "Coming soon"],
@@ -88,6 +96,21 @@ describe("tab layout", () => {
     await fireEvent.press(screen.getByRole("tab", { name: "Me" }));
     expect(screen).toHavePathname("/me");
     expect(screen.getByRole("tab", { name: "Me" }).props.accessibilityState).toMatchObject({ selected: true });
+  });
+
+  it("with the Prayer slice: five tabs, Prayer third, reachable", async () => {
+    await renderRouter(withPrayer, { initialUrl: "/" });
+    expect(screen.getAllByRole("tab").map((t) => t.props.accessibilityLabel)).toEqual([
+      "Home",
+      "Finance",
+      "Prayer",
+      "Tickets",
+      "Me",
+    ]);
+    await fireEvent.press(screen.getByRole("tab", { name: "Prayer" }));
+    expect(screen).toHavePathname("/prayer");
+    expect(await screen.findByText("Prayer room")).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Prayer" }).props.accessibilityState).toMatchObject({ selected: true });
   });
 
   it("a nested route (tickets/check-in) keeps the Tickets tab selected", async () => {
