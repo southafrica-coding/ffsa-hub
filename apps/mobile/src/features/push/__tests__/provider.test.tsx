@@ -310,10 +310,10 @@ describe("PushProvider taps and badge", () => {
   it("warm tap on a page the app doesn't have: opens the website in the in-app browser", async () => {
     await mount();
     await statusIs("off");
-    await act(async () => mockPhone.tap({ href: "/bookings/requests" }, "n1"));
-    expect(openBrowser).toHaveBeenCalledWith("https://hub.example.test/bookings/requests", expect.any(Object));
+    await act(async () => mockPhone.tap({ href: "/admin/users" }, "n1"));
+    expect(openBrowser).toHaveBeenCalledWith("https://hub.example.test/admin/users", expect.any(Object));
     // The same notification delivered twice opens once.
-    await act(async () => mockPhone.tap({ href: "/bookings/requests" }, "n1"));
+    await act(async () => mockPhone.tap({ href: "/admin/users" }, "n1"));
     expect(openBrowser).toHaveBeenCalledTimes(1);
   });
 
