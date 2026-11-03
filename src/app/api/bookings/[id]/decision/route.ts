@@ -1,5 +1,6 @@
 import { after, NextResponse } from "next/server";
 import { syncBookingAlerts } from "@/lib/prayer-room/booking-alerts";
+import { notifyBookingDecision } from "@/lib/push/notify";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthedUser } from "@/lib/api-auth";
 import {
@@ -70,6 +71,7 @@ export async function POST(
     }
     await updateSeries(supabase, booking.series_id, { status: decision });
     after(syncBookingAlerts); // prayer-room DM alerts (Auditorium over devo sets)
+    after(() => notifyBookingDecision({ booking, status: decision, deciderId: user.id })); // phone push
     return NextResponse.json({ ok: true, appliedToSeries: true });
   }
 
@@ -79,5 +81,6 @@ export async function POST(
   }
 
   after(syncBookingAlerts); // prayer-room DM alerts (Auditorium over devo sets)
+  after(() => notifyBookingDecision({ booking, status: decision, deciderId: user.id })); // phone push
   return NextResponse.json({ ok: true });
 }
