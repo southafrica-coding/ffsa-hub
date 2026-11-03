@@ -5,13 +5,13 @@ import { useState } from "react";
 import { View } from "react-native";
 
 import { Banner, Button, Divider, Masthead, Screen, Text } from "@/components";
+import { AppearanceIcon, appearanceStrings, useAppearance } from "@/features/appearance";
 import { clearFeedCaches } from "@/features/home/feed-cache";
 import { ACCOUNT_DELETION_ROUTE, FULL_PROFILE_PATH, PRIVACY_POLICY_PATH } from "@/features/me/links";
 import { meStrings as s } from "@/features/me/strings";
 import { ListRow, SectionBar, SkeletonRows, openWebPage, roleLabels, useMe } from "@/features/shell";
 import { displayName } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
-import { hairline } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 function fullName(first: string | null | undefined, last: string | null | undefined) {
@@ -23,6 +23,7 @@ function fullName(first: string | null | undefined, last: string | null | undefi
 export default function MeScreen() {
   const router = useRouter();
   const { colors, scheme } = useTheme();
+  const appearance = useAppearance();
   const { status, me, error, refresh } = useMe();
   const [signingOut, setSigningOut] = useState(false);
 
@@ -98,16 +99,13 @@ export default function MeScreen() {
           subtitle={s.rows.notifications.subtitle}
           onPress={() => router.push("/me/notifications")}
         />
-        <View
-          accessible
-          accessibilityLabel={`${s.appearance.label}: ${s.appearance.value(scheme)}`}
-          style={{ paddingVertical: 12, paddingHorizontal: 4, gap: 2, borderBottomWidth: hairline, borderBottomColor: colors.rule }}
-        >
-          <Text variant="label" tone="secondary">
-            {s.appearance.label}
-          </Text>
-          <Text>{s.appearance.value(scheme)}</Text>
-        </View>
+        <ListRow
+          testID="appearance"
+          icon={AppearanceIcon}
+          title={s.appearance.label}
+          subtitle={appearanceStrings.summary(appearance.preference, scheme)}
+          onPress={() => router.push("/me/appearance")}
+        />
       </View>
 
       <View>

@@ -65,7 +65,7 @@ describe("Me", () => {
     expect(screen.getByText("jo@example.org")).toBeTruthy();
     expect(screen.getByText("Staff · Team leader")).toBeTruthy();
     expect(screen.getByLabelText("App version: 1.2.3")).toBeTruthy();
-    expect(screen.getByLabelText(/^Appearance: Follows your phone's setting/)).toBeTruthy();
+    expect(screen.getByText("Match phone (now light)")).toBeTruthy();
   });
 
   it("empty: someone with no roles yet", async () => {
@@ -114,7 +114,17 @@ describe("Me", () => {
     await render(wrap(<MeScreen />));
     await fireEvent.press(await screen.findByRole("button", { name: "Edit name and phone" }));
     await fireEvent.press(screen.getByRole("button", { name: "Notification settings" }));
-    expect(mockRouter.push.mock.calls).toEqual([["/me/edit"], ["/me/notifications"]]);
+    await fireEvent.press(screen.getByRole("button", { name: "Appearance" }));
+    expect(mockRouter.push.mock.calls).toEqual([["/me/edit"], ["/me/notifications"], ["/me/appearance"]]);
+  });
+
+  it("sign out keeps the Appearance choice (it's per phone, not personal)", async () => {
+    await AsyncStorage.setItem("ffsa:appearance:v1", "dark");
+    mockFetch.mockImplementation(apiRoutes({ "/api/me": ME }));
+    await render(wrap(<MeScreen />));
+    await fireEvent.press(await screen.findByRole("button", { name: "Sign out" }));
+    expect(supabase.auth.signOut).toHaveBeenCalled();
+    expect(await AsyncStorage.getItem("ffsa:appearance:v1")).toBe("dark");
   });
 
   it("sign out: this device only, and the saved Home feed is wiped", async () => {

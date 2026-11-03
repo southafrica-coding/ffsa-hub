@@ -26,10 +26,9 @@ export const meStrings = {
       subtitle: "Ask us to delete your account and data",
     },
   },
+  // The row's subtitle (current choice) is in src/features/appearance/strings.ts.
   appearance: {
     label: "Appearance",
-    value: (scheme: "light" | "dark") =>
-      `Follows your phone's setting (now ${scheme === "dark" ? "dark" : "light"})`,
   },
   version: {
     label: "App version",

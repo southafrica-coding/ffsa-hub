@@ -3,6 +3,7 @@ import { RefreshControl, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Masthead } from "@/components";
+import { refreshControlColors } from "@/theme/styles";
 import { useTheme } from "@/theme/use-theme";
 
 import { strings } from "../strings";
@@ -35,7 +36,7 @@ export function Frame({
         contentInsetAdjustmentBehavior="automatic"
         refreshControl={
           onRefresh ? (
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.text} colors={[colors.text]} />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} {...refreshControlColors(colors)} />
           ) : undefined
         }
       >
