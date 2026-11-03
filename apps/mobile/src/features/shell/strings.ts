@@ -5,6 +5,7 @@ export const shellStrings = {
   tabs: {
     home: "Home",
     finance: "Finance",
+    prayer: "Prayer",
     tickets: "Tickets",
     me: "Me",
   },
