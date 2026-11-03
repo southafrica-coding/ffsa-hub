@@ -5,7 +5,8 @@ import { Switch, View } from "react-native";
 import { Banner, Button, Screen, Text } from "@/components";
 import { getPrefs, savePrefs, toggleMuted, type Prefs } from "@/features/me/api";
 import { meStrings } from "@/features/me/strings";
-import { SkeletonRows, StateMessage } from "@/features/shell";
+import { PushSettings, pushStrings } from "@/features/push";
+import { SectionBar, SkeletonRows, StateMessage } from "@/features/shell";
 import { ApiError } from "@/lib/api";
 import { apiFetch } from "@/lib/api-client";
 import { switchColors } from "@/theme/styles";
@@ -65,6 +66,8 @@ export default function NotificationPrefsScreen() {
 
   return (
     <Screen edges={["bottom"]}>
+      <PushSettings />
+      <SectionBar label={pushStrings.slackSection} />
       <Text tone="secondary">{s.intro}</Text>
 
       {load.state === "loading" ? <SkeletonRows count={2} label={s.loading} /> : null}

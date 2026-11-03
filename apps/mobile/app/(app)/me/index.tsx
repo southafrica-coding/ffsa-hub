@@ -9,6 +9,7 @@ import { AppearanceIcon, appearanceStrings, useAppearance } from "@/features/app
 import { clearFeedCaches } from "@/features/home/feed-cache";
 import { ACCOUNT_DELETION_URL, FULL_PROFILE_PATH, PRIVACY_POLICY_PATH } from "@/features/me/links";
 import { meStrings as s } from "@/features/me/strings";
+import { unregisterPushOnSignOut } from "@/features/push";
 import { ListRow, SectionBar, SkeletonRows, openWebPage, roleLabels, useMe } from "@/features/shell";
 import { displayName } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
@@ -29,6 +30,8 @@ export default function MeScreen() {
 
   async function signOut() {
     setSigningOut(true);
+    // Stop pushes to this phone while the session can still say so (bounded).
+    await unregisterPushOnSignOut();
     // Saved Home items belong to this person: don't leave them on the phone.
     await clearFeedCaches();
     // This device only: signing out on the phone shouldn't end web sessions.
