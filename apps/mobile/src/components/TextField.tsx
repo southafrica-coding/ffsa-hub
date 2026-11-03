@@ -27,7 +27,14 @@ export const TextField = forwardRef<ComponentRef<typeof TextInput>, TextFieldPro
 
   return (
     <View style={{ gap: 6 }}>
-      <Text variant="label" tone="secondary" nativeID={`${label}-label`}>
+      {/* The input carries this label itself, so screen readers don't stop here twice. */}
+      <Text
+        variant="label"
+        tone="secondary"
+        nativeID={`${label}-label`}
+        accessibilityElementsHidden
+        importantForAccessibility="no"
+      >
         {label}
       </Text>
       <View
@@ -74,10 +81,13 @@ export const TextField = forwardRef<ComponentRef<typeof TextInput>, TextFieldPro
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={revealed ? "Hide password" : "Show password"}
+            accessibilityHint={revealed ? "Hides the password again." : "Shows the password as plain text."}
             onPress={() => setRevealed((r) => !r)}
             style={{ width: touch.minTarget, height: touch.minTarget, alignItems: "center", justifyContent: "center" }}
           >
-            {revealed ? <EyeOff size={20} color={colors.textSecondary} /> : <Eye size={20} color={colors.textSecondary} />}
+            <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+              {revealed ? <EyeOff size={20} color={colors.textSecondary} /> : <Eye size={20} color={colors.textSecondary} />}
+            </View>
           </Pressable>
         ) : null}
       </View>

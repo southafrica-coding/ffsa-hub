@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ActivityIndicator, Pressable, type PressableProps, type StyleProp, type ViewStyle } from "react-native";
+import { ActivityIndicator, Pressable, View, type PressableProps, type StyleProp, type ViewStyle } from "react-native";
 
 import { buttonStyle, type ButtonVariant } from "@/theme/styles";
 import { useTheme } from "@/theme/use-theme";
@@ -41,7 +41,12 @@ export function Button({
         const s = buttonStyle(variant, colors, { pressed, disabled: isDisabled });
         return (
           <>
-            {loading ? <ActivityIndicator color={s.textColor} /> : icon}
+            {/* The spinner and icon are decoration: the label and busy state say it all. */}
+            {loading || icon ? (
+              <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                {loading ? <ActivityIndicator color={s.textColor} /> : icon}
+              </View>
+            ) : null}
             <Text variant="label" tone={s.tone} style={{ fontSize: 13 }}>
               {label}
             </Text>

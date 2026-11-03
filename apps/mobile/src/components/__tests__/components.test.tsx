@@ -136,7 +136,10 @@ describe("Divider and Masthead", () => {
 
   it("shows the yellow tick, context line and title", async () => {
     await render(<Masthead context="FFSA Hub · Home" title="Hello, Jo" />);
-    expect(flat(screen.getByTestId("masthead-tick").props.style).backgroundColor).toBe(palette.yellow);
+    // The tick is decoration: drawn, but hidden from screen readers.
+    const tick = screen.getByTestId("masthead-tick", { includeHiddenElements: true });
+    expect(flat(tick.props.style).backgroundColor).toBe(palette.yellow);
+    expect(tick.props.accessibilityElementsHidden).toBe(true);
     expect(screen.getByRole("header", { name: "Hello, Jo" })).toBeTruthy();
   });
 });

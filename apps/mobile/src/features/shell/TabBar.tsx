@@ -97,6 +97,8 @@ function TabButton({
     >
       {/* Active marker: the yellow tick from the web's tab bar. */}
       <View
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
         style={{
           position: "absolute",
           top: 0,
@@ -106,7 +108,7 @@ function TabButton({
           backgroundColor: focused ? colors.accent : "transparent",
         }}
       />
-      <View>
+      <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
         <Icon size={22} color={tint} strokeWidth={focused ? 2.5 : 2} />
         {badge > 0 ? (
           <View

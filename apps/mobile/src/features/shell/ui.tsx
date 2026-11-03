@@ -103,7 +103,12 @@ export function ListRow({
       testID={testID}
       accessibilityRole={web ? "link" : "button"}
       accessibilityLabel={web ? `${title}. ${shellStrings.opensInBrowser}` : title}
-      accessibilityHint={accessibilityHint ?? (web ? shellStrings.opensInBrowserHint : subtitle)}
+      // The subtitle is part of what the row says, so it stays in the hint even
+      // when the caller adds its own.
+      accessibilityHint={
+        [subtitle, accessibilityHint ?? (web ? shellStrings.opensInBrowserHint : undefined)].filter(Boolean).join(". ") ||
+        undefined
+      }
       accessibilityState={{ disabled }}
       disabled={disabled || !onPress}
       onPress={onPress}
@@ -119,7 +124,11 @@ export function ListRow({
         backgroundColor: pressed ? colors.surface : "transparent",
       })}
     >
-      {Icon ? <Icon size={20} color={tint} /> : null}
+      {Icon ? (
+        <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+          <Icon size={20} color={tint} />
+        </View>
+      ) : null}
       <View style={{ flex: 1, gap: 2 }}>
         <Text variant="bodyStrong" style={{ color: tint }}>
           {title}
@@ -135,8 +144,10 @@ export function ListRow({
           </Text>
         ) : null}
       </View>
-      {trailing === "push" ? <ChevronRight size={20} color={colors.textSecondary} /> : null}
-      {web ? <ExternalLink size={18} color={colors.textSecondary} /> : null}
+      <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        {trailing === "push" ? <ChevronRight size={20} color={colors.textSecondary} /> : null}
+        {web ? <ExternalLink size={18} color={colors.textSecondary} /> : null}
+      </View>
     </Pressable>
   );
 }
@@ -161,7 +172,11 @@ export function StateMessage({
   return (
     <View testID={testID} style={{ alignItems: "center", gap: 8, paddingVertical: 32, paddingHorizontal: 8 }}>
       {Icon ? (
-        <View style={{ padding: 12, backgroundColor: colors.surface }} importantForAccessibility="no">
+        <View
+          style={{ padding: 12, backgroundColor: colors.surface }}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+        >
           <Icon size={22} color={colors.text} />
         </View>
       ) : null}
