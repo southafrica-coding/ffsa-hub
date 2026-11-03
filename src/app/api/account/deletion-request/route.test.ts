@@ -17,7 +17,22 @@ type Row = {
 
 type Op = { table: string; kind: string; filters: Array<[string, string, unknown]>; payload?: unknown };
 
-const state = vi.hoisted(() => ({
+type Admin = { user_id: string; email: string; is_active: boolean };
+type State = {
+  user: { id: string; email?: string } | null;
+  tableMissing: boolean;
+  rows: Row[];
+  ops: Op[];
+  insertError: null | { code?: string; message: string };
+  raceRow: Row | null;
+  sendOk: (to: string) => boolean;
+  sends: Array<{ to: string; category: string; subject: string; html: string }>;
+  admins: Admin[];
+  limited: boolean;
+  limiterKeys: string[];
+};
+
+const state: State = vi.hoisted(() => ({
   user: { id: "me", email: "me@example.com" } as { id: string; email?: string } | null,
   tableMissing: false,
   rows: [] as Row[],
