@@ -10,6 +10,7 @@ import { useSession } from "@/auth/session-provider";
 import { apiFetch } from "@/lib/api-client";
 import { supabase } from "@/lib/supabase";
 import { hairline, touch } from "@/theme/tokens";
+import { switchColors } from "@/theme/styles";
 import { useTheme } from "@/theme/use-theme";
 
 import { deleteExpense, deleteReceipt, exchangeRateToZar, listReceipts, updateExpense, userMessage } from "../api";
@@ -100,7 +101,7 @@ function ExpenseFormView({
   userId: string | null;
 }) {
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, scheme } = useTheme();
   const { outbox, items } = useOutbox();
   const isNew = !expense;
   const canEdit = view.canEdit;
@@ -479,8 +480,7 @@ function ExpenseFormView({
                 disabled={readOnly}
                 accessibilityLabel={s.zarConfirmed}
                 accessibilityHint={s.zarConfirmedHint}
-                trackColor={{ true: colors.text, false: colors.ruleStrong }}
-                thumbColor={colors.bg}
+                {...switchColors(colors, scheme, form.zar_confirmed)}
               />
               <View style={{ flex: 1 }}>
                 <Text>{s.zarConfirmed}</Text>

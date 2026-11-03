@@ -88,16 +88,19 @@ export const colors: Record<ColorScheme, SemanticColors> = {
   // Proposed. bg/surface/rule/text/accent come from design-tokens.md; the
   // status colours are lightened so they keep contrast on near-black
   // (checked in tokens.test.ts) and still need a design review.
+  // Dark-only values (docs/dark-mode.md): ruleStrong is 3:1 on bg so input
+  // and switch outlines don't vanish on near-black; textQuiet (placeholders)
+  // and danger are 4.5:1 on every dark surface.
   dark: {
     bg: palette.darkBg,
     surface: palette.darkSurface,
     surfaceStrong: palette.darkRule,
     rule: palette.darkRule,
-    ruleStrong: palette.textSecondary,
+    ruleStrong: "#6B675D",
     text: palette.darkText,
     textSecondary: palette.ruleStrong,
     textTertiary: palette.textQuiet,
-    textQuiet: palette.textTertiary,
+    textQuiet: "#858175",
     accent: palette.yellow,
     // Yellow always carries black text, in both schemes.
     onAccent: palette.ink,
@@ -106,7 +109,7 @@ export const colors: Record<ColorScheme, SemanticColors> = {
     positiveText: "#8BC777",
     attention: "#D9A520",
     attentionBorder: palette.amberBorder,
-    danger: "#E05A5A",
+    danger: "#EB7070",
     inverse: palette.darkText,
     onInverse: palette.ink,
   },

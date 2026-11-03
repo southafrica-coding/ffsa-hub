@@ -10,6 +10,7 @@ import { formatSavedAt } from "@/features/finance/cache";
 import { ErrorState, SectionBar, Skeleton, StaleNote } from "@/features/finance/components/ui";
 import { useCachedLoad } from "@/features/finance/use-cached-load";
 import { ListRow, StateMessage, openWebPage, useMe } from "@/features/shell";
+import { refreshControlColors } from "@/theme/styles";
 import { useTheme } from "@/theme/use-theme";
 
 import { bookingsAccess } from "../access";
@@ -135,7 +136,7 @@ export default function VehicleDetailScreen({ id }: { id: string }) {
     <Screen scroll={false} edges={[]} contentStyle={{ paddingHorizontal: 0, paddingVertical: 0 }}>
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 16, gap: 16, flexGrow: 1 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.text} colors={[colors.text]} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} {...refreshControlColors(colors)} />}
       >
         <Masthead context={d.vehicleContext} title={b.booking_name} />
         <StatusLine status={b.status} />
@@ -186,7 +187,7 @@ export default function VehicleDetailScreen({ id }: { id: string }) {
               <Button label={d.approve} onPress={() => setDecision("approved")} style={{ flex: 1 }} testID="approve" />
               <Button label={d.decline} variant="destructive" onPress={() => setDecision("denied")} style={{ flex: 1 }} testID="decline" />
             </View>
-            {isManager ? <ListRow title={d.assignOnWeb} trailing="web" onPress={() => void openWebPage(`/bookings/vehicles/${b.id}`)} /> : null}
+            {isManager ? <ListRow title={d.assignOnWeb} trailing="web" onPress={() => void openWebPage(`/bookings/vehicles/${b.id}`, colors)} /> : null}
           </View>
         ) : null}
 
@@ -216,7 +217,7 @@ export default function VehicleDetailScreen({ id }: { id: string }) {
               );
             })}
             <QueueList items={queue} outbox={outbox} online={online} />
-            <ListRow icon={PenLine} title={d.agreement} subtitle={d.agreementSub} trailing="web" onPress={() => void openWebPage(`/bookings/vehicles/${b.id}/agreement`)} />
+            <ListRow icon={PenLine} title={d.agreement} subtitle={d.agreementSub} trailing="web" onPress={() => void openWebPage(`/bookings/vehicles/${b.id}/agreement`, colors)} />
           </View>
         ) : null}
 

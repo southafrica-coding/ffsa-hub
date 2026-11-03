@@ -11,6 +11,7 @@ import {
   lineHeight,
   radius,
   touch,
+  type ColorScheme,
   type SemanticColors,
 } from "./tokens";
 
@@ -199,4 +200,28 @@ export function bannerStyle(tone: BannerTone, c: SemanticColors): { container: V
         text: "default",
       };
   }
+}
+
+// ── Native controls that take colours as props ──────────────────────────────
+
+/**
+ * Pull-to-refresh spinner. iOS reads tintColor; Android draws `colors` on a
+ * disc of `progressBackgroundColor`, which is white unless set, so a light
+ * arrow would vanish on it in dark mode.
+ */
+export function refreshControlColors(c: SemanticColors) {
+  return { tintColor: c.text, colors: [c.text], progressBackgroundColor: c.surface };
+}
+
+/**
+ * Switch colours. Light keeps the white thumb. In dark the thumb would be
+ * near-black on a near-black screen when off, so it turns light grey (off)
+ * or ink on the bone track (on). State is also in the row's words/role.
+ */
+export function switchColors(c: SemanticColors, scheme: ColorScheme, value: boolean) {
+  return {
+    trackColor: { false: c.ruleStrong, true: c.text },
+    ios_backgroundColor: c.ruleStrong,
+    thumbColor: scheme === "dark" ? (value ? c.onInverse : c.textSecondary) : c.bg,
+  };
 }

@@ -116,79 +116,160 @@ commit_files mobile apps/mobile/a.ts
 git clone -q --depth 1 "file://$WORK/shallow-src" "$WORK/shallow" && cd "$WORK/shallow" || exit 2
 expect 1 "shallow clone, HEAD^ missing"
 
-# ── Branch builds: judged against the merge-base with main ─────────────────
-# new_origin <name>: a "remote" repo with one web commit on main, cloned to
-# $WORK/<name> (so `origin` exists there), then checked out on branch feat.
+# ── Branch builds (VERCEL_GIT_COMMIT_REF set, not main) ────────────────────
+# Main here only changes through GitHub squash merges, like the real repo.
+squash() { # squash <msg> <path>...: a commit as GitHub makes it on main
+  local msg="$1"; shift
+  for f in "$@"; do mkdir -p "$(dirname "$f")"; echo "$RANDOM $msg" >> "$f"; done
+  git add -A && GIT_COMMITTER_NAME=GitHub GIT_COMMITTER_EMAIL=noreply@github.com \
+    git commit -q -m "$msg (#$RANDOM)"
+}
+# new_origin <name>: an "origin" repo whose main has two squash-merged PRs
+# (both touching the website), cloned in full to $WORK/<name> on branch feat.
 new_origin() {
   new_repo "$1-origin"
-  commit_files base src/app.ts apps/mobile/a.ts
+  squash "pr one" src/app.ts apps/mobile/a.ts
+  squash "pr two" src/app.ts
   git clone -q "file://$WORK/$1-origin" "$WORK/$1" && cd "$WORK/$1" || exit 2
   git config user.email test@example.com
   git config user.name test
   git config commit.gpgsign false
   git checkout -q -b feat
 }
+# vercel_clone <name>: push feat to origin, then clone ONLY feat, shallow
+# (depth ${2:-10}) the way Vercel does, and cut off origin so nothing can be
+# fetched (a private repo with no credentials in the build container).
+vercel_clone() {
+  git push -q origin feat 2>/dev/null || exit 2
+  git clone -q --depth "${2:-10}" --branch feat "file://$WORK/$1-origin" "$WORK/$1-vercel" \
+    && cd "$WORK/$1-vercel" || exit 2
+  git remote set-url origin "file://$WORK/no-such-repo"
+}
+expect_line() { # expect_line <label> <substring> [env...]: the log names the path
+  local label="$1" want="$2"; shift 2
+  n=$((n + 1))
+  local out; out="$(env "$@" bash "$SCRIPT" 2>&1)"
+  case "$out" in
+    *"$want"*) echo "ok   $label" ;;
+    *) echo "FAIL $label: wanted '$want' in: $out"; fails=$((fails + 1)) ;;
+  esac
+}
+B="VERCEL_GIT_COMMIT_REF=feat"
 
-# 14. branch: a web commit followed by a mobile-only commit -> build
-new_origin web-then-mobile
+# 14. full clone, origin/main known locally
+new_origin local-main
 commit_files web src/app.ts
 commit_files mobile apps/mobile/a.ts
-expect 0 "branch web+mobile, old rule (no ref) only sees the last commit"
-expect 1 "branch web then mobile-only -> build" "VERCEL_GIT_COMMIT_REF=feat"
-prev="$(git rev-parse HEAD^)"
-expect 1 "branch web then mobile-only, previous deploy was the web commit" \
-  "VERCEL_GIT_COMMIT_REF=feat" "VERCEL_GIT_PREVIOUS_SHA=$prev"
+expect 0 "no ref: old rule only sees the last commit (known gap, main-style)"
+expect 1 "branch: web then mobile-only -> build" "$B"
+expect 1 "branch: ...even if the previous deploy was the web commit" "$B" "VERCEL_GIT_PREVIOUS_SHA=$(git rev-parse HEAD^)"
+expect_line "branch: log names the local main path" "merge-base with local refs/remotes/origin/main" "$B"
 
-# 15. branch with only mobile commits -> skip (even after main moves on)
-new_origin only-mobile
+new_origin local-mobile
 commit_files m1 apps/mobile/a.ts
 commit_files m2 apps/mobile/b.ts
-expect 0 "branch with only mobile commits -> skip" "VERCEL_GIT_COMMIT_REF=feat"
-(cd "$WORK/only-mobile-origin" && commit_files later-web src/app.ts)
-expect 0 "branch only mobile, main has since changed web -> skip" "VERCEL_GIT_COMMIT_REF=feat"
+expect 0 "branch: only mobile commits -> skip" "$B"
+(cd "$WORK/local-mobile-origin" && squash "later web" src/app.ts)
+git fetch -q origin
+expect 0 "branch: only mobile, main has since changed the website -> skip" "$B"
 
-# 16. fetch failure -> falls back to the previous-deploy / HEAD^ rule
+# 15. Vercel-like: shallow, branch only, origin unreachable
+new_origin shallow-web
+commit_files web src/app.ts
+commit_files m1 apps/mobile/a.ts
+commit_files m2 apps/mobile/b.ts
+vercel_clone shallow-web
+expect 1 "vercel clone: web commit then mobile-only commits -> build" "$B"
+expect_line "vercel clone: log names the squash path" "newest squash-merged main commit" "$B"
+expect_line "vercel clone: log says the fetch failed" "couldn't fetch main" "$B"
+
+new_origin shallow-mobile
+commit_files m1 apps/mobile/a.ts
+commit_files m2 apps/mobile/b.ts
+vercel_clone shallow-mobile
+expect 0 "vercel clone: mobile-only branch -> skip" "$B"
+
+# 16. main merged into the branch (the merge brings web changes from main)
+new_origin merged-mobile
+commit_files m1 apps/mobile/a.ts
+(cd "$WORK/merged-mobile-origin" && squash "web on main" src/app.ts)
+git fetch -q origin && git merge -q --no-edit origin/main
+commit_files m2 apps/mobile/b.ts
+vercel_clone merged-mobile
+expect 0 "vercel clone: mobile-only branch with main merged in -> skip" "$B"
+
+new_origin merged-web
+commit_files web src/app.ts
+(cd "$WORK/merged-web-origin" && squash "web on main" src/other.ts)
+git fetch -q origin && git merge -q --no-edit origin/main
+commit_files m apps/mobile/b.ts
+vercel_clone merged-web
+expect 1 "vercel clone: web commit, main merged in, then mobile -> build" "$B"
+
+# 17. branch longer than the clone: no main commit visible -> build
+new_origin too-deep
+commit_files web src/app.ts
+for i in 1 2 3 4; do commit_files "m$i" apps/mobile/a.ts; done
+vercel_clone too-deep 3
+expect 1 "vercel clone: fork point cut off -> build" "$B"
+expect_line "vercel clone: log says it couldn't tell" "couldn't tell where it left main" "$B"
+
+# 18. a lookalike squash commit made ON the branch must not count as main
+new_origin lookalike-squash
+commit_files web src/app.ts
+squash "edited on github" apps/mobile/a.ts
+commit_files m apps/mobile/b.ts
+vercel_clone lookalike-squash
+expect 1 "vercel clone: branch commit that looks like a squash -> build" "$B"
+
+# 19. main with a direct (non-squash) push under the fork point -> build
+new_repo direct-origin
+squash "pr one" src/app.ts
+commit_files "pushed straight to main" src/app.ts
+squash "pr two" src/app.ts
+git clone -q "file://$WORK/direct-origin" "$WORK/direct" && cd "$WORK/direct" || exit 2
+git config user.email test@example.com; git config user.name test; git config commit.gpgsign false
+git checkout -q -b feat
+commit_files m apps/mobile/a.ts
+git push -q origin feat
+git clone -q --depth 10 --branch feat "file://$WORK/direct-origin" "$WORK/direct-vercel" && cd "$WORK/direct-vercel" || exit 2
+git remote set-url origin "file://$WORK/no-such-repo"
+expect 1 "vercel clone: main commit's parent isn't a squash -> build (unsure)" "$B"
+
+# 20. a fetch that hangs is cut off by the time limit
+new_origin hang
+commit_files m apps/mobile/a.ts
+vercel_clone hang
+git config protocol.ext.allow always
+git remote set-url origin "ext::sleep 60"
+start=$(date +%s)
+expect 0 "hanging fetch: times out, squash path still skips mobile-only" "$B" "VERCEL_IGNORE_FETCH_TIMEOUT=2"
+took=$(( $(date +%s) - start ))
+n=$((n + 1))
+if [ "$took" -lt 15 ]; then echo "ok   hanging fetch finished in ${took}s"
+else echo "FAIL hanging fetch took ${took}s"; fails=$((fails + 1)); fi
+
+# 21. no origin remote at all, not shallow, no main ref, no squash -> build
 new_repo no-origin
 commit_files base src/app.ts
 git checkout -q -b feat
-commit_files web src/app.ts
-commit_files mobile apps/mobile/a.ts
-expect 0 "no origin: falls back to HEAD^ (mobile only)" "VERCEL_GIT_COMMIT_REF=feat"
-prev="$(git rev-parse HEAD~2)"
-expect 1 "no origin: falls back to previous sha (spans web)" \
-  "VERCEL_GIT_COMMIT_REF=feat" "VERCEL_GIT_PREVIOUS_SHA=$prev"
-new_origin bad-remote
-commit_files mobile apps/mobile/a.ts
-git remote set-url origin "file://$WORK/does-not-exist"
-expect 0 "unreachable origin: falls back to HEAD^" "VERCEL_GIT_COMMIT_REF=feat"
+git branch -q -D main
+commit_files m apps/mobile/a.ts
+expect 1 "no origin, no main, no squash commits -> build" "$B"
 
-# 17. fallback also fails -> build
-new_repo no-origin-first
-git checkout -q -b feat
-commit_files first apps/mobile/a.ts
-expect 1 "no origin and no HEAD^ -> build" "VERCEL_GIT_COMMIT_REF=feat"
+# 22. branch with no commits of its own -> build (empty diff)
+new_origin same-as-main
+vercel_clone same-as-main
+expect 1 "branch identical to main -> build" "$B"
 
-# 18. main keeps the old rule (previous deploy, else HEAD^), even with origin
+# 23. main keeps the old rule (previous deploy, else HEAD^)
 new_origin on-main
 git checkout -q main
 commit_files web src/app.ts
 commit_files mobile apps/mobile/a.ts
-expect 0 "main: HEAD^ only sees mobile" "VERCEL_GIT_COMMIT_REF=main"
+expect 0 "main: HEAD^ only sees mobile (unchanged)" "VERCEL_GIT_COMMIT_REF=main"
 prev="$(git rev-parse HEAD~2)"
-expect 1 "main: previous sha spans a web commit" "VERCEL_GIT_COMMIT_REF=main" "VERCEL_GIT_PREVIOUS_SHA=$prev"
-
-# 19. branch identical to main (nothing changed) -> build
-new_origin same-as-main
-expect 1 "branch with no commits of its own -> build (empty diff)" "VERCEL_GIT_COMMIT_REF=feat"
-
-# 20. shallow clone of the branch (as Vercel does), web commit earlier -> build
-new_origin shallow-branch-src
-commit_files web src/app.ts
-commit_files mobile apps/mobile/a.ts
-(cd "$WORK/shallow-branch-src" && git push -q origin feat)
-git clone -q --depth 2 --branch feat "file://$WORK/shallow-branch-src-origin" "$WORK/shallow-branch" \
-  && cd "$WORK/shallow-branch" || exit 2
-expect 1 "shallow branch clone, web commit before a mobile one -> build" "VERCEL_GIT_COMMIT_REF=feat"
+expect 1 "main: previous sha spans a web commit (unchanged)" "VERCEL_GIT_COMMIT_REF=main" "VERCEL_GIT_PREVIOUS_SHA=$prev"
 
 echo
 echo "$((n - fails))/$n passed (temp repos left in $WORK)"

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { RefreshControl, ScrollView, View, type ViewStyle } from "react-native";
 import { SafeAreaView, type Edge } from "react-native-safe-area-context";
 
+import { refreshControlColors } from "@/theme/styles";
 import { useTheme } from "@/theme/use-theme";
 
 type Props = {
@@ -31,7 +32,7 @@ export function TicketsScreen({ children, onRefresh, refreshing = false, scroll 
           contentInsetAdjustmentBehavior="automatic"
           refreshControl={
             onRefresh ? (
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.text} colors={[colors.text]} />
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} {...refreshControlColors(colors)} />
             ) : undefined
           }
         >

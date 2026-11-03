@@ -43,9 +43,10 @@ export function markKeysRead(items: FeedItem[], keys: Iterable<string>): FeedIte
 export type Target = { kind: "app"; path: string } | { kind: "web"; path: string } | { kind: "none" };
 
 // Website paths that have an in-app screen. Longest prefix wins; the rest of
-// the path is dropped (the app screens are lists, not deep pages, for now).
+// the path is dropped, except that `withId` carries the next path segment (an
+// id) over to the app path. `app: null` keeps a sub-path on the website.
 // Grow this table as slices add screens.
-const IN_APP: { web: string; app: string }[] = [
+const IN_APP: { web: string; app: string | null; withId?: true }[] = [
   { web: "/my-finance", app: "/finance" },
   { web: "/my-events", app: "/tickets" },
   { web: "/profile", app: "/me" },
@@ -54,6 +55,9 @@ const IN_APP: { web: string; app: string }[] = [
   { web: "/bookings/requests", app: "/bookings/approvals" },
   { web: "/bookings/spaces/requests", app: "/bookings/approvals" },
   { web: "/bookings/vehicles/requests", app: "/bookings/approvals" },
+  { web: "/my-schools", app: "/schools", withId: true },
+  { web: "/my-schools/apply", app: null },
+  { web: "/my-attendance", app: "/schools/attendance" },
 ];
 
 function matchesPrefix(path: string, prefix: string) {
@@ -64,5 +68,7 @@ function matchesPrefix(path: string, prefix: string) {
 export function resolveTarget(href: string | null): Target {
   if (!href || !href.startsWith("/") || href.startsWith("//")) return { kind: "none" };
   const hit = IN_APP.filter((r) => matchesPrefix(href, r.web)).sort((a, b) => b.web.length - a.web.length)[0];
-  return hit ? { kind: "app", path: hit.app } : { kind: "web", path: href };
+  if (!hit || hit.app === null) return { kind: "web", path: href };
+  const id = hit.withId ? /^\/([A-Za-z0-9-]+)(?:[/?#]|$)/.exec(href.slice(hit.web.length))?.[1] : undefined;
+  return { kind: "app", path: id ? `${hit.app}/${id}` : hit.app };
 }

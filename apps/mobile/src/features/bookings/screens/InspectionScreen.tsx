@@ -297,7 +297,7 @@ export default function InspectionScreen({ bookingId, kind }: { bookingId: strin
       ) : null}
 
       <TextField label={t.notes} value={f.notes} onChangeText={(v) => set({ notes: v })} multiline />
-      <ListRow title={t.terms} trailing="web" onPress={() => void openWebPage(TERMS_URL)} />
+      <ListRow title={t.terms} trailing="web" onPress={() => void openWebPage(TERMS_URL, colors)} />
       <CheckRow label={t.agree} checked={f.agreed} onChange={(v) => set({ agreed: v })} testID="agree" />
 
       <FormError message={error} />

@@ -6,6 +6,7 @@ import { Banner, Masthead, Screen, Text } from "@/components";
 import { useSession } from "@/auth/session-provider";
 import { useMe } from "@/features/shell";
 import { supabase } from "@/lib/supabase";
+import { refreshControlColors } from "@/theme/styles";
 import { useTheme } from "@/theme/use-theme";
 
 import { isFinanceStaff } from "../access";
@@ -49,7 +50,7 @@ export default function FinanceHomeScreen() {
     <Screen scroll={false} edges={["top"]} contentStyle={{ paddingHorizontal: 0, paddingVertical: 0 }}>
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 16, gap: 16, flexGrow: 1 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.text} colors={[colors.text]} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} {...refreshControlColors(colors)} />}
       >
         <Masthead context={strings.home.context} title={strings.home.title} />
 

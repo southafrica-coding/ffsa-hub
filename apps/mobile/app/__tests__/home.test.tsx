@@ -16,6 +16,8 @@ jest.mock("@/auth/session-provider", () => ({
 const mockRouter = { navigate: jest.fn(), push: jest.fn(), back: jest.fn() };
 jest.mock("expo-router", () => ({ useRouter: () => mockRouter }));
 jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn().mockResolvedValue({ type: "dismiss" }) }));
+let mockShowSchools = false;
+jest.mock("@/features/schools/shortcut", () => ({ useSchoolsShortcut: () => mockShowSchools }));
 
 const mockFetch = apiFetch as unknown as jest.Mock;
 const openBrowser = WebBrowser.openBrowserAsync as jest.Mock;
@@ -231,5 +233,18 @@ describe("Home", () => {
     await fireEvent.press(screen.getByRole("button", { name: "Bookings" }));
     await fireEvent.press(screen.getByRole("button", { name: "Me" }));
     expect(mockRouter.navigate.mock.calls).toEqual([["/finance"], ["/tickets"], ["/bookings"], ["/me"]]);
+    expect(screen.queryByRole("button", { name: "My Schools" })).toBeNull();
+  });
+
+  it("My Schools shortcut: only when the schools gate says so, and it opens My Schools", async () => {
+    mockShowSchools = true;
+    try {
+      mockFetch.mockImplementation(routes({ items: [] }));
+      await renderHome();
+      await fireEvent.press(await screen.findByRole("button", { name: "My Schools" }));
+      expect(mockRouter.navigate).toHaveBeenCalledWith("/schools");
+    } finally {
+      mockShowSchools = false;
+    }
   });
 });
