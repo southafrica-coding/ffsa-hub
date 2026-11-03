@@ -5,6 +5,7 @@ import {
   createReceipt,
   deleteReceipt,
   getExpenseReceipts,
+  getReceiptByPath,
 } from "@/services/outreach-finance";
 
 export async function GET(request: Request) {
@@ -73,12 +74,28 @@ export async function POST(request: Request) {
     );
   }
 
+  // The phone app retries after a dropped connection with the same file
+  // path, so a receipt already registered for this file is the answer, not a
+  // second row. The website builds a fresh path for every upload.
+  const { data: existing } = await getReceiptByPath(supabase, body.expense_id, body.file_path);
+  if (existing) {
+    return NextResponse.json({ success: true, data: existing, replayed: true });
+  }
+
   const { data, error } = await createReceipt(supabase, {
     ...body,
     uploaded_by: user.id,
   });
 
   if (error) {
+    // Row-level security said no (Postgres 42501): a permission answer, so
+    // the phone app stops retrying and tells the person.
+    if (error.code === "42501") {
+      return NextResponse.json(
+        { error: "You don't have permission to add receipts to this expense" },
+        { status: 403 }
+      );
+    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

@@ -1,11 +1,17 @@
 import { after, NextResponse } from "next/server";
 import { checkCashAlert } from "@/lib/outreach/cash-alerts";
 import { createClient } from "@/lib/supabase/server";
+import { isUuid } from "@/lib/finance/outreach-access";
 import {
   createExpense,
+  getExpenseById,
   updateExpense,
   deleteExpense,
 } from "@/services/outreach-finance";
+
+// Postgres error codes, as PostgREST reports them.
+const UNIQUE_VIOLATION = "23505";
+const RLS_VIOLATION = "42501";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -26,12 +32,34 @@ export async function POST(request: Request) {
     );
   }
 
+  // The phone app picks the expense's id itself, so a save it retries after a
+  // dropped connection can be recognised instead of logged twice. The website
+  // never sends one.
+  if (body.id !== undefined && !isUuid(body.id)) {
+    return NextResponse.json({ error: "id must be a UUID" }, { status: 400 });
+  }
+
   const { data, error } = await createExpense(supabase, {
     ...body,
     created_by: user.id,
   });
 
   if (error) {
+    // Same id again: the first save got through. Answer with that row (read
+    // through RLS, so only one the caller may see) rather than an error.
+    if (error.code === UNIQUE_VIOLATION && body.id) {
+      const { data: existing } = await getExpenseById(supabase, body.id);
+      if (existing && existing.team_id === body.team_id) {
+        return NextResponse.json({ success: true, data: existing, replayed: true });
+      }
+      return NextResponse.json({ error: "That expense id is already taken" }, { status: 409 });
+    }
+    if (error.code === RLS_VIOLATION) {
+      return NextResponse.json(
+        { error: "You don't have permission to add expenses to this team" },
+        { status: 403 }
+      );
+    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
