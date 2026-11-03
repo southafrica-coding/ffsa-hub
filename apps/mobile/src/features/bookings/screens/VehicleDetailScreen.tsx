@@ -187,7 +187,7 @@ export default function VehicleDetailScreen({ id }: { id: string }) {
               <Button label={d.approve} onPress={() => setDecision("approved")} style={{ flex: 1 }} testID="approve" />
               <Button label={d.decline} variant="destructive" onPress={() => setDecision("denied")} style={{ flex: 1 }} testID="decline" />
             </View>
-            {isManager ? <ListRow title={d.assignOnWeb} trailing="web" onPress={() => void openWebPage(`/bookings/vehicles/${b.id}`)} /> : null}
+            {isManager ? <ListRow title={d.assignOnWeb} trailing="web" onPress={() => void openWebPage(`/bookings/vehicles/${b.id}`, colors)} /> : null}
           </View>
         ) : null}
 
@@ -217,7 +217,7 @@ export default function VehicleDetailScreen({ id }: { id: string }) {
               );
             })}
             <QueueList items={queue} outbox={outbox} online={online} />
-            <ListRow icon={PenLine} title={d.agreement} subtitle={d.agreementSub} trailing="web" onPress={() => void openWebPage(`/bookings/vehicles/${b.id}/agreement`)} />
+            <ListRow icon={PenLine} title={d.agreement} subtitle={d.agreementSub} trailing="web" onPress={() => void openWebPage(`/bookings/vehicles/${b.id}/agreement`, colors)} />
           </View>
         ) : null}
 

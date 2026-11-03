@@ -92,6 +92,7 @@ export function SpaceChoice({ options, f, set, canApprove }: { options: SpaceOpt
 }
 
 export function SpaceWhen({ f, set, check }: { f: SpaceForm; set: (p: Partial<SpaceForm>) => void; check: SpaceCheckState }) {
+  const { colors } = useTheme();
   const [multiDay, setMultiDay] = useState(!!f.endDate);
   const isMulti = multiDay && !!f.endDate && f.endDate > f.date;
   return (
@@ -117,7 +118,7 @@ export function SpaceWhen({ f, set, check }: { f: SpaceForm; set: (p: Partial<Sp
         </>
       )}
       <CheckResult check={check} />
-      <ListRow title={w.weeklyLink} subtitle={w.weeklyNote} trailing="web" onPress={() => void openWebPage("/bookings/spaces/new")} />
+      <ListRow title={w.weeklyLink} subtitle={w.weeklyNote} trailing="web" onPress={() => void openWebPage("/bookings/spaces/new", colors)} />
     </View>
   );
 }

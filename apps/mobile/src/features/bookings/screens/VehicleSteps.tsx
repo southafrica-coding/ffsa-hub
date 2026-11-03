@@ -194,7 +194,7 @@ export function VehicleDrivers({
       {peopleState === "ready" ? (
         <Button label={dr.addPerson} variant="secondary" icon={<UserPlus size={18} color={colors.text} />} onPress={() => setOpen(true)} testID="add-driver" />
       ) : null}
-      <ListRow title={dr.outsiderLink} subtitle={dr.outsider} trailing="web" onPress={() => void openWebPage("/bookings/vehicles/new")} />
+      <ListRow title={dr.outsiderLink} subtitle={dr.outsider} trailing="web" onPress={() => void openWebPage("/bookings/vehicles/new", colors)} />
 
       <Sheet visible={open} title={dr.addPerson} onClose={() => setOpen(false)}>
         <View style={{ gap: 8 }}>

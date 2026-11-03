@@ -175,7 +175,7 @@ export default function NewRequestScreen() {
             {canSpace ? <ListRow icon={Building2} title={strings.type.space} subtitle={strings.type.spaceSub} onPress={() => pick("space")} testID="type-space" /> : null}
             {canVehicle ? <ListRow icon={Car} title={strings.type.vehicle} subtitle={strings.type.vehicleSub} onPress={() => pick("vehicle")} testID="type-vehicle" /> : null}
             {access.equipment.view ? (
-              <ListRow icon={Speaker} title={strings.type.equipment} subtitle={strings.type.equipmentNotYet} trailing="web" onPress={() => void openWebPage("/bookings/equipment")} testID="type-equipment" />
+              <ListRow icon={Speaker} title={strings.type.equipment} subtitle={strings.type.equipmentNotYet} trailing="web" onPress={() => void openWebPage("/bookings/equipment", colors)} testID="type-equipment" />
             ) : null}
             {!canSpace && !canVehicle ? <Text tone="secondary">{strings.type.noneAllowed}</Text> : null}
           </View>
