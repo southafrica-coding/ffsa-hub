@@ -56,7 +56,7 @@ export function QueueList({
 
   return (
     <View testID="bookings-queue" style={{ gap: 8 }}>
-      {showTitle ? <Text variant="label">{q.title}</Text> : null}
+      {showTitle ? <Text variant="label" accessibilityRole="header">{q.title}</Text> : null}
       {online ? null : (
         <Text variant="caption" tone="secondary">
           {q.offline}

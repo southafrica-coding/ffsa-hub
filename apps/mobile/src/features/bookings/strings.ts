@@ -340,4 +340,10 @@ export const strings = {
     notNow: "Not now",
     continue: "Continue",
   },
+  // Screen-reader-only words (spoken, never shown). Kept apart from the
+  // visible strings above so translation can treat them together.
+  a11y: {
+    stepChanged: (of: string, title: string) => `${of}. ${title}`,
+    photoAdded: (section: string) => `Photo added to ${section}. It sends by itself.`,
+  },
 } as const;

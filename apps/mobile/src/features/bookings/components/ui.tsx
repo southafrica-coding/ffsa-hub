@@ -3,11 +3,12 @@
 // fit; only what Bookings needs on top lives here.
 
 import { Ban, Building2, Car, CircleCheck, CircleX, Clock, Flag, Square, SquareCheck, type LucideIcon } from "lucide-react-native";
-import type { ReactNode } from "react";
-import { Pressable, View } from "react-native";
+import { useEffect, type ReactNode } from "react";
+import { Platform, Pressable, View, type ViewStyle } from "react-native";
 
 import { Text } from "@/components";
 import { Chips, Row } from "@/features/finance/components/ui";
+import { announce } from "@/lib/a11y";
 import { hairline, touch } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
@@ -24,7 +25,9 @@ export function StatusLine({ status }: { status: AnyStatus }) {
   const color = { attention: colors.attention, positive: colors.positiveText, danger: colors.danger, secondary: colors.textSecondary }[info.tone];
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }} accessible accessibilityLabel={info.label} testID={`status-${status}`}>
-      <Icon size={16} color={color} />
+      <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        <Icon size={16} color={color} />
+      </View>
       <Text variant="label" tone={info.tone === "secondary" ? "secondary" : info.tone}>
         {info.label}
       </Text>
@@ -45,7 +48,9 @@ export function BookingRow({ item, onPress }: { item: BookingItem; onPress: () =
       testID={`booking-${item.kind}-${item.id}`}
     >
       <View style={{ flexDirection: "row", gap: 10, alignItems: "flex-start" }}>
-        <Icon size={18} color={colors.textSecondary} style={{ marginTop: 2 }} />
+        <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+          <Icon size={18} color={colors.textSecondary} style={{ marginTop: 2 }} />
+        </View>
         <View style={{ flex: 1, gap: 4 }}>
           <Text variant="bodyStrong">{item.title}</Text>
           <Text tone="secondary">{item.place}</Text>
@@ -73,8 +78,25 @@ export function Field({ label, value }: { label: string; value: string | null | 
   );
 }
 
-/** A checkbox row, 48dp+, the whole row toggles. */
-export function CheckRow({ label, checked, onChange, hint, testID }: { label: string; checked: boolean; onChange: (v: boolean) => void; hint?: string; testID?: string }) {
+/**
+ * A checkbox row, 48dp+, the whole row toggles. `unavailable` only tells
+ * screen readers the box can't be ticked (the caller still ignores presses).
+ */
+export function CheckRow({
+  label,
+  checked,
+  onChange,
+  hint,
+  unavailable = false,
+  testID,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  hint?: string;
+  unavailable?: boolean;
+  testID?: string;
+}) {
   const { colors } = useTheme();
   const Icon = checked ? SquareCheck : Square;
   return (
@@ -83,7 +105,7 @@ export function CheckRow({ label, checked, onChange, hint, testID }: { label: st
       accessibilityRole="checkbox"
       accessibilityLabel={label}
       accessibilityHint={hint}
-      accessibilityState={{ checked }}
+      accessibilityState={{ checked, disabled: unavailable }}
       onPress={() => onChange(!checked)}
       style={({ pressed }) => ({
         minHeight: touch.minTarget,
@@ -94,7 +116,9 @@ export function CheckRow({ label, checked, onChange, hint, testID }: { label: st
         backgroundColor: pressed ? colors.surface : "transparent",
       })}
     >
-      <Icon size={22} color={colors.text} />
+      <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        <Icon size={22} color={colors.text} />
+      </View>
       <View style={{ flex: 1 }}>
         <Text>{label}</Text>
         {hint ? (
@@ -139,8 +163,60 @@ export function Panel({ children, testID }: { children: ReactNode; testID?: stri
   );
 }
 
+/**
+ * A row in a single-choice list (a space, say): a radio for screen readers,
+ * with the same look as finance's Row. Put it inside a radiogroup.
+ */
+export function ChoiceRow({
+  children,
+  selected,
+  onPress,
+  accessibilityLabel,
+  testID,
+}: {
+  children: ReactNode;
+  selected: boolean;
+  onPress: () => void;
+  accessibilityLabel: string;
+  testID?: string;
+}) {
+  const { colors } = useTheme();
+  const style = (pressed: boolean): ViewStyle => ({
+    minHeight: touch.minTarget,
+    paddingVertical: 12,
+    borderBottomWidth: hairline,
+    borderBottomColor: colors.rule,
+    backgroundColor: pressed ? colors.surface : "transparent",
+    gap: 6,
+  });
+  return (
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ checked: selected, selected }}
+      onPress={onPress}
+      testID={testID}
+      style={({ pressed }) => style(pressed)}
+    >
+      {children}
+    </Pressable>
+  );
+}
+
+/**
+ * Speaks a message on iOS each time it changes to something new. Android
+ * reads accessibilityLiveRegion instead (iOS ignores live regions), so pair
+ * this with a live region on the visible text to cover both, once each.
+ */
+export function useAnnounceOnIOS(message: string | null | undefined) {
+  useEffect(() => {
+    if (message && Platform.OS === "ios") announce(message);
+  }, [message]);
+}
+
 /** Inline error under a form, announced when it appears. */
 export function FormError({ message }: { message: string | null }) {
+  useAnnounceOnIOS(message);
   if (!message) return null;
   return (
     <Text tone="danger" accessibilityRole="alert" accessibilityLiveRegion="assertive" testID="form-error">

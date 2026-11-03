@@ -9,6 +9,8 @@ import { humanDate } from "../logic";
 import { strings } from "../strings";
 import type { Conflict } from "../types";
 
+import { useAnnounceOnIOS } from "./ui";
+
 const SHOW = 8;
 
 /**
@@ -18,9 +20,11 @@ const SHOW = 8;
  */
 export function ConflictList({ conflicts, blocked, title }: { conflicts: Conflict[]; blocked: boolean; title?: string }) {
   const { colors } = useTheme();
+  const heading = title ?? (blocked ? strings.clash.blockedTitle : strings.clash.warnTitle);
+  // Android reads the live region below; iOS needs it spoken.
+  useAnnounceOnIOS(conflicts.length > 0 ? heading : null);
   if (conflicts.length === 0) return null;
   const Icon = blocked ? Ban : TriangleAlert;
-  const heading = title ?? (blocked ? strings.clash.blockedTitle : strings.clash.warnTitle);
   return (
     <View
       testID={blocked ? "clash-blocked" : "clash-warning"}
@@ -29,8 +33,12 @@ export function ConflictList({ conflicts, blocked, title }: { conflicts: Conflic
       style={{ borderWidth: hairline, borderLeftWidth: 4, borderColor: blocked ? colors.danger : colors.text, padding: 12, gap: 6, backgroundColor: colors.surface }}
     >
       <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
-        <Icon size={18} color={blocked ? colors.danger : colors.text} />
-        <Text variant="bodyStrong" tone={blocked ? "danger" : "default"} style={{ flex: 1 }}>
+        <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+          <Icon size={18} color={blocked ? colors.danger : colors.text} />
+        </View>
+        {/* The container isn't one accessibility element (its lines are read
+            one by one), so the heading carries the alert role too. */}
+        <Text variant="bodyStrong" tone={blocked ? "danger" : "default"} style={{ flex: 1 }} accessibilityRole="alert">
           {heading}
         </Text>
       </View>

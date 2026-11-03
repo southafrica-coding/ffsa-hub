@@ -18,7 +18,7 @@ import { cancelVehicle, decideVehicle, loadErrorMessage, userMessage } from "../
 import { bookingsFetch } from "../client";
 import { DecisionSheet } from "../components/DecisionSheet";
 import { QueueList } from "../components/QueueList";
-import { Field, StatusLine } from "../components/ui";
+import { Field, StatusLine, useAnnounceOnIOS } from "../components/ui";
 import { loadVehicleBooking, type VehicleDetail } from "../data";
 import { canCancel, dateRangeLabel, dayCount, purposeLabel, vehicleNames, type InspectionKind } from "../logic";
 import { useBookingsOutbox } from "../outbox/provider";
@@ -55,6 +55,10 @@ export default function VehicleDetailScreen({ id }: { id: string }) {
   const [done, setDone] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // "Approved" / "Cancelled" / a failure appear in a banner; Android reads
+  // its live region, iOS needs them spoken.
+  // A danger Banner speaks itself on iOS; only the positive result needs a nudge.
+  useAnnounceOnIOS(actionError ? null : done);
 
   const load = useCallback(() => loadVehicleBooking(id), [id]);
   const { state, refreshing, refresh, retry } = useCachedLoad<VehicleDetail | null>({
@@ -200,7 +204,9 @@ export default function VehicleDetailScreen({ id }: { id: string }) {
               const label = kind === "collection" ? d.collectionLabel : d.returnLabel;
               return (
                 <View key={kind} style={{ gap: 6, paddingVertical: 6 }} testID={`check-${kind}`}>
-                  <Text variant="bodyStrong">{label}</Text>
+                  <Text variant="bodyStrong" accessibilityRole="header">
+                    {label}
+                  </Text>
                   <Text tone="secondary">
                     {c.recorded ? d.checkRecorded(c.recorded.performed_at.slice(0, 10), c.recorded.mileage) : queued ? d.checkQueued : d.checkNotRecorded}
                   </Text>

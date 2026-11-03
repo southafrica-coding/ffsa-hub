@@ -67,7 +67,8 @@ export function DateTimeField({ mode, label, value, onChange, clearable = false,
 
   return (
     <View style={{ gap: 6 }}>
-      <Text variant="label" tone="secondary">
+      {/* The button below says the label and the value, so this isn't read twice. */}
+      <Text variant="label" tone="secondary" accessibilityElementsHidden importantForAccessibility="no">
         {label}
       </Text>
       <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
@@ -90,8 +91,12 @@ export function DateTimeField({ mode, label, value, onChange, clearable = false,
             backgroundColor: pressed ? colors.surface : colors.bg,
           })}
         >
-          <Icon size={18} color={colors.textSecondary} />
-          <Text tone={value ? "default" : "secondary"}>{shown}</Text>
+          <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+            <Icon size={18} color={colors.textSecondary} />
+          </View>
+          <Text tone={value ? "default" : "secondary"} style={{ flexShrink: 1 }}>
+            {shown}
+          </Text>
         </Pressable>
         {clearable && value ? <Button label={strings.when.clear} variant="ghost" onPress={() => onChange("")} accessibilityLabel={`${strings.when.clear} ${label}`} /> : null}
       </View>

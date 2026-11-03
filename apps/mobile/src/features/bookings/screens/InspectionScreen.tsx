@@ -10,6 +10,7 @@ import { Banner, Button, Masthead, Screen, Text, TextField } from "@/components"
 import { Chips, ErrorState, SectionBar, Skeleton } from "@/features/finance/components/ui";
 import { useCachedLoad } from "@/features/finance/use-cached-load";
 import { ListRow, StateMessage, openWebPage, useMe } from "@/features/shell";
+import { announce } from "@/lib/a11y";
 import { useTheme } from "@/theme/use-theme";
 
 import { bookingsAccess } from "../access";
@@ -162,6 +163,7 @@ export default function InspectionScreen({ bookingId, kind }: { bookingId: strin
         await outbox.add(...newItems);
         setAdded((prev) => [...prev, ...newItems.map((n) => ({ id: n.id, kind: photoKind }))]);
         setError(null);
+        announce(strings.a11y.photoAdded(t.photos[photoKind]));
         void outbox.process();
       }
     } catch {
@@ -192,6 +194,8 @@ export default function InspectionScreen({ bookingId, kind }: { bookingId: strin
     if (!left) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setNotice(t.sent);
+      // The screen closes at once, so the banner is never seen: say it.
+      announce(t.sent);
       router.back();
       return;
     }
@@ -201,6 +205,7 @@ export default function InspectionScreen({ bookingId, kind }: { bookingId: strin
     }
     // Offline or the server is slow: it's safe on the phone and will go by itself.
     setNotice(t.savedOffline);
+    announce(t.savedOffline);
     router.back();
   }
 
@@ -229,7 +234,9 @@ export default function InspectionScreen({ bookingId, kind }: { bookingId: strin
           <TextField label={t.usage} value={f.usagePurpose} onChangeText={(v) => set({ usagePurpose: v })} />
           <YesNo label={t.saLicence} hint={t.saLicenceHint} value={f.saLicenseConfirmed} onChange={(v) => set({ saLicenseConfirmed: v })} />
           <Panel testID="damage-panels">
-            <Text variant="label">{t.damage}</Text>
+            <Text variant="label" accessibilityRole="header">
+              {t.damage}
+            </Text>
             <Text variant="caption" tone="secondary">
               {t.damageHint}
             </Text>
@@ -243,7 +250,9 @@ export default function InspectionScreen({ bookingId, kind }: { bookingId: strin
             ))}
           </Panel>
           <Panel>
-            <Text variant="label">{t.inventory}</Text>
+            <Text variant="label" accessibilityRole="header">
+              {t.inventory}
+            </Text>
             {INVENTORY_ITEMS.map((i) => (
               <CheckRow key={i.key} label={i.label} checked={!!f.inventory[i.key]} onChange={(on) => set({ inventory: { ...f.inventory, [i.key]: on } })} />
             ))}
@@ -253,7 +262,9 @@ export default function InspectionScreen({ bookingId, kind }: { bookingId: strin
         <>
           <DateTimeField mode="date" label={t.checkinDate} value={f.checkinDate} onChange={(v) => set({ checkinDate: v })} />
           <Panel>
-            <Text variant="label">{t.condition}</Text>
+            <Text variant="label" accessibilityRole="header">
+              {t.condition}
+            </Text>
             <CheckRow label={t.washed} checked={f.washed} onChange={(v) => set({ washed: v })} testID="washed" />
             <CheckRow label={t.fuelFull} checked={f.fuelFull} onChange={(v) => set({ fuelFull: v })} testID="fuel" />
             <CheckRow label={t.damageReported} checked={f.damageReported} onChange={(v) => set({ damageReported: v })} />

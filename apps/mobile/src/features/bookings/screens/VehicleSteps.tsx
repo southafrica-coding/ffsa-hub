@@ -18,7 +18,7 @@ import { useTheme } from "@/theme/use-theme";
 import { checkVehicles } from "../api";
 import { bookingsFetch } from "../client";
 import { DateTimeField } from "../components/DateTimeField";
-import { CheckRow, Field } from "../components/ui";
+import { CheckRow, Field, useAnnounceOnIOS } from "../components/ui";
 import {
   dateRangeLabel,
   dayCount,
@@ -83,12 +83,21 @@ export function VehicleWhen({ f, set }: { f: VehicleForm; set: (p: Partial<Vehic
 
 export function VehicleChoice({ fleet, f, set, check }: { fleet: Vehicle[]; f: VehicleForm; set: (p: Partial<VehicleForm>) => void; check: VehicleCheckState }) {
   const v = strings.vehicle;
+  useAnnounceOnIOS(check.status === "error" ? v.checkFailed : null);
   if (fleet.length === 0) return <Text tone="secondary">{v.noFleet}</Text>;
   return (
     <View style={{ gap: 8 }}>
       <Text tone="secondary">{v.optional}</Text>
-      {check.status === "checking" ? <Text tone="secondary">{strings.when.checking}</Text> : null}
-      {check.status === "error" ? <Text tone="danger">{v.checkFailed}</Text> : null}
+      {check.status === "checking" ? (
+        <Text tone="secondary" accessibilityLiveRegion="polite">
+          {strings.when.checking}
+        </Text>
+      ) : null}
+      {check.status === "error" ? (
+        <Text tone="danger" accessibilityLiveRegion="polite">
+          {v.checkFailed}
+        </Text>
+      ) : null}
       {fleet.map((car) => {
         const taken = check.unavailable.includes(car.id);
         const chosen = f.vehicleIds.includes(car.id);
@@ -102,6 +111,7 @@ export function VehicleChoice({ fleet, f, set, check }: { fleet: Vehicle[]; f: V
               label={car.name}
               hint={[detail, check.status === "done" ? (taken ? v.taken : v.free) : null].filter(Boolean).join(" · ")}
               checked={chosen}
+              unavailable={disabled}
               onChange={(on) => {
                 if (disabled) return;
                 set({ vehicleIds: on ? [...f.vehicleIds, car.id] : f.vehicleIds.filter((id) => id !== car.id) });
@@ -149,10 +159,16 @@ export function VehicleDrivers({
   return (
     <View style={{ gap: 12 }}>
       <Text tone="secondary">{dr.intro}</Text>
-      {peopleState === "loading" ? <Text tone="secondary">{dr.loading}</Text> : null}
+      {peopleState === "loading" ? (
+        <Text tone="secondary" accessibilityRole="progressbar" accessibilityLabel={dr.loading}>
+          {dr.loading}
+        </Text>
+      ) : null}
       {peopleState === "error" ? (
         <View style={{ gap: 8 }}>
-          <Text tone="danger">{dr.loadFailed}</Text>
+          <Text tone="danger" accessibilityRole="alert" accessibilityLiveRegion="polite">
+            {dr.loadFailed}
+          </Text>
           <Button label={strings.common.tryAgain} variant="secondary" onPress={onRetryPeople} />
         </View>
       ) : null}
@@ -172,7 +188,9 @@ export function VehicleDrivers({
                 onPress={() => set({ drivers: f.drivers.filter((x) => x.userId !== d.userId) })}
                 style={{ minWidth: touch.minTarget, minHeight: touch.minTarget, alignItems: "center", justifyContent: "center" }}
               >
-                <X size={20} color={colors.text} />
+                <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                  <X size={20} color={colors.text} />
+                </View>
               </Pressable>
             </View>
             {st ? (

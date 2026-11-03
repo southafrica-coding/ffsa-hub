@@ -16,7 +16,7 @@ import { cancelSpace, checkSpace, decideSpace, loadErrorMessage, userMessage } f
 import { bookingsFetch } from "../client";
 import { ConflictList } from "../components/ConflictList";
 import { DecisionSheet } from "../components/DecisionSheet";
-import { Field, StatusLine } from "../components/ui";
+import { Field, StatusLine, useAnnounceOnIOS } from "../components/ui";
 import { loadSpaceBooking } from "../data";
 import { canCancel, dateRangeLabel, EMPTY_SPACE, hm, timeRangeLabel } from "../logic";
 import { strings } from "../strings";
@@ -69,6 +69,10 @@ export default function SpaceDetailScreen({ id }: { id: string }) {
   const [done, setDone] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // "Approved" / "Cancelled" / a failure appear in a banner; Android reads
+  // its live region, iOS needs them spoken.
+  // A danger Banner speaks itself on iOS; only the positive result needs a nudge.
+  useAnnounceOnIOS(actionError ? null : done);
 
   const load = useCallback(() => loadSpaceBooking(id), [id]);
   const { state, refreshing, refresh, retry } = useCachedLoad<SpaceBooking | null>({

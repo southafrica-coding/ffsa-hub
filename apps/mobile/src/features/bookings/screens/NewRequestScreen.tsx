@@ -1,13 +1,14 @@
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { Building2, Car, Speaker } from "lucide-react-native";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
 import { Button, Masthead, Screen, Text } from "@/components";
 import { ErrorState, Skeleton } from "@/features/finance/components/ui";
 import { ListRow, StateMessage, openWebPage, useMe } from "@/features/shell";
+import { announce } from "@/lib/a11y";
 import { useTheme } from "@/theme/use-theme";
 
 import { bookingsAccess } from "../access";
@@ -89,6 +90,17 @@ export default function NewRequestScreen() {
     setError(null);
   };
 
+  // A new step replaces the screen's content under the same Next button, so
+  // screen-reader focus doesn't move: say where the person is now.
+  const stepNow = progress(flow);
+  const stepSpoken = strings.a11y.stepChanged(st.of(stepNow.index, stepNow.total), st.titles[flow.step]);
+  const lastStep = useRef(flow.step);
+  useEffect(() => {
+    if (flow.step === lastStep.current) return;
+    lastStep.current = flow.step;
+    announce(stepSpoken);
+  }, [flow.step, stepSpoken]);
+
   if (me.status === "loading") {
     return (
       <Screen edges={[]}>
@@ -141,11 +153,13 @@ export default function NewRequestScreen() {
           return;
         }
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        announce(r.autoConfirm ? strings.review.sentSpaceConfirmed : strings.review.sentSpacePending);
         if (r.bookingId) router.replace({ pathname: "/bookings/space/[id]", params: { id: r.bookingId } });
         else router.replace("/bookings");
       } else {
         const r = await submitVehicle(bookingsFetch, flow.vehicle);
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        announce(strings.review.sentVehicle);
         router.replace({ pathname: "/bookings/vehicle/[id]", params: { id: r.bookingId } });
       }
     } catch (err) {
@@ -202,7 +216,7 @@ export default function NewRequestScreen() {
   const onReview = flow.step === "review";
   return (
     <Screen keyboard edges={["bottom"]}>
-      <View accessible accessibilityLabel={`${st.of(index, total)}. ${st.titles[flow.step]}`}>
+      <View accessible accessibilityRole="header" accessibilityLabel={stepSpoken}>
         <Masthead context={st.of(index, total)} title={st.titles[flow.step]} />
       </View>
       {body()}

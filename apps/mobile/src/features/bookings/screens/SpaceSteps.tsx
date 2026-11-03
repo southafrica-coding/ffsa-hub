@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { View } from "react-native";
 
 import { Text, TextField } from "@/components";
-import { Chips, Row, Tag } from "@/features/finance/components/ui";
+import { Chips, Tag } from "@/features/finance/components/ui";
 import { ListRow, openWebPage } from "@/features/shell";
 import { useTheme } from "@/theme/use-theme";
 
@@ -14,7 +14,7 @@ import { checkSpace, userMessage, type SpaceCheck } from "../api";
 import { bookingsFetch } from "../client";
 import { ConflictList } from "../components/ConflictList";
 import { DateTimeField } from "../components/DateTimeField";
-import { CheckRow, Field } from "../components/ui";
+import { CheckRow, ChoiceRow, Field, useAnnounceOnIOS } from "../components/ui";
 import type { SpaceOptions } from "../data";
 import { approvalNote, dateRangeLabel, spaceWhenError, timeRangeLabel, todayISO, type SpaceForm } from "../logic";
 import { strings } from "../strings";
@@ -58,14 +58,17 @@ export function SpaceChoice({ options, f, set, canApprove }: { options: SpaceOpt
   if (options.venues.length === 0) return <Text tone="secondary">{strings.space.none}</Text>;
   const chosen = options.venues.find((v) => v.id === f.venueId);
   return (
-    <View accessibilityRole="radiogroup">
+    <View accessibilityRole="radiogroup" accessibilityLabel={strings.steps.titles.space}>
       {options.venues.map((v) => {
         const selected = v.id === f.venueId;
         return (
-          <Row
+          <ChoiceRow
             key={v.id}
+            selected={selected}
             onPress={() => set({ venueId: v.id })}
-            accessibilityLabel={[v.name, v.building, v.requires_approval ? strings.space.needsApproval : strings.space.instant, selected ? "Selected" : null].filter(Boolean).join(". ")}
+            accessibilityLabel={[v.name, v.building, v.capacity ? strings.space.capacity(v.capacity) : null, v.requires_approval ? strings.space.needsApproval : strings.space.instant]
+              .filter(Boolean)
+              .join(". ")}
             testID={`venue-${v.id}`}
           >
             <View style={{ flexDirection: "row", gap: 10, alignItems: "center", borderLeftWidth: selected ? 4 : 0, borderLeftColor: colors.text, paddingLeft: selected ? 8 : 0 }}>
@@ -79,7 +82,7 @@ export function SpaceChoice({ options, f, set, canApprove }: { options: SpaceOpt
               </View>
               <Tag tone={v.requires_approval ? "attention" : "default"}>{v.requires_approval ? strings.space.needsApproval : strings.space.instant}</Tag>
             </View>
-          </Row>
+          </ChoiceRow>
         );
       })}
       {chosen ? (
@@ -124,12 +127,28 @@ export function SpaceWhen({ f, set, check }: { f: SpaceForm; set: (p: Partial<Sp
 }
 
 export function CheckResult({ check }: { check: SpaceCheckState }) {
-  if (check.status === "checking") return <Text tone="secondary">{w.checking}</Text>;
-  if (check.status === "error") return <Text tone="danger">{check.message}</Text>;
+  // The answer arrives a moment after the time changes: say it (clashes are
+  // spoken by ConflictList). Android reads the live regions instead.
+  const free = check.status === "done" && !!check.result && check.result.conflicts.length === 0;
+  useAnnounceOnIOS(check.status === "error" ? check.message : free ? w.free : null);
+  if (check.status === "checking") {
+    return (
+      <Text tone="secondary" accessibilityLiveRegion="polite">
+        {w.checking}
+      </Text>
+    );
+  }
+  if (check.status === "error") {
+    return (
+      <Text tone="danger" accessibilityLiveRegion="polite">
+        {check.message}
+      </Text>
+    );
+  }
   if (check.status !== "done" || !check.result) return null;
   if (check.result.conflicts.length === 0) {
     return (
-      <Text tone="positive" testID="space-free">
+      <Text tone="positive" testID="space-free" accessibilityLiveRegion="polite">
         {w.free}
       </Text>
     );
