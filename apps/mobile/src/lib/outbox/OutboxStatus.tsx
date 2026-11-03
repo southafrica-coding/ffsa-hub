@@ -2,6 +2,7 @@
 // words (never colour alone), the waiting / needs-you count, and the notice
 // shown when the saved queue couldn't be read.
 
+import { useState } from "react";
 import { View } from "react-native";
 
 import { Banner, Button, Text } from "@/components";
@@ -19,8 +20,16 @@ type Props = {
   now?: number;
 };
 
-/** "NEEDS YOU" + why + what to do + "Last tried 14:05". Hidden from screen readers: the row's label says it. */
-export function OutboxItemStatus({ item, online, now = Date.now() }: Props) {
+/** The clock when the list was drawn (for "Last tried 14:05"), read once, not on every render. */
+export function useNow(): number {
+  const [now] = useState(Date.now);
+  return now;
+}
+
+/** "NEEDS YOU" + why + what to do + "Last tried 14:05", all in words. */
+export function OutboxItemStatus({ item, online, now: given }: Props) {
+  const drawnAt = useNow();
+  const now = given ?? drawnAt;
   const { colors } = useTheme();
   const state = itemState(item, online);
   const needsYou = state === "needs_you";

@@ -2,7 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import * as Haptics from "expo-haptics";
 import { useKeepAwake } from "expo-keep-awake";
-import { Linking } from "react-native";
+import { Alert, Linking } from "react-native";
 
 import { ApiError } from "@/lib/api";
 
@@ -175,6 +175,46 @@ describe("Door", () => {
     expect(await screen.findByTestId("rejected-banner")).toHaveTextContent(/1 offline scan was turned down/);
     await fireEvent.press(screen.getByRole("button", { name: "Clear" }));
     expect(screen.queryByTestId("rejected-banner")).toBeNull();
+  });
+
+  it("a saved scan the server refuses to take (403) needs the person: Retry, or Remove after a confirm", async () => {
+    await AsyncStorage.setItem(
+      queueKey("u1"),
+      JSON.stringify({
+        version: 2,
+        items: [{ id: "q1", eventId: "e1", code: "AbCdEfGhIjK", queuedAt: "2026-11-03T09:00:00Z", attempts: 0, state: "pending", outcome: null, lastError: null }],
+      }),
+    );
+    const alert = jest.spyOn(Alert, "alert").mockImplementation(() => {});
+    const door = makeDoor({ checkIn: jest.fn(async () => Promise.reject(new ApiError("forbidden", "You don't have access to this.", 403))) });
+    await render(<DoorScreen eventId="e1" door={door} />);
+    const banner = await screen.findByTestId("failed-banner");
+    expect(banner).toHaveTextContent(/1 saved scan needs you/);
+    expect(banner).toHaveTextContent(/AbCdEfGhIjK \(You don't have access to this\.\)/);
+    expect(screen.queryByTestId("queue-banner")).toBeNull();
+
+    await fireEvent.press(screen.getByRole("button", { name: "Remove" }));
+    expect(alert).toHaveBeenCalledWith("Remove these scans?", expect.any(String), expect.any(Array));
+    expect(screen.getByTestId("failed-banner")).toBeTruthy();
+
+    door.checkIn.mockResolvedValueOnce({ result: "ok", ticketId: "t1", ticketTypeName: "General", buyerName: "" });
+    await fireEvent.press(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(door.checkIn).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByTestId("queue-banner")).toBeNull());
+    expect(screen.queryByTestId("failed-banner")).toBeNull();
+    alert.mockClear();
+  });
+
+  it("a damaged saved queue is kept aside and the door says so", async () => {
+    await AsyncStorage.setItem(queueKey("u1"), "{half");
+    await render(<DoorScreen eventId="e1" door={makeDoor()} />);
+    expect(await screen.findByTestId("outbox-store-problem")).toBeTruthy();
+    const keys = await AsyncStorage.getAllKeys();
+    const copy = keys.find((k) => k.startsWith(`${queueKey("u1")}:quarantine:`));
+    expect(copy).toBeTruthy();
+    expect(await AsyncStorage.getItem(copy!)).toBe("{half");
+    await fireEvent.press(screen.getByRole("button", { name: "OK" }));
+    expect(screen.queryByTestId("outbox-store-problem")).toBeNull();
   });
 
   it("name search: one tap checks the guest in", async () => {

@@ -2,9 +2,18 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { ApiError } from "@/lib/api";
 
+import { MAX_ATTEMPTS } from "@/lib/outbox/backoff";
+
 import {
+  classifyScanError,
+  failedFor,
   flushQueue,
+  lastTriedOf,
   loadQueue,
+  loadQueueWithStatus,
+  newScanId,
+  parseStoredQueue,
+  quarantineKey,
   pendingFor,
   queueKey,
   queueReducer,
@@ -145,5 +154,96 @@ describe("flushQueue", () => {
       .mockResolvedValueOnce({ result: "ok", ticketId: "t", ticketTypeName: "G", buyerName: "" });
     await flushQueue(h.get(), "e1", { checkIn }, h.dispatch);
     expect(h.get().map((x) => x.state)).toEqual(["pending", "confirmed"]);
+  });
+});
+
+describe("hardening", () => {
+  beforeEach(() => AsyncStorage.clear());
+
+  it("a refused send (permanent) needs the person; Retry puts it back; Remove only then drops it", () => {
+    let q = run([enq("1"), { type: "sending", id: "1", at: 5 }, { type: "failed", id: "1", error: "No access", permanent: true }]);
+    expect(q[0]).toMatchObject({ state: "failed", attempts: 1, lastError: "No access", lastTriedAt: 5 });
+    expect(failedFor(q, "e1")).toHaveLength(1);
+    expect(pendingFor(q, "e1")).toHaveLength(0);
+    q = run([{ type: "retry", id: "1" }], q);
+    expect(q[0]).toMatchObject({ state: "pending", attempts: 0 });
+    q = run([{ type: "dismiss", id: "1" }], q);
+    expect(q).toHaveLength(1);
+    q = run([{ type: "sending", id: "1" }, { type: "failed", id: "1", error: "x", permanent: true }, { type: "dismiss", id: "1" }], q);
+    expect(q).toEqual([]);
+  });
+
+  it(`after ${MAX_ATTEMPTS} transient failures it needs the person`, () => {
+    let q = run([enq("1")]);
+    for (let i = 0; i < MAX_ATTEMPTS; i++) q = run([{ type: "sending", id: "1" }, { type: "failed", id: "1", error: "offline" }], q);
+    expect(q[0]).toMatchObject({ state: "failed", attempts: MAX_ATTEMPTS });
+  });
+
+  it("a sign-out mid-send doesn't count against the scan", () => {
+    const q = run([enq("1"), { type: "sending", id: "1" }, { type: "failed", id: "1", error: "signed out", uncounted: true }]);
+    expect(q[0]).toMatchObject({ state: "pending", attempts: 0 });
+  });
+
+  it("classifies errors", () => {
+    expect(classifyScanError(new ApiError("network", "x"))).toEqual({ stop: true, permanent: false, uncounted: false });
+    expect(classifyScanError(new ApiError("timeout", "x"))).toEqual({ stop: true, permanent: false, uncounted: false });
+    expect(classifyScanError(new ApiError("unauthenticated", "x", 401))).toEqual({ stop: true, permanent: false, uncounted: true });
+    expect(classifyScanError(new ApiError("http", "x", 503)).permanent).toBe(false);
+    expect(classifyScanError(new ApiError("http", "x", 429)).permanent).toBe(false);
+    expect(classifyScanError(new ApiError("invalid_response", "x")).permanent).toBe(false);
+    expect(classifyScanError(new ApiError("forbidden", "x", 403))).toEqual({ stop: false, permanent: true, uncounted: false });
+    expect(classifyScanError(new ApiError("http", "x", 400)).permanent).toBe(true);
+  });
+
+  it("flush: a 403 marks the scan as needing the person and carries on", async () => {
+    let q = run([enq("1", "AAAA"), enq("2", "BBBB")]);
+    const dispatch = (a: QueueAction) => {
+      q = queueReducer(q, a);
+    };
+    const checkIn = jest
+      .fn()
+      .mockRejectedValueOnce(new ApiError("forbidden", "You don't have access to this.", 403))
+      .mockResolvedValueOnce({ result: "ok", ticketId: "t", ticketTypeName: "G", buyerName: "" });
+    await flushQueue(q, "e1", { checkIn }, dispatch, { now: () => 42 });
+    expect(q.map((x) => [x.state, x.lastTriedAt])).toEqual([
+      ["failed", 42],
+      ["confirmed", 42],
+    ]);
+    expect(lastTriedOf(q)).toBe(42);
+    expect(lastTriedOf([])).toBeNull();
+  });
+
+  it("flush: never sends under someone else's account", async () => {
+    const q = run([enq("1", "AAAA")]);
+    const checkIn = jest.fn();
+    expect(await flushQueue(q, "e1", { checkIn }, () => {}, { stillOwner: async () => false })).toBe(0);
+    expect(checkIn).not.toHaveBeenCalled();
+  });
+
+  it("storage: writes version 2, still reads version 1", async () => {
+    await saveQueue("u1", run([enq("1")]));
+    expect(JSON.parse((await AsyncStorage.getItem(queueKey("u1")))!)).toMatchObject({ version: 2, items: [{ id: "1" }] });
+    await AsyncStorage.setItem(queueKey("u1"), JSON.stringify(run([enq("old")])));
+    expect((await loadQueue("u1")).map((x) => x.id)).toEqual(["old"]);
+  });
+
+  it("storage: an unreadable queue is copied to a quarantine key and reported", async () => {
+    await AsyncStorage.setItem(queueKey("u1"), "{not json");
+    expect(await loadQueueWithStatus("u1", 7)).toEqual({ items: [], problem: "corrupt" });
+    expect(await AsyncStorage.getItem(quarantineKey("u1", 7))).toBe("{not json");
+  });
+
+  it("storage: keeps the readable scans of a partly damaged queue", async () => {
+    const good = run([enq("1")])[0];
+    const res = parseStoredQueue(JSON.stringify({ version: 2, items: [good, { id: 3 }] }));
+    expect(res.problem).toBe("partial");
+    expect(res.items.map((x) => x.id)).toEqual(["1"]);
+    expect(parseStoredQueue(null)).toEqual({ items: [], problem: null });
+    expect(parseStoredQueue('{"x":1}').problem).toBe("corrupt");
+  });
+
+  it("each queued scan gets its own id", () => {
+    const ids = new Set(Array.from({ length: 50 }, newScanId));
+    expect(ids.size).toBe(50);
   });
 });

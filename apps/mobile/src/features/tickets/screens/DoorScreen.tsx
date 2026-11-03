@@ -6,7 +6,7 @@ import { Alert, View } from "react-native";
 
 import { Banner, Button, Divider, Masthead, Text, TextField } from "@/components";
 import { apiFetch } from "@/lib/api-client";
-import { StoreProblemNotice } from "@/lib/outbox/OutboxStatus";
+import { StoreProblemNotice, useNow } from "@/lib/outbox/OutboxStatus";
 import { lastTriedText } from "@/lib/outbox/status";
 import { useTheme } from "@/theme/use-theme";
 
@@ -41,6 +41,7 @@ export function DoorScreen({ eventId, eventTitle, door: injected }: Props) {
   const d = useDoor(eventId, door, online);
   const [scanning, setScanning] = useState(false);
   const [code, setCode] = useState("");
+  const now = useNow();
 
   if (d.denied) {
     return (
@@ -102,7 +103,7 @@ export function DoorScreen({ eventId, eventTitle, door: injected }: Props) {
           testID="queue-banner"
           action={online ? <Button label={strings.checkIn.queueSync} variant="secondary" loading={d.syncing} onPress={() => void d.sync()} /> : undefined}
         >
-          {[strings.checkIn.queueBody, lastTriedText({ lastTriedAt: d.lastTriedAt }, Date.now())].filter(Boolean).join(" ")}
+          {[strings.checkIn.queueBody, lastTriedText({ lastTriedAt: d.lastTriedAt }, now)].filter(Boolean).join(" ")}
         </Banner>
       ) : null}
 

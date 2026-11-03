@@ -2,7 +2,7 @@ import { useSyncExternalStore } from "react";
 import { Alert, Image, View } from "react-native";
 
 import { Button, Text } from "@/components";
-import { OutboxItemStatus, OutboxSummary, StoreProblemNotice } from "@/lib/outbox/OutboxStatus";
+import { OutboxItemStatus, OutboxSummary, StoreProblemNotice, useNow } from "@/lib/outbox/OutboxStatus";
 import { itemState, stateLabel, statusSentence } from "@/lib/outbox/status";
 import { hairline } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
@@ -36,8 +36,8 @@ export function OutboxList({ items, outbox }: { items: OutboxItem[]; outbox: Out
   const { colors } = useTheme();
   const online = useOutboxOnline();
   const problem = useSyncExternalStore(outbox.subscribe, outbox.getProblem, outbox.getProblem);
+  const now = useNow();
   if (items.length === 0 && !problem) return null;
-  const now = Date.now();
 
   function confirmDiscard(i: OutboxItem) {
     Alert.alert(strings.outbox.discardConfirmTitle, strings.outbox.discardConfirmBody, [
