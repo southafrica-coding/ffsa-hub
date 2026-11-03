@@ -223,7 +223,7 @@ export function Chips<T extends string>({
 
 // ── Loading skeleton (still when the person has asked for less motion) ─────
 
-function useReduceMotion() {
+export function useReduceMotion() {
   const [reduce, setReduce] = useState(false);
   useEffect(() => {
     let alive = true;
