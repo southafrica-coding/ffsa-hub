@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Pressable, View } from "react-native";
 
 import { Masthead, Text } from "@/components";
+import { useMe } from "@/features/shell";
 import { ApiError } from "@/lib/api";
 import { apiFetch } from "@/lib/api-client";
 import { hairline, touch } from "@/theme/tokens";
@@ -13,7 +14,7 @@ import { getCheckInEvents, type CheckInEvent } from "../api";
 import { EmptyState, ErrorState, SkeletonRows } from "../components/StateViews";
 import { TicketsScreen } from "../components/TicketsScreen";
 import { formatEventWhen } from "../dates";
-import { isSignedOutError, useMe } from "../hooks";
+import { isSignedOutError } from "../hooks";
 import { canRunCheckIn } from "../permissions";
 import { strings } from "../strings";
 

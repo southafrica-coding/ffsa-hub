@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 
+import { MeProvider } from "@/features/shell";
 import { ApiError } from "@/lib/api";
 import { apiFetch } from "@/lib/api-client";
 
@@ -41,13 +42,13 @@ beforeEach(async () => {
 describe("My tickets", () => {
   it("loading: shows a skeleton with a spoken label", async () => {
     api({ tickets: () => new Promise(() => undefined) });
-    await render(<MyTicketsScreen now={now} />);
+    await render(<MyTicketsScreen now={now} />, { wrapper: MeProvider });
     expect(screen.getByLabelText("Loading your tickets")).toBeTruthy();
   });
 
   it("success: upcoming listed, past collapsed until asked, rows open the ticket", async () => {
     api({});
-    await render(<MyTicketsScreen now={now} />);
+    await render(<MyTicketsScreen now={now} />, { wrapper: MeProvider });
     expect(await screen.findByText("Send Night")).toBeTruthy();
     expect(screen.getByText("Saved on this phone")).toBeTruthy();
     expect(screen.queryByText("Ministry Night")).toBeNull();
@@ -61,7 +62,7 @@ describe("My tickets", () => {
 
   it("success: caches what it loaded for offline use", async () => {
     api({});
-    await render(<MyTicketsScreen now={now} />);
+    await render(<MyTicketsScreen now={now} />, { wrapper: MeProvider });
     await screen.findByText("Send Night");
     await waitFor(async () => expect(await AsyncStorage.getItem(ticketCacheKey("u1"))).toContain("AbCdEfGhIjK"));
   });
@@ -71,7 +72,7 @@ describe("My tickets", () => {
       tickets: () =>
         makeTickets({ tickets: [], registrations: [{ id: "r1", status: "pending", event: ticketEvent("e5", "Prayer Day", "2026-11-25") }] }),
     });
-    await render(<MyTicketsScreen now={now} />);
+    await render(<MyTicketsScreen now={now} />, { wrapper: MeProvider });
     expect(await screen.findByText("Prayer Day")).toBeTruthy();
     expect(screen.getByText("Registered · no ticket needed")).toBeTruthy();
     expect(screen.queryByText("Saved on this phone")).toBeNull();
@@ -79,7 +80,7 @@ describe("My tickets", () => {
 
   it("empty: explains where tickets come from", async () => {
     api({ tickets: () => makeTickets({ tickets: [], registrations: [] }) });
-    await render(<MyTicketsScreen now={now} />);
+    await render(<MyTicketsScreen now={now} />, { wrapper: MeProvider });
     expect(await screen.findByText("No tickets yet")).toBeTruthy();
   });
 
@@ -92,7 +93,7 @@ describe("My tickets", () => {
         return makeTickets();
       },
     });
-    await render(<MyTicketsScreen now={now} />);
+    await render(<MyTicketsScreen now={now} />, { wrapper: MeProvider });
     expect(await screen.findByText("Couldn't reach FFSA Hub. Check your connection and try again.")).toBeTruthy();
     await fireEvent.press(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByText("Send Night")).toBeTruthy();
@@ -106,7 +107,7 @@ describe("My tickets", () => {
         throw new ApiError("network", "offline");
       },
     });
-    await render(<MyTicketsScreen now={now} />);
+    await render(<MyTicketsScreen now={now} />, { wrapper: MeProvider });
     expect(await screen.findByText("Send Night")).toBeTruthy();
     expect(await screen.findByTestId("stale-banner")).toHaveTextContent(/You're offline\. Showing the tickets saved on this phone/);
   });
@@ -123,26 +124,26 @@ describe("My tickets", () => {
       event: ticketEvent("e7", "Youth Camp", "2026-12-10"),
     };
     api({ tickets: () => makeTickets({ tickets: [waiverDue, { ...waiverDue, id: "t-w2", code: "WaiverCode2" }] }) });
-    await render(<MyTicketsScreen now={now} />);
+    await render(<MyTicketsScreen now={now} />, { wrapper: MeProvider });
     await screen.findAllByText("Youth Camp");
     expect(screen.getAllByTestId("needs-you")).toHaveLength(1);
 
     api({});
-    await render(<MyTicketsScreen now={now} />);
+    await render(<MyTicketsScreen now={now} />, { wrapper: MeProvider });
     await screen.findByText("Send Night");
     expect(screen.queryByTestId("needs-you")).toBeNull();
   });
 
   it("permission: door check-in entry only for people the server would allow", async () => {
     api({ me: () => makeMe({ roles: ["events_admin"] }) });
-    await render(<MyTicketsScreen now={now} />);
+    await render(<MyTicketsScreen now={now} />, { wrapper: MeProvider });
     await fireEvent.press(await screen.findByRole("button", { name: "Run door check-in" }));
     expect(mockPush).toHaveBeenCalledWith("/tickets/check-in");
   });
 
   it("permission denied: no door entry for an ordinary member", async () => {
     api({ me: () => makeMe({ roles: ["staff"], viaRole: ["events.manage_attendance"] }) });
-    await render(<MyTicketsScreen now={now} />);
+    await render(<MyTicketsScreen now={now} />, { wrapper: MeProvider });
     await screen.findByText("Send Night");
     expect(screen.queryByRole("button", { name: "Run door check-in" })).toBeNull();
   });

@@ -3,6 +3,7 @@ import { useState, type ReactNode } from "react";
 import { View } from "react-native";
 
 import { Banner, Button, Masthead } from "@/components";
+import { useMe } from "@/features/shell";
 
 import type { MyRegistration, MyTicket } from "../api";
 import { SectionBar, SavedCue } from "../components/SectionBar";
@@ -10,7 +11,7 @@ import { EmptyState, ErrorState, SkeletonRows } from "../components/StateViews";
 import { RegistrationRow, TicketRow } from "../components/TicketRow";
 import { TicketsScreen } from "../components/TicketsScreen";
 import { formatStamp, splitByWhen } from "../dates";
-import { useMe, useMyTickets, useOnline } from "../hooks";
+import { useMyTickets, useOnline } from "../hooks";
 import { canRunCheckIn } from "../permissions";
 import { strings } from "../strings";
 

@@ -1,5 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 
+import type { Me } from "@/lib/api";
+
+import { makeMe } from "../../../../test/fixtures";
 import { readCache } from "../cache";
 import { DataError, loadHome, type HomeData } from "../data";
 import FinanceHomeScreen from "../screens/HomeScreen";
@@ -13,7 +16,8 @@ jest.mock("@/lib/supabase", () => ({ supabase: {} }));
 jest.mock("@/lib/api-client", () => ({ apiFetch: jest.fn() }));
 jest.mock("@/auth/session-provider", () => ({ useSession: () => ({ status: "signedIn", session: { user: { id: "user-1" } } }) }));
 jest.mock("@react-native-community/netinfo", () => ({ __esModule: true, default: { fetch: async () => ({ isConnected: true }), addEventListener: () => () => {} } }));
-jest.mock("../use-me", () => ({ useMe: () => null, isFinanceStaff: () => false }));
+let mockMe: Me | null = null;
+jest.mock("@/features/shell", () => ({ useMe: () => ({ status: mockMe ? "ready" : "loading", me: mockMe, error: null, refresh: () => {} }) }));
 jest.mock("../cache", () => ({
   readCache: jest.fn(async () => null),
   writeCache: jest.fn(async () => {}),
@@ -59,6 +63,7 @@ beforeEach(() => {
   mockLoad.mockReset();
   mockRead.mockReset().mockResolvedValue(null);
   mockPush.mockReset();
+  mockMe = null;
 });
 
 describe("My Finance home", () => {
@@ -76,6 +81,15 @@ describe("My Finance home", () => {
     await render(wrap(<FinanceHomeScreen />));
     expect(await screen.findByText(strings.home.emptyTitle)).toBeTruthy();
     expect(screen.queryByTestId("needs-you")).toBeNull();
+    expect(screen.queryByText(strings.home.emptyStaff)).toBeNull();
+  });
+
+  it("points finance staff at the website from the empty state (shared useMe)", async () => {
+    mockMe = makeMe({ roles: [{ name: "finance_admin", scopeType: null, scopeId: null }], permissions: [] });
+    mockLoad.mockResolvedValue({ teams: [] });
+    const { wrap } = makeOutbox();
+    await render(wrap(<FinanceHomeScreen />));
+    expect(await screen.findByText(strings.home.emptyStaff)).toBeTruthy();
   });
 
   it("shows an error with a working retry", async () => {

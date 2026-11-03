@@ -4,9 +4,11 @@ import { RefreshControl, ScrollView, View } from "react-native";
 
 import { Banner, Masthead, Screen, Text } from "@/components";
 import { useSession } from "@/auth/session-provider";
+import { useMe } from "@/features/shell";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/theme/use-theme";
 
+import { isFinanceStaff } from "../access";
 import { userMessage } from "../api";
 import { formatSavedAt } from "../cache";
 import { BudgetBar, EmptyState, ErrorState, Row, SectionBar, Skeleton, StaleNote, Tag } from "../components/ui";
@@ -16,7 +18,6 @@ import { useOutbox } from "../outbox/provider";
 import type { OutboxItem } from "../outbox/state";
 import { strings } from "../strings";
 import { useCachedLoad } from "../use-cached-load";
-import { isFinanceStaff, useMe } from "../use-me";
 
 const db = supabase as unknown as ReadClient;
 
@@ -30,7 +31,7 @@ export default function FinanceHomeScreen() {
   const { colors } = useTheme();
   const { session } = useSession();
   const userId = session?.user.id ?? null;
-  const me = useMe();
+  const { me } = useMe();
   const { items, online } = useOutbox();
 
   const load = useCallback(() => loadHome(db), []);

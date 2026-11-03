@@ -1,16 +1,12 @@
-// Small hooks for the Tickets slice.
-//
-// useMe() is LOCAL to this slice on purpose: the shell slice ships a shared
-// useMe()/useCan() in src/features/shell/. When that lands, swap the import
-// in the screens and delete this one; the return shape is kept minimal so
-// the swap is mechanical.
+// Small hooks for the Tickets slice. Who the person is comes from the
+// shell's shared useMe() ("@/features/shell"), not from here.
 
 import * as Brightness from "expo-brightness";
 import { useNetworkState } from "expo-network";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Platform } from "react-native";
 
-import { ApiError, getMe, type Me } from "@/lib/api";
+import { ApiError } from "@/lib/api";
 import { apiFetch } from "@/lib/api-client";
 import { supabase } from "@/lib/supabase";
 
@@ -20,26 +16,6 @@ import { loadCachedTickets, saveCachedTickets } from "./ticket-cache";
 /** True for 401/403-deactivated: apiFetch already signed out; the auth gate takes over. */
 export function isSignedOutError(err: unknown) {
   return err instanceof ApiError && (err.kind === "unauthenticated" || err.kind === "deactivated");
-}
-
-// ── Me (swap for the shell slice's hook later) ──────────────────────────────
-
-export type MeState = { status: "loading" } | { status: "error"; message: string } | { status: "ready"; me: Me };
-
-export function useMe(): MeState {
-  const [state, setState] = useState<MeState>({ status: "loading" });
-  useEffect(() => {
-    const controller = new AbortController();
-    getMe(apiFetch, { signal: controller.signal }).then(
-      (me) => setState({ status: "ready", me }),
-      (err: unknown) => {
-        if (controller.signal.aborted || isSignedOutError(err)) return;
-        setState({ status: "error", message: err instanceof ApiError ? err.message : "Couldn't load your account." });
-      },
-    );
-    return () => controller.abort();
-  }, []);
-  return state;
 }
 
 // ── Session user id (for per-user storage keys) ─────────────────────────────
