@@ -9,9 +9,11 @@ It is an **independent app**: its own `package.json`, lockfile, `node_modules`, 
 ## What's here today
 
 - Sign-in (email + password), session restored on launch.
-- **Bottom tab bar**: Home · Finance · Tickets · Me (Finance and Tickets are built by their own Phase 1 slices; until they land they show "Coming soon").
+- **Bottom tab bar**: Home · Finance · Prayer · Tickets · Me.
 - **Home**: the "needs you" feed (`GET /api/notifications`, the same items as the web dashboard), one yellow band when something is unread, grouped list (Needs you / Earlier), mark read, pull-to-refresh, offline copy, shortcuts.
-- **Me**: name, email, roles; edit name and phone; notification settings; links to the full web profile and the privacy policy; app version; sign out (this phone only).
+- **Finance** (my finance, receipt capture, offline outbox), **Prayer** (week, set sheet, practice, my sets) and **Tickets** (my tickets, staff door check-in).
+- **Bookings** (spaces, vehicles, approvals, collect/return photos) and **My Schools** (enrolments, attendance, read-only): not tabs, opened from Home's shortcuts.
+- **Me**: name, email, roles; edit name and phone; notification settings; **Appearance** (Match phone / Light / Dark); links to the full web profile and the privacy policy; app version; sign out (this phone only).
 - The design tokens and a small component kit (`Button`, `Text`, `Screen`, `TextField`, `Banner` incl. the yellow "needs you" band, `Divider`, `Masthead`).
 - Final app icon and splash (Option 1, "Signature": black FF mark on `#FFB801`).
 
@@ -25,8 +27,11 @@ Planning docs (plan, feature inventory, API surface, permissions, design tokens,
 |---|---|---|
 | Home | `app/(app)/index.tsx` | shell (slice 1) |
 | Finance | `app/(app)/finance/` (own `_layout.tsx` + `index.tsx`) | slice 2 |
+| Prayer | `app/(app)/prayer/` | Phase 2 prayer slice |
 | Tickets | `app/(app)/tickets/` (own `_layout.tsx` + `index.tsx`; door check-in at `tickets/check-in/…`) | slice 3 |
-| Me | `app/(app)/me/` (`_layout.tsx`, `index.tsx`, `edit.tsx`, `notifications.tsx`) | shell (slice 1) |
+| Me | `app/(app)/me/` (`_layout.tsx`, `index.tsx`, `edit.tsx`, `notifications.tsx`, `appearance.tsx`) | shell (slice 1) |
+
+`app/(app)/bookings/` and `app/(app)/schools/` are hidden routes (`href: null` in the tab layout): they have their own stacks but no tab.
 
 Only the shell edits `app/(app)/_layout.tsx` (the tab bar). The bar matches a route on its **first path segment**, so `finance` (folder with `_layout.tsx`) and `finance/index` (bare file) are the same tab, and nested routes like `tickets/check-in` keep their tab selected. Tab order, labels, icons and optional visibility rules live in `src/features/shell/tabs.ts`.
 
@@ -37,7 +42,7 @@ Only the shell edits `app/(app)/_layout.tsx` (the tab bar). The bar matches a ro
 | `useMe()` | `{ status: "loading" \| "ready" \| "error", me, error, refresh }` from `GET /api/me`, loaded once by the tab layout and refreshed when the app returns from the background (after 5 min). |
 | `useCan(permission)` | `true` if the person holds that permission key (any scope, direct or via a role) or is `admin`/`super_admin`. `false` while loading. |
 | `useHasRole(name)` | `true` if they hold that role (any scope). |
-| `setTabBadge(tab, n)` | Puts a count on a tab (`"home" \| "finance" \| "tickets" \| "me"`); `0` hides it. Home uses it for unread notifications. |
+| `setTabBadge(tab, n)` | Puts a count on a tab (`"home" \| "finance" \| "prayer" \| "tickets" \| "me"`); `0` hides it. Home uses it for unread notifications. |
 | `openWebPage(path)` | Opens a website page in the in-app browser (for things the app doesn't have yet). |
 
 These gates are **for the interface only**. Hiding a button protects nothing: the API and Supabase RLS decide, and the app must handle a `403` gracefully (show a "not available on your account" state).
@@ -111,15 +116,20 @@ app/                     routes (expo-router)
   (auth)/sign-in.tsx     signed-out only
   (app)/_layout.tsx      signed-in only: bottom tabs + MeProvider
   (app)/index.tsx        Home ("needs you" feed)
-  (app)/finance/         slice 2 (placeholder until it lands)
-  (app)/tickets/         slice 3 (placeholder until it lands)
-  (app)/me/              Me, edit profile, notification settings
+  (app)/finance/         My Finance, receipt capture
+  (app)/prayer/          Prayer Room
+  (app)/tickets/         tickets, door check-in
+  (app)/bookings/        bookings + hire requests (hidden route, Home shortcut)
+  (app)/schools/         My Schools + attendance (hidden route, Home shortcut)
+  (app)/me/              Me, edit profile, notification settings, appearance
 docs/                    planning docs and decisions
 src/
   auth/                  session provider, sign-in rules (cooldown, safe errors)
   features/shell/        tab bar, useMe/useCan, badges, shared rows, in-app browser
   features/home/         notifications API, offline cache, feed logic, strings
   features/me/           profile + notification-preference API, validation, links, strings
+  features/appearance/   Match phone / Light / Dark choice (this device only)
+  features/<slice>/      finance, prayer, tickets, bookings, schools: one folder per feature
   components/            the component kit
   lib/
     env.ts               EXPO_PUBLIC_* validation (zod)
@@ -134,7 +144,7 @@ assets/                  icon, adaptive icon, splash, favicon, notification icon
 
 ### Design tokens
 
-`src/theme/tokens.ts` is the single source of truth; `tailwind.config.ts` and the component kit both read it. Light follows the web; **dark is new and proposed** (system setting decides). Corner radius is one token (`radius.default`, currently 2) until Jack chooses. Touch targets are 48dp minimum, labels never go below 11, and all text follows the OS font-size setting.
+`src/theme/tokens.ts` is the single source of truth; `tailwind.config.ts` and the component kit both read it. Light follows the web; **dark is new** (see Appearance below). Corner radius is one token (`radius.default`, currently 2) until Jack chooses. Touch targets are 48dp minimum, labels never go below 11, and all text follows the OS font-size setting.
 
 Use the kit or NativeWind classes (`className="gap-4"`, `bg-surface dark:bg-surface-dark`). Tailwind's default colours and radii are removed on purpose, so off-brand classes don't exist.
 
@@ -153,11 +163,11 @@ The website's `src/types/database.ts` (repo root) is the source of truth. This a
 ## Placeholders and known gaps
 
 - EAS project, Expo owner, store accounts: not set.
-- **Dark mode** follows the phone's setting only; there's no in-app Light/Dark/System switch yet (Me shows Appearance as read-only).
+- **Dark mode**: Me › Appearance offers *Match phone* (the default), *Light* or *Dark*. The choice is stored on this device only (not synced to your account, kept on sign-out). Audit and device checks: [`docs/dark-mode.md`](docs/dark-mode.md).
 - **Account deletion request**: the Me row is shown disabled until a request mechanism exists (Apple 5.1.1(v); Jack's decision).
 - Pages opened in the in-app browser don't share the app's sign-in, so the website may ask people to sign in there once.
 - Home's offline copy is per user and wiped on sign-out from Me. A forced sign-out (expired session) leaves it on the phone, keyed to that user only.
 - Deep links: `scheme: ffsahub` and `applinks:www.ffsahub.com` are declared, but the app doesn't handle any links yet. "Forgot password?" opens the website in the browser.
-- No push notifications (Home refreshes on open, pull-to-refresh and return from background) (the `expo-notifications` plugin and `assets/notification-icon.png` are ready for when it's added), no biometrics, no camera, no offline outbox.
-- Dark mode is a first pass; the web is light-only.
+- No push notifications yet (Home refreshes on open, pull-to-refresh and return from background); no biometrics.
+- The web is light-only, so pages opened in the in-app browser stay light in dark mode.
 - The web's tertiary grey (`#7C786C`) is 4.4:1 on white, just under WCAG AA for body text, so the app only uses it for large text and decoration.
