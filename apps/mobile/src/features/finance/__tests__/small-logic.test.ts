@@ -1,14 +1,14 @@
 // Small pure pieces: the photo size planner, the viewer's URL guard, the
 // camera-permission decision and the offline-copy timestamp.
 
-jest.mock("expo-image-picker", () => ({}));
-jest.mock("expo-image-manipulator", () => ({ ImageManipulator: {}, SaveFormat: { JPEG: "jpeg" } }));
-jest.mock("expo-file-system", () => ({ File: class {}, Directory: class {}, Paths: { document: { uri: "file:///docs/" } } }));
-
 import { formatSavedAt } from "../cache";
 import { permissionStep } from "../capture";
 import { RECEIPT_JPEG_QUALITY, RECEIPT_MAX_EDGE, planReceiptResize, plannedSize, safeFileName } from "../image-plan";
 import { isAllowedReceiptUri } from "../viewer-uri";
+
+jest.mock("expo-image-picker", () => ({}));
+jest.mock("expo-image-manipulator", () => ({ ImageManipulator: {}, SaveFormat: { JPEG: "jpeg" } }));
+jest.mock("expo-file-system", () => ({ File: class {}, Directory: class {}, Paths: { document: { uri: "file:///docs/" } } }));
 
 describe("planReceiptResize", () => {
   it("shrinks a 12 MP landscape photo to 1600px wide", () => {

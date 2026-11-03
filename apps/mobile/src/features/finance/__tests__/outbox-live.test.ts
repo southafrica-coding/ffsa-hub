@@ -106,9 +106,9 @@ beforeEach(() => {
   mockFiles.set("file:///docs/finance-outbox/r-1.jpg", new Uint8Array([0xff, 0xd8, 0xff]));
 });
 
-function load() {
-  // A fresh singleton per test.
-  return (require("../outbox/live") as typeof import("../outbox/live")).getOutbox();
+async function load() {
+  // A fresh singleton per test (modules are reset in beforeEach).
+  return jest.requireActual<typeof import("../outbox/live")>("../outbox/live").getOutbox();
 }
 
 describe("outbox, wired to the network", () => {
@@ -116,7 +116,7 @@ describe("outbox, wired to the network", () => {
     mockFetch.mockImplementation(async (url: string) =>
       url.endsWith("/api/finance/outreach/expenses") ? json(200, savedExpense) : json(200, { success: true, data: { id: "rec-1" } }),
     );
-    const outbox = load();
+    const outbox = await load();
     await outbox.add(expenseItem(), receiptItem());
     await outbox.process();
 
@@ -151,7 +151,7 @@ describe("outbox, wired to the network", () => {
 
   it("offline: sends nothing and keeps everything on disk", async () => {
     mockNet.isConnected = false;
-    const outbox = load();
+    const outbox = await load();
     await outbox.add(expenseItem(), receiptItem());
     await outbox.process();
     expect(mockFetch).not.toHaveBeenCalled();
@@ -163,7 +163,7 @@ describe("outbox, wired to the network", () => {
 
   it("a lost response is retried with the same id; the server's replay answer finishes it (one expense)", async () => {
     mockFetch.mockRejectedValueOnce(new TypeError("Network request failed")).mockResolvedValueOnce(json(200, { ...savedExpense, replayed: true }));
-    const outbox = load();
+    const outbox = await load();
     await outbox.add(expenseItem());
     await outbox.process();
     expect(outbox.getItems()[0]).toMatchObject({ status: "waiting", attempts: 1 });
@@ -177,7 +177,7 @@ describe("outbox, wired to the network", () => {
 
   it("a storage permission error stops and says so plainly", async () => {
     mockUpload.mockResolvedValueOnce({ data: null as never, error: { message: "new row violates row-level security policy", status: 403 } });
-    const outbox = load();
+    const outbox = await load();
     await outbox.add(receiptItem({ expenseId: "on-server" }));
     await outbox.process();
     expect(outbox.getItems()[0]).toMatchObject({ status: "failed", lastError: expect.stringMatching(/permission/) });
@@ -186,7 +186,7 @@ describe("outbox, wired to the network", () => {
 
   it("a storage network error retries later and keeps the photo", async () => {
     mockUpload.mockResolvedValueOnce({ data: null as never, error: { message: "Network request failed" } });
-    const outbox = load();
+    const outbox = await load();
     await outbox.add(receiptItem({ expenseId: "on-server" }));
     await outbox.process();
     expect(outbox.getItems()[0]).toMatchObject({ status: "waiting", attempts: 1 });
@@ -195,7 +195,7 @@ describe("outbox, wired to the network", () => {
 
   it("a 403 from the API is permanent (the person decides), a 500 retries", async () => {
     mockFetch.mockResolvedValueOnce(json(403, { error: "You don't have permission to add expenses to this team" }));
-    const outbox = load();
+    const outbox = await load();
     await outbox.add(expenseItem());
     await outbox.process();
     expect(outbox.getItems()[0].status).toBe("failed");
@@ -207,7 +207,7 @@ describe("outbox, wired to the network", () => {
   });
 
   it("only sends the signed-in person's items", async () => {
-    const outbox = load();
+    const outbox = await load();
     await outbox.add(expenseItem({ userId: "someone-else" }));
     await outbox.process();
     expect(mockFetch).not.toHaveBeenCalled();

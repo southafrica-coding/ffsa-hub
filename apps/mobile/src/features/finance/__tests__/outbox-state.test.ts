@@ -16,6 +16,7 @@ import {
   retry,
   runnable,
   wakeAll,
+  type OutboxItem,
 } from "../outbox/state";
 
 import { EXPENSE, TEAM, USER, expenseItem, receiptItem } from "../__fixtures__/fixtures";
@@ -91,7 +92,7 @@ describe("transitions", () => {
   });
 
   it("gives up retrying by itself after MAX_ATTEMPTS, but keeps the item", () => {
-    let items = [expenseItem({ attempts: MAX_ATTEMPTS - 1 })];
+    let items: OutboxItem[] = [expenseItem({ attempts: MAX_ATTEMPTS - 1 })];
     items = markFailed(items, EXPENSE, { permanent: false, message: "still offline" }, 0);
     expect(items).toHaveLength(1);
     expect(items[0].status).toBe("failed");
