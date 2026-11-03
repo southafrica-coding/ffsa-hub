@@ -1,9 +1,23 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import {
+  createBearerClient,
+  getBearerToken,
+  hasBearerHeader,
+} from "@/lib/supabase/bearer";
 
 export async function middleware(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request });
   const { pathname } = request.nextUrl;
+  const isApi = pathname === "/api" || pathname.startsWith("/api/");
+
+  // A bearer token (the phone app) only ever authenticates /api/*. Pages are
+  // cookie-only: drop the header before anything downstream can see it, so
+  // server components' createClient() never switches to a bearer client.
+  if (!isApi && request.headers.has("authorization")) {
+    request.headers.delete("authorization");
+  }
+
+  let supabaseResponse = NextResponse.next({ request });
 
   // Public routes that don't require auth
   const publicRoutes = [
@@ -36,6 +50,7 @@ export async function middleware(request: NextRequest) {
     "/hire", // public equipment-hire storefront (/hire, /hire/c/[slug], /hire/p/[slug]) — browsing needs no account
     "/t", // public tag landing (/t/[tag]) — the QR on every equipment tag; staff are sent on to the register
     "/track-intent", // public FFX track-intent survey (/track-intent/[token], migration 222) — same gotcha as /vr above
+    "/.well-known", // public app-link files (apple-app-site-association, assetlinks.json) — fetched by Apple / Google with no session
     "/api/scan", // public door scanner actions — authorised by the token in the path, not session cookies
     "/api/upload/sign", // public applicants upload photos from /apply
     "/api/public", // public application submission + signup
@@ -82,6 +97,12 @@ export async function middleware(request: NextRequest) {
     (isPublicRoute || isPublicCheckoutRoute || isPublicPromoValidateRoute)
   ) {
     return supabaseResponse;
+  }
+
+  // Protected /api/* with `Authorization: Bearer …`: the phone app. The token
+  // decides, even if cookies are present too; no cookie work happens.
+  if (isApi && hasBearerHeader(request)) {
+    return bearerGate(request);
   }
 
   const supabase = createServerClient(
@@ -153,6 +174,7 @@ export async function middleware(request: NextRequest) {
   // redirects them back there. This check must come BEFORE the "authenticated
   // users leave /login" block below to avoid a redirect loop.
   if (isDeactivated && !isPublicRoute && pathname !== "/login") {
+    if (isApi && !wantsHtml(request)) return apiDeactivated();
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("error", "deactivated");
@@ -161,6 +183,12 @@ export async function middleware(request: NextRequest) {
   }
 
   if (!user && !isPublicRoute && !isOnboarding) {
+    // API calls (fetch, the phone app) get a 401 they can act on, not a 307
+    // to an HTML login page. A browser NAVIGATION to /api/* (an export link,
+    // "Connect Xero") asks for text/html and still goes to /login below.
+    if (isApi && !wantsHtml(request)) {
+      return apiUnauthenticated("Sign in to use this endpoint.");
+    }
     // Redirect to login. Skip for public routes — notably /login itself and
     // /auth/* — which are auth-aware (they bypass the fast-path above) but must
     // never redirect-loop back to /login when there's no session.
@@ -178,6 +206,77 @@ export async function middleware(request: NextRequest) {
   }
 
   return supabaseResponse;
+}
+
+// ────────────────────────────────────────────────────────────
+// Bearer path (protected /api/* only)
+// ────────────────────────────────────────────────────────────
+// Same two checks as the cookie path, against the token instead of the
+// cookie: the Auth server must vouch for the token, and the account must not
+// be deactivated. is_active is read with a client carrying that same bearer,
+// so RLS ("users can read own user record") applies; never the service role.
+// The token's own `sub` is only used to start that read early, as above.
+async function bearerGate(request: NextRequest) {
+  const token = getBearerToken(request);
+  if (!token) {
+    return apiUnauthenticated("The access token is missing or malformed.");
+  }
+
+  const supabase = createBearerClient(token);
+  const readIsActive = async (id: string) => {
+    const { data } = await supabase
+      .from("users")
+      .select("is_active")
+      .eq("id", id)
+      .single();
+    return data as { is_active: boolean | null } | null;
+  };
+
+  const claimedUserId = jwtSubject(token);
+  const [
+    {
+      data: { user },
+    },
+    claimedRow,
+  ] = await Promise.all([
+    supabase.auth.getUser(token),
+    claimedUserId ? readIsActive(claimedUserId) : Promise.resolve(null),
+  ]);
+
+  if (!user) {
+    return apiUnauthenticated("The access token is invalid or has expired.");
+  }
+  const userRow =
+    user.id === claimedUserId ? claimedRow : await readIsActive(user.id);
+  if (userRow?.is_active === false) return apiDeactivated();
+
+  // The Authorization header is forwarded untouched, so the route's
+  // createClient() runs as this user.
+  return NextResponse.next({ request });
+}
+
+// Both bodies are part of the phone app's contract; keep the `error` codes.
+function apiUnauthenticated(message: string) {
+  return NextResponse.json(
+    { error: "unauthenticated", message },
+    { status: 401, headers: { "Cache-Control": "no-store" } }
+  );
+}
+
+function apiDeactivated() {
+  return NextResponse.json(
+    {
+      error: "deactivated",
+      message: "This account has been deactivated. Contact an administrator.",
+    },
+    { status: 403, headers: { "Cache-Control": "no-store" } }
+  );
+}
+
+// A browser navigation (address bar, <a href>, window.open) sends
+// Accept: text/html; fetch() sends */* unless told otherwise.
+function wantsHtml(request: NextRequest): boolean {
+  return (request.headers.get("accept") ?? "").includes("text/html");
 }
 
 // The `sub` claim of a JWT, unverified. Only ever used as a hint to start a

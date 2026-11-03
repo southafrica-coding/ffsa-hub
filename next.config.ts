@@ -7,6 +7,20 @@ const nextConfig: NextConfig = {
     // adding an ESLint config doesn't start failing `next build` on Vercel.
     ignoreDuringBuilds: true,
   },
+  async headers() {
+    // App links for the phone app (public/.well-known). Apple fetches the
+    // association file by a fixed name with no extension and requires JSON;
+    // Android's assetlinks.json is served as JSON by its extension, but say
+    // so explicitly. Short cache so replacing the placeholders takes effect.
+    const json = [
+      { key: "Content-Type", value: "application/json" },
+      { key: "Cache-Control", value: "public, max-age=3600" },
+    ];
+    return [
+      { source: "/.well-known/apple-app-site-association", headers: json },
+      { source: "/.well-known/assetlinks.json", headers: json },
+    ];
+  },
   async redirects() {
     // Space Bookings moved from /bookings/* to /bookings/spaces/* when the
     // /bookings hub was introduced. Keep old bookmarks/deep-links working.

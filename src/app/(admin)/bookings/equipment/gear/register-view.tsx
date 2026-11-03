@@ -3,13 +3,14 @@
 // Register, interactive half. Desktop is frame 45b drawn dark: category tabs,
 // a product table, a product opens to its units. Phone is frame 47e-1:
 // two-line rows, filter chips, 44px+ targets. A unit opens /gear/[tag].
+// Filtering and search live in lib/equipment/register.ts (filterRegister).
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Search } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import type { EquipmentLiveStatus } from "@/services/equipment";
-import { LIVE_STATUS_LABEL } from "@/lib/equipment/register";
+import { LIVE_STATUS_LABEL, filterRegister } from "@/lib/equipment/register";
 
 export type RegisterUnit = {
   tag: string;
@@ -21,7 +22,15 @@ export type RegisterUnit = {
   status: EquipmentLiveStatus;
   checked: string;
   checkedMissing: boolean;
+  /** The sheet's "Assigned to", verbatim. */
+  ownerLabel: string | null;
+  locationId: string | null;
+  location: string | null;
+  /** An import nobody has checked on the shelf yet (isUnverifiedImport). */
+  unverified: boolean;
 };
+
+export type RegisterLocation = { key: string; label: string; n: number };
 
 export type RegisterProduct = {
   id: string;
@@ -42,7 +51,7 @@ export type RegisterProduct = {
 type PhoneFilter = "all" | "attention" | "out";
 
 const COLS = "md:grid-cols-[28px_minmax(0,1fr)_110px_64px_84px_220px_190px]";
-const UNIT_COLS = "md:grid-cols-[96px_64px_minmax(0,1fr)_220px_120px_130px]";
+const UNIT_COLS = "md:grid-cols-[110px_64px_minmax(0,1fr)_190px_180px_120px_130px]";
 
 export function StatusPill({ status }: { status: EquipmentLiveStatus }) {
   return (
@@ -61,8 +70,16 @@ export function StatusPill({ status }: { status: EquipmentLiveStatus }) {
   );
 }
 
-function matches(q: string, ...fields: (string | null | undefined)[]) {
-  return fields.some((f) => f && f.toLowerCase().includes(q));
+/** On units imported from the first Sortly inventory that nobody has found on the shelf yet. */
+export function UnverifiedBadge() {
+  return (
+    <span
+      title="Imported from the first Sortly inventory. Check it exists, then edit or retire it."
+      className="inline-block whitespace-nowrap rounded-[4px] px-1.5 py-[2px] align-middle font-sans text-[9px] font-bold uppercase tracking-[0.14em] text-[color:var(--hire-accent)] ring-1 ring-inset ring-[color:var(--hire-accent)]"
+    >
+      Unverified
+    </span>
+  );
 }
 
 export function RegisterView({
@@ -70,18 +87,22 @@ export function RegisterView({
   products,
   unitTotal,
   maintenanceTotal,
+  locations,
   initialOpenId,
 }: {
   context: string;
   products: RegisterProduct[];
   unitTotal: number;
   maintenanceTotal: number;
+  /** Locations that hold gear, for the location filter. */
+  locations: RegisterLocation[];
   /** ?open=<product id>, so the unit page's back link lands on its product. */
   initialOpenId: string | null;
 }) {
   const [category, setCategory] = useState("all");
   const [phoneFilter, setPhoneFilter] = useState<PhoneFilter>("all");
   const [query, setQuery] = useState("");
+  const [location, setLocation] = useState("all");
   const [openId, setOpenId] = useState<string | null>(initialOpenId);
 
   const categories = useMemo(() => {
@@ -94,19 +115,13 @@ export function RegisterView({
   }, [products, unitTotal]);
 
   // Search covers product name, brand and model, and every unit's tag,
-  // serial and label. A product found through its units opens to show them.
+  // serial, label, owner and location. A product found through its units
+  // opens to show them.
   const q = query.trim().toLowerCase();
-  const visible = useMemo(() => {
-    return products
-      .filter((p) => category === "all" || p.category === category)
-      .map((p) => {
-        if (!q) return { product: p, units: p.units, viaUnits: false };
-        if (matches(q, p.name, p.make, p.category)) return { product: p, units: p.units, viaUnits: false };
-        const us = p.units.filter((u) => matches(q, u.tag, u.serial, u.label));
-        return us.length ? { product: p, units: us, viaUnits: true } : null;
-      })
-      .filter((x): x is { product: RegisterProduct; units: RegisterUnit[]; viaUnits: boolean } => !!x);
-  }, [products, category, q]);
+  const visible = useMemo(
+    () => filterRegister(products, { category, location, query: q }),
+    [products, category, location, q]
+  );
 
   const phoneVisible = visible.filter(
     ({ product }) =>
@@ -179,6 +194,7 @@ export function RegisterView({
               </button>
             ))}
           </div>
+          {locations.length > 1 && <LocationSelect value={location} onChange={setLocation} locations={locations} />}
         </div>
       </header>
 
@@ -200,8 +216,11 @@ export function RegisterView({
             <span className="font-normal opacity-70">{c.n}</span>
           </button>
         ))}
-        <div className="ml-auto w-[320px]">
-          <SearchBox value={query} onChange={setQuery} placeholder="Tag, serial, brand or model" />
+        <div className="ml-auto flex items-center gap-2">
+          {locations.length > 1 && <LocationSelect value={location} onChange={setLocation} locations={locations} />}
+          <div className="w-[320px]">
+            <SearchBox value={query} onChange={setQuery} placeholder="Tag, serial, brand, model or owner" />
+          </div>
         </div>
       </div>
 
@@ -229,7 +248,13 @@ export function RegisterView({
             visible.length > 0 && "md:hidden"
           )}
         >
-          {q ? `Nothing matches “${query.trim()}”.` : products.length === 0 ? "The register is empty." : "Nothing here right now."}
+          {q
+            ? `Nothing matches “${query.trim()}”.`
+            : products.length === 0
+              ? "The register is empty."
+              : location !== "all"
+                ? "No gear at this location in this category."
+                : "Nothing here right now."}
         </p>
       )}
       <ul>
@@ -338,6 +363,7 @@ function UnitList({ product, units }: { product: RegisterProduct; units: Registe
           <span>Tag</span>
           <span>Label</span>
           <span>Serial</span>
+          <span>Assigned to</span>
           <span>Condition</span>
           <span>Status</span>
           <span>Checked</span>
@@ -356,6 +382,11 @@ function UnitList({ product, units }: { product: RegisterProduct; units: Registe
               <span className="hire-mono text-[13px] font-bold text-[color:var(--hire-ink)] md:text-[12px]">
                 {u.tag}
                 {u.label && <span className="ml-2 font-normal text-[color:var(--hire-muted)] md:hidden">{u.label}</span>}
+                {u.unverified && (
+                  <span className="ml-2">
+                    <UnverifiedBadge />
+                  </span>
+                )}
               </span>
               <span className="hire-mono hidden text-[11px] text-[color:var(--hire-muted)] md:inline">{u.label}</span>
               <span
@@ -365,7 +396,15 @@ function UnitList({ product, units }: { product: RegisterProduct; units: Registe
                 )}
               >
                 {u.serial}
-                <span className="font-sans text-[color:var(--hire-muted)] md:hidden"> · {u.condition}</span>
+                <span className="font-sans text-[color:var(--hire-muted)] md:hidden">
+                  {" "}
+                  · {u.condition}
+                  {u.ownerLabel && <> · {u.ownerLabel}</>}
+                </span>
+              </span>
+              <span className="hidden min-w-0 text-[12px] leading-tight md:block">
+                <span className="block truncate text-[color:var(--hire-body)]">{u.ownerLabel ?? "—"}</span>
+                <span className="block truncate text-[11px] text-[color:var(--hire-muted)]">{u.location ?? "No location"}</span>
               </span>
               <span
                 className={cn(
@@ -394,6 +433,32 @@ function UnitList({ product, units }: { product: RegisterProduct; units: Registe
         ))}
       </div>
     </div>
+  );
+}
+
+function LocationSelect({
+  value,
+  onChange,
+  locations,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  locations: RegisterLocation[];
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      aria-label="Location"
+      className="h-11 rounded-[8px] border border-[color:var(--hire-line-strong)] bg-[color:var(--hire-surface2)] px-3 text-[16px] text-[color:var(--hire-ink)] md:h-9 md:rounded-[6px] md:text-[13px]"
+    >
+      <option value="all">All locations</option>
+      {locations.map((l) => (
+        <option key={l.key} value={l.key}>
+          {l.label} · {l.n}
+        </option>
+      ))}
+    </select>
   );
 }
 

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { clientIp, getRateLimiter, retryAfterSeconds } from "@/lib/rate-limit";
 import { resolveScanLink } from "@/services/event-scan-links";
 import {
   checkInTicket,
@@ -16,29 +17,11 @@ import {
 
 // Guessing a 24-byte token is not a realistic attack; hammering a token
 // someone leaked is. The cap is generous enough that a fast door never
-// trips it, tight enough that the link is not a bulk data tap.
-const RATE = new Map<string, { count: number; resetAt: number }>();
-const WINDOW_MS = 60 * 1000;
+// trips it, tight enough that the link is not a bulk data tap. Counted in
+// Postgres (migration 280) so every server instance shares one count; if
+// the limiter is unavailable the door stays open (see lib/rate-limit).
 const MAX_PER_WINDOW = 120;
-
-function rateLimited(key: string): boolean {
-  const now = Date.now();
-  const hit = RATE.get(key);
-  if (!hit || now > hit.resetAt) {
-    RATE.set(key, { count: 1, resetAt: now + WINDOW_MS });
-    return false;
-  }
-  hit.count += 1;
-  return hit.count > MAX_PER_WINDOW;
-}
-
-function clientKey(request: Request, token: string): string {
-  const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    request.headers.get("x-real-ip") ||
-    "unknown";
-  return `${token}:${ip}`;
-}
+const WINDOW_SECONDS = 60;
 
 const DEAD_LINK = {
   error:
@@ -46,11 +29,15 @@ const DEAD_LINK = {
 };
 
 async function openDoor(request: Request, token: string) {
-  if (rateLimited(clientKey(request, token))) {
+  const limit = await getRateLimiter().hit(`scan:${token}:${clientIp(request)}`, {
+    limit: MAX_PER_WINDOW,
+    windowSeconds: WINDOW_SECONDS,
+  });
+  if (!limit.allowed) {
     return {
       error: NextResponse.json(
         { error: "Too many requests. Wait a moment and try again." },
-        { status: 429 }
+        { status: 429, headers: { "Retry-After": String(retryAfterSeconds(limit)) } }
       ),
     };
   }

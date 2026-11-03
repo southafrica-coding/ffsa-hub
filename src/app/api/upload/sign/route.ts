@@ -1,22 +1,35 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { clientIp, getRateLimiter, retryAfterSeconds } from "@/lib/rate-limit";
+import {
+  isAcceptableUploadContentType,
+  isValidApplicationUploadPath,
+  UPLOAD_BUCKET,
+} from "@/lib/upload-paths";
 
-const IMAGE_EXTENSIONS = [
-  ".jpg",
-  ".jpeg",
-  ".png",
-  ".webp",
-  ".gif",
-  ".heic",
-  ".heif",
-];
+// INTENTIONALLY ANONYMOUS. Applicants on /apply have no account, and they
+// need a signed URL to upload their photo straight to storage. So this route
+// can't ask "who are you"; instead it only signs one narrow shape of path
+// (see lib/upload-paths: a fresh uuid per upload, an image extension, no
+// traversal), and counts requests per IP.
 
-function isImageByExtension(path: string): boolean {
-  const lower = path.toLowerCase();
-  return IMAGE_EXTENSIONS.some((ext) => lower.endsWith(ext));
-}
+// A real applicant uploads a handful of photos; 30 a minute per IP leaves
+// room for retries and a shared office connection.
+const MAX_PER_WINDOW = 30;
+const WINDOW_SECONDS = 60;
 
 export async function POST(request: Request) {
+  const limit = await getRateLimiter().hit(`upload-sign:${clientIp(request)}`, {
+    limit: MAX_PER_WINDOW,
+    windowSeconds: WINDOW_SECONDS,
+  });
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: "Too many uploads at once. Wait a minute and try again." },
+      { status: 429, headers: { "Retry-After": String(retryAfterSeconds(limit)) } }
+    );
+  }
+
   let body: { bucket?: string; path?: string; contentType?: string };
   try {
     body = await request.json();
@@ -27,23 +40,19 @@ export async function POST(request: Request) {
     );
   }
 
-  const { bucket, path, contentType } = body;
+  const { bucket, path, contentType } = body ?? {};
 
-  if (bucket !== "application-uploads") {
+  if (bucket !== UPLOAD_BUCKET) {
     return NextResponse.json({ error: "Invalid bucket" }, { status: 400 });
   }
 
-  if (!path || !path.startsWith("applications/")) {
+  if (!isValidApplicationUploadPath(path)) {
     return NextResponse.json({ error: "Invalid path" }, { status: 400 });
   }
 
-  // Accept if EITHER contentType starts with image/ OR the file extension matches
-  // an image type. Mobile browsers sometimes send empty/odd contentType.
-  const contentTypeOk =
-    contentType && contentType.startsWith("image/");
-  const extensionOk = isImageByExtension(path);
-
-  if (!contentTypeOk && !extensionOk) {
+  // The path already had to end in an image extension; a declared content
+  // type must agree that it's an image (not SVG).
+  if (!isAcceptableUploadContentType(contentType)) {
     return NextResponse.json(
       { error: "Please choose an image file (JPG, PNG, or HEIC)" },
       { status: 400 }
@@ -53,7 +62,7 @@ export async function POST(request: Request) {
   const supabase = createAdminClient();
 
   const { data, error } = await supabase.storage
-    .from(bucket)
+    .from(UPLOAD_BUCKET)
     .createSignedUploadUrl(path);
 
   if (error) {
