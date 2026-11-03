@@ -1,78 +1,215 @@
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import * as WebBrowser from "expo-web-browser";
 
-import { ApiError, meSchema } from "@/lib/api";
+import { getTabBadge, MeProvider } from "@/features/shell";
+import { ApiError } from "@/lib/api";
 import { apiFetch } from "@/lib/api-client";
-import { supabase } from "@/lib/supabase";
 
+import { apiRoutes, makeMe } from "../../test/fixtures";
 import HomeScreen from "../(app)/index";
 
-// GET /api/me is mocked: the real endpoint ships in web PR 1.
 jest.mock("@/lib/api-client", () => ({ apiFetch: jest.fn() }));
-jest.mock("@/lib/supabase", () => ({ supabase: { auth: { signOut: jest.fn().mockResolvedValue({ error: null }) } } }));
+jest.mock("@/auth/session-provider", () => ({
+  useSession: () => ({ status: "signedIn", session: { user: { id: "u1" } } }),
+}));
+const mockRouter = { navigate: jest.fn(), push: jest.fn(), back: jest.fn() };
+jest.mock("expo-router", () => ({ useRouter: () => mockRouter }));
+jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn().mockResolvedValue({ type: "dismiss" }) }));
 
 const mockFetch = apiFetch as unknown as jest.Mock;
+const openBrowser = WebBrowser.openBrowserAsync as jest.Mock;
 
-const ME = meSchema.parse({
-  user: { id: "u1", email: "jo@example.org" },
-  profile: { firstName: "Johanna", lastName: "Smit", preferredName: "Jo", avatarUrl: null, isActive: true },
-  roles: [
-    { name: "staff", scopeType: null, scopeId: null },
-    { name: "team_leader", scopeType: "outreach_team", scopeId: "t1" },
+const NOW = Date.now();
+const FEED = {
+  items: [
+    {
+      key: "booking:1",
+      kind: "booking",
+      title: "New booking request",
+      body: "Youth night · Main hall · 4 Nov",
+      href: "/bookings/requests",
+      read: false,
+      createdAt: new Date(NOW - 2 * 3600_000).toISOString(),
+    },
+    {
+      key: "user:2",
+      kind: "user",
+      title: "Staff awaiting approval",
+      body: "Ben B · b@x",
+      href: "/my-finance",
+      read: false,
+      createdAt: null,
+    },
+    {
+      key: "vehicle:3",
+      kind: "vehicle",
+      title: "Vehicle request awaiting approval",
+      body: "Quantum · 5 Nov",
+      href: "/bookings/vehicles/requests",
+      read: true,
+      createdAt: new Date(NOW - 3 * 86_400_000).toISOString(),
+    },
   ],
-  permissions: [
-    { key: "a", scopeType: null, scopeId: null, source: "role" },
-    { key: "b", scopeType: null, scopeId: null, source: "role" },
-    { key: "c", scopeType: null, scopeId: null, source: "direct" },
-  ],
-  serverTime: "2026-11-02T08:00:00.000Z",
-});
+  unreadCount: 2,
+};
 
-beforeEach(() => {
+const markReadCalls: unknown[] = [];
+function routes(feed: unknown) {
+  return apiRoutes({
+    "/api/me": makeMe(),
+    "/api/notifications": feed,
+    "/api/notifications/read": (init?: { body?: unknown }) => {
+      markReadCalls.push(init?.body);
+      return { ok: true };
+    },
+  });
+}
+
+async function renderHome() {
+  return render(
+    <MeProvider>
+      <HomeScreen />
+    </MeProvider>,
+  );
+}
+
+beforeEach(async () => {
   mockFetch.mockReset();
-  (supabase.auth.signOut as jest.Mock).mockClear();
+  openBrowser.mockClear();
+  mockRouter.navigate.mockClear();
+  markReadCalls.length = 0;
+  await AsyncStorage.clear();
 });
 
-describe("Home (placeholder)", () => {
-  it("calls GET /api/me and shows greeting, roles, permission count and server time", async () => {
-    mockFetch.mockResolvedValue(ME);
-    await render(<HomeScreen />);
+describe("Home", () => {
+  it("loading: shows a skeleton while nothing is saved yet", async () => {
+    mockFetch.mockImplementation((path: string) => (path === "/api/me" ? Promise.resolve(makeMe()) : new Promise(() => {})));
+    await renderHome();
+    expect(screen.getByLabelText("Loading your notifications")).toBeTruthy();
+    expect(screen.queryByTestId("needs-you")).toBeNull();
+  });
+
+  it("success: greets by name, one yellow band, grouped list, unread badge", async () => {
+    mockFetch.mockImplementation(routes(FEED));
+    await renderHome();
     expect(await screen.findByRole("header", { name: "Hello, Jo" })).toBeTruthy();
-    expect(mockFetch).toHaveBeenCalledWith("/api/me", expect.objectContaining({ schema: meSchema }));
-    expect(screen.getByLabelText("3 permissions")).toHaveTextContent("3");
-    expect(screen.getByText(/staff/)).toBeTruthy();
-    expect(screen.getByText(/team_leader/)).toBeTruthy();
-    expect(screen.queryByText("Not reported")).toBeNull();
-  });
-
-  it("shows the yellow band exactly once", async () => {
-    mockFetch.mockResolvedValue(ME);
-    await render(<HomeScreen />);
-    await screen.findByRole("header", { name: "Hello, Jo" });
+    expect(await screen.findByText("2 things need you")).toBeTruthy();
     expect(screen.getAllByTestId("needs-you")).toHaveLength(1);
-    expect(screen.getByText("Home is a placeholder: real screens come in Phase 1.")).toBeTruthy();
+    expect(screen.getByText("Needs you (2)")).toBeTruthy();
+    expect(screen.getByText("Earlier")).toBeTruthy();
+    expect(screen.getByText("2h ago")).toBeTruthy();
+    // Items that open the website say so (text cue, not just an icon).
+    expect(screen.getByLabelText(/^Unread\. New booking request\. .*Opens in browser$/)).toBeTruthy();
+    expect(getTabBadge("home")).toBe(2);
   });
 
-  it("shows an error with a working retry", async () => {
-    mockFetch.mockRejectedValueOnce(new ApiError("network", "Couldn't reach FFSA Hub. Check your connection and try again."));
-    mockFetch.mockResolvedValueOnce(ME);
-    await render(<HomeScreen />);
+  it("success: saves the feed on the device for next time", async () => {
+    mockFetch.mockImplementation(routes(FEED));
+    await renderHome();
+    await screen.findByText("2 things need you");
+    await waitFor(async () => expect(await AsyncStorage.getItem("ffsa:home-feed:v1:u1")).toContain("booking:1"));
+  });
+
+  it("empty: all caught up, and no yellow band", async () => {
+    mockFetch.mockImplementation(routes({ items: [], unreadCount: 0 }));
+    await renderHome();
+    expect(await screen.findByText("You're all caught up")).toBeTruthy();
+    expect(screen.queryByTestId("needs-you")).toBeNull();
+    expect(getTabBadge("home")).toBe(0);
+  });
+
+  it("everything read: list under Earlier, no band", async () => {
+    mockFetch.mockImplementation(routes({ items: [{ ...FEED.items[2] }] }));
+    await renderHome();
+    expect(await screen.findByText("Vehicle request awaiting approval")).toBeTruthy();
+    expect(screen.queryByTestId("needs-you")).toBeNull();
+  });
+
+  it("error: plain message and a working retry", async () => {
+    let calls = 0;
+    mockFetch.mockImplementation(
+      routes(() => (++calls === 1 ? new ApiError("network", "Couldn't reach FFSA Hub. Check your connection and try again.") : FEED)),
+    );
+    await renderHome();
     expect(await screen.findByText("Couldn't reach FFSA Hub. Check your connection and try again.")).toBeTruthy();
     await fireEvent.press(screen.getByRole("button", { name: "Try again" }));
-    expect(await screen.findByRole("header", { name: "Hello, Jo" })).toBeTruthy();
-    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(await screen.findByText("2 things need you")).toBeTruthy();
   });
 
-  it("shows no error when the API has signed the user out (the auth gate takes over)", async () => {
-    mockFetch.mockRejectedValue(new ApiError("deactivated", "x", 403));
-    await render(<HomeScreen />);
+  it("permission denied: explains, no retry loop", async () => {
+    mockFetch.mockImplementation(routes(new ApiError("forbidden", "You don't have access to this.", 403)));
+    await renderHome();
+    expect(await screen.findByText("Notifications aren't available on your account")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("offline: opens with the saved items and says so", async () => {
+    await AsyncStorage.setItem(
+      "ffsa:home-feed:v1:u1",
+      JSON.stringify({ savedAt: new Date(NOW - 10 * 60_000).toISOString(), items: FEED.items }),
+    );
+    mockFetch.mockImplementation(routes(new ApiError("network", "Couldn't reach FFSA Hub.")));
+    await renderHome();
+    expect(await screen.findByText("Offline")).toBeTruthy();
+    expect(screen.getByText("Showing saved items from 10m ago.")).toBeTruthy();
+    expect(screen.getByTestId("notification-booking:1")).toBeTruthy();
+  });
+
+  it("server error with saved items: keeps them and says it couldn't refresh", async () => {
+    await AsyncStorage.setItem("ffsa:home-feed:v1:u1", JSON.stringify({ savedAt: new Date(NOW).toISOString(), items: FEED.items }));
+    mockFetch.mockImplementation(routes(new ApiError("http", "Something went wrong on the server (500). Try again.", 500)));
+    await renderHome();
+    expect(await screen.findByText("Couldn't refresh")).toBeTruthy();
+    expect(screen.getByTestId("notification-booking:1")).toBeTruthy();
+  });
+
+  it("signed out by the API: no error shown (the auth gate takes over)", async () => {
+    mockFetch.mockImplementation(routes(new ApiError("unauthenticated", "x", 401)));
+    await renderHome();
     await new Promise((r) => setTimeout(r, 0));
-    expect(screen.queryByText("Couldn't load your account")).toBeNull();
+    expect(screen.queryByText("Couldn't load your notifications")).toBeNull();
   });
 
-  it("signs out on this device only", async () => {
-    mockFetch.mockResolvedValue(ME);
-    await render(<HomeScreen />);
-    await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
-    expect(supabase.auth.signOut).toHaveBeenCalledWith({ scope: "local" });
+  it("tapping an item marks it read and opens the website page in the in-app browser", async () => {
+    mockFetch.mockImplementation(routes(FEED));
+    await renderHome();
+    await fireEvent.press(await screen.findByTestId("notification-booking:1"));
+    expect(markReadCalls).toEqual([{ keys: ["booking:1"] }]);
+    expect(openBrowser).toHaveBeenCalledWith("https://hub.example.test/bookings/requests", expect.any(Object));
+    expect(await screen.findByText("1 thing needs you")).toBeTruthy();
+  });
+
+  it("items whose page exists in the app open inside the app", async () => {
+    mockFetch.mockImplementation(routes(FEED));
+    await renderHome();
+    await fireEvent.press(await screen.findByTestId("notification-user:2"));
+    expect(mockRouter.navigate).toHaveBeenCalledWith("/finance");
+    expect(openBrowser).not.toHaveBeenCalled();
+  });
+
+  it("the band's Open goes to the top unread item", async () => {
+    mockFetch.mockImplementation(routes(FEED));
+    await renderHome();
+    await fireEvent.press(await screen.findByRole("button", { name: "Open: New booking request" }));
+    expect(openBrowser).toHaveBeenCalledTimes(1);
+  });
+
+  it("mark all read: one request, band gone, badge cleared", async () => {
+    mockFetch.mockImplementation(routes(FEED));
+    await renderHome();
+    await fireEvent.press(await screen.findByRole("button", { name: "Mark all 2 as read" }));
+    expect(markReadCalls).toEqual([{ keys: ["booking:1", "user:2"] }]);
+    expect(screen.queryByTestId("needs-you")).toBeNull();
+    expect(getTabBadge("home")).toBe(0);
+  });
+
+  it("shortcuts go to Finance, Tickets and Me", async () => {
+    mockFetch.mockImplementation(routes({ items: [] }));
+    await renderHome();
+    await fireEvent.press(await screen.findByRole("button", { name: "My Finance" }));
+    await fireEvent.press(screen.getByRole("button", { name: "My Tickets" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Me" }));
+    expect(mockRouter.navigate.mock.calls).toEqual([["/finance"], ["/tickets"], ["/me"]]);
   });
 });
