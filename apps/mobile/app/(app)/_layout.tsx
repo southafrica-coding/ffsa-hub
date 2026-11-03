@@ -32,6 +32,7 @@ export default function AppLayout() {
           <Tabs.Screen name="tickets" options={{ title: "Tickets" }} />
           <Tabs.Screen name="me" options={{ title: "Me" }} />
           <Tabs.Screen name="bookings" options={{ href: null }} />
+          <Tabs.Screen name="schools" options={{ href: null }} />
         </Tabs>
       </OutboxProvider>
     </MeProvider>
