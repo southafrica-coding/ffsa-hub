@@ -1,10 +1,11 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { FileText, ImageOff } from "lucide-react-native";
 import { useCallback, useMemo, useState } from "react";
-import { AccessibilityInfo, FlatList, RefreshControl, View } from "react-native";
+import { FlatList, RefreshControl, View } from "react-native";
 
 import { Banner, Button, Masthead, Screen, Text } from "@/components";
 import { useSession } from "@/auth/session-provider";
+import { announce } from "@/lib/a11y";
 import { supabase } from "@/lib/supabase";
 import { refreshControlColors } from "@/theme/styles";
 import { useTheme } from "@/theme/use-theme";
@@ -45,7 +46,7 @@ export default function TeamScreen({ teamId }: { teamId: string }) {
       const f = takeFlash(teamId);
       if (f) {
         setFlash(f);
-        AccessibilityInfo.announceForAccessibility(f.message);
+        announce(f.message);
         void refresh();
       }
     }, [teamId, refresh]),
@@ -155,7 +156,11 @@ function MoneyView({
       {/* One big number: what's left. */}
       <View
         accessible
-        accessibilityLabel={`${strings.team.remaining}: ${moneyLabel(total.remaining, "ZAR", { cents: false })}`}
+        accessibilityLabel={
+          total.over
+            ? strings.a11y.overNow(moneyLabel(-total.remaining, "ZAR", { cents: false }))
+            : `${strings.team.remaining}: ${moneyLabel(total.remaining, "ZAR", { cents: false })}`
+        }
         style={{ gap: 4 }}
       >
         <Text variant="label" tone="secondary">
@@ -200,7 +205,7 @@ function MoneyView({
       />
       {lines.length > 1 ? (
         <Chips
-          label="Show"
+          label={strings.a11y.expensesFilter}
           value={filter}
           onChange={setFilter}
           options={[{ value: ALL, label: strings.team.allLines }, ...lines.filter((l) => l.count > 0).map((l) => ({ value: l.categoryId, label: `${l.name} (${l.count})` }))]}

@@ -171,4 +171,13 @@ export const strings = {
     review: "Review",
     closed: "Closed",
   } as Record<string, string>,
+  a11y: {
+    loadingReceipts: "Loading receipts",
+    todayHint: "Sets the date to today",
+    yesterdayHint: "Sets the date to yesterday",
+    moreDetailsHint: "Shows or hides vendor, purchaser, receipt code, country and notes",
+    overNow: (amount: string) => `Over budget: ${amount}`,
+    receiptMissing: "Receipt photo missing",
+    expensesFilter: "Show",
+  },
 } as const;

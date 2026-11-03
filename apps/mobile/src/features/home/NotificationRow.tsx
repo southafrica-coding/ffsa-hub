@@ -65,7 +65,8 @@ export function NotificationRow({
       })}
     >
       <View
-        importantForAccessibility="no"
+        importantForAccessibility="no-hide-descendants"
+        accessibilityElementsHidden
         style={{
           width: 36,
           height: 36,

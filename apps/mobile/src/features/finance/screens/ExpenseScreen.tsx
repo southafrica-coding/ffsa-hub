@@ -3,10 +3,11 @@ import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { Camera, ImagePlus } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AccessibilityInfo, Alert, Image, Pressable, Switch, View } from "react-native";
+import { Alert, Image, Pressable, Switch, View } from "react-native";
 
 import { Banner, Button, Divider, Masthead, Screen, Text, TextField } from "@/components";
 import { useSession } from "@/auth/session-provider";
+import { announce } from "@/lib/a11y";
 import { apiFetch } from "@/lib/api-client";
 import { supabase } from "@/lib/supabase";
 import { hairline, touch } from "@/theme/tokens";
@@ -241,7 +242,7 @@ function ExpenseFormView({
     if (!v.ok) {
       setErrors(v.errors);
       const first = Object.values(v.errors).find(Boolean);
-      if (first) AccessibilityInfo.announceForAccessibility(first);
+      if (first) announce(first);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       return;
     }
@@ -354,13 +355,13 @@ function ExpenseFormView({
 
       {/* Budget line */}
       <View style={{ gap: 6 }}>
-        <Text variant="label" tone="secondary">
+        <Text variant="label" tone="secondary" accessibilityElementsHidden importantForAccessibility="no">
           {s.category}
         </Text>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`${s.category}: ${categoryName ?? s.categoryPlaceholder}`}
-          accessibilityHint="Opens the list of budget lines"
+          accessibilityHint={errors.category_id ? `${errors.category_id} Opens the list of budget lines` : "Opens the list of budget lines"}
           accessibilityState={{ disabled: readOnly }}
           disabled={readOnly}
           onPress={() => setSheetOpen(true)}
@@ -396,8 +397,13 @@ function ExpenseFormView({
       />
       {!readOnly ? (
         <View style={{ flexDirection: "row", gap: 8 }}>
-          <Button label={s.today} variant="secondary" onPress={() => set("expense_date", todayIso())} />
-          <Button label={s.yesterday} variant="secondary" onPress={() => set("expense_date", shiftIso(todayIso(), -1))} />
+          <Button label={s.today} accessibilityHint={strings.a11y.todayHint} variant="secondary" onPress={() => set("expense_date", todayIso())} />
+          <Button
+            label={s.yesterday}
+            accessibilityHint={strings.a11y.yesterdayHint}
+            variant="secondary"
+            onPress={() => set("expense_date", shiftIso(todayIso(), -1))}
+          />
         </View>
       ) : null}
 
@@ -482,7 +488,7 @@ function ExpenseFormView({
                 accessibilityHint={s.zarConfirmedHint}
                 {...switchColors(colors, scheme, form.zar_confirmed)}
               />
-              <View style={{ flex: 1 }}>
+              <View style={{ flex: 1 }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
                 <Text>{s.zarConfirmed}</Text>
                 {!form.zar_confirmed ? (
                   <Text variant="caption" tone="secondary">
@@ -495,7 +501,13 @@ function ExpenseFormView({
         </View>
       ) : null}
 
-      <Button label={more ? s.lessDetails : s.moreDetails} variant="ghost" onPress={() => setMore((m) => !m)} accessibilityState={{ expanded: more }} />
+      <Button
+        label={more ? s.lessDetails : s.moreDetails}
+        variant="ghost"
+        onPress={() => setMore((m) => !m)}
+        accessibilityState={{ expanded: more }}
+        accessibilityHint={strings.a11y.moreDetailsHint}
+      />
       {more ? (
         <View style={{ gap: 16 }}>
           <TextField label={s.vendor} value={form.vendor} onChangeText={(v) => set("vendor", v)} editable={!readOnly} />
@@ -512,7 +524,7 @@ function ExpenseFormView({
       <View style={{ gap: 12 }}>
         <Text variant="title">{s.receipts}</Text>
 
-        {receipts.status === "loading" && !isNew ? <Skeleton rows={1} label="Loading receipts" /> : null}
+        {receipts.status === "loading" && !isNew ? <Skeleton rows={1} label={strings.a11y.loadingReceipts} /> : null}
         {receipts.status === "error" ? (
           <Banner tone="danger" action={<Button label={strings.common.tryAgain} variant="secondary" onPress={fetchReceipts} />}>
             {s.receiptsLoadError}
@@ -668,11 +680,12 @@ function Thumb({
 }) {
   const { colors } = useTheme();
   return (
-    <View style={{ gap: 4, width: 96 }}>
+    <View style={{ gap: 4, minWidth: 96, maxWidth: 160, alignItems: "flex-start" }}>
       <Pressable
         accessibilityRole="imagebutton"
         accessibilityLabel={label}
         accessibilityHint="Opens the receipt full screen"
+        accessibilityState={{ disabled: !onOpen }}
         disabled={!onOpen}
         onPress={onOpen}
         style={{ width: 96, height: 96, borderWidth: hairline, borderColor: colors.ruleStrong, backgroundColor: colors.surface }}

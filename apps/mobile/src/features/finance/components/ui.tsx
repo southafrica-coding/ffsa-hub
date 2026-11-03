@@ -3,9 +3,10 @@
 // to move into src/components once a second feature needs them.
 
 import { useEffect, useState, type ReactNode } from "react";
-import { AccessibilityInfo, Animated, Pressable, View, type ViewStyle } from "react-native";
+import { Animated, Pressable, View, type ViewStyle } from "react-native";
 
 import { Banner, Button, Text } from "@/components";
+import { useReduceMotion } from "@/lib/a11y";
 import { hairline, touch } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
@@ -188,7 +189,8 @@ export function Chips<T extends string>({
   const { colors } = useTheme();
   return (
     <View style={{ gap: 6 }}>
-      <Text variant="label" tone="secondary">
+      {/* Read on its own (iOS doesn't speak a radiogroup's label), then each radio. */}
+      <Text variant="label" tone="secondary" accessibilityRole="header">
         {label}
       </Text>
       <View accessibilityRole="radiogroup" accessibilityLabel={label} style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
@@ -223,21 +225,8 @@ export function Chips<T extends string>({
 
 // ── Loading skeleton (still when the person has asked for less motion) ─────
 
-export function useReduceMotion() {
-  const [reduce, setReduce] = useState(false);
-  useEffect(() => {
-    let alive = true;
-    AccessibilityInfo.isReduceMotionEnabled()
-      .then((v) => alive && setReduce(v))
-      .catch(() => {});
-    const sub = AccessibilityInfo.addEventListener("reduceMotionChanged", setReduce);
-    return () => {
-      alive = false;
-      sub.remove();
-    };
-  }, []);
-  return reduce;
-}
+// Shared hook (src/lib/a11y); re-exported so Sheet's import keeps working.
+export { useReduceMotion };
 
 export function Skeleton({ rows = 4, label }: { rows?: number; label: string }) {
   const { colors } = useTheme();
@@ -282,7 +271,7 @@ export function ErrorState({ title, message, onRetry }: { title: string; message
 
 export function EmptyState({ title, body, extra }: { title: string; body: string; extra?: string | null }) {
   return (
-    <View accessible style={{ paddingVertical: 32, gap: 8 }} testID="empty-state">
+    <View style={{ paddingVertical: 32, gap: 8 }} testID="empty-state">
       <Text variant="title">{title}</Text>
       <Text tone="secondary">{body}</Text>
       {extra ? <Text tone="secondary">{extra}</Text> : null}
