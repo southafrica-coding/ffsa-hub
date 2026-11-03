@@ -1,11 +1,13 @@
 import type { ConfigContext, ExpoConfig } from "expo/config";
 
-// Bundle ID / package name are Jack's decision (they can never change once an
-// app is in the stores). Until then they come from env with an obviously-fake
-// default so nobody ships the placeholder by accident.
-const PLACEHOLDER_ID = "com.replace_me.ffsahub";
-const iosBundleId = process.env.APP_BUNDLE_ID || PLACEHOLDER_ID;
-const androidPackage = process.env.APP_ANDROID_PACKAGE || PLACEHOLDER_ID;
+// Bundle ID / package name: Jack's pre-approved default (Decisions, 3 Nov 2026,
+// docs/plan.md). Config only: nothing is registered with Apple, Google or
+// Expo yet. It can never change once an app is in the stores, so confirm it
+// before the first store build. APP_BUNDLE_ID / APP_ANDROID_PACKAGE still
+// override it (e.g. for a separate internal build).
+const DEFAULT_APP_ID = "com.ffsouthafrica.hub";
+const iosBundleId = process.env.APP_BUNDLE_ID || DEFAULT_APP_ID;
+const androidPackage = process.env.APP_ANDROID_PACKAGE || DEFAULT_APP_ID;
 
 // Brand yellow: app icon background, Android adaptive background and splash.
 const BRAND_YELLOW = "#FFB801";
@@ -13,6 +15,8 @@ const BRAND_YELLOW = "#FFB801";
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: "FFSA Hub",
+  // TODO(Jack): `owner: "<expo-org>"` goes here once the FFSA Expo account/org
+  // exists. Deliberately absent until then (no account has been created).
   slug: "ffsa-hub",
   scheme: "ffsahub",
   version: "1.0.0",
@@ -44,6 +48,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     "expo-router",
     "expo-secure-store",
     "expo-font",
+    // In-app browser for web pages the app doesn't have yet (no options:
+    // the plugin only changes native config when given some).
+    "expo-web-browser",
     [
       "expo-splash-screen",
       {
@@ -53,22 +60,36 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         resizeMode: "contain",
       },
     ],
+    // expo-camera and expo-image-picker both set the iOS camera prompt
+    // (NSCameraUsageDescription), so they carry the same combined text.
     // Door check-in scans ticket QR codes. Camera only: no microphone (no
     // video is recorded), so no RECORD_AUDIO on Android.
     [
       "expo-camera",
       {
-        cameraPermission: "FFSA Hub uses the camera to scan ticket QR codes at event check-in.",
+        cameraPermission:
+          "FFSA Hub uses the camera to scan ticket QR codes at event check-in and to photograph receipts for your outreach team's expenses.",
         microphonePermission: false,
         recordAudioAndroid: false,
         barcodeScannerEnabled: true,
       },
     ],
-    // Opens the signed waiver PDF in an in-app browser.
-    "expo-web-browser",
     // expo-brightness is used without its config plugin on purpose: the
     // plugin only adds Android WRITE_SETTINGS (system-wide brightness), and
     // the ticket screen only brightens its own window.
+    // Receipt photos (finance). The camera is asked for just in time, after an
+    // in-app explanation; no microphone (stills only). The photo library uses
+    // the system picker, which needs no access on iOS 14+ / Android 13+.
+    [
+      "expo-image-picker",
+      {
+        cameraPermission:
+          "FFSA Hub uses the camera to scan ticket QR codes at event check-in and to photograph receipts for your outreach team's expenses.",
+        photosPermission:
+          "FFSA Hub lets you choose a photo of a receipt to attach to an outreach expense.",
+        microphonePermission: false,
+      },
+    ],
     // expo-notifications (with ./assets/notification-icon.png, color
     // BRAND_YELLOW) is added when push notifications are set up.
   ],

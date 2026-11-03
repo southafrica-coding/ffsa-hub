@@ -228,6 +228,11 @@ export async function createExpense(
   return supabase.from("outreach_expenses").insert(data).select().single();
 }
 
+/** One expense, through RLS — null data if the caller can't see it. */
+export async function getExpenseById(supabase: Client, id: string) {
+  return supabase.from("outreach_expenses").select("*").eq("id", id).maybeSingle();
+}
+
 export async function updateExpense(
   supabase: Client,
   id: string,
@@ -357,6 +362,17 @@ export async function getExpenseReceipts(supabase: Client, expenseId: string) {
     .select("*")
     .eq("expense_id", expenseId)
     .order("uploaded_at", { ascending: false });
+}
+
+/** A receipt already registered for this exact file, through RLS. */
+export async function getReceiptByPath(supabase: Client, expenseId: string, filePath: string) {
+  return supabase
+    .from("outreach_receipts")
+    .select("*")
+    .eq("expense_id", expenseId)
+    .eq("file_path", filePath)
+    .limit(1)
+    .maybeSingle();
 }
 
 export async function createReceipt(
