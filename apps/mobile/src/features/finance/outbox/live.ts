@@ -1,4 +1,4 @@
-// The app's one outbox, wired to the real network, storage and session.
+// The app's one finance outbox, wired to the real network, storage and session.
 //
 // Receipt files go to the private `outreach-receipts` bucket exactly as the
 // website uploads them: with the signed-in person's own Supabase client,
@@ -9,7 +9,12 @@
 import NetInfo from "@react-native-community/netinfo";
 import { File } from "expo-file-system";
 
-import { apiFetch } from "@/lib/api-client";
+import { ApiError, createApiFetch } from "@/lib/api";
+import { isRetryableStatus } from "@/lib/outbox/backoff";
+import { liveApiDeps, sessionUserId } from "@/lib/outbox/live-deps";
+import type { Failure } from "@/lib/outbox/queue";
+import { retryAfterRecorder } from "@/lib/outbox/retry-after";
+import { isOnlineState } from "@/lib/outbox/use-pump";
 import { supabase } from "@/lib/supabase";
 
 import { classify, createExpense, registerReceipt } from "../api";
@@ -21,10 +26,17 @@ export const RECEIPTS_BUCKET = "outreach-receipts";
 
 type StorageErrorLike = { message?: string; status?: number; statusCode?: string | number };
 
-/** Storage errors: permission and size problems won't fix themselves; the rest retry. */
-export function classifyUpload(err: unknown) {
+/**
+ * Whether a failed send is worth retrying by itself. Permission and size
+ * problems won't fix themselves; a session that ended, a timeout, a busy
+ * server (408/429/5xx) or no connection will.
+ */
+export function classifyUpload(err: unknown): Failure {
   if (err instanceof Error && (err as Error & { permanent?: unknown }).permanent === true) {
     return { permanent: true, message: err.message };
+  }
+  if (err instanceof ApiError && err.kind === "http" && isRetryableStatus(err.status)) {
+    return { permanent: false, message: err.message, ambiguous: true };
   }
   const e = (err ?? {}) as StorageErrorLike;
   const status = Number(e.status ?? e.statusCode ?? 0);
@@ -35,7 +47,9 @@ export function classifyUpload(err: unknown) {
   if (status === 413 || /too large|payload/i.test(msg)) {
     return { permanent: true, message: "This photo is too large to upload. Remove it and take it again." };
   }
-  return classify(err);
+  const base = classify(err);
+  const ambiguous = err instanceof ApiError ? err.kind === "timeout" || err.kind === "network" : !base.permanent;
+  return { ...base, ambiguous };
 }
 
 class UploadError extends Error {
@@ -50,7 +64,10 @@ class UploadError extends Error {
 let outbox: Outbox | null = null;
 
 export function getOutbox(): Outbox {
-  outbox ??= new Outbox({
+  if (outbox) return outbox;
+  const retryAfter = retryAfterRecorder();
+  const apiFetch = createApiFetch(liveApiDeps(retryAfter.fetchImpl));
+  outbox = new Outbox({
     storage: fileOutboxStorage,
     createExpense: (id, payload) => createExpense(apiFetch, id, payload),
     registerReceipt: (r) => registerReceipt(apiFetch, r),
@@ -65,17 +82,13 @@ export function getOutbox(): Outbox {
         throw new UploadError(error.message, Number(e.status ?? e.statusCode ?? 0) || undefined);
       }
     },
-    classify: classifyUpload,
-    async getUserId() {
-      const { data } = await supabase.auth.getSession();
-      return data.session?.user.id ?? null;
-    },
+    classify: (err) => ({ ...classifyUpload(err), retryAfterMs: retryAfter.take() }),
+    getUserId: sessionUserId,
     async isOnline() {
-      const s = await NetInfo.fetch();
-      // "Unknown" (null) counts as online: trying costs one failed request.
-      return s.isConnected !== false && s.isInternetReachable !== false;
+      return isOnlineState(await NetInfo.fetch());
     },
     now: () => Date.now(),
+    random: () => Math.random(),
   });
   return outbox;
 }

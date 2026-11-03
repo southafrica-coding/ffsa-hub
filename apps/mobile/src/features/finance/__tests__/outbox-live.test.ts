@@ -80,18 +80,10 @@ jest.mock("@/lib/supabase", () => ({
   },
 }));
 
+// The outbox builds its own apiFetch (the real createApiFetch, so a 429's
+// Retry-After reaches it); the fake sits at the global fetch it calls.
 const mockFetch = jest.fn();
-jest.mock("@/lib/api-client", () => {
-  const { createApiFetch } = jest.requireActual("@/lib/api");
-  return {
-    apiFetch: createApiFetch({
-      baseUrl: "https://hub.example.test",
-      getAccessToken: async () => "header.payload.sig",
-      onAuthFailure: () => {},
-      fetchImpl: (...args: unknown[]) => mockFetch(...args),
-    }),
-  };
-});
+globalThis.fetch = ((...args: unknown[]) => mockFetch(...args)) as typeof fetch;
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 const savedExpense = { success: true, data: { id: EXPENSE, team_id: TEAM, category_id: "cat-food", expense_date: "2026-11-03", zar_amount: 120.5 } };
@@ -146,7 +138,7 @@ describe("outbox, wired to the network", () => {
 
     expect(outbox.getItems()).toEqual([]);
     expect(mockFiles.has("file:///docs/finance-outbox/r-1.jpg")).toBe(false);
-    expect(JSON.parse(String(mockFiles.get("file:///docs/finance-outbox/queue.json")))).toEqual([]);
+    expect(JSON.parse(String(mockFiles.get("file:///docs/finance-outbox/queue.json")))).toEqual({ version: 2, items: [] });
   });
 
   it("offline: sends nothing and keeps everything on disk", async () => {
@@ -157,7 +149,8 @@ describe("outbox, wired to the network", () => {
     expect(mockFetch).not.toHaveBeenCalled();
     expect(mockUpload).not.toHaveBeenCalled();
     const onDisk = JSON.parse(String(mockFiles.get("file:///docs/finance-outbox/queue.json")));
-    expect(onDisk.map((i: { id: string }) => i.id)).toEqual([EXPENSE, "r-1"]);
+    expect(onDisk.version).toBe(2);
+    expect(onDisk.items.map((i: { id: string }) => i.id)).toEqual([EXPENSE, "r-1"]);
     expect(mockFiles.has("file:///docs/finance-outbox/r-1.jpg")).toBe(true);
   });
 
@@ -168,7 +161,10 @@ describe("outbox, wired to the network", () => {
     await outbox.process();
     expect(outbox.getItems()[0]).toMatchObject({ status: "waiting", attempts: 1 });
 
-    await outbox.wake();
+    // (A reconnect straight after a failure no longer re-fires within
+    // MIN_WAKE_GAP_MS, so this is the person tapping Retry.)
+    await outbox.retry(EXPENSE);
+    await outbox.process();
     expect(mockFetch).toHaveBeenCalledTimes(2);
     const ids = mockFetch.mock.calls.map(([, init]) => JSON.parse(init.body).id);
     expect(ids).toEqual([EXPENSE, EXPENSE]);
