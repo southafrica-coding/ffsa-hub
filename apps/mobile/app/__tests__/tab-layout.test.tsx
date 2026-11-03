@@ -1,9 +1,13 @@
-import { fireEvent, renderRouter, screen } from "expo-router/testing-library";
+import { fireEvent, renderRouter, screen, waitFor } from "expo-router/testing-library";
 import { Stack } from "expo-router";
 import { Text } from "react-native";
 
+import type { Outbox } from "@/features/finance/outbox/runner";
+import { useOutbox } from "@/features/finance/outbox/provider";
 import { apiFetch } from "@/lib/api-client";
 
+import { expenseItem } from "../../src/features/finance/__fixtures__/fixtures";
+import { makeOutbox } from "../../src/features/finance/__fixtures__/outbox-harness";
 import { apiRoutes, makeMe } from "../../test/fixtures";
 import AppLayout from "../(app)/_layout";
 import HomeScreen from "../(app)/index";
@@ -19,6 +23,13 @@ jest.mock("@/auth/session-provider", () => ({
 }));
 jest.mock("@/lib/supabase", () => ({ supabase: { auth: { signOut: jest.fn() } } }));
 jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn() }));
+jest.mock("@react-native-community/netinfo", () => ({
+  __esModule: true,
+  default: { fetch: async () => ({ isConnected: true }), addEventListener: () => () => {} },
+}));
+// The app's one outbox, with fake I/O (the real one writes to the documents folder).
+let mockOutbox: Outbox;
+jest.mock("@/features/finance/outbox/live", () => ({ getOutbox: () => mockOutbox }));
 
 const mockFetch = apiFetch as unknown as jest.Mock;
 
@@ -27,6 +38,7 @@ const FinancePlaceholder = () => <Text>Coming soon</Text>;
 const TicketsPlaceholder = () => <Text>Coming soon</Text>;
 
 beforeEach(() => {
+  mockOutbox = makeOutbox().outbox;
   mockFetch.mockReset();
   mockFetch.mockImplementation(apiRoutes({ "/api/me": makeMe(), "/api/notifications": { items: [] } }));
   // "No route named finance": expected until slices 2/3 add their _layout.tsx.
@@ -69,6 +81,10 @@ describe("tab layout", () => {
     expect(screen).toHavePathname("/finance");
     expect(await screen.findByText(new RegExp(financeText))).toBeTruthy();
 
+    await fireEvent.press(screen.getByRole("tab", { name: "Tickets" }));
+    expect(screen).toHavePathname("/tickets");
+    expect(screen.getByRole("tab", { name: "Tickets" }).props.accessibilityState).toMatchObject({ selected: true });
+
     await fireEvent.press(screen.getByRole("tab", { name: "Me" }));
     expect(screen).toHavePathname("/me");
     expect(screen.getByRole("tab", { name: "Me" }).props.accessibilityState).toMatchObject({ selected: true });
@@ -78,5 +94,29 @@ describe("tab layout", () => {
     await renderRouter(landedTree, { initialUrl: "/tickets/check-in" });
     expect(await screen.findByText("Door check-in")).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Tickets" }).props.accessibilityState).toMatchObject({ selected: true });
+  });
+});
+
+describe("app-wide receipt outbox", () => {
+  it("starts sending at app start, before Finance is ever opened", async () => {
+    const { outbox, deps } = makeOutbox([expenseItem()]);
+    mockOutbox = outbox;
+    await renderRouter(landedTree, { initialUrl: "/" });
+    expect(await screen.findAllByRole("tab")).toHaveLength(4);
+    expect(screen).toHavePathname("/");
+    // OutboxProvider sends on mount; the finance stack hasn't been mounted.
+    await waitFor(() => expect(deps.createExpense).toHaveBeenCalled());
+    expect(screen.queryByText("Real finance")).toBeNull();
+  });
+
+  it("is available to every tab, not just Finance", async () => {
+    const OutboxProbe = () => {
+      const { items } = useOutbox();
+      return <Text>{`Outbox: ${items.length}`}</Text>;
+    };
+    // A failed item stays put until the person removes it, so the count is stable.
+    mockOutbox = makeOutbox([expenseItem({ status: "failed", lastError: "no" })]).outbox;
+    await renderRouter({ ...landedTree, "(app)/tickets/index": OutboxProbe }, { initialUrl: "/tickets" });
+    expect(await screen.findByText("Outbox: 1")).toBeTruthy();
   });
 });

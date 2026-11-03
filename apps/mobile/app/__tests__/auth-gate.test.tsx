@@ -1,6 +1,7 @@
 import { act, renderRouter, screen } from "expo-router/testing-library";
 
 import type { SessionState } from "@/auth/session-provider";
+import type { Outbox } from "@/features/finance/outbox/runner";
 
 import AppLayout from "../(app)/_layout";
 import FinancePlaceholder from "../(app)/finance/index";
@@ -11,6 +12,11 @@ import TicketsPlaceholder from "../(app)/tickets/index";
 import AuthLayout from "../(auth)/_layout";
 import SignInScreen from "../(auth)/sign-in";
 import RootLayout from "../_layout";
+import { makeOutbox } from "../../src/features/finance/__fixtures__/outbox-harness";
+
+beforeEach(() => {
+  mockOutbox = makeOutbox().outbox;
+});
 
 let mockSession: SessionState = { status: "loading", session: null };
 const mockListeners = new Set<() => void>();
@@ -37,6 +43,13 @@ jest.mock("expo-font", () => ({ useFonts: () => [true, null] }));
 jest.mock("@/lib/supabase", () => ({ supabase: { auth: { signInWithPassword: jest.fn(), signOut: jest.fn() } } }));
 jest.mock("@/lib/api-client", () => ({ apiFetch: jest.fn(() => new Promise(() => {})) }));
 jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn() }));
+// The signed-in area mounts the receipt outbox; give it fake I/O.
+let mockOutbox: Outbox;
+jest.mock("@/features/finance/outbox/live", () => ({ getOutbox: () => mockOutbox }));
+jest.mock("@react-native-community/netinfo", () => ({
+  __esModule: true,
+  default: { fetch: async () => ({ isConnected: true }), addEventListener: () => () => {} },
+}));
 
 const routes = {
   _layout: RootLayout,

@@ -31,6 +31,11 @@ Phase 1, slice 2. Mirrors the website's `/my-finance` and outreach team pages.
 
 ## Follow-ups
 
-- Move `<OutboxProvider>` up to `app/(app)/_layout.tsx` once the tab bar lands,
-  so the outbox also sends before Finance is first opened.
-- Swap `use-me.ts` for the shell's `useMe()` / `useCan()`.
+Done in the P1 follow-ups PR:
+
+- `<OutboxProvider>` lives in `app/(app)/_layout.tsx` (inside `MeProvider`),
+  so the outbox sends from app start, before Finance is first opened. It still
+  reads the signed-in user from the session on every run.
+- The local `use-me.ts` is gone: screens use the shell's `useMe()` from
+  `@/features/shell`; the finance-only wording gate `isFinanceStaff()` lives in
+  `access.ts`.

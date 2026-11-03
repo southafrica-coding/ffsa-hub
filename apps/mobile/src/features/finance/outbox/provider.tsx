@@ -12,7 +12,7 @@ const OutboxContext = createContext<OutboxContextValue | null>(null);
 /**
  * Keeps the outbox moving: sends on mount, whenever connectivity comes back,
  * whenever the app returns to the foreground, and when the next backoff
- * timer is due. Mounted by the finance stack's layout.
+ * timer is due. Mounted app-wide by app/(app)/_layout.tsx (signed-in area).
  */
 export function OutboxProvider({ outbox, children }: { outbox: Outbox; children: ReactNode }) {
   const [online, setOnline] = useState(true);
@@ -53,7 +53,7 @@ export function OutboxProvider({ outbox, children }: { outbox: Outbox; children:
 
 export function useOutbox(): { outbox: Outbox; items: OutboxItem[]; online: boolean } {
   const ctx = useContext(OutboxContext);
-  if (!ctx) throw new Error("useOutbox must be used inside OutboxProvider (app/(app)/finance/_layout.tsx)");
+  if (!ctx) throw new Error("useOutbox must be used inside OutboxProvider (app/(app)/_layout.tsx)");
   const items = useSyncExternalStore(ctx.outbox.subscribe, ctx.outbox.getItems, ctx.outbox.getItems);
   return { outbox: ctx.outbox, items, online: ctx.online };
 }
