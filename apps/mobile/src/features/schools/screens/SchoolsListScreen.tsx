@@ -8,6 +8,7 @@ import { Banner, Button, Masthead, Screen, Text } from "@/components";
 import { ErrorState, Row, SectionBar, Skeleton } from "@/features/finance/components/ui";
 import { useCachedLoad } from "@/features/finance/use-cached-load";
 import { ListRow, StateMessage, openWebPage } from "@/features/shell";
+import { refreshControlColors } from "@/theme/styles";
 import { useTheme } from "@/theme/use-theme";
 
 import { Chevron, Freshness, StatusTag } from "../components/ui";
@@ -44,7 +45,7 @@ export default function SchoolsListScreen() {
     <Screen scroll={false} edges={[]} contentStyle={{ paddingHorizontal: 0, paddingVertical: 0 }}>
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 16, gap: 16, flexGrow: 1 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.text} colors={[colors.text]} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} {...refreshControlColors(colors)} />}
       >
         <Masthead context={data ? `${s.context} · ${data.enrolments.length}` : s.context} title={s.title} />
 

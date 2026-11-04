@@ -1,14 +1,15 @@
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
-import { Bell, ExternalLink, Pencil, ShieldCheck, Trash2, UserRound } from "lucide-react-native";
+import { Bell, Pencil, ShieldCheck, Trash2, UserRound } from "lucide-react-native";
 import { useState } from "react";
 import { View } from "react-native";
 
 import { Banner, Button, Divider, Masthead, Screen, Text } from "@/components";
 import { AppearanceIcon, appearanceStrings, useAppearance } from "@/features/appearance";
 import { clearFeedCaches } from "@/features/home/feed-cache";
-import { ACCOUNT_DELETION_URL, FULL_PROFILE_PATH, PRIVACY_POLICY_PATH } from "@/features/me/links";
+import { ACCOUNT_DELETION_ROUTE, FULL_PROFILE_PATH, PRIVACY_POLICY_PATH } from "@/features/me/links";
 import { meStrings as s } from "@/features/me/strings";
+import { unregisterPushOnSignOut } from "@/features/push";
 import { ListRow, SectionBar, SkeletonRows, openWebPage, roleLabels, useMe } from "@/features/shell";
 import { displayName } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
@@ -29,6 +30,8 @@ export default function MeScreen() {
 
   async function signOut() {
     setSigningOut(true);
+    // Stop pushes to this phone while the session can still say so (bounded).
+    await unregisterPushOnSignOut();
     // Saved Home items belong to this person: don't leave them on the phone.
     await clearFeedCaches();
     // This device only: signing out on the phone shouldn't end web sessions.
@@ -118,12 +121,10 @@ export default function MeScreen() {
         />
         <ListRow
           testID="request-deletion"
-          icon={ACCOUNT_DELETION_URL ? ExternalLink : Trash2}
+          icon={Trash2}
           title={s.rows.deletion.title}
-          subtitle={ACCOUNT_DELETION_URL ? undefined : s.rows.deletion.subtitle}
-          trailing={ACCOUNT_DELETION_URL ? "web" : "none"}
-          disabled={!ACCOUNT_DELETION_URL}
-          onPress={ACCOUNT_DELETION_URL ? () => void openWebPage(ACCOUNT_DELETION_URL!, colors) : undefined}
+          subtitle={s.rows.deletion.subtitle}
+          onPress={() => router.push(ACCOUNT_DELETION_ROUTE)}
         />
         <View
           accessible

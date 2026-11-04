@@ -58,7 +58,7 @@ Status: **fixed** (in this branch) · **ok** (already honours the theme, checked
 | Shell: `SectionBar`, `ListRow`, `StateMessage`, `SkeletonRows` | Tokens. In dark the black section bar inverts to bone with ink text (13:1+), so it still reads as a bar on a black page. | — | ok |
 | Shell: in-app browser (`openWebPage`) | Toolbar/controls colours come from the `colors` the caller passes. Bookings passed none, so the browser opened light in dark mode. | Bookings' six calls now pass `colors`. | fixed |
 | Home: feed, `NotificationRow` | Tokens. | — | ok |
-| Home: pull-to-refresh (`app/(app)/index.tsx`) | Android spinner disc defaults to white; with a light arrow in dark it is low contrast. | Owned by another slice in this batch. One-line change: spread `refreshControlColors(colors)` onto its `RefreshControl`. | follow-up |
+| Home: pull-to-refresh (`app/(app)/index.tsx`) | Android spinner disc defaults to white; with a light arrow in dark it is low contrast. | Batch 3 follow-ups: spreads `refreshControlColors(colors)` onto its `RefreshControl` (My Schools list, enrolment and attendance too). | fixed |
 | Finance: Home, Team (two lists) pull-to-refresh | Same white Android disc. | `refreshControlColors()` (tint, arrow, disc = surface). | fixed |
 | Finance: expense "rate confirmed" switch | Dark thumb was `colors.bg` (near-black) on a near-black page when off. | `switchColors()`: dark thumb is light grey off, ink on the bone track on. Light unchanged. | fixed |
 | Finance: bottom `Sheet`, skeleton pulse | Scrim is ink 45% in both schemes (invisible on black, by design); the sheet has a 2px `text` top rule, so it still stands apart in dark. Pulse stops under reduce-motion. | — | ok |
@@ -75,7 +75,7 @@ Status: **fixed** (in this branch) · **ok** (already honours the theme, checked
 | Bookings: vehicle photos, conflict list | Tokens. | — | ok |
 | Me: profile, edit | Tokens. Header colours come from `me/_layout.tsx` (tokens). | — | ok |
 | Me: Appearance row | Was a read-only line. | Pressable `ListRow` opening `/me/appearance`, subtitle shows the current choice. | fixed |
-| Me: notification settings switches (`app/(app)/me/notifications.tsx`) | Same dark-thumb problem as the expense switch. | Not this slice's file in this batch. One-line change: spread `switchColors(colors, scheme, value)` onto each `Switch`. | follow-up |
+| Me: notification settings switches (`app/(app)/me/notifications.tsx`) | Same dark-thumb problem as the expense switch. | Batch 3 follow-ups: spreads `switchColors(colors, scheme, on)` onto each `Switch`. | fixed |
 | Alerts, action sheets, keyboard | System UI; follows the window style the override sets (iOS) / DayNight (Android). | — | ok (device check) |
 
 ## Reduce motion and Dynamic Type (spot check, by reading the code)
@@ -106,9 +106,9 @@ slice, or a layout change rather than a colour fix), listed for their owners:
 4. Sign out and back in: the choice is still there.
 5. Tickets in dark: open a ticket, scan its QR with another phone's camera and with the door
    scanner.
-6. Pull to refresh on Finance, Tickets, Prayer and Bookings in dark (Android: the spinner disc
+6. Pull to refresh on Home, Finance, Tickets, Prayer, Bookings and My Schools in dark (Android: the spinner disc
    should be dark grey, not white).
-7. Expense form "rate confirmed" switch in dark, on and off (Android especially).
+7. Expense form "rate confirmed" switch and Me › Notification settings switches in dark, on and off (Android especially).
 8. Largest text size (iOS Larger Accessibility Sizes, Android font size max + display size max):
    Appearance screen rows, Me rows, and the follow-ups above.
 9. VoiceOver / TalkBack on the Appearance screen: it should read "Appearance, radio group",

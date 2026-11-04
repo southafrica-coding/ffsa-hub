@@ -2,6 +2,7 @@ import { Tabs } from "expo-router/js-tabs";
 
 import { getOutbox } from "@/features/finance/outbox/live";
 import { OutboxProvider } from "@/features/finance/outbox/provider";
+import { PushProvider } from "@/features/push";
 import { MeProvider, TabBar } from "@/features/shell";
 import { useTheme } from "@/theme/use-theme";
 
@@ -21,6 +22,7 @@ export default function AppLayout() {
   const { colors } = useTheme();
   return (
     <MeProvider>
+      <PushProvider>
       <OutboxProvider outbox={getOutbox()}>
         <Tabs
           tabBar={(props) => <TabBar {...props} />}
@@ -35,6 +37,7 @@ export default function AppLayout() {
           <Tabs.Screen name="schools" options={{ href: null }} />
         </Tabs>
       </OutboxProvider>
+      </PushProvider>
     </MeProvider>
   );
 }
