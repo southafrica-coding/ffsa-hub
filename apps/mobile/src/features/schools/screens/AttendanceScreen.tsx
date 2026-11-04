@@ -8,6 +8,7 @@ import { ErrorState, Row, SectionBar, Skeleton } from "@/features/finance/compon
 import { useCachedLoad } from "@/features/finance/use-cached-load";
 import { StateMessage } from "@/features/shell";
 import { hairline } from "@/theme/tokens";
+import { refreshControlColors } from "@/theme/styles";
 import { useTheme } from "@/theme/use-theme";
 
 import { DateBlock, Freshness, StatusTag } from "../components/ui";
@@ -82,7 +83,7 @@ export default function AttendanceScreen() {
         ListHeaderComponent={header}
         ListEmptyComponent={state.status === "ready" ? <StateMessage testID="empty" icon={CalendarCheck} title={s.emptyTitle} body={s.emptyBody} /> : undefined}
         contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 16, flexGrow: 1 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.text} colors={[colors.text]} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} {...refreshControlColors(colors)} />}
       />
     </Screen>
   );

@@ -9,6 +9,7 @@ import { ErrorState, Row, SectionBar, Skeleton } from "@/features/finance/compon
 import { useCachedLoad } from "@/features/finance/use-cached-load";
 import { ListRow, StateMessage, openWebPage } from "@/features/shell";
 import { hairline } from "@/theme/tokens";
+import { refreshControlColors } from "@/theme/styles";
 import { useTheme } from "@/theme/use-theme";
 
 import { Figure, Freshness, StatusTag } from "../components/ui";
@@ -68,7 +69,7 @@ export default function EnrolmentScreen({ id }: { id: string | undefined }) {
     <Screen scroll={false} edges={[]} contentStyle={{ paddingHorizontal: 0, paddingVertical: 0 }}>
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 16, gap: 16, flexGrow: 1 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.text} colors={[colors.text]} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} {...refreshControlColors(colors)} />}
       >
         {e ? (
           <Masthead context={s.context(programme?.code ?? "", formatDate(e.enrolled_at) ?? "")} title={name} />
