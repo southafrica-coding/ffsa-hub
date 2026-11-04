@@ -69,14 +69,11 @@ export const colors: Record<ColorScheme, SemanticColors> = {
     surface: palette.bone,
     surfaceStrong: palette.bone3,
     rule: palette.rule,
-    // App-only values (docs/accessibility.md): the web's #C7C3B5 outline was
-    // 1.76:1 on white and the #9A9689 placeholder 2.95:1. Control outlines
-    // need 3:1 (WCAG 1.4.11) and placeholder text 4.5:1 (1.4.3).
-    ruleStrong: "#8C887B",
+    ruleStrong: palette.ruleStrong,
     text: palette.ink,
     textSecondary: palette.textSecondary,
     textTertiary: palette.textTertiary,
-    textQuiet: "#77736A",
+    textQuiet: palette.textQuiet,
     accent: palette.yellow,
     onAccent: palette.ink,
     accentDim: palette.yellowDim,

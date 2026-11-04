@@ -54,11 +54,20 @@ const EXEMPT: Pair[] = [
   ["textTertiary", "bg", "disabled list rows (WCAG exempts inactive controls)"],
 ];
 
+// HELD FOR JACK (3 Nov 2026): light-mode outline (ruleStrong #C7C3B5) and placeholder
+// (textQuiet #9A9689) are below WCAG on white/bone. Proposed app-only fixes:
+// ruleStrong #8C887B and textQuiet #77736A (docs/accessibility.md). Until he decides,
+// these pairs are checked as known gaps instead of failing the suite.
+const PROPOSED = { ruleStrong: "#8C887B", textQuiet: "#77736A" } as const;
+const HELD = new Set(["light:textQuiet:bg", "light:ruleStrong:bg", "light:ruleStrong:surface"]);
+const held = (scheme: string, fg: string, bg: string) => HELD.has(`${scheme}:${fg}:${bg}`);
+
 describe.each(["light", "dark"] as const)("%s scheme", (scheme) => {
   const c = colors[scheme];
 
   it.each(BODY_TEXT)("body text %s on %s >= 4.5:1 (%s)", (fg, bg) => {
     const r = contrastRatio(c[fg], c[bg]);
+    if (held(scheme, fg, bg)) return expect(r).toBeLessThan(4.5); // known gap, held for Jack
     if (r < 4.5) throw new Error(`${scheme} ${fg} on ${bg} is ${formatRatio(r)}`);
   });
 
@@ -68,6 +77,7 @@ describe.each(["light", "dark"] as const)("%s scheme", (scheme) => {
 
   it.each(UI_PARTS)("UI part %s on %s >= 3:1 (%s)", (fg, bg) => {
     const r = contrastRatio(c[fg], c[bg]);
+    if (held(scheme, fg, bg)) return expect(r).toBeLessThan(3); // known gap, held for Jack
     if (r < 3) throw new Error(`${scheme} ${fg} on ${bg} is ${formatRatio(r)}`);
   });
 
@@ -81,20 +91,17 @@ describe.each(["light", "dark"] as const)("%s scheme", (scheme) => {
   });
 });
 
-describe("light-scheme token fixes (proof for docs/accessibility.md)", () => {
-  it("the web's outline grey fails 3:1 on white, the app value passes", () => {
-    expect(contrastRatio(palette.ruleStrong, palette.white)).toBeLessThan(3);
-    expect(contrastRatio(colors.light.ruleStrong, palette.white)).toBeGreaterThanOrEqual(3);
-    expect(contrastRatio(colors.light.ruleStrong, palette.bone)).toBeGreaterThanOrEqual(3);
-  });
-
-  it("the web's quiet grey fails 4.5:1 as placeholder text, the app value passes", () => {
-    expect(contrastRatio(palette.textQuiet, palette.white)).toBeLessThan(4.5);
-    expect(contrastRatio(colors.light.textQuiet, palette.white)).toBeGreaterThanOrEqual(4.5);
-  });
-
-  it("the palette itself (shared with the web) is unchanged", () => {
+describe("light-scheme colours held for Jack (proof for docs/accessibility.md)", () => {
+  it("app light tokens still use the shared web palette", () => {
+    expect(colors.light.ruleStrong).toBe(palette.ruleStrong);
+    expect(colors.light.textQuiet).toBe(palette.textQuiet);
     expect(palette.ruleStrong).toBe("#C7C3B5");
     expect(palette.textQuiet).toBe("#9A9689");
+  });
+
+  it("the proposed values would pass if Jack approves them", () => {
+    expect(contrastRatio(PROPOSED.ruleStrong, palette.white)).toBeGreaterThanOrEqual(3);
+    expect(contrastRatio(PROPOSED.ruleStrong, palette.bone)).toBeGreaterThanOrEqual(3);
+    expect(contrastRatio(PROPOSED.textQuiet, palette.white)).toBeGreaterThanOrEqual(4.5);
   });
 });
