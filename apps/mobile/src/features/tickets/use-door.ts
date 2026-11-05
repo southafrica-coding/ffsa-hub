@@ -1,7 +1,8 @@
 // The door controller: one hook that turns scans, typed codes and name-search
 // taps into verdicts, keeps the tally fresh, holds the Undo window, and
-// queues scans while offline. It talks to a DoorClient, so the Phase 2
-// volunteer door (/api/scan/[token]) can reuse it with a different client.
+// queues scans while offline. It talks to a DoorClient, so the volunteer
+// door (/api/scan/[token], src/features/public-scan) reuses it with a
+// different client and a different queue owner.
 
 import * as Haptics from "expo-haptics";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
@@ -54,7 +55,18 @@ const HAPTIC: Record<VerdictHaptic, Haptics.NotificationFeedbackType> = {
 
 export type DoorState = ReturnType<typeof useDoor>;
 
-export function useDoor(eventId: string, door: DoorClient, online: boolean, now: () => number = Date.now) {
+/**
+ * `owner` names whose saved scans these are (the storage key, and the check
+ * before each send). The signed-in person by default; the volunteer door
+ * passes its link instead, because a volunteer may have no account.
+ */
+export function useDoor(
+  eventId: string,
+  door: DoorClient,
+  online: boolean,
+  now: () => number = Date.now,
+  owner: () => Promise<string | null> = currentUserId,
+) {
   const [stats, setStats] = useState<DoorStats | null>(null);
   const [statsFailed, setStatsFailed] = useState(false);
   const [denied, setDenied] = useState(false);
@@ -73,6 +85,10 @@ export function useDoor(eventId: string, door: DoorClient, online: boolean, now:
     queueRef.current = queue;
   }, [queue]);
   const busyRef = useRef(false);
+  const ownerRef = useRef(owner);
+  useEffect(() => {
+    ownerRef.current = owner;
+  }, [owner]);
 
   const dispatch = useCallback((a: QueueAction) => dispatchRaw(a), []);
 
@@ -80,7 +96,7 @@ export function useDoor(eventId: string, door: DoorClient, online: boolean, now:
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      userId.current = await currentUserId();
+      userId.current = await ownerRef.current();
       const stored = userId.current ? await loadQueueWithStatus(userId.current) : { items: [], problem: null };
       if (cancelled) return;
       queueLoaded.current = true;
@@ -228,11 +244,11 @@ export function useDoor(eventId: string, door: DoorClient, online: boolean, now:
     if (syncing || !online) return;
     setSyncing(true);
     try {
-      const owner = userId.current;
+      const ownerId = userId.current;
       const answered = await flushQueue(queueRef.current, eventId, door, dispatch, {
         now,
         // Never send one person's saved scans under someone else's account.
-        stillOwner: async () => !!owner && (await currentUserId()) === owner,
+        stillOwner: async () => !!ownerId && (await ownerRef.current()) === ownerId,
       });
       if (answered > 0) void refreshStats();
     } finally {

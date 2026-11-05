@@ -1,7 +1,7 @@
 import { useKeepAwake } from "expo-keep-awake";
 import { Stack } from "expo-router";
 import { ScanLine } from "lucide-react-native";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Alert, View } from "react-native";
 
 import { Banner, Button, Divider, Masthead, Text, TextField } from "@/components";
@@ -24,8 +24,12 @@ import { useDoor } from "../use-door";
 type Props = {
   eventId: string;
   eventTitle?: string;
-  /** Injected in tests; the staff door by default. */
+  /** Injected in tests and by the volunteer door; the staff door by default. */
   door?: DoorClient;
+  /** Whose saved scans these are (see useDoor). The signed-in person by default. */
+  queueOwner?: () => Promise<string | null>;
+  /** Shown under the tally (the volunteer door's "Scanning as …" row). */
+  intro?: ReactNode;
 };
 
 /**
@@ -33,12 +37,12 @@ type Props = {
  * screen awake while it's open. Works offline by saving scans (clearly
  * marked "not yet confirmed") and sending them when the signal returns.
  */
-export function DoorScreen({ eventId, eventTitle, door: injected }: Props) {
+export function DoorScreen({ eventId, eventTitle, door: injected, queueOwner, intro }: Props) {
   useKeepAwake();
   const { colors } = useTheme();
   const online = useOnline();
   const door = useMemo(() => injected ?? staffDoorClient(apiFetch, eventId), [injected, eventId]);
-  const d = useDoor(eventId, door, online);
+  const d = useDoor(eventId, door, online, undefined, queueOwner);
   const [scanning, setScanning] = useState(false);
   const [code, setCode] = useState("");
   const now = useNow();
@@ -89,6 +93,7 @@ export function DoorScreen({ eventId, eventTitle, door: injected }: Props) {
       <Stack.Screen options={{ headerShown: true }} />
       <Masthead context={eventTitle ?? strings.checkIn.context} title={strings.checkIn.doorTitle} />
       <DoorStats stats={d.stats} failed={d.statsFailed} offline={!online} />
+      {intro}
 
       {!online ? (
         <Banner tone="info" title={strings.common.offline} testID="offline-banner">
