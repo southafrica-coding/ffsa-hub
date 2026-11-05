@@ -66,6 +66,9 @@ function RootNavigator() {
         <Stack.Protected guard={!signedIn} redirectTo="/">
           <Stack.Screen name="(auth)" />
         </Stack.Protected>
+        {/* The volunteer door (/scan/<token>) is the one route open either way:
+            the token in the link is the credential, not a Hub session. */}
+        <Stack.Screen name="scan" />
       </Stack>
     </ThemeProvider>
   );
