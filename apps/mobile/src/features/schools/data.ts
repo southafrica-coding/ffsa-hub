@@ -16,6 +16,7 @@ import type { z } from "zod";
 
 import { supabase } from "@/lib/supabase";
 
+import type { SchoolsTies } from "./logic";
 import { strings } from "./strings";
 import {
   applicationSchema,
@@ -80,15 +81,23 @@ export async function loadSchools(userId: string, client: Db = db()): Promise<Sc
   return { enrolments: rows(enrolmentSchema, e), applications: rows(applicationSchema, a), openProgrammes: rows(programmeSchema, p) };
 }
 
-/** Does the person have at least one current enrolment? (Home shortcut only.) */
-export async function hasEnrolment(userId: string, client: Db = db()): Promise<boolean> {
-  const res = (await client
-    .from("enrollments")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .is("removed_at", null)) as Res & { count: number | null };
-  if (res.error) throw failure(res.error);
-  return (res.count ?? 0) > 0;
+/**
+ * What decides whether the app offers My Schools (logic.ts canSeeMySchools):
+ * the statuses of the person's own enrolments, and whether they're the
+ * assigned staff on any enrolment (RLS lets assigned staff read those rows,
+ * migration 052; a head-only count, so no row reaches the phone).
+ */
+export async function loadSchoolsTies(userId: string, client: Db = db()): Promise<SchoolsTies> {
+  const [own, assigned] = (await Promise.all([
+    client.from("enrollments").select("status").eq("user_id", userId).is("removed_at", null),
+    client.from("enrollments").select("id", { count: "exact", head: true }).eq("assigned_staff_id", userId).is("removed_at", null),
+  ])) as [Res, Res & { count: number | null }];
+  if (own.error) throw failure(own.error);
+  if (assigned.error) throw failure(assigned.error);
+  const statuses = (Array.isArray(own.data) ? own.data : [])
+    .map((r) => (r as { status?: unknown }).status)
+    .filter((s): s is string => typeof s === "string");
+  return { enrolmentStatuses: statuses, assignedStaff: (assigned.count ?? 0) > 0 };
 }
 
 // ── One enrolment ───────────────────────────────────────────────────────────

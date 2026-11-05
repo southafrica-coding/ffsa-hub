@@ -236,7 +236,7 @@ export function summariseAttendance(rows: Pick<AttendanceRecord, "status">[]): A
   return { total: rows.length, present, pct: rows.length ? Math.round((present / rows.length) * 100) : null, byStatus };
 }
 
-// ── Home shortcut (UX only: RLS decides what the screens can read) ──────────
+// ── Who sees My Schools in the app (UX only: RLS decides what the screens can read) ──
 
 /** Holds the web's Training module: admins, program leaders, or any schools.* permission. */
 export function hasSchoolsModule(me: Me | null): boolean {
@@ -244,6 +244,66 @@ export function hasSchoolsModule(me: Me | null): boolean {
   return isAdmin(me) || hasRole(me, "program_leader") || me.permissions.some((p) => p.key.startsWith("schools."));
 }
 
-export function showSchoolsShortcut(me: Me | null, hasEnrolment: boolean): boolean {
-  return hasEnrolment || hasSchoolsModule(me);
+/**
+ * Enrolment statuses that make someone an "enrolled student" for the app.
+ * Today's statuses (migration 032): waiting_for_arrival and arrived are the
+ * school in progress; graduated stays in because a graduate still needs their
+ * grades and transcript. dismissed and decided_to_leave are out: the school is
+ * over for them and the website still has everything. active, on_hold and
+ * completed are older words for the same stages (rows may predate 031/032);
+ * withdrawn is the older word for leaving. Anything the app doesn't know is
+ * left out until it's added here.
+ */
+export const ENROLLED_STATUSES: readonly string[] = ["waiting_for_arrival", "arrived", "graduated", "active", "on_hold", "completed"];
+
+export function countsAsEnrolled(status: string): boolean {
+  return ENROLLED_STATUSES.includes(status);
+}
+
+/** What the phone can read about the person's ties to a school (data.ts loadSchoolsTies). */
+export type SchoolsTies = {
+  /** Statuses of their own enrolments that haven't been removed. */
+  enrolmentStatuses: string[];
+  /** They're the assigned staff on at least one enrolment that hasn't been removed. */
+  assignedStaff: boolean;
+};
+
+/**
+ * Jack's rule (3 Nov 2026): in the phone app, My Schools is only for enrolled
+ * students and school staff. The website is unchanged.
+ *  - Enrolled student: at least one non-removed enrolment whose status counts
+ *    (ENROLLED_STATUSES). Applicants with only an application don't count.
+ *  - School staff: holds the web's Training module (admins, program leaders,
+ *    any schools.* permission, from GET /api/me), or is the assigned staff on
+ *    an enrolment. A plain "staff" role alone is not school staff.
+ * `ties` is null until it has been read (then only the Training module counts).
+ */
+export function canSeeMySchools({ me, ties }: { me: Me | null; ties: SchoolsTies | null }): boolean {
+  if (hasSchoolsModule(me)) return true;
+  if (!ties) return false;
+  return ties.assignedStaff || ties.enrolmentStatuses.some(countsAsEnrolled);
+}
+
+/** "checking" while unsure; "unknown" when it couldn't be read and nothing was remembered. */
+export type SchoolsAccess = "checking" | "allowed" | "notAllowed" | "unknown";
+
+/**
+ * Combines the Training module (from /api/me) with the remembered or fresh
+ * answer about the person's ties. `tiesAnswer` is canSeeMySchools without the
+ * module: true / false, null when it couldn't be read, undefined while waiting.
+ */
+export function schoolsAccess({
+  me,
+  meLoading,
+  tiesAnswer,
+}: {
+  me: Me | null;
+  meLoading: boolean;
+  tiesAnswer: boolean | null | undefined;
+}): SchoolsAccess {
+  if (hasSchoolsModule(me)) return "allowed";
+  if (tiesAnswer === true) return "allowed";
+  // /api/me may still turn them into Training-module holders.
+  if (tiesAnswer === undefined || meLoading) return "checking";
+  return tiesAnswer === false ? "notAllowed" : "unknown";
 }

@@ -1,7 +1,10 @@
 import { makeMe } from "../../../../test/fixtures";
 import { course, programme } from "../__fixtures__/fixtures";
 import {
+  ENROLLED_STATUSES,
   applicationStatus,
+  canSeeMySchools,
+  countsAsEnrolled,
   attendanceStatus,
   courseTiming,
   dayAndMonth,
@@ -15,7 +18,7 @@ import {
   isUuid,
   nextArrival,
   notYetApplied,
-  showSchoolsShortcut,
+  schoolsAccess,
   staffName,
   summariseAttendance,
   summariseGrades,
@@ -167,20 +170,66 @@ describe("attendance summary", () => {
   });
 });
 
-describe("Home shortcut (UX only)", () => {
-  it("shown to people with an enrolment", () => {
-    expect(showSchoolsShortcut(makeMe(), true)).toBe(true);
-    expect(showSchoolsShortcut(null, true)).toBe(true);
+describe("Who sees My Schools in the app (UX only)", () => {
+  const role = (name: string) => makeMe({ roles: [{ name, scopeType: null, scopeId: null }], permissions: [] });
+  const nobody = makeMe({ roles: [], permissions: [] });
+  const ties = (enrolmentStatuses: string[], assignedStaff = false) => ({ enrolmentStatuses, assignedStaff });
+
+  it.each([
+    ["waiting_for_arrival", true],
+    ["arrived", true],
+    ["graduated", true],
+    ["active", true],
+    ["on_hold", true],
+    ["completed", true],
+    ["dismissed", false],
+    ["decided_to_leave", false],
+    ["withdrawn", false],
+    ["something_new", false],
+  ])("enrolment status %s counts: %s", (status, expected) => {
+    expect(countsAsEnrolled(status)).toBe(expected);
+    expect(canSeeMySchools({ me: nobody, ties: ties([status]) })).toBe(expected);
   });
 
-  it("shown to Training-module holders: admin, program leader, schools.*", () => {
-    expect(hasSchoolsModule(makeMe({ roles: [{ name: "admin", scopeType: null, scopeId: null }] }))).toBe(true);
-    expect(hasSchoolsModule(makeMe({ roles: [{ name: "program_leader", scopeType: null, scopeId: null }] }))).toBe(true);
-    expect(hasSchoolsModule(makeMe({ permissions: [perm("schools.view")] }))).toBe(true);
+  it("every status the app labels is decided on purpose", () => {
+    expect([...ENROLLED_STATUSES].sort()).toEqual(["active", "arrived", "completed", "graduated", "on_hold", "waiting_for_arrival"]);
   });
 
-  it("hidden otherwise", () => {
-    expect(showSchoolsShortcut(makeMe(), false)).toBe(false);
-    expect(showSchoolsShortcut(null, false)).toBe(false);
+  it("one enrolment that counts is enough, whatever the others say", () => {
+    expect(canSeeMySchools({ me: nobody, ties: ties(["dismissed", "arrived"]) })).toBe(true);
+  });
+
+  it.each([
+    ["admin", role("admin"), true],
+    ["super_admin", role("super_admin"), true],
+    ["program_leader", role("program_leader"), true],
+    ["any schools.* permission", makeMe({ roles: [], permissions: [perm("schools.view")] }), true],
+    ["plain staff role", role("staff"), false],
+    ["finance_admin", role("finance_admin"), false],
+    ["nobody", nobody, false],
+    ["not loaded yet", null, false],
+  ])("Training module, no enrolment: %s -> %s", (_label, me, expected) => {
+    expect(hasSchoolsModule(me)).toBe(expected);
+    expect(canSeeMySchools({ me, ties: ties([]) })).toBe(expected);
+  });
+
+  it("assigned staff on an enrolment count as school staff", () => {
+    expect(canSeeMySchools({ me: nobody, ties: ties([], true) })).toBe(true);
+    expect(canSeeMySchools({ me: null, ties: ties(["dismissed"], true) })).toBe(true);
+  });
+
+  it("applicants with no enrolment, and people we haven't asked about yet, don't", () => {
+    expect(canSeeMySchools({ me: nobody, ties: ties([]) })).toBe(false);
+    expect(canSeeMySchools({ me: nobody, ties: null })).toBe(false);
+  });
+
+  it("access: module or a yes allows at once; waits for /api/me before saying no", () => {
+    expect(schoolsAccess({ me: role("admin"), meLoading: false, tiesAnswer: undefined })).toBe("allowed");
+    expect(schoolsAccess({ me: null, meLoading: true, tiesAnswer: true })).toBe("allowed");
+    expect(schoolsAccess({ me: nobody, meLoading: false, tiesAnswer: undefined })).toBe("checking");
+    expect(schoolsAccess({ me: null, meLoading: true, tiesAnswer: false })).toBe("checking");
+    expect(schoolsAccess({ me: nobody, meLoading: false, tiesAnswer: false })).toBe("notAllowed");
+    expect(schoolsAccess({ me: null, meLoading: false, tiesAnswer: false })).toBe("notAllowed");
+    expect(schoolsAccess({ me: nobody, meLoading: false, tiesAnswer: null })).toBe("unknown");
   });
 });

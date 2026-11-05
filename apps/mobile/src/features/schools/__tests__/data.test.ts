@@ -1,7 +1,7 @@
 jest.mock("@/lib/supabase", () => ({ supabase: {} }));
 
 // eslint-disable-next-line import/first
-import { DataError, hasEnrolment, loadAttendance, loadEnrolment, loadErrorMessage, loadSchools } from "../data";
+import { DataError, loadAttendance, loadEnrolment, loadErrorMessage, loadSchools, loadSchoolsTies } from "../data";
 // eslint-disable-next-line import/first
 import { strings } from "../strings";
 
@@ -85,14 +85,17 @@ describe("My Schools list", () => {
 });
 
 describe("Home shortcut check", () => {
-  it("counts only the caller's current enrolments, without fetching rows", async () => {
-    const db = fakeDb({ enrollments: { data: null, error: null, count: 2 } });
-    expect(await hasEnrolment("u1", db.client)).toBe(true);
-    expect(db.calls("enrollments")).toEqual(
-      expect.arrayContaining([["select", "id", { count: "exact", head: true }], ["eq", "user_id", "u1"], ["is", "removed_at", null]]),
-    );
-    expect(await hasEnrolment("u1", fakeDb({ enrollments: { data: null, error: null, count: 0 } }).client)).toBe(false);
-    await expect(hasEnrolment("u1", fakeDb({ enrollments: { data: null, error: { message: "x" } } }).client)).rejects.toBeInstanceOf(DataError);
+  it("ties: statuses of the caller's own enrolments, and a head-only count of ones they're assigned staff on", async () => {
+    const db = fakeDb({ enrollments: { data: [{ status: "arrived" }, { status: "dismissed" }, { status: 3 }], error: null, count: 2 } });
+    expect(await loadSchoolsTies("u1", db.client)).toEqual({ enrolmentStatuses: ["arrived", "dismissed"], assignedStaff: true });
+    const [own, assigned] = db.log.filter((l) => l.table === "enrollments").map((l) => l.calls);
+    expect(own).toEqual([["select", "status"], ["eq", "user_id", "u1"], ["is", "removed_at", null]]);
+    expect(assigned).toEqual([["select", "id", { count: "exact", head: true }], ["eq", "assigned_staff_id", "u1"], ["is", "removed_at", null]]);
+  });
+
+  it("ties: nothing found, and a failed read throws", async () => {
+    expect(await loadSchoolsTies("u1", fakeDb({ enrollments: { data: [], error: null, count: 0 } }).client)).toEqual({ enrolmentStatuses: [], assignedStaff: false });
+    await expect(loadSchoolsTies("u1", fakeDb({ enrollments: { data: null, error: { message: "x" } } }).client)).rejects.toBeInstanceOf(DataError);
   });
 });
 
