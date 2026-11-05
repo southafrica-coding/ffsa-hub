@@ -14,6 +14,14 @@ Routes: `app/(app)/schools/` — a hidden route of the signed-in tabs (not in `T
 
 **Stays on the website.** Applying (`/my-schools/apply/<programId>`) and the transcript PDF (from the enrolment's web page), via `openWebPage`.
 
-**Home shortcut** (`shortcut.ts`, UX only): shown to people with at least one current enrolment (a head-only count, remembered per user for offline) or who hold the web's Training module (admin, `program_leader`, any `schools.*` permission).
+**Who sees My Schools in the app** (`logic.ts` `canSeeMySchools`, UX only; RLS still decides what the screens read). Jack's decision, 3 Nov 2026: in the phone app, only enrolled students and school staff. The website is unchanged.
+
+- **Enrolled student**: at least one non-removed enrolment whose status counts (`ENROLLED_STATUSES`): `waiting_for_arrival`, `arrived`, `graduated` (a graduate still needs grades and the transcript), plus the older words `active`, `on_hold`, `completed`. Not counted: `dismissed`, `decided_to_leave`, `withdrawn`, any status the app doesn't know yet, and applicants with only an application.
+- **School staff**: holds the web's Training module per `GET /api/me` (admin / super_admin, `program_leader`, any `schools.*` permission), or is the assigned staff on a non-removed enrolment (a head-only count RLS allows, migration 052). A plain `staff` role alone isn't school staff.
+
+`data.ts` `loadSchoolsTies` reads both facts (Training-module holders are never asked). `shortcut.ts` `useSchoolsAccess` remembers the answer per user (`ffsa.schools.enrolled.v2:<userId>`; v2 because the rule narrowed, the v1 flag is cleared) so it works offline, lets a fresh answer win, and waits for `/api/me` before saying no.
+
+- **Home shortcut** (`useSchoolsShortcut`): shown only once the answer is yes; never shown then hidden while loading.
+- **Routes**: `/schools` and `/schools/[id]` sit behind `SchoolsGate` (feed items, notifications and links skip Home). Not eligible: a plain "My Schools is for students and staff of our schools" screen with a button to the website's `/my-schools`. Checking: a loading state. Couldn't tell at all (offline, nothing remembered): the screen shows, with its own offline/error states. `/schools/attendance` is not gated: attendance is check-ins at any event, not school records.
 
 Grade maths in `logic.ts` mirrors `src/services/schools.ts` (`gradeToPoints`, `calculateGPA`) and the web detail page's credits earned/attempted.

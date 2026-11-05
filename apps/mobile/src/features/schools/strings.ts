@@ -15,6 +15,13 @@ export const strings = {
     datesTbc: "Dates to be confirmed",
   },
   shortcut: { title: "My Schools", subtitle: "Your training schools, grades and attendance" },
+  gate: {
+    checking: "Checking your schools",
+    title: "My Schools is for students and staff of our schools",
+    body: "It shows here once you're enrolled in a school. You can still see schools and apply on the website.",
+    openWeb: "Open My Schools on the website",
+    openWebHint: "Opens the My Schools page on the FFSA Hub website",
+  },
   list: {
     context: "Training & education",
     title: "My Schools",
