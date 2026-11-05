@@ -79,9 +79,9 @@ export const MISSIO_SLOGAN = "SENT ON MISSION";
 export const MISSIO_VISION =
   "As the Father has sent me, so I am sending you. — John 20:21";
 
-// The official wordmark (284x72 PNG, black on transparent).
+// The official wordmark (677x188 PNG, black on transparent).
 export const MISSIO_WORDMARK_PATH = "/brands/missio/missio-wordmark.png";
-const WORDMARK_RATIO = 72 / 284;
+const WORDMARK_RATIO = 188 / 677;
 
 const DEFAULT_SITE_URL = "https://www.ffsahub.com";
 

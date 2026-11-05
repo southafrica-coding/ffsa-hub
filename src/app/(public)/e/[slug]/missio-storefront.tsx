@@ -493,8 +493,8 @@ export function MissioStorefront({
             <img
               src={MISSIO_WORDMARK_SRC}
               alt={MISSIO_WORDMARK_ALT}
-              width={284}
-              height={72}
+              width={677}
+              height={188}
               className="wo-logo-img wo-logo-word"
             />
           )}
@@ -929,8 +929,8 @@ export function MissioStorefront({
         <img
           src={MISSIO_WORDMARK_SRC}
           alt={MISSIO_WORDMARK_ALT}
-          width={284}
-          height={72}
+          width={677}
+          height={188}
           className="wo-footer-word"
         />
         <p className="wo-footer-vision">

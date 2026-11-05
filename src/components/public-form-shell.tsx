@@ -520,8 +520,8 @@ function BrandLockup({ brand }: { brand: PublicShellBrand }) {
         <Image
           src={MISSIO_WORDMARK_SRC}
           alt={MISSIO_WORDMARK_ALT}
-          width={284}
-          height={72}
+          width={677}
+          height={188}
           priority
           style={{ objectFit: "contain", width: 168, maxWidth: "52%", height: "auto" }}
         />
