@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getFinanceHubAccess } from "@/lib/finance-access";
-import { Globe, Wallet, CreditCard, Home, HeartHandshake } from "lucide-react";
+import { Globe, Wallet, CreditCard, Home, HeartHandshake, FolderKanban } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Masthead, SectionBar, StatusPill } from "@/components/ffsa";
 import { XeroConnection } from "./xero-connection";
@@ -42,6 +42,13 @@ const FINANCE_MODULES = [
     description: "Year-end giving statements for US donors to FF SA USA, INC: import from Xero, review, send.",
     href: "/finance/donor-statements",
     icon: HeartHandshake,
+    ready: true,
+  },
+  {
+    title: "Projects",
+    description: "Each organisation's Xero Ministries options (FFSA NPC and FF USA Inc), with an optional type.",
+    href: "/finance/projects",
+    icon: FolderKanban,
     ready: true,
   },
 ];
