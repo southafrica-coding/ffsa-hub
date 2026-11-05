@@ -34,6 +34,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     supportsTablet: true,
     // Universal links. Inert until www.ffsahub.com serves a matching
     // apple-app-site-association (web PR 1) and the app handles the paths.
+    // The app handles /scan/<token> (volunteer door); the AASA lists it.
     associatedDomains: ["applinks:www.ffsahub.com"],
   },
   android: {
@@ -44,6 +45,19 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       backgroundColor: BRAND_YELLOW,
     },
     predictiveBackGestureEnabled: false,
+    // App links. Only the volunteer door (/scan/<token>) for now, so a scan
+    // link shared in a group chat opens the door in the app. Verified
+    // against www.ffsahub.com/.well-known/assetlinks.json; until that file
+    // carries the real package and signing fingerprint, Android keeps
+    // opening these links in the browser (nothing breaks).
+    intentFilters: [
+      {
+        action: "VIEW",
+        autoVerify: true,
+        data: [{ scheme: "https", host: "www.ffsahub.com", pathPrefix: "/scan/" }],
+        category: ["BROWSABLE", "DEFAULT"],
+      },
+    ],
   },
   web: {
     favicon: "./assets/favicon.png",

@@ -7,7 +7,8 @@
           { "/": "/auth/confirm*", "comment": "Email confirmation and magic links" },
           { "/": "/setup/*", "comment": "30-day onboarding invites" },
           { "/": "/reset-password*", "comment": "Password reset links" },
-          { "/": "/e/*", "comment": "Public event pages" }
+          { "/": "/e/*", "comment": "Public event pages" },
+          { "/": "/scan/*", "comment": "Volunteer door scanner links" }
         ]
       }
     ]

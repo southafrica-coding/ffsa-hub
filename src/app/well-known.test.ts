@@ -22,6 +22,7 @@ describe("/.well-known app-link files", () => {
       "/setup/*",
       "/reset-password*",
       "/e/*",
+      "/scan/*",
     ]);
   });
 
