@@ -79,7 +79,7 @@ describe("DeleteAccountScreen", () => {
     expect(await screen.findByTestId("deletion-none")).toBeTruthy();
     expect(screen.getByText(s.intro)).toBeTruthy();
     expect(screen.getByText(s.deleteItems[0])).toBeTruthy();
-    expect(screen.getByText(s.reason.label)).toBeTruthy();
+    expect(screen.getByLabelText(s.reason.label)).toBeTruthy();
     const button = screen.getByRole("button", { name: s.request.button });
     expect(button.props.accessibilityHint).toBe(s.request.hint);
   });
