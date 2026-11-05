@@ -1829,6 +1829,7 @@ export type Database = {
           email_wording: Json
           pay_later_due_date: string | null
           xero_item_code: string | null
+          finance_org_id: string | null
           base_label_id: string | null
           brand: string
           buyer_fields: Json
@@ -1860,6 +1861,7 @@ export type Database = {
           email_wording?: Json
           pay_later_due_date?: string | null
           xero_item_code?: string | null
+          finance_org_id?: string | null
           base_label_id?: string | null
           brand?: string
           buyer_fields?: Json
@@ -1891,6 +1893,7 @@ export type Database = {
           email_wording?: Json
           pay_later_due_date?: string | null
           xero_item_code?: string | null
+          finance_org_id?: string | null
           base_label_id?: string | null
           brand?: string
           buyer_fields?: Json
@@ -1924,8 +1927,119 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "events_finance_org_id_fkey"
+            columns: ["finance_org_id"]
+            isOneToOne: false
+            referencedRelation: "finance_orgs"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "events_created_by_fkey"
             columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      finance_orgs: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          key: string
+          name: string
+          projects_category_name: string
+          record_currency: string
+          xero_region: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          key: string
+          name: string
+          projects_category_name?: string
+          record_currency: string
+          xero_region: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          key?: string
+          name?: string
+          projects_category_name?: string
+          record_currency?: string
+          xero_region?: string
+        }
+        Relationships: []
+      }
+      finance_projects: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          linked_project_id: string | null
+          match_key: string | null
+          name: string
+          notes: string | null
+          org_id: string
+          project_type: string | null
+          sort_order: number | null
+          source: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          linked_project_id?: string | null
+          name: string
+          notes?: string | null
+          org_id: string
+          project_type?: string | null
+          sort_order?: number | null
+          source?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          linked_project_id?: string | null
+          name?: string
+          notes?: string | null
+          org_id?: string
+          project_type?: string | null
+          sort_order?: number | null
+          source?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_projects_linked_project_id_fkey"
+            columns: ["linked_project_id"]
+            isOneToOne: false
+            referencedRelation: "finance_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_projects_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "finance_orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_projects_updated_by_fkey"
+            columns: ["updated_by"]
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
@@ -2744,6 +2858,7 @@ export type Database = {
           xero_invoice_id: string | null
           xero_invoice_number: string | null
           xero_region: string | null
+          finance_org_id: string | null
           invoice_due_date: string | null
           invoice_paid_cents: number
           invoice_emailed_at: string | null
@@ -2790,6 +2905,7 @@ export type Database = {
           xero_invoice_id?: string | null
           xero_invoice_number?: string | null
           xero_region?: string | null
+          finance_org_id?: string | null
           invoice_due_date?: string | null
           invoice_paid_cents?: number
           invoice_emailed_at?: string | null
@@ -2836,6 +2952,7 @@ export type Database = {
           xero_invoice_id?: string | null
           xero_invoice_number?: string | null
           xero_region?: string | null
+          finance_org_id?: string | null
           invoice_due_date?: string | null
           invoice_paid_cents?: number
           invoice_emailed_at?: string | null
@@ -2879,6 +2996,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "orders_finance_org_id_fkey"
+            columns: ["finance_org_id"]
+            isOneToOne: false
+            referencedRelation: "finance_orgs"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "orders_buyer_contact_id_fkey"
             columns: ["buyer_contact_id"]
@@ -5147,6 +5271,10 @@ export type Database = {
       }
     }
     Functions: {
+      finance_org_for_order: {
+        Args: { p_order_id: string }
+        Returns: string | null
+      }
       _library_cascade_link: {
         Args: {
           p_link_method: string
