@@ -142,4 +142,15 @@ export const strings = {
     searching: "Searching for guests",
     searchResults: (n: number) => (n === 1 ? "1 guest found" : `${n} guests found`),
   },
+  outbox: {
+    failedTitle: (n: number) => (n === 1 ? "1 saved scan needs you" : `${n} saved scans need you`),
+    failedBody: "These scans couldn't be sent, so they are NOT confirmed. Don't let these people in on the app's word alone.",
+    retry: "Retry",
+    retryHint: "Tries to send these scans again",
+    remove: "Remove",
+    removeHint: "Deletes these scans from this phone",
+    removeTitle: "Remove these scans?",
+    removeBody: "They haven't reached FFSA Hub. Once removed, these guests won't be checked in unless you scan them again.",
+    cancel: "Cancel",
+  },
 } as const;

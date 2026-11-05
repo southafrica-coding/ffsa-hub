@@ -167,7 +167,9 @@ describe("Team screen", () => {
     const { wrap, deps } = makeOutbox([receiptItem({ expenseId: "e2", status: "failed", lastError: "You don't have permission." })]);
     await render(wrap(<TeamScreen teamId={TEAM} />));
     expect(await screen.findByText(strings.outbox.savedNotSent)).toBeTruthy();
-    expect(screen.getByText("You don't have permission.")).toBeTruthy();
+    // The reason now comes with the next step, under a "Needs you" state.
+    expect(screen.getByText(/^You don't have permission\. Tap Retry/)).toBeTruthy();
+    expect(screen.getByText("Needs you")).toBeTruthy();
     expect(screen.getByTestId("expense-row-e2").props.accessibilityLabel).toMatch(/1 receipt waiting to upload/);
     // No band: the only expense without a receipt has one waiting.
     expect(screen.queryByTestId("needs-you")).toBeNull();

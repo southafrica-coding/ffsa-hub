@@ -2,10 +2,12 @@ import { useKeepAwake } from "expo-keep-awake";
 import { Stack } from "expo-router";
 import { ScanLine } from "lucide-react-native";
 import { useMemo, useState } from "react";
-import { View } from "react-native";
+import { Alert, View } from "react-native";
 
 import { Banner, Button, Divider, Masthead, Text, TextField } from "@/components";
 import { apiFetch } from "@/lib/api-client";
+import { StoreProblemNotice, useNow } from "@/lib/outbox/OutboxStatus";
+import { lastTriedText } from "@/lib/outbox/status";
 import { useTheme } from "@/theme/use-theme";
 
 import { staffDoorClient, type DoorClient } from "../api";
@@ -39,6 +41,7 @@ export function DoorScreen({ eventId, eventTitle, door: injected }: Props) {
   const d = useDoor(eventId, door, online);
   const [scanning, setScanning] = useState(false);
   const [code, setCode] = useState("");
+  const now = useNow();
 
   if (d.denied) {
     return (
@@ -100,7 +103,34 @@ export function DoorScreen({ eventId, eventTitle, door: injected }: Props) {
           testID="queue-banner"
           action={online ? <Button label={strings.checkIn.queueSync} variant="secondary" loading={d.syncing} onPress={() => void d.sync()} /> : undefined}
         >
-          {strings.checkIn.queueBody}
+          {[strings.checkIn.queueBody, lastTriedText({ lastTriedAt: d.lastTriedAt }, now)].filter(Boolean).join(" ")}
+        </Banner>
+      ) : null}
+
+      <StoreProblemNotice problem={d.problem} onDismiss={d.dismissProblem} />
+      {d.failed.length > 0 ? (
+        <Banner
+          tone="danger"
+          title={strings.outbox.failedTitle(d.failed.length)}
+          testID="failed-banner"
+          action={
+            <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+              <Button label={strings.outbox.retry} variant="secondary" accessibilityHint={strings.outbox.retryHint} onPress={d.retryFailed} />
+              <Button
+                label={strings.outbox.remove}
+                variant="ghost"
+                accessibilityHint={strings.outbox.removeHint}
+                onPress={() =>
+                  Alert.alert(strings.outbox.removeTitle, strings.outbox.removeBody, [
+                    { text: strings.outbox.cancel, style: "cancel" },
+                    { text: strings.outbox.remove, style: "destructive", onPress: d.removeFailed },
+                  ])
+                }
+              />
+            </View>
+          }
+        >
+          {`${strings.outbox.failedBody} ${d.failed.map((f) => `${f.code}${f.lastError ? ` (${f.lastError})` : ""}`).join(", ")}`}
         </Banner>
       ) : null}
 

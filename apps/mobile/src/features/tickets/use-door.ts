@@ -5,13 +5,26 @@
 
 import * as Haptics from "expo-haptics";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { AccessibilityInfo } from "react-native";
+import { AccessibilityInfo, AppState } from "react-native";
 
 import { ApiError } from "@/lib/api";
+import { backoffMs, jitter } from "@/lib/outbox/backoff";
+import type { StoreProblem } from "@/lib/outbox/persist";
 
 import type { DoorClient, DoorStats } from "./api";
 import { currentUserId, isSignedOutError } from "./hooks";
-import { flushQueue, loadQueue, pendingFor, queueReducer, rejectedFor, saveQueue, type QueueAction } from "./offline-queue";
+import {
+  failedFor,
+  flushQueue,
+  lastTriedOf,
+  loadQueueWithStatus,
+  newScanId,
+  pendingFor,
+  queueReducer,
+  rejectedFor,
+  saveQueue,
+  type QueueAction,
+} from "./offline-queue";
 import { parseTicketCode } from "./qr";
 import {
   isRetryableError,
@@ -39,9 +52,6 @@ const HAPTIC: Record<VerdictHaptic, Haptics.NotificationFeedbackType> = {
   error: Haptics.NotificationFeedbackType.Error,
 };
 
-let idCounter = 0;
-const newId = () => `${Date.now().toString(36)}-${(idCounter++).toString(36)}`;
-
 export type DoorState = ReturnType<typeof useDoor>;
 
 export function useDoor(eventId: string, door: DoorClient, online: boolean, now: () => number = Date.now) {
@@ -53,6 +63,7 @@ export function useDoor(eventId: string, door: DoorClient, online: boolean, now:
   const [busy, setBusy] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [queue, dispatchRaw] = useReducer(queueReducer, []);
+  const [problem, setProblem] = useState<StoreProblem>(null);
 
   const gate = useMemo(() => createScanGate(SAME_CODE_MS), []);
   const userId = useRef<string | null>(null);
@@ -70,10 +81,11 @@ export function useDoor(eventId: string, door: DoorClient, online: boolean, now:
     let cancelled = false;
     (async () => {
       userId.current = await currentUserId();
-      const stored = userId.current ? await loadQueue(userId.current) : [];
+      const stored = userId.current ? await loadQueueWithStatus(userId.current) : { items: [], problem: null };
       if (cancelled) return;
       queueLoaded.current = true;
-      dispatchRaw({ type: "load", items: stored });
+      setProblem(stored.problem);
+      dispatchRaw({ type: "load", items: stored.items });
     })();
     return () => {
       cancelled = true;
@@ -126,7 +138,7 @@ export function useDoor(eventId: string, door: DoorClient, online: boolean, now:
   const submit = useCallback(
     async (code: string) => {
       if (!online) {
-        dispatch({ type: "enqueue", id: newId(), eventId, code, at: new Date(now()).toISOString() });
+        dispatch({ type: "enqueue", id: newScanId(), eventId, code, at: new Date(now()).toISOString() });
         show(verdictQueued());
         return;
       }
@@ -137,7 +149,7 @@ export function useDoor(eventId: string, door: DoorClient, online: boolean, now:
       } catch (err) {
         if (isSignedOutError(err)) return;
         if (isRetryableError(err)) {
-          dispatch({ type: "enqueue", id: newId(), eventId, code, at: new Date(now()).toISOString() });
+          dispatch({ type: "enqueue", id: newScanId(), eventId, code, at: new Date(now()).toISOString() });
           show(verdictQueued());
         } else {
           show(verdictFromError(err));
@@ -209,17 +221,28 @@ export function useDoor(eventId: string, door: DoorClient, online: boolean, now:
   // ── Offline queue ────────────────────────────────────────────────────────
   const pending = pendingFor(queue, eventId);
   const rejected = rejectedFor(queue, eventId);
+  const failed = failedFor(queue, eventId);
+  const lastTriedAt = lastTriedOf([...pending, ...failed]);
 
   const sync = useCallback(async () => {
     if (syncing || !online) return;
     setSyncing(true);
     try {
-      const answered = await flushQueue(queueRef.current, eventId, door, dispatch);
+      const owner = userId.current;
+      const answered = await flushQueue(queueRef.current, eventId, door, dispatch, {
+        now,
+        // Never send one person's saved scans under someone else's account.
+        stillOwner: async () => !!owner && (await currentUserId()) === owner,
+      });
       if (answered > 0) void refreshStats();
     } finally {
       setSyncing(false);
     }
-  }, [syncing, online, eventId, door, dispatch, refreshStats]);
+  }, [syncing, online, eventId, door, dispatch, refreshStats, now]);
+  const syncRef = useRef(sync);
+  useEffect(() => {
+    syncRef.current = sync;
+  }, [sync]);
 
   // Back online with scans waiting: send them.
   const pendingCount = pending.length;
@@ -229,6 +252,35 @@ export function useDoor(eventId: string, door: DoorClient, online: boolean, now:
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only when connectivity or the count changes
   }, [online, pendingCount]);
+
+  // A try failed but the phone still looks online (server busy, weak
+  // signal): try again after a growing, jittered delay, never in a loop.
+  const maxAttempts = pending.reduce((m, q) => Math.max(m, q.attempts), 0);
+  useEffect(() => {
+    if (!online || pendingCount === 0 || maxAttempts === 0) return;
+    const t = setTimeout(() => void syncRef.current(), jitter(backoffMs(maxAttempts), Math.random()));
+    return () => clearTimeout(t);
+  }, [online, pendingCount, maxAttempts]);
+
+  // Back to the door app after a while: send what's waiting.
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active" && pendingFor(queueRef.current, eventId).length > 0) void syncRef.current();
+    });
+    return () => sub.remove();
+  }, [eventId]);
+
+  /** The person tapped Retry on the scans that need them. */
+  const retryFailed = useCallback(() => {
+    for (const f of failedFor(queueRef.current, eventId)) dispatch({ type: "retry", id: f.id });
+  }, [eventId, dispatch]);
+
+  /** The person confirmed Remove: these scans are dropped from the phone. */
+  const removeFailed = useCallback(() => {
+    for (const f of failedFor(queueRef.current, eventId)) dispatch({ type: "dismiss", id: f.id });
+  }, [eventId, dispatch]);
+
+  const dismissProblem = useCallback(() => setProblem(null), []);
 
   const clearRejected = useCallback(() => {
     for (const r of rejectedFor(queueRef.current, eventId)) dispatch({ type: "dismiss", id: r.id });
@@ -244,6 +296,12 @@ export function useDoor(eventId: string, door: DoorClient, online: boolean, now:
     syncing,
     pending,
     rejected,
+    failed,
+    lastTriedAt,
+    problem,
+    dismissProblem,
+    retryFailed,
+    removeFailed,
     onScanned,
     checkInCode,
     undo,
