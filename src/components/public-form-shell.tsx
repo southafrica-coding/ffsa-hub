@@ -1,6 +1,12 @@
 import Image from "next/image";
 import type { CSSProperties } from "react";
 import { FFSA_SHELL_TOKENS, FFSA_TAGLINE } from "@/lib/brand/ffsa";
+import { MISSIO_COLORS } from "@/lib/email/missio-shell";
+import {
+  MISSIO_FONT_FAMILY,
+  MISSIO_WORDMARK_ALT,
+  MISSIO_WORDMARK_SRC,
+} from "@/lib/brand/missio-font";
 
 // Shared visual shell for all public-facing form/landing pages.
 // Mirrors the renderEmailShell layout so emails and the linked pages
@@ -112,24 +118,24 @@ export const WILD_ONES_SHELL_TOKENS = {
   red: "#E0736A",
 } as const;
 
-// MISSIO token set — same shape/key names as the others. Also dark, but
-// warm and quiet: pine paper on a deep-pine surround, cream type, and a
-// single clay/terracotta accent in the `yellow` slot. Mirrors
-// src/lib/email/missio-shell.ts (MISSIO_COLORS).
+// MISSIO token set — same shape/key names as the others, but LIGHT:
+// warm off-white page, lighter paper card, near-black type and 1px rules,
+// and black in the `yellow` accent slot (MISSIO has no accent colour).
+// Mirrors src/lib/email/missio-shell.ts (MISSIO_COLORS).
 export const MISSIO_SHELL_TOKENS = {
-  bg: "#16332A", // deep pine surround
-  card: "#20463A", // pine paper card
-  cardElev: "#265041", // lifted pine — input fields
-  border: "#35594B", // hairline
-  borderSoft: "rgba(237,228,211,0.14)",
-  text: "#EDE4D3", // cream
-  textDim: "rgba(237,228,211,0.74)",
-  textDimmer: "rgba(237,228,211,0.55)",
-  textFaint: "rgba(237,228,211,0.3)",
-  yellow: "#C56A3F", // accent slot = clay
-  yellowHover: "#D98A5C", // gold highlight
-  green: "#8FBF9F",
-  red: "#E0736A",
+  bg: MISSIO_COLORS.BG, // warm off-white page
+  card: MISSIO_COLORS.SURFACE, // lighter card
+  cardElev: MISSIO_COLORS.PAPER, // lightest — input fields
+  border: MISSIO_COLORS.INK, // 1px near-black rules
+  borderSoft: MISSIO_COLORS.HAIRLINE, // decorative dividers, progress track
+  text: MISSIO_COLORS.INK,
+  textDim: MISSIO_COLORS.MUTED, // 6.8:1 on bg
+  textDimmer: MISSIO_COLORS.MUTED,
+  textFaint: MISSIO_COLORS.MUTED,
+  yellow: MISSIO_COLORS.INK, // accent slot = black
+  yellowHover: "#2B2B28",
+  green: "#2F6B3A",
+  red: "#A3261B",
 } as const;
 
 export function tokensForBrand(brand: PublicShellBrand) {
@@ -171,6 +177,7 @@ export function PublicFormShell({
   // SEND callers get the SEND ticker line, and FFSA Camps gets its slogan
   // out of the box.
   const isPreachers = brand === "preachers";
+  const isMissio = brand === "missio";
   const resolvedTagline =
     tagline === undefined
       ? isTheSend
@@ -190,7 +197,14 @@ export function PublicFormShell({
   // and no shadow — matches their bespoke storefront + ticket email. F&F
   // keeps the rounded dark card with a soft shadow.
   const flatCard = isTheSend || isCamps;
-  const cardStyle: CSSProperties = flatCard
+  // MISSIO: a square paper card on a 1px near-black rule, no shadow.
+  const cardStyle: CSSProperties = isMissio
+    ? {
+        background: tk.card,
+        border: `1px solid ${tk.border}`,
+        borderRadius: 2,
+      }
+    : flatCard
     ? {
         background: tk.card,
         border: `3px solid ${tk.border}`,
@@ -215,8 +229,8 @@ export function PublicFormShell({
         ? "'Big Shoulders Display','Anton','Impact','Haettenschweiler','Arial Narrow Bold',sans-serif"
         : brand === "wild_ones"
           ? "'Oswald','Anton','Impact','Arial Narrow Bold',sans-serif"
-          : brand === "missio"
-            ? "'Fraunces','Georgia','Times New Roman',serif"
+          : isMissio
+            ? MISSIO_FONT_FAMILY
             : "var(--font-condensed, 'Arial Narrow', sans-serif)";
 
   return (
@@ -225,19 +239,20 @@ export function PublicFormShell({
       style={{
         background: tk.bg,
         color: tk.text,
+        fontFamily: isMissio ? MISSIO_FONT_FAMILY : undefined,
         // F&F's card is dark so we tell the browser to render native
         // form chrome in dark mode. SEND + FFSA Camps cards are cream
         // paper, so we explicitly opt into light chrome — otherwise
         // Safari forces dark fill/text on inputs that overrides our white
         // background + dark text styling.
-        colorScheme: flatCard ? "light" : "dark",
+        colorScheme: flatCard || isMissio ? "light" : "dark",
       }}
     >
       <div className="mx-auto" style={{ maxWidth }}>
         <BrandLockup brand={brand} />
 
         <div
-          className={flatCard ? "overflow-hidden" : "rounded-2xl overflow-hidden"}
+          className={flatCard || isMissio ? "overflow-hidden" : "rounded-2xl overflow-hidden"}
           style={cardStyle}
         >
           {/* Top accent rail — F&F: soft gradient gold; SEND: solid gold
@@ -285,7 +300,7 @@ export function PublicFormShell({
             >
               PERMISSION GRANTED&nbsp;&nbsp;&#10022;&nbsp;&nbsp;PERMISSION GRANTED
             </div>
-          ) : (
+          ) : isMissio ? null : (
             <div
               style={{
                 height: 3,
@@ -294,7 +309,7 @@ export function PublicFormShell({
             />
           )}
 
-          <div className="px-6 sm:px-9 py-9">
+          <div className={isMissio ? "px-6 sm:px-10 py-10" : "px-6 sm:px-9 py-9"}>
             {(eyebrow || heading || subheading) && (
               <div className="mb-7">
                 {eyebrow && (
@@ -306,7 +321,7 @@ export function PublicFormShell({
                       fontSize: 11,
                       letterSpacing: isTheSend ? "0.2em" : "0.25em",
                       fontWeight: 700,
-                      color: isTheSend ? tk.textDimmer : tk.yellow,
+                      color: isTheSend || isMissio ? tk.textDimmer : tk.yellow,
                       textTransform: "uppercase",
                       margin: 0,
                     }}
@@ -324,10 +339,12 @@ export function PublicFormShell({
                         ? "0.005em"
                         : isCamps
                           ? "0.01em"
-                          : "0.03em",
+                          : isMissio
+                            ? "-0.01em"
+                            : "0.03em",
                       textTransform: isPreachers ? undefined : "uppercase",
                       fontStyle: isCamps ? "italic" : undefined,
-                      fontWeight: isTheSend || isPreachers ? undefined : 900,
+                      fontWeight: isTheSend || isPreachers ? undefined : isMissio ? 800 : 900,
                       color: tk.text,
                       margin: eyebrow ? "8px 0 0" : 0,
                     }}
@@ -497,36 +514,29 @@ function BrandLockup({ brand }: { brand: PublicShellBrand }) {
 
   if (brand === "missio") {
     const tk = MISSIO_SHELL_TOKENS;
-    // MISSIO has no wordmark asset — the identity IS the serif, set as
-    // live text exactly as the storefront and ticket email do it.
+    // The official MISSIŌ wordmark (black on transparent).
     return (
-      <div className="flex flex-col items-center mb-6">
+      <div className="flex flex-col items-center mb-8">
+        <Image
+          src={MISSIO_WORDMARK_SRC}
+          alt={MISSIO_WORDMARK_ALT}
+          width={284}
+          height={72}
+          priority
+          style={{ objectFit: "contain", width: 168, maxWidth: "52%", height: "auto" }}
+        />
         <p
           style={{
-            margin: 0,
-            fontFamily: "'Fraunces','Georgia','Times New Roman',serif",
-            fontSize: 34,
-            fontWeight: 700,
-            color: tk.text,
-            letterSpacing: "0.06em",
-            textTransform: "uppercase",
-            lineHeight: 1,
-          }}
-        >
-          MISSIO
-        </p>
-        <p
-          style={{
-            margin: "12px 0 0",
-            fontFamily: "Helvetica,Arial,sans-serif",
+            margin: "14px 0 0",
+            fontFamily: MISSIO_FONT_FAMILY,
             fontSize: 10,
             fontWeight: 700,
-            color: tk.yellow,
-            letterSpacing: "0.26em",
+            color: tk.textDim,
+            letterSpacing: "0.24em",
             textTransform: "uppercase",
           }}
         >
-          &#10013;&nbsp;&nbsp;SENT&nbsp;ON&nbsp;MISSION
+          SENT&nbsp;ON&nbsp;MISSION
         </p>
       </div>
     );
@@ -756,7 +766,7 @@ export const PUBLIC_INPUT_STYLE = inputBaseStyle;
  */
 function adminChromeReclaim(
   tk: ReturnType<typeof tokensForBrand>,
-  variant: "soft" | "flat",
+  variant: "soft" | "flat" | "line",
   fonts: {
     body: string;
     label: string;
@@ -766,14 +776,22 @@ function adminChromeReclaim(
   }
 ): string {
   const flat = variant === "flat";
+  // "line" = MISSIO: 1px near-black field borders, barely-rounded corners.
+  const line = variant === "line";
+  const fieldBorder = flat
+    ? `2px solid ${tk.border}`
+    : line
+      ? `1px solid ${tk.border}`
+      : `1px solid ${tk.borderSoft}`;
+  const fieldRadius = flat ? "0" : line ? "2px" : "10px";
   return `
 @layer base {
   .ffsa-public input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="submit"]):not([type="button"]),
   .ffsa-public textarea,
   .ffsa-public select {
     background: ${tk.cardElev} !important;
-    border: ${flat ? "2px" : "1px"} solid ${flat ? tk.border : tk.borderSoft} !important;
-    border-radius: ${flat ? "0" : "10px"} !important;
+    border: ${fieldBorder} !important;
+    border-radius: ${fieldRadius} !important;
     color: ${tk.text} !important;
     font-family: ${fonts.body} !important;
     font-size: 15px !important;
@@ -1136,24 +1154,132 @@ ${adminChromeReclaim(tk, "flat", {
     return <style dangerouslySetInnerHTML={{ __html: css }} />;
   }
 
-  // ff, preachers, wild_ones and missio all ride the dark-card model, so
-  // they share this branch and differ only by tokens + display face.
+  if (brand === "missio") {
+    // MISSIO is light: off-white paper, near-black type, 1px near-black
+    // field borders, barely-rounded corners, black primary buttons with
+    // off-white type. Archivo comes from next/font (missio-font.ts).
+    const tk = MISSIO_SHELL_TOKENS;
+    const css = `
+.ffsa-public input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="submit"]):not([type="button"]),
+.ffsa-public textarea,
+.ffsa-public select {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 2px;
+  border: 1px solid ${tk.border};
+  background: ${tk.cardElev};
+  color: ${tk.text};
+  font-family: ${MISSIO_FONT_FAMILY};
+  font-size: 15px;
+  outline: none;
+  transition: box-shadow .15s ease;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+.ffsa-public select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='none' stroke='%23111111' stroke-width='2'%3E%3Cpath d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 12px 8px;
+  padding-right: 36px;
+}
+.ffsa-public input:focus, .ffsa-public textarea:focus, .ffsa-public select:focus {
+  box-shadow: 0 0 0 1px ${tk.border};
+}
+.ffsa-public input::placeholder, .ffsa-public textarea::placeholder {
+  color: ${tk.textDimmer};
+}
+.ffsa-public label {
+  color: ${tk.text};
+}
+.ffsa-public-btn-primary {
+  background: ${tk.text};
+  color: ${tk.cardElev};
+  font-family: ${MISSIO_FONT_FAMILY};
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 13px;
+  padding: 15px 30px;
+  border-radius: 2px;
+  border: 1px solid ${tk.text};
+  cursor: pointer;
+  transition: background .15s ease, transform .04s ease;
+}
+.ffsa-public-btn-primary:hover:not(:disabled) {
+  background: ${tk.yellowHover};
+}
+.ffsa-public-btn-primary:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.ffsa-public-btn-primary:disabled {
+  background: ${tk.borderSoft};
+  border-color: ${tk.borderSoft};
+  color: ${tk.textDim};
+  cursor: not-allowed;
+}
+.ffsa-public-btn-ghost {
+  background: transparent;
+  color: ${tk.textDim};
+  font-size: 13px;
+  padding: 10px 14px;
+  border: none;
+  cursor: pointer;
+  transition: color .15s ease;
+}
+.ffsa-public-btn-ghost:hover:not(:disabled) {
+  color: ${tk.text};
+}
+.ffsa-public-card {
+  background: ${tk.cardElev};
+  border: 1px solid ${tk.border};
+  border-radius: 2px;
+  padding: 14px 16px;
+}
+.ffsa-public-card.is-selected {
+  background: ${tk.text};
+  color: ${tk.cardElev};
+}
+.ffsa-public-error {
+  color: ${tk.red};
+  font-size: 13px;
+  margin-top: 6px;
+}
+.ffsa-public-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: ${tk.text};
+  margin-bottom: 6px;
+}
+.ffsa-public-label-required::after {
+  content: ' *';
+  color: ${tk.red};
+}
+${adminChromeReclaim(tk, "line", {
+  body: MISSIO_FONT_FAMILY,
+  label: MISSIO_FONT_FAMILY,
+  button: { family: MISSIO_FONT_FAMILY, weight: 700, spacing: "0.08em" },
+})}
+`;
+    return <style dangerouslySetInnerHTML={{ __html: css }} />;
+  }
+
+  // ff, preachers and wild_ones all ride the dark-card model, so they
+  // share this branch and differ only by tokens + display face.
   const tk = tokensForBrand(brand);
   const displayFont =
-    brand === "missio"
-      ? "'Fraunces','Georgia','Times New Roman',serif"
-      : brand === "wild_ones"
-        ? "'Oswald','Anton','Impact','Arial Narrow Bold',sans-serif"
-        : "'Aileron','Helvetica Neue',Arial,sans-serif";
+    brand === "wild_ones"
+      ? "'Oswald','Anton','Impact','Arial Narrow Bold',sans-serif"
+      : "'Aileron','Helvetica Neue',Arial,sans-serif";
   // Same Google Fonts import the bespoke storefronts use, so a form and
   // its storefront render in one face. Must lead the stylesheet: @import
   // is only valid before other rules.
   const fontImport =
-    brand === "missio"
-      ? "@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&display=swap');\n"
-      : brand === "wild_ones"
-        ? "@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&display=swap');\n"
-        : "";
+    brand === "wild_ones"
+      ? "@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&display=swap');\n"
+      : "";
 
   const css = `${fontImport}
 .ffsa-public input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="submit"]):not([type="button"]),

@@ -54,7 +54,7 @@ const BRAND_OPTIONS: Array<{ value: EventBrand; label: string; helper: string }>
     value: "missio",
     label: "MISSIO",
     helper:
-      "Church plant — pine & clay, serif. Bespoke DARK pine/cream template — clay #C56A3F accent, Fraunces caps, serif wordmark. Slogan: “SENT ON MISSION”.",
+      "Church plant — bespoke LIGHT template built around the official MISSIŌ wordmark: warm off-white #E2E2DD, near-black type and 1px rules, black buttons, Archivo caps. Slogan: “SENT ON MISSION”.",
   },
 ];
 

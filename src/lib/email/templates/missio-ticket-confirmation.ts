@@ -1,21 +1,21 @@
 import { eventMessageHtml } from "../event-email-wording";
-import { eventLogoBlock } from "../event-sender";
 import { formatMoney } from "@/lib/currencies";
 // FFSA Hub — Ticket confirmation email for MISSIO.
 //
 // Same shape as the generic ticket-confirmation template (inline-CSS,
 // table-based, QR codes loaded from /api/tickets/<code>/qr) but
-// re-skinned to the MISSIO aesthetic — DARK pine + cream, deep-pine
-// ink surround, serif Fraunces caps, one clay/terracotta accent. Quiet,
-// sent-out church-plant warmth.
+// re-skinned to the MISSIO aesthetic — built around the official MISSIŌ
+// wordmark: warm off-white paper, near-black type and 1px rules, bold
+// Archivo caps, square corners, no accent colour.
 //
 // Email-safe choices:
-//   - Fraunces pulled via <link> for webfont-capable clients; falls back to
-//     Georgia→Times everywhere else. Everything inline (clients strip <style>).
+//   - Archivo pulled via <link> for webfont-capable clients; falls back to
+//     Helvetica/Arial everywhere else. Everything inline (clients strip <style>).
 //   - Single 600px-wide table; nested tables for ticket stubs.
 //   - Critical entry info (QR, code, date, venue, total) stays legible —
-//     the QR sits on a white chip so scanners read it against the dark UI.
-//   - The MISSIO wordmark is rendered as live serif text (no image asset).
+//     the QR sits on a white chip with a 1px black frame.
+//   - The masthead shows the event's own logo when it has one, otherwise
+//     the MISSIŌ wordmark PNG.
 
 import {
   MISSIO_COLORS,
@@ -23,22 +23,14 @@ import {
   MISSIO_FONT_LINK,
   MISSIO_SLOGAN,
   MISSIO_VISION,
+  missioWordmarkImg,
 } from "../missio-shell";
 
-const { NAVY, INK, BONE, OFFWHITE, LINE, EMBER } = MISSIO_COLORS;
+const { BG, SURFACE, PAPER, INK, MUTED, HAIRLINE, ON_INK } = MISSIO_COLORS;
 const { DISPLAY, BODY } = MISSIO_FONTS;
 
-// Condensed display style shared by every headline-level element.
-const D = `font-family:${DISPLAY};font-weight:700;`;
-
-// Cross device.
-const MARK = "&#10013;";
-
-// MISSIO wordmark as live serif text (no image asset). `size` is the
-// font-size in px; scales the masthead vs footer instances.
-function wordmark(size: number): string {
-  return `<span style="display:inline-block;font-family:${DISPLAY};font-weight:700;font-size:${size}px;line-height:1;letter-spacing:0.14em;text-transform:uppercase;color:${OFFWHITE};">MISSIO</span>`;
-}
+// Bold display style shared by every headline-level element.
+const D = `font-family:${DISPLAY};font-weight:800;`;
 
 export function missioTicketEmailHtml(opts: {
   buyerFirstName: string;
@@ -69,30 +61,30 @@ export function missioTicketEmailHtml(opts: {
       return `
       <tr>
         <td style="padding:0;">
-          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:separate;border:2px solid ${LINE};background:${INK};">
+          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:separate;border:1px solid ${INK};background:${PAPER};">
             <tr>
               <!-- Stub: ADMIT ONE + serial -->
-              <td valign="middle" align="center" width="68" style="background:${EMBER};color:${OFFWHITE};padding:18px 0;border-right:2px dashed ${LINE};">
-                <p style="margin:0;${D}font-size:14px;letter-spacing:0.1em;line-height:1.1;text-transform:uppercase;">ADMIT</p>
-                <p style="margin:2px 0 0 0;${D}font-size:14px;letter-spacing:0.1em;line-height:1.1;text-transform:uppercase;">ONE</p>
-                <p style="margin:10px 0 0 0;font-family:${BODY};font-size:10px;font-weight:700;letter-spacing:0.12em;opacity:0.85;">${serial}</p>
+              <td valign="middle" align="center" width="68" style="background:${INK};color:${ON_INK};padding:18px 0;">
+                <p style="margin:0;${D}font-size:13px;letter-spacing:0.12em;line-height:1.1;text-transform:uppercase;color:${ON_INK};">ADMIT</p>
+                <p style="margin:2px 0 0 0;${D}font-size:13px;letter-spacing:0.12em;line-height:1.1;text-transform:uppercase;color:${ON_INK};">ONE</p>
+                <p style="margin:10px 0 0 0;font-family:${BODY};font-size:10px;font-weight:700;letter-spacing:0.12em;color:${ON_INK};">${serial}</p>
               </td>
               <!-- Ticket body: name + QR + code -->
-              <td style="padding:20px 22px;background:${INK};color:${BONE};">
-                <p style="margin:0 0 4px 0;font-family:${BODY};font-size:10px;font-weight:700;color:${EMBER};letter-spacing:0.18em;text-transform:uppercase;">PASS ${i + 1} / ${count}</p>
-                <h2 style="margin:0;${D}font-size:28px;line-height:1.0;color:${OFFWHITE};letter-spacing:0.02em;text-transform:uppercase;">${escapeHtml(t.tierName)}</h2>
-                <div style="text-align:center;margin:18px 0 6px 0;">
+              <td style="padding:22px 24px;background:${PAPER};color:${INK};">
+                <p style="margin:0 0 6px 0;font-family:${BODY};font-size:10px;font-weight:700;color:${MUTED};letter-spacing:0.18em;text-transform:uppercase;">PASS ${i + 1} / ${count}</p>
+                <h2 style="margin:0;${D}font-size:26px;line-height:1.02;color:${INK};letter-spacing:-0.01em;text-transform:uppercase;">${escapeHtml(t.tierName)}</h2>
+                <div style="text-align:center;margin:20px 0 6px 0;">
                   <img
                     src="${base}/api/tickets/${encodeURIComponent(t.code)}/qr"
                     alt="QR code for pass ${i + 1}"
                     width="220"
                     height="220"
-                    style="display:inline-block;background:#ffffff;padding:10px;border:2px solid ${EMBER};width:220px;height:220px;"
+                    style="display:inline-block;background:#ffffff;padding:10px;border:1px solid ${INK};width:220px;height:220px;"
                   />
                 </div>
-                <p style="margin:8px 0 0 0;font-family:${BODY};font-size:12px;font-weight:700;color:${BONE};letter-spacing:0.06em;text-align:center;">CODE: ${escapeHtml(t.code)}</p>
-                <div style="margin:14px 0 0 0;border-top:1px dashed ${LINE};padding-top:10px;">
-                  <p style="margin:0;font-family:${BODY};font-size:10px;font-weight:700;letter-spacing:0.08em;color:${EMBER};text-transform:uppercase;text-align:center;">ADMIT ONE &middot; ${escapeHtml(venueLine.toUpperCase())} &middot; ${escapeHtml(opts.eventDate.toUpperCase())}</p>
+                <p style="margin:8px 0 0 0;font-family:${BODY};font-size:12px;font-weight:700;color:${INK};letter-spacing:0.06em;text-align:center;">CODE: ${escapeHtml(t.code)}</p>
+                <div style="margin:16px 0 0 0;border-top:1px solid ${HAIRLINE};padding-top:10px;">
+                  <p style="margin:0;font-family:${BODY};font-size:10px;font-weight:700;letter-spacing:0.08em;color:${MUTED};text-transform:uppercase;text-align:center;">ADMIT ONE &middot; ${escapeHtml(venueLine.toUpperCase())} &middot; ${escapeHtml(opts.eventDate.toUpperCase())}</p>
                 </div>
               </td>
             </tr>
@@ -103,45 +95,40 @@ export function missioTicketEmailHtml(opts: {
     })
     .join("");
 
-  // Ticker — slogan repeated, sized to fit a 600px email.
-  const ticker = `${MISSIO_SLOGAN}&nbsp;&nbsp;${MARK}&nbsp;&nbsp;${MISSIO_SLOGAN}&nbsp;&nbsp;${MARK}&nbsp;&nbsp;${MISSIO_SLOGAN}`;
+  // The event's own logo wins the masthead; the MISSIŌ wordmark is the default.
+  const mastheadMark = opts.headerLogoUrl
+    ? `<img src="${escapeHtml(opts.headerLogoUrl)}" alt="${escapeHtml(opts.eventTitle)}" style="display:block;max-width:240px;max-height:72px;width:auto;height:auto;border:0;" />`
+    : missioWordmarkImg(base, 132);
 
   return `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="color-scheme" content="light" />
   <title>You're in — ${escapeHtml(opts.eventTitle)}</title>
   ${MISSIO_FONT_LINK}
 </head>
-<body style="margin:0;padding:0;background:${INK};font-family:${BODY};color:${BONE};">
+<body style="margin:0;padding:0;background:${BG};font-family:${BODY};color:${INK};">
   <!-- Preheader (hidden) — sets Gmail/iOS inbox preview text -->
-  <div style="display:none;max-height:0;overflow:hidden;font-size:1px;line-height:1px;color:${NAVY};">
+  <div style="display:none;max-height:0;overflow:hidden;font-size:1px;line-height:1px;color:${BG};">
     You're in. ${escapeHtml(opts.eventTitle)} is locked. ${count} ${passWord} inside.
   </div>
 
-  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:${INK};padding:30px 10px;">
+  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:${BG};padding:36px 12px;">
     <tr><td align="center">
-      <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width:600px;background:${NAVY};table-layout:fixed;">
-        ${opts.headerLogoUrl ? `<tr><td align="center" style="padding:22px 22px 0;">${eventLogoBlock(opts.headerLogoUrl, opts.eventTitle)}</td></tr>` : ""}
+      <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width:600px;background:${PAPER};border:1px solid ${INK};table-layout:fixed;">
 
-        <!-- Ink ticker bar -->
+        <!-- Masthead -->
         <tr>
-          <td style="background:${INK};border-bottom:1px solid ${LINE};padding:8px 14px;${D}font-size:14px;color:${EMBER};letter-spacing:0.22em;text-transform:uppercase;line-height:1.2;overflow:hidden;white-space:nowrap;text-align:center;">
-            ${ticker}
-          </td>
-        </tr>
-
-        <!-- Ink masthead -->
-        <tr>
-          <td style="background:${INK};padding:16px 22px;border-bottom:1px solid ${LINE};">
+          <td style="background:${PAPER};padding:30px 36px 26px;border-bottom:1px solid ${INK};">
             <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
               <tr>
                 <td valign="middle">
-                  ${wordmark(28)}
+                  ${mastheadMark}
                 </td>
-                <td valign="middle" align="right" style="font-family:${BODY};font-size:10px;font-weight:700;color:${EMBER};letter-spacing:0.18em;text-transform:uppercase;">
-                  CHURCH PLANT
+                <td valign="middle" align="right" style="font-family:${BODY};font-size:10px;font-weight:700;color:${MUTED};letter-spacing:0.2em;text-transform:uppercase;">
+                  ${MISSIO_SLOGAN}
                 </td>
               </tr>
             </table>
@@ -150,27 +137,20 @@ export function missioTicketEmailHtml(opts: {
 
         <!-- Hero -->
         <tr>
-          <td style="background:${NAVY};color:${BONE};padding:36px 28px 32px 28px;">
-            <p style="margin:0;font-family:${BODY};font-size:11px;font-weight:700;color:${EMBER};letter-spacing:0.2em;text-transform:uppercase;">
+          <td style="background:${PAPER};color:${INK};padding:44px 36px 32px 36px;">
+            <p style="margin:0;font-family:${BODY};font-size:11px;font-weight:700;color:${MUTED};letter-spacing:0.2em;text-transform:uppercase;">
               Pass Confirmed&nbsp;&nbsp;&middot;&nbsp;&nbsp;${escapeHtml(opts.eventDate)}
             </p>
-            <h1 style="margin:14px 0 0 0;${D}font-size:72px;line-height:0.9;color:${OFFWHITE};letter-spacing:0.02em;text-transform:uppercase;">
+            <h1 style="margin:16px 0 0 0;${D}font-size:64px;line-height:0.95;color:${INK};letter-spacing:-0.02em;text-transform:uppercase;">
               YOU&rsquo;RE IN.
             </h1>
-            <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:22px;">
-              <tr>
-                <td style="background:${EMBER};color:${OFFWHITE};padding:9px 16px;${D}font-size:18px;letter-spacing:0.08em;text-transform:uppercase;">
-                  ${MISSIO_SLOGAN}
-                </td>
-              </tr>
-            </table>
           </td>
         </tr>
 
         <!-- Coordinates: DATES / VENUE / ORDER -->
         <tr>
-          <td style="background:${NAVY};padding:0 28px 28px 28px;">
-            <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border:1px solid ${LINE};border-collapse:collapse;">
+          <td style="background:${PAPER};padding:0 36px 32px 36px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border:1px solid ${INK};border-collapse:collapse;">
               ${row("DATES", opts.eventDate)}
               ${row("VENUE", venueLine)}
               ${row("ORDER", `#${opts.orderId.slice(0, 8).toUpperCase()}`)}
@@ -178,61 +158,59 @@ export function missioTicketEmailHtml(opts: {
           </td>
         </tr>
 
-        <!-- Intro on pine paper -->
+        <!-- Intro -->
         <tr>
-          <td style="background:${NAVY};color:${BONE};padding:30px 28px 8px 28px;border-top:1px solid ${LINE};">
-            <p style="margin:0;font-family:${BODY};font-size:11px;font-weight:700;color:${EMBER};letter-spacing:0.2em;text-transform:uppercase;">The briefing</p>
-            <h2 style="margin:10px 0 0 0;${D}font-size:30px;line-height:1.02;color:${OFFWHITE};letter-spacing:0.02em;text-transform:uppercase;">
+          <td style="background:${PAPER};color:${INK};padding:32px 36px 8px 36px;border-top:1px solid ${HAIRLINE};">
+            <p style="margin:0;font-family:${BODY};font-size:11px;font-weight:700;color:${MUTED};letter-spacing:0.2em;text-transform:uppercase;">The briefing</p>
+            <h2 style="margin:12px 0 0 0;${D}font-size:28px;line-height:1.05;color:${INK};letter-spacing:-0.01em;text-transform:uppercase;">
               ${escapeHtml(opts.buyerFirstName)} &mdash; your ${count} ${passWord} secured
             </h2>
-            <p style="margin:14px 0 0 0;font-family:${BODY};font-size:14px;line-height:1.65;color:${BONE};">
+            <p style="margin:16px 0 0 0;font-family:${BODY};font-size:15px;line-height:1.7;color:${INK};">
               Show the QR ${qrWord} below at the door &mdash; screenshot it, print it, or pull this email up live. Save this email; it&rsquo;s your ticket in.
             </p>
           </td>
         </tr>
 
-        <tr><td style="background:${NAVY};height:24px;line-height:24px;font-size:0;">&nbsp;</td></tr>
+        <tr><td style="background:${PAPER};height:28px;line-height:28px;font-size:0;">&nbsp;</td></tr>
 
-        ${opts.message ? `<tr><td style="background:${NAVY};padding:0 28px 20px 28px;">${eventMessageHtml(opts.message, { color: BONE, font: BODY })}</td></tr>` : ""}
+        ${opts.message ? `<tr><td style="background:${PAPER};padding:0 36px 24px 36px;">${eventMessageHtml(opts.message, { color: INK, font: BODY })}</td></tr>` : ""}
         <!-- Tickets -->
         <tr>
-          <td style="background:${NAVY};padding:0 28px;">
-            <p style="margin:0 0 14px 0;font-family:${BODY};font-size:11px;font-weight:700;color:${EMBER};letter-spacing:0.2em;text-transform:uppercase;">Your passes</p>
+          <td style="background:${PAPER};padding:0 36px;">
+            <p style="margin:0 0 16px 0;font-family:${BODY};font-size:11px;font-weight:700;color:${MUTED};letter-spacing:0.2em;text-transform:uppercase;">Your passes</p>
             <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
               ${ticketsHtml}
             </table>
           </td>
         </tr>
 
-        <!-- Order summary on pine -->
+        <!-- Order summary -->
         <tr>
-          <td style="background:${NAVY};padding:0 28px 28px 28px;">
-            <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-top:2px solid ${EMBER};border-bottom:2px solid ${EMBER};">
+          <td style="background:${PAPER};padding:0 36px 36px 36px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-top:1px solid ${INK};border-bottom:1px solid ${INK};">
               <tr>
-                <td style="padding:14px 0;${D}font-size:15px;color:${OFFWHITE};letter-spacing:0.1em;text-transform:uppercase;">
+                <td style="padding:16px 0;${D}font-size:14px;color:${INK};letter-spacing:0.1em;text-transform:uppercase;">
                   Total Paid
                 </td>
-                <td align="right" style="padding:14px 0;${D}font-size:28px;color:${OFFWHITE};letter-spacing:0.02em;">
+                <td align="right" style="padding:16px 0;${D}font-size:28px;color:${INK};letter-spacing:-0.01em;">
                   ${money(opts.totalCents)}
                 </td>
               </tr>
             </table>
-            <p style="margin:14px 0 0 0;font-family:${BODY};font-size:11px;font-weight:700;color:${BONE};opacity:0.7;letter-spacing:0.06em;text-transform:uppercase;">
+            <p style="margin:16px 0 0 0;font-family:${BODY};font-size:11px;font-weight:700;color:${MUTED};letter-spacing:0.06em;text-transform:uppercase;">
               Questions? Just reply to this email &mdash; we&rsquo;ve got you.
             </p>
           </td>
         </tr>
 
-        <!-- Ink footer -->
+        <!-- Footer -->
         <tr>
-          <td style="background:${INK};color:${BONE};padding:26px 28px;text-align:center;border-top:1px solid ${LINE};">
-            <p style="margin:0;">
-              ${wordmark(40)}
-            </p>
-            <p style="margin:14px 0 0;font-family:${BODY};font-size:12px;font-style:italic;line-height:1.6;color:${BONE};opacity:0.9;max-width:420px;margin-left:auto;margin-right:auto;">
+          <td align="center" style="background:${SURFACE};color:${INK};padding:32px 36px;text-align:center;border-top:1px solid ${INK};">
+            <table role="presentation" cellpadding="0" cellspacing="0" align="center"><tr><td>${missioWordmarkImg(base, 112)}</td></tr></table>
+            <p style="margin:16px auto 0;font-family:${BODY};font-size:12px;font-style:italic;line-height:1.6;color:${MUTED};max-width:420px;">
               ${escapeHtml(MISSIO_VISION)}
             </p>
-            <p style="margin:14px 0 0 0;font-family:${BODY};font-size:10px;font-weight:700;color:${EMBER};letter-spacing:0.2em;text-transform:uppercase;">
+            <p style="margin:14px 0 0 0;font-family:${BODY};font-size:10px;font-weight:700;color:${MUTED};letter-spacing:0.2em;text-transform:uppercase;">
               ${escapeHtml(opts.eventTitle.toUpperCase())} &middot; Powered by FFSA Hub &middot; &copy;&nbsp;MMXXVI
             </p>
           </td>
@@ -249,9 +227,9 @@ export function missioTicketEmailHtml(opts: {
 function row(k: string, v: string): string {
   return `
     <tr>
-      <td style="background:${NAVY};padding:10px 12px;border-top:1px solid ${LINE};">
-        <span style="font-family:${BODY};font-size:10px;font-weight:700;color:${EMBER};letter-spacing:0.18em;text-transform:uppercase;display:block;">${escapeHtml(k)}</span>
-        <span style="font-family:${BODY};font-size:13px;color:${BONE};letter-spacing:0.02em;display:block;margin-top:3px;">${escapeHtml(v)}</span>
+      <td style="background:${PAPER};padding:12px 14px;border-top:1px solid ${INK};">
+        <span style="font-family:${BODY};font-size:10px;font-weight:700;color:${MUTED};letter-spacing:0.18em;text-transform:uppercase;display:block;">${escapeHtml(k)}</span>
+        <span style="font-family:${BODY};font-size:14px;color:${INK};letter-spacing:0.01em;display:block;margin-top:4px;">${escapeHtml(v)}</span>
       </td>
     </tr>`;
 }

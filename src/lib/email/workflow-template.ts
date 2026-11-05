@@ -670,17 +670,17 @@ ${wildOnesButton(opts.scheduler.url, opts.scheduler.label, "filled")}
 
 // ============================================================
 // MISSIO workflow email — mirrors the WILD ONES variant above but in the
-// MISSIO chrome. DARK pine paper, cream type, serif Fraunces caps, one
-// clay/terracotta accent.
+// MISSIO chrome. LIGHT off-white paper, near-black type and rules, bold
+// Archivo caps, no accent colour.
 // ============================================================
 
 const MC = MISSIO_COLORS;
 const MF = MISSIO_FONTS;
-const MISSIO_DISPLAY = `font-family:${MF.DISPLAY};font-weight:700;`;
+const MISSIO_DISPLAY = `font-family:${MF.DISPLAY};font-weight:800;`;
 
 // MISSIO-styled rich text — same allowed tags as the sibling brands so
 // the block editor produces the same shape; only the inline styles differ
-// (cream text on pine, clay underline on links, body font Helvetica).
+// (near-black text on off-white, underlined links, body font Archivo).
 function missioRichText(html: string): string {
   return sanitizeHtml(html, {
     allowedTags: ["p", "br", "strong", "b", "em", "i", "a", "span", "ul", "ol", "li"],
@@ -690,7 +690,7 @@ function missioRichText(html: string): string {
         tagName: "a",
         attribs: {
           ...attribs,
-          style: `color:${MC.EMBER};text-decoration:underline;text-decoration-color:${MC.EMBER};`,
+          style: `color:${MC.INK};text-decoration:underline;text-decoration-color:${MC.INK};`,
           target: "_blank",
           rel: "noopener noreferrer",
         },
@@ -698,7 +698,7 @@ function missioRichText(html: string): string {
       p: () => ({
         tagName: "p",
         attribs: {
-          style: `margin:0 0 4px;font-family:${MF.BODY};font-size:15px;line-height:1.65;color:${MC.BONE};`,
+          style: `margin:0 0 4px;font-family:${MF.BODY};font-size:15px;line-height:1.65;color:${MC.INK};`,
         },
       }),
     },
@@ -714,7 +714,7 @@ function renderMissioBlock(b: CampaignBlock): string {
       return `${b.eyebrow ? missioEyebrow(b.eyebrow) : ""}${missioHeading(b.text)}`;
 
     case "text":
-      return `<div style="margin:0 0 6px;font-family:${MF.BODY};font-size:15px;line-height:1.65;color:${MC.BONE};">${missioRichText(b.text)}</div>`;
+      return `<div style="margin:0 0 6px;font-family:${MF.BODY};font-size:15px;line-height:1.65;color:${MC.INK};">${missioRichText(b.text)}</div>`;
 
     case "button":
       return missioButton(b.url, b.text, b.style ?? "filled");
@@ -734,9 +734,9 @@ function renderMissioBlock(b: CampaignBlock): string {
     case "image-text":
       return `${missioImage(b.url, b.alt)}${
         b.heading
-          ? `<h2 style="margin:0 0 6px;${MISSIO_DISPLAY}font-size:22px;line-height:1.02;text-transform:uppercase;color:${MC.OFFWHITE};">${missioEsc(b.heading)}</h2>`
+          ? `<h2 style="margin:0 0 6px;${MISSIO_DISPLAY}font-size:22px;line-height:1.02;text-transform:uppercase;color:${MC.INK};">${missioEsc(b.heading)}</h2>`
           : ""
-      }<div style="margin:0 0 6px;font-family:${MF.BODY};font-size:15px;line-height:1.65;color:${MC.BONE};">${missioRichText(b.text)}</div>`;
+      }<div style="margin:0 0 6px;font-family:${MF.BODY};font-size:15px;line-height:1.65;color:${MC.INK};">${missioRichText(b.text)}</div>`;
 
     default:
       return "";
@@ -749,23 +749,23 @@ export function renderMissioWorkflowEmail(
 ): string {
   const blocks = (body?.blocks ?? []).map(renderMissioBlock).join("");
 
-  // Scheduler — framed ink card with a clay stamp button so it reads as
-  // an action inside the MISSIO aesthetic.
+  // Scheduler — a framed surface card with the black primary button so it
+  // reads as an action inside the MISSIO aesthetic.
   const schedulerBlock = opts.scheduler
-    ? `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:24px 0 6px;"><tr><td style="background:${MC.INK};border:2px solid ${MC.LINE};padding:22px;text-align:center;">
-<p style="margin:0 0 14px;font-family:${MF.BODY};font-size:11px;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;color:${MC.EMBER};">Find a time to talk</p>
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:24px 0 6px;"><tr><td style="background:${MC.SURFACE};border:1px solid ${MC.INK};padding:24px;text-align:center;">
+<p style="margin:0 0 14px;font-family:${MF.BODY};font-size:11px;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;color:${MC.MUTED};">Find a time to talk</p>
 ${missioButton(opts.scheduler.url, opts.scheduler.label, "filled")}
 </td></tr></table>`
     : "";
 
   // Preferences link footer — appended INSIDE the chrome body so it sits
-  // on the pine paper above the ink footer. The chrome itself doesn't
+  // on the paper above the footer. The chrome itself doesn't
   // know about prefsUrl.
-  const prefsFooter = `<p style="margin:28px 0 0;padding-top:18px;border-top:2px dashed ${MC.LINE};font-family:${MF.BODY};font-size:10px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:${MC.BONE};opacity:0.7;text-align:center;"><a href="${missioEsc(opts.prefsUrl)}" style="color:${MC.EMBER};text-decoration:underline;">Manage email preferences</a></p>`;
+  const prefsFooter = `<p style="margin:28px 0 0;padding-top:18px;border-top:1px solid ${MC.HAIRLINE};font-family:${MF.BODY};font-size:10px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:${MC.MUTED};text-align:center;"><a href="${missioEsc(opts.prefsUrl)}" style="color:${MC.MUTED};text-decoration:underline;">Manage email preferences</a></p>`;
 
   const bodyHtml =
     (blocks + schedulerBlock) ||
-    `<p style="font-family:${MF.BODY};font-size:15px;color:${MC.BONE};">&nbsp;</p>`;
+    `<p style="font-family:${MF.BODY};font-size:15px;color:${MC.INK};">&nbsp;</p>`;
 
   return missioChrome({
     previewText: opts.previewText,
