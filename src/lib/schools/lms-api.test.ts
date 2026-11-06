@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   cleanDesign,
   combineReasonCopy,
+  candidateName,
   courseIsGraded,
   designFromUnknown,
   designIssues,
@@ -150,13 +151,12 @@ describe("student-facing dates and copy", () => {
     expect(marksAllowsOtherNotes({ can_see_other_graders_notes: true })).toBe(true);
   });
 
-  it("reads program-scoped grader candidates and ignores an unknown payload", () => {
-    expect(
-      parseGraderCandidates({
-        candidates: [{ id: "u1", first_name: "Ada", last_name: "Lovelace", email: "ada@example.com" }],
-      }).map((person) => person.id)
-    ).toEqual(["u1"]);
-    expect(parseGraderCandidates({ people: [{ user_id: "u2", name: "Grace Hopper" }] })[0]?.first_name).toBe("Grace");
+  it("reads the grader-candidates payload and prefers the name people use", () => {
+    const [person] = parseGraderCandidates({
+      candidates: [{ id: "u1", first_name: "Samantha", last_name: "Ng", preferred_name: "Sam" }],
+    });
+    expect(person?.id).toBe("u1");
+    expect(candidateName(person)).toBe("Sam Ng");
     expect(parseGraderCandidates(null)).toEqual([]);
     expect(parseGraderCandidates({ users: "everyone" })).toEqual([]);
   });

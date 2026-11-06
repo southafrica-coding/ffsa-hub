@@ -8,6 +8,7 @@ import {
   isLetterGrade,
   lmsCall,
   lmsMessage,
+  candidateName,
   marksAllowsOfficialPost,
   marksAllowsOtherNotes,
   type GraderCandidate,
@@ -37,9 +38,7 @@ type Combined = { ready: boolean; letter: string | null; reason: string };
 type OpenCell = { enrollmentId: string; courseId: string; studentName: string; courseCode: string; courseName: string };
 
 function personName(person: GraderCandidate | undefined) {
-  if (!person) return "Assigned grader";
-  const name = `${person.first_name ?? ""} ${person.last_name ?? ""}`.trim();
-  return name || person.email || "Assigned grader";
+  return candidateName(person);
 }
 
 export function GraderQueue({
@@ -59,6 +58,7 @@ export function GraderQueue({
   const [graderError, setGraderError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState<OpenCell | null>(null);
+  const [canSeeLetters, setCanSeeLetters] = useState(false);
   const [letters, setLetters] = useState<Record<string, string | null>>(() => {
     const map: Record<string, string | null> = {};
     for (const row of official) map[`${row.enrollmentId}:${row.courseId}`] = row.letter;
@@ -103,6 +103,29 @@ export function GraderQueue({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [programId]);
 
+  // The list has no flag of its own. One marks call tells us whether this
+  // viewer may see letter text. A missing flag, or a failed call, leaves it hidden.
+  const sampleKey = queue[0] ? `${queue[0].enrollmentId}:${queue[0].courseId}` : "";
+  useEffect(() => {
+    if (!sampleKey) return;
+    const splitAt = sampleKey.indexOf(":");
+    const enrollmentId = sampleKey.slice(0, splitAt);
+    const courseId = sampleKey.slice(splitAt + 1);
+    let cancelled = false;
+    lmsCall<{ can_see_other_graders_notes?: unknown }>(
+      `/api/schools/grades/marks?enrollment_id=${enrollmentId}&billing_course_id=${courseId}`
+    )
+      .then((body) => {
+        if (!cancelled && marksAllowsOtherNotes(body)) setCanSeeLetters(true);
+      })
+      .catch(() => {
+        // Older or missing marks API: do not reveal letters.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sampleKey]);
+
   return (
     <div>
       <SectionBar title="Queue" meta={`${visible.length}`} />
@@ -139,7 +162,11 @@ export function GraderQueue({
                       {row.courseCode} · {row.courseName}
                     </span>
                   </span>
-                  {letter ? <StatusPill tone="good">Letter posted</StatusPill> : <StatusPill tone="warn">No letter</StatusPill>}
+                  {letter ? (
+                    <StatusPill tone="good">{canSeeLetters ? letter : "Letter posted"}</StatusPill>
+                  ) : (
+                    <StatusPill tone="warn">No letter</StatusPill>
+                  )}
                 </button>
               </li>
             );
@@ -153,6 +180,7 @@ export function GraderQueue({
         cell={open}
         officialLetter={open ? letters[`${open.enrollmentId}:${open.courseId}`] ?? null : null}
         onClose={() => setOpen(null)}
+        onSeeOtherLetters={() => setCanSeeLetters(true)}
         onOfficial={(letter) => {
           if (!open) return;
           setLetters((current) => ({ ...current, [`${open.enrollmentId}:${open.courseId}`]: letter }));
@@ -394,6 +422,7 @@ function MarkDrawer({
   officialLetter,
   onClose,
   onOfficial,
+  onSeeOtherLetters,
 }: {
   viewerId: string;
   peopleById: Map<string, GraderCandidate>;
@@ -401,6 +430,7 @@ function MarkDrawer({
   officialLetter: string | null;
   onClose: () => void;
   onOfficial: (letter: string) => void;
+  onSeeOtherLetters: () => void;
 }) {
   const [marks, setMarks] = useState<MarkRow[]>([]);
   const [combined, setCombined] = useState<Combined | null>(null);
@@ -432,7 +462,9 @@ function MarkDrawer({
         setMarks(body.marks ?? []);
         setCombined(body.combined ?? null);
         setCanPostOfficial(marksAllowsOfficialPost(body));
-        setCanSeeOtherNotes(marksAllowsOtherNotes(body));
+        const seeNotes = marksAllowsOtherNotes(body);
+        setCanSeeOtherNotes(seeNotes);
+        if (seeNotes) onSeeOtherLetters();
         const mine = (body.marks ?? []).find((mark) => mark.grader_user_id === viewerId);
         if (mine && isLetterGrade(mine.letter_grade)) setLetter(mine.letter_grade);
         if (mine?.notes) setMarkNotes(mine.notes);
@@ -476,7 +508,9 @@ function MarkDrawer({
       setMarks(body.marks ?? []);
       setCombined(body.combined ?? null);
       setCanPostOfficial(marksAllowsOfficialPost(body));
-      setCanSeeOtherNotes(marksAllowsOtherNotes(body));
+      const seeNotes = marksAllowsOtherNotes(body);
+      setCanSeeOtherNotes(seeNotes);
+      if (seeNotes) onSeeOtherLetters();
       setNote("Your mark is saved. It does not replace anyone else's, and it is not the official letter yet.");
     } catch (caught) {
       setError(lmsMessage(caught));

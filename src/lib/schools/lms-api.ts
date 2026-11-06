@@ -261,12 +261,27 @@ export function marksAllowsOtherNotes(body: { can_see_other_graders_notes?: unkn
   return body?.can_see_other_graders_notes === true;
 }
 
+/** Shape of GET /api/schools/programs/:programId/grader-candidates. */
 export type GraderCandidate = {
   id: string;
   first_name: string | null;
   last_name: string | null;
-  email: string | null;
+  preferred_name: string | null;
+  email?: string | null;
 };
+
+/** Same name the candidates API sorts by: preferred name, then first name. */
+export function candidateName(
+  person:
+    | (Pick<GraderCandidate, "first_name" | "last_name" | "preferred_name"> & { email?: string | null })
+    | null
+    | undefined,
+  fallback = "Assigned grader"
+): string {
+  if (!person) return fallback;
+  const name = `${person.preferred_name || person.first_name || ""} ${person.last_name || ""}`.trim();
+  return name || person.email || fallback;
+}
 
 function textOrNull(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
@@ -285,6 +300,7 @@ function personFromRow(item: unknown): GraderCandidate | null {
     id,
     first_name: textOrNull(source.first_name) ?? firstFromName ?? null,
     last_name: textOrNull(source.last_name) ?? (rest.length > 0 ? rest.join(" ") : null),
+    preferred_name: textOrNull(source.preferred_name),
     email: textOrNull(source.email),
   };
 }

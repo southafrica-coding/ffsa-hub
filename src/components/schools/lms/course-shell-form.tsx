@@ -12,18 +12,17 @@ import {
   type LearningCourseBody,
 } from "@/lib/schools/lms-api";
 import type { ClassroomCourse } from "@/lib/schools/load-classroom";
-import type { GraderCandidate } from "@/lib/schools/lms-api";
+import { candidateName, type GraderCandidate } from "@/lib/schools/lms-api";
 import { Field, Notice, SquareButton, fieldClass } from "./fields";
 import { useGraderCandidates } from "./use-grader-candidates";
 
 function personName(person: GraderCandidate) {
-  const name = `${person.first_name ?? ""} ${person.last_name ?? ""}`.trim();
-  return name || person.email || "Current lead";
+  return candidateName(person, "Current lead");
 }
 
 function formLeadOptions(people: GraderCandidate[], leadId: string | null): GraderCandidate[] {
   if (!leadId || people.some((person) => person.id === leadId)) return people;
-  return [{ id: leadId, first_name: null, last_name: null, email: null }, ...people];
+  return [{ id: leadId, first_name: null, last_name: null, preferred_name: null }, ...people];
 }
 
 function fromCourse(course: ClassroomCourse | null): LearningCourseBody {
