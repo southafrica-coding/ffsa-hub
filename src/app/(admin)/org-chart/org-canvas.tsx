@@ -19,6 +19,7 @@ import {
 } from "@/lib/org-chart/model";
 import { GEO, bezier, computeLayout, litSet, teamTableRows, type NodeId } from "@/lib/org-chart/layout";
 import { OrgEditPanel, useOrgSave } from "./org-edit-panel";
+import { applyCanvasEdit, publishOrgEdit, subscribeOrgEdit } from "@/lib/org-chart/edit-share";
 import { ORG_CSS, ORG_VARS, T } from "./org-theme";
 
 const MONO = "font-mono font-bold";
@@ -338,6 +339,31 @@ export function OrgCanvas({
       });
 
   const editing = editMode && sel?.startsWith("team:") ? team.get(sel.slice(5)) : undefined;
+  const editRef = useRef(editMode);
+  const selRef = useRef(sel);
+  editRef.current = editMode;
+  selRef.current = sel;
+
+  // The phone directory is mounted beside this canvas. Follow its edit panel,
+  // and publish ours, so crossing 1280px keeps the same team open.
+  useEffect(() => {
+    return subscribeOrgEdit((share) => {
+      const next = applyCanvasEdit({ edit: editRef.current, sel: selRef.current }, share);
+      if (next.edit === editRef.current && next.sel === selRef.current) return;
+      editRef.current = next.edit;
+      selRef.current = next.sel;
+      setEditMode(next.edit);
+      setSel(next.sel);
+      if (next.edit && next.sel?.startsWith("team:")) setZoomTeam(null);
+    });
+  }, []);
+
+  useEffect(() => {
+    publishOrgEdit({
+      edit: editMode,
+      teamId: editMode && sel?.startsWith("team:") ? sel.slice(5) : null,
+    });
+  }, [editMode, sel]);
   const drawer = sel && !zoomTeam && !editing ? buildDrawer() : null;
 
   function objectiveRows(o: OrgObjective, teamName?: string): DRow[] {

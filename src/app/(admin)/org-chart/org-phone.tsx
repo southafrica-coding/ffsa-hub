@@ -28,6 +28,7 @@ import {
   phoneAttention,
   type DirectoryScreen,
 } from "@/lib/org-chart/phone";
+import { applyDirectoryEdit, publishOrgEdit, subscribeOrgEdit } from "@/lib/org-chart/edit-share";
 import { OrgEditPanel } from "./org-edit-panel";
 import { ORG_CSS, ORG_VARS, T } from "./org-theme";
 
@@ -91,7 +92,17 @@ export function OrgPhone({ model, canManage }: { model: OrgModel; canManage: boo
       setScreen(next);
     };
     window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
+    const unsub = subscribeOrgEdit((share) => {
+      const next = applyDirectoryEdit(screenRef.current, share);
+      if (next === screenRef.current) return;
+      screenRef.current = next;
+      setScreen(next);
+      history.replaceState({ orgDir: next }, "");
+    });
+    return () => {
+      window.removeEventListener("popstate", onPop);
+      unsub();
+    };
   }, []);
 
   useEffect(() => {
@@ -166,6 +177,12 @@ export function OrgPhone({ model, canManage }: { model: OrgModel; canManage: boo
   const goBack = () => history.back();
 
   const editing = editMode && teamId ? teamById.get(teamId) : undefined;
+
+  // The desktop canvas is mounted beside this list. Publish the open edit
+  // panel so crossing 1280px keeps the same team.
+  useEffect(() => {
+    publishOrgEdit({ edit: editMode, teamId: editing?.id ?? null });
+  }, [editMode, editing?.id]);
   const open = !editMode && teamId ? teamById.get(teamId) : undefined;
 
   const kicker = editMode
