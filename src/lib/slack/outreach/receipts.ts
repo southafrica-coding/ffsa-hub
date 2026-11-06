@@ -336,6 +336,36 @@ async function withPlainLine(
   };
 }
 
+/**
+ * The budget a no-receipt repayment can attach to: same outreach team,
+ * org and period as a receipt. Null when none matches, or when the
+ * confirmed currency is not that budget's currency. lineId is set only
+ * when the note names a line exactly.
+ */
+export async function budgetForSlip(
+  admin: Admin,
+  args: { teamId: string | null; localCurrency: string; expenseDate: string; nameHint: string | null }
+): Promise<{ budgetId: string; currency: "ZAR" | "USD"; lineId: string | null; teamId: string } | null> {
+  if (!args.teamId) return null;
+  const found = await linesForReceipt(
+    admin,
+    args.teamId,
+    { local_currency: args.localCurrency, expense_date: args.expenseDate, description: args.nameHint ?? "" } as Proposal,
+    args.nameHint
+  );
+  if (!found.budgetId || (found.org !== "npc" && found.org !== "usa")) return null;
+  const currency = found.org === "usa" ? "USD" : "ZAR";
+  if (args.localCurrency.toUpperCase() !== currency) return null;
+  const named = choosePlainBudgetLine({
+    userNote: args.nameHint,
+    suggested: null,
+    description: args.nameHint ?? "",
+    categoryName: null,
+    lines: found.status === "approved" ? found.lines : [],
+  });
+  return { budgetId: found.budgetId, currency, lineId: named.budget_line_id, teamId: args.teamId };
+}
+
 async function loadCategories(admin: Admin): Promise<BudgetCategory[]> {
   const { data } = await admin.from("outreach_budget_categories").select("id, name, slug, sort_order");
   return (data ?? []) as BudgetCategory[];

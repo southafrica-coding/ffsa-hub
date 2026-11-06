@@ -5,7 +5,10 @@
  */
 
 import { isMissingRelation } from "@/lib/finance/budget-actuals";
+import { repaymentLogRow } from "@/lib/finance/budget-log-rows";
+import { sastDate } from "@/lib/slack/assistant/outreach";
 import { parseRepayValue } from "./no-receipt";
+import { budgetForSlip } from "./receipts";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Admin = any;
@@ -37,15 +40,44 @@ export async function confirmRepayment(
   }
 
   const money = claim.currency === "ZAR" ? `R${(claim.amountCents / 100).toFixed(2)}` : `${claim.currency} ${(claim.amountCents / 100).toFixed(2)}`;
+  const { data: claimant } = await admin.from("users").select("id").eq("slack_user_id", claim.claimantSlackId).maybeSingle();
+  const claimantHubId = (claimant as { id: string } | null)?.id ?? null;
+  const budget = await budgetForSlip(admin, {
+    teamId: claim.teamId,
+    localCurrency: claim.currency,
+    expenseDate: sastDate(new Date()),
+    nameHint: claim.description,
+  });
+  const row = repaymentLogRow({
+    budgetId: budget?.budgetId ?? null,
+    lineId: budget?.lineId ?? null,
+    hubUserId: claimantHubId,
+    slackUserId: claim.claimantSlackId,
+    teamId: budget ? claim.teamId : null,
+    amountCents: claim.amountCents,
+    amountCurrency: claim.currency,
+    budgetCurrency: budget?.currency ?? null,
+    description: claim.description,
+    confirmedAt: new Date().toISOString(),
+  });
+  if (!row) {
+    return {
+      text: `You repay ${money} for ${claim.description}. It's noted here in Slack. It isn't on a budget in that currency, and nothing was sent to Xero.`,
+    };
+  }
 
-  const { data: prior, error: priorError } = await admin
+  let priorQuery = admin
     .from("budget_repayments")
     .select("id")
-    .eq("slack_user_id", claim.claimantSlackId)
-    .eq("amount_cents", claim.amountCents)
-    .eq("currency", claim.currency)
-    .eq("description", claim.description)
-    .limit(1);
+    .eq("budget_id", row.budget_id)
+    .eq("slack_user_id", row.slack_user_id)
+    .eq("amount_cents", row.amount_cents)
+    .eq("reason", row.reason)
+    .ilike("description", row.description);
+  priorQuery = row.line_id ? priorQuery.eq("line_id", row.line_id) : priorQuery.is("line_id", null);
+  priorQuery = row.hub_user_id ? priorQuery.eq("hub_user_id", row.hub_user_id) : priorQuery.is("hub_user_id", null);
+  priorQuery = row.team_id ? priorQuery.eq("team_id", row.team_id) : priorQuery.is("team_id", null);
+  const { data: prior, error: priorError } = await priorQuery.limit(1);
   if (priorError && !isMissingRelation(priorError)) {
     console.error("[slack/outreach] repayment lookup failed", priorError.message ?? priorError);
     return { text: `You repay ${money} for ${claim.description}. I couldn't check the list just now — try again in a moment. Nothing was sent to Xero.` };
@@ -54,16 +86,7 @@ export async function confirmRepayment(
     return { text: `You already noted that you repay ${money} for ${claim.description}. Nothing was sent to Xero.` };
   }
 
-  const { error } = await admin.from("budget_repayments").insert({
-    hub_user_id: hubUserId,
-    slack_user_id: slackUserId,
-    team_id: claim.teamId,
-    amount_cents: claim.amountCents,
-    currency: claim.currency,
-    description: claim.description,
-    reason: "no_receipt",
-    confirmed_at: new Date().toISOString(),
-  });
+  const { error } = await admin.from("budget_repayments").insert(row);
 
   if (error && !isMissingRelation(error)) {
     console.error("[slack/outreach] repayment insert failed", error.message ?? error);
@@ -72,9 +95,9 @@ export async function confirmRepayment(
 
   const saved = !error;
   const tail = saved
-    ? "It's noted."
+    ? "It's noted on the budget."
     : "It's noted here in Slack. The repayment list in the Hub isn't switched on yet.";
   return {
-    text: `You repay ${money} for ${claim.description}. It is not on the budget and it was not sent to Xero. ${tail}`,
+    text: `You repay ${money} for ${claim.description}. ${tail} Nothing was sent to Xero.`,
   };
 }

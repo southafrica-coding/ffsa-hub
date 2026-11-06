@@ -5,11 +5,12 @@
  *
  * The Xero id is stored on outreach_receipt_drafts.proposal.xero_write
  * (jsonb that already exists). A row is also written to budget_xero_spends
- * once Hub Data has created that table. That is the receipt/Xero log.
- * It is not budget_expenses — on the updated PR #475 that name is the
- * sheet's Expense Tracker and has a different shape.
+ * (Hub Data draft #513) once that table exists. The amount is cents of the
+ * parent budget's currency. The line column is line_id. There is no
+ * currency column and no org_key. It is not budget_expenses.
  */
 
+import { xeroSpendLogRow } from "@/lib/finance/budget-log-rows";
 import { isMissingRelation } from "@/lib/finance/budget-actuals";
 import { xeroPreviewWriteBlock } from "@/lib/finance/xero-preview-guard";
 import { decideXeroSpend, spendBankAccountCode, type XeroTracking } from "@/lib/finance/xero-spend";
@@ -145,29 +146,31 @@ async function saveXeroOnDraft(
   return { ok: true };
 }
 
-/** The receipt/Xero log. Not budget_expenses. One row per expense. */
+/** The receipt/Xero log (#513). Not budget_expenses. One row per expense or draft. */
 async function rememberXeroSpend(
   admin: Admin,
   input: ConfirmedSpend,
   status: string,
   bankTransactionId: string | null
 ) {
-  const row = {
-    budget_id: input.budgetId,
-    budget_line_id: input.budgetLineId,
-    org_key: input.orgKey,
-    outreach_expense_id: input.expenseId,
-    receipt_draft_id: input.draftId,
-    purchaser_user_id: input.hubUserId,
-    amount_cents: Math.round(input.amountZar * 100),
-    currency: input.currency,
-    spent_on: input.date,
+  const budgetCurrency = input.orgKey === "usa" ? "USD" : input.orgKey === "npc" ? "ZAR" : null;
+  const row = xeroSpendLogRow({
+    budgetId: input.budgetId,
+    lineId: input.budgetLineId,
+    outreachExpenseId: input.expenseId,
+    receiptDraftId: input.draftId,
+    purchaserUserId: input.hubUserId,
+    bookAmount: input.amountZar,
+    bookCurrency: input.currency,
+    budgetCurrency,
+    spentOn: input.date,
     description: input.description,
-    has_receipt: true,
-    xero_bank_transaction_id: bankTransactionId,
-    xero_status: status,
-    confirmed_at: new Date().toISOString(),
-  };
+    hasReceipt: input.hasReceipt,
+    xeroBankTransactionId: bankTransactionId,
+    xeroStatus: status,
+    confirmedAt: new Date().toISOString(),
+  });
+  if (!row) return;
   const byExpense = input.expenseId
     ? await admin.from("budget_xero_spends").select("id").eq("outreach_expense_id", input.expenseId).limit(1)
     : { data: [], error: null };
