@@ -82,7 +82,7 @@ describe("period and scope", () => {
       name: "Worship",
       ownerKind: "staff_ministry",
       ownerId: "m1",
-      orgId: "org1",
+      org_id: "org1",
       periodKind: "year",
       periodLabel: "2027",
       periodStart: "2027-01-01",

@@ -63,7 +63,7 @@ export function BudgetSheet({
   const fixed = useMemo(() => rollup(draft.lines, "fixed", driverValue), [draft.lines, driverValue]);
   const totalCents = variable.cents + fixed.cents;
   const gaps = scopeGaps(draft);
-  const org = options.orgs.find((item) => item.id === draft.orgId) ?? null;
+  const org = options.orgs.find((item) => item.id === draft.org_id) ?? null;
   const currency = org?.currency ?? null;
   const owners = draft.ownerKind ? options.owners[draft.ownerKind] : [];
   const owner = owners.find((item) => item.id === draft.ownerId) ?? null;
@@ -167,9 +167,9 @@ export function BudgetSheet({
           <select
             className={control}
             aria-label="Organisation"
-            value={draft.orgId}
+            value={draft.org_id}
             disabled={!options.orgsReadable || options.orgs.length === 0}
-            onChange={(e) => patch({ orgId: e.target.value })}
+            onChange={(e) => patch({ org_id: e.target.value })}
           >
             <option value="">Choose one</option>
             {options.orgs.map((item) => (

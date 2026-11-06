@@ -115,7 +115,8 @@ export type BudgetSheetDraft = {
   name: string;
   ownerKind: BudgetOwnerKind | "";
   ownerId: string;
-  orgId: string;
+  /** budgets.org_id. Currency is that org's record currency and is not chosen on its own. */
+  org_id: string;
   periodKind: PeriodKind | "";
   periodLabel: string;
   periodStart: string;
@@ -137,7 +138,7 @@ export function emptyBudgetDraft(): BudgetSheetDraft {
     name: "",
     ownerKind: "",
     ownerId: "",
-    orgId: "",
+    org_id: "",
     periodKind: "",
     periodLabel: "",
     periodStart: "",
@@ -194,7 +195,7 @@ export function parseBudgetDraft(value: unknown): BudgetSheetDraft | null {
   const name = asText(raw.name, 200);
   const ownerKind = asText(raw.ownerKind, 40);
   const ownerId = asText(raw.ownerId, 80);
-  const orgId = asText(raw.orgId, 80);
+  const org_id = asText(raw.org_id, 80);
   const periodKind = asText(raw.periodKind, 20);
   const periodLabel = asText(raw.periodLabel, 120);
   const periodStart = asText(raw.periodStart, 10);
@@ -211,7 +212,7 @@ export function parseBudgetDraft(value: unknown): BudgetSheetDraft | null {
     name === null ||
     ownerKind === null ||
     ownerId === null ||
-    orgId === null ||
+    org_id === null ||
     periodKind === null ||
     periodLabel === null ||
     periodStart === null ||
@@ -263,7 +264,7 @@ export function parseBudgetDraft(value: unknown): BudgetSheetDraft | null {
     name,
     ownerKind: ownerKind === "" || isOwnerKind(ownerKind) ? ownerKind : "",
     ownerId,
-    orgId,
+    org_id,
     periodKind: periodKind === "" || isPeriodKind(periodKind) ? periodKind : "",
     periodLabel,
     periodStart,
@@ -387,7 +388,7 @@ export function scopeGaps(draft: BudgetSheetDraft): ScopeGap[] {
   const gaps: ScopeGap[] = [];
   if (!draft.name.trim()) gaps.push("name");
   if (!draft.ownerKind || !draft.ownerId) gaps.push("owner");
-  if (!draft.orgId) gaps.push("organisation");
+  if (!draft.org_id) gaps.push("organisation");
   if (periodProblem(draft)) gaps.push("period");
   return gaps;
 }
