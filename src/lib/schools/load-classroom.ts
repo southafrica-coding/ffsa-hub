@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { hasModuleAccess } from "@/lib/require-permission";
 import { userCanManageApplications, userCanManageProgram } from "@/lib/auth/check-schools-access";
 import { loadTrackPipeline } from "@/lib/schools/track-pipeline";
-import { gradedCoursesForStudent, type QueueCourse, type TrackScope } from "@/lib/schools/lms-api";
+import { courseIsGraded, gradedCoursesForStudent, type QueueCourse, type TrackScope } from "@/lib/schools/lms-api";
 
 export type ClassroomProgram = { id: string; name: string; code: string };
 
@@ -69,7 +69,7 @@ function asCourse(row: Record<string, unknown>): ClassroomCourse {
     end_date: typeof row.end_date === "string" ? row.end_date : null,
     arrival_date: typeof row.arrival_date === "string" ? row.arrival_date : null,
     credit_hours: typeof row.credit_hours === "number" ? row.credit_hours : 0,
-    graded: row.graded !== false,
+    graded: courseIsGraded(row.graded),
     lead_staff_id: typeof row.lead_staff_id === "string" ? row.lead_staff_id : null,
   };
 }
@@ -127,17 +127,6 @@ export async function loadClassroomCourse(programId: string, courseId: string) {
   const result = await readCourses(supabase, programId, courseId);
   if (result.error || !result.data || Array.isArray(result.data)) return null;
   return asCourse(result.data as Record<string, unknown>);
-}
-
-export async function loadPeople(): Promise<ClassroomPerson[]> {
-  const admin = createAdminClient();
-  const { data } = await admin
-    .from("users")
-    .select("id, first_name, last_name, email")
-    .eq("is_active", true)
-    .order("first_name", { ascending: true })
-    .limit(500);
-  return (data ?? []) as ClassroomPerson[];
 }
 
 export async function loadGradingQueue(programId: string): Promise<{

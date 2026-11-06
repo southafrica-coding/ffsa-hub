@@ -97,7 +97,7 @@ export function ClassroomIndex({
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-display text-[18px] font-black uppercase leading-none">{course.name}</span>
                   <StatusPill tone={STATUS_TONE[course.status] ?? "quiet"}>{course.status.replace(/_/g, " ")}</StatusPill>
-                  {course.graded === false ? <StatusPill>Not graded</StatusPill> : null}
+                  {course.graded === true ? null : <StatusPill>Not graded</StatusPill>}
                 </div>
                 <p className="mono-label mt-1.5">
                   {course.code} · {when(course)}

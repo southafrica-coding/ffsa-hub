@@ -546,20 +546,17 @@ export function ProgramDetail({
   const postedLetters = new Set(
     grades.filter((grade) => grade.letter_grade).map((grade) => `${grade.enrollment_id}:${grade.course_id}`)
   );
-  const courseById = new Map(schoolCourses.map((course) => [course.id, course]));
+  // A missing graded column is not graded. Only an explicit true opens a letter.
+  const gradedCourseIds = new Set(
+    billingCourses.filter((course) => (course as { graded?: boolean }).graded === true).map((course) => course.id)
+  );
   // A school that is not split into segments has an empty track list, so each
   // student's course ids are empty. Count every graded course for them.
   const wholeSchool = segmentCourses.length === 0;
   const lettersOpen = overviewRows.reduce((sum, row) => {
     if (row.removed) return sum;
     const ids = wholeSchool ? schoolCourses.map((course) => course.id) : row.courseIds;
-    return (
-      sum +
-      ids.filter((id) => {
-        const course = courseById.get(id);
-        return !!course?.graded && !postedLetters.has(`${row.enrollmentId}:${id}`);
-      }).length
-    );
+    return sum + ids.filter((id) => gradedCourseIds.has(id) && !postedLetters.has(`${row.enrollmentId}:${id}`)).length;
   }, 0);
   const [tab, setTab] = useState(
     initialTab && TAB_KEYS.includes(normaliseTab(initialTab)) ? normaliseTab(initialTab) : "overview"

@@ -11,12 +11,19 @@ import {
   lmsMessage,
   type LearningCourseBody,
 } from "@/lib/schools/lms-api";
-import type { ClassroomCourse, ClassroomPerson } from "@/lib/schools/load-classroom";
+import type { ClassroomCourse } from "@/lib/schools/load-classroom";
+import type { GraderCandidate } from "@/lib/schools/lms-api";
 import { Field, Notice, SquareButton, fieldClass } from "./fields";
+import { useGraderCandidates } from "./use-grader-candidates";
 
-function personName(person: ClassroomPerson) {
+function personName(person: GraderCandidate) {
   const name = `${person.first_name ?? ""} ${person.last_name ?? ""}`.trim();
-  return name || person.email || "Unknown";
+  return name || person.email || "Current lead";
+}
+
+function formLeadOptions(people: GraderCandidate[], leadId: string | null): GraderCandidate[] {
+  if (!leadId || people.some((person) => person.id === leadId)) return people;
+  return [{ id: leadId, first_name: null, last_name: null, email: null }, ...people];
 }
 
 function fromCourse(course: ClassroomCourse | null): LearningCourseBody {
@@ -32,7 +39,7 @@ function fromCourse(course: ClassroomCourse | null): LearningCourseBody {
     end_date: course?.end_date ?? null,
     arrival_date: course?.arrival_date ?? null,
     credit_hours: course?.credit_hours ?? 0,
-    graded: course?.graded ?? true,
+    graded: course?.graded === true,
     lead_staff_id: course?.lead_staff_id ?? null,
   };
 }
@@ -40,14 +47,14 @@ function fromCourse(course: ClassroomCourse | null): LearningCourseBody {
 export function CourseShellForm({
   programId,
   course,
-  staff,
 }: {
   programId: string;
   course: ClassroomCourse | null;
-  staff: ClassroomPerson[];
 }) {
   const router = useRouter();
+  const { people, note: peopleNote } = useGraderCandidates(programId);
   const [form, setForm] = useState<LearningCourseBody>(() => fromCourse(course));
+  const leadOptions = formLeadOptions(people, form.lead_staff_id);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -164,10 +171,10 @@ export function CourseShellForm({
         <Field label="Arrival" hint="Cannot be after the course starts.">
           <input className={fieldClass} type="date" value={form.arrival_date ?? ""} onChange={(event) => set("arrival_date", event.target.value || null)} />
         </Field>
-        <Field label="Course leader">
+        <Field label="Course leader" hint={peopleNote ?? "People who can lead or grade this school."}>
           <select className={fieldClass} value={form.lead_staff_id ?? ""} onChange={(event) => set("lead_staff_id", event.target.value || null)}>
             <option value="">No one named</option>
-            {staff.map((person) => (
+            {leadOptions.map((person) => (
               <option key={person.id} value={person.id}>
                 {personName(person)}
               </option>

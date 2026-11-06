@@ -1,6 +1,6 @@
 import { Masthead, MastheadAction } from "@/components/ffsa";
 import { classroomHref } from "@/lib/schools/lms-api";
-import { loadClassroomCourse, loadPeople, requireClassroom } from "@/lib/schools/load-classroom";
+import { loadClassroomCourse, requireClassroom } from "@/lib/schools/load-classroom";
 import { CourseBuilder } from "@/components/schools/lms/course-builder";
 
 export default async function CourseBuilderPage({
@@ -10,7 +10,7 @@ export default async function CourseBuilderPage({
 }) {
   const { programId, courseId } = await params;
   const { program } = await requireClassroom(programId);
-  const [course, staff] = await Promise.all([loadClassroomCourse(programId, courseId), loadPeople()]);
+  const course = await loadClassroomCourse(programId, courseId);
   if (!course) {
     return (
       <div className="ffsa-screen">
@@ -26,7 +26,7 @@ export default async function CourseBuilderPage({
         title={course.name}
         actions={<MastheadAction href={classroomHref(programId)}>Classroom</MastheadAction>}
       />
-      <CourseBuilder programId={programId} programName={program.name} course={course} staff={staff} />
+      <CourseBuilder programId={programId} programName={program.name} course={course} />
     </div>
   );
 }

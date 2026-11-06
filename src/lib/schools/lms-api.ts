@@ -247,6 +247,65 @@ export function isLetterGrade(value: string): value is LetterGrade {
   return (LETTER_GRADES as readonly string[]).includes(value);
 }
 
+/** Missing or non-boolean `graded` is not graded. Only an explicit true counts. */
+export function courseIsGraded(value: unknown): boolean {
+  return value === true;
+}
+
+/** GET /api/schools/grades/marks. Missing flags stay closed. */
+export function marksAllowsOfficialPost(body: { can_post_official?: unknown } | null | undefined): boolean {
+  return body?.can_post_official === true;
+}
+
+export function marksAllowsOtherNotes(body: { can_see_other_graders_notes?: unknown } | null | undefined): boolean {
+  return body?.can_see_other_graders_notes === true;
+}
+
+export type GraderCandidate = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+};
+
+function textOrNull(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function personFromRow(item: unknown): GraderCandidate | null {
+  if (!item || typeof item !== "object") return null;
+  const row = item as Record<string, unknown>;
+  const nested = row.users && typeof row.users === "object" ? (row.users as Record<string, unknown>) : null;
+  const source = nested ?? row;
+  const id = textOrNull(source.id) ?? textOrNull(row.user_id) ?? textOrNull(row.id);
+  if (!id) return null;
+  const fullName = textOrNull(source.name);
+  const [firstFromName, ...rest] = fullName ? fullName.split(/\s+/) : [];
+  return {
+    id,
+    first_name: textOrNull(source.first_name) ?? firstFromName ?? null,
+    last_name: textOrNull(source.last_name) ?? (rest.length > 0 ? rest.join(" ") : null),
+    email: textOrNull(source.email),
+  };
+}
+
+/** GET /api/schools/programs/:programId/grader-candidates. Unknown shapes yield nobody. */
+export function parseGraderCandidates(body: unknown): GraderCandidate[] {
+  if (!body || typeof body !== "object") return [];
+  const record = body as Record<string, unknown>;
+  const list = record.candidates ?? record.people ?? record.users;
+  if (!Array.isArray(list)) return [];
+  const seen = new Set<string>();
+  const people: GraderCandidate[] = [];
+  for (const item of list) {
+    const person = personFromRow(item);
+    if (!person || seen.has(person.id)) continue;
+    seen.add(person.id);
+    people.push(person);
+  }
+  return people;
+}
+
 /** Due date shown to a student. Offset is days after the course start. */
 export function dueOn(startDate: string | null | undefined, offset: number | undefined): string | null {
   if (!startDate || offset == null || !DATE.test(startDate)) return null;

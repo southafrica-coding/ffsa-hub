@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   cleanDesign,
   combineReasonCopy,
+  courseIsGraded,
   designFromUnknown,
   designIssues,
   dueOn,
@@ -9,6 +10,9 @@ import {
   feeSetupHref,
   gradedCoursesForStudent,
   learningCourseIssues,
+  marksAllowsOfficialPost,
+  marksAllowsOtherNotes,
+  parseGraderCandidates,
   summarizeDesign,
   type LearningCourseBody,
 } from "./lms-api";
@@ -129,6 +133,32 @@ describe("student-facing dates and copy", () => {
   it("says what a combined mark is waiting on", () => {
     expect(combineReasonCopy({ ready: false, letter: null, reason: "needs_a_person" })).toMatch(/not averaged/);
     expect(combineReasonCopy({ ready: true, letter: "B+", reason: "ready" })).toMatch(/B\+/);
+  });
+
+  it("treats a missing graded flag as not graded", () => {
+    expect(courseIsGraded(undefined)).toBe(false);
+    expect(courseIsGraded(null)).toBe(false);
+    expect(courseIsGraded(false)).toBe(false);
+    expect(courseIsGraded(true)).toBe(true);
+  });
+
+  it("hides official posting and other notes unless the marks call says so", () => {
+    expect(marksAllowsOfficialPost(undefined)).toBe(false);
+    expect(marksAllowsOfficialPost({})).toBe(false);
+    expect(marksAllowsOfficialPost({ can_post_official: true })).toBe(true);
+    expect(marksAllowsOtherNotes({})).toBe(false);
+    expect(marksAllowsOtherNotes({ can_see_other_graders_notes: true })).toBe(true);
+  });
+
+  it("reads program-scoped grader candidates and ignores an unknown payload", () => {
+    expect(
+      parseGraderCandidates({
+        candidates: [{ id: "u1", first_name: "Ada", last_name: "Lovelace", email: "ada@example.com" }],
+      }).map((person) => person.id)
+    ).toEqual(["u1"]);
+    expect(parseGraderCandidates({ people: [{ user_id: "u2", name: "Grace Hopper" }] })[0]?.first_name).toBe("Grace");
+    expect(parseGraderCandidates(null)).toEqual([]);
+    expect(parseGraderCandidates({ users: "everyone" })).toEqual([]);
   });
 
   it("keeps fee setup on the finance billing route", () => {

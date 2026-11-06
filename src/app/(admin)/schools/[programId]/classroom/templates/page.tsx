@@ -5,7 +5,7 @@ import { TemplateLibrary } from "@/components/schools/lms/template-library";
 
 export default async function TemplateLibraryPage({ params }: { params: Promise<{ programId: string }> }) {
   const { programId } = await params;
-  const { program } = await requireClassroom(programId);
+  const { program, canSaveBaseWide } = await requireClassroom(programId);
 
   return (
     <div className="ffsa-screen">
@@ -14,7 +14,7 @@ export default async function TemplateLibraryPage({ params }: { params: Promise<
         title="Template library"
         actions={<MastheadAction href={classroomHref(programId)}>Classroom</MastheadAction>}
       />
-      <TemplateLibrary programId={programId} programName={program.name} />
+      <TemplateLibrary programId={programId} programName={program.name} canSaveBaseWide={canSaveBaseWide} />
     </div>
   );
 }

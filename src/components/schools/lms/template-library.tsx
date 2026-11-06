@@ -16,7 +16,15 @@ type TemplateRow = {
   summary: DesignSummary | null;
 };
 
-export function TemplateLibrary({ programId, programName }: { programId: string; programName: string }) {
+export function TemplateLibrary({
+  programId,
+  programName,
+  canSaveBaseWide,
+}: {
+  programId: string;
+  programName: string;
+  canSaveBaseWide: boolean;
+}) {
   const router = useRouter();
   const [rows, setRows] = useState<TemplateRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -41,6 +49,7 @@ export function TemplateLibrary({ programId, programName }: { programId: string;
   }, [programId]);
 
   async function remove(row: TemplateRow) {
+    if (row.program_id == null && !canSaveBaseWide) return;
     if (!confirm(`Delete the template “${row.name}”? Courses that already copied it keep their own classroom.`)) return;
     setBusyId(row.id);
     try {
@@ -80,8 +89,15 @@ export function TemplateLibrary({ programId, programName }: { programId: string;
         <p className="px-5 py-8 mono-label md:px-8">Loading templates…</p>
       ) : (
         <>
-          <TemplateGroup title="This school" rows={school} busyId={busyId} programId={programId} onDelete={remove} />
-          <TemplateGroup title="Every school" rows={shared} busyId={busyId} programId={programId} onDelete={remove} />
+          <TemplateGroup title="This school" rows={school} busyId={busyId} programId={programId} canDelete={() => true} onDelete={remove} />
+          <TemplateGroup
+            title="Every school"
+            rows={shared}
+            busyId={busyId}
+            programId={programId}
+            canDelete={() => canSaveBaseWide}
+            onDelete={remove}
+          />
         </>
       )}
     </div>
@@ -93,12 +109,14 @@ function TemplateGroup({
   rows,
   programId,
   busyId,
+  canDelete,
   onDelete,
 }: {
   title: string;
   rows: TemplateRow[];
   programId: string;
   busyId: string | null;
+  canDelete: (row: TemplateRow) => boolean;
   onDelete: (row: TemplateRow) => void;
 }) {
   return (
@@ -125,9 +143,11 @@ function TemplateGroup({
                 >
                   Edit
                 </Link>
-                <SquareButton tone="quiet" disabled={busyId === row.id} onClick={() => onDelete(row)}>
-                  Delete
-                </SquareButton>
+                {canDelete(row) ? (
+                  <SquareButton tone="quiet" disabled={busyId === row.id} onClick={() => onDelete(row)}>
+                    Delete
+                  </SquareButton>
+                ) : null}
               </div>
             </li>
           ))}

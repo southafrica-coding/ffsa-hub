@@ -2,8 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getEnrollmentById, getGradesByEnrollment } from "@/services/schools";
 import { Masthead, MastheadAction } from "@/components/ffsa";
-import { StudentCourseStats } from "@/components/schools/lms/student-course-view";
-import { StudentOutline } from "@/components/schools/lms/student-outline";
+import { StudentClassroomGap, StudentCourseStats } from "@/components/schools/lms/student-course-view";
 
 type CourseRow = {
   id: string;
@@ -59,7 +58,7 @@ export default async function StudentCoursePage({
     code: course.code ?? "",
     name: course.name ?? "Course",
     startDate: course.start_date ?? null,
-    graded: course.graded !== false,
+    graded: course.graded === true,
     status: course.status ?? null,
     creditHours: course.credit_hours ?? 0,
     description: course.description ?? null,
@@ -73,7 +72,7 @@ export default async function StudentCoursePage({
         actions={<MastheadAction href={`/my-schools/${enrollmentId}`}>My grades</MastheadAction>}
       />
       <StudentCourseStats course={shape} officialLetter={letter} />
-      <StudentOutline programId={program.id} courseId={course.id} course={shape} />
+      <StudentClassroomGap />
     </div>
   );
 }

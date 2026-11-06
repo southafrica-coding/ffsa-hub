@@ -14,7 +14,7 @@ import {
   summarizeDesign,
   type CourseDesign,
 } from "@/lib/schools/lms-api";
-import type { ClassroomCourse, ClassroomPerson } from "@/lib/schools/load-classroom";
+import type { ClassroomCourse } from "@/lib/schools/load-classroom";
 import { CourseShellForm } from "./course-shell-form";
 import { DesignEditor } from "./design-editor";
 import { Field, Notice, SquareButton, fieldClass } from "./fields";
@@ -26,12 +26,10 @@ export function CourseBuilder({
   programId,
   programName,
   course,
-  staff,
 }: {
   programId: string;
   programName: string;
   course: ClassroomCourse;
-  staff: ClassroomPerson[];
 }) {
   const router = useRouter();
   const [design, setDesign] = useState<CourseDesign>(emptyDesign());
@@ -161,7 +159,7 @@ export function CourseBuilder({
   return (
     <div>
       <SectionBar title="Course details" meta={programName} />
-      <CourseShellForm programId={programId} course={course} staff={staff} />
+      <CourseShellForm programId={programId} course={course} />
 
       <SectionBar title="Classroom" meta={summaryLine(summarizeDesign(cleanDesign(design)))} />
       <div className="space-y-4 px-5 py-5 md:px-8">

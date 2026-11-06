@@ -14,6 +14,19 @@ function kindLabel(kind: string) {
   return "Discussion";
 }
 
+export const STUDENT_CLASSROOM_GAP =
+  "Your school keeps the pages and assignments on the course. Students cannot read that saved design through the hub yet. Your official letter is on this page either way.";
+
+/** Student course home. No outline fetch, and no modules, pages, or briefs. */
+export function StudentClassroomGap() {
+  return (
+    <section>
+      <SectionBar title="Classroom" />
+      <p className="border-b border-rule px-5 py-4 text-[14px] leading-relaxed text-ink md:px-8">{STUDENT_CLASSROOM_GAP}</p>
+    </section>
+  );
+}
+
 export function StudentCourseBody({
   course,
   design,

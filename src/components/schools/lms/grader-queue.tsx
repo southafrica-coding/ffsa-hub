@@ -8,9 +8,13 @@ import {
   isLetterGrade,
   lmsCall,
   lmsMessage,
+  marksAllowsOfficialPost,
+  marksAllowsOtherNotes,
+  type GraderCandidate,
 } from "@/lib/schools/lms-api";
-import type { ClassroomPerson, QueueStudent } from "@/lib/schools/load-classroom";
+import type { QueueStudent } from "@/lib/schools/load-classroom";
 import { Field, Notice, SquareButton, fieldClass } from "./fields";
+import { useGraderCandidates } from "./use-grader-candidates";
 
 type Official = { enrollmentId: string; courseId: string; letter: string | null };
 
@@ -32,23 +36,21 @@ type Combined = { ready: boolean; letter: string | null; reason: string };
 
 type OpenCell = { enrollmentId: string; courseId: string; studentName: string; courseCode: string; courseName: string };
 
-function personName(person: ClassroomPerson | undefined) {
-  if (!person) return "Unknown person";
+function personName(person: GraderCandidate | undefined) {
+  if (!person) return "Assigned grader";
   const name = `${person.first_name ?? ""} ${person.last_name ?? ""}`.trim();
-  return name || person.email || "Unknown person";
+  return name || person.email || "Assigned grader";
 }
 
 export function GraderQueue({
   programId,
   viewerId,
   students,
-  people,
   official,
 }: {
   programId: string;
   viewerId: string;
   students: QueueStudent[];
-  people: ClassroomPerson[];
   official: Official[];
 }) {
   const [filter, setFilter] = useState<"open" | "all">("open");
@@ -63,6 +65,7 @@ export function GraderQueue({
     return map;
   });
 
+  const { people, note: candidateNote } = useGraderCandidates(programId);
   const byId = useMemo(() => new Map(people.map((person) => [person.id, person])), [people]);
 
   const queue = useMemo(() => {
@@ -159,12 +162,13 @@ export function GraderQueue({
       <SectionBar title="Graders" meta={graders ? `${graders.length}` : ""} />
       <div className="space-y-4 px-5 py-5 md:px-8">
         <p className="text-[13px] leading-snug text-[#55524A]">
-          A grader marks one course, one student, or both. Their mark is their own. Posting the official letter is a
-          separate step, and this queue is where a school leader does it. The API does not list a grader&apos;s own
-          queue apart from the school they can manage.
+          A grader marks one course, one student, or both. Their mark is their own. The official letter is a separate
+          step, and this queue shows it only when the marks call says you can post it. Pick someone from the people
+          who can grade this school.
         </p>
         {graderNote ? <Notice tone="warn">{graderNote}</Notice> : null}
         {graderError ? <Notice tone="warn">{graderError}</Notice> : null}
+        {candidateNote ? <Notice>{candidateNote}</Notice> : null}
         <AssignGrader
           programId={programId}
           students={students}
@@ -254,7 +258,7 @@ function AssignGrader({
 }: {
   programId: string;
   students: QueueStudent[];
-  people: ClassroomPerson[];
+  people: GraderCandidate[];
   busy: boolean;
   onBusy: (busy: boolean) => void;
   onError: (message: string | null) => void;
@@ -392,7 +396,7 @@ function MarkDrawer({
   onOfficial,
 }: {
   viewerId: string;
-  peopleById: Map<string, ClassroomPerson>;
+  peopleById: Map<string, GraderCandidate>;
   cell: OpenCell | null;
   officialLetter: string | null;
   onClose: () => void;
@@ -405,6 +409,8 @@ function MarkDrawer({
   const [markNotes, setMarkNotes] = useState("");
   const [official, setOfficial] = useState("");
   const [officialNotes, setOfficialNotes] = useState("");
+  const [canPostOfficial, setCanPostOfficial] = useState(false);
+  const [canSeeOtherNotes, setCanSeeOtherNotes] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -414,24 +420,30 @@ function MarkDrawer({
     setMarkNotes("");
     setOfficial(officialLetter ?? "");
     setOfficialNotes("");
+    setCanPostOfficial(false);
+    setCanSeeOtherNotes(false);
     setError(null);
     setNote("Loading marks…");
     const posted = officialLetter;
-    lmsCall<{ marks: MarkRow[]; combined: Combined }>(
+    lmsCall<{ marks?: MarkRow[]; combined?: Combined; can_post_official?: unknown; can_see_other_graders_notes?: unknown }>(
       `/api/schools/grades/marks?enrollment_id=${cell.enrollmentId}&billing_course_id=${cell.courseId}`
     )
       .then((body) => {
         setMarks(body.marks ?? []);
         setCombined(body.combined ?? null);
+        setCanPostOfficial(marksAllowsOfficialPost(body));
+        setCanSeeOtherNotes(marksAllowsOtherNotes(body));
         const mine = (body.marks ?? []).find((mark) => mark.grader_user_id === viewerId);
         if (mine && isLetterGrade(mine.letter_grade)) setLetter(mine.letter_grade);
         if (mine?.notes) setMarkNotes(mine.notes);
-        if (body.combined?.letter && !posted) setOfficial(body.combined.letter);
+        if (marksAllowsOfficialPost(body) && body.combined?.letter && !posted) setOfficial(body.combined.letter);
         setNote(null);
       })
       .catch((caught) => {
         setMarks([]);
         setCombined(null);
+        setCanPostOfficial(false);
+        setCanSeeOtherNotes(false);
         setNote(lmsMessage(caught));
       });
     // Reload when the student/course changes, not when the official letter we just posted updates.
@@ -452,11 +464,16 @@ function MarkDrawer({
           notes: markNotes.trim() || null,
         },
       });
-      const body = await lmsCall<{ marks: MarkRow[]; combined: Combined }>(
-        `/api/schools/grades/marks?enrollment_id=${cell.enrollmentId}&billing_course_id=${cell.courseId}`
-      );
+      const body = await lmsCall<{
+        marks?: MarkRow[];
+        combined?: Combined;
+        can_post_official?: unknown;
+        can_see_other_graders_notes?: unknown;
+      }>(`/api/schools/grades/marks?enrollment_id=${cell.enrollmentId}&billing_course_id=${cell.courseId}`);
       setMarks(body.marks ?? []);
       setCombined(body.combined ?? null);
+      setCanPostOfficial(marksAllowsOfficialPost(body));
+      setCanSeeOtherNotes(marksAllowsOtherNotes(body));
       setNote("Your mark is saved. It does not replace anyone else's, and it is not the official letter yet.");
     } catch (caught) {
       setError(lmsMessage(caught));
@@ -516,7 +533,9 @@ function MarkDrawer({
                     </span>
                     <StatusPill>{mark.letter_grade}</StatusPill>
                   </div>
-                  {mark.notes ? <p className="mt-2 text-[13px] leading-snug text-[#55524A]">{mark.notes}</p> : null}
+                  {mark.notes && (mark.grader_user_id === viewerId || canSeeOtherNotes) ? (
+                    <p className="mt-2 text-[13px] leading-snug text-[#55524A]">{mark.notes}</p>
+                  ) : null}
                 </li>
               ))}
             </ul>
@@ -538,30 +557,36 @@ function MarkDrawer({
             Save your mark
           </SquareButton>
 
-          <div className="border-t border-ink pt-4">
-            <p className="mono-label">Official letter</p>
-            <p className="mt-2 text-[13px] leading-snug text-[#55524A]">
-              This is the one letter on the transcript. The grades matrix can still post through its own path.
-            </p>
-            <div className="mt-3 space-y-3">
-              <Field label="Letter">
-                <select className={fieldClass} value={official} onChange={(event) => setOfficial(event.target.value)}>
-                  <option value="">Choose</option>
-                  {LETTER_GRADES.map((grade) => (
-                    <option key={grade} value={grade}>
-                      {grade}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Transcript note">
-                <textarea className={fieldClass} rows={2} value={officialNotes} onChange={(event) => setOfficialNotes(event.target.value)} />
-              </Field>
-              <SquareButton tone="outline" onClick={postOfficial} disabled={busy}>
-                Post official letter
-              </SquareButton>
+          {canPostOfficial ? (
+            <div className="border-t border-ink pt-4">
+              <p className="mono-label">Official letter</p>
+              <p className="mt-2 text-[13px] leading-snug text-[#55524A]">
+                This is the one letter on the transcript. The grades matrix can still post through its own path.
+              </p>
+              <div className="mt-3 space-y-3">
+                <Field label="Letter">
+                  <select className={fieldClass} value={official} onChange={(event) => setOfficial(event.target.value)}>
+                    <option value="">Choose</option>
+                    {LETTER_GRADES.map((grade) => (
+                      <option key={grade} value={grade}>
+                        {grade}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Transcript note">
+                  <textarea className={fieldClass} rows={2} value={officialNotes} onChange={(event) => setOfficialNotes(event.target.value)} />
+                </Field>
+                <SquareButton tone="outline" onClick={postOfficial} disabled={busy}>
+                  Post official letter
+                </SquareButton>
+              </div>
             </div>
-          </div>
+          ) : (
+            <p className="border-t border-ink pt-4 text-[13px] leading-snug text-[#55524A]">
+              Posting the official letter stays on the Grades tab until this marks call says you can post it.
+            </p>
+          )}
         </div>
       ) : null}
     </Drawer>
