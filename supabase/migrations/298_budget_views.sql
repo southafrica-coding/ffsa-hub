@@ -166,7 +166,7 @@ COMMENT ON COLUMN public.v_budget_lines_flat.coding_status IS
 COMMENT ON COLUMN public.v_budget_lines_flat.za_account_code IS
   'Xero account code in the South Africa organisation. NULL when not coded, or when the caller is not finance.';
 COMMENT ON COLUMN public.v_budget_lines_flat.us_account_code IS
-  'Xero account code in the USA organisation. NULL when not coded, or when the caller is not finance.';
+  'Unused on Hub budgets, which are South Africa only. NULL.';
 
 COMMENT ON VIEW public.v_budget_summary IS
   'Per budget × section × category: live line count, total cents and how many lines still need coding. Sum the rows for section or budget totals. security_invoker: the caller''s RLS applies.';
@@ -176,11 +176,11 @@ COMMENT ON COLUMN public.v_budget_summary.needs_coding_count IS
   'Live lines in this group whose coding_status is needs_coding.';
 
 COMMENT ON VIEW public.v_budget_yoy IS
-  'Year-over-year: each budget that continues an earlier one (source_budget_id), per category, with this total, the earlier total and the change, in cents. Currencies are shown, never converted. security_invoker: the caller''s RLS applies to both budgets.';
+  'Period-to-source comparison for Hub budgets (FFSA NPC, ZAR): each budget that continues an earlier one, per category, with this total, the earlier total and the change, in cents. security_invoker: the caller''s RLS applies to both budgets.';
 COMMENT ON COLUMN public.v_budget_yoy.source_total_cents IS
   'The earlier budget''s live total for this category when the caller can see that budget. 0 when the category is new on a visible source. NULL when row-level security hides the source budget (a hidden source is not treated as zero).';
 COMMENT ON COLUMN public.v_budget_yoy.change_cents IS
-  'total_cents minus source_total_cents when the two budgets share org_id and currency. NULL when the source is hidden or the org or currency differs. No FX conversion.';
+  'total_cents minus source_total_cents. NULL when the source is hidden. Hub budgets are FFSA NPC in ZAR, so there is no cross-currency conversion.';
 
 
 

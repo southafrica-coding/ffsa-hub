@@ -14,7 +14,8 @@ GRANT EXECUTE ON FUNCTION
  finance_private.can_manage_budget(uuid),finance_private.can_edit_budget_lines(uuid),
  finance_private.can_edit_budget_sections(uuid),finance_private.can_create_budget_row(text,uuid,uuid,uuid,uuid,uuid,uuid,uuid),
  finance_private.can_see_budget_template(uuid),finance_private.can_manage_budget_template(uuid),
- finance_private.can_record_budget_expenses(uuid)
+ finance_private.can_record_budget_expenses(uuid),
+ finance_private.assert_south_africa_budget_org(uuid)
  TO authenticated,service_role;
 REVOKE ALL ON FUNCTION public.budget_owner_id(uuid,uuid,uuid,uuid,uuid) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.budget_owner_id(uuid,uuid,uuid,uuid,uuid) TO authenticated,service_role;

@@ -3,8 +3,9 @@
 -- One entity (typed FK, including outreach_team_id) and one responsible
 -- person: a single budget_members row with role owner. Editors and viewers
 -- stay on that same table.
--- One finance org per budget; currency must match that org's record_currency;
--- org, currency and period are frozen on the header. Coding is one row per line
+-- Every Hub budget is FFSA NPC (finance_orgs.key npc, ZAR). A US org or a US
+-- period is rejected, not rewritten onto South Africa. Org, currency and
+-- period stay frozen on the header. Coding is one row per line
 -- and must use that org's Xero region. No outreach import and no ministry-name
 -- mapping onto finance_projects. Depends on 295 and on applied 275/290/291.
 -- Numbered 296. Once-only; not safe to re-run.
@@ -529,6 +530,28 @@ $$;
 
 REVOKE ALL ON FUNCTION finance_private.budget_copied_coding_status(text, uuid, uuid) FROM PUBLIC, anon, authenticated;
 
+-- Looked up by key, not by a fixed uuid. finance_orgs and the US mirror stay.
+CREATE OR REPLACE FUNCTION finance_private.assert_south_africa_budget_org(p_org_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM public.finance_orgs o
+     WHERE o.id = p_org_id
+       AND o.key = 'npc'
+       AND o.is_active
+       AND o.record_currency = 'ZAR'
+  ) THEN
+    RAISE EXCEPTION 'Hub budgets are for South Africa only (FFSA NPC, ZAR). A US organisation or a US period cannot be used'
+      USING ERRCODE = '23514';
+  END IF;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION finance_private.assert_south_africa_budget_org(uuid) FROM PUBLIC, anon;
 
 
 CREATE OR REPLACE FUNCTION finance_private.budgets_before_write()
@@ -539,8 +562,13 @@ DECLARE
   v_status_fields text[] := ARRAY['status', 'approved_by', 'approved_at', 'archived_at', 'updated_at'];
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    SELECT coalesce(NEW.currency,o.record_currency) INTO NEW.currency FROM public.finance_orgs o WHERE o.id=NEW.org_id AND o.is_active;
-    IF NEW.currency IS NULL THEN RAISE EXCEPTION 'Active finance org required' USING ERRCODE='23514'; END IF;
+    PERFORM finance_private.assert_south_africa_budget_org(NEW.org_id);
+    SELECT coalesce(NEW.currency, o.record_currency) INTO NEW.currency
+      FROM public.finance_orgs o
+     WHERE o.id = NEW.org_id AND o.key = 'npc' AND o.is_active;
+    IF NEW.currency IS DISTINCT FROM 'ZAR' THEN
+      RAISE EXCEPTION 'Hub budgets are in ZAR' USING ERRCODE = '23514';
+    END IF;
     IF NOT EXISTS(SELECT 1 FROM public.fiscal_periods p WHERE p.id=NEW.period_id AND p.org_id=NEW.org_id AND p.archived_at IS NULL) THEN RAISE EXCEPTION 'Active period for selected org required' USING ERRCODE='23514'; END IF;
     IF NEW.source_budget_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM public.budgets s WHERE s.id=NEW.source_budget_id AND s.org_id=NEW.org_id AND s.owner_kind=NEW.owner_kind AND public.budget_owner_id(s.staff_ministry_id,s.subcategory_id,s.program_id,s.event_id,s.outreach_team_id)=public.budget_owner_id(NEW.staff_ministry_id,NEW.subcategory_id,NEW.program_id,NEW.event_id,NEW.outreach_team_id)) THEN RAISE EXCEPTION 'Source budget has another org/owner' USING ERRCODE='23514'; END IF;
     IF NEW.source_template_id IS NOT NULL AND NEW.source_template_id<>NEW.template_id THEN RAISE EXCEPTION 'Source template must match template_id' USING ERRCODE='23514'; END IF;
@@ -1110,7 +1138,8 @@ BEGIN
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Period not found or archived' USING ERRCODE = '22023';
   END IF;
-  -- Org comes from the period. Callers do not need to read finance_orgs.
+  -- The period's org must already be FFSA NPC. Do not retarget a US period onto South Africa.
+  PERFORM finance_private.assert_south_africa_budget_org(v_org);
   IF p_org_id IS NOT NULL AND p_org_id IS DISTINCT FROM v_org THEN
     RAISE EXCEPTION 'Budget org comes from the fiscal period' USING ERRCODE = '23514';
   END IF;
@@ -1179,6 +1208,8 @@ BEGIN
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Period not found or archived' USING ERRCODE = '22023';
   END IF;
+  -- The period's org must already be FFSA NPC. Do not retarget a US period onto South Africa.
+  PERFORM finance_private.assert_south_africa_budget_org(v_org);
 
   INSERT INTO public.budgets
     (id, name, template_id, template_version, period_id, org_id, currency, owner_kind,
@@ -1580,7 +1611,7 @@ COMMENT ON TABLE public.budget_template_line_coding IS
   'The one Xero coding row for a template line, in that template''s org region. Copied from the source line and re-checked against the mirror when a budget is made from the template. Finance only.';
 
 COMMENT ON TABLE public.budgets IS
-  'One budget for one entity (staff ministry, ministry sub-category, school, event, or outreach team via outreach_team_id), one finance org and one fiscal period. Currency matches that org. One person is the responsible owner. Created by create_budget_from_template() or copy_budget_to_period(); always starts as a draft. Money in cents. Archived, never deleted. Members see their own; finance sees all.';
+  'One budget for one entity (staff ministry, ministry sub-category, school, event, or outreach team via outreach_team_id), the South Africa org (FFSA NPC, ZAR) and one of that org''s fiscal periods. One person is the responsible owner. Created by create_budget_from_template() or copy_budget_to_period(); always starts as a draft. Money in cents. Archived, never deleted. Members see their own; finance sees all.';
 COMMENT ON COLUMN public.budgets.owner_kind IS
   'Which owner column is set: staff_ministry, ministry_subcategory, program, event, or outreach_team. Exactly one owner column is non-null and it matches this. outreach_team_id is the team #507 looks up.';
 COMMENT ON COLUMN public.budgets.template_version IS
@@ -1590,7 +1621,7 @@ COMMENT ON COLUMN public.budgets.source_budget_id IS
 COMMENT ON COLUMN public.budgets.source_template_id IS
   'The template this budget was created from by create_budget_from_template. NULL for a direct copy.';
 COMMENT ON COLUMN public.budgets.currency IS
-  'The finance org''s record currency (ZAR or USD). Frozen with org_id. No conversion.';
+  'ZAR, the record currency of FFSA NPC. Frozen with org_id. Hub budgets are not kept in USD.';
 COMMENT ON COLUMN public.budgets.status IS
   'draft → submitted → approved, or archived. New budgets are always drafts. Only budget.approve (Budget Approver role) approves a submitted budget or reopens an approved one; an approved budget cannot be changed until reopened.';
 COMMENT ON COLUMN public.budgets.approved_by IS

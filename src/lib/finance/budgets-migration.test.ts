@@ -164,6 +164,12 @@ describe("migrations 295–299 — the budget model", () => {
     expect(core).toMatch(/NEW\.currency IS DISTINCT FROM OLD\.currency/);
     expect(core).toMatch(/NEW\.period_id IS DISTINCT FROM OLD\.period_id/);
     expect(foundation).toMatch(/Period org, dates and kind are immutable/);
+    expect(core).toMatch(/o\.key = 'npc'/);
+    expect(core).toMatch(/o\.record_currency = 'ZAR'/);
+    expect(core).toMatch(/Hub budgets are for South Africa only \(FFSA NPC, ZAR\)/);
+    expect(core).toMatch(/PERFORM finance_private\.assert_south_africa_budget_org\(NEW\.org_id\)/);
+    expect(core).toMatch(/PERFORM finance_private\.assert_south_africa_budget_org\(v_org\)/);
+    expect(core).not.toMatch(/316e0b77-3f4d-437f-a86e-856e8467f0b9/);
   });
 
   it("keeps one entity, the outreach team fk, and one responsible owner on budget_members", () => {

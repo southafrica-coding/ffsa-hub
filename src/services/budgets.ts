@@ -32,9 +32,8 @@ const OWNER_COLUMN: Record<BudgetOwnerKind, string> = {
   outreach_team: "outreach_team_id",
 };
 
-// The period link is the composite (period_id, org_id) foreign key, so a
-// USA period cannot be embedded onto an NPC budget. finance_orgs is not
-// embedded: its narrower RLS would hide a member's budget row.
+// Hub budgets are FFSA NPC (ZAR). finance_orgs is not embedded: its narrower
+// RLS would hide a member's budget row. A US period is rejected, not attached.
 const BUDGET_DETAIL_SELECT = `
   *,
   fiscal_periods!budgets_period_org_fkey(id, org_id, label, kind, start_date, end_date),
@@ -157,7 +156,7 @@ export type ListBudgetsOptions = {
   ownerId?: string;
 };
 
-/** Live budgets. Pass orgId so a list never mixes the two finance orgs. */
+/** Live budgets. They are FFSA NPC; orgId only narrows within that. */
 export async function listBudgets(supabase: Client, options?: ListBudgetsOptions) {
   let query = supabase.from("budgets").select("id, name, org_id, currency, period_id, status, owner_kind").is("archived_at", null).order("name");
   if (options?.orgId) query = query.eq("org_id", options.orgId);
@@ -167,10 +166,7 @@ export async function listBudgets(supabase: Client, options?: ListBudgetsOptions
   return query;
 }
 
-/**
- * Dashboard rows for one org. The caller groups these; this does not sum
- * across organisations or currencies.
- */
+/** Dashboard rows. Hub budgets are FFSA NPC in ZAR. */
 export async function listBudgetOverviews(
   supabase: Client,
   options: { orgId: string; periodId?: string; status?: BudgetStatus }
