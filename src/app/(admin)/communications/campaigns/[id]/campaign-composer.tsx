@@ -873,6 +873,34 @@ export function CampaignComposer({
     router.refresh();
   }
 
+  // Same path as Schedule: PATCH the campaign. canManageComms on that route
+  // is what decides who may schedule, so unschedule does not add a new check.
+  async function unschedule() {
+    if (
+      !confirm(
+        "Unschedule this email? That cancels the scheduled send and puts it back in draft."
+      )
+    ) {
+      return;
+    }
+    setErr(null);
+    setMsg(null);
+    setBusy(true);
+    const res = await fetch(`/api/campaigns/${campaign.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "draft", scheduled_at: null }),
+    });
+    setBusy(false);
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      return setErr(data.error ?? "Could not unschedule");
+    }
+    setScheduleAt("");
+    setMsg("Unscheduled. This email is a draft again and will not send.");
+    router.refresh();
+  }
+
   // Clone a sent email into a fresh editable draft (same design, audience,
   // and sender). The user can then tweak it and/or add more audience labels
   // before sending again.
@@ -893,6 +921,14 @@ export function CampaignComposer({
     };
     router.push(`/communications/campaigns/${copy.id}`);
   }
+
+  const scheduledWhen = campaign.scheduled_at
+    ? new Date(campaign.scheduled_at)
+    : null;
+  const scheduledLabel =
+    scheduledWhen && !Number.isNaN(scheduledWhen.getTime())
+      ? formatSast(scheduledWhen)
+      : null;
 
   return (
     <div className="space-y-4">
@@ -1107,10 +1143,11 @@ export function CampaignComposer({
           </Field>
 
           <p className="text-xs text-muted-foreground md:col-span-2">
-            Current audience:{" "}
-            <span className="font-medium">{audienceCount}</span> contact
-            {audienceCount === 1 ? "" : "s"} (subscribed, not unsubscribed or
-            bounced).
+            This email goes to{" "}
+            <span className="font-medium">{audienceCount}</span>{" "}
+            {audienceCount === 1 ? "person" : "people"}. Anyone unsubscribed,
+            suppressed, or with an undeliverable address is skipped, and is
+            not included in that number.
             {(labelSetChanged || contactSetChanged) && (
               <span className="text-amber-400 ml-1">
                 Save to recompute after changing the audience.
@@ -1143,7 +1180,7 @@ export function CampaignComposer({
         }}
         onDragEnd={handleDragEnd}
       >
-        <div className="grid gap-3 -mx-4 md:-mx-6 lg:grid-cols-[200px_minmax(0,1fr)_330px] lg:items-start">
+        <div className="grid gap-3 lg:grid-cols-[200px_minmax(0,1fr)_330px] lg:items-start">
           {/* Palette */}
           <Card
             data-dnd-no-autoscroll
@@ -1348,6 +1385,28 @@ export function CampaignComposer({
             <CardTitle className="text-base">Send</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {(campaign.status === "scheduled" || campaign.scheduled_at) && (
+              <div className="flex flex-wrap items-center justify-between gap-3 border border-rule bg-bone px-3 py-2">
+                <p className="text-sm">
+                  {scheduledLabel
+                    ? `Scheduled to send ${scheduledLabel}.`
+                    : "This email is scheduled."}{" "}
+                  {campaign.status === "scheduled"
+                    ? "Unschedule cancels that send and returns the email to a draft."
+                    : ""}
+                </p>
+                {campaign.status === "scheduled" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={unschedule}
+                    disabled={busy}
+                  >
+                    Unschedule
+                  </Button>
+                )}
+              </div>
+            )}
             {/* Test send — always available, even before audience is locked. */}
             <div className="flex flex-wrap items-end gap-2 pb-3 border-b">
               <label className="block">
@@ -1441,8 +1500,8 @@ export function CampaignComposer({
               </div>
             )}
             <p className="text-xs text-muted-foreground">
-              Recipients are deduplicated across the chosen labels and exclude
-              anyone unsubscribed, bounced, or not subscribed. Every email
+              People on more than one chosen label get one email. Unsubscribed,
+              suppressed, and undeliverable addresses are skipped. Every email
               includes a Manage Preferences link.
             </p>
           </CardContent>

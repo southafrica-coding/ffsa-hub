@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { canManageComms } from "@/lib/api-auth";
@@ -60,8 +61,11 @@ export default async function BrandSettingsPage({
 
         {list.length === 0 ? (
           <p className="text-[13px] text-[color:var(--text-secondary)]">
-            No sending identities configured. Add one first under
-            Communications settings.
+            No sending identities yet. Add one on{" "}
+            <Link href="/communications/identities" className="underline">
+              Identities
+            </Link>{" "}
+            first.
           </p>
         ) : (
           <BrandEditor

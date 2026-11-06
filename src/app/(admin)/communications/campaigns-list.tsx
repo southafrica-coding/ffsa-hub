@@ -15,6 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { SectionBar, StatusPill, type Tone } from "@/components/ffsa";
+import { CAMPAIGN_TEMPLATES } from "@/lib/campaigns/templates";
 import { getLabelColors } from "@/lib/label-color";
 import type { CampaignStats } from "@/services/campaigns";
 
@@ -54,6 +55,51 @@ const STATUS_TONE: Record<string, Tone> = {
   failed: "bad",
   cancelled: "quiet",
 };
+
+type CampaignLabel = {
+  id: string;
+  slug: string;
+  name: string;
+  color: string | null;
+};
+
+function campaignLabels(c: Campaign): CampaignLabel[] {
+  return (c.campaign_labels ?? [])
+    .map((cl) => cl.labels)
+    .filter((l): l is CampaignLabel => !!l);
+}
+
+function campaignWhen(c: Campaign): string {
+  if (c.sent_at) return `Sent ${new Date(c.sent_at).toLocaleString()}`;
+  if (c.scheduled_at) return `Scheduled ${new Date(c.scheduled_at).toLocaleString()}`;
+  return "—";
+}
+
+function AudienceChips({ labels }: { labels: CampaignLabel[] }) {
+  if (labels.length === 0) {
+    return <span className="text-[color:var(--text-tertiary)]">—</span>;
+  }
+  return (
+    <div className="flex flex-wrap gap-1">
+      {labels.map((l) => {
+        const col = getLabelColors(l);
+        return (
+          <span
+            key={l.id}
+            className="inline-flex items-center border px-2 py-0.5 text-xs font-medium"
+            style={{
+              backgroundColor: col.bg,
+              color: col.text,
+              borderColor: col.border,
+            }}
+          >
+            {l.name}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
 
 export function CampaignsList({
   campaigns,
@@ -159,13 +205,22 @@ export function CampaignsList({
           <div className="space-y-4 border-b border-rule bg-bone px-5 py-4">
             <div>
               <p className="mono-label mb-2">Start from</p>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5">
+              <div className="grid grid-cols-1 gap-1.5 min-[480px]:grid-cols-2 lg:grid-cols-4">
                 <TemplateChip
                   active={templateId === ""}
                   name="Blank"
                   tagline="An empty canvas with a single starter block."
                   onClick={() => setTemplateId("")}
                 />
+                {CAMPAIGN_TEMPLATES.map((t) => (
+                  <TemplateChip
+                    key={t.id}
+                    active={templateId === t.id}
+                    name={t.name}
+                    tagline={t.tagline}
+                    onClick={() => setTemplateId(t.id)}
+                  />
+                ))}
               </div>
             </div>
             <Input
@@ -265,7 +320,66 @@ export function CampaignsList({
             No emails yet.
           </p>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+            <div className="md:hidden">
+              {campaigns.map((c) => {
+                const s = stats?.[c.id];
+                const delivered = s?.delivered ?? 0;
+                const quiet = delivered > 0 ? "" : "text-[color:var(--text-tertiary)]";
+                return (
+                  <div
+                    key={c.id}
+                    className="border-b border-rule px-4 py-3.5 last:border-b-0"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="min-w-0 flex-1">
+                        <Link
+                          href={`/communications/campaigns/${c.id}`}
+                          className="block break-words font-display text-[20px] font-black uppercase leading-none text-[color:var(--text-primary)]"
+                        >
+                          {c.name}
+                        </Link>
+                        {c.subject && (
+                          <p className="mt-1 text-[12px] text-[color:var(--text-tertiary)]">
+                            {c.subject}
+                          </p>
+                        )}
+                      </div>
+                      {c.status === "draft" && (
+                        <button
+                          type="button"
+                          onClick={() => deleteEmail(c.id, c.name)}
+                          disabled={deletingId === c.id}
+                          title="Delete draft"
+                          aria-label={`Delete draft ${c.name}`}
+                          className="inline-flex h-11 w-11 shrink-0 items-center justify-center text-[color:var(--text-tertiary)] hover:text-destructive disabled:opacity-40"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <AudienceChips labels={campaignLabels(c)} />
+                      <StatusPill tone={STATUS_TONE[c.status] ?? "quiet"}>
+                        {c.status}
+                      </StatusPill>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[12px]">
+                      <span className={`tabular ${quiet}`}>
+                        Opened {pct(s?.opened ?? 0, delivered)}
+                      </span>
+                      <span className={`tabular ${quiet}`}>
+                        Clicked {pct(s?.clicked ?? 0, delivered)}
+                      </span>
+                      <span className="tabular text-[color:var(--text-tertiary)]">
+                        {campaignWhen(c)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="hidden md:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -281,12 +395,7 @@ export function CampaignsList({
               </TableHeader>
               <TableBody>
                 {campaigns.map((c) => {
-                  const cLabels = (c.campaign_labels ?? [])
-                    .map((cl) => cl.labels)
-                    .filter(
-                      (l): l is { id: string; slug: string; name: string; color: string | null } =>
-                        !!l
-                    );
+                  const cLabels = campaignLabels(c);
                   const s = stats?.[c.id];
                   const delivered = s?.delivered ?? 0;
                   return (
@@ -305,30 +414,7 @@ export function CampaignsList({
                         )}
                       </TableCell>
                       <TableCell>
-                        {cLabels.length === 0 ? (
-                          <span className="text-[color:var(--text-tertiary)]">—</span>
-                        ) : (
-                          <div className="flex flex-wrap gap-1">
-                            {cLabels.map((l) => {
-                              // Label colours are data the user picks in
-                              // Labels — kept, but square and hairline.
-                              const col = getLabelColors(l);
-                              return (
-                                <span
-                                  key={l.id}
-                                  className="inline-flex items-center border px-2 py-0.5 text-xs font-medium"
-                                  style={{
-                                    backgroundColor: col.bg,
-                                    color: col.text,
-                                    borderColor: col.border,
-                                  }}
-                                >
-                                  {l.name}
-                                </span>
-                              );
-                            })}
-                          </div>
-                        )}
+                        <AudienceChips labels={cLabels} />
                       </TableCell>
                       <TableCell>
                         <StatusPill tone={STATUS_TONE[c.status] ?? "quiet"}>
@@ -354,11 +440,7 @@ export function CampaignsList({
                         {pct(s?.clicked ?? 0, delivered)}
                       </TableCell>
                       <TableCell className="tabular text-xs text-[color:var(--text-tertiary)]">
-                        {c.sent_at
-                          ? `Sent ${new Date(c.sent_at).toLocaleString()}`
-                          : c.scheduled_at
-                          ? `Scheduled ${new Date(c.scheduled_at).toLocaleString()}`
-                          : "—"}
+                        {campaignWhen(c)}
                       </TableCell>
                       <TableCell className="text-right">
                         {c.status === "draft" && (
@@ -379,7 +461,8 @@ export function CampaignsList({
                 })}
               </TableBody>
             </Table>
-          </div>
+            </div>
+          </>
         )}
       </div>
     </div>

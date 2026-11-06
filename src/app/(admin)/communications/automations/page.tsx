@@ -51,7 +51,54 @@ export default async function AutomationsPage() {
             title="Workflows"
             meta={`${rows.length} across all events`}
           />
-          <div className="overflow-x-auto">
+          <div className="md:hidden">
+            {rows.length === 0 ? (
+              <p className="px-4 py-10 text-center text-xs tracking-[0.05em] text-[color:var(--text-tertiary)]">
+                No workflows yet. Create one on an event&apos;s Outcomes tab.
+              </p>
+            ) : (
+              rows.map((w) => {
+                const outcome = w.event_outcomes;
+                const eventId: string | undefined = outcome?.event_id;
+                const eventTitle: string = outcome?.events?.title ?? "—";
+                const stepCount: number = w.workflow_steps?.[0]?.count ?? 0;
+                const active = activeCount.get(w.id) ?? 0;
+                return (
+                  <div
+                    key={w.id}
+                    className="border-b border-rule px-4 py-3.5 last:border-b-0"
+                  >
+                    <div className="break-words font-display text-[20px] font-black uppercase leading-none">
+                      {w.name}
+                    </div>
+                    <p className="mt-1 text-[12px] text-[color:var(--text-tertiary)]">
+                      {eventTitle} · {outcome?.name ?? "—"}
+                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <span className="mono-label">
+                        {stepCount} {stepCount === 1 ? "step" : "steps"}
+                      </span>
+                      <span className="mono-label">{active} active</span>
+                      <StatusPill tone={w.is_active ? "good" : "quiet"}>
+                        {w.is_active ? "Active" : "Paused"}
+                      </StatusPill>
+                    </div>
+                    {eventId ? (
+                      <Link
+                        href={`/events/${eventId}?tab=outcomes`}
+                        className="mt-3 inline-flex min-h-11 items-center font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--text-primary)] underline"
+                      >
+                        Open
+                      </Link>
+                    ) : (
+                      <p className="mono-label mt-3">No event link</p>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+          <div className="hidden md:block">
             <Table>
               <TableHeader>
                 <TableRow>
