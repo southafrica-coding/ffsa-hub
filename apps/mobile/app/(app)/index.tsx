@@ -1,5 +1,5 @@
 import { useRouter, type Href } from "expo-router";
-import { CalendarDays, Check, CircleUser, GraduationCap, Ticket, Wallet } from "lucide-react-native";
+import { CalendarDays, Check, CircleUser, GraduationCap, Target, Ticket, Wallet } from "lucide-react-native";
 import { RefreshControl, ScrollView, View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
@@ -7,6 +7,7 @@ import { Banner, Button, Masthead, Screen, Text } from "@/components";
 import type { FeedItem } from "@/features/home/api";
 import { groupFeed, resolveTarget, timeAgo } from "@/features/home/feed-logic";
 import { NotificationRow } from "@/features/home/NotificationRow";
+import { strings as okrsStrings } from "@/features/okrs/strings";
 import { homeStrings as s } from "@/features/home/strings";
 import { useFeed } from "@/features/home/use-feed";
 import { useSchoolsShortcut } from "@/features/schools/shortcut";
@@ -174,6 +175,12 @@ export default function HomeScreen() {
               onPress={() => router.navigate("/schools")}
             />
           ) : null}
+          <ListRow
+            icon={Target}
+            title={okrsStrings.shortcut.title}
+            subtitle={okrsStrings.shortcut.subtitle}
+            onPress={() => router.navigate("/okrs")}
+          />
           <ListRow
             icon={CircleUser}
             title={s.shortcuts.me.title}

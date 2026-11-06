@@ -78,6 +78,16 @@ describe("resolveTarget", () => {
     expect(resolveTarget("/my-schools-old")).toEqual({ kind: "web", path: "/my-schools-old" });
   });
 
+  it("OKRs: the wall and one group open in the app; the cycles manager stays on the website", () => {
+    const id = "11111111-1111-4111-8111-111111111111";
+    expect(resolveTarget("/okrs")).toEqual({ kind: "app", path: "/okrs" });
+    expect(resolveTarget("/okrs?cycle=2025")).toEqual({ kind: "app", path: "/okrs" });
+    expect(resolveTarget(`/okrs/${id}`)).toEqual({ kind: "app", path: `/okrs/${id}` });
+    expect(resolveTarget(`/okrs/${id}?cycle=2026`)).toEqual({ kind: "app", path: `/okrs/${id}` });
+    expect(resolveTarget("/okrs/cycles")).toEqual({ kind: "web", path: "/okrs/cycles" });
+    expect(resolveTarget("/okrs-archive")).toEqual({ kind: "web", path: "/okrs-archive" });
+  });
+
   it("the browser for everything else (today's feed items all go here)", () => {
     for (const href of ["/users?filter=pending", "/prayer-room?tab=practice", "/records-library/match-queue"]) {
       expect(resolveTarget(href)).toEqual({ kind: "web", path: href });

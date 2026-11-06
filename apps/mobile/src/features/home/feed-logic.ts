@@ -58,6 +58,8 @@ const IN_APP: { web: string; app: string | null; withId?: true }[] = [
   { web: "/my-schools", app: "/schools", withId: true },
   { web: "/my-schools/apply", app: null },
   { web: "/my-attendance", app: "/schools/attendance" },
+  { web: "/okrs", app: "/okrs", withId: true },
+  { web: "/okrs/cycles", app: null },
 ];
 
 function matchesPrefix(path: string, prefix: string) {
