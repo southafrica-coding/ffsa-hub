@@ -5,6 +5,7 @@ import {
   canEditTestimony,
   isOwnedMediaPath,
   publishNeedsConfirmation,
+  testimonyVisibleTo,
   validateSignMedia,
   validateTestimonyWrite,
 } from "./contract";
@@ -70,6 +71,18 @@ describe("testimony media paths", () => {
     expect(isOwnedMediaPath(USER, path!, "image/jpeg")).toBe(true);
     expect(isOwnedMediaPath(USER, `testimonies/someone-else/${FILE}.jpg`, "image/jpeg")).toBe(false);
     expect(isOwnedMediaPath(USER, `testimonies/${USER}/../${FILE}.jpg`, "image/jpeg")).toBe(false);
+  });
+});
+
+describe("who can see a story", () => {
+  const author = "11111111-1111-4111-8111-111111111111";
+  const view = { view: true, submit: true, publish: false };
+  it("hides a withheld story from its author and shows it to a publisher", () => {
+    const row = { author_user_id: author, status: "withheld" };
+    expect(testimonyVisibleTo(row, author, view)).toBe(false);
+    expect(testimonyVisibleTo(row, author, { view: true, submit: true, publish: true })).toBe(true);
+    expect(testimonyVisibleTo({ author_user_id: author, status: "draft" }, author, view)).toBe(true);
+    expect(testimonyVisibleTo({ author_user_id: author, status: "published" }, "someone-else", { view: true, submit: false, publish: false })).toBe(true);
   });
 });
 

@@ -383,6 +383,25 @@ export function validateSignMedia(
  * Authors edit their own draft or submitted story. Publishers edit anything.
  * A published or withheld story is locked for the author.
  */
+/**
+ * Matches migration 293. Publishers see every row, including withheld.
+ * A viewer sees published rows. An author also sees their own draft and
+ * submitted rows. Their withheld story is not visible to them.
+ */
+export function testimonyVisibleTo(
+  row: { author_user_id: string; status: string },
+  userId: string,
+  access: { view: boolean; submit: boolean; publish: boolean }
+): boolean {
+  if (access.publish) return true;
+  if (row.status === "published" && access.view) return true;
+  return (
+    access.submit &&
+    row.author_user_id === userId &&
+    (row.status === "draft" || row.status === "submitted")
+  );
+}
+
 export function canEditTestimony(
   access: { publish: boolean },
   row: { author_user_id: string; status: string },

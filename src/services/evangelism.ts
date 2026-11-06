@@ -144,6 +144,30 @@ export async function listPublishedByIds(supabase: Client, ids: string[]) {
  * JWT cannot SELECT withheld rows (migration 293), but the screen still
  * needs the id so it can drop a story that left the wall.
  */
+/**
+ * TV tombstones. Hub Data has been asked to add evangelism_removals on
+ * #508. It is not in migration 293. Callers must treat a missing table
+ * as an empty log, not an error.
+ */
+export async function listRemovalsSince(supabase: Client, since: string) {
+  return supabase
+    .from("evangelism_removals")
+    .select("testimony_id")
+    .gt("removed_at", since)
+    .limit(200);
+}
+
+export async function recordRemoval(
+  supabase: Client,
+  row: { testimony_id: string; reason: "withheld" | "deleted" }
+) {
+  return supabase.from("evangelism_removals").insert({
+    testimony_id: row.testimony_id,
+    reason: row.reason,
+    removed_at: new Date().toISOString(),
+  });
+}
+
 export async function listWithheldSince(supabase: Client, since: string) {
   return supabase
     .from("evangelism_testimonies")

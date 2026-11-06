@@ -188,6 +188,9 @@ export async function POST(request: Request) {
       }))
     );
     if (mediaError) {
+      // The row check can reject a file the bucket already accepted (a photo
+      // over 15 MB). Remove the object so it is not left behind.
+      await bucketRemove(media.map((item) => item.path));
       await deleteTestimony(supabase, row.id);
       return asError(mediaError, "Couldn't attach the files.");
     }
@@ -250,4 +253,14 @@ async function confirmUploads(
     files.set(item.path, { size: assessed.size, contentType: assessed.contentType, kind: assessed.kind });
   }
   return { ok: true, files };
+}
+
+async function bucketRemove(paths: string[]) {
+  if (paths.length === 0) return;
+  try {
+    const admin = createAdminClient();
+    await admin.storage.from(EVANGELISM_MEDIA_BUCKET).remove(paths);
+  } catch {
+    console.error("[evangelism] could not remove a rejected upload");
+  }
 }

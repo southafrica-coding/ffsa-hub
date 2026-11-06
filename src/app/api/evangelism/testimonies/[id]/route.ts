@@ -4,6 +4,7 @@ import {
   canDeleteTestimony,
   canEditTestimony,
   publishNeedsConfirmation,
+  testimonyVisibleTo,
   validateTestimonyWrite,
   type TestimonyWrite,
 } from "@/lib/evangelism/contract";
@@ -11,7 +12,7 @@ import { asError, guardEvangelism, isGuard, json, notEnabled, readBody } from "@
 import { presentTestimony, type TestimonyRow } from "@/lib/evangelism/present";
 import { isEvangelismNotReady } from "@/lib/evangelism/schema-error";
 import { loadAuthorNames, signTestimonyMedia } from "@/lib/evangelism/signed-media";
-import { deleteTestimony, getTestimony, updateTestimony } from "@/services/evangelism";
+import { deleteTestimony, getTestimony, recordRemoval, updateTestimony } from "@/services/evangelism";
 
 // GET    /api/evangelism/testimonies/:id
 // PATCH  /api/evangelism/testimonies/:id
@@ -22,23 +23,6 @@ import { deleteTestimony, getTestimony, updateTestimony } from "@/services/evang
 // an author can delete their own draft.
 
 type Ctx = { params: Promise<{ id: string }> };
-
-// Same shape as migration 293: publishers see every row, including withheld.
-// Everyone else sees published rows. An author also sees their own draft
-// and submitted rows. A withheld story is not visible to its author.
-function visible(
-  row: TestimonyRow,
-  userId: string,
-  access: { view: boolean; submit: boolean; publish: boolean }
-): boolean {
-  if (access.publish) return true;
-  if (row.status === "published" && access.view) return true;
-  return (
-    access.submit &&
-    row.author_user_id === userId &&
-    (row.status === "draft" || row.status === "submitted")
-  );
-}
 
 async function presentOne(row: TestimonyRow, publish: boolean) {
   const [urls, names] = await Promise.all([
@@ -60,7 +44,7 @@ export async function GET(_request: Request, context: Ctx) {
   const { data, error } = await getTestimony(supabase, id);
   if (error) return asError(error, "Couldn't load the testimony.");
   const row = data as TestimonyRow | null;
-  if (!row || !visible(row, user.id, access)) {
+  if (!row || !testimonyVisibleTo(row, user.id, access)) {
     return json({ error: "not_found", message: "Testimony not found." }, 404);
   }
   return json({ testimony: await presentOne(row, access.publish) });
@@ -77,7 +61,7 @@ export async function PATCH(request: Request, context: Ctx) {
   const { data, error } = await getTestimony(supabase, id);
   if (error) return asError(error, "Couldn't load the testimony.");
   const row = data as TestimonyRow | null;
-  if (!row || !visible(row, user.id, access)) {
+  if (!row || !testimonyVisibleTo(row, user.id, access)) {
     return json({ error: "not_found", message: "Testimony not found." }, 404);
   }
   if (!canEditTestimony(access, row, user.id)) {
@@ -154,6 +138,9 @@ export async function PATCH(request: Request, context: Ctx) {
 
   const updated = await updateTestimony(supabase, id, patch);
   if (updated.error) return asError(updated.error, "Couldn't update the testimony.");
+  if (patch.status === "withheld" && (row.status === "published" || row.published_at)) {
+    await noteRemoval(supabase, id, "withheld");
+  }
   return json({ testimony: await presentOne(updated.data as TestimonyRow, access.publish) });
 }
 
@@ -165,7 +152,7 @@ export async function DELETE(_request: Request, context: Ctx) {
   const { data, error } = await getTestimony(supabase, id);
   if (error) return asError(error, "Couldn't load the testimony.");
   const row = data as TestimonyRow | null;
-  if (!row || !visible(row, user.id, access)) {
+  if (!row || !testimonyVisibleTo(row, user.id, access)) {
     return json({ error: "not_found", message: "Testimony not found." }, 404);
   }
   if (!canDeleteTestimony(access, row, user.id)) {
@@ -188,5 +175,21 @@ export async function DELETE(_request: Request, context: Ctx) {
 
   const removed = await deleteTestimony(supabase, id);
   if (removed.error) return asError(removed.error, "Couldn't delete the testimony.");
+  if (row.status === "published" || row.published_at) {
+    await noteRemoval(supabase, id, "deleted");
+  }
   return json({ ok: true });
+}
+
+/** Best-effort TV tombstone. A missing evangelism_removals table does not fail the edit. */
+async function noteRemoval(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  testimonyId: string,
+  reason: "withheld" | "deleted"
+) {
+  const { error } = await recordRemoval(supabase, { testimony_id: testimonyId, reason });
+  if (error && !isEvangelismNotReady(error)) {
+    console.error("[evangelism] removal log skipped", (error as { code?: string }).code ?? "");
+  }
 }

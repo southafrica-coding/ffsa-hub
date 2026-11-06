@@ -16,7 +16,7 @@ export function isEvangelismNotReady(error: unknown): boolean {
   const text = typeof message === "string" ? message : typeof nested === "string" ? nested : "";
   if (!text) return false;
   return (
-    /evangelism_testimonies|evangelism_media|evangelism-media/i.test(text) &&
+    /evangelism_testimonies|evangelism_media|evangelism_removals|evangelism-media/i.test(text) &&
     /does not exist|schema cache|not found|Bucket not found/i.test(text)
   ) || /Bucket not found/i.test(text);
 }

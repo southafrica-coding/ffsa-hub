@@ -25,6 +25,7 @@ vi.mock("@/services/evangelism", () => ({
   listPublishedForStats: async () => ({ data: [], error: null }),
   listPublishedByIds: async () => ({ data: [], error: null }),
   listWithheldSince: async () => ({ data: [{ id: "gone" }], error: null }),
+  listRemovalsSince: async () => ({ data: [{ testimony_id: "deleted-row" }], error: null }),
 }));
 
 import { GET } from "./route";
@@ -98,7 +99,7 @@ describe("GET /api/evangelism/feed", () => {
     );
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.removed_ids).toEqual([visible, "gone"]);
+    expect(body.removed_ids).toEqual([visible, "gone", "deleted-row"]);
   });
 
   it("rejects a bad cursor and a viewer with no access", async () => {

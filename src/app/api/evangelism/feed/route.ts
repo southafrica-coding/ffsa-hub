@@ -10,6 +10,7 @@ import {
   listPublishedByIds,
   listPublishedFeed,
   listPublishedForStats,
+  listRemovalsSince,
   listWithheldSince,
 } from "@/services/evangelism";
 
@@ -20,11 +21,11 @@ import {
 //   refreshed       — stories in `visible` that are still published, with new
 //                     read URLs. Signed URLs last 10 minutes, so the screen
 //                     sends the ids it is already showing on every poll.
-//   removed_ids     — visible ids that are no longer published, plus withheld
-//                     ids (id only, service role: viewers cannot SELECT those
-//                     rows). Migration 293 has no removals table; a deleted
-//                     story is noticed because its id is no longer published.
-//                     Apply removed_ids after appending testimonies.
+//   removed_ids     — visible ids that are no longer published, withheld ids
+//                     (service role, id only: viewers cannot SELECT those rows),
+//                     and evangelism_removals when that table exists. If it
+//                     does not, those tombstones are empty and this poll still
+//                     succeeds. Apply removed_ids after appending testimonies.
 //   media_expires_at — when the URLs in this response stop working.
 //
 // POST /api/evangelism/media/refresh renews URLs without a stats poll.
@@ -66,8 +67,11 @@ export async function GET(request: Request) {
   if (!visible.ok) return json({ error: "bad_request", message: visible.message }, 400);
 
   const window = statsWindow("month");
-  const withheld = await withheldIdsSince(since);
-  if ("error" in withheld && withheld.error) return withheld.error;
+  const [withheld, loggedRemovals] = await Promise.all([
+    withheldIdsSince(since),
+    removalIdsSince(since),
+  ]);
+  if (withheld.error) return withheld.error;
 
   const [feed, statsResult, stillUp] = await Promise.all([
     listPublishedFeed(supabase, { since, limit: FEED_LIMIT }),
@@ -90,6 +94,7 @@ export async function GET(request: Request) {
   const removed = new Set<string>();
   for (const id of visible.ids) if (!stillPublished.has(id)) removed.add(id);
   for (const id of withheld.ids) removed.add(id);
+  for (const id of loggedRemovals) removed.add(id);
 
   const last = rows.length > 0 ? rows[rows.length - 1].published_at : since;
   const statRows = statsResult.data ?? [];
@@ -112,9 +117,7 @@ export async function GET(request: Request) {
 }
 
 /** Ids of stories withheld after the cursor. Empty when there is no cursor. */
-async function withheldIdsSince(
-  since: string | null
-): Promise<{ ids: string[]; error?: ReturnType<typeof json> }> {
+async function withheldIdsSince(since: string | null): Promise<{ ids: string[]; error?: Response }> {
   if (!since) return { ids: [] };
   let admin;
   try {
@@ -128,4 +131,23 @@ async function withheldIdsSince(
     return { ids: [], error: asError(error, "Couldn't load stories taken off the screen.") };
   }
   return { ids: ((data ?? []) as Array<{ id: string }>).map((row) => row.id) };
+}
+
+/** Tombstones from evangelism_removals. Empty when Hub Data has not added that table. */
+async function removalIdsSince(since: string | null): Promise<string[]> {
+  if (!since) return [];
+  let admin;
+  try {
+    admin = createAdminClient();
+  } catch {
+    return [];
+  }
+  const { data, error } = await listRemovalsSince(admin, since);
+  if (error) {
+    if (!isEvangelismNotReady(error)) {
+      console.error("[evangelism] removal log unreadable", (error as { code?: string }).code ?? "");
+    }
+    return [];
+  }
+  return ((data ?? []) as Array<{ testimony_id: string }>).map((row) => row.testimony_id);
 }
