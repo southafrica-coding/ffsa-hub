@@ -589,6 +589,76 @@ export type Database = {
           },
         ]
       }
+      budget_expenses: {
+        Row: {
+          amount_cents: number
+          archived_at: string | null
+          budget_id: string
+          created_at: string
+          created_by: string | null
+          description: string
+          expense_date: string
+          id: string
+          line_id: string | null
+          notes: string | null
+          reference: string | null
+          updated_at: string
+          vendor: string | null
+        }
+        Insert: {
+          amount_cents: number
+          archived_at?: string | null
+          budget_id: string
+          created_at?: string
+          created_by?: string | null
+          description: string
+          expense_date: string
+          id?: string
+          line_id?: string | null
+          notes?: string | null
+          reference?: string | null
+          updated_at?: string
+          vendor?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          archived_at?: string | null
+          budget_id?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          expense_date?: string
+          id?: string
+          line_id?: string | null
+          notes?: string | null
+          reference?: string | null
+          updated_at?: string
+          vendor?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_expenses_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "budgets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_expenses_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_expenses_line_budget_fkey"
+            columns: ["line_id", "budget_id"]
+            isOneToOne: false
+            referencedRelation: "budget_lines"
+            referencedColumns: ["id", "budget_id"]
+          },
+        ]
+      }
       budget_line_coding: {
         Row: {
           account_id: string | null
@@ -1071,6 +1141,7 @@ export type Database = {
           is_active: boolean
           key: string | null
           name: string
+          org_id: string | null
           outreach_team_id: string | null
           owner_kind: string | null
           program_id: string | null
@@ -1094,6 +1165,7 @@ export type Database = {
           is_active?: boolean
           key?: string | null
           name: string
+          org_id?: string | null
           outreach_team_id?: string | null
           owner_kind?: string | null
           program_id?: string | null
@@ -1117,6 +1189,7 @@ export type Database = {
           is_active?: boolean
           key?: string | null
           name?: string
+          org_id?: string | null
           outreach_team_id?: string | null
           owner_kind?: string | null
           program_id?: string | null
@@ -1139,6 +1212,13 @@ export type Database = {
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_templates_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "finance_orgs"
             referencedColumns: ["id"]
           },
           {
@@ -1196,6 +1276,7 @@ export type Database = {
           income_goal_cents: number | null
           name: string
           notes: string | null
+          org_id: string
           outreach_team_id: string | null
           owner_kind: string
           period_id: string
@@ -1226,6 +1307,7 @@ export type Database = {
           income_goal_cents?: number | null
           name: string
           notes?: string | null
+          org_id: string
           outreach_team_id?: string | null
           owner_kind: string
           period_id: string
@@ -1256,6 +1338,7 @@ export type Database = {
           income_goal_cents?: number | null
           name?: string
           notes?: string | null
+          org_id?: string
           outreach_team_id?: string | null
           owner_kind?: string
           period_id?: string
@@ -1292,6 +1375,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "budgets_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "finance_orgs"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "budgets_outreach_team_id_fkey"
             columns: ["outreach_team_id"]
             isOneToOne: false
@@ -1299,11 +1389,11 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "budgets_period_id_fkey"
-            columns: ["period_id"]
+            foreignKeyName: "budgets_period_org_fkey"
+            columns: ["period_id", "org_id"]
             isOneToOne: false
             referencedRelation: "fiscal_periods"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "org_id"]
           },
           {
             foreignKeyName: "budgets_program_id_fkey"
@@ -2305,6 +2395,7 @@ export type Database = {
           is_current: boolean
           kind: string
           label: string
+          org_id: string
           start_date: string
           updated_at: string
         }
@@ -2317,6 +2408,7 @@ export type Database = {
           is_current?: boolean
           kind: string
           label: string
+          org_id: string
           start_date: string
           updated_at?: string
         }
@@ -2329,6 +2421,7 @@ export type Database = {
           is_current?: boolean
           kind?: string
           label?: string
+          org_id?: string
           start_date?: string
           updated_at?: string
         }
@@ -2338,6 +2431,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fiscal_periods_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "finance_orgs"
             referencedColumns: ["id"]
           },
         ]
@@ -6570,6 +6670,59 @@ export type Database = {
       }
     }
     Views: {
+      v_budget_coding_queue: {
+        Row: {
+          budget_id: string | null
+          currency: string | null
+          coding_status: string | null
+          invalid_account: boolean | null
+          invalid_tracking: boolean | null
+          line_id: string | null
+          missing_account: boolean | null
+          name: string | null
+          org_id: string | null
+          org_region: string | null
+        }
+        Relationships: []
+      }
+      v_budget_expense_tracker: {
+        Row: {
+          amount_cents: number | null
+          budget_id: string | null
+          category_id: string | null
+          created_at: string | null
+          created_by: string | null
+          currency: string | null
+          description: string | null
+          expense_date: string | null
+          expense_id: string | null
+          kind: string | null
+          line_id: string | null
+          line_name: string | null
+          notes: string | null
+          org_id: string | null
+          reference: string | null
+          updated_at: string | null
+          vendor: string | null
+        }
+        Relationships: []
+      }
+      v_budget_line_actuals: {
+        Row: {
+          archived_at: string | null
+          budget_id: string | null
+          category_id: string | null
+          currency: string | null
+          kind: string | null
+          line_id: string | null
+          name: string | null
+          org_id: string | null
+          planned_cents: number | null
+          remaining_cents: number | null
+          spent_cents: number | null
+        }
+        Relationships: []
+      }
       v_budget_lines_flat: {
         Row: {
           amount_cents: number | null
@@ -6588,6 +6741,7 @@ export type Database = {
           line_name: string | null
           line_total_cents: number | null
           multiplier: number | null
+          org_id: string | null
           owner_id: string | null
           owner_kind: string | null
           owner_name: string | null
@@ -6615,6 +6769,34 @@ export type Database = {
         }
         Relationships: []
       }
+      v_budget_overview: {
+        Row: {
+          budget_id: string | null
+          currency: string | null
+          end_date: string | null
+          fixed_cents: number | null
+          funding_goal_cents: number | null
+          fundraising_goal_cents: number | null
+          funds_in_hand_cents: number | null
+          income_goal_cents: number | null
+          line_count: number | null
+          name: string | null
+          notes: string | null
+          org_id: string | null
+          owner_id: string | null
+          owner_kind: string | null
+          period_id: string | null
+          period_label: string | null
+          planned_cents: number | null
+          remaining_cents: number | null
+          spent_cents: number | null
+          start_date: string | null
+          status: string | null
+          unallocated_cents: number | null
+          variable_cents: number | null
+        }
+        Relationships: []
+      }
       v_budget_summary: {
         Row: {
           budget_id: string | null
@@ -6625,6 +6807,7 @@ export type Database = {
           currency: string | null
           line_count: number | null
           needs_coding_count: number | null
+          org_id: string | null
           owner_id: string | null
           owner_kind: string | null
           period_id: string | null
@@ -6641,6 +6824,7 @@ export type Database = {
           category_name: string | null
           change_cents: number | null
           currency: string | null
+          org_id: string | null
           owner_id: string | null
           owner_kind: string | null
           period_id: string | null
@@ -6735,25 +6919,32 @@ export type Database = {
           queued: number
         }[]
       }
-      can_approve_budgets: { Args: never; Returns: boolean }
-      can_edit_all_budgets: { Args: never; Returns: boolean }
-      can_manage_budget_codes: { Args: never; Returns: boolean }
-      can_view_all_budgets: { Args: never; Returns: boolean }
+      budget_owner_id: {
+        Args: {
+          p_event_id: string | null
+          p_outreach_team_id: string | null
+          p_program_id: string | null
+          p_staff_ministry_id: string | null
+          p_subcategory_id: string | null
+        }
+        Returns: string | null
+      }
       copy_budget_to_period: {
         Args: {
-          p_name?: string
+          p_name?: string | null
           p_period_id: string
           p_source_budget_id: string
-          p_submit?: boolean
+          p_submit?: boolean | null
         }
         Returns: string
       }
       create_budget_from_template: {
         Args: {
-          p_currency?: string
-          p_driver_label?: string
-          p_driver_value?: number
+          p_currency?: string | null
+          p_driver_label?: string | null
+          p_driver_value?: number | null
           p_name: string
+          p_org_id: string
           p_owner_id: string
           p_owner_kind: string
           p_period_id: string
@@ -6791,10 +6982,6 @@ export type Database = {
       }
       has_schools_access: { Args: never; Returns: boolean }
       is_admin: { Args: never; Returns: boolean }
-      is_budget_member: {
-        Args: { p_budget_id: string; p_min_role?: string }
-        Returns: boolean
-      }
       is_outreach_finance_admin: {
         Args: { check_team_id: string }
         Returns: boolean

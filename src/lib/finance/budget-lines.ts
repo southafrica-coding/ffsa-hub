@@ -1,5 +1,5 @@
 /**
- * Budget lines (migration 278): the arithmetic.
+ * Budget lines (migration 296): the arithmetic.
  *
  * A line is `amount × frequency × multiplier`, with the amount in cents.
  * The database trigger `budget_lines_before_write` is the source of truth
