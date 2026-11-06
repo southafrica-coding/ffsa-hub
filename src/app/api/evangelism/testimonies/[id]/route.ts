@@ -10,9 +10,10 @@ import {
 } from "@/lib/evangelism/contract";
 import { asError, guardEvangelism, isGuard, json, notEnabled, readBody } from "@/lib/evangelism/http";
 import { presentTestimony, type TestimonyRow } from "@/lib/evangelism/present";
+import { recordRemovalBestEffort } from "@/lib/evangelism/removals";
 import { isEvangelismNotReady } from "@/lib/evangelism/schema-error";
 import { loadAuthorNames, signTestimonyMedia } from "@/lib/evangelism/signed-media";
-import { deleteTestimony, getTestimony, recordRemoval, updateTestimony } from "@/services/evangelism";
+import { deleteTestimony, getTestimony, updateTestimony } from "@/services/evangelism";
 
 // GET    /api/evangelism/testimonies/:id
 // PATCH  /api/evangelism/testimonies/:id
@@ -139,7 +140,7 @@ export async function PATCH(request: Request, context: Ctx) {
   const updated = await updateTestimony(supabase, id, patch);
   if (updated.error) return asError(updated.error, "Couldn't update the testimony.");
   if (patch.status === "withheld" && (row.status === "published" || row.published_at)) {
-    await noteRemoval(supabase, id, "withheld");
+    await recordRemovalBestEffort(id, "withheld");
   }
   return json({ testimony: await presentOne(updated.data as TestimonyRow, access.publish) });
 }
@@ -176,20 +177,7 @@ export async function DELETE(_request: Request, context: Ctx) {
   const removed = await deleteTestimony(supabase, id);
   if (removed.error) return asError(removed.error, "Couldn't delete the testimony.");
   if (row.status === "published" || row.published_at) {
-    await noteRemoval(supabase, id, "deleted");
+    await recordRemovalBestEffort(id, "deleted");
   }
   return json({ ok: true });
-}
-
-/** Best-effort TV tombstone. A missing evangelism_removals table does not fail the edit. */
-async function noteRemoval(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: any,
-  testimonyId: string,
-  reason: "withheld" | "deleted"
-) {
-  const { error } = await recordRemoval(supabase, { testimony_id: testimonyId, reason });
-  if (error && !isEvangelismNotReady(error)) {
-    console.error("[evangelism] removal log skipped", (error as { code?: string }).code ?? "");
-  }
 }

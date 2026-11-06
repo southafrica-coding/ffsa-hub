@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { EVANGELISM_FEED_POLL_SECONDS, mediaExpiresAt, parseTestimonyIds } from "@/lib/evangelism/contract";
 import { asError, guardEvangelism, isGuard, json } from "@/lib/evangelism/http";
 import { presentTestimony, type TestimonyRow } from "@/lib/evangelism/present";
+import { listRemovalIds } from "@/lib/evangelism/removals";
 import { isEvangelismNotReady } from "@/lib/evangelism/schema-error";
 import { aggregateTestimonies, statsWindow } from "@/lib/evangelism/stats";
 import { loadAuthorNames, signTestimonyMedia } from "@/lib/evangelism/signed-media";
@@ -10,7 +11,6 @@ import {
   listPublishedByIds,
   listPublishedFeed,
   listPublishedForStats,
-  listRemovalsSince,
   listWithheldSince,
 } from "@/services/evangelism";
 
@@ -69,7 +69,7 @@ export async function GET(request: Request) {
   const window = statsWindow("month");
   const [withheld, loggedRemovals] = await Promise.all([
     withheldIdsSince(since),
-    removalIdsSince(since),
+    listRemovalIds(since),
   ]);
   if (withheld.error) return withheld.error;
 
@@ -131,23 +131,4 @@ async function withheldIdsSince(since: string | null): Promise<{ ids: string[]; 
     return { ids: [], error: asError(error, "Couldn't load stories taken off the screen.") };
   }
   return { ids: ((data ?? []) as Array<{ id: string }>).map((row) => row.id) };
-}
-
-/** Tombstones from evangelism_removals. Empty when Hub Data has not added that table. */
-async function removalIdsSince(since: string | null): Promise<string[]> {
-  if (!since) return [];
-  let admin;
-  try {
-    admin = createAdminClient();
-  } catch {
-    return [];
-  }
-  const { data, error } = await listRemovalsSince(admin, since);
-  if (error) {
-    if (!isEvangelismNotReady(error)) {
-      console.error("[evangelism] removal log unreadable", (error as { code?: string }).code ?? "");
-    }
-    return [];
-  }
-  return ((data ?? []) as Array<{ testimony_id: string }>).map((row) => row.testimony_id);
 }

@@ -19,13 +19,15 @@ vi.mock("@/lib/evangelism/signed-media", () => ({
   loadAuthorNames: async () => new Map(),
 }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({}) }));
+vi.mock("@/lib/evangelism/removals", () => ({
+  listRemovalIds: async (since: string | null) => (since ? ["deleted-row"] : []),
+}));
 vi.mock("@/services/evangelism", () => ({
   STATS_ROW_CAP: 5000,
   listPublishedFeed: async () => ({ data: h.feed, error: null }),
   listPublishedForStats: async () => ({ data: [], error: null }),
   listPublishedByIds: async () => ({ data: [], error: null }),
   listWithheldSince: async () => ({ data: [{ id: "gone" }], error: null }),
-  listRemovalsSince: async () => ({ data: [{ testimony_id: "deleted-row" }], error: null }),
 }));
 
 import { GET } from "./route";
