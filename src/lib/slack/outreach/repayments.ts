@@ -5,7 +5,7 @@
  */
 
 import { isMissingRelation } from "@/lib/finance/budget-actuals";
-import { repaymentLogRow } from "@/lib/finance/budget-log-rows";
+import { repaymentIdempotencyToken, repaymentLogRow } from "@/lib/finance/budget-log-rows";
 import { sastDate } from "@/lib/slack/assistant/outreach";
 import { parseRepayValue } from "./no-receipt";
 import { budgetForSlip } from "./receipts";
@@ -24,10 +24,16 @@ async function isTeamOwner(admin: Admin, teamId: string, hubUserId: string): Pro
   return Boolean(data);
 }
 
+function isUniqueViolation(error: { code?: string; message?: string } | null | undefined): boolean {
+  if (!error) return false;
+  return error.code === "23505" || /duplicate key|unique constraint/i.test(error.message ?? "");
+}
+
 export async function confirmRepayment(
   admin: Admin,
   slackUserId: string,
-  rawValue: string | undefined
+  rawValue: string | undefined,
+  source?: { messageTs?: string | null }
 ): Promise<{ text: string }> {
   const claim = parseRepayValue(rawValue);
   if (!claim) return { text: "I couldn't read that repayment. Send it again with the amount." };
@@ -48,6 +54,17 @@ export async function confirmRepayment(
     expenseDate: sastDate(new Date()),
     nameHint: claim.description,
   });
+  // The confirm token is the card's message ts, or the draft id when the click has no ts.
+  // Description, amount, and reason are not the key: two real purchases can share them.
+  const token = repaymentIdempotencyToken({
+    messageTs: source?.messageTs,
+    receiptDraftId: claim.receiptDraftId,
+  });
+  if (!token) {
+    return {
+      text: `You repay ${money} for ${claim.description}. It's noted here in Slack. I couldn't tie it to this confirm, so it isn't saved on the budget. Nothing was sent to Xero.`,
+    };
+  }
   const row = repaymentLogRow({
     budgetId: budget?.budgetId ?? null,
     lineId: budget?.lineId ?? null,
@@ -59,6 +76,7 @@ export async function confirmRepayment(
     budgetCurrency: budget?.currency ?? null,
     description: claim.description,
     confirmedAt: new Date().toISOString(),
+    idempotencyToken: token,
   });
   if (!row) {
     return {
@@ -66,18 +84,11 @@ export async function confirmRepayment(
     };
   }
 
-  let priorQuery = admin
+  const { data: prior, error: priorError } = await admin
     .from("budget_repayments")
     .select("id")
-    .eq("budget_id", row.budget_id)
-    .eq("slack_user_id", row.slack_user_id)
-    .eq("amount_cents", row.amount_cents)
-    .eq("reason", row.reason)
-    .ilike("description", row.description);
-  priorQuery = row.line_id ? priorQuery.eq("line_id", row.line_id) : priorQuery.is("line_id", null);
-  priorQuery = row.hub_user_id ? priorQuery.eq("hub_user_id", row.hub_user_id) : priorQuery.is("hub_user_id", null);
-  priorQuery = row.team_id ? priorQuery.eq("team_id", row.team_id) : priorQuery.is("team_id", null);
-  const { data: prior, error: priorError } = await priorQuery.limit(1);
+    .eq("slack_message_ts", row.slack_message_ts)
+    .limit(1);
   if (priorError && !isMissingRelation(priorError)) {
     console.error("[slack/outreach] repayment lookup failed", priorError.message ?? priorError);
     return { text: `You repay ${money} for ${claim.description}. I couldn't check the list just now — try again in a moment. Nothing was sent to Xero.` };
@@ -88,6 +99,9 @@ export async function confirmRepayment(
 
   const { error } = await admin.from("budget_repayments").insert(row);
 
+  if (error && isUniqueViolation(error)) {
+    return { text: `You already noted that you repay ${money} for ${claim.description}. Nothing was sent to Xero.` };
+  }
   if (error && !isMissingRelation(error)) {
     console.error("[slack/outreach] repayment insert failed", error.message ?? error);
     return { text: `You repay ${money} for ${claim.description}. I couldn't save it just now — send it again in a moment. Nothing was sent to Xero.` };

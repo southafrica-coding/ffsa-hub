@@ -49,6 +49,8 @@ type Payload = {
   trigger_id?: string;
   response_url?: string;
   channel?: { id: string };
+  message?: { ts?: string };
+  container?: { message_ts?: string };
   actions?: { action_id: string; value?: string; selected_option?: { value: string } }[];
   view?: {
     callback_id: string;
@@ -128,7 +130,9 @@ export async function POST(request: Request) {
       const reply = ephemeral(payload.response_url);
       after(async () => {
         try {
-          const result = await confirmRepayment(createAdminClient(), slackUserId, action.value);
+          const result = await confirmRepayment(createAdminClient(), slackUserId, action.value, {
+            messageTs: payload.message?.ts ?? payload.container?.message_ts ?? null,
+          });
           await reply(result.text);
         } catch (e) {
           console.error("[slack/outreach] repay", e);

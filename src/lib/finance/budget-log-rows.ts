@@ -76,12 +76,31 @@ export type RepaymentLogRow = {
   line_id: string | null;
   hub_user_id: string | null;
   slack_user_id: string;
+  /** #513 unique confirm key. A Slack message ts, or a receipt draft id when the click has no ts. */
+  slack_message_ts: string;
   team_id: string | null;
   amount_cents: number;
   description: string;
   reason: "no_receipt";
   confirmed_at: string;
 };
+
+/**
+ * Confirm identity for budget_repayments.slack_message_ts.
+ * The card's message ts wins. A receipt draft id is the token only when
+ * the click has no ts. Same token is the same confirm. A new card is a new ts,
+ * so two repayments can share amount and description.
+ */
+export function repaymentIdempotencyToken(args: {
+  messageTs?: string | null;
+  receiptDraftId?: string | null;
+}): string | null {
+  const ts = args.messageTs?.trim() ?? "";
+  if (ts.length >= 1 && ts.length <= 64) return ts;
+  const draft = args.receiptDraftId?.trim() ?? "";
+  if (draft.length >= 1 && draft.length <= 64) return draft;
+  return null;
+}
 
 export function repaymentLogRow(args: {
   budgetId: string | null;
@@ -91,22 +110,27 @@ export function repaymentLogRow(args: {
   /** Must be that budget's outreach team. Null when the claim named no team. */
   teamId: string | null;
   amountCents: number;
-  /** Currency the person confirmed. Stored only if it is the budget's currency. */
+  /** Currency the person confirmed. Compared to the budget, never written. */
   amountCurrency: string;
   budgetCurrency: BudgetCurrency | null;
   description: string;
   confirmedAt: string;
+  /** Slack message ts, or a receipt draft id. Required. Not a currency and not a description. */
+  idempotencyToken: string | null;
 }): RepaymentLogRow | null {
   if (!args.budgetId || !args.budgetCurrency) return null;
   if (args.amountCurrency.toUpperCase() !== args.budgetCurrency) return null;
   const description = args.description.trim();
+  const token = args.idempotencyToken?.trim() ?? "";
   if (!description || !args.slackUserId) return null;
+  if (token.length < 1 || token.length > 64) return null;
   if (!Number.isInteger(args.amountCents) || args.amountCents <= 0) return null;
   return {
     budget_id: args.budgetId,
     line_id: args.lineId,
     hub_user_id: args.hubUserId,
     slack_user_id: args.slackUserId,
+    slack_message_ts: token,
     team_id: args.teamId,
     amount_cents: args.amountCents,
     description: description.slice(0, 500),

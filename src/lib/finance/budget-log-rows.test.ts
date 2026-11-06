@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { repaymentLogRow, xeroSpendLogRow } from "./budget-log-rows";
+import { repaymentIdempotencyToken, repaymentLogRow, xeroSpendLogRow } from "./budget-log-rows";
 
 describe("xeroSpendLogRow", () => {
   const base = {
@@ -65,11 +65,14 @@ describe("repaymentLogRow", () => {
       budgetCurrency: "ZAR",
       description: " taxi ",
       confirmedAt: "2026-11-06T00:00:00.000Z",
+      idempotencyToken: "1710000000.000100",
     });
     expect(row?.line_id).toBe("l1");
     expect(row?.amount_cents).toBe(18000);
+    expect(row?.slack_message_ts).toBe("1710000000.000100");
     expect(row?.reason).toBe("no_receipt");
     expect(row && "currency" in row).toBe(false);
+    expect(row && "org_key" in row).toBe(false);
     expect(repaymentLogRow({ ...{
       budgetId: "b1",
       lineId: null,
@@ -81,6 +84,7 @@ describe("repaymentLogRow", () => {
       budgetCurrency: "ZAR",
       description: "coffee",
       confirmedAt: "2026-11-06T00:00:00.000Z",
+      idempotencyToken: "1710000000.000100",
     } })).toBeNull();
     expect(repaymentLogRow({
       budgetId: null,
@@ -93,6 +97,32 @@ describe("repaymentLogRow", () => {
       budgetCurrency: "ZAR",
       description: "taxi",
       confirmedAt: "2026-11-06T00:00:00.000Z",
+      idempotencyToken: "1710000000.000100",
     })).toBeNull();
+    expect(repaymentLogRow({
+      budgetId: "b1",
+      lineId: null,
+      hubUserId: "u1",
+      slackUserId: "U1",
+      teamId: "t1",
+      amountCents: 18000,
+      amountCurrency: "ZAR",
+      budgetCurrency: "ZAR",
+      description: "taxi",
+      confirmedAt: "2026-11-06T00:00:00.000Z",
+      idempotencyToken: "  ",
+    })).toBeNull();
+  });
+
+  it("uses the card ts, and a draft id only when the click has no ts", () => {
+    expect(repaymentIdempotencyToken({
+      messageTs: "1710000000.000100",
+      receiptDraftId: "8b1d6c3a-1f2e-4a5b-9c8d-0e1f2a3b4c5d",
+    })).toBe("1710000000.000100");
+    expect(repaymentIdempotencyToken({
+      messageTs: "  ",
+      receiptDraftId: "8b1d6c3a-1f2e-4a5b-9c8d-0e1f2a3b4c5d",
+    })).toBe("8b1d6c3a-1f2e-4a5b-9c8d-0e1f2a3b4c5d");
+    expect(repaymentIdempotencyToken({ messageTs: null, receiptDraftId: null })).toBeNull();
   });
 });
