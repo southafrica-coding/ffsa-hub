@@ -54,6 +54,24 @@ describe("course templates API", () => {
     expect(bad.status).toBe(400);
   });
 
+  it("refuses to save a template from a preview deployment", async () => {
+    const previous = process.env.VERCEL_ENV;
+    process.env.VERCEL_ENV = "preview";
+    try {
+      const res = await POST(
+        new Request("http://x/api/schools/course-templates", {
+          method: "POST",
+          body: JSON.stringify({ name: "Bible quarter", program_id: null, design }),
+        })
+      );
+      expect(res.status).toBe(403);
+      expect(await res.json()).toMatchObject({ error: "preview_writes_disabled" });
+    } finally {
+      if (previous === undefined) delete process.env.VERCEL_ENV;
+      else process.env.VERCEL_ENV = previous;
+    }
+  });
+
   it("does not list every school's templates for someone who is not a global manager", async () => {
     h.canManage = false;
     expect((await GET(new Request("http://x/api/schools/course-templates"))).status).toBe(403);

@@ -2,7 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { userCanManageProgram } from "@/lib/auth/check-schools-access";
 import { parseCourseDesign, summarizeDesign, COURSE_DESIGN_VERSION } from "@/lib/schools/course-design";
 import { canManageSchoolGlobally, guardUser, isGuard } from "@/lib/schools/lms-guard";
-import { dbError, isLmsSchemaMissing, isUuid, json, lmsSchemaNotApplied } from "@/lib/schools/lms-http";
+import { dbError, isLmsSchemaMissing, isUuid, json, lmsSchemaNotApplied, previewWritesDisabled } from "@/lib/schools/lms-http";
 import { insertCourseTemplate, listCourseTemplates } from "@/services/course-designs";
 
 // GET  /api/schools/course-templates?program_id=
@@ -51,6 +51,8 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const guard = await guardUser();
   if (isGuard(guard)) return guard.response;
+  const blocked = previewWritesDisabled();
+  if (blocked) return blocked;
   let body: Record<string, unknown>;
   try {
     body = (await request.json()) as Record<string, unknown>;

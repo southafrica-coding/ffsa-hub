@@ -2,7 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { userCanManageProgram } from "@/lib/auth/check-schools-access";
 import { parseCourseDesign, COURSE_DESIGN_VERSION } from "@/lib/schools/course-design";
 import { canManageSchoolGlobally, guardUser, isGuard } from "@/lib/schools/lms-guard";
-import { dbError, isLmsSchemaMissing, json, lmsSchemaNotApplied } from "@/lib/schools/lms-http";
+import { dbError, isLmsSchemaMissing, json, lmsSchemaNotApplied, previewWritesDisabled } from "@/lib/schools/lms-http";
 import { deleteCourseTemplate, getCourseTemplate, updateCourseTemplate } from "@/services/course-designs";
 
 // GET    /api/schools/course-templates/:id
@@ -42,6 +42,8 @@ export async function PATCH(request: Request, context: Ctx) {
   const { id } = await context.params;
   const loaded = await loadAuthorized(id);
   if ("response" in loaded && loaded.response) return loaded.response;
+  const blocked = previewWritesDisabled();
+  if (blocked) return blocked;
   const guard = (loaded as { guard: { user: { id: string } } }).guard;
 
   let body: Record<string, unknown>;
@@ -79,6 +81,8 @@ export async function DELETE(_request: Request, context: Ctx) {
   const { id } = await context.params;
   const loaded = await loadAuthorized(id);
   if ("response" in loaded && loaded.response) return loaded.response;
+  const blocked = previewWritesDisabled();
+  if (blocked) return blocked;
   const removed = await deleteCourseTemplate(createAdminClient(), id);
   if (removed.error) return dbError(removed.error, "Couldn't delete the template.");
   return json({ ok: true });

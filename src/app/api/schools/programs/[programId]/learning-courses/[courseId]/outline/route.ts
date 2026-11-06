@@ -1,7 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parseCourseDesign, summarizeDesign, COURSE_DESIGN_VERSION } from "@/lib/schools/course-design";
 import { guardProgram, isGuard } from "@/lib/schools/lms-guard";
-import { dbError, isLmsSchemaMissing, json, lmsSchemaNotApplied } from "@/lib/schools/lms-http";
+import { dbError, isLmsSchemaMissing, json, lmsSchemaNotApplied, previewWritesDisabled } from "@/lib/schools/lms-http";
 import { getCourseOutline, getCourseTemplate, saveCourseOutline } from "@/services/course-designs";
 import { getLearningCourse } from "@/services/learning-courses";
 
@@ -42,6 +42,8 @@ export async function PUT(request: Request, context: Ctx) {
   const { programId, courseId } = await context.params;
   const guard = await guardProgram(programId);
   if (isGuard(guard)) return guard.response;
+  const blocked = previewWritesDisabled();
+  if (blocked) return blocked;
   let body: { design?: unknown; template_id?: unknown };
   try {
     body = await request.json();
