@@ -13,7 +13,23 @@ import {
 } from "@/lib/campaigns/blocks";
 import { getEffectiveBrand } from "@/services/brand";
 import { getAuthedUser, canManageComms, COMMS_SEND_PERMS } from "@/lib/api-auth";
+import { hasModuleAccess } from "@/lib/require-permission";
 import type { Json } from "@/types/database";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Client = any;
+
+/**
+ * Who may read a campaign body. Same people as
+ * requireModuleAccess(…, "communications") — super_admin, admin, or any
+ * communications-module permission such as campaigns.read — plus the
+ * comms_admin role, which canManageComms already treats as communications
+ * access. requireModuleAccess itself redirects, so the route returns 403.
+ */
+async function canReadCampaign(supabase: Client, userId: string): Promise<boolean> {
+  if (await hasModuleAccess(supabase, userId, "communications")) return true;
+  return canManageComms(supabase, userId);
+}
 
 // Statuses the campaigns table accepts. PATCH may only move between draft
 // and scheduled; sending/sent are written by send-now and the cron.
@@ -91,6 +107,9 @@ export async function GET(
   const supabase = await createClient();
   const user = await getAuthedUser(supabase);
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  if (!(await canReadCampaign(supabase, user.id))) {
+    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  }
 
   const { data, error } = await getCampaignById(supabase, id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

@@ -44,7 +44,7 @@ vi.mock("@/services/campaigns", () => ({
   },
 }));
 
-import { PATCH } from "./route";
+import { GET, PATCH } from "./route";
 
 const FUTURE = "2026-12-01T08:00:00.000Z";
 const FUTURE_SAME_INSTANT = "2026-12-01T10:00:00+02:00";
@@ -292,5 +292,63 @@ describe("PATCH /api/campaigns/[id] schedule permission", () => {
     expect((await call("{")).status).toBe(400);
     expect((await call({})).status).toBe(400);
     expect(state.updates).toEqual([]);
+  });
+});
+
+const getCall = () =>
+  GET(new Request("http://x/api/campaigns/c1"), {
+    params: Promise.resolve({ id: "c1" }),
+  });
+
+describe("GET /api/campaigns/[id] read gate", () => {
+  beforeEach(() => {
+    draftCampaign();
+    world(DRAFT_ONLY);
+  });
+
+  it("401 when not signed in", async () => {
+    world(DRAFT_ONLY, null);
+    expect((await getCall()).status).toBe(401);
+  });
+
+  it("403 for a signed-in student or staff member with no communications access", async () => {
+    world(role("student"));
+    expect((await getCall()).status).toBe(403);
+    world({
+      roles: [{ id: "r-staff", name: "staff" }],
+      direct: [{ module: "events", key: "events.create" }],
+    });
+    const res = await getCall();
+    expect(res.status).toBe(403);
+    expect((await res.json()).error).toBe("Not authorized");
+  });
+
+  it("allows a communications-module permission such as campaigns.read", async () => {
+    world(perms("campaigns.read"));
+    const res = await getCall();
+    expect(res.status).toBe(200);
+    expect((await res.json()).campaign.id).toBe("c1");
+  });
+
+  it("allows other communications-module permissions and a role bundle", async () => {
+    world(perms("forms.read"));
+    expect((await getCall()).status).toBe(200);
+    world({
+      roles: [{ id: "r-staff", name: "staff" }],
+      direct: [],
+      bundles: { "r-staff": [{ module: "communications", key: "campaigns.read" }] },
+    });
+    expect((await getCall()).status).toBe(200);
+  });
+
+  it.each(["super_admin", "admin", "comms_admin"])("%s can read", async (name) => {
+    world(role(name));
+    expect((await getCall()).status).toBe(200);
+  });
+
+  it("404 when an allowed reader asks for a missing campaign", async () => {
+    world(role("comms_admin"));
+    state.campaign = null;
+    expect((await getCall()).status).toBe(404);
   });
 });

@@ -30,10 +30,9 @@ import { handleInboundEmail } from "@/lib/email/inbound";
 // complaint is logged as a POPIA objection.
 //
 // Signing: Resend uses Svix. We verify the svix-id / svix-timestamp /
-// svix-signature triple against RESEND_WEBHOOK_SECRET (whsec_...). If the
-// secret isn't configured yet we accept + log a warning, so wiring the
-// endpoint before pasting the secret doesn't silently drop events —
-// but set it: an unsigned public endpoint is spoofable.
+// svix-signature triple against RESEND_WEBHOOK_SECRET (whsec_...). The
+// secret must be set. A missing secret is a closed door (503), not a
+// reason to accept the body — an unsigned public endpoint is spoofable.
 
 export const runtime = "nodejs";
 // Inbound replies fetch the full email and may forward it with attachments.
@@ -110,22 +109,23 @@ export async function POST(request: Request) {
   const secret = process.env.RESEND_WEBHOOK_SECRET?.trim();
   const eventId = request.headers.get("svix-id");
 
-  if (secret) {
-    const ok = verifySvix(
-      secret,
-      eventId,
-      request.headers.get("svix-timestamp"),
-      request.headers.get("svix-signature"),
-      rawBody
+  if (!secret) {
+    console.error(
+      "[resend/webhook] RESEND_WEBHOOK_SECRET not set — refusing unverified event"
     );
-    if (!ok) {
-      console.error("[resend/webhook] signature verification failed");
-      return new NextResponse("invalid signature", { status: 401 });
-    }
-  } else {
-    console.warn(
-      "[resend/webhook] RESEND_WEBHOOK_SECRET not set — accepting unverified event"
-    );
+    return new NextResponse("webhook secret not configured", { status: 503 });
+  }
+
+  const ok = verifySvix(
+    secret,
+    eventId,
+    request.headers.get("svix-timestamp"),
+    request.headers.get("svix-signature"),
+    rawBody
+  );
+  if (!ok) {
+    console.error("[resend/webhook] signature verification failed");
+    return new NextResponse("invalid signature", { status: 401 });
   }
 
   let payload: ResendEvent;
