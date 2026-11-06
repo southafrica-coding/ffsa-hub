@@ -48,7 +48,7 @@ export async function GET(_request: Request, context: Ctx) {
   if (!row || !testimonyVisibleTo(row, user.id, access)) {
     return json({ error: "not_found", message: "Testimony not found." }, 404);
   }
-  return json({ testimony: await presentOne(row, access.publish) });
+  return json({ testimony: await presentOne(row, access.publish), can_publish: access.publish });
 }
 
 export async function PATCH(request: Request, context: Ctx) {
@@ -142,7 +142,10 @@ export async function PATCH(request: Request, context: Ctx) {
   if (patch.status === "withheld" && (row.status === "published" || row.published_at)) {
     await recordRemovalBestEffort(id, "withheld");
   }
-  return json({ testimony: await presentOne(updated.data as TestimonyRow, access.publish) });
+  return json({
+    testimony: await presentOne(updated.data as TestimonyRow, access.publish),
+    can_publish: access.publish,
+  });
 }
 
 export async function DELETE(_request: Request, context: Ctx) {

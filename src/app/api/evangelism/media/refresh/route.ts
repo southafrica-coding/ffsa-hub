@@ -1,7 +1,7 @@
 import { mediaExpiresAt, parseTestimonyIds } from "@/lib/evangelism/contract";
 import { asError, guardEvangelism, isGuard, json, readBody } from "@/lib/evangelism/http";
 import { presentTestimony, type TestimonyRow } from "@/lib/evangelism/present";
-import { loadAuthorNames, signTestimonyMedia } from "@/lib/evangelism/signed-media";
+import { signTestimonyMedia } from "@/lib/evangelism/signed-media";
 import { listPublishedByIds } from "@/services/evangelism";
 
 // POST /api/evangelism/media/refresh  { ids: string[] }
@@ -27,10 +27,7 @@ export async function POST(request: Request) {
   const rows = (listed.data ?? []) as TestimonyRow[];
   const found = new Set(rows.map((row) => row.id));
   const expiresAt = mediaExpiresAt();
-  const [urls, names] = await Promise.all([
-    signTestimonyMedia(rows),
-    loadAuthorNames(rows.map((row) => row.author_user_id)),
-  ]);
+  const urls = await signTestimonyMedia(rows);
 
   return json({
     media_expires_at: expiresAt,
@@ -38,7 +35,8 @@ export async function POST(request: Request) {
       presentTestimony(row, {
         urls,
         publish: false,
-        authorName: names.get(row.author_user_id) ?? null,
+        authorName: null,
+        includeAuthorName: false,
         mediaExpiresAt: expiresAt,
       })
     ),

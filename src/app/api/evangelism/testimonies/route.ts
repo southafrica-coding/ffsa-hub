@@ -86,7 +86,10 @@ export async function GET(request: Request) {
 
   const { data, error } = await listTestimonies(supabase, { limit, visibility });
   if (error) return asError(error, "Couldn't load testimonies.");
-  return json({ testimonies: await presentMany((data ?? []) as TestimonyRow[], access.publish) });
+  return json({
+    testimonies: await presentMany((data ?? []) as TestimonyRow[], access.publish),
+    can_publish: access.publish,
+  });
 }
 
 export async function POST(request: Request) {
@@ -200,7 +203,7 @@ export async function POST(request: Request) {
   if (reloadError) return asError(reloadError, "Saved the story but couldn't read it back.");
   const saved = (fresh as TestimonyRow | null) ?? row;
   const [presented] = await presentMany([saved], access.publish);
-  return json({ testimony: presented }, 201);
+  return json({ testimony: presented, can_publish: access.publish }, 201);
 }
 
 async function confirmUploads(

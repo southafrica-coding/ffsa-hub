@@ -36,6 +36,8 @@ export function presentTestimony(
     urls: Map<string, string | null>;
     publish: boolean;
     authorName: string | null;
+    /** Wall/TV payloads omit the key entirely. Review and mine lists include it. */
+    includeAuthorName?: boolean;
     /** When the signed read URLs stop working. Same value for every file in this response. */
     mediaExpiresAt?: string | null;
   }
@@ -54,7 +56,7 @@ export function presentTestimony(
     status: row.status,
     published_at: row.published_at,
     author_user_id: row.author_user_id,
-    author_name: options.authorName,
+    ...(options.includeAuthorName === false ? {} : { author_name: options.authorName }),
     created_at: row.created_at,
     updated_at: row.updated_at,
     ...(options.publish ? { withheld_reason: row.withheld_reason, published_by: row.published_by } : {}),

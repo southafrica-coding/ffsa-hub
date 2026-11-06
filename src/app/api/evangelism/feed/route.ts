@@ -5,7 +5,7 @@ import { presentTestimony, type TestimonyRow } from "@/lib/evangelism/present";
 import { listRemovalIds } from "@/lib/evangelism/removals";
 import { isEvangelismNotReady } from "@/lib/evangelism/schema-error";
 import { aggregateTestimonies, statsWindow } from "@/lib/evangelism/stats";
-import { loadAuthorNames, signTestimonyMedia } from "@/lib/evangelism/signed-media";
+import { signTestimonyMedia } from "@/lib/evangelism/signed-media";
 import {
   STATS_ROW_CAP,
   listPublishedByIds,
@@ -36,15 +36,13 @@ import {
 const FEED_LIMIT = 50;
 
 async function presentRows(rows: TestimonyRow[], expiresAt: string) {
-  const [urls, names] = await Promise.all([
-    signTestimonyMedia(rows),
-    loadAuthorNames(rows.map((row) => row.author_user_id)),
-  ]);
+  const urls = await signTestimonyMedia(rows);
   return rows.map((row) =>
     presentTestimony(row, {
       urls,
       publish: false,
-      authorName: names.get(row.author_user_id) ?? null,
+      authorName: null,
+      includeAuthorName: false,
       mediaExpiresAt: expiresAt,
     })
   );

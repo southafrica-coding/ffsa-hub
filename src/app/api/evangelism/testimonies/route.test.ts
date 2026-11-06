@@ -101,6 +101,7 @@ describe("POST /api/evangelism/testimonies", () => {
     expect(res.status).toBe(201);
     expect(h.inserted).toMatchObject({ author_user_id: h.userId, status: "submitted", consent_to_share: true });
     const body = await res.json();
+    expect(body.can_publish).toBe(false);
     expect(body.testimony.author_name).toBe("Thabo N");
     expect(body.testimony.withheld_reason).toBeUndefined();
 
@@ -128,5 +129,14 @@ describe("GET /api/evangelism/testimonies", () => {
     h.access = { view: true, submit: false, publish: false };
     const res = await GET(new Request("http://x/api/evangelism/testimonies?status=draft"));
     expect(res.status).toBe(403);
+  });
+
+  it("keeps team draft and review queues publisher-only", async () => {
+    h.access = { view: true, submit: true, publish: false };
+    expect((await GET(new Request("http://x/api/evangelism/testimonies?status=submitted"))).status).toBe(403);
+    expect((await GET(new Request("http://x/api/evangelism/testimonies?status=draft"))).status).toBe(403);
+    const mine = await GET(new Request("http://x/api/evangelism/testimonies?status=draft&mine=1"));
+    expect(mine.status).toBe(200);
+    expect((await mine.json()).can_publish).toBe(false);
   });
 });
