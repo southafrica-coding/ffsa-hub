@@ -6944,7 +6944,7 @@ export type Database = {
           p_driver_label?: string | null
           p_driver_value?: number | null
           p_name: string
-          p_org_id: string
+          p_org_id?: string | null
           p_owner_id: string
           p_owner_kind: string
           p_period_id: string

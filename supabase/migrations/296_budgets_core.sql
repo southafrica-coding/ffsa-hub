@@ -208,7 +208,7 @@ CREATE TABLE IF NOT EXISTS public.budget_sections (
 CREATE TABLE IF NOT EXISTS public.budget_members (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   budget_id   uuid NOT NULL REFERENCES public.budgets(id) ON DELETE RESTRICT,
-  user_id     uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  user_id     uuid NOT NULL REFERENCES public.users(id) ON DELETE RESTRICT,
   role        text NOT NULL CHECK (role IN ('owner', 'editor', 'viewer')),
   added_by    uuid REFERENCES public.users(id) ON DELETE SET NULL,
   created_at  timestamptz NOT NULL DEFAULT now(),
@@ -542,7 +542,6 @@ BEGIN
     SELECT coalesce(NEW.currency,o.record_currency) INTO NEW.currency FROM public.finance_orgs o WHERE o.id=NEW.org_id AND o.is_active;
     IF NEW.currency IS NULL THEN RAISE EXCEPTION 'Active finance org required' USING ERRCODE='23514'; END IF;
     IF NOT EXISTS(SELECT 1 FROM public.fiscal_periods p WHERE p.id=NEW.period_id AND p.org_id=NEW.org_id AND p.archived_at IS NULL) THEN RAISE EXCEPTION 'Active period for selected org required' USING ERRCODE='23514'; END IF;
-    IF NEW.owner_kind='outreach_team' THEN RAISE EXCEPTION 'Outreach retains its existing budget model' USING ERRCODE='23514'; END IF;
     IF NEW.source_budget_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM public.budgets s WHERE s.id=NEW.source_budget_id AND s.org_id=NEW.org_id AND s.owner_kind=NEW.owner_kind AND public.budget_owner_id(s.staff_ministry_id,s.subcategory_id,s.program_id,s.event_id,s.outreach_team_id)=public.budget_owner_id(NEW.staff_ministry_id,NEW.subcategory_id,NEW.program_id,NEW.event_id,NEW.outreach_team_id)) THEN RAISE EXCEPTION 'Source budget has another org/owner' USING ERRCODE='23514'; END IF;
     IF NEW.source_template_id IS NOT NULL AND NEW.source_template_id<>NEW.template_id THEN RAISE EXCEPTION 'Source template must match template_id' USING ERRCODE='23514'; END IF;
     IF NOT EXISTS(SELECT 1 FROM public.budget_templates t WHERE t.id=NEW.template_id AND (t.org_id IS NULL OR (t.org_id=NEW.org_id AND t.owner_kind=NEW.owner_kind AND public.budget_owner_id(t.staff_ministry_id,t.subcategory_id,t.program_id,t.event_id,t.outreach_team_id)=public.budget_owner_id(NEW.staff_ministry_id,NEW.subcategory_id,NEW.program_id,NEW.event_id,NEW.outreach_team_id)))) THEN RAISE EXCEPTION 'Template has another org/owner' USING ERRCODE='23514'; END IF;
@@ -1083,14 +1082,12 @@ AS $$
 DECLARE
   v_template  public.budget_templates%ROWTYPE;
   v_id        uuid := gen_random_uuid();
+  v_org       uuid;
 BEGIN
   SELECT * INTO v_template FROM public.budget_templates
    WHERE id = p_template_id AND is_active AND archived_at IS NULL;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Budget template not found or not active' USING ERRCODE = '22023';
-  END IF;
-  IF p_owner_kind = 'outreach_team' THEN
-    RAISE EXCEPTION 'Outreach teams keep their own budget for now' USING ERRCODE = '22023';
   END IF;
   IF p_owner_kind IS NULL OR NOT (p_owner_kind = ANY (v_template.applies_to)) THEN
     RAISE EXCEPTION 'This template is not for owner kind %', p_owner_kind USING ERRCODE = '22023';
@@ -1107,21 +1104,29 @@ BEGIN
   IF p_name IS NULL OR btrim(p_name) = '' THEN
     RAISE EXCEPTION 'A budget name is required' USING ERRCODE = '22023';
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM public.fiscal_periods WHERE id = p_period_id AND archived_at IS NULL) THEN
+  SELECT p.org_id INTO v_org
+    FROM public.fiscal_periods p
+   WHERE p.id = p_period_id AND p.archived_at IS NULL;
+  IF NOT FOUND THEN
     RAISE EXCEPTION 'Period not found or archived' USING ERRCODE = '22023';
+  END IF;
+  -- Org comes from the period. Callers do not need to read finance_orgs.
+  IF p_org_id IS NOT NULL AND p_org_id IS DISTINCT FROM v_org THEN
+    RAISE EXCEPTION 'Budget org comes from the fiscal period' USING ERRCODE = '23514';
   END IF;
 
   INSERT INTO public.budgets
     (id, name, template_id, template_version, period_id, org_id, currency, owner_kind,
-     staff_ministry_id, subcategory_id, program_id, event_id,
+     staff_ministry_id, subcategory_id, program_id, event_id, outreach_team_id,
      source_budget_id, source_template_id, driver_label, driver_value)
   VALUES
-    (v_id, btrim(p_name), v_template.id, v_template.version, p_period_id, p_org_id,
+    (v_id, btrim(p_name), v_template.id, v_template.version, p_period_id, v_org,
      p_currency, p_owner_kind,
      CASE WHEN p_owner_kind = 'staff_ministry'       THEN p_owner_id END,
      CASE WHEN p_owner_kind = 'ministry_subcategory' THEN p_owner_id END,
      CASE WHEN p_owner_kind = 'program'              THEN p_owner_id END,
      CASE WHEN p_owner_kind = 'event'                THEN p_owner_id END,
+     CASE WHEN p_owner_kind = 'outreach_team'        THEN p_owner_id END,
      v_template.source_budget_id, v_template.id,
      coalesce(p_driver_label, v_template.driver_label),
      coalesce(p_driver_value, v_template.driver_value));
@@ -1162,27 +1167,30 @@ AS $$
 DECLARE
   v_src  public.budgets%ROWTYPE;
   v_id   uuid := gen_random_uuid();
+  v_org  uuid;
 BEGIN
   SELECT * INTO v_src FROM public.budgets WHERE id = p_source_budget_id;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Budget not found' USING ERRCODE = '22023';
   END IF;
-  IF v_src.owner_kind = 'outreach_team' THEN
-    RAISE EXCEPTION 'Outreach teams keep their own budget for now' USING ERRCODE = '22023';
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM public.fiscal_periods WHERE id = p_period_id AND archived_at IS NULL) THEN
+  SELECT p.org_id INTO v_org
+    FROM public.fiscal_periods p
+   WHERE p.id = p_period_id AND p.archived_at IS NULL;
+  IF NOT FOUND THEN
     RAISE EXCEPTION 'Period not found or archived' USING ERRCODE = '22023';
   END IF;
 
   INSERT INTO public.budgets
     (id, name, template_id, template_version, period_id, org_id, currency, owner_kind,
-     staff_ministry_id, subcategory_id, program_id, event_id,
+     staff_ministry_id, subcategory_id, program_id, event_id, outreach_team_id,
      source_budget_id, source_template_id, driver_label, driver_value,
      funding_goal_cents, income_goal_cents, fundraising_goal_cents, notes)
   VALUES
     (v_id, coalesce(nullif(btrim(p_name), ''), v_src.name), v_src.template_id, v_src.template_version,
-     p_period_id, v_src.org_id, v_src.currency, v_src.owner_kind,
-     v_src.staff_ministry_id, v_src.subcategory_id, v_src.program_id, v_src.event_id,
+     p_period_id, v_org,
+     CASE WHEN v_org IS NOT DISTINCT FROM v_src.org_id THEN v_src.currency END,
+     v_src.owner_kind,
+     v_src.staff_ministry_id, v_src.subcategory_id, v_src.program_id, v_src.event_id, v_src.outreach_team_id,
      v_src.id, NULL, v_src.driver_label, v_src.driver_value,
      v_src.funding_goal_cents, v_src.income_goal_cents, v_src.fundraising_goal_cents, v_src.notes);
 
@@ -1426,7 +1434,7 @@ DROP POLICY IF EXISTS "Approver decides on submitted budgets" ON public.budgets;
 CREATE POLICY "Approver decides on submitted budgets"
   ON public.budgets FOR UPDATE
   USING (finance_private.can_approve_budgets() AND status IN ('submitted', 'approved') AND archived_at IS NULL)
-  WITH CHECK (finance_private.can_approve_budgets() AND status IN ('draft', 'submitted', 'approved'));
+  WITH CHECK (finance_private.can_approve_budgets() AND status IN ('draft', 'submitted', 'approved', 'archived'));
 
 DROP POLICY IF EXISTS "Finance and members read budget sections" ON public.budget_sections;
 CREATE POLICY "Finance and members read budget sections"
@@ -1511,7 +1519,7 @@ ON CONFLICT (key) DO NOTHING;
 INSERT INTO public.budget_templates (key, name, version, applies_to, default_currency, funding_fields)
 VALUES (
   'team_standard', 'Team budget (standard)', 1,
-  ARRAY['staff_ministry', 'ministry_subcategory', 'program', 'event'],
+  ARRAY['staff_ministry', 'ministry_subcategory', 'program', 'event', 'outreach_team'],
   'ZAR',
   '[{"key": "funding_goal_cents",     "label": "Funding goal"},
     {"key": "funds_in_hand_cents",    "label": "Funds in hand"},
@@ -1554,7 +1562,7 @@ COMMENT ON TABLE public.budget_templates IS
 COMMENT ON COLUMN public.budget_templates.key IS
   'Stable handle for built-in templates (''team_standard''). NULL for templates saved from a budget.';
 COMMENT ON COLUMN public.budget_templates.applies_to IS
-  'Owner kinds the template may be used for. outreach_team is allowed in the type but not offered yet.';
+  'Owner kinds the template may be used for, including an outreach team. That is a workbook row on budgets, not a copy of the outreach ledger.';
 COMMENT ON COLUMN public.budget_templates.funding_fields IS
   'Which funding rows the overview shows: [{key, label}], keys are budgets.*_cents columns.';
 COMMENT ON COLUMN public.budget_templates.owner_kind IS
@@ -1574,7 +1582,7 @@ COMMENT ON TABLE public.budget_template_line_coding IS
 COMMENT ON TABLE public.budgets IS
   'One budget for one entity (staff ministry, ministry sub-category, school, event, or outreach team via outreach_team_id), one finance org and one fiscal period. Currency matches that org. One person is the responsible owner. Created by create_budget_from_template() or copy_budget_to_period(); always starts as a draft. Money in cents. Archived, never deleted. Members see their own; finance sees all.';
 COMMENT ON COLUMN public.budgets.owner_kind IS
-  'Which owner column is set: staff_ministry, ministry_subcategory, program, event (or outreach_team, reserved). Exactly one owner column is non-null and it matches this.';
+  'Which owner column is set: staff_ministry, ministry_subcategory, program, event, or outreach_team. Exactly one owner column is non-null and it matches this. outreach_team_id is the team #507 looks up.';
 COMMENT ON COLUMN public.budgets.template_version IS
   'The template version this budget was copied from. The budget is never updated when the template changes.';
 COMMENT ON COLUMN public.budgets.source_budget_id IS

@@ -11,10 +11,15 @@ type SaveTemplateArgs = Database["public"]["Functions"]["save_budget_as_template
 // Budgets (migrations 295–299). Pure data access: every call runs as the
 // signed-in user, so RLS decides what they can see and change. Totals,
 // coding status, org currency and the copied Xero coding are set by
-// database triggers — nothing here sends them, and nothing here reads or
-// writes outreach budgets.
+// database triggers — nothing here sends them, and nothing here imports
+// outreach_expenses. An outreach team can still own a workbook row.
 
-export type BudgetOwnerKind = "staff_ministry" | "ministry_subcategory" | "program" | "event";
+export type BudgetOwnerKind =
+  | "staff_ministry"
+  | "ministry_subcategory"
+  | "program"
+  | "event"
+  | "outreach_team";
 export type BudgetCurrency = "ZAR" | "USD";
 export type BudgetStatus = "draft" | "submitted" | "approved" | "archived";
 export type XeroOrgRegion = "za" | "us";
@@ -24,6 +29,7 @@ const OWNER_COLUMN: Record<BudgetOwnerKind, string> = {
   ministry_subcategory: "subcategory_id",
   program: "program_id",
   event: "event_id",
+  outreach_team: "outreach_team_id",
 };
 
 // The period link is the composite (period_id, org_id) foreign key, so a
@@ -86,8 +92,11 @@ export type CreateBudgetInput = {
   ownerKind: BudgetOwnerKind;
   ownerId: string;
   periodId: string;
-  /** finance_orgs.id. Currency is filled from that org when omitted. */
-  orgId: string;
+  /**
+   * Optional check. The database sets org_id from the fiscal period, so a
+   * leader does not read finance_orgs. Pass it only to reject a mismatch.
+   */
+  orgId?: string;
   name: string;
   currency?: BudgetCurrency;
   driverLabel?: string;
@@ -107,7 +116,7 @@ export async function createBudgetFromTemplate(supabase: Client, input: CreateBu
     p_owner_kind: input.ownerKind,
     p_owner_id: input.ownerId,
     p_period_id: input.periodId,
-    p_org_id: input.orgId,
+    p_org_id: input.orgId ?? null,
     p_name: input.name,
     p_currency: input.currency ?? null,
     p_driver_label: input.driverLabel ?? null,

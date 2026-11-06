@@ -25,8 +25,10 @@ describe("migrations 295–299 — numbering", () => {
     for (const [n, f] of Object.entries(FILES)) {
       expect(files.filter((x) => x.startsWith(`${n}_`))).toEqual([f]);
     }
-    for (const reserved of ["276", "277", "278", "279", "293", "294"]) {
-      expect(files.filter((x) => x.startsWith(`${reserved}_`)), reserved).toEqual([]);
+    // 276 (#441), 293 (#508) and 294 (#506) live on other branches. Do not
+    // assert they are absent; that fails as soon as one of them merges.
+    for (const gone of ["277", "278", "279"]) {
+      expect(files.filter((x) => x.startsWith(`${gone}_`)), gone).toEqual([]);
     }
   });
 
@@ -93,7 +95,7 @@ describe("migrations 295–299 — security", () => {
   it("keeps the public create/copy/save RPCs invoker-only and away from anon", () => {
     const core = all[1].code;
     expect(core).toMatch(
-      /FUNCTION public\.create_budget_from_template\(\s*p_template_id\s+uuid,\s*p_owner_kind\s+text,\s*p_owner_id\s+uuid,\s*p_period_id\s+uuid,\s*p_org_id\s+uuid,/
+      /FUNCTION public\.create_budget_from_template\(\s*p_template_id\s+uuid,\s*p_owner_kind\s+text,\s*p_owner_id\s+uuid,\s*p_period_id\s+uuid,\s*p_org_id\s+uuid(?:\s+DEFAULT NULL)?,/
     );
     for (const fn of ["create_budget_from_template", "copy_budget_to_period", "save_budget_as_template"]) {
       expect(core).toMatch(new RegExp(`FUNCTION public\\.${fn}\\([\\s\\S]*?SECURITY INVOKER`));
@@ -179,7 +181,7 @@ describe("migrations 295–299 — the budget model", () => {
     expect(core).toMatch(/CONSTRAINT budget_template_line_coding_one_org UNIQUE\(template_line_id\)/);
     expect(core).toMatch(/Coding must use the budget\/template org/);
     expect(joined).not.toMatch(/finance_projects/);
-    expect(joined).not.toMatch(/outreach_team_budgets|outreach_budget_lines|outreach_expenses/);
+    expect(joined).not.toMatch(/outreach_team_budgets|outreach_budget_lines|public\.outreach_expenses/);
   });
 
   it("keeps the six workbook sections, with lines only on variable and fixed", () => {
@@ -206,7 +208,13 @@ describe("migrations 295–299 — the budget model", () => {
     expect(expenses).not.toMatch(/storage\.|receipt/i);
     expect(joined).not.toMatch(/CREATE TABLE public\.budget_repayments|CREATE TABLE public\.budget_xero_spends/);
     expect(joined).not.toMatch(/INSERT INTO public\.outreach_expenses|FROM public\.outreach_expenses/);
-    expect(expenses).toMatch(/Expense date must fall within the budget period/);
+    expect(expenses).not.toMatch(/expense_date NOT BETWEEN/);
+    expect(expenses).toMatch(/v_archive_only OR l\.archived_at IS NULL/);
+    expect(expenses).toMatch(/b\.status <> 'archived'/);
+    expect(core).not.toMatch(/Outreach retains its existing budget model|Outreach teams keep their own budget/);
+    expect(core).toMatch(/REFERENCES public\.users\(id\) ON DELETE RESTRICT/);
+    expect(core).toMatch(/status IN \('draft', 'submitted', 'approved', 'archived'\)/);
+    expect(core).toMatch(/SELECT p\.org_id INTO v_org/);
     expect(views).toMatch(/CREATE VIEW public\.v_budget_expense_tracker/);
     expect(views).toMatch(/CREATE VIEW public\.v_budget_overview/);
     expect(views).toMatch(/WHEN sb\.id IS NOT NULL AND sb\.org_id=b\.org_id AND sb\.currency=b\.currency/);
