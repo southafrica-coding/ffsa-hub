@@ -1,13 +1,14 @@
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
-import { Bell, Pencil, ShieldCheck, Trash2, UserRound } from "lucide-react-native";
+import { Bell, BriefcaseBusiness, CarFront, HeartPulse, IdCard, Pencil, ShieldCheck, Trash2, UserRound, UsersRound } from "lucide-react-native";
 import { useState } from "react";
 import { View } from "react-native";
 
 import { Banner, Button, Divider, Masthead, Screen, Text } from "@/components";
 import { AppearanceIcon, appearanceStrings, useAppearance } from "@/features/appearance";
 import { clearFeedCaches } from "@/features/home/feed-cache";
-import { ACCOUNT_DELETION_ROUTE, FULL_PROFILE_PATH, PRIVACY_POLICY_PATH } from "@/features/me/links";
+import { isStaff } from "@/features/me/docs-logic";
+import { ACCOUNT_DELETION_ROUTE, DOC_ROUTES, FULL_PROFILE_PATH, PRIVACY_POLICY_PATH } from "@/features/me/links";
 import { meStrings as s } from "@/features/me/strings";
 import { unregisterPushOnSignOut } from "@/features/push";
 import { ListRow, SectionBar, SkeletonRows, openWebPage, roleLabels, useMe } from "@/features/shell";
@@ -85,6 +86,18 @@ export default function MeScreen() {
           onPress={() => router.push("/me/edit")}
           disabled={!me}
         />
+      </View>
+
+      <View>
+        <SectionBar label={s.sections.documents} />
+        <ListRow icon={UsersRound} title={s.rows.household.title} subtitle={s.rows.household.subtitle} onPress={() => router.push(DOC_ROUTES.household)} />
+        <ListRow icon={CarFront} title={s.rows.licence.title} subtitle={s.rows.licence.subtitle} onPress={() => router.push(DOC_ROUTES.licence)} />
+        <ListRow icon={IdCard} title={s.rows.passport.title} subtitle={s.rows.passport.subtitle} onPress={() => router.push(DOC_ROUTES.passport)} />
+        <ListRow icon={HeartPulse} title={s.rows.insurance.title} subtitle={s.rows.insurance.subtitle} onPress={() => router.push(DOC_ROUTES.insurance)} />
+        {/* The web shows the staff CV (Work tab) to staff only; the API still decides. */}
+        {isStaff(me) ? (
+          <ListRow icon={BriefcaseBusiness} title={s.rows.cv.title} subtitle={s.rows.cv.subtitle} onPress={() => router.push(DOC_ROUTES.cv)} />
+        ) : null}
         <ListRow
           icon={UserRound}
           title={s.rows.fullProfile.title}

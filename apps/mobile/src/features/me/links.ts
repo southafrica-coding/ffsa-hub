@@ -1,7 +1,19 @@
 // Website pages the Me tab links to (opened in the in-app browser).
 
-/** The full web profile (household, documents, insurance, Slack, …). */
+/** The full web profile (personal details, Slack, agreements, records, …). */
 export const FULL_PROFILE_PATH = "/profile";
+
+/** The web profile's Work tab (staff CV entries are added and edited there). */
+export const STAFF_CV_PATH = "/profile?tab=work";
+
+/** The in-app document screens (app/(app)/me/…). */
+export const DOC_ROUTES = {
+  household: "/me/household",
+  licence: "/me/licence",
+  passport: "/me/passport",
+  insurance: "/me/insurance",
+  cv: "/me/cv",
+} as const;
 
 // No /privacy page exists on the website. The Hub's privacy agreement is
 // served publicly at /legal/consent?kind=privacy, so the app links there.

@@ -92,7 +92,7 @@ describe("Me", () => {
   it("web links open in the in-app browser and say so", async () => {
     mockFetch.mockImplementation(apiRoutes({ "/api/me": ME }));
     await render(wrap(<MeScreen />));
-    await fireEvent.press(await screen.findByRole("link", { name: "Open full profile on the web. Opens in browser" }));
+    await fireEvent.press(await screen.findByRole("link", { name: "More on the website. Opens in browser" }));
     await fireEvent.press(screen.getByRole("link", { name: "Privacy policy. Opens in browser" }));
     expect(openBrowser.mock.calls.map((c) => c[0])).toEqual([
       "https://hub.example.test/profile",
@@ -116,6 +116,24 @@ describe("Me", () => {
     await fireEvent.press(screen.getByRole("button", { name: "Notification settings" }));
     await fireEvent.press(screen.getByRole("button", { name: "Appearance" }));
     expect(mockRouter.push.mock.calls).toEqual([["/me/edit"], ["/me/notifications"], ["/me/appearance"]]);
+  });
+
+  it("documents: native rows for household, licence, passport and insurance push their screens", async () => {
+    mockFetch.mockImplementation(apiRoutes({ "/api/me": ME }));
+    await render(wrap(<MeScreen />));
+    await fireEvent.press(await screen.findByRole("button", { name: "Household" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Driver's licence" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Passport photo" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Health insurance" }));
+    await fireEvent.press(screen.getByRole("button", { name: "About your role" }));
+    expect(mockRouter.push.mock.calls).toEqual([["/me/household"], ["/me/licence"], ["/me/passport"], ["/me/insurance"], ["/me/cv"]]);
+  });
+
+  it("documents: the staff CV row is for staff only (students don't see it)", async () => {
+    mockFetch.mockImplementation(apiRoutes({ "/api/me": makeMe({ roles: [{ name: "student", scopeType: null, scopeId: null }] }) }));
+    await render(wrap(<MeScreen />));
+    expect(await screen.findByRole("button", { name: "Household" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "About your role" })).toBeNull();
   });
 
   it("sign out keeps the Appearance choice (it's per phone, not personal)", async () => {
