@@ -4,8 +4,10 @@
  * with hasReceipt, and decideXeroSpend refuses it anyway.
  *
  * The Xero id is stored on outreach_receipt_drafts.proposal.xero_write
- * (jsonb that already exists). A budget_expenses row is inserted only when
- * Hub Data has created that table.
+ * (jsonb that already exists). A row is also written to budget_xero_spends
+ * once Hub Data has created that table. That is the receipt/Xero log.
+ * It is not budget_expenses — on the updated PR #475 that name is the
+ * sheet's Expense Tracker and has a different shape.
  */
 
 import { isMissingRelation } from "@/lib/finance/budget-actuals";
@@ -29,6 +31,10 @@ export type ConfirmedSpend = {
   vendor: string | null;
   budgetId: string | null;
   budgetLineId: string | null;
+  /** npc or usa, when a budget was chosen. Null when the receipt is not on one yet. */
+  orgKey: "npc" | "usa" | null;
+  /** Book currency of that org: ZAR for NPC, USD for USA. */
+  currency: "ZAR" | "USD";
   region: XeroRegion;
   proposal: Record<string, unknown>;
 };
@@ -72,29 +78,46 @@ async function loadCoding(admin: Admin, lineId: string | null, region: XeroRegio
   return { accountCode, tracking, incomplete: false };
 }
 
-async function rememberBudgetExpense(
+/** The receipt/Xero log. Not budget_expenses. */
+async function rememberXeroSpend(
   admin: Admin,
   input: ConfirmedSpend,
   status: string,
   bankTransactionId: string | null
 ) {
-  const { error } = await admin.from("budget_expenses").insert({
+  const row = {
     budget_id: input.budgetId,
     budget_line_id: input.budgetLineId,
+    org_key: input.orgKey,
     outreach_expense_id: input.expenseId,
     receipt_draft_id: input.draftId,
     purchaser_user_id: input.hubUserId,
     amount_cents: Math.round(input.amountZar * 100),
-    currency: "ZAR",
+    currency: input.currency,
     spent_on: input.date,
     description: input.description,
     has_receipt: true,
     xero_bank_transaction_id: bankTransactionId,
     xero_status: status,
     confirmed_at: new Date().toISOString(),
-  });
+  };
+  const { data: existing, error: readError } = await admin
+    .from("budget_xero_spends")
+    .select("id")
+    .eq("receipt_draft_id", input.draftId)
+    .limit(1);
+  if (readError) {
+    if (!isMissingRelation(readError)) {
+      console.error("[xero] budget_xero_spends read failed", input.draftId, readError.message ?? readError);
+    }
+    return;
+  }
+  const prior = (existing ?? []) as { id: string }[];
+  const { error } = prior.length
+    ? await admin.from("budget_xero_spends").update(row).eq("id", prior[0].id)
+    : await admin.from("budget_xero_spends").insert(row);
   if (error && !isMissingRelation(error)) {
-    console.error("[xero] budget_expenses insert failed", input.draftId, error.message ?? error);
+    console.error("[xero] budget_xero_spends write failed", input.draftId, error.message ?? error);
   }
 }
 
@@ -159,7 +182,7 @@ export async function writeConfirmedSpend(
     .eq("id", input.draftId);
 
   if (input.confirmed && input.hasReceipt && !input.repayment) {
-    await rememberBudgetExpense(admin, input, status, bankTransactionId);
+    await rememberXeroSpend(admin, input, status, bankTransactionId);
   }
   return { status, bankTransactionId };
 }

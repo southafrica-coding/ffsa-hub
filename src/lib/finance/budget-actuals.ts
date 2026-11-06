@@ -102,7 +102,7 @@ export function regionForBudgetCurrency(currency: string | null | undefined): "z
   return (currency ?? "").toUpperCase() === "USD" ? "us" : "za";
 }
 
-/** PostgREST / Postgres when budgets (migrations 277–279) are not applied yet. */
+/** PostgREST / Postgres when the budget tables from the updated PR #475 are not applied yet. */
 export function isMissingRelation(error: { code?: string; message?: string } | null | undefined): boolean {
   if (!error) return false;
   const msg = `${error.code ?? ""} ${error.message ?? ""}`;

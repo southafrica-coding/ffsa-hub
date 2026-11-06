@@ -60,6 +60,13 @@ import {
 } from "./pull-logic";
 import { xeroResultSentence } from "@/lib/finance/xero-spend";
 import { writeConfirmedSpend } from "@/lib/finance/record-xero-spend";
+import {
+  orgForReceiptCurrency,
+  selectTeamBudget,
+  xeroBook,
+  type BudgetOrgKey,
+  type TeamBudgetRow,
+} from "@/lib/finance/team-budget-pick";
 import { isFinanceStaff, pickTeam, sastDate, summarise, type OutreachScope, type OutreachTeamRef } from "@/lib/slack/assistant/outreach";
 import { choosePlainBudgetLine, type PlainBudgetLine } from "./budget-line-language";
 import {
@@ -181,26 +188,91 @@ async function financeClosed(admin: Admin, teamId: string): Promise<boolean> {
   return data?.status === "auto_closed" || data?.status === "admin_override";
 }
 
-async function loadPlainLines(admin: Admin, teamId: string | null): Promise<PlainBudgetLine[]> {
-  if (!teamId) return [];
+type BudgetQueryRow = {
+  id: string;
+  name: string;
+  status: string;
+  currency: string | null;
+  org_id: string | null;
+  fiscal_periods?: { start_date?: string; end_date?: string } | { start_date?: string; end_date?: string }[] | null;
+  budget_lines?: { id: string; name: string; archived_at: string | null }[] | null;
+};
+
+function onePeriod(
+  value: BudgetQueryRow["fiscal_periods"]
+): { start_date?: string; end_date?: string } | null {
+  if (!value) return null;
+  return Array.isArray(value) ? value[0] ?? null : value;
+}
+
+/**
+ * Lines from the one budget this receipt belongs to: same team, the org
+ * for the slip (NPC/ZAR or USA/USD), and the fiscal period that contains
+ * the date. Several budgets for the team are not merged.
+ */
+async function linesForReceipt(
+  admin: Admin,
+  teamId: string | null,
+  proposal: Proposal,
+  nameHint: string | null
+): Promise<{
+  lines: PlainBudgetLine[];
+  org: BudgetOrgKey | null;
+  budgetId: string | null;
+  reason: "none" | "ambiguous" | "chosen";
+}> {
+  const none = { lines: [] as PlainBudgetLine[], org: null, budgetId: null, reason: "none" as const };
+  if (!teamId) return none;
   const { data, error } = await admin
     .from("budgets")
-    .select("id, status, budget_lines!budget_lines_budget_id_fkey(id, name, archived_at)")
+    .select(
+      `id, name, status, currency, org_id,
+       fiscal_periods!budgets_period_id_fkey(start_date, end_date),
+       budget_lines!budget_lines_budget_id_fkey(id, name, archived_at)`
+    )
     .eq("outreach_team_id", teamId)
     .is("archived_at", null);
-  if (error || !data) return [];
-  const out: PlainBudgetLine[] = [];
-  for (const budget of data as {
-    id: string;
-    status: string;
-    budget_lines?: { id: string; name: string; archived_at: string | null }[];
-  }[]) {
-    if (budget.status === "archived") continue;
-    for (const line of budget.budget_lines ?? []) {
-      if (!line.archived_at && line.name) out.push({ id: line.id, budgetId: budget.id, name: line.name });
+  if (error || !data) return none;
+
+  const rows = data as BudgetQueryRow[];
+  const orgIds = [...new Set(rows.map((row) => row.org_id).filter((id): id is string => !!id))];
+  const orgKeyById = new Map<string, BudgetOrgKey>();
+  if (orgIds.length) {
+    const { data: orgs } = await admin.from("finance_orgs").select("id, key").in("id", orgIds);
+    for (const org of (orgs ?? []) as { id: string; key: string }[]) {
+      if (org.key === "npc" || org.key === "usa") orgKeyById.set(org.id, org.key);
     }
   }
-  return out;
+
+  const candidates: TeamBudgetRow[] = rows.map((row) => {
+    const period = onePeriod(row.fiscal_periods);
+    return {
+      id: row.id,
+      name: row.name,
+      status: row.status,
+      orgKey: row.org_id ? orgKeyById.get(row.org_id) ?? null : null,
+      currency: row.currency,
+      periodStart: period?.start_date ?? null,
+      periodEnd: period?.end_date ?? null,
+      lines: (row.budget_lines ?? [])
+        .filter((line) => !line.archived_at && line.name)
+        .map((line) => ({ id: line.id, name: line.name })),
+    };
+  });
+
+  const org = orgForReceiptCurrency(proposal.local_currency);
+  const picked = selectTeamBudget(candidates, {
+    org,
+    expenseDate: proposal.expense_date,
+    nameHint,
+  });
+  if (!picked.ok) return { ...none, reason: picked.reason };
+  return {
+    org,
+    budgetId: picked.budget.id,
+    reason: "chosen",
+    lines: picked.budget.lines.map((line) => ({ id: line.id, budgetId: picked.budget.id, name: line.name })),
+  };
 }
 
 /** Names the budget line in plain words. An empty budget, or no budget tables yet, falls back to the category. */
@@ -210,17 +282,31 @@ async function withPlainLine(
   teamId: string | null,
   hint: { userNote: string | null; suggested: string | null }
 ): Promise<Proposal> {
-  const [lines, categories] = await Promise.all([loadPlainLines(admin, teamId), loadCategories(admin)]);
+  const [found, categories] = await Promise.all([
+    linesForReceipt(admin, teamId, proposal, hint.userNote),
+    loadCategories(admin),
+  ]);
   const categoryName = categories.find((c) => c.id === proposal.category_id)?.name ?? null;
+  const chosen = choosePlainBudgetLine({
+    userNote: hint.userNote,
+    suggested: hint.suggested ?? categoryName,
+    description: proposal.description,
+    categoryName,
+    lines: found.lines,
+  });
+  const warnings = (proposal.read_warnings ?? []).filter((warning) => !warning.startsWith("Two budgets match"));
+  if (found.reason === "ambiguous") {
+    warnings.push(
+      "Two budgets match this team, organisation and period. Put the budget's name in your note so I know which one."
+    );
+  }
   return {
     ...proposal,
-    ...choosePlainBudgetLine({
-      userNote: hint.userNote,
-      suggested: hint.suggested ?? categoryName,
-      description: proposal.description,
-      categoryName,
-      lines,
-    }),
+    ...chosen,
+    read_warnings: warnings,
+    // The budget is chosen by org and period even when no line name matched.
+    budget_id: chosen.budget_id ?? found.budgetId,
+    budget_org_key: found.org,
   };
 }
 
@@ -626,7 +712,7 @@ async function proposeReceipt(
       senderName: sender,
       proposal,
       categoryName: catName,
-      warnings,
+      warnings: proposal.read_warnings ?? warnings,
       team: current,
       teamChoices: isDM(a.m.channelId) ? a.choices : [],
     })
@@ -1006,27 +1092,41 @@ export async function confirmCardPayment(draftId: string, expenseId: string, sla
     const target = origin ?? draft;
     const originProposal = (target.proposal ?? {}) as Proposal;
     let xeroStatus = "failed";
-    try {
-      const xero = await writeConfirmedSpend(admin, {
-        draftId: target.id,
-        expenseId,
-        hubUserId: target.hub_user_id,
-        confirmed: true,
-        hasReceipt: Boolean(target.storage_path),
-        repayment: false,
-        zarConfirmed: true,
-        amountZar: bank.purchase,
-        date: exp.expense_date,
-        description: originProposal.budget_line_label || exp.description,
-        vendor: exp.vendor,
-        budgetId: originProposal.budget_id ?? null,
-        budgetLineId: originProposal.budget_line_id ?? null,
-        region: "za",
-        proposal: originProposal as unknown as Record<string, unknown>,
-      });
-      xeroStatus = xero.status;
-    } catch (xeroErr) {
-      console.error("[slack/outreach] xero after bank confirm failed", draftId, xeroErr);
+    // The bank notification confirms rand, so it posts to FFSA NPC. A dollar
+    // slip was already booked on FF USA Inc at Confirm and is not re-posted in rand.
+    if (originProposal.budget_org_key === "usa") {
+      xeroStatus = originProposal.xero_write?.status ?? "not_confirmed";
+    } else {
+      try {
+        const book = xeroBook("npc", {
+          localCurrency: "ZAR",
+          localAmount: bank.purchase,
+          zarAmount: bank.purchase,
+          zarConfirmed: true,
+        });
+        const xero = await writeConfirmedSpend(admin, {
+          draftId: target.id,
+          expenseId,
+          hubUserId: target.hub_user_id,
+          confirmed: true,
+          hasReceipt: Boolean(target.storage_path),
+          repayment: false,
+          zarConfirmed: book.zarConfirmed,
+          amountZar: book.amount,
+          date: exp.expense_date,
+          description: originProposal.budget_line_label || exp.description,
+          vendor: exp.vendor,
+          budgetId: originProposal.budget_id ?? null,
+          budgetLineId: originProposal.budget_line_id ?? null,
+          orgKey: originProposal.budget_org_key ?? "npc",
+          currency: book.currency,
+          region: book.region,
+          proposal: originProposal as unknown as Record<string, unknown>,
+        });
+        xeroStatus = xero.status;
+      } catch (xeroErr) {
+        console.error("[slack/outreach] xero after bank confirm failed", draftId, xeroErr);
+      }
     }
 
     if (draft.card_ts) {
@@ -1214,6 +1314,12 @@ export async function logReceipt(draftId: string, slackUserId: string, reply: Re
     const { data: saved } = await admin.from("outreach_expenses").select("zar_amount").eq("id", expense.id).maybeSingle();
     const zarFinal = saved?.zar_amount != null ? Number(saved.zar_amount) : p.zar_amount;
     const fromPulls = p.payment_method === "cash" && p.local_currency !== "ZAR";
+    const book = xeroBook(p.budget_org_key ?? null, {
+      localCurrency: p.local_currency,
+      localAmount: p.local_amount,
+      zarAmount: Number(zarFinal),
+      zarConfirmed: p.local_currency === "ZAR" || Boolean(p.zar_confirmed),
+    });
     let xeroStatus = "failed";
     try {
       const xero = await writeConfirmedSpend(admin, {
@@ -1223,14 +1329,16 @@ export async function logReceipt(draftId: string, slackUserId: string, reply: Re
         confirmed: true,
         hasReceipt: true,
         repayment: false,
-        zarConfirmed: p.local_currency === "ZAR" || Boolean(p.zar_confirmed),
-        amountZar: Number(zarFinal),
+        zarConfirmed: book.zarConfirmed,
+        amountZar: book.amount,
         date: p.expense_date,
         description: p.budget_line_label || p.description,
         vendor: p.vendor,
         budgetId: p.budget_id ?? null,
         budgetLineId: p.budget_line_id ?? null,
-        region: "za",
+        orgKey: p.budget_org_key ?? null,
+        currency: book.currency,
+        region: book.region,
         proposal: p as unknown as Record<string, unknown>,
       });
       xeroStatus = xero.status;

@@ -209,6 +209,8 @@ export type Proposal = {
   budget_id?: string | null;
   budget_line_id?: string | null;
   budget_line_label?: string | null;
+  /** Which finance org that budget belongs to. NPC records ZAR, USA records USD. */
+  budget_org_key?: "npc" | "usa" | null;
   /** Set after confirm, once a Xero spend has been attempted. */
   xero_write?: {
     status: string;

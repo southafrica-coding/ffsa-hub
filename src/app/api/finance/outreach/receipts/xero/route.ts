@@ -8,6 +8,7 @@
 
 import { NextResponse } from "next/server";
 import { writeConfirmedSpend } from "@/lib/finance/record-xero-spend";
+import { xeroBook, type BudgetOrgKey } from "@/lib/finance/team-budget-pick";
 import { canEditFinanceProjects } from "@/lib/finance/orgs";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -48,29 +49,38 @@ export async function POST(request: Request) {
     description?: string;
     expense_date?: string;
     zar_amount?: number;
-    local_currency?: string;
     zar_confirmed?: boolean;
     budget_id?: string | null;
     budget_line_id?: string | null;
     budget_line_label?: string | null;
+    budget_org_key?: BudgetOrgKey | null;
+    local_amount?: number | null;
+    local_currency?: string | null;
   };
 
-  let zarConfirmed = proposal.local_currency === "ZAR" || Boolean(proposal.zar_confirmed);
-  let amountZar = Number(proposal.zar_amount);
+  const org: BudgetOrgKey | null =
+    proposal.budget_org_key === "usa" || proposal.budget_org_key === "npc" ? proposal.budget_org_key : null;
+  let localCurrency = proposal.local_currency ?? "ZAR";
+  const localAmount = proposal.local_amount ?? null;
+  let zarAmount = Number(proposal.zar_amount);
+  let zarConfirmed = (proposal.local_currency ?? "").toUpperCase() === "ZAR" || Boolean(proposal.zar_confirmed);
   let date = proposal.expense_date ?? "";
-  if (draft.expense_id) {
+  // The saved expense is the rand book. A USA budget keeps the dollar slip instead.
+  if (draft.expense_id && org !== "usa") {
     const { data: expense } = await admin
       .from("outreach_expenses")
       .select("zar_amount, zar_confirmed, local_currency, expense_date")
       .eq("id", draft.expense_id)
       .maybeSingle();
     if (expense) {
+      localCurrency = expense.local_currency ?? localCurrency;
+      zarAmount = Number(expense.zar_amount);
       zarConfirmed = expense.local_currency === "ZAR" || Boolean(expense.zar_confirmed);
-      amountZar = Number(expense.zar_amount);
       date = expense.expense_date ?? date;
     }
   }
 
+  const book = xeroBook(org, { localCurrency, localAmount, zarAmount, zarConfirmed });
   const result = await writeConfirmedSpend(admin, {
     draftId,
     expenseId: draft.expense_id ?? null,
@@ -78,14 +88,16 @@ export async function POST(request: Request) {
     confirmed: true,
     hasReceipt: Boolean(draft.storage_path),
     repayment: false,
-    zarConfirmed,
-    amountZar,
+    zarConfirmed: book.zarConfirmed,
+    amountZar: book.amount,
     date,
     description: proposal.budget_line_label || proposal.description || "Receipt",
     vendor: proposal.vendor ?? null,
     budgetId: proposal.budget_id ?? null,
     budgetLineId: proposal.budget_line_id ?? null,
-    region: "za",
+    orgKey: org,
+    currency: book.currency,
+    region: book.region,
     proposal,
   });
 
