@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { userCanManageApplications } from "@/lib/auth/check-schools-access";
+import { gradeMarksRestrictMessage } from "@/lib/schools/lms-http";
 import { deactivateMembershipProfile } from "@/lib/auth/membership-roles";
 import {
   createEnrollment,
@@ -186,6 +187,10 @@ export async function DELETE(request: Request) {
   const { error } = await deleteEnrollment(admin, id);
 
   if (error) {
+    const marks = gradeMarksRestrictMessage(error);
+    if (marks) {
+      return NextResponse.json({ error: marks }, { status: 409 });
+    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
