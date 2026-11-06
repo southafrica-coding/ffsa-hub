@@ -283,6 +283,79 @@ export async function getXeroTrackingOptions(
 }
 
 // ────────────────────────────────────────────────────────────
+// CODE MIRROR SOURCE (read-only)
+// ────────────────────────────────────────────────────────────
+
+const XERO_MIRROR_TIMEOUT_MS = 20_000;
+
+export type XeroMirrorSource =
+  | {
+      ok: true;
+      tenantId: string;
+      // Raw Xero objects, every type and status Xero returns.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      accounts: any[];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      trackingCategories: any[];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      items: any[];
+    }
+  | { ok: false; reason: "not_connected" | "token" | "xero"; message: string; tenantId?: string };
+
+/**
+ * Everything the code mirror (migration 275) copies from one organisation:
+ * the full chart of accounts, every tracking category with its options
+ * (archived ones included), and every item. Three GETs, nothing written to
+ * Xero. Never throws: a region that can't be read says why, so the caller
+ * can record it and carry on with the other region.
+ */
+export async function fetchXeroMirrorSource(
+  supabase: Client,
+  region: XeroRegion
+): Promise<XeroMirrorSource> {
+  const tokens = await getStoredTokens(supabase, region);
+  if (!tokens) {
+    return { ok: false, reason: "not_connected", message: "This organisation is not connected to Xero." };
+  }
+  const auth = await getValidAccessToken(supabase, region);
+  if (!auth) {
+    return {
+      ok: false,
+      reason: "token",
+      tenantId: tokens.tenant_id,
+      message: "Xero would not renew the saved authorisation. Reconnect this organisation.",
+    };
+  }
+  try {
+    const opts = { timeoutMs: XERO_MIRROR_TIMEOUT_MS };
+    // One at a time: three calls is nowhere near Xero's per-minute limit,
+    // and it keeps us well under its 5-concurrent-calls cap too.
+    const accounts = await xeroGet(auth.accessToken, auth.tenantId, "Accounts", opts);
+    const tracking = await xeroGet(
+      auth.accessToken,
+      auth.tenantId,
+      "TrackingCategories?includeArchived=true",
+      opts
+    );
+    const items = await xeroGet(auth.accessToken, auth.tenantId, "Items", opts);
+    return {
+      ok: true,
+      tenantId: auth.tenantId,
+      accounts: accounts.Accounts ?? [],
+      trackingCategories: tracking.TrackingCategories ?? [],
+      items: items.Items ?? [],
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      reason: "xero",
+      tenantId: auth.tenantId,
+      message: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+// ────────────────────────────────────────────────────────────
 // PAYMENT STATE OF SPECIFIC INVOICES (read-only)
 // ────────────────────────────────────────────────────────────
 
