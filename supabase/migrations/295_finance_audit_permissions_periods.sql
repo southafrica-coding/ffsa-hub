@@ -1,7 +1,7 @@
 -- DRAFT ONLY. DO NOT APPLY to production.
 -- Replaces the unapplied #475 file 277_finance_audit_permissions_periods.sql.
 -- Depends on main's already-applied 275 (Xero code mirror), 290 (finance_orgs
--- and projects) and 291 (Xero sync). Do not reapply those. Do not invent a 276.
+-- and projects) and 291 (Xero sync). Do not reapply those.
 -- Numbered 295: 293 and 294 are reserved by sibling draft PRs. Once-only;
 -- not safe to re-run, and there is no destructive rollback.
 -- finance_private must NOT be added to the exposed API schemas.
