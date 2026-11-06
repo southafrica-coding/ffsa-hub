@@ -163,6 +163,8 @@ async function rememberXeroSpend(
     bookAmount: input.amountZar,
     bookCurrency: input.currency,
     budgetCurrency,
+    periodStart: input.periodStart,
+    periodEnd: input.periodEnd,
     spentOn: input.date,
     description: input.description,
     hasReceipt: input.hasReceipt,

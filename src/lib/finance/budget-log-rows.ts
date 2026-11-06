@@ -33,6 +33,9 @@ export function xeroSpendLogRow(args: {
   bookAmount: number;
   bookCurrency: BudgetCurrency;
   budgetCurrency: BudgetCurrency | null;
+  /** Inclusive fiscal-period bounds. #513 rejects a date outside them. */
+  periodStart: string | null;
+  periodEnd: string | null;
   spentOn: string;
   description: string;
   hasReceipt: boolean;
@@ -43,7 +46,13 @@ export function xeroSpendLogRow(args: {
   if (!args.budgetId || !args.budgetCurrency) return null;
   if (args.bookCurrency !== args.budgetCurrency) return null;
   const description = args.description.trim();
-  if (!description || !args.spentOn) return null;
+  const spentOn = args.spentOn.slice(0, 10);
+  const periodStart = args.periodStart?.slice(0, 10) ?? "";
+  const periodEnd = args.periodEnd?.slice(0, 10) ?? "";
+  // 301 rejects a date outside the budget period. No row, including an update.
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(spentOn) || !periodStart || !periodEnd) return null;
+  if (spentOn < periodStart || spentOn > periodEnd) return null;
+  if (!description) return null;
   const amountCents = Math.round(args.bookAmount * 100);
   if (!Number.isInteger(amountCents) || amountCents <= 0) return null;
   return {
@@ -53,7 +62,7 @@ export function xeroSpendLogRow(args: {
     receipt_draft_id: args.receiptDraftId,
     purchaser_user_id: args.purchaserUserId,
     amount_cents: amountCents,
-    spent_on: args.spentOn,
+    spent_on: spentOn,
     description: description.slice(0, 4000),
     has_receipt: args.hasReceipt,
     xero_bank_transaction_id: args.xeroBankTransactionId,

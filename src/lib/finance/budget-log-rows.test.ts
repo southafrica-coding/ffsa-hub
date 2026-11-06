@@ -11,6 +11,8 @@ describe("xeroSpendLogRow", () => {
     bookAmount: 40,
     bookCurrency: "USD" as const,
     budgetCurrency: "USD" as const,
+    periodStart: "2026-01-01",
+    periodEnd: "2026-12-31",
     spentOn: "2026-11-06",
     description: "  Food  ",
     hasReceipt: true,
@@ -44,6 +46,9 @@ describe("xeroSpendLogRow", () => {
     expect(xeroSpendLogRow({ ...base, budgetId: null })).toBeNull();
     expect(xeroSpendLogRow({ ...base, bookCurrency: "ZAR", bookAmount: 720 })).toBeNull();
     expect(xeroSpendLogRow({ ...base, bookAmount: 0 })).toBeNull();
+    expect(xeroSpendLogRow({ ...base, spentOn: "2025-12-31" })).toBeNull();
+    expect(xeroSpendLogRow({ ...base, spentOn: "2027-01-01" })).toBeNull();
+    expect(xeroSpendLogRow({ ...base, periodStart: null, periodEnd: null })).toBeNull();
   });
 });
 
