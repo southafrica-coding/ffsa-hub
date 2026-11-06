@@ -2,7 +2,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { userCanManageProgram } from "@/lib/auth/check-schools-access";
 import { guardUser, isGuard } from "@/lib/schools/lms-guard";
 import { dbError, isUuid, json, previewWritesDisabled } from "@/lib/schools/lms-http";
-import { enrollmentIsClosed } from "@/lib/schools/learning-course";
 import { graderCapability, isLetterGrade, type GraderAssignment } from "@/lib/schools/multi-grader";
 import { listGraderRowsForUser } from "@/services/course-graders";
 import { getLearningCourse, postOfficialGrade } from "@/services/learning-courses";
@@ -11,9 +10,9 @@ import { getLearningCourse, postOfficialGrade } from "@/services/learning-course
 //   { enrollment_id, course_id, letter_grade, notes? }
 //
 // Writes the one transcript letter on `grades` (unique per enrolment and
-// billing course). School managers can post today. A grader can post only
-// when course_graders.can_post_official is true — that table is proposed,
-// so until Hub Data applies it only managers succeed.
+// billing course). A school manager can post. A grader can post only when
+// the most specific covering course_graders row has can_post_official.
+// A student who has left (removed_at or withdrawn) can still be graded.
 //
 // This does not replace POST /api/schools/grades. That route is what the
 // grades matrix uses. This one is the authed path for training leaders,
@@ -47,14 +46,11 @@ export async function POST(request: Request) {
   const admin = createAdminClient();
   const { data: enrollment, error } = await admin
     .from("enrollments")
-    .select("id, program_id, removed_at, status")
+    .select("id, program_id")
     .eq("id", enrollmentId)
     .maybeSingle();
   if (error) return dbError(error, "Couldn't load the enrolment.");
   if (!enrollment) return json({ error: "not_found", message: "Enrolment not found." }, 404);
-  if (enrollmentIsClosed(enrollment)) {
-    return json({ error: "bad_request", message: "That student is no longer on this school's roster." }, 400);
-  }
 
   const course = await getLearningCourse(admin, enrollment.program_id, courseId);
   if (course.error) return dbError(course.error, "Couldn't load the course.");

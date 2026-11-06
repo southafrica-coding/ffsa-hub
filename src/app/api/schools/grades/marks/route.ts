@@ -2,7 +2,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { userCanManageProgram } from "@/lib/auth/check-schools-access";
 import { guardUser, isGuard } from "@/lib/schools/lms-guard";
 import { dbError, isLmsSchemaMissing, isUuid, json, lmsSchemaNotApplied, previewWritesDisabled } from "@/lib/schools/lms-http";
-import { enrollmentIsClosed } from "@/lib/schools/learning-course";
 import { assignmentCovers, combineLetterGrades, graderCapability, isLetterGrade, type GraderAssignment } from "@/lib/schools/multi-grader";
 import { listCourseGraders, listGradeMarks, listGraderRowsForUser, upsertGradeMark } from "@/services/course-graders";
 import { getLearningCourse } from "@/services/learning-courses";
@@ -11,9 +10,13 @@ import { getLearningCourse } from "@/services/learning-courses";
 // POST /api/schools/grades/marks
 //   { enrollment_id, billing_course_id, letter_grade, notes? }
 //
-// The caller records their own mark. A school manager's mark is theirs,
-// not a silent overwrite of someone else. The official transcript letter
-// is POST /api/schools/grades/official.
+// The caller records their own mark. A school manager may write a mark
+// without a course_graders row. Anyone else needs a covering assignment.
+// There is no database foreign key from grade_marks.grader_user_id to
+// course_graders; this route is the check.
+// Leaving the school (removed_at or withdrawn) does not block reading or
+// writing a letter. Existing marks stay.
+// The official transcript letter is POST /api/schools/grades/official.
 // Table grade_marks is proposed — 503 until Hub Data applies it.
 //
 // Students do not use this route. They already read their official grade
@@ -129,14 +132,11 @@ async function loadScope(
 ): Promise<Scope> {
   const { data: enrollment, error } = await admin
     .from("enrollments")
-    .select("id, program_id, removed_at, status")
+    .select("id, program_id")
     .eq("id", enrollmentId)
     .maybeSingle();
   if (error) return { response: dbError(error, "Couldn't load the enrolment.") };
   if (!enrollment) return { response: json({ error: "not_found", message: "Enrolment not found." }, 404) };
-  if (enrollmentIsClosed(enrollment)) {
-    return { response: json({ error: "bad_request", message: "That student is no longer on this school's roster." }, 400) };
-  }
 
   const course = await getLearningCourse(admin, enrollment.program_id, courseId);
   if (course.error) return { response: dbError(course.error, "Couldn't load the course.") };

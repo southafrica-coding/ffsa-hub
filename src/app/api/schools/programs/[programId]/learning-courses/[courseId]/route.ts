@@ -19,8 +19,11 @@ import {
 // PATCH  /api/schools/programs/:programId/learning-courses/:courseId
 // DELETE /api/schools/programs/:programId/learning-courses/:courseId
 //
-// Delete is refused while fee items, billing plans, or transcript grades
-// still point at the course.
+// Delete is refused while fee items, billing plans, transcript grades, or
+// grader marks still point at the course. countRelated on
+// grade_marks.billing_course_id returns 409 before the delete. If that
+// check is missed, grade_marks ON DELETE RESTRICT comes back as 23503 and
+// dbError maps it to the same 409.
 
 type Ctx = { params: Promise<{ programId: string; courseId: string }> };
 

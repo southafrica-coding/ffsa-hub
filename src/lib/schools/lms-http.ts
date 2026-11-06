@@ -97,6 +97,28 @@ export function uniqueConflictMessage(error: { message?: string; details?: strin
   return "That record already exists.";
 }
 
+/**
+ * grade_marks foreign keys are ON DELETE RESTRICT. A 23503 that names that
+ * table is "marks still exist", not a bad id.
+ * - grader_user_id: this person still has marks (user delete / offboarding)
+ * - billing_course_id: same meaning as the course-delete pre-check
+ * - enrollment_id: the enrolment still has marks
+ */
+export function gradeMarksRestrictMessage(error: {
+  code?: string;
+  message?: string;
+  details?: string;
+}): string | null {
+  if (error.code !== "23503") return null;
+  const text = `${error.message ?? ""} ${error.details ?? ""}`;
+  if (!/grade_marks/i.test(text)) return null;
+  if (/grader_user_id/i.test(text)) return "This person still has grader marks.";
+  if (/enrollment_id/i.test(text)) {
+    return "This enrolment still has grader marks. Remove them before deleting it.";
+  }
+  return "This course has grader marks. Remove them before deleting the course.";
+}
+
 export function dbError(
   error: { code?: string; message?: string; details?: string },
   fallback: string
@@ -106,6 +128,8 @@ export function dbError(
   if (error.code === "23505") {
     return json({ error: "conflict", message: uniqueConflictMessage(error) }, 409);
   }
+  const marks = gradeMarksRestrictMessage(error);
+  if (marks) return json({ error: "conflict", message: marks }, 409);
   if (error.code === "23503") {
     return json({ error: "bad_request", message: "That link does not point at a real record." }, 400);
   }

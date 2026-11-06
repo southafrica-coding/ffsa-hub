@@ -39,6 +39,19 @@ describe("graderCapability", () => {
       }).can_post_official
     ).toBe(false);
   });
+
+  it("uses only the most specific covering row, and does not open other notes", () => {
+    const flags = graderCapability({
+      manager: false,
+      assignments: [
+        { grader_user_id: "g", billing_course_id: "c1", enrollment_id: null, can_post_official: true },
+        { grader_user_id: "g", billing_course_id: "c1", enrollment_id: "e1", can_post_official: false },
+        { grader_user_id: "g", billing_course_id: null, enrollment_id: "e1", can_post_official: true },
+      ],
+      ...target,
+    });
+    expect(flags).toEqual({ can_post_official: false, can_see_other_graders_notes: false });
+  });
 });
 
 describe("assignmentCovers", () => {

@@ -92,9 +92,46 @@ export type GraderAssignment = {
 };
 
 /**
+ * How tightly a row matches this student and course.
+ * 3 course+student, 2 course-wide, 1 student-wide, 0 both null (widest).
+ * Null when the row does not cover the target.
+ * The most specific covering row is the only one whose can_post_official counts.
+ * That choice does not reveal other graders' notes.
+ */
+export function assignmentSpecificity(
+  row: GraderAssignment,
+  target: { enrollmentId: string; courseId: string }
+): number | null {
+  if (!assignmentCovers(row, target)) return null;
+  const course = row.billing_course_id != null;
+  const student = row.enrollment_id != null;
+  if (course && student) return 3;
+  if (course) return 2;
+  if (student) return 1;
+  return 0;
+}
+
+/** The single covering row that decides can_post_official. Ties keep the first row. */
+export function mostSpecificAssignment(
+  assignments: GraderAssignment[],
+  target: { enrollmentId: string; courseId: string }
+): GraderAssignment | null {
+  let best: GraderAssignment | null = null;
+  let rank = -1;
+  for (const row of assignments) {
+    const next = assignmentSpecificity(row, target);
+    if (next == null || next <= rank) continue;
+    best = row;
+    rank = next;
+  }
+  return best;
+}
+
+/**
  * Flags the marks UI reads. School managers may post the official letter and
  * read every grader's notes. An assigned grader may post the official letter
- * only when a covering row says so, and never sees another grader's notes.
+ * only when the most specific covering row says so. Overlapping rows are not
+ * OR-ed. Graders never see another grader's notes.
  * Letter visibility is unchanged.
  */
 export function graderCapability(input: {
@@ -103,18 +140,10 @@ export function graderCapability(input: {
   enrollmentId: string;
   courseId: string;
 }): { can_post_official: boolean; can_see_other_graders_notes: boolean } {
-  const canPost =
-    input.manager ||
-    input.assignments.some(
-      (row) =>
-        row.can_post_official === true &&
-        assignmentCovers(row, {
-          enrollmentId: input.enrollmentId,
-          courseId: input.courseId,
-        })
-    );
+  const target = { enrollmentId: input.enrollmentId, courseId: input.courseId };
+  const row = mostSpecificAssignment(input.assignments, target);
   return {
-    can_post_official: canPost,
+    can_post_official: input.manager || row?.can_post_official === true,
     can_see_other_graders_notes: input.manager,
   };
 }
