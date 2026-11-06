@@ -25,15 +25,17 @@ import { deleteTestimony, getTestimony, updateTestimony } from "@/services/evang
 
 type Ctx = { params: Promise<{ id: string }> };
 
-async function presentOne(row: TestimonyRow, publish: boolean) {
+async function presentOne(row: TestimonyRow, callerId: string, publish: boolean) {
+  const include = publish || row.author_user_id === callerId;
   const [urls, names] = await Promise.all([
     signTestimonyMedia([row]),
-    loadAuthorNames([row.author_user_id]),
+    include ? loadAuthorNames([row.author_user_id]) : Promise.resolve(new Map<string, string | null>()),
   ]);
   return presentTestimony(row, {
     urls,
     publish,
-    authorName: names.get(row.author_user_id) ?? null,
+    authorName: include ? (names.get(row.author_user_id) ?? null) : null,
+    includeAuthorName: include,
   });
 }
 
@@ -48,7 +50,7 @@ export async function GET(_request: Request, context: Ctx) {
   if (!row || !testimonyVisibleTo(row, user.id, access)) {
     return json({ error: "not_found", message: "Testimony not found." }, 404);
   }
-  return json({ testimony: await presentOne(row, access.publish), can_publish: access.publish });
+  return json({ testimony: await presentOne(row, user.id, access.publish), can_publish: access.publish });
 }
 
 export async function PATCH(request: Request, context: Ctx) {
@@ -143,7 +145,7 @@ export async function PATCH(request: Request, context: Ctx) {
     await recordRemovalBestEffort(id, "withheld");
   }
   return json({
-    testimony: await presentOne(updated.data as TestimonyRow, access.publish),
+    testimony: await presentOne(updated.data as TestimonyRow, user.id, access.publish),
     can_publish: access.publish,
   });
 }

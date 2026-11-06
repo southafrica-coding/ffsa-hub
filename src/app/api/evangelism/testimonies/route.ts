@@ -41,18 +41,25 @@ function clampLimit(value: string | null): number {
   return Math.min(n, 100);
 }
 
-async function presentMany(rows: TestimonyRow[], publish: boolean) {
+function showAuthor(row: TestimonyRow, callerId: string, publish: boolean) {
+  return publish || row.author_user_id === callerId;
+}
+
+async function presentMany(rows: TestimonyRow[], callerId: string, publish: boolean) {
+  const named = rows.filter((row) => showAuthor(row, callerId, publish));
   const [urls, names] = await Promise.all([
     signTestimonyMedia(rows),
-    loadAuthorNames(rows.map((row) => row.author_user_id)),
+    loadAuthorNames(named.map((row) => row.author_user_id)),
   ]);
-  return rows.map((row) =>
-    presentTestimony(row, {
+  return rows.map((row) => {
+    const include = showAuthor(row, callerId, publish);
+    return presentTestimony(row, {
       urls,
       publish,
-      authorName: names.get(row.author_user_id) ?? null,
-    })
-  );
+      authorName: include ? (names.get(row.author_user_id) ?? null) : null,
+      includeAuthorName: include,
+    });
+  });
 }
 
 export async function GET(request: Request) {
@@ -87,7 +94,7 @@ export async function GET(request: Request) {
   const { data, error } = await listTestimonies(supabase, { limit, visibility });
   if (error) return asError(error, "Couldn't load testimonies.");
   return json({
-    testimonies: await presentMany((data ?? []) as TestimonyRow[], access.publish),
+    testimonies: await presentMany((data ?? []) as TestimonyRow[], user.id, access.publish),
     can_publish: access.publish,
   });
 }
@@ -202,7 +209,7 @@ export async function POST(request: Request) {
   const { data: fresh, error: reloadError } = await getTestimony(supabase, row.id);
   if (reloadError) return asError(reloadError, "Saved the story but couldn't read it back.");
   const saved = (fresh as TestimonyRow | null) ?? row;
-  const [presented] = await presentMany([saved], access.publish);
+  const [presented] = await presentMany([saved], user.id, access.publish);
   return json({ testimony: presented, can_publish: access.publish }, 201);
 }
 

@@ -131,6 +131,38 @@ describe("GET /api/evangelism/testimonies", () => {
     expect(res.status).toBe(403);
   });
 
+  it("hides the author on a published story the viewer did not write", async () => {
+    h.access = { view: true, submit: false, publish: false };
+    h.rows = [
+      {
+        id: "pub",
+        author_user_id: "someone-else",
+        title: "A published story",
+        body: "Long enough to be a testimony for the people who were there that afternoon.",
+        occurred_on: "2026-11-01",
+        location_label: "Durban base",
+        people_reached: 1,
+        decisions: 0,
+        outcome: "conversation",
+        consent_to_share: true,
+        status: "published",
+        published_at: "2026-11-01T00:00:00.000Z",
+        published_by: "someone-else",
+        withheld_reason: "private",
+        created_at: "2026-11-01T00:00:00.000Z",
+        updated_at: "2026-11-01T00:00:00.000Z",
+        evangelism_media: [],
+      },
+    ];
+    const res = await GET(new Request("http://x/api/evangelism/testimonies"));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.can_publish).toBe(false);
+    expect("author_name" in body.testimonies[0]).toBe(false);
+    expect("author_user_id" in body.testimonies[0]).toBe(false);
+    expect("withheld_reason" in body.testimonies[0]).toBe(false);
+  });
+
   it("keeps team draft and review queues publisher-only", async () => {
     h.access = { view: true, submit: true, publish: false };
     expect((await GET(new Request("http://x/api/evangelism/testimonies?status=submitted"))).status).toBe(403);
