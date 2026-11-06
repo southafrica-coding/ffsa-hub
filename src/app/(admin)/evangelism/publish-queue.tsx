@@ -82,9 +82,12 @@ export function PublishQueue({ userId }: { userId: string }) {
         setOffline(isOffline(result));
         setForbidden(result.status === 403);
         setMessage(result.message);
+        // Team status lists are 403 for people who cannot publish. A miss is
+        // not a reason to keep publisher controls on.
+        if (result.status === 403) setCanPublish(false);
         return;
       }
-      if (readCanPublish(result.data)) setCanPublish(true);
+      setCanPublish(readCanPublish(result.data));
       setOffline(false);
       setForbidden(false);
       setRows(result.data.testimonies ?? []);

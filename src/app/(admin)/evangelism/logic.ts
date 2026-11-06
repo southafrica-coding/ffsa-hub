@@ -411,11 +411,12 @@ export function authorName(row: { author_name: string | null }): string {
 }
 
 /**
- * The base TV does not name the person who told the story. Drop the name
- * even when the feed still sends `author_name`.
+ * The base TV does not name who told the story. The feed omits `author_name`
+ * and `author_user_id`; clear both anyway so a leftover field cannot render,
+ * including as "A team member".
  */
 export function stripTvAuthors(rows: Testimony[]): Testimony[] {
-  return rows.map((row) => (row.author_name == null ? row : { ...row, author_name: null }));
+  return rows.map((row) => ({ ...row, author_name: null, author_user_id: "" }));
 }
 
 export function tvStoryLine(story: { occurred_on: string; location_label: string }): string {
@@ -423,25 +424,19 @@ export function tvStoryLine(story: { occurred_on: string; location_label: string
 }
 
 /**
- * True only when the API says this viewer may publish. A successful list of
- * submitted stories is not that signal, and neither is `withheld_reason`.
+ * True only for top-level `can_publish: true` on a testimonies response
+ * (GET/POST list, GET/PATCH one story). Missing, false, a withheld reason,
+ * or a bare successful list are not permission to publish.
  */
 export function readCanPublish(payload: unknown): boolean {
   if (!payload || typeof payload !== "object") return false;
-  const body = payload as Record<string, unknown>;
-  if (body.can_publish === true) return true;
-  const access = body.access;
-  if (access && typeof access === "object") {
-    const record = access as Record<string, unknown>;
-    if (record.can_publish === true || record.publish === true) return true;
-  }
-  if (rowCanPublish(body.testimony)) return true;
-  if (Array.isArray(body.testimonies) && body.testimonies.some(rowCanPublish)) return true;
-  return false;
+  return (payload as { can_publish?: unknown }).can_publish === true;
 }
 
-function rowCanPublish(row: unknown): boolean {
-  return !!row && typeof row === "object" && (row as { can_publish?: unknown }).can_publish === true;
+/** `removed_ids` from the feed. Any other shape is an empty list, not a guess. */
+export function removedIdsFromFeed(payload: { removed_ids?: unknown } | null | undefined): string[] {
+  if (!payload || !Array.isArray(payload.removed_ids)) return [];
+  return payload.removed_ids.filter((id): id is string => typeof id === "string" && id.length > 0);
 }
 
 export function nextReplaceDelay(failed: boolean): number {

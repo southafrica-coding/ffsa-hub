@@ -49,7 +49,7 @@ export function EvangelismHome({ userId }: { userId: string }) {
       setOffline(offlineResult && !offlineResult.ok ? offlineResult.message : null);
 
       // A 200 from the submitted list is not permission to publish. The band
-      // waits for an explicit can_publish (or access.publish) flag.
+      // appears only when that response includes can_publish: true.
       const publish = [queue, mine].some((result) => result.ok && readCanPublish(result.data));
       setCanPublish(publish);
       if (queue.ok && publish) setWaiting(queue.data.testimonies?.length ?? 0);

@@ -12,6 +12,7 @@ import {
   nextReplaceDelay,
   pruneExpiredStories,
   readCanPublish,
+  removedIdsFromFeed,
   stripTvAuthors,
   testimoniesUrl,
   tvStoryLine,
@@ -196,19 +197,44 @@ describe("evangelism files and feed helpers", () => {
     ).toEqual([]);
   });
 
-  it("does not treat a list or a withheld reason as permission to publish", () => {
-    expect(readCanPublish({ testimonies: [{ withheld_reason: "secret", can_publish: false }] })).toBe(false);
-    expect(readCanPublish({ testimonies: [{ title: "A story" }] })).toBe(false);
+  it("reads only top-level can_publish and ignores a successful list", () => {
     expect(readCanPublish({ can_publish: true, testimonies: [] })).toBe(true);
-    expect(readCanPublish({ access: { publish: true } })).toBe(true);
-    expect(readCanPublish({ testimony: { can_publish: true } })).toBe(true);
+    expect(readCanPublish({ can_publish: false, testimonies: [{ id: "x" }] })).toBe(false);
+    expect(readCanPublish({ testimonies: [{ withheld_reason: "secret", title: "A story" }] })).toBe(false);
+    expect(readCanPublish({ testimonies: [{ can_publish: true }] })).toBe(false);
+    expect(readCanPublish({ access: { publish: true }, testimonies: [] })).toBe(false);
+    expect(readCanPublish({ testimony: { can_publish: true } })).toBe(false);
+    expect(readCanPublish({})).toBe(false);
+  });
+
+  it("drops feed removed_ids on an append, and an empty first paint removes nothing", () => {
+    const older = row("old", "Older");
+    const newer = row("new", "Newer");
+    expect(removedIdsFromFeed({ removed_ids: [] })).toEqual([]);
+    expect(removedIdsFromFeed({})).toEqual([]);
+    expect(removedIdsFromFeed({ removed_ids: ["old", 3, ""] })).toEqual(["old"]);
+    expect(
+      applyFeed([older, newer], { mode: "append", testimonies: [], removedIds: removedIdsFromFeed({ removed_ids: [] }) }).map(
+        (item) => item.id
+      )
+    ).toEqual(["old", "new"]);
+    expect(
+      applyFeed([older, newer], {
+        mode: "append",
+        testimonies: [],
+        removedIds: removedIdsFromFeed({ removed_ids: ["old", "gone"] }),
+      }).map((item) => item.id)
+    ).toEqual(["new"]);
   });
 
   it("leaves names off the TV line and retries a failed replace on the poll interval", () => {
     const named = row("old", "Older");
-    expect(stripTvAuthors([named])[0].author_name).toBeNull();
+    const stripped = stripTvAuthors([named])[0];
+    expect(stripped.author_name).toBeNull();
+    expect(stripped.author_user_id).toBe("");
     expect(tvStoryLine(named)).toBe("6 Nov 2026 · Durban base");
     expect(tvStoryLine(named)).not.toContain("Thandi");
+    expect(tvStoryLine(named)).not.toContain("team member");
     expect(nextReplaceDelay(true)).toBe(REPLACE_RETRY_MS);
     expect(nextReplaceDelay(false)).toBe(FEED_URL_REFRESH_MS);
   });

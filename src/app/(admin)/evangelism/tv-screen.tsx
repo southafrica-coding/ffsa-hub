@@ -13,6 +13,7 @@ import {
   nextReplaceDelay,
   outcomeLabel,
   pruneExpiredStories,
+  removedIdsFromFeed,
   stripTvAuthors,
   tvStoryLine,
   visibleIdsForPoll,
@@ -128,7 +129,9 @@ export function TvScreen() {
         if (mode === "replace") cursor.current = result.data.cursor ?? null;
         else if (result.data.cursor) cursor.current = result.data.cursor;
 
-        const removed = Array.isArray(result.data.removed_ids) ? result.data.removed_ids : [];
+        // Always the feed's removed_ids. First paint is an empty array. An append
+        // drops withheld and deleted stories now, not at the next full replace.
+        const removed = removedIdsFromFeed(result.data);
         const refreshed = Array.isArray(result.data.refreshed) ? result.data.refreshed : [];
         const incoming = result.data.testimonies ?? [];
         let next = stripTvAuthors(
