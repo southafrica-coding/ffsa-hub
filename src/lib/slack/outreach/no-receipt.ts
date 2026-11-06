@@ -15,17 +15,19 @@ const NO_RECEIPT_PHRASE =
 
 const QUESTION_START = /^(how|what|what's|whats|which|when|who|where|why|can|could|is|are|do|does|did|should)\b/i;
 
-const SPEND_CLAIM = /\b(i |we |i've |we've )?(spent|paid|bought|purchased)\b/i;
-
 export type BareMessage = "question" | "no_receipt" | "other";
 
 /** What a Slack message with no photo is. Questions stay with the budget assistant. */
 export function classifyBareMessage(text: string): BareMessage {
   const t = text.trim();
   if (!t) return "other";
-  if (NO_RECEIPT_PHRASE.test(t)) return "no_receipt";
+  // A question wins even when it mentions a receipt. "What happens if I have no receipt?"
   if (t.includes("?") || QUESTION_START.test(t)) return "question";
-  if (SPEND_CLAIM.test(t) && /\d/.test(t)) return "no_receipt";
+  if (NO_RECEIPT_PHRASE.test(t)) return "no_receipt";
+  // A running total is not a purchase without a slip. "We spent R2000 so far."
+  if (/\b(so far|in total|altogether|already|this week|this month|left|remaining)\b/i.test(t)) return "other";
+  // First person, a specific purchase. "We spent…" without "no receipt" is chat.
+  if (/\b(i|i've)\s+(spent|paid|bought|purchased)\b/i.test(t) && /\d/.test(t)) return "no_receipt";
   return "other";
 }
 
@@ -54,7 +56,7 @@ export function parseSpendClaim(text: string): SpendClaim | null {
   const description = text
     .replace(match[0], " ")
     .replace(NO_RECEIPT_PHRASE, " ")
-    .replace(SPEND_CLAIM, " ")
+    .replace(/\b(i|i've|we|we've)?\s*(spent|paid|bought|purchased)\b/i, " ")
     .replace(/\s+/g, " ")
     .replace(/^[\s,.:;-]+|[\s,.:;-]+$/g, "")
     .slice(0, 80);
@@ -70,25 +72,39 @@ export function repaymentSentence(claim: SpendClaim | null, teamName: string | n
   return `No receipt, so you repay *${money}* for ${claim.description}.${where} It is not sent to Xero.`;
 }
 
-/** Button value: cents, currency, team id or "-", description. Slack's limit is 2000. */
-export function repayValue(args: { amountCents: number; currency: string; teamId: string | null; description: string }): string {
+/** Button value: cents, currency, team id or "-", claimant Slack id, description. Slack's limit is 2000. */
+export function repayValue(args: {
+  amountCents: number;
+  currency: string;
+  teamId: string | null;
+  claimantSlackId: string;
+  description: string;
+}): string {
   const desc = args.description.replace(/\|/g, " ").slice(0, 80);
-  return `${args.amountCents}|${args.currency}|${args.teamId ?? "-"}|${desc}`;
+  return `${args.amountCents}|${args.currency}|${args.teamId ?? "-"}|${args.claimantSlackId}|${desc}`;
 }
 
 export function parseRepayValue(value: string | undefined): {
   amountCents: number;
   currency: string;
   teamId: string | null;
+  claimantSlackId: string;
   description: string;
 } | null {
-  const [centsRaw, currency, team, ...rest] = (value ?? "").split("|");
+  const [centsRaw, currency, team, claimant, ...rest] = (value ?? "").split("|");
   const amountCents = Number(centsRaw);
   if (!Number.isInteger(amountCents) || amountCents <= 0) return null;
   if (!currency || !/^[A-Z]{3}$/.test(currency)) return null;
+  if (!claimant || !/^U[A-Z0-9]+$/.test(claimant)) return null;
   const description = rest.join("|").trim();
   if (!description) return null;
-  return { amountCents, currency, teamId: team && team !== "-" ? team : null, description: description.slice(0, 80) };
+  return {
+    amountCents,
+    currency,
+    teamId: team && team !== "-" ? team : null,
+    claimantSlackId: claimant,
+    description: description.slice(0, 80),
+  };
 }
 
 export function repaymentBlocks(text: string, value: string | null): unknown[] {

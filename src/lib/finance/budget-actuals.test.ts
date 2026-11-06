@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { attributeActuals, isMissingRelation, regionForBudgetCurrency, xeroDateOnly, type ActualLineInput, type XeroActualSpend } from "./budget-actuals";
+import { attributeActuals, isMissingRelation, regionForBudgetCurrency, xeroDateOnly, xeroLineSpendCents, type ActualLineInput, type XeroActualSpend } from "./budget-actuals";
 
 const food: ActualLineInput = {
   lineId: "food",
@@ -58,6 +58,26 @@ describe("attributeActuals", () => {
     expect(result.lines.find((l) => l.lineId === "food")?.actualCents).toBe(0);
     expect(result.lines.find((l) => l.lineId === "food-2")?.actualCents).toBe(0);
     expect(result.unmatched).toEqual({ count: 2, cents: 18_900 });
+  });
+
+  it("does not let a line with no tracking take every spend on the account", () => {
+    const bare: ActualLineInput = { ...food, lineId: "bare", name: "Bare", tracking: [] };
+    const result = attributeActuals([bare], [spend({})]);
+    expect(result.lines[0].actualCents).toBe(0);
+    expect(result.unmatched).toEqual({ count: 1, cents: 18_000 });
+  });
+
+  it("counts one spend on one line when two budgets share the account and tracking", () => {
+    const other: ActualLineInput = { ...food, lineId: "other-budget", name: "Same line elsewhere" };
+    const result = attributeActuals([food, other], [spend({})]);
+    expect(result.lines.every((line) => line.actualCents === 0)).toBe(true);
+    expect(result.unmatched.count).toBe(1);
+  });
+
+  it("does not turn a refund into spend", () => {
+    expect(xeroLineSpendCents(-50)).toBeNull();
+    expect(xeroLineSpendCents(0)).toBeNull();
+    expect(xeroLineSpendCents(18.5)).toBe(1850);
   });
 
   it("prefers the line with more tracking when both accounts match", () => {

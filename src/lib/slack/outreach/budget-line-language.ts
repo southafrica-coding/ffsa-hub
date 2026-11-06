@@ -26,17 +26,14 @@ export function budgetLineSentence(args: { lineName: string | null; categoryName
   return `${head} — ${what}`;
 }
 
-function loose(hay: string, needle: string): boolean {
-  const h = hay.toLowerCase();
-  const n = needle.toLowerCase().trim();
-  if (n.length < 3) return false;
-  return h === n || h.includes(n) || n.includes(h);
+function exact(lineName: string, hint: string): boolean {
+  return lineName.trim().toLowerCase() === hint.trim().toLowerCase();
 }
 
 /**
- * Picks a line only when the note, the suggested category, or the
- * description actually names it. No guess when several lines could fit,
- * and no guess when the budget is still empty.
+ * Picks a line only when a hint is exactly the line's name. A shorter
+ * word inside the name is not a match, so a category never selects an
+ * account by substring. No guess when several lines could fit.
  */
 export function choosePlainBudgetLine(args: {
   userNote: string | null;
@@ -46,7 +43,7 @@ export function choosePlainBudgetLine(args: {
   lines: PlainBudgetLine[];
 }): ChosenBudgetLine {
   const hints = [args.userNote, args.suggested, args.categoryName, args.description].map(clean).filter(Boolean);
-  const hits = args.lines.filter((line) => hints.some((hint) => loose(line.name, hint) || loose(hint, line.name)));
+  const hits = args.lines.filter((line) => hints.some((hint) => exact(line.name, hint)));
   const unique = new Map(hits.map((line) => [line.id, line]));
   const chosen = unique.size === 1 ? [...unique.values()][0] : null;
   return {

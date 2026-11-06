@@ -15,6 +15,10 @@ export type SlackChannelPrivacy = {
   is_private?: boolean;
   /** False when the bot has not been invited. Absent means we don't know. */
   is_member?: boolean;
+  /** Slack Connect or a channel shared outside this workspace. */
+  is_shared?: boolean;
+  is_ext_shared?: boolean;
+  is_org_shared?: boolean;
 };
 
 export type ReceiptDoor =
@@ -30,8 +34,16 @@ export const GROUP_DM_TELL =
 export const UNKNOWN_CHANNEL_TELL =
   "I couldn't confirm this channel is private, so I won't read a receipt here. Send the photo to me in a direct message.";
 
+export const SHARED_CHANNEL_TELL =
+  "This channel is shared outside the workspace, so I won't read a receipt here. Send the photo in a direct message, or in the team's own private channel.";
+
+export function channelIsShared(channel: SlackChannelPrivacy | null | undefined): boolean {
+  return Boolean(channel?.is_shared || channel?.is_ext_shared || channel?.is_org_shared);
+}
+
 export function receiptDoor(args: { isDM: boolean; channel: SlackChannelPrivacy | null }): ReceiptDoor {
   if (args.isDM || args.channel?.is_im) return { ok: true, place: "dm" };
+  if (channelIsShared(args.channel)) return { ok: false, tell: SHARED_CHANNEL_TELL };
   if (args.channel?.is_mpim) return { ok: false, tell: GROUP_DM_TELL };
   if (args.channel?.is_private === true && args.channel.is_member !== false) {
     return { ok: true, place: "private_channel" };

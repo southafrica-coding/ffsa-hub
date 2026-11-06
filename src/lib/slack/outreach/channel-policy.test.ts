@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GROUP_DM_TELL, PUBLIC_CHANNEL_TELL, UNKNOWN_CHANNEL_TELL, receiptDoor } from "./channel-policy";
+import { GROUP_DM_TELL, PUBLIC_CHANNEL_TELL, SHARED_CHANNEL_TELL, UNKNOWN_CHANNEL_TELL, receiptDoor } from "./channel-policy";
 
 describe("receiptDoor", () => {
   it("lets a DM through without asking Slack", () => {
@@ -24,6 +24,15 @@ describe("receiptDoor", () => {
     expect(receiptDoor({ isDM: false, channel: { is_mpim: true, is_private: true } }).ok).toBe(false);
     expect(receiptDoor({ isDM: false, channel: { is_mpim: true } })).toMatchObject({ tell: GROUP_DM_TELL });
     expect(receiptDoor({ isDM: false, channel: { is_private: true, is_member: false } }).ok).toBe(false);
+  });
+
+  it("refuses a Slack Connect or shared channel even when it is private", () => {
+    const door = receiptDoor({
+      isDM: false,
+      channel: { is_private: true, is_member: true, is_ext_shared: true },
+    });
+    expect(door).toEqual({ ok: false, tell: SHARED_CHANNEL_TELL });
+    expect(receiptDoor({ isDM: false, channel: { is_private: true, is_shared: true } }).ok).toBe(false);
   });
 
   it("stays shut when privacy can't be proven", () => {

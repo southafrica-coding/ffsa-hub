@@ -17,7 +17,7 @@ describe("budget line in plain words", () => {
     );
   });
 
-  it("matches one named line and does not invent one", () => {
+  it("matches a line only when the name is exact", () => {
     expect(
       choosePlainBudgetLine({
         userNote: null,
@@ -26,10 +26,20 @@ describe("budget line in plain words", () => {
         categoryName: "Food",
         lines: LINES,
       })
+    ).toMatchObject({ budget_line_id: null, budget_line_label: "Food — Groceries" });
+
+    expect(
+      choosePlainBudgetLine({
+        userNote: "Fuel",
+        suggested: null,
+        description: "diesel",
+        categoryName: null,
+        lines: LINES,
+      })
     ).toEqual({
       budget_id: "b1",
-      budget_line_id: "l-food",
-      budget_line_label: "Food for the team — Groceries",
+      budget_line_id: "l-fuel",
+      budget_line_label: "Fuel — diesel",
     });
 
     expect(
@@ -53,7 +63,7 @@ describe("budget line in plain words", () => {
     ).toMatchObject({ budget_line_id: null, budget_line_label: "Food — Groceries" });
   });
 
-  it("does not pick when two lines fit", () => {
+  it("does not pick a longer name from a shorter word", () => {
     const chosen = choosePlainBudgetLine({
       userNote: "food",
       suggested: null,
@@ -64,6 +74,6 @@ describe("budget line in plain words", () => {
         { id: "b", budgetId: "b1", name: "Food for guests" },
       ],
     });
-    expect(chosen.budget_line_id).toBeNull();
+    expect(chosen.budget_line_id).toBe("a");
   });
 });

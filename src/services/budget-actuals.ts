@@ -9,9 +9,11 @@ import {
   isMissingRelation,
   regionForBudgetCurrency,
   xeroDateOnly,
+  xeroLineSpendCents,
   type ActualLineInput,
   type XeroActualSpend,
 } from "@/lib/finance/budget-actuals";
+import { cachedXeroRead } from "@/lib/finance/xero-spend-cache";
 import { listXeroSpendTransactions, type XeroBankTransactionPage, type XeroRegion } from "@/services/xero";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -57,15 +59,66 @@ function spendsFrom(transactions: XeroBankTransactionPage[]): XeroActualSpend[] 
         line.LineAmount != null
           ? Number(line.LineAmount)
           : Number(line.UnitAmount ?? 0) * Number(line.Quantity ?? 1);
-      if (!Number.isFinite(major) || major === 0) continue;
+      const amountCents = xeroLineSpendCents(major);
+      if (amountCents == null) continue;
       out.push({
         bankTransactionId: txn.BankTransactionID,
         accountCode: line.AccountCode ?? null,
-        amountCents: Math.round(Math.abs(major) * 100),
+        amountCents,
         tracking: (line.Tracking ?? [])
           .filter((t) => t.Name && t.Option)
           .map((t) => ({ name: t.Name as string, option: t.Option as string })),
       });
+    }
+  }
+  return out;
+}
+
+/** Lines on other budgets, used only so a spend is not claimed twice. Not returned. */
+async function otherBudgetLines(admin: Client, budgetId: string, region: XeroRegion): Promise<ActualLineInput[]> {
+  const { data, error } = await admin
+    .from("budgets")
+    .select(
+      `id,
+       budget_lines!budget_lines_budget_id_fkey(
+         id, name, archived_at,
+         budget_line_coding(org_region, account_id, tracking_option_1_id, tracking_option_2_id,
+           xero_accounts!budget_line_coding_account_id_fkey(code, status),
+           opt1:xero_tracking_options!budget_line_coding_tracking_option_1_id_fkey(name, xero_tracking_categories(name)),
+           opt2:xero_tracking_options!budget_line_coding_tracking_option_2_id_fkey(name, xero_tracking_categories(name))
+         )
+       )`
+    )
+    .neq("id", budgetId)
+    .is("archived_at", null);
+  if (error || !Array.isArray(data)) return [];
+
+  const out: ActualLineInput[] = [];
+  for (const budget of data as {
+    budget_lines?: {
+      id: string;
+      name: string;
+      archived_at: string | null;
+      budget_line_coding?: {
+        org_region: string;
+        xero_accounts?: { code?: string | null; status?: string } | { code?: string | null; status?: string }[] | null;
+        opt1?: { name?: string; xero_tracking_categories?: { name?: string } | { name?: string }[] | null } | null;
+        opt2?: { name?: string; xero_tracking_categories?: { name?: string } | { name?: string }[] | null } | null;
+      }[];
+    }[];
+  }[]) {
+    for (const line of budget.budget_lines ?? []) {
+      if (line.archived_at) continue;
+      const coding = (line.budget_line_coding ?? []).find((row) => row.org_region === region);
+      const account = Array.isArray(coding?.xero_accounts) ? coding?.xero_accounts[0] : coding?.xero_accounts;
+      const code = account?.status === "ACTIVE" ? account.code ?? null : null;
+      const tracking: { name: string; option: string }[] = [];
+      for (const opt of [coding?.opt1, coding?.opt2]) {
+        if (!opt?.name) continue;
+        const cat = Array.isArray(opt.xero_tracking_categories) ? opt.xero_tracking_categories[0] : opt.xero_tracking_categories;
+        if (cat?.name) tracking.push({ name: cat.name, option: opt.name });
+      }
+      out.push({ lineId: line.id, name: line.name, plannedCents: 0, accountCode: code, tracking });
     }
   }
   return out;
@@ -168,7 +221,9 @@ export async function getBudgetActuals(
     };
   });
 
-  const xero = await listXeroSpendTransactions(admin, region, { start, end });
+  const xero = await cachedXeroRead(`spend:${region}:${start}:${end}`, () =>
+    listXeroSpendTransactions(admin, region, { start, end })
+  );
   if (!xero.ok) {
     const unknown = attributeActuals(
       lines.map((line) => ({ ...line, accountCode: null })),
@@ -195,7 +250,15 @@ export async function getBudgetActuals(
     const date = xeroDateOnly(txn.Date);
     return date != null && date >= start && date <= end;
   });
-  const attributed = attributeActuals(lines, spendsFrom(inPeriod));
+  // Other budgets in the same books, so one Xero spend is not counted on every
+  // budget that shares an account and tracking option.
+  const others = await otherBudgetLines(admin, data.id, region);
+  const attributedAll = attributeActuals([...lines, ...others], spendsFrom(inPeriod));
+  const mine = new Set(lines.map((line) => line.lineId));
+  const attributed = {
+    lines: attributedAll.lines.filter((line) => mine.has(line.lineId)),
+    unmatched: attributedAll.unmatched,
+  };
   return {
     status: 200,
     body: {

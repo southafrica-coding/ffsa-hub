@@ -16,10 +16,16 @@ describe("classifyBareMessage", () => {
     expect(classifyBareMessage("did we already log the diesel?")).toBe("question");
   });
 
-  it("treats a spend with no photo as a repayment, not an expense", () => {
+  it("treats a first-person spend with no photo as a repayment, not an expense", () => {
     expect(classifyBareMessage("I spent R180 on a taxi, no receipt")).toBe("no_receipt");
     expect(classifyBareMessage("lost the receipt for the airtime")).toBe("no_receipt");
-    expect(classifyBareMessage("we paid 50 for parking")).toBe("no_receipt");
+    expect(classifyBareMessage("I paid 50 for parking")).toBe("no_receipt");
+  });
+
+  it("keeps questions and running totals out of the repay reply", () => {
+    expect(classifyBareMessage("What happens if I have no receipt?")).toBe("question");
+    expect(classifyBareMessage("We spent R2000 so far")).toBe("other");
+    expect(classifyBareMessage("we paid 50 for parking")).toBe("other");
   });
 
   it("leaves ordinary chat alone", () => {
@@ -46,7 +52,13 @@ describe("repayment card", () => {
     expect(text).toMatch(/you repay/);
     expect(text).toMatch(/not sent to Xero/);
     expect(text).toMatch(/Botswana/);
-    const value = repayValue({ amountCents: 18000, currency: "ZAR", teamId: "team-1", description: "for a taxi" });
+    const value = repayValue({
+      amountCents: 18000,
+      currency: "ZAR",
+      teamId: "team-1",
+      claimantSlackId: "U123",
+      description: "for a taxi",
+    });
     const blocks = JSON.stringify(repaymentBlocks(text, value));
     expect(blocks).toContain(ACTION_REPAY);
     expect(blocks).not.toContain("receipt_log");
@@ -54,6 +66,7 @@ describe("repayment card", () => {
       amountCents: 18000,
       currency: "ZAR",
       teamId: "team-1",
+      claimantSlackId: "U123",
       description: "for a taxi",
     });
   });

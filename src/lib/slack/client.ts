@@ -215,6 +215,9 @@ export type SlackConversationInfo = {
   is_member?: boolean;
   is_channel?: boolean;
   is_group?: boolean;
+  is_shared?: boolean;
+  is_ext_shared?: boolean;
+  is_org_shared?: boolean;
 };
 
 export function conversationInfo(channel: string, bot?: SlackBotId) {

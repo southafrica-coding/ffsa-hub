@@ -7,6 +7,7 @@ function input(over: Partial<XeroSpendInput> = {}): XeroSpendInput {
     hasReceipt: true,
     repayment: false,
     zarConfirmed: true,
+    paymentMethod: "card",
     amountZar: 180.5,
     date: "2026-11-06",
     description: "Food — taxi to the venue",
@@ -50,6 +51,19 @@ describe("decideXeroSpend", () => {
     expect(decideXeroSpend(input({ repayment: true, hasReceipt: false }))).toMatchObject({
       write: false,
       status: "repayment",
+    });
+  });
+
+  it("does not post cash, and the bank-wait is only for a card", () => {
+    expect(decideXeroSpend(input({ paymentMethod: "cash", zarConfirmed: true }))).toMatchObject({
+      write: false,
+      status: "cash_not_posted",
+    });
+    expect(decideXeroSpend(input({ paymentMethod: "cash", zarConfirmed: false }))).toMatchObject({
+      status: "cash_not_posted",
+    });
+    expect(decideXeroSpend(input({ paymentMethod: "card", zarConfirmed: false }))).toMatchObject({
+      status: "rand_not_confirmed",
     });
   });
 

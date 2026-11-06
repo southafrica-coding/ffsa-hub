@@ -21,13 +21,17 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-  if (!(await canReadFinanceXero(supabase, user.id))) {
-    return NextResponse.json({ error: "You don't have permission to see finance data from Xero" }, { status: 403 });
-  }
-
   const { id } = await context.params;
   if (!id) return NextResponse.json({ error: "Missing budget id" }, { status: 400 });
 
+  // The user's own row-level access is enough for a budget they can already
+  // read. canReadFinanceXero remains the way to see a budget you are not on.
   const result = await getBudgetActuals(supabase, createAdminClient(), id);
-  return NextResponse.json(result.body, { status: result.status });
+  if (result.status === 200 || result.status === 400 || result.status === 503) {
+    return NextResponse.json(result.body, { status: result.status });
+  }
+  if (await canReadFinanceXero(supabase, user.id)) {
+    return NextResponse.json(result.body, { status: result.status });
+  }
+  return NextResponse.json({ error: "You don't have permission to see this budget" }, { status: 403 });
 }

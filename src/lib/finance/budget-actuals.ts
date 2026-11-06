@@ -38,18 +38,30 @@ export type ActualsAttribution = {
 
 const norm = (s: string) => s.trim().toLowerCase();
 
+function sameTracking(a: ActualTracking, b: ActualTracking): boolean {
+  return norm(a.name) === norm(b.name) && norm(a.option) === norm(b.option);
+}
+
 function matches(line: ActualLineInput, spend: XeroActualSpend): boolean {
   if (!line.accountCode || !spend.accountCode) return false;
   if (norm(line.accountCode) !== norm(spend.accountCode)) return false;
-  return line.tracking.every((t) =>
-    spend.tracking.some((s) => norm(s.name) === norm(t.name) && norm(s.option) === norm(t.option))
-  );
+  // A line with no tracking does not swallow every spend on that account.
+  // It only matches a spend that also has no tracking.
+  if (line.tracking.length === 0) return spend.tracking.length === 0;
+  return line.tracking.every((t) => spend.tracking.some((s) => sameTracking(t, s)));
+}
+
+/** Positive spend only. A refund (negative line) is not turned into spend. */
+export function xeroLineSpendCents(amount: number): number | null {
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+  return Math.round(amount * 100);
 }
 
 /**
- * Each Xero line is given to the single most specific budget line that
- * fits. Two lines that fit equally well leave the spend unmatched, so it
- * is never counted twice.
+ * Each Xero line is given to at most one budget line, including lines
+ * passed in from other budgets. Two lines that fit equally well leave the
+ * spend unmatched, so it is never counted twice. A line with no tracking
+ * does not take spend that has tracking.
  */
 export function attributeActuals(lines: ActualLineInput[], spends: XeroActualSpend[]): ActualsAttribution {
   const assigned = new Map<string, number>();

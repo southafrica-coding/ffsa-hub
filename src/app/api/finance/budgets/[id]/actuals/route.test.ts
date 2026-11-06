@@ -111,4 +111,26 @@ describe("GET /api/finance/budgets/[id]/actuals", () => {
     ]);
     expect(JSON.stringify(state.fake.queries.map((q) => q.table))).not.toContain("outreach_expenses");
   });
+
+  it("lets someone read actuals for a budget they can already see, without finance.view", async () => {
+    world(NO_ROLES, [], { id: "leader" }, (q) => {
+      if (q.table === "budgets" && q.single) {
+        return {
+          data: {
+            id: "b1",
+            name: "Botswana",
+            currency: "ZAR",
+            archived_at: null,
+            fiscal_periods: { start_date: "2026-01-01", end_date: "2026-12-31" },
+            budget_lines: [],
+          },
+        };
+      }
+      if (q.table === "budgets") return { data: [] };
+      return undefined;
+    });
+    const res = await call();
+    expect(res.status).toBe(200);
+    expect((await res.json()).source).toBe("xero");
+  });
 });

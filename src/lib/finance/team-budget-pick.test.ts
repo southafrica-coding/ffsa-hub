@@ -49,6 +49,16 @@ describe("selectTeamBudget", () => {
     expect(picked.ok && picked.budget.id).toBe("b-usa");
   });
 
+  it("prefers the approved budget over a draft in the same period", () => {
+    const draft = budget({ id: "b-draft", name: "Botswana draft", status: "draft" });
+    const picked = selectTeamBudget([npc2026, draft], {
+      org: "npc",
+      expenseDate: "2026-11-06",
+      nameHint: null,
+    });
+    expect(picked.ok && picked.budget.id).toBe("b-2026");
+  });
+
   it("does not guess when two NPC budgets share the period, unless the note names one", () => {
     const other = budget({ id: "b-other", name: "Vehicle fund" });
     expect(

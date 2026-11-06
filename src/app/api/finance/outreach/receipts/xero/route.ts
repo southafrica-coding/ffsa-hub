@@ -8,6 +8,7 @@
 
 import { NextResponse } from "next/server";
 import { writeConfirmedSpend } from "@/lib/finance/record-xero-spend";
+import { xeroPreviewWriteBlock } from "@/lib/finance/xero-preview-guard";
 import { xeroBook, type BudgetOrgKey } from "@/lib/finance/team-budget-pick";
 import { canEditFinanceProjects } from "@/lib/finance/orgs";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -34,6 +35,9 @@ export async function POST(request: Request) {
   const draftId = typeof body.draftId === "string" ? body.draftId : "";
   if (!draftId) return NextResponse.json({ error: "draftId is required" }, { status: 400 });
 
+  const blocked = xeroPreviewWriteBlock();
+  if (blocked) return NextResponse.json(blocked, { status: 403 });
+
   // Service role, and these columns (zar_confirmed, draft kind) are ahead of the generated types.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
@@ -54,6 +58,10 @@ export async function POST(request: Request) {
     budget_line_id?: string | null;
     budget_line_label?: string | null;
     budget_org_key?: BudgetOrgKey | null;
+    budget_status?: string | null;
+    budget_period_start?: string | null;
+    budget_period_end?: string | null;
+    payment_method?: "cash" | "card" | "bank_transfer";
     local_amount?: number | null;
     local_currency?: string | null;
   };
@@ -98,6 +106,10 @@ export async function POST(request: Request) {
     orgKey: org,
     currency: book.currency,
     region: book.region,
+    paymentMethod: proposal.payment_method === "card" || proposal.payment_method === "bank_transfer" ? proposal.payment_method : "cash",
+    budgetStatus: proposal.budget_status ?? null,
+    periodStart: proposal.budget_period_start ?? null,
+    periodEnd: proposal.budget_period_end ?? null,
     proposal,
   });
 

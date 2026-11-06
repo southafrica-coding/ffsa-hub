@@ -3,11 +3,12 @@
  *
  * A separate Slack app from FFSA Hub Activity (see lib/slack/bots), so
  * teams get a bot that only does one job: their outreach budget. It
- * handles app_mention, message.im (a DM), and message.groups (a private
- * channel). Receipts are photo-first: a DM is the default, and a private
- * team channel is the only other place a photo is read. A public channel
- * is told to move to a DM. A spend with no photo is a repayment, not an
- * expense. Anything else is a budget question.
+ * handles message.im (a DM) and app_mention. A channel message is a turn
+ * only when it @mentions the bot. message.groups for that same mention is
+ * ignored, so one photo cannot create two drafts, and ordinary chat never
+ * reaches the assistant. Receipts in a channel are read only in the private
+ * channel linked to that team. A public, shared, or Slack Connect channel
+ * is told to move to a DM.
  * Flow mirrors /api/slack/events:
  *   1. verify the signature with THIS app's signing secret
  *   2. url_verification handshake, drop retries, ignore bots/edits
@@ -23,6 +24,7 @@ import { after, NextResponse } from "next/server";
 import { isFinanceStaff, pickTeam, resolveOutreachScope } from "@/lib/slack/assistant/outreach";
 import { runAssistant } from "@/lib/slack/assistant/run";
 import { loadReceiptDoor } from "@/lib/slack/outreach/channel-policy";
+import { outreachEventKind } from "@/lib/slack/outreach/event-gate";
 import { classifyBareMessage, parseSpendClaim, repayValue, repaymentBlocks, repaymentSentence } from "@/lib/slack/outreach/no-receipt";
 import { handleIncomingReceipts } from "@/lib/slack/outreach/receipts";
 import type { SlackFile } from "@/lib/slack/outreach/receipt-logic";
@@ -107,16 +109,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  const isMention = event.type === "app_mention";
-  const isDM = event.type === "message" && event.channel_type === "im";
-  const isPrivateChannel = event.type === "message" && event.channel_type === "group";
-  if ((!isMention && !isDM && !isPrivateChannel) || !event.channel || typeof event.user !== "string") {
+  const kind = outreachEventKind(event);
+  if (kind === "ignore" || !event.channel || typeof event.user !== "string") {
     return NextResponse.json({ ok: true });
   }
-  // @mentioning the bot inside a DM fires both events — answer the DM one.
-  if (isMention && event.channel.startsWith("D")) {
-    return NextResponse.json({ ok: true });
-  }
+  const isDM = kind === "dm";
 
   const question = cleanText(event.text ?? "");
   const files = event.files ?? [];
@@ -147,6 +144,14 @@ export async function POST(request: Request) {
       const hubUserId = await resolveHubUserBySlackId(admin, slackUserId);
       const outreach = await resolveOutreachScope(admin, { hubUserId, channelId: channel, isDM });
 
+      // A channel receipt or no-receipt claim is only read in the private channel linked to that team.
+      if (!isDM && receiptLike && (outreach.kind !== "ok" || !outreach.scope.inTeamChannel)) {
+        await reply(
+          "Send the photo in a direct message, or @mention me in the private channel linked to that outreach team."
+        );
+        return;
+      }
+
       // A spend with no photo is a repayment even when this person can't see
       // the budget. It never becomes an expense and it never goes to Xero.
       if (files.length === 0 && classifyBareMessage(question) === "no_receipt") {
@@ -166,6 +171,7 @@ export async function POST(request: Request) {
               amountCents: Math.round(claim.amount * 100),
               currency: claim.currency,
               teamId,
+              claimantSlackId: slackUserId,
               description: claim.description,
             })
           : null;

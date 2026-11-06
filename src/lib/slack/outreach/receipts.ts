@@ -219,9 +219,20 @@ async function linesForReceipt(
   lines: PlainBudgetLine[];
   org: BudgetOrgKey | null;
   budgetId: string | null;
+  status: string | null;
+  periodStart: string | null;
+  periodEnd: string | null;
   reason: "none" | "ambiguous" | "chosen";
 }> {
-  const none = { lines: [] as PlainBudgetLine[], org: null, budgetId: null, reason: "none" as const };
+  const none = {
+    lines: [] as PlainBudgetLine[],
+    org: null,
+    budgetId: null,
+    status: null,
+    periodStart: null,
+    periodEnd: null,
+    reason: "none" as const,
+  };
   if (!teamId) return none;
   const { data, error } = await admin
     .from("budgets")
@@ -270,6 +281,9 @@ async function linesForReceipt(
   return {
     org,
     budgetId: picked.budget.id,
+    status: picked.budget.status,
+    periodStart: picked.budget.periodStart,
+    periodEnd: picked.budget.periodEnd,
     reason: "chosen",
     lines: picked.budget.lines.map((line) => ({ id: line.id, budgetId: picked.budget.id, name: line.name })),
   };
@@ -280,20 +294,22 @@ async function withPlainLine(
   admin: Admin,
   proposal: Proposal,
   teamId: string | null,
-  hint: { userNote: string | null; suggested: string | null }
+  hint: { userNote: string | null; suggested: string | null; explicitLineId?: string | null }
 ): Promise<Proposal> {
   const [found, categories] = await Promise.all([
     linesForReceipt(admin, teamId, proposal, hint.userNote),
     loadCategories(admin),
   ]);
   const categoryName = categories.find((c) => c.id === proposal.category_id)?.name ?? null;
+  // Exact name only, and only on an approved budget. A draft is not an account.
   const chosen = choosePlainBudgetLine({
     userNote: hint.userNote,
     suggested: hint.suggested ?? categoryName,
     description: proposal.description,
     categoryName,
-    lines: found.lines,
+    lines: found.status === "approved" ? found.lines : [],
   });
+  const picked = hint.explicitLineId ? found.lines.find((line) => line.id === hint.explicitLineId) : undefined;
   const warnings = (proposal.read_warnings ?? []).filter((warning) => !warning.startsWith("Two budgets match"));
   if (found.reason === "ambiguous") {
     warnings.push(
@@ -303,10 +319,19 @@ async function withPlainLine(
   return {
     ...proposal,
     ...chosen,
+    ...(picked
+      ? {
+          budget_id: picked.budgetId,
+          budget_line_id: picked.id,
+          budget_line_label: picked.name,
+        }
+      : {}),
     read_warnings: warnings,
-    // The budget is chosen by org and period even when no line name matched.
-    budget_id: chosen.budget_id ?? found.budgetId,
+    budget_id: picked?.budgetId ?? chosen.budget_id ?? found.budgetId,
     budget_org_key: found.org,
+    budget_status: found.status,
+    budget_period_start: found.periodStart,
+    budget_period_end: found.periodEnd,
   };
 }
 
@@ -431,8 +456,8 @@ export async function handleIncomingReceipts(m: IncomingReceipts): Promise<void>
     await post(
       m.channelId,
       names.length
-        ? `Only ${names.join(" or ")} can log ${team.team_name}'s expenses — tag them here, or send them the photo. If you have no receipt, you repay this yourself. It is not sent to Xero.`
-        : `Only ${team.team_name}'s owner and co-leaders can log its expenses. If you have no receipt, you repay this yourself. It is not sent to Xero.`,
+        ? `Only ${names.join(" or ")} can log ${team.team_name}'s expenses — tag them here, or send them the photo.`
+        : `Only ${team.team_name}'s owner and co-leaders can log its expenses.`,
       m.threadTs
     );
     return;
@@ -1094,8 +1119,11 @@ export async function confirmCardPayment(draftId: string, expenseId: string, sla
     let xeroStatus = "failed";
     // The bank notification confirms rand, so it posts to FFSA NPC. A dollar
     // slip was already booked on FF USA Inc at Confirm and is not re-posted in rand.
+    const merchant = origin && origin.kind !== "card_confirm" ? origin : null;
     if (originProposal.budget_org_key === "usa") {
       xeroStatus = originProposal.xero_write?.status ?? "not_confirmed";
+    } else if (!merchant?.storage_path) {
+      xeroStatus = "bank_proof_only";
     } else {
       try {
         const book = xeroBook("npc", {
@@ -1105,11 +1133,12 @@ export async function confirmCardPayment(draftId: string, expenseId: string, sla
           zarConfirmed: true,
         });
         const xero = await writeConfirmedSpend(admin, {
-          draftId: target.id,
+          draftId: merchant?.id ?? target.id,
           expenseId,
-          hubUserId: target.hub_user_id,
+          hubUserId: merchant?.hub_user_id ?? target.hub_user_id,
           confirmed: true,
-          hasReceipt: Boolean(target.storage_path),
+          // The screenshot on this card is the bank notification, not the shop receipt.
+          hasReceipt: Boolean(merchant?.storage_path),
           repayment: false,
           zarConfirmed: book.zarConfirmed,
           amountZar: book.amount,
@@ -1118,10 +1147,14 @@ export async function confirmCardPayment(draftId: string, expenseId: string, sla
           vendor: exp.vendor,
           budgetId: originProposal.budget_id ?? null,
           budgetLineId: originProposal.budget_line_id ?? null,
-          orgKey: originProposal.budget_org_key ?? "npc",
+          orgKey: "npc",
           currency: book.currency,
           region: book.region,
-          proposal: originProposal as unknown as Record<string, unknown>,
+          paymentMethod: "card",
+          budgetStatus: originProposal.budget_status ?? null,
+          periodStart: originProposal.budget_period_start ?? null,
+          periodEnd: originProposal.budget_period_end ?? null,
+          proposal: (merchant?.proposal ?? originProposal) as unknown as Record<string, unknown>,
         });
         xeroStatus = xero.status;
       } catch (xeroErr) {
@@ -1339,6 +1372,10 @@ export async function logReceipt(draftId: string, slackUserId: string, reply: Re
         orgKey: p.budget_org_key ?? null,
         currency: book.currency,
         region: book.region,
+        paymentMethod: p.payment_method,
+        budgetStatus: p.budget_status ?? null,
+        periodStart: p.budget_period_start ?? null,
+        periodEnd: p.budget_period_end ?? null,
         proposal: p as unknown as Record<string, unknown>,
       });
       xeroStatus = xero.status;
@@ -1521,7 +1558,17 @@ export async function openChangeForm(draftId: string, triggerId: string, slackUs
     return;
   }
   const categories = await loadCategories(admin);
-  const res = await slack.openView(triggerId, changeModal({ draftId, proposal: draft.proposal, categories }), "outreach");
+  const found = await linesForReceipt(admin, draft.team_id, draft.proposal, draft.user_note);
+  const res = await slack.openView(
+    triggerId,
+    changeModal({
+      draftId,
+      proposal: draft.proposal,
+      categories,
+      budgetLines: found.lines.map((line) => ({ id: line.id, name: line.name })),
+    }),
+    "outreach"
+  );
   if (!res.ok) await reply(`Couldn't open the form (${res.error ?? "unknown error"}). Try again.`);
 }
 
@@ -1568,7 +1615,11 @@ export async function applyChangeAndLog(draftId: string, input: ChangeInput, sla
     // A rand amount typed from the bank app confirms a card payment too.
     zar_confirmed: input.local_currency !== "ZAR" && input.payment_method === "card" && (keepBank || Boolean(input.zar_override)),
   };
-  const lined = await withPlainLine(admin, proposal, draft.team_id, { userNote: draft.user_note ?? null, suggested: null });
+  const lined = await withPlainLine(admin, proposal, draft.team_id, {
+    userNote: draft.user_note ?? null,
+    suggested: null,
+    explicitLineId: input.budget_line_id,
+  });
   await admin
     .from("outreach_receipt_drafts")
     .update({ proposal: lined, updated_at: new Date().toISOString() })

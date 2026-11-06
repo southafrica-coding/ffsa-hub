@@ -96,4 +96,37 @@ describe("POST /api/finance/outreach/receipts/xero", () => {
     });
     expect(await res.json()).toEqual({ status: "no_account", bankTransactionId: null });
   });
+
+  it("uses the US bank account when the budget is FF USA Inc", async () => {
+    state.draft = {
+      ...state.draft,
+      proposal: {
+        ...(state.draft?.proposal as object),
+        budget_org_key: "usa",
+        local_currency: "USD",
+        local_amount: 40,
+        payment_method: "card",
+        budget_status: "approved",
+        budget_period_start: "2026-01-01",
+        budget_period_end: "2026-12-31",
+      },
+    };
+    const res = await call({ draftId: "d1" });
+    expect(res.status).toBe(200);
+    expect(state.calls[0]).toMatchObject({ region: "us", currency: "USD", amountZar: 40, paymentMethod: "card" });
+  });
+
+  it("refuses to write from a preview deployment", async () => {
+    const previous = process.env.VERCEL_ENV;
+    process.env.VERCEL_ENV = "preview";
+    try {
+      const res = await call({ draftId: "d1" });
+      expect(res.status).toBe(403);
+      expect(await res.json()).toMatchObject({ error: "preview_writes_disabled" });
+      expect(state.calls).toEqual([]);
+    } finally {
+      if (previous === undefined) delete process.env.VERCEL_ENV;
+      else process.env.VERCEL_ENV = previous;
+    }
+  });
 });

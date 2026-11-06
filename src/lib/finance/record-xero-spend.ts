@@ -11,6 +11,7 @@
  */
 
 import { isMissingRelation } from "@/lib/finance/budget-actuals";
+import { xeroPreviewWriteBlock } from "@/lib/finance/xero-preview-guard";
 import { decideXeroSpend, spendBankAccountCode, type XeroTracking } from "@/lib/finance/xero-spend";
 import { createXeroSpendMoney, type XeroRegion } from "@/services/xero";
 
@@ -36,6 +37,10 @@ export type ConfirmedSpend = {
   /** Book currency of that org: ZAR for NPC, USD for USA. */
   currency: "ZAR" | "USD";
   region: XeroRegion;
+  paymentMethod: "cash" | "card" | "bank_transfer";
+  budgetStatus: string | null;
+  periodStart: string | null;
+  periodEnd: string | null;
   proposal: Record<string, unknown>;
 };
 
@@ -78,7 +83,69 @@ async function loadCoding(admin: Admin, lineId: string | null, region: XeroRegio
   return { accountCode, tracking, incomplete: false };
 }
 
-/** The receipt/Xero log. Not budget_expenses. */
+function inBudgetPeriod(date: string, start: string | null, end: string | null): boolean {
+  if (!start || !end || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+  return date >= start.slice(0, 10) && date <= end.slice(0, 10);
+}
+
+/** An existing Xero bank transaction for this expense, from the log or a draft. */
+async function xeroIdForExpense(admin: Admin, expenseId: string): Promise<string | null> {
+  const { data, error } = await admin
+    .from("budget_xero_spends")
+    .select("xero_bank_transaction_id")
+    .eq("outreach_expense_id", expenseId)
+    .limit(5);
+  if (!error) {
+    const hit = ((data ?? []) as { xero_bank_transaction_id?: string | null }[]).find((row) => row.xero_bank_transaction_id);
+    if (hit?.xero_bank_transaction_id) return hit.xero_bank_transaction_id;
+  }
+  const { data: drafts, error: draftError } = await admin
+    .from("outreach_receipt_drafts")
+    .select("proposal")
+    .eq("expense_id", expenseId);
+  if (draftError) {
+    console.error("[xero] could not read drafts for expense", expenseId, draftError.message ?? draftError);
+    return null;
+  }
+  for (const row of (drafts ?? []) as { proposal?: { xero_write?: { bank_transaction_id?: string | null } } }[]) {
+    const id = row.proposal?.xero_write?.bank_transaction_id;
+    if (typeof id === "string" && id) return id;
+  }
+  return null;
+}
+
+/** Merges xero_write into the draft as it is now. A stored bank id is not replaced. */
+async function saveXeroOnDraft(
+  admin: Admin,
+  draftId: string,
+  xeroWrite: { status: string; bank_transaction_id: string | null; error: string | null; at: string }
+): Promise<{ ok: boolean; message?: string }> {
+  const { data, error: readError } = await admin
+    .from("outreach_receipt_drafts")
+    .select("proposal")
+    .eq("id", draftId)
+    .maybeSingle();
+  if (readError) return { ok: false, message: readError.message ?? "could not read the draft" };
+  const current = ((data?.proposal ?? {}) as Record<string, unknown>) ?? {};
+  const prior = current.xero_write as { bank_transaction_id?: string | null; status?: string } | undefined;
+  const bankTransactionId = prior?.bank_transaction_id || xeroWrite.bank_transaction_id;
+  const proposal = {
+    ...current,
+    xero_write: {
+      ...xeroWrite,
+      bank_transaction_id: bankTransactionId,
+      status: prior?.bank_transaction_id ? prior.status ?? "written" : xeroWrite.status,
+    },
+  };
+  const { error } = await admin
+    .from("outreach_receipt_drafts")
+    .update({ proposal, updated_at: new Date().toISOString() })
+    .eq("id", draftId);
+  if (error) return { ok: false, message: error.message ?? "could not store the Xero id" };
+  return { ok: true };
+}
+
+/** The receipt/Xero log. Not budget_expenses. One row per expense. */
 async function rememberXeroSpend(
   admin: Admin,
   input: ConfirmedSpend,
@@ -101,18 +168,26 @@ async function rememberXeroSpend(
     xero_status: status,
     confirmed_at: new Date().toISOString(),
   };
-  const { data: existing, error: readError } = await admin
-    .from("budget_xero_spends")
-    .select("id")
-    .eq("receipt_draft_id", input.draftId)
-    .limit(1);
-  if (readError) {
-    if (!isMissingRelation(readError)) {
-      console.error("[xero] budget_xero_spends read failed", input.draftId, readError.message ?? readError);
+  const byExpense = input.expenseId
+    ? await admin.from("budget_xero_spends").select("id").eq("outreach_expense_id", input.expenseId).limit(1)
+    : { data: [], error: null };
+  if (byExpense.error) {
+    if (!isMissingRelation(byExpense.error)) {
+      console.error("[xero] budget_xero_spends read failed", input.draftId, byExpense.error.message ?? byExpense.error);
     }
     return;
   }
-  const prior = (existing ?? []) as { id: string }[];
+  let prior = (byExpense.data ?? []) as { id: string }[];
+  if (!prior.length) {
+    const byDraft = await admin.from("budget_xero_spends").select("id").eq("receipt_draft_id", input.draftId).limit(1);
+    if (byDraft.error) {
+      if (!isMissingRelation(byDraft.error)) {
+        console.error("[xero] budget_xero_spends read failed", input.draftId, byDraft.error.message ?? byDraft.error);
+      }
+      return;
+    }
+    prior = (byDraft.data ?? []) as { id: string }[];
+  }
   const { error } = prior.length
     ? await admin.from("budget_xero_spends").update(row).eq("id", prior[0].id)
     : await admin.from("budget_xero_spends").insert(row);
@@ -130,9 +205,13 @@ export async function writeConfirmedSpend(
   admin: Admin,
   input: ConfirmedSpend
 ): Promise<{ status: string; bankTransactionId: string | null }> {
-  const existing = input.proposal.xero_write as { bank_transaction_id?: string | null } | null | undefined;
-  if (existing?.bank_transaction_id) {
-    return { status: "already_written", bankTransactionId: existing.bank_transaction_id };
+  if (xeroPreviewWriteBlock()) {
+    return { status: "preview_blocked", bankTransactionId: null };
+  }
+
+  if (input.expenseId) {
+    const already = await xeroIdForExpense(admin, input.expenseId);
+    if (already) return { status: "already_written", bankTransactionId: already };
   }
 
   const coding = await loadCoding(admin, input.budgetLineId, input.region);
@@ -140,19 +219,32 @@ export async function writeConfirmedSpend(
   let bankTransactionId: string | null = null;
   let error: string | null = null;
 
-  if (coding.incomplete) {
+  const hasLine = Boolean(input.budgetLineId);
+  const approved = input.budgetStatus === "approved";
+  const dated = inBudgetPeriod(input.date, input.periodStart, input.periodEnd);
+
+  if (input.paymentMethod === "cash") {
+    status = "cash_not_posted";
+  } else if (hasLine && !approved) {
+    status = "unapproved_budget";
+  } else if (hasLine && !dated) {
+    status = "outside_period";
+  } else if (coding.incomplete) {
     error = "The budget line's tracking options could not be read, so nothing was sent to Xero.";
+  } else if (!input.expenseId) {
+    error = "There is no expense to attach this Xero spend to.";
   } else {
     const decision = decideXeroSpend({
       confirmed: input.confirmed,
       hasReceipt: input.hasReceipt,
       repayment: input.repayment,
       zarConfirmed: input.zarConfirmed,
+      paymentMethod: input.paymentMethod,
       amountZar: input.amountZar,
       date: input.date,
       description: input.description,
       vendor: input.vendor,
-      reference: `ffsa-${input.draftId}`,
+      reference: `ffsa-expense-${input.expenseId}`,
       accountCode: coding.accountCode,
       bankAccountCode: spendBankAccountCode(input.region),
       tracking: coding.tracking,
@@ -161,7 +253,7 @@ export async function writeConfirmedSpend(
       status = decision.status;
     } else {
       const posted = await createXeroSpendMoney(admin, input.region, {
-        idempotencyKey: `ffsa-receipt-${input.draftId}`,
+        idempotencyKey: `ffsa-expense-${input.expenseId}`,
         payload: decision.payload,
       });
       if (posted.ok) {
@@ -170,18 +262,22 @@ export async function writeConfirmedSpend(
       } else {
         status = "failed";
         error = posted.message;
-        console.error("[xero] spend not written", input.draftId, posted.message);
+        console.error("[xero] spend not written", input.expenseId, posted.message);
       }
     }
   }
 
-  const xero_write = { status, bank_transaction_id: bankTransactionId, error, at: new Date().toISOString() };
-  await admin
-    .from("outreach_receipt_drafts")
-    .update({ proposal: { ...input.proposal, xero_write }, updated_at: new Date().toISOString() })
-    .eq("id", input.draftId);
+  const saved = await saveXeroOnDraft(admin, input.draftId, {
+    status,
+    bank_transaction_id: bankTransactionId,
+    error,
+    at: new Date().toISOString(),
+  });
+  if (!saved.ok) {
+    console.error("[xero] draft did not store the Xero id", input.draftId, saved.message);
+  }
 
-  if (input.confirmed && input.hasReceipt && !input.repayment) {
+  if (input.confirmed && input.hasReceipt && !input.repayment && input.paymentMethod !== "cash") {
     await rememberXeroSpend(admin, input, status, bankTransactionId);
   }
   return { status, bankTransactionId };

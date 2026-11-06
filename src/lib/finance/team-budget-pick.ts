@@ -102,12 +102,15 @@ function nameHits(budgetName: string, hint: string): boolean {
  * that contains the receipt date. Ambiguous when more than one name remains.
  */
 export function selectTeamBudget(rows: TeamBudgetRow[], book: ReceiptBook): BudgetSelection {
-  const matched = rows.filter(
+  let matched = rows.filter(
     (row) =>
       row.status !== "archived" &&
       orgMatches(row, book.org) &&
       inPeriod(book.expenseDate, row.periodStart, row.periodEnd)
   );
+  // An approved budget wins over a draft or a submitted one in the same period.
+  const approved = matched.filter((row) => row.status === "approved");
+  if (approved.length) matched = approved;
   if (matched.length === 0) return { ok: false, reason: "none" };
   if (matched.length === 1) return { ok: true, budget: matched[0] };
   const hint = book.nameHint ?? "";

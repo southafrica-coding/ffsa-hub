@@ -305,6 +305,7 @@ describe("parseChange", () => {
         local_currency: "BWP",
         zar_override: null,
         category_id: "c0",
+        budget_line_id: null,
         payment_method: "cash",
         description: "Groceries",
       },

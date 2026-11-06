@@ -10,6 +10,17 @@ import { parseRepayValue } from "./no-receipt";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Admin = any;
 
+async function isTeamOwner(admin: Admin, teamId: string, hubUserId: string): Promise<boolean> {
+  const { data } = await admin
+    .from("outreach_team_members")
+    .select("role")
+    .eq("team_id", teamId)
+    .eq("user_id", hubUserId)
+    .eq("role", "owner")
+    .maybeSingle();
+  return Boolean(data);
+}
+
 export async function confirmRepayment(
   admin: Admin,
   slackUserId: string,
@@ -20,7 +31,28 @@ export async function confirmRepayment(
 
   const { data: user } = await admin.from("users").select("id").eq("slack_user_id", slackUserId).maybeSingle();
   const hubUserId = (user as { id: string } | null)?.id ?? null;
+  const owner = claim.teamId && hubUserId ? await isTeamOwner(admin, claim.teamId, hubUserId) : false;
+  if (slackUserId !== claim.claimantSlackId && !owner) {
+    return { text: "Only the person who spent this, or the team owner, can confirm the repayment." };
+  }
+
   const money = claim.currency === "ZAR" ? `R${(claim.amountCents / 100).toFixed(2)}` : `${claim.currency} ${(claim.amountCents / 100).toFixed(2)}`;
+
+  const { data: prior, error: priorError } = await admin
+    .from("budget_repayments")
+    .select("id")
+    .eq("slack_user_id", claim.claimantSlackId)
+    .eq("amount_cents", claim.amountCents)
+    .eq("currency", claim.currency)
+    .eq("description", claim.description)
+    .limit(1);
+  if (priorError && !isMissingRelation(priorError)) {
+    console.error("[slack/outreach] repayment lookup failed", priorError.message ?? priorError);
+    return { text: `You repay ${money} for ${claim.description}. I couldn't check the list just now — try again in a moment. Nothing was sent to Xero.` };
+  }
+  if (!priorError && (prior ?? []).length) {
+    return { text: `You already noted that you repay ${money} for ${claim.description}. Nothing was sent to Xero.` };
+  }
 
   const { error } = await admin.from("budget_repayments").insert({
     hub_user_id: hubUserId,
