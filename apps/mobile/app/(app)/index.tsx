@@ -12,6 +12,7 @@ import { strings as okrsStrings } from "@/features/okrs/strings";
 import { homeStrings as s } from "@/features/home/strings";
 import { useFeed } from "@/features/home/use-feed";
 import { MinistriesHomeShortcut } from "@/features/ministries/HomeShortcut";
+import { StaffDecisionsHomeShortcut } from "@/features/staff-decisions/HomeShortcut";
 import { useSchoolsShortcut } from "@/features/schools/shortcut";
 import { strings as schoolsStrings } from "@/features/schools/strings";
 import { BarAction, ListRow, SectionBar, SkeletonRows, StateMessage, openWebPage, useMe } from "@/features/shell";
@@ -185,6 +186,7 @@ export default function HomeScreen() {
             onPress={() => router.navigate("/okrs")}
           />
           <MinistriesHomeShortcut />
+          <StaffDecisionsHomeShortcut />
           <ListRow
             icon={CircleUser}
             title={s.shortcuts.me.title}

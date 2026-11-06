@@ -63,6 +63,7 @@ const IN_APP: { web: string; app: string | null; withId?: true }[] = [
   { web: "/okrs/cycles", app: null },
   { web: "/ministry", app: "/ministries", withId: true },
   { web: "/ministry/staff", app: null },
+  { web: "/staff-decisions", app: "/staff-decisions" },
 ];
 
 function matchesPrefix(path: string, prefix: string) {
@@ -72,6 +73,9 @@ function matchesPrefix(path: string, prefix: string) {
 /** Decide whether a feed item's website href opens in the app or the browser. */
 export function resolveTarget(href: string | null): Target {
   if (!href || !href.startsWith("/") || href.startsWith("//")) return { kind: "none" };
+  // A Leadership Track school's staff-decision tab has its own in-app screen.
+  const sd = /^\/schools\/([0-9a-fA-F-]{36})\?(?:[^#]*&)?tab=staff_decision(?:[&#]|$)/.exec(href);
+  if (sd) return { kind: "app", path: `/staff-decisions/${sd[1]}` };
   const hit = IN_APP.filter((r) => matchesPrefix(href, r.web)).sort((a, b) => b.web.length - a.web.length)[0];
   if (!hit || hit.app === null) return { kind: "web", path: href };
   const id = hit.withId ? /^\/([A-Za-z0-9-]+)(?:[/?#]|$)/.exec(href.slice(hit.web.length))?.[1] : undefined;

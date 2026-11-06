@@ -105,6 +105,18 @@ describe("resolveTarget", () => {
     expect(resolveTarget("/ministry-old")).toEqual({ kind: "web", path: "/ministry-old" });
   });
 
+  it("staff decisions: the list and a school's staff_decision tab open in the app; other school tabs stay on the website", () => {
+    const id = "11111111-2222-4333-8444-555555555555";
+    expect(resolveTarget("/staff-decisions")).toEqual({ kind: "app", path: "/staff-decisions" });
+    expect(resolveTarget("/staff-decisions?from=email")).toEqual({ kind: "app", path: "/staff-decisions" });
+    expect(resolveTarget(`/schools/${id}?tab=staff_decision`)).toEqual({ kind: "app", path: `/staff-decisions/${id}` });
+    expect(resolveTarget(`/schools/${id}?from=slack&tab=staff_decision`)).toEqual({ kind: "app", path: `/staff-decisions/${id}` });
+    expect(resolveTarget(`/schools/${id}?tab=staff_decision_x`)).toEqual({ kind: "web", path: `/schools/${id}?tab=staff_decision_x` });
+    expect(resolveTarget(`/schools/${id}?tab=arrival`)).toEqual({ kind: "web", path: `/schools/${id}?tab=arrival` });
+    expect(resolveTarget(`/schools/${id}`)).toEqual({ kind: "web", path: `/schools/${id}` });
+    expect(resolveTarget("/staff-decisions-old")).toEqual({ kind: "web", path: "/staff-decisions-old" });
+  });
+
   it("the browser for everything else (today's feed items all go here)", () => {
     for (const href of ["/users?filter=pending", "/prayer-room?tab=practice", "/records-library/match-queue"]) {
       expect(resolveTarget(href)).toEqual({ kind: "web", path: href });
