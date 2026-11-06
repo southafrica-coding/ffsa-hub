@@ -11,7 +11,7 @@ import { asError, guardEvangelism, isGuard, json, notEnabled, readBody } from "@
 import { presentTestimony, type TestimonyRow } from "@/lib/evangelism/present";
 import { isEvangelismNotReady } from "@/lib/evangelism/schema-error";
 import { loadAuthorNames, signTestimonyMedia } from "@/lib/evangelism/signed-media";
-import { deleteTestimony, getTestimony, recordRemoval, updateTestimony } from "@/services/evangelism";
+import { deleteTestimony, getTestimony, updateTestimony } from "@/services/evangelism";
 
 // GET    /api/evangelism/testimonies/:id
 // PATCH  /api/evangelism/testimonies/:id
@@ -23,11 +23,21 @@ import { deleteTestimony, getTestimony, recordRemoval, updateTestimony } from "@
 
 type Ctx = { params: Promise<{ id: string }> };
 
-function visible(row: TestimonyRow, userId: string, access: { view: boolean; publish: boolean }): boolean {
-  if (!access.view) return false;
+// Same shape as migration 293: publishers see every row, including withheld.
+// Everyone else sees published rows. An author also sees their own draft
+// and submitted rows. A withheld story is not visible to its author.
+function visible(
+  row: TestimonyRow,
+  userId: string,
+  access: { view: boolean; submit: boolean; publish: boolean }
+): boolean {
   if (access.publish) return true;
-  if (row.status === "published") return true;
-  return row.author_user_id === userId;
+  if (row.status === "published" && access.view) return true;
+  return (
+    access.submit &&
+    row.author_user_id === userId &&
+    (row.status === "draft" || row.status === "submitted")
+  );
 }
 
 async function presentOne(row: TestimonyRow, publish: boolean) {
@@ -142,13 +152,6 @@ export async function PATCH(request: Request, context: Ctx) {
     return json({ error: "bad_request", message: "Nothing to update." }, 400);
   }
 
-  if (patch.status === "withheld" && (row.status === "published" || row.published_at)) {
-    const removal = await recordRemoval(supabase, { testimony_id: id, reason: "withheld" });
-    if (removal.error && !isEvangelismNotReady(removal.error)) {
-      return asError(removal.error, "Couldn't update the testimony.");
-    }
-  }
-
   const updated = await updateTestimony(supabase, id, patch);
   if (updated.error) return asError(updated.error, "Couldn't update the testimony.");
   return json({ testimony: await presentOne(updated.data as TestimonyRow, access.publish) });
@@ -167,15 +170,6 @@ export async function DELETE(_request: Request, context: Ctx) {
   }
   if (!canDeleteTestimony(access, row, user.id)) {
     return json({ error: "forbidden", message: "You cannot delete this story." }, 403);
-  }
-
-  const wasOnTheWall = row.status === "published" || row.published_at != null;
-  if (wasOnTheWall) {
-    const removal = await recordRemoval(supabase, { testimony_id: id, reason: "deleted" });
-    if (removal.error) {
-      if (isEvangelismNotReady(removal.error)) return notEnabled();
-      return asError(removal.error, "Couldn't delete the testimony.");
-    }
   }
 
   const paths = (row.evangelism_media ?? []).map((item) => item.storage_path).filter(Boolean);

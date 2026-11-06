@@ -68,7 +68,9 @@ export async function GET(request: Request) {
   const mine = url.searchParams.get("mine") === "1";
   const limit = clampLimit(url.searchParams.get("limit"));
 
-  if (status && status !== "published" && !access.publish && !(access.submit && mine)) {
+  // Authors may list their own drafts and submissions. Withheld is publisher-only.
+  const authorStatus = status === "draft" || status === "submitted";
+  if (status && status !== "published" && !access.publish && !(access.submit && mine && authorStatus)) {
     return json({ error: "forbidden", message: "Only a publisher can list unpublished stories." }, 403);
   }
 

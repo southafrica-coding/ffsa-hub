@@ -1,12 +1,12 @@
 // Data access for evangelism testimonies.
 //
-// Tables are NOT in the database yet. Hub Data applies them (see the draft
-// PR). Until then every call fails with a missing-schema error and the
-// routes answer 503 evangelism_not_enabled.
+// Tables are drafted in migration 293 (PR #508), not applied. Until that
+// file is applied, queries fail and the routes answer 503.
+// This module does not add or renumber a migration.
 //
-// Proposed tables (do not apply from this file):
-//   evangelism_testimonies, evangelism_media
-// Proposed private bucket: evangelism-media
+// Visibility matches that SQL: viewers read published rows only. Authors
+// read and write their own draft and submitted rows, and delete drafts.
+// Withheld rows are visible to publishers only. There is no removals table.
 //
 // This module only builds queries. Permission checks live in the routes.
 
@@ -40,10 +40,15 @@ export async function listTestimonies(
   if (visibility.kind === "published") {
     query = query.eq("status", "published");
   } else if (visibility.kind === "published_or_own") {
-    query = query.or(`status.eq.published,author_user_id.eq.${visibility.authorId}`);
+    // Published stories, plus the caller's drafts and submissions.
+    // Withheld rows stay out: migration 293 hides them from the author.
+    query = query.or(
+      `status.eq.published,and(author_user_id.eq.${visibility.authorId},status.in.(draft,submitted))`
+    );
   } else if (visibility.kind === "own") {
     query = query.eq("author_user_id", visibility.authorId);
     if (visibility.status) query = query.eq("status", visibility.status);
+    else query = query.in("status", ["draft", "submitted"]);
   } else {
     if (visibility.status) query = query.eq("status", visibility.status);
     if (visibility.authorId) query = query.eq("author_user_id", visibility.authorId);
@@ -134,7 +139,11 @@ export async function listPublishedByIds(supabase: Client, ids: string[]) {
   return supabase.from("evangelism_testimonies").select(STORY).eq("status", "published").in("id", ids);
 }
 
-/** Stories that were on the wall and have since been withheld. */
+/**
+ * Ids only, for the TV feed. Call this with the service role: a viewer
+ * JWT cannot SELECT withheld rows (migration 293), but the screen still
+ * needs the id so it can drop a story that left the wall.
+ */
 export async function listWithheldSince(supabase: Client, since: string) {
   return supabase
     .from("evangelism_testimonies")
@@ -142,26 +151,6 @@ export async function listWithheldSince(supabase: Client, since: string) {
     .eq("status", "withheld")
     .not("published_at", "is", null)
     .gt("updated_at", since);
-}
-
-/** Proposed table. A published story that was withheld or deleted after `since`. */
-export async function listRemovalsSince(supabase: Client, since: string) {
-  return supabase
-    .from("evangelism_removals")
-    .select("testimony_id")
-    .gt("removed_at", since)
-    .limit(200);
-}
-
-export async function recordRemoval(
-  supabase: Client,
-  row: { testimony_id: string; reason: "withheld" | "deleted" }
-) {
-  return supabase.from("evangelism_removals").insert({
-    testimony_id: row.testimony_id,
-    reason: row.reason,
-    removed_at: new Date().toISOString(),
-  });
 }
 
 export async function authorNames(supabase: Client, ids: string[]) {

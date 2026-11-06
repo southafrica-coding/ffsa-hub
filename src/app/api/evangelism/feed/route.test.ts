@@ -18,13 +18,13 @@ vi.mock("@/lib/evangelism/signed-media", () => ({
   signTestimonyMedia: async () => new Map(),
   loadAuthorNames: async () => new Map(),
 }));
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({}) }));
 vi.mock("@/services/evangelism", () => ({
   STATS_ROW_CAP: 5000,
   listPublishedFeed: async () => ({ data: h.feed, error: null }),
   listPublishedForStats: async () => ({ data: [], error: null }),
   listPublishedByIds: async () => ({ data: [], error: null }),
   listWithheldSince: async () => ({ data: [{ id: "gone" }], error: null }),
-  listRemovalsSince: async () => ({ data: [{ testimony_id: "deleted-row" }], error: null }),
 }));
 
 import { GET } from "./route";
@@ -91,11 +91,14 @@ describe("GET /api/evangelism/feed", () => {
     expect(body.removed_ids).toEqual([]);
   });
 
-  it("drops withheld and deleted stories once the screen has a cursor", async () => {
-    const res = await GET(new Request("http://x/api/evangelism/feed?since=2026-11-01T00:00:00.000Z"));
+  it("drops a withheld story and a visible id that is no longer published", async () => {
+    const visible = "33333333-3333-4333-8333-333333333333";
+    const res = await GET(
+      new Request(`http://x/api/evangelism/feed?since=2026-11-01T00:00:00.000Z&visible=${visible}`)
+    );
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.removed_ids).toEqual(expect.arrayContaining(["gone", "deleted-row"]));
+    expect(body.removed_ids).toEqual([visible, "gone"]);
   });
 
   it("rejects a bad cursor and a viewer with no access", async () => {

@@ -1,3 +1,4 @@
+import { createAdminClient } from "@/lib/supabase/admin";
 import { EVANGELISM_FEED_POLL_SECONDS, mediaExpiresAt, parseTestimonyIds } from "@/lib/evangelism/contract";
 import { asError, guardEvangelism, isGuard, json } from "@/lib/evangelism/http";
 import { presentTestimony, type TestimonyRow } from "@/lib/evangelism/present";
@@ -9,7 +10,6 @@ import {
   listPublishedByIds,
   listPublishedFeed,
   listPublishedForStats,
-  listRemovalsSince,
   listWithheldSince,
 } from "@/services/evangelism";
 
@@ -20,9 +20,11 @@ import {
 //   refreshed       — stories in `visible` that are still published, with new
 //                     read URLs. Signed URLs last 10 minutes, so the screen
 //                     sends the ids it is already showing on every poll.
-//   removed_ids     — ids that were published and have since been withheld or
-//                     deleted, plus any `visible` id that is no longer published.
-//                     Apply these after appending testimonies.
+//   removed_ids     — visible ids that are no longer published, plus withheld
+//                     ids (id only, service role: viewers cannot SELECT those
+//                     rows). Migration 293 has no removals table; a deleted
+//                     story is noticed because its id is no longer published.
+//                     Apply removed_ids after appending testimonies.
 //   media_expires_at — when the URLs in this response stop working.
 //
 // POST /api/evangelism/media/refresh renews URLs without a stats poll.
@@ -64,23 +66,17 @@ export async function GET(request: Request) {
   if (!visible.ok) return json({ error: "bad_request", message: visible.message }, 400);
 
   const window = statsWindow("month");
-  const [feed, statsResult, stillUp, withheld, removals] = await Promise.all([
+  const withheld = await withheldIdsSince(since);
+  if ("error" in withheld && withheld.error) return withheld.error;
+
+  const [feed, statsResult, stillUp] = await Promise.all([
     listPublishedFeed(supabase, { since, limit: FEED_LIMIT }),
     listPublishedForStats(supabase, window),
     listPublishedByIds(supabase, visible.ids),
-    since ? listWithheldSince(supabase, since) : Promise.resolve({ data: [], error: null }),
-    since ? listRemovalsSince(supabase, since) : Promise.resolve({ data: [], error: null }),
   ]);
   if (feed.error) return asError(feed.error, "Couldn't load the feed.");
   if (statsResult.error) return asError(statsResult.error, "Couldn't load evangelism stats.");
   if (stillUp.error) return asError(stillUp.error, "Couldn't refresh stories already on screen.");
-  if (withheld.error) return asError(withheld.error, "Couldn't load stories taken off the screen.");
-  // The removals table is proposed. Withheld rows and missing visible ids
-  // still tell the screen what to drop if it has not been created yet.
-  const removalRows = removals.error && isEvangelismNotReady(removals.error) ? [] : removals.data;
-  if (removals.error && !isEvangelismNotReady(removals.error)) {
-    return asError(removals.error, "Couldn't load stories taken off the screen.");
-  }
 
   const rows = (since ? (feed.data ?? []) : [...((feed.data ?? []) as TestimonyRow[])].reverse()) as TestimonyRow[];
   const refreshedRows = (stillUp.data ?? []) as TestimonyRow[];
@@ -93,8 +89,7 @@ export async function GET(request: Request) {
   const stillPublished = new Set(refreshedRows.map((row) => row.id));
   const removed = new Set<string>();
   for (const id of visible.ids) if (!stillPublished.has(id)) removed.add(id);
-  for (const row of (withheld.data ?? []) as Array<{ id: string }>) removed.add(row.id);
-  for (const row of (removalRows ?? []) as Array<{ testimony_id: string }>) removed.add(row.testimony_id);
+  for (const id of withheld.ids) removed.add(id);
 
   const last = rows.length > 0 ? rows[rows.length - 1].published_at : since;
   const statRows = statsResult.data ?? [];
@@ -114,4 +109,23 @@ export async function GET(request: Request) {
       truncated: statRows.length >= STATS_ROW_CAP,
     }),
   });
+}
+
+/** Ids of stories withheld after the cursor. Empty when there is no cursor. */
+async function withheldIdsSince(
+  since: string | null
+): Promise<{ ids: string[]; error?: ReturnType<typeof json> }> {
+  if (!since) return { ids: [] };
+  let admin;
+  try {
+    admin = createAdminClient();
+  } catch {
+    return { ids: [] };
+  }
+  const { data, error } = await listWithheldSince(admin, since);
+  if (error) {
+    if (isEvangelismNotReady(error)) return { ids: [] };
+    return { ids: [], error: asError(error, "Couldn't load stories taken off the screen.") };
+  }
+  return { ids: ((data ?? []) as Array<{ id: string }>).map((row) => row.id) };
 }
