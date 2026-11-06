@@ -2,7 +2,10 @@
  * Receipts from Slack — the I/O half (pure logic lives in receipt-logic.ts).
  *
  *   photo arrives ─► original stored (outreach-receipts bucket) + draft row
- *                 ─► Claude reads it ─► card [Log to <team>] [Change] [Cancel]
+ *                 ─► Claude reads it ─► card [Confirm <team>] [Change] [Cancel]
+ *                    The card names a budget line in plain words. Xero is
+ *                    written only after Confirm, and only when that line
+ *                    has an account. No photo means the purchaser repays.
  *   bank notice   ─► a screenshot of an ATM withdrawal becomes a CASH PULL
  *                    card instead [Log pull to <team>] [Change] [Cancel] —
  *                    priced exactly like the Hub form (migration 263/264)
@@ -13,10 +16,11 @@
  *   Team          ─► in a DM, someone who can log for several teams picks
  *                    (or corrects) the team on the card; nothing is logged
  *                    until a team is chosen (migration 262)
- *   Log it        ─► outreach_expenses (source 'slack') + the ORIGINAL file
+ *   Confirm       ─► outreach_expenses (source 'slack') + the ORIGINAL file
+ *                    then, and only then, a Xero spend if the line is coded
  *                    moved under the expense and recorded in
  *                    outreach_receipts, exactly like a Hub upload
- *   Change        ─► Slack form ─► then Log it
+ *   Change        ─► Slack form ─► then Confirm
  *   Cancel        ─► draft cancelled, stored photo removed
  *
  * Bookkeeping guarantee: the original bytes are saved before anything else
@@ -54,7 +58,10 @@ import {
   pullLine,
   type PullProposal,
 } from "./pull-logic";
+import { xeroResultSentence } from "@/lib/finance/xero-spend";
+import { writeConfirmedSpend } from "@/lib/finance/record-xero-spend";
 import { isFinanceStaff, pickTeam, sastDate, summarise, type OutreachScope, type OutreachTeamRef } from "@/lib/slack/assistant/outreach";
+import { choosePlainBudgetLine, type PlainBudgetLine } from "./budget-line-language";
 import {
   ACTION_CANCEL,
   buildProposal,
@@ -172,6 +179,49 @@ async function editorNames(admin: Admin, teamId: string): Promise<string[]> {
 async function financeClosed(admin: Admin, teamId: string): Promise<boolean> {
   const { data } = await admin.from("outreach_closeouts").select("status").eq("team_id", teamId).maybeSingle();
   return data?.status === "auto_closed" || data?.status === "admin_override";
+}
+
+async function loadPlainLines(admin: Admin, teamId: string | null): Promise<PlainBudgetLine[]> {
+  if (!teamId) return [];
+  const { data, error } = await admin
+    .from("budgets")
+    .select("id, status, budget_lines!budget_lines_budget_id_fkey(id, name, archived_at)")
+    .eq("outreach_team_id", teamId)
+    .is("archived_at", null);
+  if (error || !data) return [];
+  const out: PlainBudgetLine[] = [];
+  for (const budget of data as {
+    id: string;
+    status: string;
+    budget_lines?: { id: string; name: string; archived_at: string | null }[];
+  }[]) {
+    if (budget.status === "archived") continue;
+    for (const line of budget.budget_lines ?? []) {
+      if (!line.archived_at && line.name) out.push({ id: line.id, budgetId: budget.id, name: line.name });
+    }
+  }
+  return out;
+}
+
+/** Names the budget line in plain words. An empty budget, or no budget tables yet, falls back to the category. */
+async function withPlainLine(
+  admin: Admin,
+  proposal: Proposal,
+  teamId: string | null,
+  hint: { userNote: string | null; suggested: string | null }
+): Promise<Proposal> {
+  const [lines, categories] = await Promise.all([loadPlainLines(admin, teamId), loadCategories(admin)]);
+  const categoryName = categories.find((c) => c.id === proposal.category_id)?.name ?? null;
+  return {
+    ...proposal,
+    ...choosePlainBudgetLine({
+      userNote: hint.userNote,
+      suggested: hint.suggested ?? categoryName,
+      description: proposal.description,
+      categoryName,
+      lines,
+    }),
+  };
 }
 
 async function loadCategories(admin: Admin): Promise<BudgetCategory[]> {
@@ -295,8 +345,8 @@ export async function handleIncomingReceipts(m: IncomingReceipts): Promise<void>
     await post(
       m.channelId,
       names.length
-        ? `Only ${names.join(" or ")} can log ${team.team_name}'s expenses — tag them here, or send them the photo.`
-        : `Only ${team.team_name}'s owner and co-leaders can log its expenses.`,
+        ? `Only ${names.join(" or ")} can log ${team.team_name}'s expenses — tag them here, or send them the photo. If you have no receipt, you repay this yourself. It is not sent to Xero.`
+        : `Only ${team.team_name}'s owner and co-leaders can log its expenses. If you have no receipt, you repay this yourself. It is not sent to Xero.`,
       m.threadTs
     );
     return;
@@ -504,7 +554,9 @@ async function notAReceipt(admin: Admin, g: Ingested) {
     .from("outreach_receipt_drafts")
     .update({ status: "cancelled", extracted: g.reading, error: "not a receipt", updated_at: new Date().toISOString() })
     .eq("id", g.draftId);
-  await g.say("That doesn't look like a receipt, so I haven't kept it. If it is one, send a clearer photo.");
+  await g.say(
+    "That doesn't look like a receipt, so I haven't kept it. No receipt means you repay this yourself — it doesn't come out of the budget and it isn't sent to Xero. If it is a receipt, send a clearer photo."
+  );
 }
 
 /** A notification sent with its receipt: its file rides on the receipt's draft. */
@@ -553,6 +605,11 @@ async function proposeReceipt(
 
   const dup = team ? duplicateWarning(g.sha, proposal, await priorReceipts(admin, team.id, g.draftId)) : null;
   if (dup) warnings.unshift(dup);
+
+  proposal = await withPlainLine(admin, proposal, team?.id ?? null, {
+    userNote: a.m.userNote,
+    suggested: g.reading.suggested_category,
+  });
 
   await admin
     .from("outreach_receipt_drafts")
@@ -938,10 +995,44 @@ export async function confirmCardPayment(draftId: string, expenseId: string, sla
       .eq("id", draftId);
     await checkCashAlert(exp.team_id);
 
+    const { data: origins } = await admin
+      .from("outreach_receipt_drafts")
+      .select("*")
+      .eq("expense_id", expenseId)
+      .neq("id", draftId)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    const origin = (origins?.[0] ?? null) as Draft | null;
+    const target = origin ?? draft;
+    const originProposal = (target.proposal ?? {}) as Proposal;
+    let xeroStatus = "failed";
+    try {
+      const xero = await writeConfirmedSpend(admin, {
+        draftId: target.id,
+        expenseId,
+        hubUserId: target.hub_user_id,
+        confirmed: true,
+        hasReceipt: Boolean(target.storage_path),
+        repayment: false,
+        zarConfirmed: true,
+        amountZar: bank.purchase,
+        date: exp.expense_date,
+        description: originProposal.budget_line_label || exp.description,
+        vendor: exp.vendor,
+        budgetId: originProposal.budget_id ?? null,
+        budgetLineId: originProposal.budget_line_id ?? null,
+        region: "za",
+        proposal: originProposal as unknown as Record<string, unknown>,
+      });
+      xeroStatus = xero.status;
+    } catch (xeroErr) {
+      console.error("[slack/outreach] xero after bank confirm failed", draftId, xeroErr);
+    }
+
     if (draft.card_ts) {
       const diff = bank.purchase - estimate;
       const text = `✅ *Confirmed by the bank* — ${exp.vendor ?? exp.description} ${money(Number(exp.local_amount), exp.local_currency)} is *${money(bank.purchase, "ZAR")}*`;
-      const detail = `The estimate was ${money(estimate, "ZAR")} (${diff >= 0 ? "+" : "−"}${money(Math.abs(diff), "ZAR")})${bank.fee > 0 ? ` · ${money(bank.fee, "ZAR")} fee logged in Bank Costs` : ""} · <${SITE}/finance/outreach/${exp.team_id}|View in the Hub>`;
+      const detail = `The estimate was ${money(estimate, "ZAR")} (${diff >= 0 ? "+" : "−"}${money(Math.abs(diff), "ZAR")})${bank.fee > 0 ? ` · ${money(bank.fee, "ZAR")} fee logged in Bank Costs` : ""} · ${xeroResultSentence(xeroStatus)} · <${SITE}/finance/outreach/${exp.team_id}|View in the Hub>`;
       await update(draft.channel_id, draft.card_ts, text.replace(/\*/g, ""), decidedBlocks(text, detail));
     }
   } catch (err) {
@@ -980,6 +1071,7 @@ type Draft = {
   file_size: number | null;
   file_sha256: string;
   storage_path: string;
+  user_note: string | null;
   /** A PullProposal when kind is cash_pull. */
   proposal: Proposal;
   status: string;
@@ -1122,7 +1214,30 @@ export async function logReceipt(draftId: string, slackUserId: string, reply: Re
     const { data: saved } = await admin.from("outreach_expenses").select("zar_amount").eq("id", expense.id).maybeSingle();
     const zarFinal = saved?.zar_amount != null ? Number(saved.zar_amount) : p.zar_amount;
     const fromPulls = p.payment_method === "cash" && p.local_currency !== "ZAR";
-    const left = await categoryLeft(admin, teamId, p.category_id!);
+    let xeroStatus = "failed";
+    try {
+      const xero = await writeConfirmedSpend(admin, {
+        draftId,
+        expenseId: expense.id,
+        hubUserId: draft.hub_user_id,
+        confirmed: true,
+        hasReceipt: true,
+        repayment: false,
+        zarConfirmed: p.local_currency === "ZAR" || Boolean(p.zar_confirmed),
+        amountZar: Number(zarFinal),
+        date: p.expense_date,
+        description: p.budget_line_label || p.description,
+        vendor: p.vendor,
+        budgetId: p.budget_id ?? null,
+        budgetLineId: p.budget_line_id ?? null,
+        region: "za",
+        proposal: p as unknown as Record<string, unknown>,
+      });
+      xeroStatus = xero.status;
+    } catch (xeroErr) {
+      console.error("[slack/outreach] xero after confirm failed", draftId, xeroErr);
+    }
+    const left = p.budget_line_id ? null : await categoryLeft(admin, teamId, p.category_id!);
     await checkCashAlert(teamId);
     const { data: teamRow } = await admin.from("outreach_teams").select("team_name").eq("id", teamId).maybeSingle();
     if (draft.card_ts) {
@@ -1130,8 +1245,12 @@ export async function logReceipt(draftId: string, slackUserId: string, reply: Re
         p.local_currency === "ZAR"
           ? money(p.zar_amount, "ZAR")
           : `${money(p.local_amount, p.local_currency)} (${money(zarFinal, "ZAR")}${fromPulls ? " from your cash pulls" : p.zar_confirmed ? " confirmed by bank" : p.payment_method === "card" ? " estimate — send the bank notification" : ""})`;
-      const text = `✅ *Logged to ${teamRow?.team_name ?? "the team"} by ${logger}* — ${p.vendor ?? "Receipt"} · ${p.expense_date} · ${amount} · ${left.category}`;
-      const detail = `${left.category} now has *${left.left < 0 ? `over by R${fmtNum(-left.left)}` : `R${fmtNum(left.left)} left`}* of R${fmtNum(left.planned)} · receipt saved · <${SITE}/finance/outreach/${teamId}|View in the Hub>`;
+      const lineBit = p.budget_line_label ? ` · ${p.budget_line_label}` : left ? ` · ${left.category}` : "";
+      const text = `✅ *Confirmed for ${teamRow?.team_name ?? "the team"} by ${logger}* — ${p.vendor ?? "Receipt"} · ${p.expense_date} · ${amount}${lineBit}`;
+      const spent = left
+        ? `${left.category} now has *${left.left < 0 ? `over by R${fmtNum(-left.left)}` : `R${fmtNum(left.left)} left`}* of R${fmtNum(left.planned)} · `
+        : `${p.budget_line_label ?? "Budget line"} · `;
+      const detail = `${spent}receipt saved · ${xeroResultSentence(xeroStatus)} · <${SITE}/finance/outreach/${teamId}|View in the Hub>`;
       await update(draft.channel_id, draft.card_ts, text.replace(/\*/g, ""), decidedBlocks(text, detail));
     }
   } catch (err) {
@@ -1215,16 +1334,20 @@ export async function chooseTeam(draftId: string, teamId: string, slackUserId: s
           rate_label: rate?.label ?? "",
           cash_batch_id: rate?.cash_batch_id ?? null,
         };
+  const lined =
+    draft.kind === "cash_pull"
+      ? proposal
+      : await withPlainLine(admin, proposal, teamId, { userNote: draft.user_note ?? null, suggested: null });
 
   const { data: moved } = await admin
     .from("outreach_receipt_drafts")
-    .update({ team_id: teamId, proposal, updated_at: new Date().toISOString() })
+    .update({ team_id: teamId, proposal: lined, updated_at: new Date().toISOString() })
     .eq("id", draftId)
     .eq("status", "pending")
     .select("id");
   if (!moved?.length) return reply("That receipt has just been handled by someone else.");
 
-  await redrawCard(admin, { ...draft, team_id: teamId, proposal });
+  await redrawCard(admin, { ...draft, team_id: teamId, proposal: lined });
 }
 
 /** Draw a pending draft's card again from what's stored. */
@@ -1337,9 +1460,10 @@ export async function applyChangeAndLog(draftId: string, input: ChangeInput, sla
     // A rand amount typed from the bank app confirms a card payment too.
     zar_confirmed: input.local_currency !== "ZAR" && input.payment_method === "card" && (keepBank || Boolean(input.zar_override)),
   };
+  const lined = await withPlainLine(admin, proposal, draft.team_id, { userNote: draft.user_note ?? null, suggested: null });
   await admin
     .from("outreach_receipt_drafts")
-    .update({ proposal, updated_at: new Date().toISOString() })
+    .update({ proposal: lined, updated_at: new Date().toISOString() })
     .eq("id", draftId)
     .eq("status", "pending");
   await logReceipt(draftId, slackUserId, reply);

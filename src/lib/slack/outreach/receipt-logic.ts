@@ -205,6 +205,17 @@ export type Proposal = {
   bank_fee_zar?: number;
   /** The notification screenshot sent with the receipt. */
   bank_proof?: { path: string; name: string; mime: string | null; size: number | null } | null;
+  /** Plain-language budget line shown on the card. Account codes stay off it. */
+  budget_id?: string | null;
+  budget_line_id?: string | null;
+  budget_line_label?: string | null;
+  /** Set after confirm, once a Xero spend has been attempted. */
+  xero_write?: {
+    status: string;
+    bank_transaction_id?: string | null;
+    error?: string | null;
+    at?: string;
+  } | null;
 };
 
 export const KNOWN_CURRENCIES = new Set<string>(SUPPORTED_CURRENCIES.map((c) => c.code));
@@ -358,10 +369,10 @@ export function parseTeamOption(value: string | undefined): { draftId: string; t
   return draftId && teamId ? { draftId, teamId } : null;
 }
 
-/** Slack caps a button's text at 75 characters. */
+/** Slack caps a button's text at 75 characters. Confirm is the Xero gate. */
 export function logButtonText(teamName: string | null): string {
-  if (!teamName) return "✅ Log it";
-  const label = `✅ Log to ${teamName}`;
+  if (!teamName) return "✅ Confirm";
+  const label = `✅ Confirm ${teamName}`;
   return label.length <= 75 ? label : `${label.slice(0, 74)}…`;
 }
 
@@ -407,11 +418,12 @@ export function receiptCardBlocks(args: {
 }): unknown[] {
   const p = args.proposal;
   const choices = args.teamChoices ?? [];
+  const budgetLine = p.budget_line_label?.trim() || args.categoryName || "_not set_";
   const fields = [
     `*Shop*\n${p.vendor ?? "—"}`,
     `*Date*\n${p.expense_date}`,
     `*Amount*\n${amountLine(p)}`,
-    `*Category*\n${args.categoryName ?? "_not set_"}`,
+    `*Budget line*\n${budgetLine}`,
     `*Paid by*\n${PAY_LABEL[p.payment_method]}`,
     `*For*\n${p.description}${p.receipt_code ? ` · #${p.receipt_code}` : ""}`,
   ];
@@ -421,8 +433,8 @@ export function receiptCardBlocks(args: {
       text: {
         type: "mrkdwn",
         text: args.team
-          ? `🧾 *Receipt from ${args.senderName}* for *${args.team.name}* — check the team and the details, then tap *Log to ${args.team.name}*.`
-          : `🧾 *Receipt from ${args.senderName}* — *which team is this for?* Pick it below, then check the details.`,
+          ? `🧾 *Receipt from ${args.senderName}* for *${args.team.name}* — check the budget line, then tap *Confirm*.`
+          : `🧾 *Receipt from ${args.senderName}* — *which team is this for?* Pick it below, then check the budget line.`,
       },
     },
     { type: "section", fields: fields.map((t) => ({ type: "mrkdwn", text: t })) },
@@ -567,7 +579,7 @@ export function changeModal(args: {
     callback_id: VIEW_CHANGE,
     private_metadata: args.draftId,
     title: { type: "plain_text", text: "Check the receipt" },
-    submit: { type: "plain_text", text: "Log it" },
+    submit: { type: "plain_text", text: "Confirm" },
     close: { type: "plain_text", text: "Back" },
     blocks: [
       text("vendor", "Shop", p.vendor),

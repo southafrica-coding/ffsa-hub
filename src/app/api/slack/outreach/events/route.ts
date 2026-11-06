@@ -3,9 +3,11 @@
  *
  * A separate Slack app from FFSA Hub Activity (see lib/slack/bots), so
  * teams get a bot that only does one job: their outreach budget. It
- * handles app_mention (an @mention in a team channel) and message.im
- * (a DM). A message with a photo or PDF attached is a receipt
- * (lib/slack/outreach/receipts); anything else is a budget question.
+ * handles app_mention, message.im (a DM), and message.groups (a private
+ * channel). Receipts are photo-first: a DM is the default, and a private
+ * team channel is the only other place a photo is read. A public channel
+ * is told to move to a DM. A spend with no photo is a repayment, not an
+ * expense. Anything else is a budget question.
  * Flow mirrors /api/slack/events:
  *   1. verify the signature with THIS app's signing secret
  *   2. url_verification handshake, drop retries, ignore bots/edits
@@ -18,8 +20,10 @@
  */
 
 import { after, NextResponse } from "next/server";
-import { isFinanceStaff, resolveOutreachScope } from "@/lib/slack/assistant/outreach";
+import { isFinanceStaff, pickTeam, resolveOutreachScope } from "@/lib/slack/assistant/outreach";
 import { runAssistant } from "@/lib/slack/assistant/run";
+import { loadReceiptDoor } from "@/lib/slack/outreach/channel-policy";
+import { classifyBareMessage, parseSpendClaim, repayValue, repaymentBlocks, repaymentSentence } from "@/lib/slack/outreach/no-receipt";
 import { handleIncomingReceipts } from "@/lib/slack/outreach/receipts";
 import type { SlackFile } from "@/lib/slack/outreach/receipt-logic";
 import * as slack from "@/lib/slack/client";
@@ -105,7 +109,8 @@ export async function POST(request: Request) {
 
   const isMention = event.type === "app_mention";
   const isDM = event.type === "message" && event.channel_type === "im";
-  if ((!isMention && !isDM) || !event.channel || typeof event.user !== "string") {
+  const isPrivateChannel = event.type === "message" && event.channel_type === "group";
+  if ((!isMention && !isDM && !isPrivateChannel) || !event.channel || typeof event.user !== "string") {
     return NextResponse.json({ ok: true });
   }
   // @mentioning the bot inside a DM fires both events — answer the DM one.
@@ -129,9 +134,52 @@ export async function POST(request: Request) {
         .postMessage({ channel, text, thread_ts: threadTs, bot: "outreach" })
         .catch((err) => console.error("[slack/outreach] post failed", err));
     try {
+      const receiptLike = files.length > 0 || classifyBareMessage(question) === "no_receipt";
+      if (receiptLike) {
+        const door = await loadReceiptDoor({ isDM, channelId: channel });
+        if (!door.ok) {
+          await reply(door.tell);
+          return;
+        }
+      }
+
       const admin = createAdminClient();
       const hubUserId = await resolveHubUserBySlackId(admin, slackUserId);
       const outreach = await resolveOutreachScope(admin, { hubUserId, channelId: channel, isDM });
+
+      // A spend with no photo is a repayment even when this person can't see
+      // the budget. It never becomes an expense and it never goes to Xero.
+      if (files.length === 0 && classifyBareMessage(question) === "no_receipt") {
+        if (!hubUserId) {
+          await reply(
+            "I'm the outreach finance helper. I don't know who you are yet — link your Slack on your Hub profile, then tell me again."
+          );
+          return;
+        }
+        const picked = outreach.kind === "ok" ? pickTeam(outreach.scope) : { ok: false as const };
+        const teamName = picked.ok ? picked.team.team_name : null;
+        const teamId = picked.ok ? picked.team.id : null;
+        const claim = parseSpendClaim(question);
+        const text = repaymentSentence(claim, teamName);
+        const value = claim
+          ? repayValue({
+              amountCents: Math.round(claim.amount * 100),
+              currency: claim.currency,
+              teamId,
+              description: claim.description,
+            })
+          : null;
+        await slack
+          .postMessage({
+            channel,
+            text: text.replace(/\*/g, ""),
+            blocks: repaymentBlocks(text, value),
+            thread_ts: threadTs,
+            bot: "outreach",
+          })
+          .catch((err) => console.error("[slack/outreach] repayment post failed", err));
+        return;
+      }
 
       if (outreach.kind === "refuse") {
         await reply(outreach.reason);

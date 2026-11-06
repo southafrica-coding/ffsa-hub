@@ -36,6 +36,9 @@ import {
 import * as slack from "@/lib/slack/client";
 import { parsePullChange, VIEW_PULL_CHANGE } from "@/lib/slack/outreach/pull-logic";
 import { ACTION_CARD_CONFIRM } from "@/lib/slack/outreach/card-logic";
+import { ACTION_REPAY } from "@/lib/slack/outreach/no-receipt";
+import { confirmRepayment } from "@/lib/slack/outreach/repayments";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -119,6 +122,18 @@ export async function POST(request: Request) {
           confirmCardPayment(draftId, expenseId, slackUserId, reply).catch((e) => console.error("[slack/outreach] card confirm", e))
         );
       }
+      return new NextResponse(null, { status: 200 });
+    }
+    if (action?.action_id === ACTION_REPAY) {
+      const reply = ephemeral(payload.response_url);
+      after(async () => {
+        try {
+          const result = await confirmRepayment(createAdminClient(), slackUserId, action.value);
+          await reply(result.text);
+        } catch (e) {
+          console.error("[slack/outreach] repay", e);
+        }
+      });
       return new NextResponse(null, { status: 200 });
     }
     const draftId = action?.value;

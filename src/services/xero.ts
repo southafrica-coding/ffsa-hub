@@ -224,7 +224,8 @@ async function xeroPost(
   accessToken: string,
   tenantId: string,
   endpoint: string,
-  body: unknown
+  body: unknown,
+  extraHeaders?: Record<string, string>
 ) {
   const res = await fetch(`${XERO_API}/${endpoint}`, {
     method: "POST",
@@ -233,6 +234,7 @@ async function xeroPost(
       "xero-tenant-id": tenantId,
       "Content-Type": "application/json",
       Accept: "application/json",
+      ...extraHeaders,
     },
     body: JSON.stringify(body),
   });
@@ -1612,5 +1614,97 @@ export async function listXeroDonationLines(
       return { ...empty, error: "Xero refused the request — the US authorisation has expired. Reconnect Xero in Finance → Xero." };
     }
     return { ...empty, error: msg };
+  }
+}
+
+// ────────────────────────────────────────────────────────────
+// SPEND MONEY (confirmed receipts only)
+// ────────────────────────────────────────────────────────────
+
+export type XeroBankTransactionResult =
+  | { ok: true; bankTransactionId: string }
+  | { ok: false; reason: "not_connected" | "xero"; message: string };
+
+/**
+ * POST one BankTransactions spend. The caller has already decided this
+ * receipt is confirmed, has a photo, and has an account code — this
+ * function does not check that policy. Idempotency-Key stops a retry
+ * from creating a second spend.
+ */
+export async function createXeroSpendMoney(
+  supabase: Client,
+  region: XeroRegion,
+  args: { idempotencyKey: string; payload: unknown }
+): Promise<XeroBankTransactionResult> {
+  const auth = await getValidAccessToken(supabase, region);
+  if (!auth) {
+    return { ok: false, reason: "not_connected", message: "This organisation is not connected to Xero." };
+  }
+  try {
+    const json = (await xeroPost(auth.accessToken, auth.tenantId, "BankTransactions", args.payload, {
+      "Idempotency-Key": args.idempotencyKey,
+    })) as { BankTransactions?: { BankTransactionID?: string }[] };
+    const id = json.BankTransactions?.[0]?.BankTransactionID;
+    if (!id) return { ok: false, reason: "xero", message: "Xero did not return a bank transaction id." };
+    return { ok: true, bankTransactionId: id };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, reason: "xero", message };
+  }
+}
+
+export type XeroBankTransactionPage = {
+  BankTransactionID?: string;
+  Date?: string;
+  Reference?: string;
+  Status?: string;
+  Type?: string;
+  LineItems?: {
+    Description?: string;
+    AccountCode?: string;
+    LineAmount?: number;
+    UnitAmount?: number;
+    Quantity?: number;
+    Tracking?: { Name?: string; Option?: string }[];
+  }[];
+};
+
+/**
+ * AUTHORISED spend-money transactions in a date range. GET only.
+ * `partial` is true when the range was cut off at 20 pages.
+ */
+export async function listXeroSpendTransactions(
+  supabase: Client,
+  region: XeroRegion,
+  range: { start: string; end: string }
+): Promise<{ ok: true; transactions: XeroBankTransactionPage[]; partial: boolean } | { ok: false; reason: "not_connected" | "xero"; message: string }> {
+  const auth = await getValidAccessToken(supabase, region);
+  if (!auth) {
+    return { ok: false, reason: "not_connected", message: "This organisation is not connected to Xero." };
+  }
+  const start = range.start.split("-").map((n) => Number(n));
+  const end = range.end.split("-").map((n) => Number(n));
+  if (start.length !== 3 || end.length !== 3 || start.some((n) => !n) || end.some((n) => !n)) {
+    return { ok: false, reason: "xero", message: "The budget period dates are not usable." };
+  }
+  const where = encodeURIComponent(
+    `Type=="SPEND"&&Status=="AUTHORISED"&&Date>=DateTime(${start[0]},${start[1]},${start[2]})&&Date<=DateTime(${end[0]},${end[1]},${end[2]})`
+  );
+  try {
+    const transactions: XeroBankTransactionPage[] = [];
+    let partial = false;
+    for (let page = 1; page <= 20; page++) {
+      const json = (await xeroGet(auth.accessToken, auth.tenantId, `BankTransactions?where=${where}&page=${page}`)) as {
+        BankTransactions?: XeroBankTransactionPage[];
+      };
+      const list = json.BankTransactions ?? [];
+      transactions.push(...list);
+      if (list.length < 100) return { ok: true, transactions, partial };
+      if (page === 20) partial = true;
+    }
+    return { ok: true, transactions, partial };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, reason: "xero", message };
   }
 }

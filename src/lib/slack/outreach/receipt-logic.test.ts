@@ -233,7 +233,8 @@ describe("Slack card", () => {
     const actions = blocks.find((b) => (b as { type: string }).type === "actions") as {
       elements: { text: { text: string } }[];
     };
-    expect(actions.elements[0].text.text).toBe("✅ Log to Eswatini Leadership Track 26'");
+    expect(actions.elements[0].text.text).toBe("✅ Confirm Eswatini Leadership Track 26'");
+    expect(text(blocks)).toContain("*Budget line*\\nFood");
   });
 
   it("asks which team when none is chosen, with a menu of the sender's teams", () => {
@@ -275,7 +276,7 @@ describe("team menu values", () => {
   });
 
   it("keeps the Log button within Slack's 75 characters", () => {
-    expect(logButtonText(null)).toBe("✅ Log it");
+    expect(logButtonText(null)).toBe("✅ Confirm");
     expect(logButtonText("x".repeat(100)).length).toBeLessThanOrEqual(75);
   });
 });
