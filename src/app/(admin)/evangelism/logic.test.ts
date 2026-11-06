@@ -1,15 +1,27 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import {
+  applyFeed,
   classifyFile,
   emptyStory,
+  expiryFromPayload,
   feedUrl,
   johannesburgDate,
   mediaLimitMessage,
   mergeTestimonies,
+  nextReplaceDelay,
+  pruneExpiredStories,
+  readCanPublish,
+  stripTvAuthors,
   testimoniesUrl,
+  tvStoryLine,
   validateStory,
   validateWithheldReason,
+  visibleIdsForPoll,
   waitingCopy,
+  MEDIA_TTL_MS,
+  REPLACE_RETRY_MS,
+  FEED_URL_REFRESH_MS,
   type Testimony,
 } from "./logic";
 
@@ -121,10 +133,14 @@ describe("evangelism files and feed helpers", () => {
   });
 
   it("builds the feed and list URLs the API documents", () => {
+    const visible = "33333333-3333-4333-8333-333333333333";
     expect(feedUrl(null)).toBe("/api/evangelism/feed");
     expect(feedUrl("not-a-date")).toBe("/api/evangelism/feed");
     expect(feedUrl("2026-11-06T12:00:00.000Z")).toBe(
       "/api/evangelism/feed?since=2026-11-06T12%3A00%3A00.000Z"
+    );
+    expect(feedUrl("2026-11-06T12:00:00.000Z", [visible, "not-a-uuid"])).toBe(
+      `/api/evangelism/feed?since=2026-11-06T12%3A00%3A00.000Z&visible=${visible}`
     );
     expect(testimoniesUrl({ status: "submitted", limit: 100 })).toBe(
       "/api/evangelism/testimonies?status=submitted&limit=100"
@@ -139,6 +155,96 @@ describe("evangelism files and feed helpers", () => {
     const refreshed = { ...newer, title: "Newer title" };
     expect(mergeTestimonies([older, newer], [refreshed], "append")[1].title).toBe("Newer title");
     expect(mergeTestimonies([older], [newer], "replace")).toEqual([newer]);
+  });
+
+  it("drops withheld and deleted ids on an append, after new rows are added", () => {
+    const older = row("old", "Older");
+    const newer = row("new", "Newer");
+    const kept = applyFeed([older, newer], {
+      mode: "append",
+      testimonies: [],
+      removedIds: ["old", "missing"],
+    });
+    expect(kept.map((item) => item.id)).toEqual(["new"]);
+
+    const returned = applyFeed([older], {
+      mode: "append",
+      testimonies: [{ ...older, title: "Still here" }],
+      removedIds: ["old"],
+    });
+    expect(returned).toEqual([]);
+  });
+
+  it("refreshes a story that stayed on screen, then still honours a removal", () => {
+    const older = row("old", "Older");
+    older.media = [
+      { id: "m", kind: "photo", content_type: "image/jpeg", size_bytes: 10, sort_order: 0, url: "old-url" },
+    ];
+    const refreshed = {
+      ...older,
+      media: [{ ...older.media[0], url: "new-url" }],
+    };
+    const updated = applyFeed([older], {
+      mode: "append",
+      testimonies: [],
+      refreshed: [refreshed],
+      removedIds: [],
+    });
+    expect(updated[0].media[0].url).toBe("new-url");
+    expect(
+      applyFeed(updated, { mode: "append", testimonies: [], refreshed: [refreshed], removedIds: ["old"] })
+    ).toEqual([]);
+  });
+
+  it("does not treat a list or a withheld reason as permission to publish", () => {
+    expect(readCanPublish({ testimonies: [{ withheld_reason: "secret", can_publish: false }] })).toBe(false);
+    expect(readCanPublish({ testimonies: [{ title: "A story" }] })).toBe(false);
+    expect(readCanPublish({ can_publish: true, testimonies: [] })).toBe(true);
+    expect(readCanPublish({ access: { publish: true } })).toBe(true);
+    expect(readCanPublish({ testimony: { can_publish: true } })).toBe(true);
+  });
+
+  it("leaves names off the TV line and retries a failed replace on the poll interval", () => {
+    const named = row("old", "Older");
+    expect(stripTvAuthors([named])[0].author_name).toBeNull();
+    expect(tvStoryLine(named)).toBe("6 Nov 2026 · Durban base");
+    expect(tvStoryLine(named)).not.toContain("Thandi");
+    expect(nextReplaceDelay(true)).toBe(REPLACE_RETRY_MS);
+    expect(nextReplaceDelay(false)).toBe(FEED_URL_REFRESH_MS);
+  });
+
+  it("drops a story once its signed URL may have expired", () => {
+    const older = row("old", "Older");
+    const now = Date.parse("2026-11-06T12:10:00.000Z");
+    const fresh = expiryFromPayload("2026-11-06T12:20:00.000Z");
+    const stale = expiryFromPayload("2026-11-06T12:00:00.000Z");
+    expect(fresh - Date.parse("2026-11-06T12:10:00.000Z")).toBe(10 * 60 * 1000);
+    expect(expiryFromPayload(undefined, now) - now).toBe(MEDIA_TTL_MS);
+    const expiry = new Map<string, number>([["old", stale]]);
+    expect(pruneExpiredStories([older], expiry, now)).toEqual([]);
+    expiry.set("old", fresh);
+    expect(pruneExpiredStories([older], expiry, now)).toEqual([older]);
+    expect(pruneExpiredStories([older], new Map(), now)).toEqual([]);
+  });
+
+  it("sends at most 40 visible uuids", () => {
+    const ids = Array.from({ length: 45 }, (_, index) =>
+      `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`
+    );
+    const first = visibleIdsForPoll(ids, 0);
+    expect(first.ids).toHaveLength(40);
+    expect(first.nextOffset).toBe(40);
+    const second = visibleIdsForPoll(ids, first.nextOffset);
+    expect(second.ids[0]).toBe(ids[40]);
+    expect(visibleIdsForPoll(["nope", ids[0]]).ids).toEqual([ids[0]]);
+  });
+
+  it("does not redirect the evangelism pages while the module stays hidden", () => {
+    for (const name of ["page.tsx", "queue/page.tsx", "screen/page.tsx"]) {
+      const source = readFileSync(new URL(`./${name}`, import.meta.url), "utf8");
+      expect(source).not.toContain("isHiddenFromNav");
+      expect(source).not.toContain('redirect("/dashboard")');
+    }
   });
 
   it("only writes the yellow-band sentence when stories are actually waiting", () => {

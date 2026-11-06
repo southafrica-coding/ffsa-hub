@@ -8,6 +8,7 @@ import {
   formatStoryDate,
   johannesburgDate,
   outcomeLabel,
+  readCanPublish,
   statusLabel,
   waitingCopy,
   type Testimony,
@@ -26,6 +27,7 @@ const TONE: Record<string, Tone> = {
 export function EvangelismHome({ userId }: { userId: string }) {
   const today = johannesburgDate();
   const [waiting, setWaiting] = useState<number | null>(null);
+  const [canPublish, setCanPublish] = useState(false);
   const [stories, setStories] = useState<Testimony[] | null>(null);
   const [offline, setOffline] = useState<string | null>(null);
   const [listError, setListError] = useState<string | null>(null);
@@ -46,7 +48,11 @@ export function EvangelismHome({ userId }: { userId: string }) {
       const offlineResult = [queue, mine].find((result) => !result.ok && isOffline(result));
       setOffline(offlineResult && !offlineResult.ok ? offlineResult.message : null);
 
-      if (queue.ok) setWaiting(queue.data.testimonies?.length ?? 0);
+      // A 200 from the submitted list is not permission to publish. The band
+      // waits for an explicit can_publish (or access.publish) flag.
+      const publish = [queue, mine].some((result) => result.ok && readCanPublish(result.data));
+      setCanPublish(publish);
+      if (queue.ok && publish) setWaiting(queue.data.testimonies?.length ?? 0);
       else setWaiting(null);
 
       if (mine.ok) {
@@ -137,6 +143,7 @@ export function EvangelismHome({ userId }: { userId: string }) {
       <StoryDrawer
         story={open}
         userId={userId}
+        canPublish={canPublish}
         onClose={() => setOpenId(null)}
         onPrev={openIndex > 0 ? () => stories && setOpenId(stories[openIndex - 1].id) : undefined}
         onNext={

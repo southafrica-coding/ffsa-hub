@@ -3,7 +3,6 @@
 // state — the screens render it, they do not invent data.
 
 import {
-  FEED_PATH,
   MEDIA_SIGN_PATH,
   TESTIMONIES_PATH,
   feedUrl,
@@ -38,7 +37,13 @@ export type FeedPayload = {
   server_time: string;
   cursor: string | null;
   testimonies: Testimony[];
+  /** Stories already on screen, with new read URLs. Present when `visible` was sent. */
+  refreshed?: Testimony[];
+  /** Withheld, deleted, or no longer published. Apply after appending. */
+  removed_ids?: string[];
+  media_expires_at?: string | null;
   stats: EvangelismStats;
+  can_publish?: boolean;
 };
 
 export type SignPayload = {
@@ -139,7 +144,7 @@ export function createTestimony(body: StoryWrite) {
   });
 }
 
-export function updateTestimony(id: string, body: Partial<StoryWrite>) {
+export function updateTestimony(id: string, body: Partial<StoryWrite> & { confirm_consent?: boolean }) {
   return send<{ testimony: Testimony }>(`${TESTIMONIES_PATH}/${id}`, {
     method: "PATCH",
     body: JSON.stringify(body),
@@ -150,8 +155,8 @@ export function deleteTestimony(id: string) {
   return send<{ ok: boolean }>(`${TESTIMONIES_PATH}/${id}`, { method: "DELETE" });
 }
 
-export function getFeed(since: string | null) {
-  return send<FeedPayload>(since ? feedUrl(since) : FEED_PATH);
+export function getFeed(since: string | null, visibleIds?: string[]) {
+  return send<FeedPayload>(feedUrl(since, visibleIds));
 }
 
 export function signMedia(body: { kind: "photo" | "video"; content_type: string; size: number }) {

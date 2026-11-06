@@ -6,13 +6,16 @@ import Link from "next/link";
 import { getFeed, isOffline, type EvangelismStats, type ApiFailure } from "./api";
 import {
   FEED_POLL_SECONDS,
-  FEED_URL_REFRESH_MS,
-  authorName,
+  applyFeed,
   excerpt,
-  formatStoryDate,
+  expiryFromPayload,
   johannesburgClock,
-  mergeTestimonies,
+  nextReplaceDelay,
   outcomeLabel,
+  pruneExpiredStories,
+  stripTvAuthors,
+  tvStoryLine,
+  visibleIdsForPoll,
   type Testimony,
 } from "./logic";
 
@@ -23,6 +26,9 @@ type Board = {
   failure: ApiFailure | null;
   checkedAt: string | null;
   pollSeconds: number;
+  /** A full replace failed and at least one story was dropped because its URL may have expired. */
+  mediaStale: boolean;
+  replaceRetrying: boolean;
 };
 
 const EMPTY_BOARD: Board = {
@@ -32,6 +38,8 @@ const EMPTY_BOARD: Board = {
   failure: null,
   checkedAt: null,
   pollSeconds: FEED_POLL_SECONDS,
+  mediaStale: false,
+  replaceRetrying: false,
 };
 
 export function TvScreen() {
@@ -60,36 +68,105 @@ export function TvScreen() {
   useEffect(() => {
     let stopped = false;
     let pollTimer = 0;
-    let refreshTimer = 0;
+    let replaceTimer = 0;
     let chain: Promise<void> = Promise.resolve();
     const cursor = { current: null as string | null };
     const delay = { current: FEED_POLL_SECONDS * 1000 };
+    const stories = { current: [] as Testimony[] };
+    const expiresAt = new Map<string, number>();
+    const visibleOffset = { current: 0 };
+
+    function stamp(ids: string[], payloadExpires: unknown) {
+      const until = expiryFromPayload(payloadExpires);
+      for (const id of ids) expiresAt.set(id, until);
+    }
+
+    function scheduleReplace(failed: boolean) {
+      window.clearTimeout(replaceTimer);
+      replaceTimer = window.setTimeout(() => {
+        if (!stopped) enqueue("replace");
+      }, nextReplaceDelay(failed));
+    }
 
     function enqueue(mode: "append" | "replace") {
       chain = chain.then(async () => {
         if (stopped) return;
         const since = mode === "replace" ? null : cursor.current;
-        const result = await getFeed(since);
+        const visible =
+          mode === "append"
+            ? visibleIdsForPoll(stories.current.map((row) => row.id), visibleOffset.current)
+            : visibleIdsForPoll(stories.current.map((row) => row.id), 0);
+        if (mode === "append") visibleOffset.current = visible.nextOffset;
+        const result = await getFeed(since, visible.ids);
         if (stopped) return;
+
         if (!result.ok) {
-          setBoard((current) => ({ ...current, loaded: true, failure: result }));
+          if (mode === "replace") scheduleReplace(true);
+          const now = Date.now();
+          const pruned = pruneExpiredStories(stories.current, expiresAt, now);
+          const dropped = pruned.length !== stories.current.length;
+          stories.current = pruned;
+          for (const id of [...expiresAt.keys()]) {
+            if (!pruned.some((row) => row.id === id)) expiresAt.delete(id);
+          }
+          setBoard((current) => ({
+            ...current,
+            loaded: true,
+            stories: pruned,
+            // An append failure is a feed failure. A replace failure must not
+            // blank a screen whose 15 second polls are still working.
+            failure: mode === "append" || current.stories.length === 0 ? result : current.failure,
+            mediaStale: pruned.length === 0 && (dropped || current.mediaStale),
+            replaceRetrying: mode === "replace" || current.replaceRetrying,
+            checkedAt: johannesburgClock(),
+          }));
           return;
         }
+
         const seconds = result.data.poll_after_seconds;
         if (Number.isFinite(seconds) && seconds >= 5 && seconds <= 120) delay.current = seconds * 1000;
-        cursor.current = result.data.cursor ?? cursor.current;
+        if (mode === "replace") cursor.current = result.data.cursor ?? null;
+        else if (result.data.cursor) cursor.current = result.data.cursor;
+
+        const removed = Array.isArray(result.data.removed_ids) ? result.data.removed_ids : [];
+        const refreshed = Array.isArray(result.data.refreshed) ? result.data.refreshed : [];
         const incoming = result.data.testimonies ?? [];
-        setBoard((current) => {
-          const stories = mergeTestimonies(current.stories, incoming, mode);
-          return {
-            loaded: true,
-            stories,
-            stats: result.data.stats,
-            failure: null,
-            checkedAt: johannesburgClock(),
-            pollSeconds: Math.round(delay.current / 1000),
-          };
-        });
+        let next = stripTvAuthors(
+          applyFeed(stories.current, {
+            mode,
+            testimonies: incoming,
+            refreshed,
+            removedIds: removed,
+          })
+        );
+        const now = Date.now();
+        stamp(incoming.map((row) => row.id), result.data.media_expires_at);
+        stamp(refreshed.map((row) => row.id), result.data.media_expires_at);
+        if (mode === "replace") {
+          const keep = new Set(next.map((row) => row.id));
+          for (const id of expiresAt.keys()) if (!keep.has(id)) expiresAt.delete(id);
+          stamp([...keep], result.data.media_expires_at);
+        }
+        for (const id of removed) expiresAt.delete(id);
+        const pruned = pruneExpiredStories(next, expiresAt, now);
+        const droppedForExpiry = pruned.length !== next.length;
+        next = pruned;
+        stories.current = next;
+
+        setBoard((current) => ({
+          loaded: true,
+          stories: next,
+          stats: result.data.stats ?? current.stats,
+          failure: null,
+          checkedAt: johannesburgClock(),
+          pollSeconds: Math.round(delay.current / 1000),
+          mediaStale: mode === "replace" ? false : next.length === 0 && (droppedForExpiry || current.mediaStale),
+          replaceRetrying: mode === "replace" ? false : current.replaceRetrying,
+        }));
+        if (mode === "replace") scheduleReplace(false);
+      }).catch(() => {
+        if (stopped) return;
+        if (mode === "replace") scheduleReplace(true);
       });
     }
 
@@ -102,12 +179,12 @@ export function TvScreen() {
 
     enqueue("replace");
     schedule();
-    refreshTimer = window.setInterval(() => enqueue("replace"), FEED_URL_REFRESH_MS);
+    scheduleReplace(false);
 
     return () => {
       stopped = true;
       window.clearTimeout(pollTimer);
-      window.clearInterval(refreshTimer);
+      window.clearTimeout(replaceTimer);
     };
   }, []);
 
@@ -187,7 +264,18 @@ export function TvScreen() {
           </Center>
         )}
 
-        {board.loaded && board.stories.length === 0 && board.failure && (
+        {board.loaded && board.stories.length === 0 && board.mediaStale && (
+          <Center>
+            <p className="font-display text-[clamp(36px,5vw,68px)] font-black uppercase leading-[0.92]">
+              Pictures expired
+            </p>
+            <p className="mt-4 max-w-xl text-[16px] leading-relaxed text-[color:var(--text-secondary)]">
+              The full screen check failed, so these stories came down. Trying again.
+            </p>
+          </Center>
+        )}
+
+        {board.loaded && board.stories.length === 0 && !board.mediaStale && board.failure && (
           <Center>
             <p className="font-display text-[clamp(36px,5vw,68px)] font-black uppercase leading-[0.92]">
               {isOffline(board.failure) ? "Not switched on" : "The feed didn't answer"}
@@ -199,7 +287,7 @@ export function TvScreen() {
           </Center>
         )}
 
-        {board.loaded && board.stories.length === 0 && !board.failure && (
+        {board.loaded && board.stories.length === 0 && !board.mediaStale && !board.failure && (
           <Center>
             <p className="font-display text-[clamp(36px,5vw,68px)] font-black uppercase leading-[0.92]">
               Nothing published yet
@@ -235,9 +323,13 @@ export function TvScreen() {
 
       <footer className="flex items-center justify-between gap-4 border-t border-ink px-6 py-2 md:px-10">
         <span className="mono-label">
-          {board.failure && board.stories.length > 0
-            ? "Last check failed. Trying again."
-            : `Live · every ${board.pollSeconds}s`}
+          {board.mediaStale
+            ? "Pictures expired. Checking again."
+            : board.replaceRetrying
+              ? "Full refresh failed. Trying again."
+              : board.failure && board.stories.length > 0
+                ? "Last check failed. Trying again."
+                : `Live · every ${board.pollSeconds}s`}
         </span>
         <span className="mono-label">{board.checkedAt ? `Last check ${board.checkedAt}` : "Waiting for the first check"}</span>
       </footer>
@@ -310,7 +402,7 @@ function Featured({ story, stats }: { story: Testimony; stats: EvangelismStats |
           {story.title}
         </h2>
         <p className="mt-4 text-[15px] text-[color:var(--text-secondary)]">
-          {formatStoryDate(story.occurred_on)} · {story.location_label} · {authorName(story)}
+          {tvStoryLine(story)}
         </p>
         <p className="mt-6 max-w-3xl text-[clamp(16px,1.6vw,22px)] leading-relaxed">{excerpt(story.body)}</p>
         {feature?.url && places.length > 0 && (

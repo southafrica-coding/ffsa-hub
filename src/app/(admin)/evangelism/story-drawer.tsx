@@ -14,7 +14,6 @@ import {
   storyFromTestimony,
   validateStory,
   validateWithheldReason,
-  viewerCanPublish,
   type FieldError,
   type StoryInput,
   type Testimony,
@@ -31,6 +30,7 @@ const TONE: Record<string, Tone> = {
 export function StoryDrawer({
   story,
   userId,
+  canPublish,
   onClose,
   onPrev,
   onNext,
@@ -38,6 +38,8 @@ export function StoryDrawer({
 }: {
   story: Testimony | null;
   userId: string;
+  /** Explicit API flag. Absent means this viewer is not shown publisher controls. */
+  canPublish: boolean;
   onClose: () => void;
   onPrev?: () => void;
   onNext?: () => void;
@@ -79,12 +81,11 @@ export function StoryDrawer({
     );
   }
 
-  const publisher = viewerCanPublish(story);
   const mine = story.author_user_id === userId;
-  const canEdit = publisher || (mine && (story.status === "draft" || story.status === "submitted"));
-  const canDelete = publisher || (mine && story.status === "draft");
-  const canPublish = publisher && story.status !== "published" && story.consent_to_share;
-  const canWithhold = publisher && story.status !== "withheld";
+  const canEdit = canPublish || (mine && (story.status === "draft" || story.status === "submitted"));
+  const canDelete = canPublish || (mine && story.status === "draft");
+  const showPublish = canPublish && story.status !== "published" && story.consent_to_share;
+  const canWithhold = canPublish && story.status !== "withheld";
 
   async function run(label: string, action: () => Promise<ApiFailure | { ok: true }>, success: string) {
     setBusy(label);
@@ -182,7 +183,7 @@ export function StoryDrawer({
             </div>
           )}
 
-          {publisher && story.withheld_reason && (
+          {canPublish && story.withheld_reason && (
             <div className="border border-ink bg-ink px-4 py-3 text-white">
               <div className="mono-label mb-1 text-yellow">Publishers only</div>
               <p className="text-[14px] leading-relaxed">{story.withheld_reason}</p>
@@ -190,7 +191,7 @@ export function StoryDrawer({
             </div>
           )}
 
-          {publisher && !story.consent_to_share && story.status !== "published" && (
+          {canPublish && !story.consent_to_share && story.status !== "published" && (
             <p className="text-[13px] leading-relaxed text-amber">
               This story can&apos;t be published until the author agrees it can be shared.
             </p>
@@ -242,14 +243,14 @@ export function StoryDrawer({
             </>
           ) : (
             <>
-              {canPublish && (
+              {showPublish && (
                 <Button
                   type="button"
                   disabled={busy !== null}
                   onClick={() =>
                     void run(
                       "publish",
-                      () => updateTestimony(story.id, { status: "published" }),
+                      () => updateTestimony(story.id, { status: "published", confirm_consent: true }),
                       "Published. It will show on the TV within a few seconds."
                     )
                   }

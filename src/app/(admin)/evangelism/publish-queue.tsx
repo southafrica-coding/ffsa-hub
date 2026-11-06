@@ -17,6 +17,7 @@ import {
   authorName,
   formatStoryDate,
   outcomeLabel,
+  readCanPublish,
   statusLabel,
   type StoryStatus,
   type Testimony,
@@ -64,6 +65,7 @@ export function PublishQueue({ userId }: { userId: string }) {
   const [offline, setOffline] = useState(false);
   const [forbidden, setForbidden] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [canPublish, setCanPublish] = useState(false);
   const [tick, setTick] = useState(0);
 
   const reload = useCallback(() => setTick((value) => value + 1), []);
@@ -82,6 +84,7 @@ export function PublishQueue({ userId }: { userId: string }) {
         setMessage(result.message);
         return;
       }
+      if (readCanPublish(result.data)) setCanPublish(true);
       setOffline(false);
       setForbidden(false);
       setRows(result.data.testimonies ?? []);
@@ -105,7 +108,7 @@ export function PublishQueue({ userId }: { userId: string }) {
 
       <div className="px-5 py-6 md:px-8 md:py-7">
         <div className="mb-4 flex flex-wrap gap-1.5">
-          {FILTERS.map((item) => (
+          {FILTERS.filter((item) => item.key !== "draft" || canPublish).map((item) => (
             <button
               key={item.key}
               type="button"
@@ -213,6 +216,7 @@ export function PublishQueue({ userId }: { userId: string }) {
       <StoryDrawer
         story={open}
         userId={userId}
+        canPublish={canPublish}
         onClose={() => setOpenId(null)}
         onPrev={openIndex > 0 && rows ? () => setOpenId(rows[openIndex - 1].id) : undefined}
         onNext={

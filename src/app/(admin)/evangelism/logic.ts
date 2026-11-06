@@ -11,10 +11,19 @@ export const MEDIA_SIGN_PATH = "/api/evangelism/media/sign";
 export const FEED_POLL_SECONDS = 15;
 
 /**
- * Signed read URLs last 10 minutes. Refresh the whole window a little before
- * that so a photo already on screen does not die between cursor polls.
+ * Signed read URLs last 10 minutes. A full replace runs a little before that.
+ * If the replace fails, retry on the poll interval instead of waiting another
+ * 8 minutes — an append does not renew every URL already on screen.
  */
 export const FEED_URL_REFRESH_MS = 8 * 60 * 1000;
+export const MEDIA_TTL_MS = 10 * 60 * 1000;
+export const REPLACE_RETRY_MS = FEED_POLL_SECONDS * 1000;
+
+/** GET /api/evangelism/feed rejects more than this many `visible` ids. */
+export const VISIBLE_ID_CAP = 40;
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const OUTCOMES = [
   { value: "conversation", label: "Conversation" },
@@ -348,9 +357,13 @@ export function mediaLimitMessage(files: Array<{ kind: "photo" | "video" }>): st
   return null;
 }
 
-export function feedUrl(since: string | null | undefined): string {
-  if (!since || Number.isNaN(Date.parse(since))) return FEED_PATH;
-  return `${FEED_PATH}?since=${encodeURIComponent(since)}`;
+export function feedUrl(since: string | null | undefined, visibleIds?: string[]): string {
+  const params = new URLSearchParams();
+  if (since && !Number.isNaN(Date.parse(since))) params.set("since", since);
+  const visible = visibleIdsForPoll(visibleIds ?? [], 0).ids;
+  if (visible.length > 0) params.set("visible", visible.join(","));
+  const search = params.toString();
+  return search ? `${FEED_PATH}?${search}` : FEED_PATH;
 }
 
 export function testimoniesUrl(query: { status?: string; mine?: boolean; limit?: number }): string {
@@ -392,14 +405,71 @@ export type TestimonyMedia = {
   url: string | null;
 };
 
-/** Publishers receive withheld_reason; viewers and the TV do not. */
-export function viewerCanPublish(row: Testimony): boolean {
-  return Object.prototype.hasOwnProperty.call(row, "withheld_reason");
-}
-
 export function authorName(row: { author_name: string | null }): string {
   const name = row.author_name?.trim();
   return name || "A team member";
+}
+
+/**
+ * The base TV does not name the person who told the story. Drop the name
+ * even when the feed still sends `author_name`.
+ */
+export function stripTvAuthors(rows: Testimony[]): Testimony[] {
+  return rows.map((row) => (row.author_name == null ? row : { ...row, author_name: null }));
+}
+
+export function tvStoryLine(story: { occurred_on: string; location_label: string }): string {
+  return `${formatStoryDate(story.occurred_on)} · ${story.location_label}`;
+}
+
+/**
+ * True only when the API says this viewer may publish. A successful list of
+ * submitted stories is not that signal, and neither is `withheld_reason`.
+ */
+export function readCanPublish(payload: unknown): boolean {
+  if (!payload || typeof payload !== "object") return false;
+  const body = payload as Record<string, unknown>;
+  if (body.can_publish === true) return true;
+  const access = body.access;
+  if (access && typeof access === "object") {
+    const record = access as Record<string, unknown>;
+    if (record.can_publish === true || record.publish === true) return true;
+  }
+  if (rowCanPublish(body.testimony)) return true;
+  if (Array.isArray(body.testimonies) && body.testimonies.some(rowCanPublish)) return true;
+  return false;
+}
+
+function rowCanPublish(row: unknown): boolean {
+  return !!row && typeof row === "object" && (row as { can_publish?: unknown }).can_publish === true;
+}
+
+export function nextReplaceDelay(failed: boolean): number {
+  return failed ? REPLACE_RETRY_MS : FEED_URL_REFRESH_MS;
+}
+
+/** When the signed URLs in a feed response stop working. Falls back to 10 minutes. */
+export function expiryFromPayload(value: unknown, now = Date.now()): number {
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  return now + MEDIA_TTL_MS;
+}
+
+/**
+ * Drop a story once we can no longer prove its media URL is still valid.
+ * A missing expiry counts as expired: an append must not keep it up.
+ */
+export function pruneExpiredStories(
+  stories: Testimony[],
+  expiresAtById: ReadonlyMap<string, number>,
+  now: number
+): Testimony[] {
+  return stories.filter((story) => {
+    const until = expiresAtById.get(story.id);
+    return until != null && now < until;
+  });
 }
 
 export function mergeTestimonies(
@@ -420,6 +490,52 @@ export function mergeTestimonies(
     }
   }
   return next;
+}
+
+export type FeedUpdate = {
+  mode: "append" | "replace";
+  testimonies: Testimony[];
+  /** Stories already on screen, with new read URLs. */
+  refreshed?: Testimony[];
+  /** Withheld, deleted, or no longer published. Applied after the append. */
+  removedIds?: string[];
+};
+
+export function applyFeed(current: Testimony[], update: FeedUpdate): Testimony[] {
+  const removed = new Set(
+    (update.removedIds ?? []).filter((id) => typeof id === "string" && id.length > 0)
+  );
+  let next =
+    update.mode === "replace"
+      ? update.testimonies.slice()
+      : mergeTestimonies(current, update.testimonies, "append");
+  if (update.refreshed && update.refreshed.length > 0) {
+    next = mergeTestimonies(next, update.refreshed, "append");
+  }
+  if (removed.size === 0) return next;
+  return next.filter((row) => !removed.has(row.id));
+}
+
+/** Ids to send as `visible`. The feed rejects more than 40, and rejects non-uuids. */
+export function visibleIdsForPoll(
+  ids: string[],
+  offset = 0,
+  max = VISIBLE_ID_CAP
+): { ids: string[]; nextOffset: number } {
+  const unique: string[] = [];
+  const seen = new Set<string>();
+  for (const id of ids) {
+    const value = id.trim();
+    if (!UUID_RE.test(value) || seen.has(value)) continue;
+    seen.add(value);
+    unique.push(value);
+  }
+  if (unique.length === 0) return { ids: [], nextOffset: 0 };
+  if (unique.length <= max) return { ids: unique, nextOffset: 0 };
+  const start = ((offset % unique.length) + unique.length) % unique.length;
+  const window: string[] = [];
+  for (let index = 0; index < max; index += 1) window.push(unique[(start + index) % unique.length]);
+  return { ids: window, nextOffset: (start + max) % unique.length };
 }
 
 export function storyFromTestimony(row: Testimony): StoryInput {
