@@ -132,7 +132,7 @@ export default async function ProgramStudentsPage({
               No active students enrolled in this program.
             </p>
           ) : (
-            <Table>
+            <Table className="phone-stack">
               <TableHeader>
                 <TableRow>
                   <TableHead>Student</TableHead>

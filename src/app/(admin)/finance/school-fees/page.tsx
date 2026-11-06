@@ -76,7 +76,7 @@ export default async function SchoolFeesPage() {
               No programs found. Create a program in Schools first.
             </p>
           ) : (
-            <Table>
+            <Table className="phone-stack">
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[110px]">Code</TableHead>
@@ -92,10 +92,10 @@ export default async function SchoolFeesPage() {
                   const courseCount = program.billing_courses?.length ?? 0;
                   return (
                     <TableRow key={program.id}>
-                      <TableCell className="mono-label !text-[color:var(--text-secondary)]">
+                      <TableCell data-label="Code" className="mono-label !text-[color:var(--text-secondary)]">
                         {program.code}
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="Program">
                         <Link
                           href={`/finance/school-fees/${program.id}/billing`}
                           className="font-display text-[19px] font-black uppercase leading-none hover:text-electric"

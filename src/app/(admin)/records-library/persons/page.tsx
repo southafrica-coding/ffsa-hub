@@ -89,7 +89,7 @@ export default async function LibraryPersonsPage({
       />
 
       <div className="overflow-x-auto border rounded-md">
-        <table className="min-w-full text-sm">
+        <table className="phone-stack min-w-full text-sm">
           <thead className="bg-muted/50 text-foreground">
             <tr>
               <th className="text-left px-3 py-2 font-medium">Name</th>
@@ -116,7 +116,7 @@ export default async function LibraryPersonsPage({
                   : null;
                 return (
                   <tr key={p.id} className="border-t hover:bg-muted/30">
-                    <td className="px-3 py-2">
+                    <td data-label="Name" className="px-3 py-2">
                       <Link
                         href={`/records-library/persons/${p.id}`}
                         className="text-foreground hover:underline"
@@ -124,8 +124,8 @@ export default async function LibraryPersonsPage({
                         {bestPersonName(p)}
                       </Link>
                     </td>
-                    <td className="px-3 py-2 text-muted-foreground">{p.email ?? "—"}</td>
-                    <td className="px-3 py-2 text-muted-foreground">{p.phone ?? "—"}</td>
+                    <td data-label="Email" className="px-3 py-2 text-muted-foreground">{p.email ?? "—"}</td>
+                    <td data-label="Phone" className="px-3 py-2 text-muted-foreground">{p.phone ?? "—"}</td>
                     <td className="px-3 py-2 text-muted-foreground">{p.date_of_birth ?? "—"}</td>
                     <td className="px-3 py-2 text-muted-foreground">{p.country ?? "—"}</td>
                     <td className="px-3 py-2 text-muted-foreground">

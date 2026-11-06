@@ -358,7 +358,7 @@ export function ProgramFeesDetail({
             </p>
           ) : (
             <div className="overflow-x-auto border border-ink">
-              <Table>
+              <Table className="phone-stack">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-8" />
@@ -436,7 +436,7 @@ export function ProgramFeesDetail({
             </p>
           ) : (
             <div className="overflow-x-auto border border-ink">
-              <Table>
+              <Table className="phone-stack">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Date</TableHead>
@@ -588,10 +588,10 @@ function StudentFeeRow({
             <ChevronRight className="h-3 w-3" />
           )}
         </TableCell>
-        <TableCell className="font-medium">
+        <TableCell data-label="Student" className="font-medium">
           {studentName(fee.users)}
         </TableCell>
-        <TableCell onClick={(e) => e.stopPropagation()}>
+        <TableCell data-label="Tier" onClick={(e) => e.stopPropagation()}>
           <Select
             value={fee.tier}
             onValueChange={handleTierChange}
@@ -607,13 +607,14 @@ function StudentFeeRow({
             </SelectContent>
           </Select>
         </TableCell>
-        <TableCell className="text-right font-mono text-sm">
+        <TableCell data-label="Total due" className="text-right font-mono text-sm">
           {formatCurrency(Number(fee.final_amount_zar))}
         </TableCell>
-        <TableCell className="text-right tabular font-mono text-sm text-[color:var(--green-text)]">
+        <TableCell data-label="Paid" className="text-right tabular font-mono text-sm text-[color:var(--green-text)]">
           {formatCurrency(Number(fee.amount_paid_zar))}
         </TableCell>
         <TableCell
+          data-label="Balance"
           className={`text-right font-mono text-sm ${
             balance > 0 ? "text-destructive" : ""
           }`}

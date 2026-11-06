@@ -83,7 +83,7 @@ export function ProjectsList({
               title={`${org.name} (${recordCurrencyForOrg(org)})`}
               meta={needle ? `${shown.length} of ${all.length}` : `${all.length} projects`}
             />
-            <Table>
+            <Table className="phone-stack">
               <TableHeader>
                 <TableRow>
                   <TableHead>Project (Xero {org.projects_category_name})</TableHead>
@@ -98,8 +98,8 @@ export function ProjectsList({
                   const state = xeroState(p);
                   return (
                     <TableRow key={p.id}>
-                      <TableCell className="text-sm">{p.name}</TableCell>
-                      <TableCell>
+                      <TableCell data-label="Project" className="text-sm">{p.name}</TableCell>
+                      <TableCell data-label="Type">
                         <select
                           aria-label={`Type for ${p.name}`}
                           className="h-9 w-full border border-input bg-background px-2 text-sm disabled:opacity-60"
@@ -115,10 +115,10 @@ export function ProjectsList({
                           ))}
                         </select>
                       </TableCell>
-                      <TableCell className="text-[13px] text-[color:var(--text-secondary)]">
+                      <TableCell data-label="Linked" className="text-[13px] text-[color:var(--text-secondary)]">
                         {linked ? linked.name : "—"}
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="In Xero">
                         <StatusPill tone={state.tone}>{state.label}</StatusPill>
                       </TableCell>
                     </TableRow>

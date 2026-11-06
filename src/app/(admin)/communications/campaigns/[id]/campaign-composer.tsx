@@ -1143,7 +1143,7 @@ export function CampaignComposer({
         }}
         onDragEnd={handleDragEnd}
       >
-        <div className="grid gap-3 -mx-4 md:-mx-6 lg:grid-cols-[200px_minmax(0,1fr)_330px] lg:items-start">
+        <div className="grid min-w-0 gap-3 lg:-mx-6 lg:grid-cols-[200px_minmax(0,1fr)_330px] lg:items-start">
           {/* Palette */}
           <Card
             data-dnd-no-autoscroll
@@ -1167,7 +1167,7 @@ export function CampaignComposer({
                   setDesignOpen(true);
                   setSelectedBlockId(null);
                 }}
-                className="h-7 w-full gap-1 text-xs"
+                className="h-11 w-full gap-1 text-xs lg:h-7"
                 title="Edit the whole email's background, fonts and colors"
               >
                 🎨 Design
@@ -1672,7 +1672,7 @@ function PaletteItem({
       title={title}
       {...attributes}
       {...listeners}
-      className={`flex h-7 items-center gap-1 rounded border px-2 text-left text-xs hover:bg-muted cursor-grab active:cursor-grabbing ${
+      className={`flex h-11 items-center gap-1 rounded border px-2 text-left text-xs hover:bg-muted cursor-grab active:cursor-grabbing lg:h-7 ${
         isDragging ? "opacity-50" : ""
       }`}
     >
@@ -1705,7 +1705,7 @@ function SectionPaletteItem({
       onClick={onClick}
       {...attributes}
       {...listeners}
-      className={`flex h-9 items-center gap-2 rounded border px-2 text-left text-xs hover:bg-muted cursor-grab active:cursor-grabbing ${
+      className={`flex h-11 items-center gap-2 rounded border px-2 text-left text-xs hover:bg-muted cursor-grab active:cursor-grabbing lg:h-9 ${
         isDragging ? "opacity-50" : ""
       }`}
     >

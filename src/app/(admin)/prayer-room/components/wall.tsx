@@ -23,7 +23,7 @@
  * always marks a set.
  */
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils/cn";
 import { MapPin } from "lucide-react";
 import { displayName, offSiteLocation, type Person } from "./helpers";
@@ -263,24 +263,38 @@ export default function Wall({
     return out;
   }, []);
   const hourLabels = useMemo(() => hours.filter((h) => h < DAY_END), [hours]);
+  // Phone shows one weekday at a time. 0 is Monday.
+  const [phoneDay, setPhoneDay] = useState(() => {
+    const wd = new Date().getDay();
+    return wd >= 1 && wd <= 5 ? wd - 1 : 0;
+  });
 
   return (
     <div className="border border-ink bg-white">
-      <p className="border-b border-rule px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-[color:var(--text-tertiary)] md:hidden">
-        Swipe across the week. Each day is wide enough to read.
-      </p>
-      {/* On a phone the five columns used to share ~300px, so a set title
-          was a few letters. A contained sideways scroll keeps the column
-          near the width the cards were drawn for. */}
-      <div className="overflow-x-auto">
-      <div className="min-w-[760px]">
+      <div className="grid grid-cols-5 border-b border-ink md:hidden">
+        {days.map((d, i) => (
+          <button
+            key={d.iso}
+            type="button"
+            onClick={() => setPhoneDay(i)}
+            aria-pressed={i === phoneDay}
+            className={cn(
+              "flex min-h-11 flex-col items-center justify-center",
+              i === phoneDay ? "bg-ink text-white" : "bg-bone text-ink"
+            )}
+          >
+            <span className="font-mono text-[9px] font-bold tracking-[0.12em]">{WEEKDAY_LABELS[i]}</span>
+            <span className="font-display text-[16px] font-black leading-none">{d.iso.slice(8, 10)}</span>
+          </button>
+        ))}
+      </div>
       {/* header row: gutter + five days */}
-      <div className="flex border-b border-ink bg-ink">
+      <div className="hidden border-b border-ink bg-ink md:flex">
         <div className="w-16 shrink-0 md:w-[92px]" />
         {days.map((d, i) => (
           <div
             key={d.iso}
-            className="flex-1 border-l border-[#2A2A28] px-2 py-2 text-center"
+            className={cn("flex-1 border-l border-[#2A2A28] px-2 py-2 text-center", i !== phoneDay && "max-md:hidden")}
           >
             <div className="font-mono text-[9px] font-bold tracking-[0.18em] text-white">
               {WEEKDAY_LABELS[i]}
@@ -345,12 +359,12 @@ export default function Wall({
         </div>
 
         {/* the five columns */}
-        {days.map((d) => {
+        {days.map((d, i) => {
           const daySets = (byDay.get(d.iso) ?? []).slice().sort(
             (a, b) => toMin(a.start_time) - toMin(b.start_time)
           );
           return (
-            <div key={d.iso} className="relative flex-1 border-l border-rule">
+            <div key={d.iso} className={cn("relative flex-1 border-l border-rule", i !== phoneDay && "max-md:hidden")}>
               {/* hour rules */}
               {hours.map((h) => (
                 <div
@@ -522,8 +536,6 @@ export default function Wall({
             </div>
           );
         })}
-      </div>
-      </div>
       </div>
 
       {/* the vocabulary, stated — the wall is unreadable without it */}
