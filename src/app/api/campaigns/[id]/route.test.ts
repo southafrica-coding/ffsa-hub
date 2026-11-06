@@ -19,9 +19,16 @@ const state = vi.hoisted(() => ({
     preview_text: string | null;
     sending_identity_id: string | null;
   },
-  updates: [] as Array<{ id: string; patch: Record<string, unknown> }>,
+  updates: [] as Array<{
+    id: string;
+    patch: Record<string, unknown>;
+    options?: { onlyStatuses?: readonly string[] };
+  }>,
   labels: [] as string[][],
   contacts: [] as string[][],
+  conflict: false,
+  deletes: [] as Array<{ id: string; options?: { onlyStatuses?: readonly string[] } }>,
+  deleteMiss: false,
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -29,11 +36,25 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 vi.mock("@/services/campaigns", () => ({
   getCampaignById: async () => ({ data: state.campaign, error: null }),
-  updateCampaign: async (_s: unknown, id: string, patch: Record<string, unknown>) => {
-    state.updates.push({ id, patch });
+  updateCampaign: async (
+    _s: unknown,
+    id: string,
+    patch: Record<string, unknown>,
+    options?: { onlyStatuses?: readonly string[] }
+  ) => {
+    state.updates.push({ id, patch, options });
+    if (state.conflict) return { data: null, error: null };
     return { data: { id, ...patch }, error: null };
   },
-  deleteCampaign: async () => ({ error: null }),
+  deleteCampaign: async (
+    _s: unknown,
+    id: string,
+    options?: { onlyStatuses?: readonly string[] }
+  ) => {
+    state.deletes.push({ id, options });
+    if (state.deleteMiss) return { data: null, error: null };
+    return { data: { id }, error: null };
+  },
   setCampaignLabels: async (_s: unknown, _id: string, labelIds: string[]) => {
     state.labels.push(labelIds);
     return { error: null };
@@ -44,7 +65,7 @@ vi.mock("@/services/campaigns", () => ({
   },
 }));
 
-import { GET, PATCH } from "./route";
+import { DELETE, GET, PATCH } from "./route";
 
 const FUTURE = "2026-12-01T08:00:00.000Z";
 const FUTURE_SAME_INSTANT = "2026-12-01T10:00:00+02:00";
@@ -101,6 +122,9 @@ describe("PATCH /api/campaigns/[id] schedule permission", () => {
     state.updates = [];
     state.labels = [];
     state.contacts = [];
+    state.deletes = [];
+    state.conflict = false;
+    state.deleteMiss = false;
     draftCampaign();
     world(DRAFT_ONLY);
   });
@@ -148,6 +172,7 @@ describe("PATCH /api/campaigns/[id] schedule permission", () => {
     });
     expect(typeof state.updates[0].patch.body_html).toBe("string");
     expect(state.updates[0].patch.status).toBeUndefined();
+    expect(state.updates[0].options).toEqual({ onlyStatuses: ["draft", "scheduled"] });
     expect(state.labels).toEqual([["lab-1"]]);
     expect(state.contacts).toEqual([["con-1"]]);
   });
@@ -189,13 +214,54 @@ describe("PATCH /api/campaigns/[id] schedule permission", () => {
 
   it("the same instant in another format is not a reschedule", async () => {
     draftCampaign({ status: "scheduled", scheduled_at: FUTURE });
-    const res = await call({ scheduled_at: FUTURE_SAME_INSTANT, name: "Copy edit" });
+    const res = await call({ scheduled_at: FUTURE_SAME_INSTANT });
     expect(res.status).toBe(200);
-    expect(state.updates[0].patch).toMatchObject({
-      scheduled_at: FUTURE_SAME_INSTANT,
-      name: "Copy edit",
-    });
-    expect(state.updates[0].patch.status).toBeUndefined();
+    expect(state.updates[0].patch).toEqual({ scheduled_at: FUTURE_SAME_INSTANT });
+  });
+
+  it("a draft-only user cannot change what a scheduled campaign will send", async () => {
+    draftCampaign({ status: "scheduled", scheduled_at: FUTURE });
+    const bodies = [
+      { name: "Renamed" },
+      { subject: "Swapped subject" },
+      { preview_text: "Peek" },
+      { sending_identity_id: "ident-2" },
+      { body_source: { version: 1, blocks: [{ id: "b1", type: "text", text: "Swap" }] } },
+      { label_ids: ["lab-9"] },
+      { contact_ids: ["con-9"] },
+    ];
+    for (const body of bodies) {
+      const res = await call(body);
+      expect(res.status, JSON.stringify(body)).toBe(403);
+      expect((await res.json()).error).toBe("Not authorized to edit a scheduled send");
+    }
+    expect(state.updates).toEqual([]);
+    expect(state.labels).toEqual([]);
+    expect(state.contacts).toEqual([]);
+  });
+
+  it("a sender can edit a scheduled campaign, and unscheduling stays on the draft gate", async () => {
+    draftCampaign({ status: "scheduled", scheduled_at: FUTURE });
+    world(perms("campaigns.draft", "campaigns.send"));
+    expect((await call({ subject: "Still scheduled", label_ids: ["lab-1"] })).status).toBe(200);
+    expect(state.labels).toEqual([["lab-1"]]);
+
+    world(DRAFT_ONLY);
+    state.updates = [];
+    state.labels = [];
+    const res = await call({ status: "draft", subject: "Pulled back" });
+    expect(res.status).toBe(200);
+    expect(state.updates[0].patch).toMatchObject({ status: "draft", subject: "Pulled back" });
+  });
+
+  it("409 when the row is no longer draft or scheduled", async () => {
+    state.conflict = true;
+    const res = await call({ subject: "Too late", label_ids: ["lab-1"], contact_ids: ["con-1"] });
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe("Campaign can no longer be edited");
+    expect(state.updates[0].options).toEqual({ onlyStatuses: ["draft", "scheduled"] });
+    expect(state.labels).toEqual([]);
+    expect(state.contacts).toEqual([]);
   });
 
   it("clearing scheduled_at on a scheduled campaign does not arm cron", async () => {
@@ -230,7 +296,7 @@ describe("PATCH /api/campaigns/[id] schedule permission", () => {
 
   it("rejects an unparsable scheduled_at before any write", async () => {
     world(role("comms_admin"));
-    for (const scheduled_at of ["tomorrow", "", 123, {}]) {
+    for (const scheduled_at of ["tomorrow", "", "1", "2026-12-01", 123, {}]) {
       expect((await call({ scheduled_at })).status).toBe(400);
     }
     expect(state.updates).toEqual([]);
@@ -350,5 +416,47 @@ describe("GET /api/campaigns/[id] read gate", () => {
     world(role("comms_admin"));
     state.campaign = null;
     expect((await getCall()).status).toBe(404);
+  });
+});
+
+const deleteCall = () =>
+  DELETE(new Request("http://x/api/campaigns/c1", { method: "DELETE" }), {
+    params: Promise.resolve({ id: "c1" }),
+  });
+
+describe("DELETE /api/campaigns/[id]", () => {
+  beforeEach(() => {
+    state.deletes = [];
+    state.deleteMiss = false;
+    draftCampaign();
+    world(DRAFT_ONLY);
+  });
+
+  it("a draft-only user can delete a draft", async () => {
+    const res = await deleteCall();
+    expect(res.status).toBe(200);
+    expect(state.deletes[0].options).toEqual({ onlyStatuses: ["draft"] });
+  });
+
+  it("a draft-only user cannot delete a scheduled campaign", async () => {
+    draftCampaign({ status: "scheduled", scheduled_at: FUTURE });
+    const res = await deleteCall();
+    expect(res.status).toBe(403);
+    expect((await res.json()).error).toBe("Not authorized to delete a scheduled send");
+    expect(state.deletes).toEqual([]);
+  });
+
+  it("a sender can delete a scheduled campaign, still conditioned on that status", async () => {
+    draftCampaign({ status: "scheduled", scheduled_at: FUTURE });
+    world(perms("campaigns.draft", "campaigns.send"));
+    expect((await deleteCall()).status).toBe(200);
+    expect(state.deletes[0].options).toEqual({ onlyStatuses: ["scheduled"] });
+  });
+
+  it("409 when the row's status changed before the delete", async () => {
+    state.deleteMiss = true;
+    const res = await deleteCall();
+    expect(res.status).toBe(409);
+    expect(state.deletes).toHaveLength(1);
   });
 });

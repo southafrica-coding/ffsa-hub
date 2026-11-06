@@ -33,10 +33,23 @@ import { handleInboundEmail } from "@/lib/email/inbound";
 // svix-signature triple against RESEND_WEBHOOK_SECRET (whsec_...). The
 // secret must be set. A missing secret is a closed door (503), not a
 // reason to accept the body — an unsigned public endpoint is spoofable.
+// svix-timestamp must be within ±5 minutes (Svix's default tolerance) so a
+// captured, valid signature cannot be replayed later.
 
 export const runtime = "nodejs";
 // Inbound replies fetch the full email and may forward it with attachments.
 export const maxDuration = 60;
+
+// Svix's default tolerance. A timestamp older or newer than this is a replay
+// or a clock-skewed forgery, even when the HMAC matches.
+const SVIX_TOLERANCE_SECONDS = 5 * 60;
+
+function svixTimestampFresh(timestamp: string, nowMs = Date.now()): boolean {
+  if (!/^\d+$/.test(timestamp)) return false;
+  const seconds = Number(timestamp);
+  if (!Number.isFinite(seconds)) return false;
+  return Math.abs(nowMs - seconds * 1000) <= SVIX_TOLERANCE_SECONDS * 1000;
+}
 
 // Verify a Svix-style signature. signedContent = `${id}.${ts}.${body}`;
 // the secret is base64 after the `whsec_` prefix; the header is a
@@ -49,6 +62,7 @@ function verifySvix(
   body: string
 ): boolean {
   if (!id || !timestamp || !signatureHeader) return false;
+  if (!svixTimestampFresh(timestamp)) return false;
   const secretBytes = Buffer.from(secret.replace(/^whsec_/, ""), "base64");
   const signedContent = `${id}.${timestamp}.${body}`;
   const expected = createHmac("sha256", secretBytes)

@@ -46,10 +46,24 @@ import { POST } from "./route";
 const SECRET_BYTES = Buffer.from("resend-webhook-test-secret");
 const SECRET = `whsec_${SECRET_BYTES.toString("base64")}`;
 
-function signature(body: string, secret = SECRET, id = "evt_1", timestamp = "1700000000") {
+function signature(
+  body: string,
+  secret = SECRET,
+  id = "evt_1",
+  timestamp = String(Math.floor(Date.now() / 1000))
+) {
   const key = Buffer.from(secret.replace(/^whsec_/, ""), "base64");
   const mac = createHmac("sha256", key).update(`${id}.${timestamp}.${body}`).digest("base64");
   return { id, timestamp, header: `v1,${mac}` };
+}
+
+function signedAt(body: string, timestamp: string) {
+  const sig = signature(body, SECRET, "evt_1", timestamp);
+  return post(body, {
+    "svix-id": sig.id,
+    "svix-timestamp": sig.timestamp,
+    "svix-signature": sig.header,
+  });
 }
 
 function post(
@@ -115,6 +129,25 @@ describe("POST /api/integrations/resend/webhook", () => {
     expect(res.status).toBe(200);
     expect(calls.apply).toBe(1);
     expect(calls.admin).toBeGreaterThan(0);
+  });
+
+  it("rejects a valid signature whose timestamp is outside ±5 minutes", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const tooOld = await signedAt(delivered, String(now - 6 * 60));
+    expect(tooOld.status).toBe(401);
+    expect(await tooOld.text()).toBe("invalid signature");
+
+    const tooFar = await signedAt(delivered, String(now + 6 * 60));
+    expect(tooFar.status).toBe(401);
+
+    // The timestamp the old tests signed with — years outside the window.
+    expect((await signedAt(delivered, "1700000000")).status).toBe(401);
+    expect(calls.apply).toBe(0);
+    expect(calls.admin).toBe(0);
+
+    expect((await signedAt(delivered, String(now - 4 * 60))).status).toBe(200);
+    expect((await signedAt(delivered, String(now + 4 * 60))).status).toBe(200);
+    expect(calls.apply).toBe(2);
   });
 
   it("processes an inbound reply only after the signature checks out", async () => {

@@ -48,18 +48,31 @@ export async function createCampaign(supabase: Client, data: CampaignInsert) {
 export async function updateCampaign(
   supabase: Client,
   id: string,
-  data: CampaignUpdate
+  data: CampaignUpdate,
+  options?: { onlyStatuses?: readonly string[] }
 ) {
-  return supabase
+  let query = supabase
     .from("campaigns")
     .update({ ...data, updated_at: new Date().toISOString() })
-    .eq("id", id)
-    .select()
-    .single();
+    .eq("id", id);
+  if (options?.onlyStatuses?.length) {
+    query = query.in("status", [...options.onlyStatuses]);
+  }
+  // maybeSingle so zero matching rows (status moved on, usually to sending)
+  // is { data: null }, not a PostgREST error the route would report as 500.
+  return query.select().maybeSingle();
 }
 
-export async function deleteCampaign(supabase: Client, id: string) {
-  return supabase.from("campaigns").delete().eq("id", id);
+export async function deleteCampaign(
+  supabase: Client,
+  id: string,
+  options?: { onlyStatuses?: readonly string[] }
+) {
+  let query = supabase.from("campaigns").delete().eq("id", id);
+  if (options?.onlyStatuses?.length) {
+    query = query.in("status", [...options.onlyStatuses]);
+  }
+  return query.select("id").maybeSingle();
 }
 
 // ────────────────────────────────────────────────────────────
