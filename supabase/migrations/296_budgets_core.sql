@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS public.budget_templates (
   is_active         boolean NOT NULL DEFAULT true,
   applies_to        text[] NOT NULL DEFAULT ARRAY['staff_ministry', 'ministry_subcategory', 'program', 'event'],
   org_id            uuid REFERENCES public.finance_orgs(id) ON DELETE RESTRICT,
-  default_currency  text NOT NULL DEFAULT 'ZAR' CHECK (default_currency IN ('ZAR', 'USD')),
+  default_currency  text NOT NULL DEFAULT 'ZAR' CHECK (default_currency = 'ZAR'),
   funding_fields    jsonb NOT NULL DEFAULT '[]'::jsonb,
   owner_kind        text CHECK (owner_kind IN ('staff_ministry', 'ministry_subcategory', 'program', 'event', 'outreach_team')),
   staff_ministry_id uuid REFERENCES public.staff_ministries(id) ON DELETE RESTRICT,
@@ -130,7 +130,7 @@ CREATE TABLE IF NOT EXISTS public.budgets (
   template_version        integer NOT NULL,
   org_id                  uuid NOT NULL REFERENCES public.finance_orgs(id) ON DELETE RESTRICT,
   period_id               uuid NOT NULL,
-  currency                text NOT NULL CHECK (currency IN ('ZAR', 'USD')),
+  currency                text NOT NULL CHECK (currency = 'ZAR'),
   owner_kind              text NOT NULL
                           CHECK (owner_kind IN ('staff_ministry', 'ministry_subcategory', 'program', 'event', 'outreach_team')),
   staff_ministry_id       uuid REFERENCES public.staff_ministries(id) ON DELETE RESTRICT,
@@ -1594,6 +1594,8 @@ COMMENT ON COLUMN public.budget_templates.key IS
   'Stable handle for built-in templates (''team_standard''). NULL for templates saved from a budget.';
 COMMENT ON COLUMN public.budget_templates.applies_to IS
   'Owner kinds the template may be used for, including an outreach team. That is a workbook row on budgets, not a copy of the outreach ledger.';
+COMMENT ON COLUMN public.budget_templates.default_currency IS
+  'ZAR only, including global templates with no org. A scoped template must be FFSA NPC (key npc). A US organisation is rejected.';
 COMMENT ON COLUMN public.budget_templates.funding_fields IS
   'Which funding rows the overview shows: [{key, label}], keys are budgets.*_cents columns.';
 COMMENT ON COLUMN public.budget_templates.owner_kind IS
@@ -1688,6 +1690,10 @@ ALTER TABLE public.budget_category_coding ADD CONSTRAINT budget_category_coding_
 CREATE FUNCTION finance_private.budget_template_identity_guard() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 BEGIN
+ IF NEW.default_currency IS DISTINCT FROM 'ZAR' THEN
+  RAISE EXCEPTION 'Hub budget templates are in ZAR' USING ERRCODE='23514'; END IF;
+ IF NEW.org_id IS NOT NULL THEN
+  PERFORM finance_private.assert_south_africa_budget_org(NEW.org_id); END IF;
  IF TG_OP='UPDATE' AND ROW(NEW.org_id,NEW.owner_kind,NEW.staff_ministry_id,NEW.subcategory_id,NEW.program_id,NEW.event_id,NEW.outreach_team_id,NEW.source_budget_id)
  IS DISTINCT FROM ROW(OLD.org_id,OLD.owner_kind,OLD.staff_ministry_id,OLD.subcategory_id,OLD.program_id,OLD.event_id,OLD.outreach_team_id,OLD.source_budget_id) THEN
  RAISE EXCEPTION 'Template identity is immutable' USING ERRCODE='23514'; END IF;

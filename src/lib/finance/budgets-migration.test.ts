@@ -169,6 +169,12 @@ describe("migrations 295–299 — the budget model", () => {
     expect(core).toMatch(/Hub budgets are for South Africa only \(FFSA NPC, ZAR\)/);
     expect(core).toMatch(/PERFORM finance_private\.assert_south_africa_budget_org\(NEW\.org_id\)/);
     expect(core).toMatch(/PERFORM finance_private\.assert_south_africa_budget_org\(v_org\)/);
+    expect(core).toMatch(/currency\s+text NOT NULL CHECK \(currency = 'ZAR'\)/);
+    expect(core).toMatch(/default_currency\s+text NOT NULL DEFAULT 'ZAR' CHECK \(default_currency = 'ZAR'\)/);
+    expect(core).toMatch(/IF NEW\.org_id IS NOT NULL THEN\s+PERFORM finance_private\.assert_south_africa_budget_org\(NEW\.org_id\)/);
+    expect(core).toMatch(/Hub budget templates are in ZAR/);
+    expect(core).not.toMatch(/CHECK \(currency IN \('ZAR', 'USD'\)\)/);
+    expect(core).not.toMatch(/CHECK \(default_currency IN \('ZAR', 'USD'\)\)/);
     expect(core).not.toMatch(/316e0b77-3f4d-437f-a86e-856e8467f0b9/);
   });
 

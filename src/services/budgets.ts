@@ -20,7 +20,7 @@ export type BudgetOwnerKind =
   | "program"
   | "event"
   | "outreach_team";
-export type BudgetCurrency = "ZAR" | "USD";
+export type BudgetCurrency = "ZAR";
 export type BudgetStatus = "draft" | "submitted" | "approved" | "archived";
 export type XeroOrgRegion = "za" | "us";
 
