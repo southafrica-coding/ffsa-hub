@@ -30,6 +30,7 @@ import { OutcomesManager } from "./outcomes-manager";
 import { RolesRoster } from "./roles-roster";
 import { BaseLabelPicker } from "./base-label-picker";
 import { getEventLabelIds } from "@/services/event-labels";
+import { getEventFinanceOrgPicker } from "@/lib/finance/orgs";
 import { FormsTab } from "./forms-tab";
 import { WorkflowsManager } from "./workflows-manager";
 import { OutcomeFormLink } from "./outcome-form-link";
@@ -104,6 +105,7 @@ export default async function EventDetailPage({
     attendanceCounts,
     { data: feedbackForms },
     eventLabelIds,
+    financeOrgPicker,
   ] = await Promise.all([
     getRegistrationsForEvent(supabase, id),
     getAttendanceForEvent(supabase, id),
@@ -137,6 +139,13 @@ export default async function EventDetailPage({
     // Every CRM label this event applies (migration 193). Empty before
     // the migration is applied — the picker then shows base_label_id only.
     getEventLabelIds(supabase, id),
+    // The two finance org names for the "Finance organisation" select
+    // (migration 291). Event editors only; nothing else from finance.
+    supabase.auth
+      .getUser()
+      .then(({ data }: { data: { user: { id: string } | null } }) =>
+        getEventFinanceOrgPicker(supabase, data.user?.id ?? null)
+      ),
   ]);
 
   // Primary first, so the picker can mark it as such.
@@ -242,6 +251,7 @@ export default async function EventDetailPage({
             attendance={attendance ?? []}
             coming={coming}
             baseLabelIds={baseLabelIds}
+            financeOrgPicker={financeOrgPicker}
           />
         )}
 
@@ -330,7 +340,7 @@ function formatDayRange(start: string, end: string | null) {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function DetailsTab(props: any) {
-  const { event, eventId, roles, labels, users, registrations, attendance, coming, baseLabelIds } =
+  const { event, eventId, roles, labels, users, registrations, attendance, coming, baseLabelIds, financeOrgPicker } =
     props;
 
   // "1 140 / 2 000" won't fit at the strip's 54px, so a ratio drops to
@@ -361,6 +371,7 @@ function DetailsTab(props: any) {
         eventId={eventId}
         status={event.status}
         event={event}
+        financeOrgs={financeOrgPicker.canPick ? financeOrgPicker.orgs : null}
       />
 
       <div className="border-x border-t border-ink">

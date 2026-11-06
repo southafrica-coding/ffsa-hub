@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { updateEvent } from "@/services/events";
 import { getAuthedUser, canManageEvents } from "@/lib/api-auth";
 import { setEventLabels } from "@/services/event-labels";
+import { listFinanceOrgChoices } from "@/lib/finance/orgs";
 
 // PATCH /api/events/[id] — update event-level CRM fields (base label, etc.)
 export async function PATCH(
@@ -33,6 +34,7 @@ export async function PATCH(
     registration_required?: boolean;
     brand?: string;
     cancellation_message?: string | null;
+    finance_org_id?: string | null;
   };
   try {
     body = await request.json();
@@ -146,6 +148,23 @@ export async function PATCH(
       return NextResponse.json({ error: "Invalid brand" }, { status: 400 });
     }
     patch.brand = body.brand;
+  }
+
+  // Finance organisation (migrations 290, 291): which Xero file this event's
+  // money is recorded in. One of the two orgs, or null for "not chosen yet".
+  // Never filled in from the currency.
+  if ("finance_org_id" in body) {
+    const orgId = body.finance_org_id;
+    if (orgId === null || orgId === "") {
+      patch.finance_org_id = null;
+    } else {
+      const { data: orgs } = await listFinanceOrgChoices(supabase);
+      const known = Array.isArray(orgs) && orgs.some((o: { id: string }) => o.id === orgId);
+      if (typeof orgId !== "string" || !known) {
+        return NextResponse.json({ error: "Unknown finance organisation" }, { status: 400 });
+      }
+      patch.finance_org_id = orgId;
+    }
   }
 
   if (Object.keys(patch).length === 0) {

@@ -11,6 +11,7 @@ import { Lock, Pencil } from "lucide-react";
 import { DescriptionEditor } from "@/components/events/description-editor";
 import { EventDescription } from "@/components/events/event-description";
 import { sanitizeEventDescription } from "@/lib/events/rich-text";
+import type { FinanceOrgChoice } from "@/lib/finance/orgs";
 
 type EventBrand =
   | "ff"
@@ -79,6 +80,7 @@ type EventCore = {
   is_public: boolean;
   registration_required: boolean;
   brand?: string | null;
+  finance_org_id?: string | null;
 };
 
 type FormState = {
@@ -115,10 +117,13 @@ export function EventDetailsForm({
   eventId,
   status,
   event,
+  financeOrgs,
 }: {
   eventId: string;
   status: string;
   event: EventCore;
+  /** The two finance orgs, or null when this person can't set one. */
+  financeOrgs: FinanceOrgChoice[] | null;
 }) {
   const router = useRouter();
   const initial = useMemo(() => toFormState(event), [event]);
@@ -226,6 +231,9 @@ export function EventDetailsForm({
                 ?? null
             }
           />
+          {financeOrgs && (
+            <FinanceOrgField eventId={eventId} orgs={financeOrgs} value={event.finance_org_id ?? null} />
+          )}
           <p className="text-xs text-muted-foreground border-t pt-3">
             To edit any of these, use <strong>Revert to draft</strong> at the top
             of the page. Editing reopens here, then hit Publish to go live again.
@@ -361,6 +369,10 @@ export function EventDetailsForm({
           </p>
         </div>
 
+        {financeOrgs && (
+          <FinanceOrgField eventId={eventId} orgs={financeOrgs} value={event.finance_org_id ?? null} />
+        )}
+
         {err && <p className="text-xs text-destructive">{err}</p>}
         {saved && !dirty && (
           <p className="text-xs text-grass-text">Saved.</p>
@@ -386,6 +398,74 @@ export function EventDetailsForm({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * Which finance organisation (Xero file) this event's money is recorded in
+ * (events.finance_org_id, migration 290). Saves on change and stays editable
+ * while the event is live: it isn't shown to buyers. Empty means "not
+ * chosen yet" — nothing is assumed from the currency.
+ */
+function FinanceOrgField({
+  eventId,
+  orgs,
+  value,
+}: {
+  eventId: string;
+  orgs: FinanceOrgChoice[];
+  value: string | null;
+}) {
+  const router = useRouter();
+  const [current, setCurrent] = useState(value ?? "");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function change(next: string) {
+    const previous = current;
+    setCurrent(next);
+    setBusy(true);
+    setMsg(null);
+    const res = await fetch(`/api/events/${eventId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ finance_org_id: next || null }),
+    });
+    setBusy(false);
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      setCurrent(previous);
+      setMsg({ ok: false, text: data.error ?? "Couldn't save the finance organisation." });
+      return;
+    }
+    setMsg({ ok: true, text: "Saved." });
+    router.refresh();
+  }
+
+  return (
+    <div className="space-y-2 border-t pt-4">
+      <Label htmlFor="ev-finance-org">Finance organisation</Label>
+      <select
+        id="ev-finance-org"
+        value={current}
+        disabled={busy}
+        onChange={(e) => change(e.target.value)}
+        className="flex h-10 w-full border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60"
+      >
+        <option value="">Not chosen yet</option>
+        {orgs
+          .filter((o) => o.is_active || o.id === current)
+          .map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.name} ({o.record_currency})
+            </option>
+          ))}
+      </select>
+      <p className="text-xs text-muted-foreground">
+        Which Xero file this event&apos;s money is recorded in. Finance can change it later.
+      </p>
+      {msg && <p className={`text-xs ${msg.ok ? "text-grass-text" : "text-destructive"}`}>{msg.text}</p>}
+    </div>
   );
 }
 
