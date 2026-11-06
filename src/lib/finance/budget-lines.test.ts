@@ -27,7 +27,7 @@ describe("toHundredths — what numeric(10,2) stores", () => {
   });
 });
 
-describe("lineTotalCents — mirrors the migration 278 trigger", () => {
+describe("lineTotalCents — mirrors the migration 296 trigger", () => {
   it("repeating cost: R190 × 12 times × 8 people = R18,240", () => {
     expect(lineTotalCents({ amount_cents: 19000, frequency: 12, multiplier: 8 })).toBe(1824000);
   });

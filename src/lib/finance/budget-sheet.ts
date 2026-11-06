@@ -2,7 +2,7 @@
  * The empty "Team budget (standard)" sheet.
  *
  * Section keys, labels and help match the template seeded in draft PR #475
- * (migration 278). Only fixed and variable hold lines. A line total is
+ * (migration 296). Only fixed and variable hold lines. A line total is
  * amount × frequency × multiplier, in cents, via budget-lines.ts — the same
  * sum the database trigger will store once those tables exist.
  *
@@ -99,7 +99,8 @@ export const PERIOD_KIND_LABEL: Record<PeriodKind, string> = {
   event: "Event",
 };
 
-export type BudgetCurrency = "ZAR" | "USD";
+/** Hub budgets are rand. This does not convert another currency. */
+export type BudgetCurrency = "ZAR";
 
 export type SheetLine = {
   id: string;
@@ -408,13 +409,11 @@ export function formatBudgetMoney(cents: number, currency: BudgetCurrency | null
   if (!currency) {
     return new Intl.NumberFormat("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
   }
-  return new Intl.NumberFormat(currency === "USD" ? "en-US" : "en-ZA", {
-    style: "currency",
-    currency,
-  }).format(amount);
+  return new Intl.NumberFormat("en-ZA", { style: "currency", currency: "ZAR" }).format(amount);
 }
 
+/** Rand only. Any other record currency is not a budget currency and is not converted. */
 export function currencyFromRecord(record: string | null | undefined): BudgetCurrency | null {
-  if (record === "ZAR" || record === "USD") return record;
+  if ((record ?? "").toUpperCase() === "ZAR") return "ZAR";
   return null;
 }
