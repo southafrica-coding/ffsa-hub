@@ -78,6 +78,23 @@ describe("resolveTarget", () => {
     expect(resolveTarget("/my-schools-old")).toEqual({ kind: "web", path: "/my-schools-old" });
   });
 
+  it("OKRs: the wall and one group open in the app; the cycles manager stays on the website", () => {
+    const id = "11111111-1111-4111-8111-111111111111";
+    expect(resolveTarget("/okrs")).toEqual({ kind: "app", path: "/okrs" });
+    expect(resolveTarget("/okrs?cycle=2025")).toEqual({ kind: "app", path: "/okrs" });
+    expect(resolveTarget(`/okrs/${id}`)).toEqual({ kind: "app", path: `/okrs/${id}` });
+    expect(resolveTarget(`/okrs/${id}?cycle=2026`)).toEqual({ kind: "app", path: `/okrs/${id}` });
+    expect(resolveTarget("/okrs/cycles")).toEqual({ kind: "web", path: "/okrs/cycles" });
+    expect(resolveTarget("/okrs-archive")).toEqual({ kind: "web", path: "/okrs-archive" });
+  });
+
+  it("history items open My History", () => {
+    expect(resolveTarget("/my-history")).toEqual({ kind: "app", path: "/history" });
+    expect(resolveTarget("/my-history?from=email")).toEqual({ kind: "app", path: "/history" });
+    expect(resolveTarget("/my-history/anything")).toEqual({ kind: "app", path: "/history" });
+    expect(resolveTarget("/my-history-old")).toEqual({ kind: "web", path: "/my-history-old" });
+  });
+
   it("ministry items open Ministries; a staff profile stays on the website", () => {
     const id = "11111111-2222-4333-8444-555555555555";
     expect(resolveTarget("/ministry")).toEqual({ kind: "app", path: "/ministries" });

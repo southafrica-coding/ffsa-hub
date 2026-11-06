@@ -166,7 +166,7 @@ export default async function ProgramDetailPage({
     return (
       <div className="ffsa-screen">
         <Masthead context="Training" title="Not found" />
-        <p className="px-8 py-7 text-[13px] text-destructive">Program not found.</p>
+        <p className="px-5 py-6 md:px-8 md:py-7 text-[13px] text-destructive">Program not found.</p>
       </div>
     );
   }

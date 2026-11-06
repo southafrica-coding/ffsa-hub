@@ -194,10 +194,10 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <div className="mt-8 flex items-center justify-between gap-4 border-t border-rule pt-5">
+          <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-rule pt-5">
             <Link
               href="/forgot-password"
-              className="font-mono text-[9.5px] font-bold uppercase tracking-[0.16em] text-[color:var(--text-secondary)] hover:text-ink"
+              className="inline-flex min-h-11 items-center font-mono text-[9.5px] font-bold uppercase leading-snug tracking-[0.16em] text-[color:var(--text-secondary)] hover:text-ink"
             >
               Forgot password / first-time setup
             </Link>

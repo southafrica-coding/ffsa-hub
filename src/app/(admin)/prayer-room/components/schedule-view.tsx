@@ -240,13 +240,13 @@ export default function ScheduleView({ userId, isStaff, isMember, inCatalogue, t
 
       <div className="flex flex-wrap items-center gap-2 border-b border-rule bg-bone px-5 py-3 md:px-8">
         <div className="flex items-center gap-1">
-          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => step(-1)} aria-label="Previous">
+          <Button variant="outline" size="icon" className="h-11 w-11 md:h-8 md:w-8" onClick={() => step(-1)} aria-label="Previous">
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <div className="min-w-[10rem] px-1 text-center font-mono text-[10px] font-bold uppercase tracking-[0.12em]">
             {headerLabel}
           </div>
-          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => step(1)} aria-label="Next">
+          <Button variant="outline" size="icon" className="h-11 w-11 md:h-8 md:w-8" onClick={() => step(1)} aria-label="Next">
             <ChevronRight className="h-4 w-4" />
           </Button>
           <Button variant="ghost" size="sm" className="ml-1" onClick={() => setAnchor(todayISO())}>

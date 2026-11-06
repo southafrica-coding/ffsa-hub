@@ -5,6 +5,7 @@ import { requireModuleAccess } from "@/lib/require-permission";
 import { loadOrgChart } from "@/services/org-chart";
 import { canManageOrg } from "@/services/org-import";
 import { OrgCanvas } from "./org-canvas";
+import { OrgPhone } from "./org-phone";
 
 export const metadata = { title: "Org Chart · FFSA Hub" };
 
@@ -26,7 +27,17 @@ export default async function OrgChartPage() {
   return (
     <div className="ffsa-screen">
       {data.model.teams.length > 0 ? (
-        <OrgCanvas model={data.model} savedLayout={data.layout} canManage={canManage} />
+        <>
+          {/* Below xl the canvas is a pan/zoom drawing that shrinks past
+              readable. The directory is the chart there; the canvas returns
+              once the window can hold it at full size. */}
+          <div className="xl:hidden">
+            <OrgPhone model={data.model} canManage={canManage} />
+          </div>
+          <div className="hidden xl:block">
+            <OrgCanvas model={data.model} savedLayout={data.layout} canManage={canManage} />
+          </div>
+        </>
       ) : (
         <div className="px-5 py-10 md:px-8">
           <p className="mono-label">No teams yet</p>

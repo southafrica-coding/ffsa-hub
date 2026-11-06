@@ -51,7 +51,7 @@ export default async function FormResponsesPage({
         }
       />
 
-      <div className="space-y-3 px-8 py-7">
+      <div className="space-y-3 px-5 py-6 md:px-8 md:py-7">
       {rows.length === 0 ? (
         <p className="mono-label">
           No submissions yet. Responses appear here as people fill in the form.

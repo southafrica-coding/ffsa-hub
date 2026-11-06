@@ -49,8 +49,85 @@ export function BookingCalendar({
     }
   }
 
+  const inMonthDays = days.filter((d) => isoMonth(d) === month);
+  const busyDays = inMonthDays.filter((d) => (byDay.get(d) ?? []).length > 0);
+
   return (
     <div className="border border-ink bg-white">
+      {/* Phone: a day list. Seven columns on 375px leaves each day ~50px wide,
+          which is not enough for a title or a tap. */}
+      <div className="md:hidden">
+        {busyDays.length === 0 ? (
+          <p className="px-4 py-8 text-[14px] text-[color:var(--text-secondary)]">
+            Nothing booked this month.
+          </p>
+        ) : (
+          busyDays.map((d) => {
+            const dayBookings = byDay.get(d) ?? [];
+            const isToday = d === today;
+            return (
+              <div key={d} className="border-b border-rule last:border-b-0">
+                <div className="flex items-center justify-between gap-3 bg-bone px-4 py-2">
+                  <Link
+                    href={`/bookings/spaces?view=day&date=${d}`}
+                    className={cn(
+                      "font-display text-[18px] font-black uppercase leading-none",
+                      isToday && "bg-ink px-1.5 py-1 text-white"
+                    )}
+                  >
+                    {isoDay(d)}
+                    {isToday && (
+                      <span className="ml-2 font-mono text-[10px] font-bold tracking-[0.12em] text-yellow">
+                        TODAY
+                      </span>
+                    )}
+                  </Link>
+                  {canCreate && (
+                    <Link
+                      href={`/bookings/spaces/new?date=${d}`}
+                      className="flex h-11 items-center font-mono text-[10px] font-bold uppercase tracking-[0.12em]"
+                    >
+                      + Book
+                    </Link>
+                  )}
+                </div>
+                <div className="space-y-px px-3 py-2">
+                  {dayBookings.map((b) => {
+                    const clash = clashIds.has(b.id);
+                    const color = venueColor.get(b.venue_id) ?? "#64748b";
+                    const t = timeLabel(b.start_time);
+                    return (
+                      <BookingPopover key={`${b.id}-${d}`} booking={b}>
+                        <button
+                          type="button"
+                          style={bookingBlockStyle(b.status)}
+                          className="flex min-h-11 w-full items-center gap-2 px-2 text-left text-[14px] font-normal normal-case leading-tight tracking-normal"
+                        >
+                          <span className="h-4 w-[3px] shrink-0" style={{ backgroundColor: color }} />
+                          {clash && <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />}
+                          <span className="min-w-0 flex-1 truncate">
+                            {t !== "—" && (
+                              <span className="font-mono text-[12px] font-bold tabular-nums text-[color:var(--text-tertiary)]">
+                                {t}{" "}
+                              </span>
+                            )}
+                            {b.title}
+                          </span>
+                          <span className="shrink-0 truncate text-[12px] text-[color:var(--text-secondary)]">
+                            {b.venue?.name ?? ""}
+                          </span>
+                        </button>
+                      </BookingPopover>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      <div className="hidden md:block">
       {/* Weekday header */}
       <div className="grid grid-cols-7 bg-ink">
         {WEEKDAY_HEADERS.map((wd) => (
@@ -172,6 +249,7 @@ export function BookingCalendar({
             </div>
           );
         })}
+      </div>
       </div>
     </div>
   );

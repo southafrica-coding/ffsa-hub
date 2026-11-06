@@ -36,11 +36,11 @@ export function BackButton() {
   }
 
   return (
-    <div className="mb-4">
+    <div className="px-4 pt-3 md:px-6 md:pt-6">
       <button
         type="button"
         onClick={handleBack}
-        className="text-xs text-muted-foreground hover:text-foreground uppercase"
+        className="flex min-h-11 items-center text-xs uppercase text-muted-foreground hover:text-foreground"
         style={{ letterSpacing: "0.15em" }}
       >
         ← Back

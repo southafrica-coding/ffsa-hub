@@ -266,6 +266,14 @@ export default function Wall({
 
   return (
     <div className="border border-ink bg-white">
+      <p className="border-b border-rule px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-[color:var(--text-tertiary)] md:hidden">
+        Swipe across the week. Each day is wide enough to read.
+      </p>
+      {/* On a phone the five columns used to share ~300px, so a set title
+          was a few letters. A contained sideways scroll keeps the column
+          near the width the cards were drawn for. */}
+      <div className="overflow-x-auto">
+      <div className="min-w-[760px]">
       {/* header row: gutter + five days */}
       <div className="flex border-b border-ink bg-ink">
         <div className="w-16 shrink-0 md:w-[92px]" />
@@ -514,6 +522,8 @@ export default function Wall({
             </div>
           );
         })}
+      </div>
+      </div>
       </div>
 
       {/* the vocabulary, stated — the wall is unreadable without it */}

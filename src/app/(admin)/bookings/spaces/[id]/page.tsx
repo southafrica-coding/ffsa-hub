@@ -152,7 +152,7 @@ export default async function BookingDetailPage({
         }
       />
 
-      <div className="max-w-3xl space-y-5 px-8 py-7">
+      <div className="max-w-3xl space-y-5 px-5 py-6 md:px-8 md:py-7">
       {clashes.length > 0 && !isClosed && (
         <div className="border border-destructive p-3 text-sm">
           <p className="flex items-center gap-2 font-semibold text-destructive">

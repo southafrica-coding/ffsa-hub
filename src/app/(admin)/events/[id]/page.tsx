@@ -230,7 +230,7 @@ export default async function EventDetailPage({
       />
 
       {/* Tab navigation — folder tabs on the module rule, not pills. */}
-      <div className="flex flex-wrap items-center gap-1.5 border-b border-rule bg-bone px-8 py-3">
+      <div className="flex flex-wrap items-center gap-1.5 border-b border-rule bg-bone px-5 py-3 md:px-8">
         {TABS.map((t) => (
           <Link key={t.key} href={`/events/${id}?tab=${t.key}`}>
             <Chip active={tab === t.key}>{t.label}</Chip>
@@ -238,7 +238,7 @@ export default async function EventDetailPage({
         ))}
       </div>
 
-      <div className="space-y-6 px-8 py-7">
+      <div className="space-y-6 px-5 py-6 md:px-8 md:py-7">
         {tab === "details" && (
           <DetailsTab
             event={event}

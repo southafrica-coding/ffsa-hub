@@ -126,7 +126,7 @@ export function VehiclesBoard({
       )}
 
       {/* Status filter */}
-      <div className="flex flex-wrap items-center border-b border-rule bg-bone px-8 py-3">
+      <div className="flex flex-wrap items-center border-b border-rule bg-bone px-5 py-3 md:px-8">
         {FILTERS.map((f) => (
           <Link
             key={f.key}
@@ -149,7 +149,7 @@ export function VehiclesBoard({
         </span>
       </div>
 
-      <div className="space-y-5 px-8 py-7">
+      <div className="space-y-5 px-5 py-6 md:px-8 md:py-7">
       {/* Fleet calendar — one row per vehicle, the month left to right. */}
       <FleetCalendar
         vehicles={vehicles}

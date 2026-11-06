@@ -72,7 +72,7 @@ export default async function ReturnInspectionPage({
   return (
     <div className="ffsa-screen">
       <Masthead context="Reservations" title="Return inspection" />
-      <div className="max-w-3xl space-y-5 px-8 py-7">
+      <div className="max-w-3xl space-y-5 px-5 py-6 md:px-8 md:py-7">
         <p className="text-[13px] text-[color:var(--text-secondary)]">{b.booking_name} · Sign In</p>
         <InspectionForm
           bookingId={id}

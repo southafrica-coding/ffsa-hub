@@ -97,9 +97,36 @@ export default async function FinancePage() {
     <div className="ffsa-screen">
       <Masthead context="Financial management" title="Finance" />
 
-      <div className="space-y-7 px-8 py-7">
+      <div className="space-y-7 px-5 py-6 md:px-8 md:py-7">
         <div className="border border-ink">
           <SectionBar title="Modules" meta={`${liveCount} of ${modules.length} live`} />
+          <div className="md:hidden">
+            {modules.map((mod) => {
+              const Icon = mod.icon;
+              const body = (
+                <>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="flex min-w-0 items-center gap-2.5">
+                      <Icon className="h-4 w-4 shrink-0 text-[color:var(--text-tertiary)]" />
+                      <span className="font-display text-[20px] font-black uppercase leading-none">{mod.title}</span>
+                    </span>
+                    <StatusPill tone={mod.ready ? "good" : "quiet"}>{mod.ready ? "Live" : "Soon"}</StatusPill>
+                  </div>
+                  <p className="mt-2 text-[13px] leading-snug text-[color:var(--text-secondary)]">{mod.description}</p>
+                </>
+              );
+              return mod.ready ? (
+                <Link key={mod.title} href={mod.href} className="block border-b border-rule px-4 py-4 last:border-b-0">
+                  {body}
+                </Link>
+              ) : (
+                <div key={mod.title} className="border-b border-rule px-4 py-4 opacity-55 last:border-b-0">
+                  {body}
+                </div>
+              );
+            })}
+          </div>
+          <div className="hidden md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -153,6 +180,7 @@ export default async function FinancePage() {
               })}
             </TableBody>
           </Table>
+          </div>
         </div>
 
         {/* Integrations */}

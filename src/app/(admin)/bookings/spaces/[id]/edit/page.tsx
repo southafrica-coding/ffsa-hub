@@ -53,7 +53,7 @@ export default async function EditBookingPage({
   return (
     <div className="ffsa-screen">
       <Masthead context="Venue scheduling" title="Edit booking" />
-      <div className="max-w-2xl px-8 py-7">
+      <div className="max-w-2xl px-5 py-6 md:px-8 md:py-7">
         <EditBookingForm
           booking={booking}
           venues={(venuesRes.data ?? []) as Venue[]}

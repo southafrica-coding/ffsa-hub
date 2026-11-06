@@ -275,7 +275,7 @@ export default async function VehicleBookingDetail({
         }
       />
 
-      <div className="max-w-3xl space-y-5 px-8 py-7">
+      <div className="max-w-3xl space-y-5 px-5 py-6 md:px-8 md:py-7">
       <p className="text-[13px] text-[color:var(--text-secondary)]">
         {dateRangeLabel(b.checkout_date, b.return_date)} · {days} day
         {days === 1 ? "" : "s"} · {purposeLabel(b.purpose)}

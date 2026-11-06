@@ -27,7 +27,7 @@ export function DashboardGrid({
         <button
           type="button"
           onClick={() => setCustomizing(true)}
-          className="chip transition-colors duration-150 hover:bg-bone"
+          className="chip inline-flex min-h-11 items-center transition-colors duration-150 hover:bg-bone"
         >
           <SlidersHorizontal className="h-3 w-3" />
           Customise

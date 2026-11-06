@@ -85,7 +85,7 @@ export default async function CourseDetailPage({
     <div className="ffsa-screen">
       <Masthead context={`School fees · ${program.name}`} title={course.name} />
 
-      <div className="space-y-6 px-8 py-7">
+      <div className="space-y-6 px-5 py-6 md:px-8 md:py-7">
         <CourseDetailPanel
           course={course as Parameters<typeof CourseDetailPanel>[0]["course"]}
           staff={(staff ?? []) as Parameters<typeof CourseDetailPanel>[0]["staff"]}

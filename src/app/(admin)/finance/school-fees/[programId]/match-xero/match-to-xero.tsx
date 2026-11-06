@@ -159,7 +159,7 @@ export function MatchToXero({
         <div className="border-b border-rule px-4 py-3">
           <h2 className="font-mono text-[11px] font-bold uppercase tracking-[0.14em]">How this works</h2>
         </div>
-        <ol className="list-decimal space-y-1 px-8 py-3 text-[13px]">
+        <ol className="list-decimal space-y-1 px-5 py-3 md:px-8 text-[13px]">
           <li>
             <strong>Set up billing</strong> for every student who has none, from this school&apos;s payment schedules.
             Nothing is invoiced — anything already due is held.
