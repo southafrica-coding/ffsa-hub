@@ -3,10 +3,18 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getFinanceHubAccess } from "@/lib/finance-access";
-import { Globe, Wallet, CreditCard, Home, HeartHandshake, FolderKanban } from "lucide-react";
+import { Globe, Wallet, CreditCard, Home, HeartHandshake, FolderKanban, BookOpen } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Masthead, SectionBar, StatusPill } from "@/components/ffsa";
 import { XeroConnection } from "./xero-connection";
+import { XeroSyncStatus } from "./xero-sync-status";
+import {
+  canEditFinanceProjects,
+  canReadFinanceXero,
+  listFinanceOrgs,
+  type FinanceOrg,
+} from "@/lib/finance/orgs";
+import { getXeroMirrorFreshness } from "@/lib/finance/xero-mirror-sync";
 
 const FINANCE_MODULES = [
   {
@@ -46,9 +54,16 @@ const FINANCE_MODULES = [
   },
   {
     title: "Projects",
-    description: "Each organisation's Xero Ministries options (FFSA NPC and FF USA Inc), with an optional type.",
+    description: "Each organisation's Xero Ministries options (FFSA NPC and FF USA Inc), kept in step with Xero, with an optional type.",
     href: "/finance/projects",
     icon: FolderKanban,
+    ready: true,
+  },
+  {
+    title: "Chart of Accounts",
+    description: "Each organisation's accounts exactly as Xero has them, kept in step automatically. Read-only.",
+    href: "/finance/accounts",
+    icon: BookOpen,
     ready: true,
   },
 ];
@@ -67,6 +82,16 @@ export default async function FinancePage() {
         (m) => m.href === "/finance/outreach" || (financeOffice && m.href === "/finance/donor-statements")
       );
   const liveCount = modules.filter((m) => m.ready).length;
+
+  // How current the Hub's copy of each Xero file is. Opening this page also
+  // refreshes it when it's over 5 minutes old (XeroSyncStatus).
+  const xeroMirror = fullFinance && (await canReadFinanceXero(supabase, user.id))
+    ? await Promise.all([
+        listFinanceOrgs(supabase),
+        getXeroMirrorFreshness(supabase),
+        canEditFinanceProjects(supabase, user.id),
+      ])
+    : null;
 
   return (
     <div className="ffsa-screen">
@@ -135,6 +160,13 @@ export default async function FinancePage() {
           <Suspense>
             <XeroConnection />
           </Suspense>
+        )}
+        {xeroMirror && (
+          <XeroSyncStatus
+            orgs={((xeroMirror[0].data ?? []) as FinanceOrg[]).map((o) => ({ region: o.xero_region, name: o.name }))}
+            freshness={xeroMirror[1]}
+            canSyncNow={xeroMirror[2]}
+          />
         )}
       </div>
     </div>

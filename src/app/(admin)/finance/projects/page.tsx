@@ -5,16 +5,21 @@ import { requireModuleAccess } from "@/lib/require-permission";
 import { getFinanceHubAccess } from "@/lib/finance-access";
 import {
   canEditFinanceProjects,
+  canReadFinanceXero,
   listFinanceOrgs,
   listFinanceProjects,
   type FinanceOrg,
   type FinanceProject,
 } from "@/lib/finance/orgs";
+import { getXeroMirrorFreshness } from "@/lib/finance/xero-mirror-sync";
 import { Masthead } from "@/components/ffsa";
 import { ProjectsList } from "./projects-list";
+import { XeroSyncStatus } from "../xero-sync-status";
 
-// Each org's Xero "Ministries" options (migration 290). Names come from Xero
-// and are read-only here; finance can set a Type. Nothing is deleted.
+// Each org's Xero "Ministries" options (migrations 290, 291). The list is
+// kept in step with Xero automatically: names and active/archived come from
+// Xero and are read-only here; finance can set a Type. Nothing is deleted,
+// and there is no way to add a project Xero doesn't have.
 export default async function FinanceProjectsPage() {
   const supabase = await createClient();
   const {
@@ -23,16 +28,19 @@ export default async function FinanceProjectsPage() {
   if (!user) redirect("/login");
   await requireModuleAccess(supabase, user.id, "finance");
 
-  const [{ fullFinance }, canEdit] = await Promise.all([
+  const [{ fullFinance }, canEdit, canRead] = await Promise.all([
     getFinanceHubAccess(supabase, user.id),
     canEditFinanceProjects(supabase, user.id),
+    canReadFinanceXero(supabase, user.id),
   ]);
-  if (!fullFinance && !canEdit) redirect("/finance");
+  if (!fullFinance && !canEdit && !canRead) redirect("/finance");
 
-  const [{ data: orgs }, { data: projects }] = await Promise.all([
+  const [{ data: orgs }, { data: projects }, freshness] = await Promise.all([
     listFinanceOrgs(supabase),
     listFinanceProjects(supabase),
+    getXeroMirrorFreshness(supabase),
   ]);
+  const orgList = (orgs ?? []) as FinanceOrg[];
 
   return (
     <div className="ffsa-screen">
@@ -48,8 +56,15 @@ export default async function FinanceProjectsPage() {
           </Link>
         }
       />
+      <div className="px-8 pt-7">
+        <XeroSyncStatus
+          orgs={orgList.map((o) => ({ region: o.xero_region, name: o.name }))}
+          freshness={freshness}
+          canSyncNow={canEdit}
+        />
+      </div>
       <ProjectsList
-        orgs={(orgs ?? []) as FinanceOrg[]}
+        orgs={orgList}
         projects={(projects ?? []) as FinanceProject[]}
         canEdit={canEdit}
       />

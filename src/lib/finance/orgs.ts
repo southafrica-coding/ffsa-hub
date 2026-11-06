@@ -15,7 +15,7 @@
  * finance_org_for_order().
  */
 
-import { hasAnyRole } from "@/lib/api-auth";
+import { canManageEvents, hasAnyRole } from "@/lib/api-auth";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
@@ -52,6 +52,10 @@ export type FinanceProject = {
   notes: string | null;
   is_active: boolean;
   archived_at: string | null;
+  /** The mirrored Xero option (migration 291). null = not linked to Xero yet. */
+  xero_tracking_option_id?: string | null;
+  /** The linked option's state in Xero, when listed with listFinanceProjects. */
+  xero_option?: { status: string; missing_since: string | null } | null;
 };
 
 // ────────────────────────────────────────────────────────────
@@ -130,12 +134,66 @@ export async function canEditFinanceProjects(supabase: Client, userId: string): 
   return byRole || byPermission === true;
 }
 
+/**
+ * May see what the Hub mirrors from Xero (accounts, tracking options,
+ * projects, sync runs). Mirrors the read policies in migration 275:
+ * is_admin(), finance_admin, finance.view, finance.edit or budget.view_all.
+ * Everyone else sees none of the Xero lists.
+ */
+export async function canReadFinanceXero(supabase: Client, userId: string): Promise<boolean> {
+  const [byRole, ...perms] = await Promise.all([
+    hasAnyRole(supabase, userId, ["super_admin", "admin", "finance_admin"]),
+    ...["finance.view", "finance.edit", "budget.view_all"].map((key) =>
+      supabase.rpc("has_permission", { required_permission: key })
+    ),
+  ]);
+  return byRole || perms.some((p: { data: unknown }) => p.data === true);
+}
+
+/** One org as the event form's select sees it: never accounts or projects. */
+export type FinanceOrgChoice = Pick<FinanceOrg, "id" | "key" | "name" | "record_currency" | "is_active">;
+
+/**
+ * The two orgs for the "Finance organisation" select (finance_org_choices(),
+ * migration 291). Open to event editors as well as finance; anyone else gets
+ * an empty list from the database.
+ */
+export async function listFinanceOrgChoices(supabase: Client) {
+  return supabase.rpc("finance_org_choices");
+}
+
+/**
+ * The event form's "Finance organisation" select: shown to people who can
+ * edit events (the same check PATCH /api/events/[id] makes), with just the
+ * two org names. No finance permission needed; nothing else from finance or
+ * Xero is read. Anyone else gets canPick false and no orgs.
+ */
+export async function getEventFinanceOrgPicker(
+  supabase: Client,
+  userId: string | null
+): Promise<{ canPick: boolean; orgs: FinanceOrgChoice[] }> {
+  if (!userId || !(await canManageEvents(supabase, userId))) return { canPick: false, orgs: [] };
+  const { data, error } = await listFinanceOrgChoices(supabase);
+  // Before migration 291 the function doesn't exist: no select, not an error page.
+  if (error || !Array.isArray(data)) return { canPick: false, orgs: [] };
+  return {
+    canPick: data.length > 0,
+    orgs: (data as FinanceOrgChoice[]).map(({ id, key, name, record_currency, is_active }) => ({
+      id,
+      key,
+      name,
+      record_currency,
+      is_active,
+    })),
+  };
+}
+
 // ────────────────────────────────────────────────────────────
 // Data
 // ────────────────────────────────────────────────────────────
 
 const PROJECT_COLUMNS =
-  "id, org_id, name, sort_order, project_type, linked_project_id, notes, is_active, archived_at";
+  "id, org_id, name, sort_order, project_type, linked_project_id, notes, is_active, archived_at, xero_tracking_option_id";
 
 export async function listFinanceOrgs(supabase: Client) {
   return supabase
@@ -144,11 +202,14 @@ export async function listFinanceOrgs(supabase: Client) {
     .order("key");
 }
 
-/** Every project in both orgs, archived ones included, in Xero CSV order. */
+/**
+ * Every project in both orgs, archived ones included, in list order, with the
+ * linked Xero option's state (archived / missing in Xero).
+ */
 export async function listFinanceProjects(supabase: Client) {
   return supabase
     .from("finance_projects")
-    .select(PROJECT_COLUMNS)
+    .select(`${PROJECT_COLUMNS}, xero_option:xero_tracking_options(status, missing_since)`)
     .order("sort_order", { ascending: true, nullsFirst: false })
     .order("name");
 }

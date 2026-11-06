@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -14,6 +14,17 @@ import {
   type FinanceProjectType,
 } from "@/lib/finance/orgs";
 
+/** Where a project stands against Xero. Names and status come from Xero. */
+function xeroState(p: FinanceProject): { tone: "good" | "warn" | "quiet" | "bad"; label: string } {
+  if (!p.is_active) {
+    if (p.xero_option?.missing_since) return { tone: "quiet", label: "Gone from Xero" };
+    if (p.xero_option?.status === "archived") return { tone: "quiet", label: "Archived in Xero" };
+    return { tone: "quiet", label: p.xero_tracking_option_id ? "Archived" : "Not in Xero" };
+  }
+  if (p.xero_tracking_option_id) return { tone: "good", label: "From Xero" };
+  return { tone: "warn", label: "Not linked yet" };
+}
+
 export function ProjectsList({
   orgs,
   projects,
@@ -24,6 +35,8 @@ export function ProjectsList({
   canEdit: boolean;
 }) {
   const [rows, setRows] = useState(projects);
+  // A background Xero sync refreshes the page; take the new list.
+  useEffect(() => setRows(projects), [projects]);
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState<string | null>(null);
 
@@ -76,12 +89,13 @@ export function ProjectsList({
                   <TableHead>Project (Xero {org.projects_category_name})</TableHead>
                   <TableHead className="w-[180px]">Type</TableHead>
                   <TableHead className="w-[220px]">Linked in other org</TableHead>
-                  <TableHead className="w-[110px]">State</TableHead>
+                  <TableHead className="w-[150px]">In Xero</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {shown.map((p) => {
                   const linked = p.linked_project_id ? byId.get(p.linked_project_id) : null;
+                  const state = xeroState(p);
                   return (
                     <TableRow key={p.id}>
                       <TableCell className="text-sm">{p.name}</TableCell>
@@ -105,9 +119,7 @@ export function ProjectsList({
                         {linked ? linked.name : "—"}
                       </TableCell>
                       <TableCell>
-                        <StatusPill tone={p.is_active ? "good" : "quiet"}>
-                          {p.is_active ? "Active" : "Archived"}
-                        </StatusPill>
+                        <StatusPill tone={state.tone}>{state.label}</StatusPill>
                       </TableCell>
                     </TableRow>
                   );
@@ -115,7 +127,9 @@ export function ProjectsList({
                 {shown.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={4} className="text-sm text-[color:var(--text-secondary)]">
-                      {all.length === 0 ? "No projects yet." : "No project matches that search."}
+                      {all.length === 0
+                        ? "No projects yet. They appear here once Xero has been read."
+                        : "No project matches that search."}
                     </TableCell>
                   </TableRow>
                 )}
