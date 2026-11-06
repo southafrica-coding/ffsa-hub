@@ -9,9 +9,15 @@ import { getLearningCourse } from "@/services/learning-courses";
 // PUT /api/schools/programs/:programId/learning-courses/:courseId/outline
 //   { design }  or  { template_id }
 //
+// Staff classroom route. guardProgram (userCanManageProgram) is required.
+// A student gets 403 and does not receive the design. A school leader who
+// is also enrolled may use this route. There is no student outline route;
+// student-facing content, if it is added later, must be a separate path
+// and must not return this staff design.
+//
 // Saves the design onto this course. Copying a template copies the document;
 // later edits to the template do not rewrite the course. Table course_outlines
-// is proposed — 503 until Hub Data applies it.
+// is proposed — 503 until it exists.
 
 type Ctx = { params: Promise<{ programId: string; courseId: string }> };
 

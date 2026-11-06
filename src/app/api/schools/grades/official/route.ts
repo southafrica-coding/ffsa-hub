@@ -3,7 +3,7 @@ import { userCanManageProgram } from "@/lib/auth/check-schools-access";
 import { guardUser, isGuard } from "@/lib/schools/lms-guard";
 import { dbError, isUuid, json, previewWritesDisabled } from "@/lib/schools/lms-http";
 import { enrollmentIsClosed } from "@/lib/schools/learning-course";
-import { assignmentCovers, isLetterGrade, type GraderAssignment } from "@/lib/schools/multi-grader";
+import { graderCapability, isLetterGrade, type GraderAssignment } from "@/lib/schools/multi-grader";
 import { listGraderRowsForUser } from "@/services/course-graders";
 import { getLearningCourse, postOfficialGrade } from "@/services/learning-courses";
 
@@ -66,11 +66,15 @@ export async function POST(request: Request) {
   const manager = await userCanManageProgram(guard.supabase, guard.user.id, enrollment.program_id);
   if (!manager) {
     const rows = await listGraderRowsForUser(admin, enrollment.program_id, guard.user.id);
-    const assignments = ((rows.data ?? []) as GraderAssignment[]).filter(
-      (row) => row.can_post_official && assignmentCovers(row, { enrollmentId, courseId })
-    );
-    // Missing grader table, or no official-poster row: not a manager, so no.
-    if (rows.error || assignments.length === 0) {
+    const assignments = (rows.data ?? []) as GraderAssignment[];
+    const capability = graderCapability({
+      manager: false,
+      assignments,
+      enrollmentId,
+      courseId,
+    });
+    // Missing grader table, or can_post_official is false: not a manager, so no.
+    if (rows.error || !capability.can_post_official) {
       return json({ error: "forbidden", message: "You cannot post the official grade." }, 403);
     }
   }

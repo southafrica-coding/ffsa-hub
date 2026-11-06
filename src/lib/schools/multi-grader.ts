@@ -91,6 +91,34 @@ export type GraderAssignment = {
   can_post_official?: boolean;
 };
 
+/**
+ * Flags the marks UI reads. School managers may post the official letter and
+ * read every grader's notes. An assigned grader may post the official letter
+ * only when a covering row says so, and never sees another grader's notes.
+ * Letter visibility is unchanged.
+ */
+export function graderCapability(input: {
+  manager: boolean;
+  assignments: GraderAssignment[];
+  enrollmentId: string;
+  courseId: string;
+}): { can_post_official: boolean; can_see_other_graders_notes: boolean } {
+  const canPost =
+    input.manager ||
+    input.assignments.some(
+      (row) =>
+        row.can_post_official === true &&
+        assignmentCovers(row, {
+          enrollmentId: input.enrollmentId,
+          courseId: input.courseId,
+        })
+    );
+  return {
+    can_post_official: canPost,
+    can_see_other_graders_notes: input.manager,
+  };
+}
+
 /** A row covers this student and course when its course/enrolment is null (wider) or equal. */
 export function assignmentCovers(
   row: GraderAssignment,

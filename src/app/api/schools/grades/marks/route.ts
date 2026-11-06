@@ -3,7 +3,7 @@ import { userCanManageProgram } from "@/lib/auth/check-schools-access";
 import { guardUser, isGuard } from "@/lib/schools/lms-guard";
 import { dbError, isLmsSchemaMissing, isUuid, json, lmsSchemaNotApplied, previewWritesDisabled } from "@/lib/schools/lms-http";
 import { enrollmentIsClosed } from "@/lib/schools/learning-course";
-import { assignmentCovers, combineLetterGrades, isLetterGrade, type GraderAssignment } from "@/lib/schools/multi-grader";
+import { assignmentCovers, combineLetterGrades, graderCapability, isLetterGrade, type GraderAssignment } from "@/lib/schools/multi-grader";
 import { listCourseGraders, listGradeMarks, listGraderRowsForUser, upsertGradeMark } from "@/services/course-graders";
 import { getLearningCourse } from "@/services/learning-courses";
 
@@ -40,14 +40,25 @@ export async function GET(request: Request) {
     return dbError(marks.error, "Couldn't load marks.");
   }
   const rows = (marks.data ?? []) as Array<{ grader_user_id: string; letter_grade: string; notes: string | null }>;
+  const capability = graderCapability({
+    manager: scope.manager,
+    assignments: scope.assignments,
+    enrollmentId,
+    courseId,
+  });
   const visible = rows.map((row) => ({
     ...row,
-    notes: scope.manager || row.grader_user_id === guard.user.id ? row.notes : null,
+    notes: capability.can_see_other_graders_notes || row.grader_user_id === guard.user.id ? row.notes : null,
   }));
 
   const assigned = scope.manager ? await assignedIds(admin, scope.programId, courseId, enrollmentId) : scope.assignments;
   const slots = combineSlots(assigned, rows);
-  return json({ marks: visible, combined: combineLetterGrades(slots) });
+  return json({
+    marks: visible,
+    combined: combineLetterGrades(slots),
+    can_post_official: capability.can_post_official,
+    can_see_other_graders_notes: capability.can_see_other_graders_notes,
+  });
 }
 
 export async function POST(request: Request) {
@@ -93,7 +104,17 @@ export async function POST(request: Request) {
     if (isLmsSchemaMissing(saved.error)) return lmsSchemaNotApplied("Grade marks");
     return dbError(saved.error, "Couldn't save the mark.");
   }
-  return json({ mark: saved.data });
+  const capability = graderCapability({
+    manager: scope.manager,
+    assignments: scope.assignments,
+    enrollmentId,
+    courseId,
+  });
+  return json({
+    mark: saved.data,
+    can_post_official: capability.can_post_official,
+    can_see_other_graders_notes: capability.can_see_other_graders_notes,
+  });
 }
 
 type Scope =

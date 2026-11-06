@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assignmentCovers, combineLetterGrades, nearestLetter } from "./multi-grader";
+import { assignmentCovers, combineLetterGrades, graderCapability, nearestLetter } from "./multi-grader";
 
 describe("combineLetterGrades", () => {
   it("waits until every assigned grader has marked", () => {
@@ -14,6 +14,30 @@ describe("combineLetterGrades", () => {
     expect(combineLetterGrades(["A", "B"]).letter).toBe("A-");
     expect(nearestLetter(3.85)).toBe("A");
     expect(combineLetterGrades(["A-", "B+"]).letter).toBe("A-");
+  });
+});
+
+describe("graderCapability", () => {
+  const target = { enrollmentId: "e1", courseId: "c1" };
+  it("lets a school manager post and read other notes, and a grader only their own notes", () => {
+    expect(graderCapability({ manager: true, assignments: [], ...target })).toEqual({
+      can_post_official: true,
+      can_see_other_graders_notes: true,
+    });
+    expect(
+      graderCapability({
+        manager: false,
+        assignments: [{ grader_user_id: "g", billing_course_id: "c1", enrollment_id: null, can_post_official: true }],
+        ...target,
+      })
+    ).toEqual({ can_post_official: true, can_see_other_graders_notes: false });
+    expect(
+      graderCapability({
+        manager: false,
+        assignments: [{ grader_user_id: "g", billing_course_id: "c1", enrollment_id: null, can_post_official: false }],
+        ...target,
+      }).can_post_official
+    ).toBe(false);
   });
 });
 
