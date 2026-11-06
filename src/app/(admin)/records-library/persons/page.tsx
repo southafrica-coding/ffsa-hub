@@ -126,9 +126,9 @@ export default async function LibraryPersonsPage({
                     </td>
                     <td data-label="Email" className="px-3 py-2 text-muted-foreground">{p.email ?? "—"}</td>
                     <td data-label="Phone" className="px-3 py-2 text-muted-foreground">{p.phone ?? "—"}</td>
-                    <td className="px-3 py-2 text-muted-foreground">{p.date_of_birth ?? "—"}</td>
-                    <td className="px-3 py-2 text-muted-foreground">{p.country ?? "—"}</td>
-                    <td className="px-3 py-2 text-muted-foreground">
+                    <td data-label="DOB" className="px-3 py-2 text-muted-foreground">{p.date_of_birth ?? "—"}</td>
+                    <td data-label="Country" className="px-3 py-2 text-muted-foreground">{p.country ?? "—"}</td>
+                    <td data-label="Source" className="px-3 py-2 text-muted-foreground">
                       {p.source_import?.filename ? (
                         <Link
                           href={`/records-library/imports/${p.source_import.id}`}
@@ -140,7 +140,7 @@ export default async function LibraryPersonsPage({
                         "—"
                       )}
                     </td>
-                    <td className="px-3 py-2">
+                    <td data-label="Linked user" className="px-3 py-2">
                       {linkedName ? (
                         <Link
                           href={`/users/${p.users!.id}`}
@@ -152,7 +152,7 @@ export default async function LibraryPersonsPage({
                         <span className="text-muted-foreground">Unlinked</span>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-muted-foreground">
+                    <td data-label="Added" className="px-3 py-2 text-muted-foreground">
                       {new Date(p.created_at).toLocaleDateString()}
                     </td>
                   </tr>

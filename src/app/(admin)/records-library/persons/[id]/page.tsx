@@ -1,3 +1,4 @@
+import { Children, cloneElement, isValidElement, type ReactNode } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import { requireModuleAccess } from "@/lib/require-permission";
@@ -239,10 +240,26 @@ function Table({
             ))}
           </tr>
         </thead>
-        <tbody>{children}</tbody>
+        <tbody>{stampFieldLabels(headers, children)}</tbody>
       </table>
     </div>
   );
+}
+
+type FieldCell = { children?: ReactNode; "data-label"?: string };
+
+/** Phone rows read `data-label`. Detail tables name each cell from its column. */
+function stampFieldLabels(headers: string[], children: ReactNode) {
+  return Children.map(children, (row) => {
+    if (!isValidElement<FieldCell>(row)) return row;
+    const cells = Children.map(row.props.children, (cell, i) => {
+      if (!isValidElement<FieldCell>(cell)) return cell;
+      const label = headers[i];
+      if (!label || cell.props["data-label"]) return cell;
+      return cloneElement(cell, { "data-label": label });
+    });
+    return cloneElement(row, undefined, cells);
+  });
 }
 
 function Stat({ label, value }: { label: string; value: number }) {

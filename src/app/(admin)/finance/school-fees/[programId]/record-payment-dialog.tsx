@@ -153,7 +153,7 @@ export function RecordPaymentDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" variant="outline" onClick={(e) => e.stopPropagation()}>
+        <Button size="sm" variant="outline" className="h-11 md:h-8" onClick={(e) => e.stopPropagation()}>
           <DollarSign className="mr-1 h-3 w-3" />
           Pay
         </Button>

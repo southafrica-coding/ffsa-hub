@@ -825,7 +825,7 @@ export function OrgCanvas({
         </div>
         <div className="flex flex-wrap items-center gap-2.5 lg:gap-3.5">
           <div className="relative w-full sm:w-[250px]">
-            <div className="flex h-11 items-center gap-2.5 border bg-[color:var(--org-surface)] px-3 lg:h-10" style={{ borderColor: T.btnBorder }}>
+            <div className="flex h-11 items-center gap-2.5 border bg-[color:var(--org-surface)] px-3 focus-within:border-[color:var(--org-yellow)] focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[color:var(--org-yellow)] lg:h-10" style={{ borderColor: T.btnBorder }}>
               <Search size={14} color={T.mono} />
               <input
                 value={query}
