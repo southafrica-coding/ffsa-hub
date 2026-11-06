@@ -12,6 +12,12 @@ export function useGraderCandidates(programId: string): {
 } {
   const [people, setPeople] = useState<GraderCandidate[]>([]);
   const [note, setNote] = useState<string | null>(null);
+  const [boundProgram, setBoundProgram] = useState(programId);
+  if (boundProgram !== programId) {
+    setBoundProgram(programId);
+    setPeople([]);
+    setNote(null);
+  }
 
   useEffect(() => {
     let cancelled = false;

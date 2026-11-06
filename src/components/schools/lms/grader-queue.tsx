@@ -41,6 +41,12 @@ function personName(person: GraderCandidate | undefined) {
   return candidateName(person);
 }
 
+function lettersFrom(official: Official[]): Record<string, string | null> {
+  const map: Record<string, string | null> = {};
+  for (const row of official) map[`${row.enrollmentId}:${row.courseId}`] = row.letter;
+  return map;
+}
+
 export function GraderQueue({
   programId,
   viewerId,
@@ -66,11 +72,14 @@ export function GraderQueue({
   const letterContext = `${programId}:${studentKey}`;
   const letterContextRef = useRef(letterContext);
   letterContextRef.current = letterContext;
-  const [letters, setLetters] = useState<Record<string, string | null>>(() => {
-    const map: Record<string, string | null> = {};
-    for (const row of official) map[`${row.enrollmentId}:${row.courseId}`] = row.letter;
-    return map;
-  });
+  const [boundContext, setBoundContext] = useState(letterContext);
+  const [letters, setLetters] = useState<Record<string, string | null>>(() => lettersFrom(official));
+  if (boundContext !== letterContext) {
+    setBoundContext(letterContext);
+    setCanSeeLetters(false);
+    setOpen(null);
+    setLetters(lettersFrom(official));
+  }
 
   const { people, note: candidateNote } = useGraderCandidates(programId);
   const byId = useMemo(() => new Map(people.map((person) => [person.id, person])), [people]);

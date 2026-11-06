@@ -28,7 +28,7 @@ export default async function GradingPage({ params }: { params: Promise<{ progra
           {open === 1 ? "1 official letter is still open." : `${open} official letters are still open.`}
         </NeedsYou>
       ) : null}
-      <GraderQueue programId={programId} viewerId={userId} students={students} official={official} />
+      <GraderQueue key={programId} programId={programId} viewerId={userId} students={students} official={official} />
     </div>
   );
 }
