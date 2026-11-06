@@ -1991,6 +1991,7 @@ export type Database = {
           source: string | null
           updated_at: string
           updated_by: string | null
+          xero_tracking_option_id: string | null
         }
         Insert: {
           archived_at?: string | null
@@ -2006,6 +2007,7 @@ export type Database = {
           source?: string | null
           updated_at?: string
           updated_by?: string | null
+          xero_tracking_option_id?: string | null
         }
         Update: {
           archived_at?: string | null
@@ -2021,6 +2023,7 @@ export type Database = {
           source?: string | null
           updated_at?: string
           updated_by?: string | null
+          xero_tracking_option_id?: string | null
         }
         Relationships: [
           {
@@ -2042,6 +2045,13 @@ export type Database = {
             columns: ["updated_by"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_projects_xero_tracking_option_id_fkey"
+            columns: ["xero_tracking_option_id"]
+            isOneToOne: false
+            referencedRelation: "xero_tracking_options"
             referencedColumns: ["id"]
           },
         ]
@@ -5637,6 +5647,16 @@ export type Database = {
       }
     }
     Functions: {
+      finance_org_choices: {
+        Args: never
+        Returns: {
+          id: string
+          is_active: boolean
+          key: string
+          name: string
+          record_currency: string
+        }[]
+      }
       finance_org_for_order: {
         Args: { p_order_id: string }
         Returns: string | null
