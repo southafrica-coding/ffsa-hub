@@ -69,9 +69,26 @@ function campaignLabels(c: Campaign): CampaignLabel[] {
     .filter((l): l is CampaignLabel => !!l);
 }
 
+// Same clock as the composer banner (formatSast in campaign-composer.tsx):
+// Africa/Johannesburg, labelled SAST, so a laptop in another zone cannot
+// show a different send time from the one the composer promised.
+function formatScheduledSast(when: Date): string {
+  return `${when.toLocaleString("en-ZA", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Africa/Johannesburg",
+  })} SAST`;
+}
+
 function campaignWhen(c: Campaign): string {
   if (c.sent_at) return `Sent ${new Date(c.sent_at).toLocaleString()}`;
-  if (c.scheduled_at) return `Scheduled ${new Date(c.scheduled_at).toLocaleString()}`;
+  if (c.scheduled_at) {
+    const when = new Date(c.scheduled_at);
+    if (!Number.isNaN(when.getTime())) return `Scheduled ${formatScheduledSast(when)}`;
+  }
   return "—";
 }
 
