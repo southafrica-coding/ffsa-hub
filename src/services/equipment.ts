@@ -703,6 +703,24 @@ export async function deleteProductPhoto(supabase: Client, id: string) {
   return supabase.from("equipment_product_photos").delete().eq("id", id).select().maybeSingle();
 }
 
+export async function getProductPhoto(supabase: Client, id: string) {
+  return supabase.from("equipment_product_photos").select("*").eq("id", id).maybeSingle();
+}
+
+/**
+ * Point one photo row at a new file. sort_order is left as it is.
+ * alt is written only when the caller collected a new one.
+ */
+export async function updateProductPhoto(
+  supabase: Client,
+  id: string,
+  data: { file_path: string; alt?: string | null }
+) {
+  const patch: { file_path: string; alt?: string | null } = { file_path: data.file_path };
+  if (data.alt !== undefined) patch.alt = data.alt;
+  return supabase.from("equipment_product_photos").update(patch).eq("id", id).select().maybeSingle();
+}
+
 /** Free count and stock for every listed product over [from, to] (migration 257). */
 export async function listedAvailability(
   supabase: Client,
