@@ -76,7 +76,7 @@ export type RepaymentLogRow = {
   line_id: string | null;
   hub_user_id: string | null;
   slack_user_id: string;
-  /** #513 unique confirm key. A Slack message ts, or a receipt draft id when the click has no ts. */
+  /** #513 NOT NULL unique key: the Slack confirm card's message.ts. */
   slack_message_ts: string;
   team_id: string | null;
   amount_cents: number;
@@ -86,20 +86,14 @@ export type RepaymentLogRow = {
 };
 
 /**
- * Confirm identity for budget_repayments.slack_message_ts.
- * The card's message ts wins. A receipt draft id is the token only when
- * the click has no ts. Same token is the same confirm. A new card is a new ts,
- * so two repayments can share amount and description.
+ * slack_message_ts for budget_repayments. #513 requires the confirm card's
+ * message.ts (NOT NULL, unique). A draft id is not that key. A blank ts
+ * means no row: an insert without it fails.
  */
-export function repaymentIdempotencyToken(args: {
-  messageTs?: string | null;
-  receiptDraftId?: string | null;
-}): string | null {
-  const ts = args.messageTs?.trim() ?? "";
-  if (ts.length >= 1 && ts.length <= 64) return ts;
-  const draft = args.receiptDraftId?.trim() ?? "";
-  if (draft.length >= 1 && draft.length <= 64) return draft;
-  return null;
+export function repaymentMessageTs(messageTs: string | null | undefined): string | null {
+  const ts = messageTs?.trim() ?? "";
+  if (ts.length < 1 || ts.length > 64) return null;
+  return ts;
 }
 
 export function repaymentLogRow(args: {
@@ -115,22 +109,21 @@ export function repaymentLogRow(args: {
   budgetCurrency: BudgetCurrency | null;
   description: string;
   confirmedAt: string;
-  /** Slack message ts, or a receipt draft id. Required. Not a currency and not a description. */
-  idempotencyToken: string | null;
+  /** Confirm card message.ts. Required on every insert. */
+  slackMessageTs: string | null;
 }): RepaymentLogRow | null {
   if (!args.budgetId || !args.budgetCurrency) return null;
   if (args.amountCurrency.toUpperCase() !== args.budgetCurrency) return null;
   const description = args.description.trim();
-  const token = args.idempotencyToken?.trim() ?? "";
-  if (!description || !args.slackUserId) return null;
-  if (token.length < 1 || token.length > 64) return null;
+  const slackMessageTs = repaymentMessageTs(args.slackMessageTs);
+  if (!description || !args.slackUserId || !slackMessageTs) return null;
   if (!Number.isInteger(args.amountCents) || args.amountCents <= 0) return null;
   return {
     budget_id: args.budgetId,
     line_id: args.lineId,
     hub_user_id: args.hubUserId,
     slack_user_id: args.slackUserId,
-    slack_message_ts: token,
+    slack_message_ts: slackMessageTs,
     team_id: args.teamId,
     amount_cents: args.amountCents,
     description: description.slice(0, 500),

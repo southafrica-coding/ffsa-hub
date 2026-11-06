@@ -72,18 +72,16 @@ export function repaymentSentence(claim: SpendClaim | null, teamName: string | n
   return `No receipt, so you repay *${money}* for ${claim.description}.${where} It is not sent to Xero.`;
 }
 
-/** Button value: cents, currency, team id or "-", claimant Slack id, draft id or "-", description. Slack's limit is 2000. */
+/** Button value: cents, currency, team id or "-", claimant Slack id, description. Slack's limit is 2000. */
 export function repayValue(args: {
   amountCents: number;
   currency: string;
   teamId: string | null;
   claimantSlackId: string;
   description: string;
-  receiptDraftId?: string | null;
 }): string {
   const desc = args.description.replace(/\|/g, " ").slice(0, 80);
-  const draft = args.receiptDraftId?.trim() || "-";
-  return `${args.amountCents}|${args.currency}|${args.teamId ?? "-"}|${args.claimantSlackId}|${draft}|${desc}`;
+  return `${args.amountCents}|${args.currency}|${args.teamId ?? "-"}|${args.claimantSlackId}|${desc}`;
 }
 
 export function parseRepayValue(value: string | undefined): {
@@ -91,23 +89,20 @@ export function parseRepayValue(value: string | undefined): {
   currency: string;
   teamId: string | null;
   claimantSlackId: string;
-  receiptDraftId: string | null;
   description: string;
 } | null {
-  const [centsRaw, currency, team, claimant, draft, ...rest] = (value ?? "").split("|");
+  const [centsRaw, currency, team, claimant, ...rest] = (value ?? "").split("|");
   const amountCents = Number(centsRaw);
   if (!Number.isInteger(amountCents) || amountCents <= 0) return null;
   if (!currency || !/^[A-Z]{3}$/.test(currency)) return null;
   if (!claimant || !/^U[A-Z0-9]+$/.test(claimant)) return null;
   const description = rest.join("|").trim();
   if (!description) return null;
-  const receiptDraftId = draft && draft !== "-" ? draft.slice(0, 64) : null;
   return {
     amountCents,
     currency,
     teamId: team && team !== "-" ? team : null,
     claimantSlackId: claimant,
-    receiptDraftId,
     description: description.slice(0, 80),
   };
 }

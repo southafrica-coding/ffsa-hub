@@ -5,7 +5,7 @@
  */
 
 import { isMissingRelation } from "@/lib/finance/budget-actuals";
-import { repaymentIdempotencyToken, repaymentLogRow } from "@/lib/finance/budget-log-rows";
+import { repaymentLogRow, repaymentMessageTs } from "@/lib/finance/budget-log-rows";
 import { sastDate } from "@/lib/slack/assistant/outreach";
 import { parseRepayValue } from "./no-receipt";
 import { budgetForSlip } from "./receipts";
@@ -54,15 +54,12 @@ export async function confirmRepayment(
     expenseDate: sastDate(new Date()),
     nameHint: claim.description,
   });
-  // The confirm token is the card's message ts, or the draft id when the click has no ts.
-  // Description, amount, and reason are not the key: two real purchases can share them.
-  const token = repaymentIdempotencyToken({
-    messageTs: source?.messageTs,
-    receiptDraftId: claim.receiptDraftId,
-  });
-  if (!token) {
+  // #513: slack_message_ts is NOT NULL and unique. It is the confirm card's message.ts.
+  // A draft id is not a substitute. Description is not the unique key.
+  const messageTs = repaymentMessageTs(source?.messageTs);
+  if (!messageTs) {
     return {
-      text: `You repay ${money} for ${claim.description}. It's noted here in Slack. I couldn't tie it to this confirm, so it isn't saved on the budget. Nothing was sent to Xero.`,
+      text: `You repay ${money} for ${claim.description}. It's noted here in Slack. I couldn't read this confirm, so it isn't saved on the budget. Nothing was sent to Xero.`,
     };
   }
   const row = repaymentLogRow({
@@ -76,7 +73,7 @@ export async function confirmRepayment(
     budgetCurrency: budget?.currency ?? null,
     description: claim.description,
     confirmedAt: new Date().toISOString(),
-    idempotencyToken: token,
+    slackMessageTs: messageTs,
   });
   if (!row) {
     return {

@@ -67,18 +67,8 @@ describe("repayment card", () => {
       currency: "ZAR",
       teamId: "team-1",
       claimantSlackId: "U123",
-      receiptDraftId: null,
       description: "for a taxi",
     });
-    const withDraft = repayValue({
-      amountCents: 18000,
-      currency: "ZAR",
-      teamId: "team-1",
-      claimantSlackId: "U123",
-      description: "for a taxi",
-      receiptDraftId: "8b1d6c3a-1f2e-4a5b-9c8d-0e1f2a3b4c5d",
-    });
-    expect(parseRepayValue(withDraft)?.receiptDraftId).toBe("8b1d6c3a-1f2e-4a5b-9c8d-0e1f2a3b4c5d");
   });
 
   it("asks for an amount instead of confirming a blank one", () => {

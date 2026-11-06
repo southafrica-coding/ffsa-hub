@@ -130,6 +130,7 @@ export async function POST(request: Request) {
       const reply = ephemeral(payload.response_url);
       after(async () => {
         try {
+          // Card message.ts only. action_ts changes on every tap and is not the key.
           const result = await confirmRepayment(createAdminClient(), slackUserId, action.value, {
             messageTs: payload.message?.ts ?? payload.container?.message_ts ?? null,
           });

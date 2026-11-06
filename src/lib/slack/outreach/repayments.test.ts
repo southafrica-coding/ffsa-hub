@@ -58,8 +58,7 @@ function adminFake() {
   };
 }
 
-const VALUE = "18000|ZAR|team-1|U123|-|for a taxi";
-const DRAFT = "8b1d6c3a-1f2e-4a5b-9c8d-0e1f2a3b4c5d";
+const VALUE = "18000|ZAR|team-1|U123|for a taxi";
 
 describe("confirmRepayment", () => {
   beforeEach(() => {
@@ -81,6 +80,7 @@ describe("confirmRepayment", () => {
     expect(first.text).toMatch(/noted on the budget/);
     expect(repeat.text).toMatch(/already noted/);
     expect(second.text).toMatch(/noted on the budget/);
+    expect(admin.inserts.every((row) => typeof row.slack_message_ts === "string" && row.slack_message_ts.length > 0)).toBe(true);
     expect(admin.rows.map((row) => row.slack_message_ts)).toEqual(["1710000000.000100", "1710000000.000200"]);
     expect(admin.rows[0]).toMatchObject({
       budget_id: "b1",
@@ -94,14 +94,13 @@ describe("confirmRepayment", () => {
     expect(admin.lookups.some((lookup) => lookup.slack_message_ts === "1710000000.000100")).toBe(true);
   });
 
-  it("uses the receipt draft id when the click has no message ts", async () => {
+  it("does not insert when the confirm card has no message.ts", async () => {
     const admin = adminFake();
-    const value = `18000|ZAR|team-1|U123|${DRAFT}|for a taxi`;
-    await confirmRepayment(admin, "U123", value, { messageTs: null });
-    const repeat = await confirmRepayment(admin, "U123", value, {});
-    expect(repeat.text).toMatch(/already noted/);
-    expect(admin.rows).toHaveLength(1);
-    expect(admin.rows[0]?.slack_message_ts).toBe(DRAFT);
+    const missing = await confirmRepayment(admin, "U123", VALUE, { messageTs: null });
+    const blank = await confirmRepayment(admin, "U123", VALUE, { messageTs: "  " });
+    expect(missing.text).toMatch(/isn't saved on the budget/);
+    expect(blank.text).toMatch(/isn't saved on the budget/);
+    expect(admin.inserts).toHaveLength(0);
   });
 
   it("treats a unique collision on the same token as a no-op", async () => {
@@ -112,10 +111,4 @@ describe("confirmRepayment", () => {
     expect(admin.rows).toHaveLength(0);
   });
 
-  it("does not insert when the confirm has neither ts nor draft id", async () => {
-    const admin = adminFake();
-    const result = await confirmRepayment(admin, "U123", VALUE);
-    expect(result.text).toMatch(/isn't saved on the budget/);
-    expect(admin.inserts).toHaveLength(0);
-  });
 });
