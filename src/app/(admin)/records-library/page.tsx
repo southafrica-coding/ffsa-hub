@@ -99,7 +99,7 @@ export default async function RecordsLibraryPage() {
           <p className="text-sm text-muted-foreground">No imports yet. Upload your first CSV to begin.</p>
         ) : (
           <div className="overflow-x-auto border rounded-md">
-            <table className="min-w-full text-sm">
+            <table className="phone-stack min-w-full text-sm">
               <thead className="bg-muted/50 text-foreground">
                 <tr>
                   <th className="text-left px-3 py-2 font-medium">File</th>
@@ -154,7 +154,7 @@ export default async function RecordsLibraryPage() {
           <p className="text-sm text-muted-foreground">No library persons yet.</p>
         ) : (
           <div className="overflow-x-auto border rounded-md">
-            <table className="min-w-full text-sm">
+            <table className="phone-stack min-w-full text-sm">
               <thead className="bg-muted/50 text-foreground">
                 <tr>
                   <th className="text-left px-3 py-2 font-medium">Name</th>

@@ -211,7 +211,7 @@ function Table({
 }) {
   return (
     <div className="overflow-x-auto border rounded-md">
-      <table className="min-w-full text-sm">
+      <table className="phone-stack min-w-full text-sm">
         <thead className="bg-muted/50 text-foreground">
           <tr>
             {headers.map((h) => (

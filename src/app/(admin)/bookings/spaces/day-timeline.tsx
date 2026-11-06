@@ -127,9 +127,41 @@ export function DayTimeline({
   for (let m = minOf; m < maxOf; m += 30) slots.push(m);
 
   return (
-    // Wider than a narrow viewport by design; it scrolls inside itself rather
-    // than pushing the page sideways.
-    <div className="overflow-x-auto">
+    <div>
+      <div className="border border-ink md:hidden">
+        {resources.map((res) => (
+          <section key={res.key} className="border-b border-rule last:border-b-0">
+            <div className="flex items-start gap-2 bg-bone px-4 py-3">
+              <span className="mt-1 h-2.5 w-2.5 shrink-0" style={{ backgroundColor: res.color }} />
+              <div className="min-w-0">
+                <div className="text-[15px] font-bold leading-snug">{res.name}</div>
+                {res.meta && <div className="mt-0.5 text-[12px] text-[color:var(--text-secondary)]">{res.meta}</div>}
+                {res.byApproval && <div className="mono-label mt-1">By approval</div>}
+              </div>
+            </div>
+            {res.items.length === 0 ? (
+              <p className="px-4 py-3 text-[13px] text-[color:var(--text-tertiary)]">
+                {res.byApproval ? "Free · a request goes to a booking manager" : "Free"}
+              </p>
+            ) : (
+              res.items.map((item) => (
+                <Link
+                  key={item.id}
+                  href={item.href}
+                  className="flex min-h-11 items-center gap-2 border-t border-rule px-4 py-2"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[14px] font-bold leading-snug">{item.title}</span>
+                    <span className="font-mono text-[11px] text-[color:var(--text-secondary)]">{item.timeLabel}</span>
+                  </span>
+                  <span className="mono-label shrink-0">{item.status}</span>
+                </Link>
+              ))
+            )}
+          </section>
+        ))}
+      </div>
+    <div className="hidden overflow-x-auto md:block">
       <div className="min-w-[720px]">
         {/* Black hour header */}
         <div className="flex bg-ink">
@@ -309,6 +341,7 @@ export function DayTimeline({
           );
         })}
       </div>
+    </div>
     </div>
   );
 }

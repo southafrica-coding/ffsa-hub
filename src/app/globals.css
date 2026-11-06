@@ -547,6 +547,41 @@
     letter-spacing: -0.01em; color: var(--text-primary); font-variant-numeric: tabular-nums;
   }
 
+  /* Wide tables become a stack of labeled rows on a phone. Put `phone-stack`
+     on the <table>. Direct cells only, so a table nested in an expanded row
+     keeps its own layout. A cell with `hidden` stays hidden. */
+  @media (max-width: 767px) {
+    table.phone-stack > thead { display: none; }
+    table.phone-stack,
+    table.phone-stack > tbody,
+    table.phone-stack > tbody > tr,
+    table.phone-stack > tbody > tr > td {
+      display: block;
+      width: auto;
+      max-width: 100%;
+      white-space: normal !important;
+    }
+    table.phone-stack > tbody > tr {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--surface-4);
+    }
+    table.phone-stack > tbody > tr > td {
+      padding: 4px 0 !important;
+      text-align: left !important;
+    }
+    table.phone-stack > tbody > tr > td[data-label]::before {
+      content: attr(data-label);
+      display: block;
+      font-family: var(--font-mono-brand);
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--text-tertiary);
+    }
+    table.phone-stack > tbody > tr > td.hidden { display: none; }
+  }
+
   /* KPI strip cell */
   .kpi { padding: 16px 14px 14px; border-right: 1px solid var(--rule); }
   @media (min-width: 768px) { .kpi { padding: 20px 24px 18px; } }

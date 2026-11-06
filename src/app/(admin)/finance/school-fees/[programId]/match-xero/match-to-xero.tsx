@@ -231,7 +231,7 @@ export function MatchToXero({
             </span>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-left text-[13px]">
+            <table className="phone-stack w-full text-left text-[13px] md:min-w-[720px]">
               <thead>
                 <tr className="border-b border-rule font-mono text-[9px] uppercase tracking-[0.12em] text-[color:var(--text-secondary)]">
                   <th className="px-4 py-2">Student</th>
@@ -252,7 +252,7 @@ export function MatchToXero({
                         className={`border-b border-rule ${expandable ? "cursor-pointer hover:bg-bone" : ""}`}
                         onClick={() => expandable && toggleOpen(s.enrollmentId)}
                       >
-                        <td className="px-4 py-2">
+                        <td data-label="Student" className="px-4 py-2">
                           <span className="font-semibold">{s.name}</span>
                           <span className="block text-[11px] text-[color:var(--text-secondary)]">{s.email ?? "no email"}</span>
                         </td>

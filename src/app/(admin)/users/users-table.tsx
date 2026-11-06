@@ -731,7 +731,7 @@ export function UsersTable({
           Showing {filteredUsers.length} of {users.length}
         </p>
       </div>
-      <Table>
+      <Table className="phone-stack">
         <TableHeader>
           <TableRow>
             <TableHead>Name</TableHead>
@@ -770,7 +770,7 @@ export function UsersTable({
                     setQuickPerson({ userId: user.id, name: displayName(user) })
                   }
                 >
-                  <TableCell className="font-medium">
+                  <TableCell data-label="Name" className="font-medium">
                     <div className="flex items-center gap-3">
                       <UserAvatar
                         src={user.avatar_url}
@@ -781,18 +781,18 @@ export function UsersTable({
                       {targetIsSuper && <SuperAdminBadge />}
                     </div>
                   </TableCell>
-                  <TableCell className="text-muted-foreground">
+                  <TableCell data-label="Email" className="text-muted-foreground">
                     {user.email ?? "—"}
                   </TableCell>
-                  <TableCell className="text-muted-foreground">
+                  <TableCell data-label="Job title" className="text-muted-foreground">
                     {title ?? "—"}
                   </TableCell>
-                  <TableCell className="text-muted-foreground">
+                  <TableCell data-label="Department" className="text-muted-foreground">
                     {user.department
                       ? deptLabels[user.department] ?? user.department
                       : "—"}
                   </TableCell>
-                  <TableCell onClick={(e) => e.stopPropagation()}>
+                  <TableCell data-label="Role" onClick={(e) => e.stopPropagation()}>
                     {isSuperAdmin && !locked ? (
                       <select
                         className="h-8 border border-input bg-transparent px-2 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
@@ -828,7 +828,7 @@ export function UsersTable({
                       </span>
                     )}
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-label="Status">
                     <div className="flex flex-col gap-1 items-start">
                       <Badge
                         variant="outline"
@@ -931,10 +931,10 @@ export function UsersTable({
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="text-muted-foreground text-xs">
+                  <TableCell data-label="Activity" className="text-muted-foreground text-xs">
                     <ActivityCell user={user} stage={lifecycle.stage} />
                   </TableCell>
-                  <TableCell onClick={(e) => e.stopPropagation()}>
+                  <TableCell data-label="Actions" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center gap-1">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>

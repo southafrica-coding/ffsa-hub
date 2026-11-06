@@ -81,7 +81,7 @@ export default async function FinanceAccountsPage() {
           return (
             <div key={org.id} className="border border-ink">
               <SectionBar title={`${org.name} (${org.record_currency})`} meta={`${live} active of ${list.length}`} />
-              <Table>
+              <Table className="phone-stack">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-[90px]">Code</TableHead>
@@ -93,17 +93,17 @@ export default async function FinanceAccountsPage() {
                 <TableBody>
                   {list.map((a) => (
                     <TableRow key={a.id} className={a.status === "active" && !a.missing_since ? undefined : "opacity-60"}>
-                      <TableCell className="font-mono text-[12px] tabular-nums">{a.code ?? "—"}</TableCell>
-                      <TableCell className="text-sm">
+                      <TableCell data-label="Code" className="font-mono text-[12px] tabular-nums">{a.code ?? "—"}</TableCell>
+                      <TableCell data-label="Name" className="text-sm">
                         {a.name}
                         {a.friendly_name && (
                           <span className="ml-2 text-[12px] text-[color:var(--text-secondary)]">({a.friendly_name})</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-[12px] text-[color:var(--text-secondary)]">
+                      <TableCell data-label="Type" className="text-[12px] text-[color:var(--text-secondary)]">
                         {[a.class, a.type].filter(Boolean).join(" · ") || "—"}
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="In Xero">
                         <StatusPill tone={a.missing_since ? "quiet" : a.status === "active" ? "good" : "quiet"}>
                           {a.missing_since ? "Gone from Xero" : a.status === "active" ? "Active" : "Archived"}
                         </StatusPill>
