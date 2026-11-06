@@ -55,6 +55,8 @@ export async function POST(
 //   - { membership_id, subcategory_id }  → the old single-value form, kept as
 //     a thin alias for [id] / [] so existing callers keep working.
 //   - { membership_id }                  → approve a pending membership.
+//     The update matches only a row whose status is still 'pending'.
+//     When it matches nothing, the response is 404.
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -97,12 +99,18 @@ export async function PATCH(
   }
 
   if (!assigning) {
-    const { error } = await admin
+    // Approve only an existing pending request. The status filter is part of
+    // the update, so a miss (nothing pending under this id) is 404.
+    const { data: approved, error } = await admin
       .from("staff_ministry_members")
       .update({ status: "active", approved_by: user.id })
       .eq("id", membershipId)
-      .eq("staff_ministry_id", id);
+      .eq("staff_ministry_id", id)
+      .eq("status", "pending")
+      .select("id");
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    if (!approved || approved.length === 0)
+      return NextResponse.json({ error: "Membership not found" }, { status: 404 });
     return NextResponse.json({ success: true });
   }
 
