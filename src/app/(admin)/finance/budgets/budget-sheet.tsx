@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { Bar, KpiStrip, Masthead, MastheadButton, ModuleTabs, NeedsYou, SectionBar, StatusPill } from "@/components/ffsa";
 import { MoneyKpi } from "../money-kpi";
@@ -11,7 +11,6 @@ import {
   TEAM_BUDGET_TEMPLATE_NAME,
   OWNER_KIND_LABEL,
   PERIOD_KIND_LABEL,
-  PERIOD_KINDS,
   BUDGET_OWNER_KINDS,
   draftIsDirty,
   emptyBudgetDraft,
@@ -20,13 +19,11 @@ import {
   newSheetLine,
   parseDriver,
   parseOptionalMoney,
-  periodProblem,
   rollup,
   scopeGaps,
   type BudgetOwnerKind,
   type BudgetSectionKey,
   type BudgetSheetDraft,
-  type PeriodKind,
   type SheetLine,
 } from "@/lib/finance/budget-sheet";
 import { BudgetActuals } from "./budget-actuals";
@@ -62,12 +59,23 @@ export function BudgetSheet({
   const variable = useMemo(() => rollup(draft.lines, "variable", driverValue), [draft.lines, driverValue]);
   const fixed = useMemo(() => rollup(draft.lines, "fixed", driverValue), [draft.lines, driverValue]);
   const totalCents = variable.cents + fixed.cents;
-  const gaps = scopeGaps(draft);
-  const org = options.orgs.find((item) => item.id === draft.org_id) ?? null;
-  const currency = org?.currency ?? null;
+  const npc =
+    options.orgs.find((item) => item.key === "npc" && item.currency === "ZAR" && !item.inactive) ?? null;
+  const periods = options.periods.filter((period) => npc !== null && period.org_id === npc.id);
+  const selectedPeriod = periods.find((period) => period.id === draft.periodId) ?? null;
+  const currency = npc ? "ZAR" : null;
+  const gaps = scopeGaps(draft, { npcId: npc?.id ?? null, periods });
   const owners = draft.ownerKind ? options.owners[draft.ownerKind] : [];
   const owner = owners.find((item) => item.id === draft.ownerId) ?? null;
-  const periodIssue = periodProblem(draft);
+  useEffect(() => {
+    if (!selectedPeriod) {
+      setDraft((prev) => (prev.periodId === "" && prev.org_id === "" ? prev : { ...prev, periodId: "", org_id: "" }));
+      return;
+    }
+    if (draft.org_id !== selectedPeriod.org_id) {
+      setDraft((prev) => ({ ...prev, org_id: selectedPeriod.org_id }));
+    }
+  }, [selectedPeriod, draft.org_id]);
   const active = TEAM_BUDGET_SECTIONS.find((item) => item.key === section) ?? TEAM_BUDGET_SECTIONS[0];
 
   function patch(partial: Partial<BudgetSheetDraft>) {
@@ -163,100 +171,79 @@ export function BudgetSheet({
             <p className="mt-1.5 text-[12px] text-amber">Nothing you can see for this kind.</p>
           )}
         </Field>
-        <Field label="Organisation">
-          <select
-            className={control}
-            aria-label="Organisation"
-            value={draft.org_id}
-            disabled={!options.orgsReadable || options.orgs.length === 0}
-            onChange={(e) => patch({ org_id: e.target.value })}
-          >
-            <option value="">Choose one</option>
-            {options.orgs.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-                {item.inactive ? " (inactive)" : ""}
-                {item.currency ? ` · ${item.currency}` : ""}
-              </option>
-            ))}
-          </select>
-          {!options.orgsReadable && (
-            <p className="mt-1.5 text-[12px] text-amber">
-              Finance organisations could not be read. A budget needs one.
-            </p>
-          )}
-          {options.orgsReadable && options.orgs.length === 0 && (
-            <p className="mt-1.5 text-[12px] text-amber">No finance organisations are on this Hub yet.</p>
-          )}
-        </Field>
+        <div className="bg-white px-3 py-3">
+          <div className="mono-label">Organisation</div>
+          <div className="mt-2 text-sm">{npc ? npc.name : "—"}</div>
+          <p className="mt-2 text-[12px] leading-snug text-[color:var(--text-secondary)]">
+            {npc
+              ? "FFSA NPC. South Africa only. The organisation comes from the period."
+              : options.orgsReadable
+                ? "FFSA NPC is not on this Hub yet. This budget cannot be started."
+                : "FFSA NPC could not be read. This budget cannot be started."}
+          </p>
+        </div>
         <div className="bg-white px-3 py-3">
           <div className="mono-label">Currency</div>
           <div className="numeral mt-2 text-[28px] leading-none">{currency ?? "—"}</div>
           <p className="mt-2 text-[12px] leading-snug text-[color:var(--text-secondary)]">
-            {org
-              ? `Locked to ${org.name}. Amounts are not converted if you change organisation.`
-              : "Set by the organisation. You don't pick a currency."}
+            {npc ? "Rand. Locked to FFSA NPC." : "Rand, once FFSA NPC is on the Hub."}
           </p>
         </div>
-        <Field label="Period">
-          <select
-            className={control}
-            aria-label="Period kind"
-            value={draft.periodKind}
-            onChange={(e) => patch({ periodKind: e.target.value as PeriodKind | "" })}
-          >
-            <option value="">Year, term, or event</option>
-            {PERIOD_KINDS.map((kind) => (
-              <option key={kind} value={kind}>
-                {PERIOD_KIND_LABEL[kind]}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Period name">
-          <input
-            className={control}
-            aria-label="Period name"
-            value={draft.periodLabel}
-            placeholder="2027"
-            onChange={(e) => patch({ periodLabel: e.target.value })}
-          />
-        </Field>
-        <Field label="Dates">
-          <div className="mt-1.5 grid grid-cols-2 gap-2">
-            <input
-              type="date"
-              aria-label="Period start"
-              className="h-11 w-full border border-ink bg-white px-2 text-sm outline-none focus:bg-bone"
-              value={draft.periodStart}
-              onChange={(e) => patch({ periodStart: e.target.value })}
-            />
-            <input
-              type="date"
-              aria-label="Period end"
-              className="h-11 w-full border border-ink bg-white px-2 text-sm outline-none focus:bg-bone"
-              value={draft.periodEnd}
-              onChange={(e) => patch({ periodEnd: e.target.value })}
-            />
-          </div>
-          {draft.periodKind && periodIssue && <p className="mt-1.5 text-[12px] text-amber">{periodIssue}</p>}
-        </Field>
+        <div className="bg-white px-3 py-3 sm:col-span-2">
+          <label className="block">
+            <span className="mono-label">Period</span>
+            {periods.length > 0 ? (
+              <select
+                className={control}
+                aria-label="Period"
+                value={selectedPeriod?.id ?? ""}
+                onChange={(e) => {
+                  const period = periods.find((row) => row.id === e.target.value);
+                  if (!period || period.org_id !== npc?.id) {
+                    patch({ periodId: "", org_id: "" });
+                    return;
+                  }
+                  patch({ periodId: period.id, org_id: period.org_id });
+                }}
+              >
+                <option value="">Choose a period</option>
+                {periods.map((period) => (
+                  <option key={period.id} value={period.id}>
+                    {PERIOD_KIND_LABEL[period.kind]} · {period.label} · {period.start} – {period.end}
+                    {period.current ? " · current" : ""}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <p className="mt-2 text-[13px] leading-snug text-amber">
+                {!npc
+                  ? "A period is only offered for FFSA NPC."
+                  : options.periodsReadable
+                    ? "FFSA NPC has no periods yet. A budget cannot invent one."
+                    : "Periods could not be read. A budget uses a period that already exists."}
+              </p>
+            )}
+          </label>
+          {selectedPeriod && (
+            <p className="mt-2 text-[12px] leading-snug text-[color:var(--text-secondary)]">
+              {selectedPeriod.start} – {selectedPeriod.end}. This period&apos;s organisation is the budget&apos;s.
+            </p>
+          )}
+        </div>
         <div className="bg-bone px-3 py-3 sm:col-span-2 xl:col-span-4">
           <div className="mono-label">Xero codes</div>
           <p className="mt-1.5 max-w-3xl text-[13px] leading-snug text-ink">
-            You edit amounts and notes. Finance maps each line to a Xero code for{" "}
-            {org ? org.name : "the organisation"}. This sheet has no chart-of-accounts picker.
+            You edit amounts and notes. Finance maps each line to a Xero code for South Africa.
+            This sheet has no chart-of-accounts picker.
             {draft.lines.length > 0 && " Every line is not coded yet."}
           </p>
-          {(owner || org || (draft.periodKind && !periodIssue)) && (
+          {(owner || npc || selectedPeriod) && (
             <p className="mono-label mt-3">
               {[
                 owner?.label,
-                org?.name,
+                npc?.name,
                 currency,
-                draft.periodKind && !periodIssue
-                  ? `${draft.periodLabel.trim()} · ${draft.periodStart} – ${draft.periodEnd}`
-                  : null,
+                selectedPeriod ? `${selectedPeriod.label} · ${selectedPeriod.start} – ${selectedPeriod.end}` : null,
               ]
                 .filter(Boolean)
                 .join("  ·  ")}

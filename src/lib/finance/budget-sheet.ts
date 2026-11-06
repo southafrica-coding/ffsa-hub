@@ -77,6 +77,7 @@ export const BUDGET_OWNER_KINDS = [
   "ministry_subcategory",
   "program",
   "event",
+  "outreach_team",
 ] as const;
 
 export type BudgetOwnerKind = (typeof BUDGET_OWNER_KINDS)[number];
@@ -86,6 +87,7 @@ export const OWNER_KIND_LABEL: Record<BudgetOwnerKind, string> = {
   ministry_subcategory: "Ministry sub-category",
   program: "School",
   event: "Event",
+  outreach_team: "Outreach team",
 };
 
 export const PERIOD_KINDS = ["year", "term", "event"] as const;
@@ -115,12 +117,13 @@ export type BudgetSheetDraft = {
   name: string;
   ownerKind: BudgetOwnerKind | "";
   ownerId: string;
-  /** budgets.org_id. Currency is that org's record currency and is not chosen on its own. */
+  /**
+   * budgets.org_id. Set from the chosen fiscal period's org, which must be
+   * FFSA NPC. Not chosen on its own, and never rewritten from another org.
+   */
   org_id: string;
-  periodKind: PeriodKind | "";
-  periodLabel: string;
-  periodStart: string;
-  periodEnd: string;
+  /** fiscal_periods.id. Empty until a real South African period is chosen. */
+  periodId: string;
   /** Overview prose. No column for this on the draft budget model — see the PR. */
   purpose: string;
   driverLabel: string;
@@ -139,10 +142,7 @@ export function emptyBudgetDraft(): BudgetSheetDraft {
     ownerKind: "",
     ownerId: "",
     org_id: "",
-    periodKind: "",
-    periodLabel: "",
-    periodStart: "",
-    periodEnd: "",
+    periodId: "",
     purpose: "",
     driverLabel: "",
     driverValue: "",
@@ -180,10 +180,6 @@ function isOwnerKind(value: string): value is BudgetOwnerKind {
   return (BUDGET_OWNER_KINDS as readonly string[]).includes(value);
 }
 
-function isPeriodKind(value: string): value is PeriodKind {
-  return (PERIOD_KINDS as readonly string[]).includes(value);
-}
-
 function isLineKind(value: string): value is BudgetLineKind {
   return value === "fixed" || value === "variable";
 }
@@ -196,10 +192,7 @@ export function parseBudgetDraft(value: unknown): BudgetSheetDraft | null {
   const ownerKind = asText(raw.ownerKind, 40);
   const ownerId = asText(raw.ownerId, 80);
   const org_id = asText(raw.org_id, 80);
-  const periodKind = asText(raw.periodKind, 20);
-  const periodLabel = asText(raw.periodLabel, 120);
-  const periodStart = asText(raw.periodStart, 10);
-  const periodEnd = asText(raw.periodEnd, 10);
+  const periodId = asText(raw.periodId, 80);
   const purpose = asText(raw.purpose);
   const driverLabel = asText(raw.driverLabel, 80);
   const driverValue = asText(raw.driverValue, 20);
@@ -213,10 +206,7 @@ export function parseBudgetDraft(value: unknown): BudgetSheetDraft | null {
     ownerKind === null ||
     ownerId === null ||
     org_id === null ||
-    periodKind === null ||
-    periodLabel === null ||
-    periodStart === null ||
-    periodEnd === null ||
+    periodId === null ||
     purpose === null ||
     driverLabel === null ||
     driverValue === null ||
@@ -265,10 +255,7 @@ export function parseBudgetDraft(value: unknown): BudgetSheetDraft | null {
     ownerKind: ownerKind === "" || isOwnerKind(ownerKind) ? ownerKind : "",
     ownerId,
     org_id,
-    periodKind: periodKind === "" || isPeriodKind(periodKind) ? periodKind : "",
-    periodLabel,
-    periodStart,
-    periodEnd,
+    periodId,
     purpose,
     driverLabel,
     driverValue,
@@ -372,31 +359,33 @@ export function parseOptionalMoney(value: string): { state: "blank" } | { state:
   return { state: "cents", cents };
 }
 
-export function periodProblem(draft: Pick<BudgetSheetDraft, "periodKind" | "periodLabel" | "periodStart" | "periodEnd">): string | null {
-  if (!draft.periodKind) return "Choose a year, a term, or an event.";
-  if (!draft.periodLabel.trim()) return "Name the period.";
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(draft.periodStart) || !/^\d{4}-\d{2}-\d{2}$/.test(draft.periodEnd)) {
-    return "A period needs a start date and an end date.";
-  }
-  if (draft.periodEnd < draft.periodStart) return "The period ends before it starts.";
-  return null;
-}
-
 export type ScopeGap = "name" | "owner" | "organisation" | "period";
 
-export function scopeGaps(draft: BudgetSheetDraft): ScopeGap[] {
+export type ScopeContext = {
+  /** FFSA NPC id. Null when that org is not available. */
+  npcId: string | null;
+  /** Real fiscal periods for that org only. A US period is never in this list. */
+  periods: readonly { id: string; org_id: string }[];
+};
+
+/**
+ * A period counts only when it is one of the supplied rows and the draft's
+ * org_id is that row's org. A typed name or a US period does not count.
+ */
+export function scopeGaps(draft: BudgetSheetDraft, ctx: ScopeContext = { npcId: null, periods: [] }): ScopeGap[] {
   const gaps: ScopeGap[] = [];
   if (!draft.name.trim()) gaps.push("name");
   if (!draft.ownerKind || !draft.ownerId) gaps.push("owner");
-  if (!draft.org_id) gaps.push("organisation");
-  if (periodProblem(draft)) gaps.push("period");
+  if (!ctx.npcId) gaps.push("organisation");
+  const period = ctx.periods.find((row) => row.id === draft.periodId && row.org_id === ctx.npcId);
+  if (!period || draft.org_id !== period.org_id) gaps.push("period");
   return gaps;
 }
 
 const GAP_PHRASE: Record<ScopeGap, string> = {
   name: "a name",
   owner: "one owner",
-  organisation: "one organisation",
+  organisation: "South Africa",
   period: "a real period",
 };
 
@@ -409,7 +398,7 @@ function joinList(items: string[]): string {
 /** The single NeedsYou sentence. Scope first, then the fact that nothing is saved. */
 export function needsYouCopy(gaps: ScopeGap[]): string {
   if (gaps.length > 0) {
-    return `This budget still needs ${joinList(gaps.map((gap) => GAP_PHRASE[gap]))}. A budget is one owner, one organisation, one currency, and one period.`;
+    return `This budget still needs ${joinList(gaps.map((gap) => GAP_PHRASE[gap]))}. A budget is one owner, South Africa, rand, and one period.`;
   }
   return "This sheet adds up here, and only here. It is not saved in the Hub — refreshing the page clears it. Approval, Xero coding and spending are not connected yet.";
 }

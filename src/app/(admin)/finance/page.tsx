@@ -27,7 +27,7 @@ const FINANCE_MODULES = [
   {
     title: "Budgets",
     description:
-      "A team budget sheet: overview, dashboard, variable and fixed costs, an expense tracker and notes. One owner, one organisation, one currency, one period. Separate from outreach cash.",
+      "A team budget sheet for South Africa, in rand: overview, dashboard, variable and fixed costs, an expense tracker and notes. One owner and a real period. Separate from outreach cash.",
     href: "/finance/budgets",
     icon: Sheet,
     ready: true,

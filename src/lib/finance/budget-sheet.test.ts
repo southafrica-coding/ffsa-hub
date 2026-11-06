@@ -8,7 +8,6 @@ import {
   needsYouCopy,
   newSheetLine,
   parseBudgetDraft,
-  periodProblem,
   rollup,
   scopeGaps,
   type BudgetSheetDraft,
@@ -70,11 +69,8 @@ describe("rollup", () => {
 });
 
 describe("period and scope", () => {
-  it("requires a named range that ends on or after it starts", () => {
-    expect(periodProblem(draft())).toMatch(/year, a term, or an event/);
-    expect(periodProblem(draft({ periodKind: "year", periodLabel: "2027", periodStart: "2027-01-01", periodEnd: "2026-12-31" }))).toMatch(/ends before/);
-    expect(periodProblem(draft({ periodKind: "year", periodLabel: "2027", periodStart: "2027-01-01", periodEnd: "2027-12-31" }))).toBeNull();
-  });
+  const npc = "npc-id";
+  const periods = [{ id: "per-1", org_id: npc }];
 
   it("names the missing scope, in order", () => {
     expect(scopeGaps(draft())).toEqual(["name", "owner", "organisation", "period"]);
@@ -82,17 +78,22 @@ describe("period and scope", () => {
       name: "Worship",
       ownerKind: "staff_ministry",
       ownerId: "m1",
-      org_id: "org1",
-      periodKind: "year",
-      periodLabel: "2027",
-      periodStart: "2027-01-01",
-      periodEnd: "2027-12-31",
+      org_id: npc,
+      periodId: "per-1",
     });
-    expect(scopeGaps(ready)).toEqual([]);
+    expect(scopeGaps(ready, { npcId: npc, periods })).toEqual([]);
     expect(needsYouCopy([])).toMatch(/not saved/);
     expect(needsYouCopy(["owner", "period"])).toBe(
-      "This budget still needs one owner and a real period. A budget is one owner, one organisation, one currency, and one period."
+      "This budget still needs one owner and a real period. A budget is one owner, South Africa, rand, and one period."
     );
+  });
+
+  it("takes org_id from the fiscal period and ignores a period that is not FFSA NPC", () => {
+    const chosen = draft({ org_id: npc, periodId: "per-1" });
+    expect(scopeGaps(chosen, { npcId: npc, periods })).not.toContain("period");
+    const usPeriod = draft({ org_id: "usa-id", periodId: "us-per" });
+    expect(scopeGaps(usPeriod, { npcId: npc, periods })).toContain("period");
+    expect(scopeGaps(draft({ org_id: "usa-id", periodId: "per-1" }), { npcId: npc, periods })).toContain("period");
   });
 });
 
@@ -115,10 +116,9 @@ describe("parseBudgetDraft", () => {
 });
 
 describe("formatBudgetMoney", () => {
-  it("prints rand and dollars from cents", () => {
+  it("prints rand from cents", () => {
     expect(formatBudgetMoney(1824000, "ZAR")).toMatch(/18/);
     expect(formatBudgetMoney(1824000, "ZAR")).toMatch(/R/);
-    expect(formatBudgetMoney(100, "USD")).toMatch(/\$/);
     expect(formatBudgetMoney(0, null)).toMatch(/0/);
   });
 });
