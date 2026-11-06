@@ -24,9 +24,8 @@ const LATER = "__later__";
  * someone with a Hub account who isn't staff yet, offer to make them staff,
  * the same two steps as the web dialog. A "no" needs a note. Making someone
  * staff asks for confirmation first. The sheet stays open on failure so the
- * reason is read where the person acted. Give it key={row.enrollmentId + step}
- * so each opening starts clean;
- * render it only while a row is open.
+ * reason is read where the person acted. Render it only while a row is
+ * open, with key={row.enrollmentId + step} so each opening starts clean.
  */
 export function DecisionSheet({
   row,
