@@ -283,38 +283,34 @@ export function candidateName(
   return name || person.email || fallback;
 }
 
-function textOrNull(value: unknown): string | null {
-  return typeof value === "string" && value.trim() ? value.trim() : null;
+function optionalName(value: unknown): string | null | undefined {
+  if (value == null) return null;
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
 }
 
-function personFromRow(item: unknown): GraderCandidate | null {
+/** One row of `{ candidates: [{ id, first_name, last_name, preferred_name }] }`. */
+function personFromCandidate(item: unknown): GraderCandidate | null {
   if (!item || typeof item !== "object") return null;
   const row = item as Record<string, unknown>;
-  const nested = row.users && typeof row.users === "object" ? (row.users as Record<string, unknown>) : null;
-  const source = nested ?? row;
-  const id = textOrNull(source.id) ?? textOrNull(row.user_id) ?? textOrNull(row.id);
-  if (!id) return null;
-  const fullName = textOrNull(source.name);
-  const [firstFromName, ...rest] = fullName ? fullName.split(/\s+/) : [];
-  return {
-    id,
-    first_name: textOrNull(source.first_name) ?? firstFromName ?? null,
-    last_name: textOrNull(source.last_name) ?? (rest.length > 0 ? rest.join(" ") : null),
-    preferred_name: textOrNull(source.preferred_name),
-    email: textOrNull(source.email),
-  };
+  if (typeof row.id !== "string" || !row.id.trim()) return null;
+  const first_name = optionalName(row.first_name);
+  const last_name = optionalName(row.last_name);
+  const preferred_name = optionalName(row.preferred_name);
+  if (first_name === undefined || last_name === undefined || preferred_name === undefined) return null;
+  return { id: row.id.trim(), first_name, last_name, preferred_name };
 }
 
-/** GET /api/schools/programs/:programId/grader-candidates. Unknown shapes yield nobody. */
+/** GET /api/schools/programs/:programId/grader-candidates. Any other shape yields nobody. */
 export function parseGraderCandidates(body: unknown): GraderCandidate[] {
   if (!body || typeof body !== "object") return [];
-  const record = body as Record<string, unknown>;
-  const list = record.candidates ?? record.people ?? record.users;
+  const list = (body as { candidates?: unknown }).candidates;
   if (!Array.isArray(list)) return [];
   const seen = new Set<string>();
   const people: GraderCandidate[] = [];
   for (const item of list) {
-    const person = personFromRow(item);
+    const person = personFromCandidate(item);
     if (!person || seen.has(person.id)) continue;
     seen.add(person.id);
     people.push(person);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Drawer, SectionBar, StatusPill } from "@/components/ffsa";
 import {
   LETTER_GRADES,
@@ -59,6 +59,13 @@ export function GraderQueue({
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState<OpenCell | null>(null);
   const [canSeeLetters, setCanSeeLetters] = useState(false);
+  const studentKey = students
+    .map((student) => student.enrollmentId)
+    .sort()
+    .join("\n");
+  const letterContext = `${programId}:${studentKey}`;
+  const letterContextRef = useRef(letterContext);
+  letterContextRef.current = letterContext;
   const [letters, setLetters] = useState<Record<string, string | null>>(() => {
     const map: Record<string, string | null> = {};
     for (const row of official) map[`${row.enrollmentId}:${row.courseId}`] = row.letter;
@@ -105,18 +112,23 @@ export function GraderQueue({
 
   // The list has no flag of its own. One marks call tells us whether this
   // viewer may see letter text. A missing flag, or a failed call, leaves it hidden.
+  // A new school or student set starts hidden again, so an earlier true cannot carry over.
   const sampleKey = queue[0] ? `${queue[0].enrollmentId}:${queue[0].courseId}` : "";
   useEffect(() => {
+    setCanSeeLetters(false);
     if (!sampleKey) return;
     const splitAt = sampleKey.indexOf(":");
     const enrollmentId = sampleKey.slice(0, splitAt);
     const courseId = sampleKey.slice(splitAt + 1);
+    const started = letterContext;
     let cancelled = false;
     lmsCall<{ can_see_other_graders_notes?: unknown }>(
       `/api/schools/grades/marks?enrollment_id=${enrollmentId}&billing_course_id=${courseId}`
     )
       .then((body) => {
-        if (!cancelled && marksAllowsOtherNotes(body)) setCanSeeLetters(true);
+        if (!cancelled && started === letterContextRef.current && marksAllowsOtherNotes(body)) {
+          setCanSeeLetters(true);
+        }
       })
       .catch(() => {
         // Older or missing marks API: do not reveal letters.
@@ -124,7 +136,7 @@ export function GraderQueue({
     return () => {
       cancelled = true;
     };
-  }, [sampleKey]);
+  }, [letterContext, sampleKey]);
 
   return (
     <div>
@@ -180,7 +192,9 @@ export function GraderQueue({
         cell={open}
         officialLetter={open ? letters[`${open.enrollmentId}:${open.courseId}`] ?? null : null}
         onClose={() => setOpen(null)}
-        onSeeOtherLetters={() => setCanSeeLetters(true)}
+        onSeeOtherLetters={() => {
+          if (letterContextRef.current === letterContext) setCanSeeLetters(true);
+        }}
         onOfficial={(letter) => {
           if (!open) return;
           setLetters((current) => ({ ...current, [`${open.enrollmentId}:${open.courseId}`]: letter }));
@@ -310,7 +324,11 @@ function AssignGrader({
     const q = query.trim().toLowerCase();
     if (q.length < 2) return [];
     return people
-      .filter((person) => `${person.first_name ?? ""} ${person.last_name ?? ""} ${person.email ?? ""}`.toLowerCase().includes(q))
+      .filter((person) =>
+        `${person.preferred_name ?? ""} ${person.first_name ?? ""} ${person.last_name ?? ""} ${person.email ?? ""}`
+          .toLowerCase()
+          .includes(q)
+      )
       .slice(0, 6);
   }, [people, query]);
 

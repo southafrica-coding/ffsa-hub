@@ -158,7 +158,8 @@ describe("student-facing dates and copy", () => {
     expect(person?.id).toBe("u1");
     expect(candidateName(person)).toBe("Sam Ng");
     expect(parseGraderCandidates(null)).toEqual([]);
-    expect(parseGraderCandidates({ users: "everyone" })).toEqual([]);
+    expect(parseGraderCandidates({ users: [{ id: "u9", first_name: "No" }] })).toEqual([]);
+    expect(parseGraderCandidates({ people: [{ user_id: "u2", name: "Grace Hopper" }] })).toEqual([]);
   });
 
   it("keeps fee setup on the finance billing route", () => {
