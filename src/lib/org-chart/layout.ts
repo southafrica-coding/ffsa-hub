@@ -32,35 +32,36 @@ export type Edge = {
   from: [number, number, number];
   to: [number, number, number];
 };
+export type OutsidePerson = { userId: string; name: string };
+
 export type Layout = {
-  pos: Record<string, Placed>; // keyed by team id, plus "schools" and "dir"
+  pos: Record<string, Placed>; // keyed by team id, plus "schools", "dir" and "outside"
   zones: Zone[];
   edges: Edge[];
   width: number;
   height: number;
   /** y of each Leadership-team leader row's centre, keyed by userId. */
   leadRowY: Record<string, number>;
+  /**
+   * People who hold a reporting line but are not a row on any team card.
+   * Drawn as their own table so the line has somewhere to start.
+   */
+  outside: OutsidePerson[];
 };
 
 const ZONE_ORDER: OrgCluster[] = ["outward", "inward", "backbone", "parttime", "unplaced"];
 
-/** How many people a team's table names before "+N more" — leads first. */
-export const PEOPLE_SHOWN = 6;
-
 /**
- * What a team's table shows, people first: its lead(s), then others, up to
- * PEOPLE_SHOWN names in all, then the "+N more · OPEN" row. A child ministry adds a
- * "within" row. Objectives are NOT on the canvas — they are one click away,
- * in the drawer and the team view.
+ * What a team's table shows, people first: every lead, then everyone else.
+ * A child ministry adds a "within" row. The canvas keeps one OPEN row under
+ * the names so the team view is one click away — it does not hide anyone.
+ * Objectives are NOT on the canvas — they are one click away, in the drawer
+ * and the team view.
  */
 export function teamTableRows(t: OrgTeam) {
-  const allLeads = t.members.filter((m) => m.isLead);
-  const others = t.members.filter((m) => !m.isLead);
-  // Every card names at most PEOPLE_SHOWN, so a team with many leaders does
-  // not tower over the rest; whoever is left is counted in "+N more".
-  const leads = allLeads.slice(0, PEOPLE_SHOWN);
-  const shown = others.slice(0, Math.max(0, PEOPLE_SHOWN - leads.length));
-  return { leads, shown, more: t.members.length - leads.length - shown.length };
+  const leads = t.members.filter((m) => m.isLead);
+  const shown = t.members.filter((m) => !m.isLead);
+  return { leads, shown, more: 0 };
 }
 
 export function teamRows(t: OrgTeam): number {
@@ -68,33 +69,56 @@ export function teamRows(t: OrgTeam): number {
   return (t.parentId ? 1 : 0) + Math.max(leads.length, 1) + shown.length + 1;
 }
 
+/** Where a named person sits, so a reporting line can start on their row. */
+type PersonRow = { teamId: string; y: number };
+
 export function computeLayout(model: OrgModel, overrides: Record<string, { x: number; y: number }> = {}): Layout {
   const { LX, LW, ZX, CW, CG, HEAD, ROW, DIR_Y, PER_ROW } = GEO;
   const pos: Record<string, Placed> = {};
   const zones: Zone[] = [];
   const byId = new Map(model.teams.map((t) => [t.id, t]));
 
-  // ── Left column: the Leadership team, Missio, then the FFSA direction ──
+  // Parents before children, so a child ministry sits with the team it is within.
+  const columnTeams = (cluster: OrgCluster) => {
+    const inCluster = model.teams.filter((t) => t.cluster === cluster);
+    const top = inCluster.filter((t) => !(t.parentId && byId.get(t.parentId)?.cluster === cluster));
+    const out: OrgTeam[] = [];
+    for (const t of top) {
+      out.push(t);
+      for (const child of inCluster.filter((k) => k.parentId === t.id)) out.push(child);
+    }
+    return out;
+  };
+
+  // ── Left column: every Leadership ministry, every Alongside ministry ──
   // The direction table and the OKR lines into it are NOT drawn on the resting
   // canvas (Jack, 2026-10-19: people first). Their place is reserved here so
   // nothing shifts when they appear: the canvas shows them only while a team
   // or a direction is selected, and only that team's lines.
-  const leadership = model.leadershipId ? byId.get(model.leadershipId) : undefined;
-  const leadY = DIR_Y;
+  // The direction itself is placed after the "outside" table, further down,
+  // because that table only exists once every roster row is known.
   const leadRowY: Record<string, number> = {};
-  if (leadership) {
-    const h = HEAD + ROW * Math.max(model.leaders.length, 1);
-    pos[leadership.id] = { x: LX, y: leadY, w: LW, h, cluster: "leadership" };
-    model.leaders.forEach((l, i) => (leadRowY[l.userId] = leadY + HEAD + ROW * i + ROW / 2));
+  let leftY = DIR_Y;
+  for (const t of columnTeams("leadership")) {
+    if (t.id === model.leadershipId) {
+      const h = HEAD + ROW * Math.max(model.leaders.length, 1);
+      pos[t.id] = { x: LX, y: leftY, w: LW, h, cluster: "leadership" };
+      model.leaders.forEach((l, i) => {
+        leadRowY[l.userId] = leftY + HEAD + ROW * i + ROW / 2;
+      });
+      leftY += h + 16;
+      continue;
+    }
+    const h = HEAD + ROW * teamRows(t);
+    pos[t.id] = { x: LX, y: leftY, w: LW, h, cluster: "leadership" };
+    leftY += h + 16;
   }
-  const afterLead = leadership ? pos[leadership.id].y + pos[leadership.id].h + 30 : leadY;
 
-  const missio = model.missioId ? byId.get(model.missioId) : undefined;
-  if (missio) {
-    pos[missio.id] = { x: LX, y: afterLead, w: LW, h: HEAD + ROW * Math.max(missio.groups.length, 1), cluster: "alongside" };
+  for (const t of columnTeams("alongside")) {
+    const h = HEAD + ROW * teamRows(t);
+    pos[t.id] = { x: LX, y: leftY, w: LW, h, cluster: "alongside" };
+    leftY += h + 16;
   }
-  const afterMissio = missio ? pos[missio.id].y + pos[missio.id].h + 30 : afterLead;
-  pos.dir = { x: LX, y: afterMissio, w: LW, h: HEAD + GEO.DIR_H * model.directions.length, cluster: "leadership" };
 
   // ── Cluster zones ──
   // Children sit straight after their parent, so Training's schools read
@@ -152,6 +176,52 @@ export function computeLayout(model: OrgModel, overrides: Record<string, { x: nu
   // Saved positions win over the automatic layout.
   for (const [id, p] of Object.entries(overrides)) if (pos[id]) pos[id] = { ...pos[id], x: p.x, y: p.y };
 
+  // A reporting line needs a row to start from. Anyone who holds one and is
+  // not on a drawn roster gets a row of their own, under the left column.
+  const onACard = new Set<string>();
+  for (const t of model.teams) {
+    if (!pos[t.id]) continue;
+    for (const m of t.members) onACard.add(m.userId);
+  }
+  const outsideById = new Map<string, string>();
+  for (const t of model.teams) {
+    for (const l of t.lines) {
+      if (!onACard.has(l.userId) && !outsideById.has(l.userId)) outsideById.set(l.userId, l.name);
+    }
+  }
+  const outside: OutsidePerson[] = [...outsideById.entries()]
+    .map(([userId, name]) => ({ userId, name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  if (outside.length) {
+    const h = HEAD + ROW * outside.length;
+    pos.outside = { x: LX, y: leftY, w: LW, h, cluster: "leadership" };
+    leftY += h + 16;
+  }
+  pos.dir = { x: LX, y: leftY, w: LW, h: HEAD + GEO.DIR_H * model.directions.length, cluster: "leadership" };
+
+  // Row centres from the positions actually drawn (after a saved move).
+  const personRows = new Map<string, PersonRow[]>();
+  const remember = (userId: string, row: PersonRow) => {
+    const list = personRows.get(userId) ?? [];
+    list.push(row);
+    personRows.set(userId, list);
+  };
+  if (model.leadershipId && pos[model.leadershipId]) {
+    const card = pos[model.leadershipId];
+    model.leaders.forEach((l, i) => {
+      const y = card.y + HEAD + ROW * i + ROW / 2;
+      leadRowY[l.userId] = y;
+      remember(l.userId, { teamId: model.leadershipId!, y });
+    });
+  }
+  for (const t of model.teams) {
+    if (t.id === model.leadershipId || !pos[t.id]) continue;
+    for (const row of memberCenters(pos[t.id].y, t)) remember(row.userId, { teamId: t.id, y: row.y });
+  }
+  outside.forEach((p, i) => {
+    remember(p.userId, { teamId: "outside", y: pos.outside.y + HEAD + ROW * i + ROW / 2 });
+  });
+
   // ── Lines ──
   const edges: Edge[] = [];
   const left = (id: string): [number, number, number] => [pos[id].x, pos[id].y + HEAD / 2, -1];
@@ -170,14 +240,42 @@ export function computeLayout(model: OrgModel, overrides: Record<string, { x: nu
   }
 
   for (const t of model.teams) {
-    if (!pos[t.id] || t.id === model.leadershipId) continue;
+    if (!pos[t.id]) continue;
     for (const l of t.lines) {
-      const y = leadRowY[l.userId];
-      if (y === undefined) continue; // overseen by someone not on the Leadership team: shown in the drawer only
+      const fromRow = pickPersonRow(personRows.get(l.userId) ?? [], t.id);
+      if (!fromRow || !pos[fromRow.teamId]) continue;
+      const src = pos[fromRow.teamId];
+      const dst = pos[t.id];
+      // Same column: bow out to the right. A team to the right is met on its
+      // left edge; a team to the left is met on its right edge.
+      const sameColumn = src.x === dst.x;
+      const targetToTheRight = dst.x + dst.w / 2 >= src.x + src.w / 2;
+      const fromX = sameColumn || targetToTheRight ? src.x + src.w : src.x;
+      const fromDir = sameColumn || targetToTheRight ? 1 : -1;
+      const toX = sameColumn ? dst.x + dst.w : targetToTheRight ? dst.x : dst.x + dst.w;
+      const toDir = sameColumn ? 1 : targetToTheRight ? -1 : 1;
+      const toY = dst.y + HEAD / 2;
+      // A person overseeing their own card still gets a line, bowed out to the right.
+      // The id matches the row the canvas draws, so selecting that person lights the line.
+      const anchorId =
+        fromRow.teamId === model.leadershipId || fromRow.teamId === "outside" ? "lead:" + l.userId : "person:" + l.userId;
       if (l.kind === "alongside") {
-        edges.push({ a: "lead:" + l.userId, b: "team:" + t.id, kind: "alongside", from: [LX, y, -1], to: [LX, pos[t.id].y + HEAD / 2, -1] });
+        edges.push({
+          a: anchorId,
+          b: "team:" + t.id,
+          kind: "alongside",
+          from: [fromX, fromRow.y, fromDir],
+          to: [toX, toY, toDir],
+        });
       } else {
-        edges.push({ a: "lead:" + l.userId, b: "team:" + t.id, kind: "report", label: l.kind, from: [LX + LW, y, 1], to: left(t.id) });
+        edges.push({
+          a: anchorId,
+          b: "team:" + t.id,
+          kind: "report",
+          label: l.kind,
+          from: [fromX, fromRow.y, fromDir],
+          to: [toX, toY, toDir],
+        });
       }
     }
   }
@@ -203,7 +301,31 @@ export function computeLayout(model: OrgModel, overrides: Record<string, { x: nu
     width: Math.max(...all.map((p) => p.x + p.w), ZX + PER_ROW * (CW + CG)) + 40,
     height: Math.max(...all.map((p) => p.y + p.h), ...zones.map((z) => z.y + z.h)) + 40,
     leadRowY,
+    outside,
   };
+}
+
+/** Centre of each named row on a normal team card (within, leads, everyone else). */
+function memberCenters(cardY: number, t: OrgTeam): { userId: string; y: number }[] {
+  const { leads, shown } = teamTableRows(t);
+  let i = t.parentId ? 1 : 0;
+  const out: { userId: string; y: number }[] = [];
+  const push = (userId: string) => {
+    out.push({ userId, y: cardY + GEO.HEAD + GEO.ROW * i + GEO.ROW / 2 });
+    i += 1;
+  };
+  if (leads.length === 0) i += 1;
+  else for (const m of leads) push(m.userId);
+  for (const m of shown) push(m.userId);
+  return out;
+}
+
+/** Prefer a row on another card, and a Leadership-team row over any other. */
+function pickPersonRow(rows: PersonRow[], targetTeamId: string): PersonRow | undefined {
+  if (rows.length === 0) return undefined;
+  const elsewhere = rows.filter((r) => r.teamId !== targetTeamId);
+  const pool = elsewhere.length ? elsewhere : rows;
+  return pool.find((r) => r.teamId !== "outside") ?? pool[0];
 }
 
 function clusterTitle(c: OrgCluster): string {

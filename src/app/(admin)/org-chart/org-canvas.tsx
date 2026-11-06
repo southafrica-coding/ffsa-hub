@@ -631,7 +631,6 @@ export function OrgCanvas({
 
   const icon = (I: typeof Network) => <I size={13} strokeWidth={2.2} />;
   const leadership = model.leadershipId ? team.get(model.leadershipId) : undefined;
-  const missio = model.missioId ? team.get(model.missioId) : undefined;
 
   const tables: React.ReactNode[] = [];
   // The FFSA direction: its place is reserved in the layout, but it is only
@@ -693,29 +692,32 @@ export function OrgCanvas({
       </div>
     );
   }
-  if (missio && layout.pos[missio.id]) {
-    const nid = "team:" + missio.id;
-    const s = tableShell(nid, layout.pos[missio.id], true);
+  if (layout.outside.length && layout.pos.outside) {
+    const s = tableShell(null, layout.pos.outside);
     tables.push(
-      <div key={missio.id} data-node className="absolute" style={{ ...s.style, cursor: editMode ? "move" : undefined }} onPointerDown={startTableDrag(missio.id)}>
-        <Head nid={nid} on={s.on} icon={icon(Heart)} name={missio.name} count="ALONGSIDE" />
-        {missio.groups.length ? (
-          missio.groups.map((g) => <Row key={g.name} text={g.name} right={String(g.people.length)} />)
-        ) : (
-          <Row text="Nobody on the roster yet" ink={T.mono} />
-        )}
+      <div key="outside" data-node className="absolute" style={s.style}>
+        <Head nid={null} on={false} icon={icon(Network)} name="Reports in" count={String(layout.outside.length)} />
+        {layout.outside.map((p) => (
+          <Row key={p.userId} nid={"lead:" + p.userId} text={p.name} right="OFF ROSTER" rightInk={T.open} />
+        ))}
       </div>
     );
   }
   for (const t of model.teams) {
-    if (t.id === model.leadershipId || t.id === model.missioId || !layout.pos[t.id]) continue;
+    if (t.id === model.leadershipId || !layout.pos[t.id]) continue;
     const nid = "team:" + t.id;
-    const s = tableShell(nid, layout.pos[t.id]);
+    const s = tableShell(nid, layout.pos[t.id], t.cluster === "alongside");
     const parent = t.parentId ? team.get(t.parentId) : undefined;
     const rows = teamTableRows(t);
     tables.push(
       <div key={t.id} data-node className="absolute" style={{ ...s.style, cursor: editMode ? "move" : undefined }} onPointerDown={startTableDrag(t.id)}>
-        <Head nid={nid} on={s.on} icon={icon(UsersRound)} name={t.name} count={String(t.headcount)} />
+        <Head
+          nid={nid}
+          on={s.on}
+          icon={icon(t.cluster === "alongside" ? Heart : t.cluster === "leadership" ? Network : UsersRound)}
+          name={t.name}
+          count={t.cluster === "alongside" ? "ALONGSIDE" : String(t.headcount)}
+        />
         {parent ? <Row mono="WITHIN" text={parent.name} ink={T.mono} /> : null}
         {rows.leads.length ? (
           rows.leads.map((m) => (
@@ -728,13 +730,7 @@ export function OrgCanvas({
           <Row key={m.userId} nid={"person:" + m.userId} text={m.name} />
         ))}
         <Row
-          text={
-            rows.more > 0
-              ? `+ ${rows.more} more`
-              : t.headcount === 0
-                ? "Nobody on the roster yet"
-                : `${t.headcount} ${t.headcount === 1 ? "person" : "people"}`
-          }
+          text={t.headcount === 0 ? "Nobody on the roster yet" : "Open the team"}
           right="OPEN ›"
           ink={t.headcount === 0 ? T.open : T.mono}
           rightInk={T.ink}

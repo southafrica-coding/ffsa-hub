@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { STATUS_ESTIMATE, buildOrgModel, krPct, meanPct, pctLabel, rollUpState, updateMonthStart, type OrgInput, type RawKr } from "./model";
-import { PEOPLE_SHOWN, computeLayout, litSet, teamRows, teamTableRows } from "./layout";
+import { computeLayout, litSet, teamRows, teamTableRows } from "./layout";
 
 const kr = (over: Partial<RawKr> = {}): RawKr => ({
   id: Math.random().toString(36).slice(2),
@@ -198,34 +198,72 @@ describe("computeLayout", () => {
     expect(teamRows(rca)).toBe(3);
   });
 
-  it("shows at most PEOPLE_SHOWN people and counts the rest", () => {
+  it("names the whole roster, leads first", () => {
     const big = buildOrgModel(
       input({
         members: Array.from({ length: 9 }, (_, i) => ({
           id: "b" + i, staff_ministry_id: "media", user_id: "u" + i, member_role: i === 0 ? "leader" : "member",
           is_point_leader: i === 0, role_title: null, responsibilities: [], share_pct: null, staff_kind: null, subcategories: [],
         })),
+        people: Array.from({ length: 9 }, (_, i) => ({ id: "u" + i, name: "Person " + i, job_title: null })),
       })
     ).teams.find((t) => t.id === "media")!;
     const r = teamTableRows(big);
     expect(r.leads).toHaveLength(1);
-    expect(r.leads.length + r.shown.length).toBe(PEOPLE_SHOWN);
-    expect(r.more).toBe(9 - PEOPLE_SHOWN);
+    expect(r.shown).toHaveLength(8);
+    expect(r.more).toBe(0);
+    expect(r.leads.length + r.shown.length).toBe(big.members.length);
   });
 
-  it("caps a team with many leaders at the same size, leads first", () => {
-    const leaders = buildOrgModel(
+  it("places every Leadership ministry and every Alongside ministry", () => {
+    const placed = computeLayout(
+      buildOrgModel(
+        input({
+          teams: [
+            { id: "lt", name: "Leadership Team", slug: "leadership_team", cluster: "leadership", parent_id: null, purpose: null, description: null, ministry_type: "main", sort_order: 1 },
+            { id: "board", name: "Board", slug: "board", cluster: "leadership", parent_id: null, purpose: null, description: null, ministry_type: "main", sort_order: 2 },
+            { id: "missio", name: "Missio", slug: "missio", cluster: "alongside", parent_id: null, purpose: null, description: null, ministry_type: "main", sort_order: 3 },
+            { id: "chapel", name: "Chapel", slug: "chapel", cluster: "alongside", parent_id: null, purpose: null, description: null, ministry_type: "main", sort_order: 4 },
+          ],
+        })
+      )
+    );
+    for (const id of ["lt", "board", "missio", "chapel"]) expect(placed.pos[id]).toBeDefined();
+    expect(placed.pos.board.x).toBe(placed.pos.lt.x);
+    expect(placed.pos.chapel.x).toBe(placed.pos.missio.x);
+    expect(placed.pos.board.y).toBeGreaterThan(placed.pos.lt.y);
+    expect(placed.pos.chapel.y).toBeGreaterThan(placed.pos.missio.y);
+  });
+
+  it("draws a reporting line to someone who is not on the Leadership team", () => {
+    const m2 = buildOrgModel(
       input({
-        members: Array.from({ length: 10 }, (_, i) => ({
-          id: "c" + i, staff_ministry_id: "media", user_id: "u" + i, member_role: i < 8 ? "leader" : "member",
-          is_point_leader: i === 0, role_title: null, responsibilities: [], share_pct: null, staff_kind: null, subcategories: [],
-        })),
+        lines: [
+          { staff_ministry_id: "media", leader_user_id: "mache", kind: "oversees", label: null },
+        ],
       })
-    ).teams.find((t) => t.id === "media")!;
-    const r = teamTableRows(leaders);
-    expect(r.leads).toHaveLength(PEOPLE_SHOWN);
-    expect(r.shown).toHaveLength(0);
-    expect(r.more).toBe(10 - PEOPLE_SHOWN);
+    );
+    const laid = computeLayout(m2);
+    expect(laid.edges.some((e) => e.kind === "report" && e.a === "person:mache" && e.b === "team:media")).toBe(true);
+    expect(laid.outside.some((p) => p.userId === "mache")).toBe(false);
+  });
+
+  it("gives a row to a reporting line whose person is on no roster", () => {
+    const m2 = buildOrgModel(
+      input({
+        lines: [{ staff_ministry_id: "media", leader_user_id: "ghost", kind: "oversees", label: null }],
+        people: [
+          { id: "caleb", name: "Caleb", job_title: null },
+          { id: "tosca", name: "Tosca Ferndale", job_title: "Media lead" },
+          { id: "mache", name: "Maché van Zyl", job_title: "Hosting" },
+          { id: "ghost", name: "Ghost Lead", job_title: null },
+        ],
+      })
+    );
+    const laid = computeLayout(m2);
+    expect(laid.outside.map((p) => p.userId)).toEqual(["ghost"]);
+    expect(laid.pos.outside).toBeDefined();
+    expect(laid.edges.some((e) => e.kind === "report" && e.a === "lead:ghost" && e.b === "team:media")).toBe(true);
   });
 
   it("draws a reporting line from a Leadership-team row, and a dotted line for a shared person", () => {
