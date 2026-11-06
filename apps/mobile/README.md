@@ -13,7 +13,7 @@ It is an **independent app**: its own `package.json`, lockfile, `node_modules`, 
 - **Home**: the "needs you" feed (`GET /api/notifications`, the same items as the web dashboard), one yellow band when something is unread, grouped list (Needs you / Earlier), mark read, pull-to-refresh, offline copy, shortcuts.
 - **Finance** (my finance, receipt capture, offline outbox), **Prayer** (week, set sheet, practice, my sets) and **Tickets** (my tickets, staff door check-in).
 - **Bookings** (spaces, vehicles, approvals, collect/return photos) and **My Schools** (enrolments, attendance, read-only): not tabs, opened from Home's shortcuts.
-- **Me**: name, email, roles; edit name and phone; notification settings; **Appearance** (Match phone / Light / Dark); links to the full web profile and the privacy policy; app version; sign out (this phone only).
+- **Me**: name, email, roles; edit name and phone; notification settings; **Appearance** (Match phone / Light / Dark); **Documents** (household, driver's licence, passport photo, health insurance, and the staff CV for staff: `src/features/me/screens/`); a "More on the website" link and the privacy policy; app version; sign out (this phone only).
 - The design tokens and a small component kit (`Button`, `Text`, `Screen`, `TextField`, `Banner` incl. the yellow "needs you" band, `Divider`, `Masthead`).
 - Final app icon and splash (Option 1, "Signature": black FF mark on `#FFB801`).
 
