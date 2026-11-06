@@ -6,7 +6,8 @@
  *
  * FFSA NPC records ZAR. FF USA Inc records USD. A dollar slip is the USA
  * budget; every other slip is the NPC budget, in the period that contains
- * the receipt date. Two budgets still in that org and period are not guessed
+ * the receipt date. The org is taken from the budget currency, not from a
+ * finance_orgs read. Two budgets still in that org and period are not guessed
  * apart unless the note names one of them.
  */
 
@@ -16,7 +17,7 @@ export type TeamBudgetRow = {
   id: string;
   name: string;
   status: string;
-  /** finance_orgs.key. Null when the row has no org yet. */
+  /** npc or usa from the budget currency. Null when the currency is neither ZAR nor USD. */
   orgKey: BudgetOrgKey | null;
   /** budgets.currency, used when orgKey is absent. */
   currency: string | null;

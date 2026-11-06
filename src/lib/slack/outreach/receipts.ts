@@ -194,21 +194,26 @@ type BudgetQueryRow = {
   status: string;
   currency: string | null;
   org_id: string | null;
-  fiscal_periods?: { start_date?: string; end_date?: string } | { start_date?: string; end_date?: string }[] | null;
+  fiscal_periods?:
+    | { id?: string; org_id?: string; start_date?: string; end_date?: string }
+    | { id?: string; org_id?: string; start_date?: string; end_date?: string }[]
+    | null;
   budget_lines?: { id: string; name: string; archived_at: string | null }[] | null;
 };
 
 function onePeriod(
   value: BudgetQueryRow["fiscal_periods"]
-): { start_date?: string; end_date?: string } | null {
+): { id?: string; org_id?: string; start_date?: string; end_date?: string } | null {
   if (!value) return null;
   return Array.isArray(value) ? value[0] ?? null : value;
 }
 
 /**
- * Lines from the one budget this receipt belongs to: same team, the org
- * for the slip (NPC/ZAR or USA/USD), and the fiscal period that contains
- * the date. Several budgets for the team are not merged.
+ * Lines from the one budget this receipt belongs to. Look up by
+ * outreach_team_id, then narrow with selectTeamBudget: NPC/ZAR or USA/USD
+ * from the slip's currency (leaders do not read finance_orgs), and the
+ * fiscal period that contains the date. Several budgets for the team are
+ * not merged.
  */
 async function linesForReceipt(
   admin: Admin,
@@ -238,7 +243,7 @@ async function linesForReceipt(
     .from("budgets")
     .select(
       `id, name, status, currency, org_id,
-       fiscal_periods!budgets_period_id_fkey(start_date, end_date),
+       fiscal_periods!budgets_period_org_fkey(id, org_id, label, kind, start_date, end_date),
        budget_lines!budget_lines_budget_id_fkey(id, name, archived_at)`
     )
     .eq("outreach_team_id", teamId)
@@ -246,29 +251,25 @@ async function linesForReceipt(
   if (error || !data) return none;
 
   const rows = data as BudgetQueryRow[];
-  const orgIds = [...new Set(rows.map((row) => row.org_id).filter((id): id is string => !!id))];
-  const orgKeyById = new Map<string, BudgetOrgKey>();
-  if (orgIds.length) {
-    const { data: orgs } = await admin.from("finance_orgs").select("id, key").in("id", orgIds);
-    for (const org of (orgs ?? []) as { id: string; key: string }[]) {
-      if (org.key === "npc" || org.key === "usa") orgKeyById.set(org.id, org.key);
-    }
-  }
-
-  const candidates: TeamBudgetRow[] = rows.map((row) => {
+  const candidates: TeamBudgetRow[] = rows.flatMap((row) => {
     const period = onePeriod(row.fiscal_periods);
-    return {
+    // The period's org and the budget's org are the same composite key.
+    // Leaders cannot read finance_orgs, so npc/usa comes from the currency.
+    if (row.org_id && period?.org_id && row.org_id !== period.org_id) return [];
+    const currency = (row.currency ?? "").toUpperCase();
+    const orgKey: BudgetOrgKey | null = currency === "USD" ? "usa" : currency === "ZAR" ? "npc" : null;
+    return [{
       id: row.id,
       name: row.name,
       status: row.status,
-      orgKey: row.org_id ? orgKeyById.get(row.org_id) ?? null : null,
+      orgKey,
       currency: row.currency,
       periodStart: period?.start_date ?? null,
       periodEnd: period?.end_date ?? null,
       lines: (row.budget_lines ?? [])
         .filter((line) => !line.archived_at && line.name)
         .map((line) => ({ id: line.id, name: line.name })),
-    };
+    }];
   });
 
   const org = orgForReceiptCurrency(proposal.local_currency);

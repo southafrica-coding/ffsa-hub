@@ -133,7 +133,7 @@ export async function getBudgetActuals(
     .from("budgets")
     .select(
       `id, name, currency, archived_at,
-       fiscal_periods!budgets_period_id_fkey(start_date, end_date),
+       fiscal_periods!budgets_period_org_fkey(id, org_id, label, kind, start_date, end_date),
        budget_lines!budget_lines_budget_id_fkey(
          id, name, line_total_cents, archived_at,
          budget_line_coding(org_region, account_id, tracking_option_1_id, tracking_option_2_id)
