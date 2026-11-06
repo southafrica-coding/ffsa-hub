@@ -78,6 +78,13 @@ describe("resolveTarget", () => {
     expect(resolveTarget("/my-schools-old")).toEqual({ kind: "web", path: "/my-schools-old" });
   });
 
+  it("history items open My History", () => {
+    expect(resolveTarget("/my-history")).toEqual({ kind: "app", path: "/history" });
+    expect(resolveTarget("/my-history?from=email")).toEqual({ kind: "app", path: "/history" });
+    expect(resolveTarget("/my-history/anything")).toEqual({ kind: "app", path: "/history" });
+    expect(resolveTarget("/my-history-old")).toEqual({ kind: "web", path: "/my-history-old" });
+  });
+
   it("the browser for everything else (today's feed items all go here)", () => {
     for (const href of ["/users?filter=pending", "/prayer-room?tab=practice", "/records-library/match-queue"]) {
       expect(resolveTarget(href)).toEqual({ kind: "web", path: href });

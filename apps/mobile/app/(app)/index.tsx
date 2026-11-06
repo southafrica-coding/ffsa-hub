@@ -1,9 +1,10 @@
 import { useRouter, type Href } from "expo-router";
-import { CalendarDays, Check, CircleUser, GraduationCap, Ticket, Wallet } from "lucide-react-native";
+import { CalendarDays, Check, CircleUser, GraduationCap, History, Ticket, Wallet } from "lucide-react-native";
 import { RefreshControl, ScrollView, View } from "react-native";
 
 import { useSession } from "@/auth/session-provider";
 import { Banner, Button, Masthead, Screen, Text } from "@/components";
+import { strings as historyStrings } from "@/features/history/strings";
 import type { FeedItem } from "@/features/home/api";
 import { groupFeed, resolveTarget, timeAgo } from "@/features/home/feed-logic";
 import { NotificationRow } from "@/features/home/NotificationRow";
@@ -174,6 +175,7 @@ export default function HomeScreen() {
               onPress={() => router.navigate("/schools")}
             />
           ) : null}
+          <ListRow icon={History} title={historyStrings.shortcut.title} subtitle={historyStrings.shortcut.subtitle} onPress={() => router.navigate("/history")} />
           <ListRow
             icon={CircleUser}
             title={s.shortcuts.me.title}
