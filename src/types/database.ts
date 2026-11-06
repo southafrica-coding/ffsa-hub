@@ -5050,6 +5050,226 @@ export type Database = {
           },
         ]
       }
+      xero_accounts: {
+        Row: {
+          class: string | null
+          code: string | null
+          currency_code: string | null
+          description: string | null
+          first_seen_at: string
+          friendly_name: string | null
+          id: string
+          is_bank: boolean
+          is_hidden: boolean
+          last_changed_at: string
+          missing_since: string | null
+          name: string
+          org_region: string
+          raw: Json | null
+          status: string
+          synced_at: string
+          tax_type: string | null
+          tenant_id: string
+          type: string | null
+          xero_account_id: string
+        }
+        Insert: {
+          class?: string | null
+          code?: string | null
+          currency_code?: string | null
+          description?: string | null
+          first_seen_at?: string
+          friendly_name?: string | null
+          id?: string
+          is_bank?: boolean
+          is_hidden?: boolean
+          last_changed_at?: string
+          missing_since?: string | null
+          name: string
+          org_region: string
+          raw?: Json | null
+          status?: string
+          synced_at?: string
+          tax_type?: string | null
+          tenant_id: string
+          type?: string | null
+          xero_account_id: string
+        }
+        Update: {
+          class?: string | null
+          code?: string | null
+          currency_code?: string | null
+          description?: string | null
+          first_seen_at?: string
+          friendly_name?: string | null
+          id?: string
+          is_bank?: boolean
+          is_hidden?: boolean
+          last_changed_at?: string
+          missing_since?: string | null
+          name?: string
+          org_region?: string
+          raw?: Json | null
+          status?: string
+          synced_at?: string
+          tax_type?: string | null
+          tenant_id?: string
+          type?: string | null
+          xero_account_id?: string
+        }
+        Relationships: []
+      }
+      xero_items: {
+        Row: {
+          code: string | null
+          description: string | null
+          first_seen_at: string
+          id: string
+          is_purchased: boolean | null
+          is_sold: boolean | null
+          last_changed_at: string
+          missing_since: string | null
+          name: string | null
+          org_region: string
+          raw: Json | null
+          sales_account_code: string | null
+          status: string
+          synced_at: string
+          tenant_id: string
+          xero_item_id: string
+        }
+        Insert: {
+          code?: string | null
+          description?: string | null
+          first_seen_at?: string
+          id?: string
+          is_purchased?: boolean | null
+          is_sold?: boolean | null
+          last_changed_at?: string
+          missing_since?: string | null
+          name?: string | null
+          org_region: string
+          raw?: Json | null
+          sales_account_code?: string | null
+          status?: string
+          synced_at?: string
+          tenant_id: string
+          xero_item_id: string
+        }
+        Update: {
+          code?: string | null
+          description?: string | null
+          first_seen_at?: string
+          id?: string
+          is_purchased?: boolean | null
+          is_sold?: boolean | null
+          last_changed_at?: string
+          missing_since?: string | null
+          name?: string | null
+          org_region?: string
+          raw?: Json | null
+          sales_account_code?: string | null
+          status?: string
+          synced_at?: string
+          tenant_id?: string
+          xero_item_id?: string
+        }
+        Relationships: []
+      }
+      xero_mirror_changes: {
+        Row: {
+          changed_at: string
+          entity: string
+          entity_id: string
+          field: string
+          id: number
+          new_value: string | null
+          old_value: string | null
+          org_region: string
+          run_id: string | null
+        }
+        Insert: {
+          changed_at?: string
+          entity: string
+          entity_id: string
+          field: string
+          id?: never
+          new_value?: string | null
+          old_value?: string | null
+          org_region: string
+          run_id?: string | null
+        }
+        Update: {
+          changed_at?: string
+          entity?: string
+          entity_id?: string
+          field?: string
+          id?: never
+          new_value?: string | null
+          old_value?: string | null
+          org_region?: string
+          run_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "xero_mirror_changes_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "xero_sync_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      xero_sync_runs: {
+        Row: {
+          counts: Json
+          error: string | null
+          finished_at: string | null
+          id: string
+          kind: string
+          org_region: string
+          started_at: string
+          started_by: string | null
+          status: string
+          tenant_id: string | null
+          trigger: string
+        }
+        Insert: {
+          counts?: Json
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          kind: string
+          org_region: string
+          started_at?: string
+          started_by?: string | null
+          status?: string
+          tenant_id?: string | null
+          trigger: string
+        }
+        Update: {
+          counts?: Json
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          kind?: string
+          org_region?: string
+          started_at?: string
+          started_by?: string | null
+          status?: string
+          tenant_id?: string | null
+          trigger?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "xero_sync_runs_started_by_fkey"
+            columns: ["started_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       xero_tokens: {
         Row: {
           access_token: string
@@ -5094,6 +5314,152 @@ export type Database = {
           {
             foreignKeyName: "xero_tokens_connected_by_fkey"
             columns: ["connected_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      xero_tracking_categories: {
+        Row: {
+          first_seen_at: string
+          id: string
+          last_changed_at: string
+          missing_since: string | null
+          name: string
+          org_region: string
+          raw: Json | null
+          status: string
+          synced_at: string
+          tenant_id: string
+          xero_category_id: string
+        }
+        Insert: {
+          first_seen_at?: string
+          id?: string
+          last_changed_at?: string
+          missing_since?: string | null
+          name: string
+          org_region: string
+          raw?: Json | null
+          status?: string
+          synced_at?: string
+          tenant_id: string
+          xero_category_id: string
+        }
+        Update: {
+          first_seen_at?: string
+          id?: string
+          last_changed_at?: string
+          missing_since?: string | null
+          name?: string
+          org_region?: string
+          raw?: Json | null
+          status?: string
+          synced_at?: string
+          tenant_id?: string
+          xero_category_id?: string
+        }
+        Relationships: []
+      }
+      xero_tracking_options: {
+        Row: {
+          category_id: string
+          first_seen_at: string
+          friendly_name: string | null
+          id: string
+          is_hidden: boolean
+          last_changed_at: string
+          match_key: string | null
+          missing_since: string | null
+          name: string
+          org_region: string
+          raw: Json | null
+          status: string
+          synced_at: string
+          tenant_id: string
+          xero_option_id: string
+        }
+        Insert: {
+          category_id: string
+          first_seen_at?: string
+          friendly_name?: string | null
+          id?: string
+          is_hidden?: boolean
+          last_changed_at?: string
+          match_key?: never
+          missing_since?: string | null
+          name: string
+          org_region: string
+          raw?: Json | null
+          status?: string
+          synced_at?: string
+          tenant_id: string
+          xero_option_id: string
+        }
+        Update: {
+          category_id?: string
+          first_seen_at?: string
+          friendly_name?: string | null
+          id?: string
+          is_hidden?: boolean
+          last_changed_at?: string
+          match_key?: never
+          missing_since?: string | null
+          name?: string
+          org_region?: string
+          raw?: Json | null
+          status?: string
+          synced_at?: string
+          tenant_id?: string
+          xero_option_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "xero_tracking_options_category_org_tenant_fkey"
+            columns: ["category_id", "org_region", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "xero_tracking_categories"
+            referencedColumns: ["id", "org_region", "tenant_id"]
+          },
+        ]
+      }
+      xero_tracking_roles: {
+        Row: {
+          category_id: string | null
+          category_name: string
+          org_region: string
+          role_key: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          category_id?: string | null
+          category_name: string
+          org_region: string
+          role_key: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          category_id?: string | null
+          category_name?: string
+          org_region?: string
+          role_key?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "xero_tracking_roles_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "xero_tracking_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "xero_tracking_roles_updated_by_fkey"
+            columns: ["updated_by"]
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
