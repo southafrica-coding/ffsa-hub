@@ -1832,6 +1832,7 @@ export type Database = {
           email_wording: Json
           pay_later_due_date: string | null
           xero_item_code: string | null
+          finance_org_id: string | null
           base_label_id: string | null
           brand: string
           buyer_fields: Json
@@ -1863,6 +1864,7 @@ export type Database = {
           email_wording?: Json
           pay_later_due_date?: string | null
           xero_item_code?: string | null
+          finance_org_id?: string | null
           base_label_id?: string | null
           brand?: string
           buyer_fields?: Json
@@ -1894,6 +1896,7 @@ export type Database = {
           email_wording?: Json
           pay_later_due_date?: string | null
           xero_item_code?: string | null
+          finance_org_id?: string | null
           base_label_id?: string | null
           brand?: string
           buyer_fields?: Json
@@ -1927,10 +1930,131 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "events_finance_org_id_fkey"
+            columns: ["finance_org_id"]
+            isOneToOne: false
+            referencedRelation: "finance_orgs"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "events_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      finance_orgs: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          key: string
+          name: string
+          projects_category_name: string
+          record_currency: string
+          xero_region: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          key: string
+          name: string
+          projects_category_name?: string
+          record_currency: string
+          xero_region: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          key?: string
+          name?: string
+          projects_category_name?: string
+          record_currency?: string
+          xero_region?: string
+        }
+        Relationships: []
+      }
+      finance_projects: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          linked_project_id: string | null
+          match_key: string | null
+          name: string
+          notes: string | null
+          org_id: string
+          project_type: string | null
+          sort_order: number | null
+          source: string | null
+          updated_at: string
+          updated_by: string | null
+          xero_tracking_option_id: string | null
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          linked_project_id?: string | null
+          name: string
+          notes?: string | null
+          org_id: string
+          project_type?: string | null
+          sort_order?: number | null
+          source?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          xero_tracking_option_id?: string | null
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          linked_project_id?: string | null
+          name?: string
+          notes?: string | null
+          org_id?: string
+          project_type?: string | null
+          sort_order?: number | null
+          source?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          xero_tracking_option_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_projects_linked_project_id_fkey"
+            columns: ["linked_project_id"]
+            isOneToOne: false
+            referencedRelation: "finance_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_projects_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "finance_orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_projects_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_projects_xero_tracking_option_id_fkey"
+            columns: ["xero_tracking_option_id"]
+            isOneToOne: false
+            referencedRelation: "xero_tracking_options"
             referencedColumns: ["id"]
           },
         ]
@@ -2747,6 +2871,7 @@ export type Database = {
           xero_invoice_id: string | null
           xero_invoice_number: string | null
           xero_region: string | null
+          finance_org_id: string | null
           invoice_due_date: string | null
           invoice_paid_cents: number
           invoice_emailed_at: string | null
@@ -2793,6 +2918,7 @@ export type Database = {
           xero_invoice_id?: string | null
           xero_invoice_number?: string | null
           xero_region?: string | null
+          finance_org_id?: string | null
           invoice_due_date?: string | null
           invoice_paid_cents?: number
           invoice_emailed_at?: string | null
@@ -2839,6 +2965,7 @@ export type Database = {
           xero_invoice_id?: string | null
           xero_invoice_number?: string | null
           xero_region?: string | null
+          finance_org_id?: string | null
           invoice_due_date?: string | null
           invoice_paid_cents?: number
           invoice_emailed_at?: string | null
@@ -2882,6 +3009,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "orders_finance_org_id_fkey"
+            columns: ["finance_org_id"]
+            isOneToOne: false
+            referencedRelation: "finance_orgs"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "orders_buyer_contact_id_fkey"
             columns: ["buyer_contact_id"]
@@ -5053,6 +5187,226 @@ export type Database = {
           },
         ]
       }
+      xero_accounts: {
+        Row: {
+          class: string | null
+          code: string | null
+          currency_code: string | null
+          description: string | null
+          first_seen_at: string
+          friendly_name: string | null
+          id: string
+          is_bank: boolean
+          is_hidden: boolean
+          last_changed_at: string
+          missing_since: string | null
+          name: string
+          org_region: string
+          raw: Json | null
+          status: string
+          synced_at: string
+          tax_type: string | null
+          tenant_id: string
+          type: string | null
+          xero_account_id: string
+        }
+        Insert: {
+          class?: string | null
+          code?: string | null
+          currency_code?: string | null
+          description?: string | null
+          first_seen_at?: string
+          friendly_name?: string | null
+          id?: string
+          is_bank?: boolean
+          is_hidden?: boolean
+          last_changed_at?: string
+          missing_since?: string | null
+          name: string
+          org_region: string
+          raw?: Json | null
+          status?: string
+          synced_at?: string
+          tax_type?: string | null
+          tenant_id: string
+          type?: string | null
+          xero_account_id: string
+        }
+        Update: {
+          class?: string | null
+          code?: string | null
+          currency_code?: string | null
+          description?: string | null
+          first_seen_at?: string
+          friendly_name?: string | null
+          id?: string
+          is_bank?: boolean
+          is_hidden?: boolean
+          last_changed_at?: string
+          missing_since?: string | null
+          name?: string
+          org_region?: string
+          raw?: Json | null
+          status?: string
+          synced_at?: string
+          tax_type?: string | null
+          tenant_id?: string
+          type?: string | null
+          xero_account_id?: string
+        }
+        Relationships: []
+      }
+      xero_items: {
+        Row: {
+          code: string | null
+          description: string | null
+          first_seen_at: string
+          id: string
+          is_purchased: boolean | null
+          is_sold: boolean | null
+          last_changed_at: string
+          missing_since: string | null
+          name: string | null
+          org_region: string
+          raw: Json | null
+          sales_account_code: string | null
+          status: string
+          synced_at: string
+          tenant_id: string
+          xero_item_id: string
+        }
+        Insert: {
+          code?: string | null
+          description?: string | null
+          first_seen_at?: string
+          id?: string
+          is_purchased?: boolean | null
+          is_sold?: boolean | null
+          last_changed_at?: string
+          missing_since?: string | null
+          name?: string | null
+          org_region: string
+          raw?: Json | null
+          sales_account_code?: string | null
+          status?: string
+          synced_at?: string
+          tenant_id: string
+          xero_item_id: string
+        }
+        Update: {
+          code?: string | null
+          description?: string | null
+          first_seen_at?: string
+          id?: string
+          is_purchased?: boolean | null
+          is_sold?: boolean | null
+          last_changed_at?: string
+          missing_since?: string | null
+          name?: string | null
+          org_region?: string
+          raw?: Json | null
+          sales_account_code?: string | null
+          status?: string
+          synced_at?: string
+          tenant_id?: string
+          xero_item_id?: string
+        }
+        Relationships: []
+      }
+      xero_mirror_changes: {
+        Row: {
+          changed_at: string
+          entity: string
+          entity_id: string
+          field: string
+          id: number
+          new_value: string | null
+          old_value: string | null
+          org_region: string
+          run_id: string | null
+        }
+        Insert: {
+          changed_at?: string
+          entity: string
+          entity_id: string
+          field: string
+          id?: never
+          new_value?: string | null
+          old_value?: string | null
+          org_region: string
+          run_id?: string | null
+        }
+        Update: {
+          changed_at?: string
+          entity?: string
+          entity_id?: string
+          field?: string
+          id?: never
+          new_value?: string | null
+          old_value?: string | null
+          org_region?: string
+          run_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "xero_mirror_changes_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "xero_sync_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      xero_sync_runs: {
+        Row: {
+          counts: Json
+          error: string | null
+          finished_at: string | null
+          id: string
+          kind: string
+          org_region: string
+          started_at: string
+          started_by: string | null
+          status: string
+          tenant_id: string | null
+          trigger: string
+        }
+        Insert: {
+          counts?: Json
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          kind: string
+          org_region: string
+          started_at?: string
+          started_by?: string | null
+          status?: string
+          tenant_id?: string | null
+          trigger: string
+        }
+        Update: {
+          counts?: Json
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          kind?: string
+          org_region?: string
+          started_at?: string
+          started_by?: string | null
+          status?: string
+          tenant_id?: string | null
+          trigger?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "xero_sync_runs_started_by_fkey"
+            columns: ["started_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       xero_tokens: {
         Row: {
           access_token: string
@@ -5097,6 +5451,152 @@ export type Database = {
           {
             foreignKeyName: "xero_tokens_connected_by_fkey"
             columns: ["connected_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      xero_tracking_categories: {
+        Row: {
+          first_seen_at: string
+          id: string
+          last_changed_at: string
+          missing_since: string | null
+          name: string
+          org_region: string
+          raw: Json | null
+          status: string
+          synced_at: string
+          tenant_id: string
+          xero_category_id: string
+        }
+        Insert: {
+          first_seen_at?: string
+          id?: string
+          last_changed_at?: string
+          missing_since?: string | null
+          name: string
+          org_region: string
+          raw?: Json | null
+          status?: string
+          synced_at?: string
+          tenant_id: string
+          xero_category_id: string
+        }
+        Update: {
+          first_seen_at?: string
+          id?: string
+          last_changed_at?: string
+          missing_since?: string | null
+          name?: string
+          org_region?: string
+          raw?: Json | null
+          status?: string
+          synced_at?: string
+          tenant_id?: string
+          xero_category_id?: string
+        }
+        Relationships: []
+      }
+      xero_tracking_options: {
+        Row: {
+          category_id: string
+          first_seen_at: string
+          friendly_name: string | null
+          id: string
+          is_hidden: boolean
+          last_changed_at: string
+          match_key: string | null
+          missing_since: string | null
+          name: string
+          org_region: string
+          raw: Json | null
+          status: string
+          synced_at: string
+          tenant_id: string
+          xero_option_id: string
+        }
+        Insert: {
+          category_id: string
+          first_seen_at?: string
+          friendly_name?: string | null
+          id?: string
+          is_hidden?: boolean
+          last_changed_at?: string
+          match_key?: never
+          missing_since?: string | null
+          name: string
+          org_region: string
+          raw?: Json | null
+          status?: string
+          synced_at?: string
+          tenant_id: string
+          xero_option_id: string
+        }
+        Update: {
+          category_id?: string
+          first_seen_at?: string
+          friendly_name?: string | null
+          id?: string
+          is_hidden?: boolean
+          last_changed_at?: string
+          match_key?: never
+          missing_since?: string | null
+          name?: string
+          org_region?: string
+          raw?: Json | null
+          status?: string
+          synced_at?: string
+          tenant_id?: string
+          xero_option_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "xero_tracking_options_category_org_tenant_fkey"
+            columns: ["category_id", "org_region", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "xero_tracking_categories"
+            referencedColumns: ["id", "org_region", "tenant_id"]
+          },
+        ]
+      }
+      xero_tracking_roles: {
+        Row: {
+          category_id: string | null
+          category_name: string
+          org_region: string
+          role_key: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          category_id?: string | null
+          category_name: string
+          org_region: string
+          role_key: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          category_id?: string | null
+          category_name?: string
+          org_region?: string
+          role_key?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "xero_tracking_roles_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "xero_tracking_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "xero_tracking_roles_updated_by_fkey"
+            columns: ["updated_by"]
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
@@ -5150,6 +5650,20 @@ export type Database = {
       }
     }
     Functions: {
+      finance_org_choices: {
+        Args: never
+        Returns: {
+          id: string
+          is_active: boolean
+          key: string
+          name: string
+          record_currency: string
+        }[]
+      }
+      finance_org_for_order: {
+        Args: { p_order_id: string }
+        Returns: string | null
+      }
       _library_cascade_link: {
         Args: {
           p_link_method: string
