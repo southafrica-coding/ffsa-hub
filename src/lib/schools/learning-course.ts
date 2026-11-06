@@ -126,16 +126,75 @@ export function datesAreOrdered(dates: {
   return null;
 }
 
-/** Why a course shell cannot be removed. Finance and transcript rows win. */
+/** Why a course shell cannot be removed. Finance, transcript, and grader marks win. */
 export function learningCourseDeleteBlock(counts: {
   charges: number;
   plans: number;
   grades: number;
+  marks: number;
 }): string | null {
   if (counts.charges > 0) {
-    return "This course has fee items. Finance removes those before the course can be deleted.";
+    return "This course has fee items. Those have to be removed before the course can be deleted.";
   }
   if (counts.plans > 0) return "Students already have billing plans on this course.";
   if (counts.grades > 0) return "This course has grades on the transcript. It cannot be deleted.";
+  if (counts.marks > 0) return "This course has grader marks. Remove them before deleting the course.";
   return null;
+}
+
+/** Fields that must stay put once the course has fees or transcript grades. */
+export const LOCKED_WHEN_IN_USE = ["code", "start_date", "end_date", "arrival_date", "graded"] as const;
+
+/** Fields that show on a transcript. Successful changes are written to the audit log. */
+export const TRANSCRIPT_FIELDS = ["code", "name", "credit_hours", "graded"] as const;
+
+function sameValue(before: unknown, after: unknown): boolean {
+  if (before == null && after == null) return true;
+  if (typeof before === "string" && typeof after === "string") {
+    const left = /^\d{4}-\d{2}-\d{2}/.test(before) ? before.slice(0, 10) : before;
+    const right = /^\d{4}-\d{2}-\d{2}/.test(after) ? after.slice(0, 10) : after;
+    return left === right;
+  }
+  return before === after;
+}
+
+export function lockedFieldChanges(
+  existing: Record<string, unknown>,
+  patch: Record<string, unknown>
+): string[] {
+  return LOCKED_WHEN_IN_USE.filter(
+    (field) => field in patch && !sameValue(existing[field], patch[field])
+  );
+}
+
+export function transcriptFieldChanges(
+  existing: Record<string, unknown>,
+  patch: Record<string, unknown>
+): Record<string, { from: unknown; to: unknown }> | null {
+  const changes: Record<string, { from: unknown; to: unknown }> = {};
+  for (const field of TRANSCRIPT_FIELDS) {
+    if (!(field in patch) || sameValue(existing[field], patch[field])) continue;
+    changes[field] = { from: existing[field] ?? null, to: patch[field] };
+  }
+  return Object.keys(changes).length > 0 ? changes : null;
+}
+
+/**
+ * A grader has to be staff (or another elevated role), not a student-only
+ * account. Same membership set as src/lib/auth/membership-roles.ts:
+ * student, community_member, self_service are not enough on their own.
+ * Staff who also hold the student role still qualify.
+ */
+const MEMBERSHIP_ONLY = new Set(["student", "community_member", "self_service"]);
+
+export function canBeCourseGrader(roleNames: string[]): boolean {
+  return roleNames.some((name) => !MEMBERSHIP_ONLY.has(name));
+}
+
+/** Removed from the roster, or marked withdrawn. */
+export function enrollmentIsClosed(row: {
+  removed_at?: string | null;
+  status?: string | null;
+}): boolean {
+  return row.removed_at != null || row.status === "withdrawn";
 }

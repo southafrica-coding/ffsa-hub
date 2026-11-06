@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { datesAreOrdered, learningCourseDeleteBlock, parseLearningCourse } from "./learning-course";
+import {
+  canBeCourseGrader,
+  datesAreOrdered,
+  enrollmentIsClosed,
+  learningCourseDeleteBlock,
+  lockedFieldChanges,
+  parseLearningCourse,
+  transcriptFieldChanges,
+} from "./learning-course";
 
 describe("parseLearningCourse", () => {
   it("uppercases the code and requires a name", () => {
@@ -16,10 +24,36 @@ describe("parseLearningCourse", () => {
 });
 
 describe("learningCourseDeleteBlock", () => {
-  it("keeps a course that finance or the transcript still uses", () => {
-    expect(learningCourseDeleteBlock({ charges: 1, plans: 0, grades: 0 })).toMatch(/fee items/);
-    expect(learningCourseDeleteBlock({ charges: 0, plans: 2, grades: 0 })).toMatch(/billing plans/);
-    expect(learningCourseDeleteBlock({ charges: 0, plans: 0, grades: 1 })).toMatch(/transcript/);
-    expect(learningCourseDeleteBlock({ charges: 0, plans: 0, grades: 0 })).toBeNull();
+  const clear = { charges: 0, plans: 0, grades: 0, marks: 0 };
+  it("keeps a course that finance, the transcript, or grader marks still use", () => {
+    expect(learningCourseDeleteBlock({ ...clear, charges: 1 })).toMatch(/fee items/);
+    expect(learningCourseDeleteBlock({ ...clear, plans: 2 })).toMatch(/billing plans/);
+    expect(learningCourseDeleteBlock({ ...clear, grades: 1 })).toMatch(/transcript/);
+    expect(learningCourseDeleteBlock({ ...clear, marks: 1 })).toMatch(/grader marks/);
+    expect(learningCourseDeleteBlock(clear)).toBeNull();
+  });
+});
+
+describe("course field locks", () => {
+  it("locks code, dates, and graded once the course is in use, and logs transcript fields", () => {
+    const existing = { code: "FFBX", name: "Bible", start_date: "2026-03-01", graded: true, credit_hours: 12 };
+    expect(lockedFieldChanges(existing, { name: "Bible school" })).toEqual([]);
+    expect(lockedFieldChanges(existing, { code: "FFX", graded: false })).toEqual(["code", "graded"]);
+    expect(lockedFieldChanges(existing, { start_date: "2026-03-01T00:00:00.000Z" })).toEqual([]);
+    expect(transcriptFieldChanges(existing, { name: "Bible school", credit_hours: 10 })).toEqual({
+      name: { from: "Bible", to: "Bible school" },
+      credit_hours: { from: 12, to: 10 },
+    });
+  });
+
+  it("treats staff as graders and students as not", () => {
+    expect(canBeCourseGrader(["student"])).toBe(false);
+    expect(canBeCourseGrader([])).toBe(false);
+    expect(canBeCourseGrader(["staff"])).toBe(true);
+    expect(canBeCourseGrader(["staff", "student"])).toBe(true);
+    expect(canBeCourseGrader(["admin"])).toBe(true);
+    expect(enrollmentIsClosed({ removed_at: "2026-01-01", status: "arrived" })).toBe(true);
+    expect(enrollmentIsClosed({ removed_at: null, status: "withdrawn" })).toBe(true);
+    expect(enrollmentIsClosed({ removed_at: null, status: "arrived" })).toBe(false);
   });
 });

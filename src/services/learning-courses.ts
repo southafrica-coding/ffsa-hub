@@ -14,12 +14,20 @@ const COLUMN_SETS = [
   "id, program_id, code, name, description, scope, sequence, status, start_date, end_date, arrival_date, notes, lead_staff_id, created_at, updated_at",
 ];
 
-async function readWithFallback(run: (columns: string) => Promise<{ data: unknown; error: { code?: string } | null }>) {
-  let last: { data: unknown; error: { code?: string } | null } = { data: null, error: null };
+function retryWithoutNewColumns(error: { code?: string; message?: string }): boolean {
+  if (error.code === "42703" || error.code === "PGRST204") return true;
+  const message = error.message ?? "";
+  return /credit_hours|\bgraded\b/.test(message) && /does not exist|schema cache|column/i.test(message);
+}
+
+async function readWithFallback(
+  run: (columns: string) => Promise<{ data: unknown; error: { code?: string; message?: string } | null }>
+) {
+  let last: { data: unknown; error: { code?: string; message?: string } | null } = { data: null, error: null };
   for (const columns of COLUMN_SETS) {
     last = await run(columns);
     if (!last.error) return last;
-    if (last.error.code !== "42703" && last.error.code !== "PGRST204") return last;
+    if (!retryWithoutNewColumns(last.error)) return last;
   }
   return last;
 }
@@ -53,7 +61,7 @@ export async function updateLearningCourse(
 ) {
   return supabase
     .from("billing_courses")
-    .update(patch)
+    .update({ ...patch, updated_at: new Date().toISOString() })
     .eq("program_id", programId)
     .eq("id", courseId)
     .select("*")

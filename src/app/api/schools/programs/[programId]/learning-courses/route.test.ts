@@ -29,7 +29,8 @@ vi.mock("@/services/learning-courses", () => ({
 
 import { GET, POST } from "./route";
 
-const ctx = { params: Promise.resolve({ programId: "p1" }) };
+const PROGRAM = "11111111-1111-4111-8111-111111111111";
+const ctx = { params: Promise.resolve({ programId: PROGRAM }) };
 
 beforeEach(() => {
   h.user = { id: "me" };
@@ -60,7 +61,7 @@ describe("learning courses API", () => {
     );
     expect(res.status).toBe(201);
     expect(h.inserted).toMatchObject({
-      program_id: "p1",
+      program_id: PROGRAM,
       code: "FFBX",
       name: "Bible school",
       credit_hours: 12,
@@ -80,5 +81,25 @@ describe("learning courses API", () => {
     );
     expect(res.status).toBe(400);
     expect(h.inserted).toBeNull();
+  });
+
+  it("rejects a bad school id and refuses preview writes", async () => {
+    const bad = await GET(new Request("http://x"), { params: Promise.resolve({ programId: "not-a-school" }) });
+    expect(bad.status).toBe(400);
+
+    const previous = process.env.VERCEL_ENV;
+    process.env.VERCEL_ENV = "preview";
+    try {
+      const preview = await POST(
+        new Request("http://x", { method: "POST", body: JSON.stringify({ code: "FFBX", name: "Bible school" }) }),
+        ctx
+      );
+      expect(preview.status).toBe(403);
+      expect(await preview.json()).toMatchObject({ error: "preview_writes_disabled" });
+      expect(h.inserted).toBeNull();
+    } finally {
+      if (previous === undefined) delete process.env.VERCEL_ENV;
+      else process.env.VERCEL_ENV = previous;
+    }
   });
 });

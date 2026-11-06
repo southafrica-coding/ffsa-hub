@@ -1,7 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { userCanManageProgram } from "@/lib/auth/check-schools-access";
 import { guardUser, isGuard } from "@/lib/schools/lms-guard";
-import { dbError, isUuid, json } from "@/lib/schools/lms-http";
+import { dbError, isUuid, json, previewWritesDisabled } from "@/lib/schools/lms-http";
+import { enrollmentIsClosed } from "@/lib/schools/learning-course";
 import { assignmentCovers, isLetterGrade, type GraderAssignment } from "@/lib/schools/multi-grader";
 import { listGraderRowsForUser } from "@/services/course-graders";
 import { getLearningCourse, postOfficialGrade } from "@/services/learning-courses";
@@ -22,6 +23,8 @@ import { getLearningCourse, postOfficialGrade } from "@/services/learning-course
 export async function POST(request: Request) {
   const guard = await guardUser();
   if (isGuard(guard)) return guard.response;
+  const blocked = previewWritesDisabled();
+  if (blocked) return blocked;
   let body: Record<string, unknown>;
   try {
     body = (await request.json()) as Record<string, unknown>;
@@ -44,11 +47,14 @@ export async function POST(request: Request) {
   const admin = createAdminClient();
   const { data: enrollment, error } = await admin
     .from("enrollments")
-    .select("id, program_id")
+    .select("id, program_id, removed_at, status")
     .eq("id", enrollmentId)
     .maybeSingle();
   if (error) return dbError(error, "Couldn't load the enrolment.");
   if (!enrollment) return json({ error: "not_found", message: "Enrolment not found." }, 404);
+  if (enrollmentIsClosed(enrollment)) {
+    return json({ error: "bad_request", message: "That student is no longer on this school's roster." }, 400);
+  }
 
   const course = await getLearningCourse(admin, enrollment.program_id, courseId);
   if (course.error) return dbError(course.error, "Couldn't load the course.");

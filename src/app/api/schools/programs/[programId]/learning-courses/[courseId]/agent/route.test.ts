@@ -34,7 +34,12 @@ vi.mock("@/lib/auth/check-schools-access", () => ({
 
 import { POST } from "./route";
 
-const ctx = { params: Promise.resolve({ programId: "p1", courseId: "c1" }) };
+const ctx = {
+  params: Promise.resolve({
+    programId: "11111111-1111-4111-8111-111111111111",
+    courseId: "22222222-2222-4222-8222-222222222222",
+  }),
+};
 const post = () => POST(new Request("http://x", { method: "POST", body: "{}" }), ctx);
 
 beforeEach(() => {

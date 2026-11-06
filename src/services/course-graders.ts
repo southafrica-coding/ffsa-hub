@@ -49,7 +49,10 @@ export async function upsertGradeMark(
 ) {
   return supabase
     .from("grade_marks")
-    .upsert(row, { onConflict: "enrollment_id,billing_course_id,grader_user_id" })
+    .upsert(
+      { ...row, updated_at: new Date().toISOString() },
+      { onConflict: "enrollment_id,billing_course_id,grader_user_id" }
+    )
     .select("id, enrollment_id, billing_course_id, grader_user_id, letter_grade, notes, updated_at")
     .single();
 }

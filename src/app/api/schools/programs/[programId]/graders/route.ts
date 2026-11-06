@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { guardProgram, isGuard } from "@/lib/schools/lms-guard";
-import { dbError, isLmsSchemaMissing, isUuid, json, lmsSchemaNotApplied } from "@/lib/schools/lms-http";
+import { dbError, isLmsSchemaMissing, isUuid, json, lmsSchemaNotApplied, previewWritesDisabled } from "@/lib/schools/lms-http";
+import { canBeCourseGrader, enrollmentIsClosed } from "@/lib/schools/learning-course";
 import { deleteCourseGrader, insertCourseGrader, listCourseGraders } from "@/services/course-graders";
 import { getLearningCourse } from "@/services/learning-courses";
 
@@ -32,6 +33,8 @@ export async function POST(request: Request, context: Ctx) {
   const { programId } = await context.params;
   const guard = await guardProgram(programId);
   if (isGuard(guard)) return guard.response;
+  const blocked = previewWritesDisabled();
+  if (blocked) return blocked;
   let body: Record<string, unknown>;
   try {
     body = (await request.json()) as Record<string, unknown>;
@@ -49,6 +52,11 @@ export async function POST(request: Request, context: Ctx) {
   if (enrollmentId && !isUuid(enrollmentId)) return json({ error: "bad_request", message: "enrollment_id is not valid." }, 400);
 
   const admin = createAdminClient();
+  const staff = await graderIsStaff(admin, graderId);
+  if (staff === "error") return json({ error: "server_error", message: "Couldn't check that person." }, 500);
+  if (staff === "no") {
+    return json({ error: "bad_request", message: "A grader has to be a staff member, not a student." }, 400);
+  }
   if (courseId) {
     const course = await getLearningCourse(admin, programId, courseId);
     if (course.error) return dbError(course.error, "Couldn't load the course.");
@@ -57,12 +65,15 @@ export async function POST(request: Request, context: Ctx) {
   if (enrollmentId) {
     const { data, error } = await admin
       .from("enrollments")
-      .select("id")
+      .select("id, removed_at, status, program_id")
       .eq("id", enrollmentId)
       .eq("program_id", programId)
       .maybeSingle();
     if (error) return dbError(error, "Couldn't load the enrolment.");
     if (!data) return json({ error: "bad_request", message: "That student is not in this school." }, 400);
+    if (enrollmentIsClosed(data)) {
+      return json({ error: "bad_request", message: "That student is no longer on this school's roster." }, 400);
+    }
   }
 
   const { data, error } = await insertCourseGrader(admin, {
@@ -84,6 +95,8 @@ export async function DELETE(request: Request, context: Ctx) {
   const { programId } = await context.params;
   const guard = await guardProgram(programId);
   if (isGuard(guard)) return guard.response;
+  const blocked = previewWritesDisabled();
+  if (blocked) return blocked;
   const id = new URL(request.url).searchParams.get("id") ?? "";
   if (!isUuid(id)) return json({ error: "bad_request", message: "id is required." }, 400);
   const { data, error } = await deleteCourseGrader(createAdminClient(), programId, id);
@@ -93,4 +106,22 @@ export async function DELETE(request: Request, context: Ctx) {
   }
   if (!data || data.length === 0) return json({ error: "not_found", message: "Grader not found in this school." }, 404);
   return json({ ok: true });
+}
+
+async function graderIsStaff(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string
+): Promise<"yes" | "no" | "error"> {
+  const { data, error } = await admin
+    .from("user_roles")
+    .select("roles!inner(name)")
+    .eq("user_id", userId);
+  if (error) return "error";
+  const names = ((data ?? []) as Array<{ roles: { name: string } | { name: string }[] | null }>).flatMap(
+    (row) => {
+      if (!row.roles) return [];
+      return Array.isArray(row.roles) ? row.roles.map((role) => role.name) : [row.roles.name];
+    }
+  );
+  return canBeCourseGrader(names) ? "yes" : "no";
 }

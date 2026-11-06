@@ -1,6 +1,6 @@
 import { guardUser, isGuard } from "@/lib/schools/lms-guard";
 import { userCanManageProgram } from "@/lib/auth/check-schools-access";
-import { json } from "@/lib/schools/lms-http";
+import { isUuid, json } from "@/lib/schools/lms-http";
 
 // POST /api/schools/programs/:programId/learning-courses/:courseId/agent
 //
@@ -9,9 +9,12 @@ import { json } from "@/lib/schools/lms-http";
 // (src/lib/schools/course-agent.ts). The repo has no Mindjoy (or other
 // tutor) integration, and this route does not add one.
 //
-// Who will be allowed: a manager of the school, or a student enrolled in it
-// (removed_at is null) once the course belongs to that school. The response
-// deliberately does not include the course material.
+// Who will be allowed: a manager of the school, or a student enrolled in it.
+// Live columns (checked against the database, not guessed): enrollments.user_id,
+// enrollments.removed_at, enrollments.program_id. Own-row SELECT is allowed by
+// "Users can read own enrollments" (user_id = auth.uid()). billing_courses SELECT
+// is allowed for any signed-in user ("Authenticated can read billing courses").
+// The response deliberately does not include the course material.
 
 type Ctx = { params: Promise<{ programId: string; courseId: string }> };
 
@@ -30,6 +33,9 @@ export async function POST(_request: Request, context: Ctx) {
   const { programId, courseId } = await context.params;
   const guard = await guardUser();
   if (isGuard(guard)) return guard.response;
+  if (!isUuid(programId) || !isUuid(courseId)) {
+    return json({ error: "bad_request", message: "That school or course id is not valid." }, 400);
+  }
 
   if (await userCanManageProgram(guard.supabase, guard.user.id, programId)) {
     return notEnabled();

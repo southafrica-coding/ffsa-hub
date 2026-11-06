@@ -1,7 +1,14 @@
+import type { Json } from "@/types/database";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { guardProgram, isGuard } from "@/lib/schools/lms-guard";
-import { dbError, json } from "@/lib/schools/lms-http";
-import { datesAreOrdered, learningCourseDeleteBlock, parseLearningCourse } from "@/lib/schools/learning-course";
+import { dbError, isLmsSchemaMissing, json, previewWritesDisabled } from "@/lib/schools/lms-http";
+import {
+  datesAreOrdered,
+  learningCourseDeleteBlock,
+  lockedFieldChanges,
+  parseLearningCourse,
+  transcriptFieldChanges,
+} from "@/lib/schools/learning-course";
 import {
   countRelated,
   deleteLearningCourse,
@@ -21,6 +28,8 @@ export async function PATCH(request: Request, context: Ctx) {
   const { programId, courseId } = await context.params;
   const guard = await guardProgram(programId);
   if (isGuard(guard)) return guard.response;
+  const blocked = previewWritesDisabled();
+  if (blocked) return blocked;
 
   let body: Record<string, unknown>;
   try {
@@ -48,8 +57,37 @@ export async function PATCH(request: Request, context: Ctx) {
   });
   if (dates) return json({ error: "bad_request", message: dates }, 400);
 
+  const currentRow = existing.data as Record<string, unknown>;
+  const locked = lockedFieldChanges(currentRow, parsed.value);
+  if (locked.length > 0) {
+    const usage = await usageCounts(admin, courseId);
+    if ("response" in usage) return usage.response;
+    if (usage.charges > 0 || usage.grades > 0) {
+      return json(
+        {
+          error: "conflict",
+          message: "Code, dates, and whether the course is graded cannot change once it has fees or transcript grades.",
+        },
+        409
+      );
+    }
+  }
+
   const updated = await updateLearningCourse(admin, programId, courseId, parsed.value);
   if (updated.error) return dbError(updated.error, "Couldn't update the course.");
+
+  const transcript = transcriptFieldChanges(currentRow, parsed.value);
+  if (transcript) {
+    const { error: auditError } = await admin.from("audit_logs").insert({
+      user_id: guard.user.id,
+      action: "update",
+      resource_type: "billing_courses",
+      resource_id: courseId,
+      changes: { transcript } as unknown as Json,
+    });
+    if (auditError) console.error("[lms] transcript audit failed", auditError.code ?? "");
+  }
+
   return json({ course: updated.data });
 }
 
@@ -57,27 +95,56 @@ export async function DELETE(_request: Request, context: Ctx) {
   const { programId, courseId } = await context.params;
   const guard = await guardProgram(programId);
   if (isGuard(guard)) return guard.response;
+  const blocked = previewWritesDisabled();
+  if (blocked) return blocked;
   const admin = createAdminClient();
   const existing = await getLearningCourse(admin, programId, courseId);
   if (existing.error) return dbError(existing.error, "Couldn't load the course.");
   if (!existing.data) return json({ error: "not_found", message: "Course not found in this school." }, 404);
 
-  const [charges, plans, grades] = await Promise.all([
-    countRelated(admin, "fee_charge_items", "course_id", courseId),
-    countRelated(admin, "student_billing_plans", "course_id", courseId),
-    countRelated(admin, "grades", "course_id", courseId),
-  ]);
-  for (const result of [charges, plans, grades]) {
-    if (result.error) return dbError(result.error, "Couldn't check whether the course is in use.");
-  }
-  const block = learningCourseDeleteBlock({
-    charges: charges.count ?? 0,
-    plans: plans.count ?? 0,
-    grades: grades.count ?? 0,
-  });
+  const usage = await usageCounts(admin, courseId);
+  if ("response" in usage) return usage.response;
+  const block = learningCourseDeleteBlock(usage);
   if (block) return json({ error: "conflict", message: block }, 409);
 
   const removed = await deleteLearningCourse(admin, programId, courseId);
   if (removed.error) return dbError(removed.error, "Couldn't delete the course.");
   return json({ ok: true });
+}
+
+async function usageCounts(
+  admin: ReturnType<typeof createAdminClient>,
+  courseId: string
+): Promise<
+  | { response: Response }
+  | { charges: number; plans: number; grades: number; marks: number }
+> {
+  const [charges, plans, grades, marks] = await Promise.all([
+    countRelated(admin, "fee_charge_items", "course_id", courseId),
+    countRelated(admin, "student_billing_plans", "course_id", courseId),
+    countRelated(admin, "grades", "course_id", courseId),
+    countRelated(admin, "grade_marks", "billing_course_id", courseId),
+  ]);
+  for (const result of [charges, plans, grades]) {
+    if (result.error) return { response: dbError(result.error, "Couldn't check whether the course is in use.") };
+  }
+  // grade_marks is proposed. A missing table means there is nothing to wipe.
+  // Any other error stops the delete so marks cannot be cascade-removed by surprise.
+  if (marks.error) {
+    if (!isLmsSchemaMissing(marks.error)) {
+      return { response: dbError(marks.error, "Couldn't check grader marks.") };
+    }
+    return {
+      charges: charges.count ?? 0,
+      plans: plans.count ?? 0,
+      grades: grades.count ?? 0,
+      marks: 0,
+    };
+  }
+  return {
+    charges: charges.count ?? 0,
+    plans: plans.count ?? 0,
+    grades: grades.count ?? 0,
+    marks: marks.count ?? 0,
+  };
 }

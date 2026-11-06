@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { userCanManageApplications, userCanManageProgram } from "@/lib/auth/check-schools-access";
-import { json } from "./lms-http";
+import { isUuid, json } from "./lms-http";
 
 export async function guardUser() {
   const supabase = await createClient();
@@ -16,6 +16,9 @@ export async function guardUser() {
 export async function guardProgram(programId: string) {
   const guard = await guardUser();
   if ("response" in guard) return guard;
+  if (!isUuid(programId)) {
+    return { response: json({ error: "bad_request", message: "That school id is not valid." }, 400) };
+  }
   if (!(await userCanManageProgram(guard.supabase, guard.user.id, programId))) {
     return { response: json({ error: "forbidden", message: "You cannot manage this school." }, 403) };
   }

@@ -1,7 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { userCanManageProgram } from "@/lib/auth/check-schools-access";
 import { guardUser, isGuard } from "@/lib/schools/lms-guard";
-import { dbError, isLmsSchemaMissing, isUuid, json, lmsSchemaNotApplied } from "@/lib/schools/lms-http";
+import { dbError, isLmsSchemaMissing, isUuid, json, lmsSchemaNotApplied, previewWritesDisabled } from "@/lib/schools/lms-http";
+import { enrollmentIsClosed } from "@/lib/schools/learning-course";
 import { assignmentCovers, combineLetterGrades, isLetterGrade, type GraderAssignment } from "@/lib/schools/multi-grader";
 import { listCourseGraders, listGradeMarks, listGraderRowsForUser, upsertGradeMark } from "@/services/course-graders";
 import { getLearningCourse } from "@/services/learning-courses";
@@ -52,6 +53,8 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const guard = await guardUser();
   if (isGuard(guard)) return guard.response;
+  const blocked = previewWritesDisabled();
+  if (blocked) return blocked;
   let body: Record<string, unknown>;
   try {
     body = (await request.json()) as Record<string, unknown>;
@@ -105,15 +108,21 @@ async function loadScope(
 ): Promise<Scope> {
   const { data: enrollment, error } = await admin
     .from("enrollments")
-    .select("id, program_id")
+    .select("id, program_id, removed_at, status")
     .eq("id", enrollmentId)
     .maybeSingle();
   if (error) return { response: dbError(error, "Couldn't load the enrolment.") };
   if (!enrollment) return { response: json({ error: "not_found", message: "Enrolment not found." }, 404) };
+  if (enrollmentIsClosed(enrollment)) {
+    return { response: json({ error: "bad_request", message: "That student is no longer on this school's roster." }, 400) };
+  }
 
   const course = await getLearningCourse(admin, enrollment.program_id, courseId);
   if (course.error) return { response: dbError(course.error, "Couldn't load the course.") };
   if (!course.data) return { response: json({ error: "bad_request", message: "That course is not in this student's school." }, 400) };
+  if ((course.data as { graded?: boolean }).graded === false) {
+    return { response: json({ error: "bad_request", message: "This course is not graded." }, 400) };
+  }
 
   const manager = await userCanManageProgram(guard.supabase as never, guard.user.id, enrollment.program_id);
   if (manager) return { manager: true, programId: enrollment.program_id, assignments: [] };

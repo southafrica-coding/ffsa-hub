@@ -23,7 +23,12 @@ export async function insertCourseTemplate(supabase: Client, row: Record<string,
 }
 
 export async function updateCourseTemplate(supabase: Client, id: string, patch: Record<string, unknown>) {
-  return supabase.from("course_design_templates").update(patch).eq("id", id).select("*").single();
+  return supabase
+    .from("course_design_templates")
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select("*")
+    .single();
 }
 
 export async function deleteCourseTemplate(supabase: Client, id: string) {
@@ -37,7 +42,7 @@ export async function getCourseOutline(supabase: Client, courseId: string) {
 export async function saveCourseOutline(supabase: Client, row: Record<string, unknown>) {
   return supabase
     .from("course_outlines")
-    .upsert(row, { onConflict: "billing_course_id" })
+    .upsert({ ...row, updated_at: new Date().toISOString() }, { onConflict: "billing_course_id" })
     .select("*")
     .single();
 }

@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { guardProgram, isGuard } from "@/lib/schools/lms-guard";
-import { dbError, json } from "@/lib/schools/lms-http";
+import { dbError, json, previewWritesDisabled } from "@/lib/schools/lms-http";
 import { datesAreOrdered, parseLearningCourse } from "@/lib/schools/learning-course";
 import { insertLearningCourse, listLearningCourses } from "@/services/learning-courses";
 
@@ -37,6 +37,8 @@ export async function POST(request: Request, context: Ctx) {
   const { programId } = await context.params;
   const guard = await guardProgram(programId);
   if (isGuard(guard)) return guard.response;
+  const blocked = previewWritesDisabled();
+  if (blocked) return blocked;
   const parsed = parseLearningCourse(await readJson(request), "create");
   if (!parsed.ok) return json({ error: "bad_request", message: parsed.message }, 400);
   const dates = datesAreOrdered(parsed.value as { start_date?: string | null; end_date?: string | null; arrival_date?: string | null });
