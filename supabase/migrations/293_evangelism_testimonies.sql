@@ -17,14 +17,21 @@
 --                        UPDATE of the caller's own draft and submitted
 --                        rows. DELETE of the caller's own drafts only.
 --                        Cannot set status to published or withheld.
---                        Cannot set published_at or published_by.
+--                        Cannot set published_at, published_by, or
+--                        withheld_reason.
 --   evangelism.publish   SELECT and UPDATE every row, including
 --                        withheld. DELETE any row. May publish.
+--                        status = 'published' requires published_at
+--                        and published_by.
 --
 -- Withheld rows are invisible to everyone except publishers and
--- admins, including the author. That is tighter than the [id] route's
--- visible() helper, which would return an author's own withheld row
--- once they have view. RLS makes that GET a not-found.
+-- admins, including the author. #499's current visible() helper
+-- matches that: a withheld story is not returned to its author.
+--
+-- evangelism_removals is the tombstone recordRemoval / listRemovalsSince
+-- write and read (testimony_id, reason, removed_at). The keys above
+-- are seeded only. This file does not grant them to any role bundle
+-- or user.
 --
 -- author_user_id is set on insert (must be auth.uid() for a user JWT)
 -- and is not in the authenticated UPDATE grant. A BEFORE trigger
@@ -52,18 +59,22 @@
 --
 -- ROLLBACK (nothing else references these objects):
 --   DROP TABLE IF EXISTS public.evangelism_media;
+--   DROP TABLE IF EXISTS public.evangelism_removals;
 --   DROP TABLE IF EXISTS public.evangelism_testimonies;
 --   DROP FUNCTION IF EXISTS public.evangelism_testimonies_guard();
 --   DROP FUNCTION IF EXISTS public.evangelism_media_path_guard();
 --   DROP FUNCTION IF EXISTS public.evangelism_media_path_matches(text, uuid);
+--   DROP FUNCTION IF EXISTS public.evangelism_author_unchanged(uuid, uuid);
 --   DELETE FROM storage.buckets WHERE id = 'evangelism-media';
 --   DELETE FROM public.permissions
 --    WHERE key IN ('evangelism.view', 'evangelism.submit', 'evangelism.publish');
 -- ============================================================
 
 -- ────────────────────────────────────────────────────────────
--- 1. Permission keys (not grants to people — admins already pass)
+-- 1. Permission keys (seeded, not assigned — admins already pass)
 -- ────────────────────────────────────────────────────────────
+-- No role_permissions and no user_permissions rows. is_admin()
+-- (super_admin, admin) is the only way in until someone grants a key.
 INSERT INTO public.permissions (module, key, display_name, sort_order) VALUES
   ('evangelism', 'evangelism.view',    'View published testimonies and base stats', 10),
   ('evangelism', 'evangelism.submit',  'Upload and submit testimonies',            20),
@@ -152,11 +163,21 @@ BEGIN
   END IF;
 
   IF public.is_admin() OR public.has_permission('evangelism.publish') THEN
+    IF NEW.status = 'published'
+       AND (NEW.published_at IS NULL OR NEW.published_by IS NULL) THEN
+      RAISE EXCEPTION 'A published testimony needs published_at and published_by'
+        USING ERRCODE = '42501';
+    END IF;
     RETURN NEW;
   END IF;
 
   IF NEW.status IN ('published', 'withheld') THEN
     RAISE EXCEPTION 'Only a publisher can publish or withhold a testimony'
+      USING ERRCODE = '42501';
+  END IF;
+
+  IF NEW.withheld_reason IS NOT NULL THEN
+    RAISE EXCEPTION 'Only a publisher can set withheld_reason'
       USING ERRCODE = '42501';
   END IF;
 
@@ -268,6 +289,7 @@ CREATE POLICY "evangelism_testimonies_insert_submitter"
     AND status IN ('draft', 'submitted')
     AND published_at IS NULL
     AND published_by IS NULL
+    AND withheld_reason IS NULL
     AND public.has_permission('evangelism.submit')
     AND NOT public.is_admin()
     AND NOT public.has_permission('evangelism.publish')
@@ -280,6 +302,10 @@ CREATE POLICY "evangelism_testimonies_insert_publisher"
   WITH CHECK (
     author_user_id = auth.uid()
     AND (public.is_admin() OR public.has_permission('evangelism.publish'))
+    AND (
+      status IS DISTINCT FROM 'published'
+      OR (published_at IS NOT NULL AND published_by IS NOT NULL)
+    )
   );
 
 DROP POLICY IF EXISTS "evangelism_testimonies_update_submitter" ON public.evangelism_testimonies;
@@ -298,6 +324,7 @@ CREATE POLICY "evangelism_testimonies_update_submitter"
     AND status IN ('draft', 'submitted')
     AND published_at IS NULL
     AND published_by IS NULL
+    AND withheld_reason IS NULL
     AND public.has_permission('evangelism.submit')
     AND NOT public.is_admin()
     AND NOT public.has_permission('evangelism.publish')
@@ -312,6 +339,10 @@ CREATE POLICY "evangelism_testimonies_update_publisher"
   WITH CHECK (
     (public.is_admin() OR public.has_permission('evangelism.publish'))
     AND public.evangelism_author_unchanged(id, author_user_id)
+    AND (
+      status IS DISTINCT FROM 'published'
+      OR (published_at IS NOT NULL AND published_by IS NOT NULL)
+    )
   );
 
 DROP POLICY IF EXISTS "evangelism_testimonies_delete_own_draft" ON public.evangelism_testimonies;
@@ -358,6 +389,12 @@ GRANT ALL ON TABLE public.evangelism_testimonies TO service_role;
 -- 15 MB and 250 MB, in bytes, matching the API constants.
 -- Photos cannot use the bucket cap: that single number has to be
 -- the video size or videos never upload.
+-- How many files a story may have (8, of which at most 4 are video)
+-- is left to the API. A CHECK cannot count sibling rows.
+-- ON DELETE CASCADE removes these rows when the testimony row goes.
+-- It does not remove the object in the evangelism-media bucket.
+-- The testimony DELETE route removes those objects with the service
+-- role before it deletes the row. A direct SQL delete leaves the files.
 CREATE TABLE IF NOT EXISTS public.evangelism_media (
   id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   testimony_id   uuid NOT NULL REFERENCES public.evangelism_testimonies (id) ON DELETE CASCADE,
@@ -552,13 +589,73 @@ CREATE POLICY "evangelism_media_delete_publisher"
   );
 
 -- No UPDATE policy and no UPDATE grant: file rows are inserted once.
--- Replacing a file is a new row. Deleting the testimony cascades.
+-- Replacing a file is a new row. CASCADE removes the row only.
 REVOKE ALL ON TABLE public.evangelism_media FROM PUBLIC, anon, authenticated;
 GRANT SELECT, INSERT, DELETE ON TABLE public.evangelism_media TO authenticated;
 GRANT ALL ON TABLE public.evangelism_media TO service_role;
 
 -- ────────────────────────────────────────────────────────────
--- 6. Private bucket. No storage.objects policies.
+-- 6. Removals (TV tombstones)
+-- ────────────────────────────────────────────────────────────
+-- Shape used by #499's recordRemoval and listRemovalsSince:
+--   insert { testimony_id, reason: 'withheld' | 'deleted', removed_at }
+--   select testimony_id where removed_at > cursor
+-- recordRemoval runs as the publisher's user JWT, before the
+-- testimony is updated to withheld or deleted. listRemovalsSince
+-- runs as the feed caller (evangelism.view). The current tip of
+-- #499 stopped calling them because this table was missing; the
+-- columns here are the ones those functions send and read.
+--
+-- testimony_id is not a foreign key. The row has to keep the id
+-- after the testimony is deleted. ON DELETE CASCADE would drop the
+-- id the screen needs. ON DELETE RESTRICT would block that delete.
+-- There is no UPDATE or DELETE policy. authenticated gets SELECT
+-- and INSERT only — not the UPDATE/DELETE granted on the other
+-- evangelism tables.
+CREATE TABLE IF NOT EXISTS public.evangelism_removals (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  testimony_id  uuid NOT NULL,
+  reason        text NOT NULL CHECK (reason IN ('withheld', 'deleted')),
+  removed_at    timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS evangelism_removals_removed_at
+  ON public.evangelism_removals (removed_at);
+
+ALTER TABLE public.evangelism_removals ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "evangelism_removals_select" ON public.evangelism_removals;
+CREATE POLICY "evangelism_removals_select"
+  ON public.evangelism_removals
+  FOR SELECT TO authenticated
+  USING (
+    public.is_admin()
+    OR public.has_permission('evangelism.view')
+    OR public.has_permission('evangelism.submit')
+    OR public.has_permission('evangelism.publish')
+  );
+
+DROP POLICY IF EXISTS "evangelism_removals_insert_publisher" ON public.evangelism_removals;
+CREATE POLICY "evangelism_removals_insert_publisher"
+  ON public.evangelism_removals
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    (public.is_admin() OR public.has_permission('evangelism.publish'))
+    AND reason IN ('withheld', 'deleted')
+    AND EXISTS (
+      SELECT 1
+      FROM public.evangelism_testimonies t
+      WHERE t.id = testimony_id
+        AND (t.status = 'published' OR t.published_at IS NOT NULL)
+    )
+  );
+
+REVOKE ALL ON TABLE public.evangelism_removals FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT ON TABLE public.evangelism_removals TO authenticated;
+GRANT ALL ON TABLE public.evangelism_removals TO service_role;
+
+-- ────────────────────────────────────────────────────────────
+-- 7. Private bucket. No storage.objects policies.
 -- ────────────────────────────────────────────────────────────
 -- file_size_limit is 250 MB (262144000), the video maximum. It is
 -- not 15 MB: that would reject every video at upload time. Photo
@@ -595,7 +692,7 @@ SET public = EXCLUDED.public,
 --   SELECT relrowsecurity FROM pg_class
 --    WHERE oid = 'public.evangelism_testimonies'::regclass;
 --   SELECT policyname, cmd FROM pg_policies
---    WHERE tablename IN ('evangelism_testimonies', 'evangelism_media')
+--    WHERE tablename IN ('evangelism_testimonies', 'evangelism_media', 'evangelism_removals')
 --    ORDER BY tablename, cmd, policyname;
 --   SELECT id, public, file_size_limit, allowed_mime_types
 --     FROM storage.buckets WHERE id = 'evangelism-media';
