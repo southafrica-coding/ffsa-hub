@@ -88,8 +88,8 @@ describe("GET /api/evangelism/feed", () => {
     expect(body.testimonies.map((row: { id: string }) => row.id)).toEqual(["old", "new"]);
     expect(body.cursor).toBe("2026-11-06T12:00:00.000Z");
     expect(body.testimonies[0].withheld_reason).toBeUndefined();
-    expect(body.testimonies[0].author_name).toBeUndefined();
     expect("author_name" in body.testimonies[0]).toBe(false);
+    expect("author_user_id" in body.testimonies[0]).toBe(false);
     expect(body.stats.range).toBe("month");
     expect(body.media_expires_at).toEqual(expect.any(String));
     expect(body.refreshed).toEqual([]);
