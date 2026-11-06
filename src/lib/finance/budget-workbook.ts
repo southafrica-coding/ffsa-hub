@@ -115,6 +115,8 @@ export type WorkbookWrite = {
   expenses?: WorkbookExpenseInput[];
   /** Sent status, when the caller echoed the current one. A change is rejected earlier. */
   status?: string;
+  /** Sheet revision from the last load. Required on save. */
+  updatedAt?: string;
   present: {
     name: boolean;
     ownerKind: boolean;
@@ -131,6 +133,7 @@ export type WorkbookWrite = {
     lines: boolean;
     expenses: boolean;
     status: boolean;
+    updatedAt: boolean;
   };
   ignored: string[];
 };
@@ -531,9 +534,9 @@ export function parseWorkbookWrite(body: unknown, mode: "create" | "save"): Pars
   if (hasCodingKey(record) || hasXeroSpendKey(record)) {
     return { ok: false, error: "This save doesn't set a Xero code, and it doesn't record Xero spend." };
   }
-  if (record.currency !== undefined || record.record_currency !== undefined) {
-    const currency = String(record.currency ?? record.record_currency).trim().toUpperCase();
-    if (currency !== "" && currency !== "ZAR") {
+  const currencyRaw = record.currency !== undefined ? record.currency : record.record_currency;
+  if (currencyRaw !== undefined && currencyRaw !== null && currencyRaw !== "") {
+    if (typeof currencyRaw !== "string" || currencyRaw.trim().toUpperCase() !== "ZAR") {
       return { ok: false, error: "Amounts stay in rand. There's no currency to choose." };
     }
   }
@@ -545,7 +548,7 @@ export function parseWorkbookWrite(body: unknown, mode: "create" | "save"): Pars
   }
 
   const ignored: string[] = [];
-  if (record.currency !== undefined || record.record_currency !== undefined) ignored.push("currency");
+  if (typeof currencyRaw === "string" && currencyRaw.trim()) ignored.push("currency");
 
   const namePresent = record.name !== undefined;
   let name: string | undefined;
@@ -630,10 +633,20 @@ export function parseWorkbookWrite(body: unknown, mode: "create" | "save"): Pars
     status = record.status;
   }
 
+  let updatedAt: string | undefined;
+  const updatedAtPresent = record.updatedAt !== undefined || record.updated_at !== undefined;
+  if (updatedAtPresent) {
+    const raw = record.updatedAt !== undefined ? record.updatedAt : record.updated_at;
+    if (raw !== null && raw !== "") {
+      if (typeof raw !== "string") return { ok: false, error: "Reload this budget before saving." };
+      updatedAt = raw;
+    }
+  }
+
   if (mode === "create") {
     if (!name) return { ok: false, error: "Name the budget." };
     if (!ownerKind || !ownerId) return { ok: false, error: "Choose one owner." };
-    if (!periodId && !periodParsed.period) return { ok: false, error: "A budget needs a period with a start and an end." };
+    if (!periodId) return { ok: false, error: "Choose a period that already exists." };
   }
 
   return {
@@ -655,6 +668,7 @@ export function parseWorkbookWrite(body: unknown, mode: "create" | "save"): Pars
       lines,
       expenses,
       status,
+      updatedAt,
       present: {
         name: namePresent,
         ownerKind: ownerKindPresent,
@@ -671,6 +685,7 @@ export function parseWorkbookWrite(body: unknown, mode: "create" | "save"): Pars
         lines: record.lines !== undefined,
         expenses: record.expenses !== undefined,
         status: statusPresent,
+        updatedAt: updatedAtPresent,
       },
       ignored,
     },

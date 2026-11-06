@@ -12,7 +12,7 @@ export type PreviewWriteBlock = {
   message: string;
 };
 
-const PREVIEW_MESSAGE = "This preview can't change budgets with the service role.";
+const PREVIEW_MESSAGE = "This preview deployment cannot change budgets.";
 
 export function serviceRoleWriteBlock(): PreviewWriteBlock | null {
   if (process.env.VERCEL_ENV === "preview") {

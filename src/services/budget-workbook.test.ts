@@ -13,7 +13,14 @@ const EXPENSE = "55555555-5555-4555-8555-555555555555";
 type Row = Record<string, unknown>;
 type Write = { table: string; op: string; payload: unknown };
 
-function memory(options?: { missing?: string[]; hide?: string[]; denyInsert?: string[] }) {
+function memory(options?: {
+  missing?: string[];
+  hide?: string[];
+  denyInsert?: string[];
+  denyUpdate?: string[];
+  denyArchive?: string[];
+  rpcError?: { code: string; message: string };
+}) {
   const tables: Record<string, Row[]> = {
     finance_orgs: [
       { id: NPC, key: "npc", name: "FFSA NPC", record_currency: "ZAR", is_active: true },
@@ -39,7 +46,14 @@ function memory(options?: { missing?: string[]; hide?: string[]; denyInsert?: st
   const missing = new Set(options?.missing ?? []);
   const hide = new Set(options?.hide ?? []);
   const denyInsert = new Set(options?.denyInsert ?? []);
+  const denyUpdate = new Set(options?.denyUpdate ?? []);
+  const denyArchive = new Set(options?.denyArchive ?? []);
   const writes: Write[] = [];
+  let clock = Date.parse("2026-11-06T00:00:00.000Z");
+  const stamp = () => {
+    clock += 1000;
+    return new Date(clock).toISOString();
+  };
 
   function applyLine(row: Row) {
     const budget = tables.budgets.find((item) => item.id === row.budget_id);
@@ -137,16 +151,24 @@ function memory(options?: { missing?: string[]; hide?: string[]; denyInsert?: st
       }
       if (state.op === "insert" && state.payload) {
         writes.push({ table, op: "insert", payload: structuredClone(state.payload) });
-        const stored: Row = { ...state.payload, id: state.payload.id ?? randomUUID() };
+        const stored: Row = { ...state.payload, id: state.payload.id ?? randomUUID(), updated_at: stamp() };
         if (table === "budget_lines") applyLine(stored);
         if (table === "budget_expenses") stored.archived_at = null;
         tables[table].push(stored);
         return { data: one ? stored : [stored], error: null };
       }
+      if (state.op === "update" && state.payload && denyUpdate.has(table)) {
+        writes.push({ table, op: "update", payload: structuredClone(state.payload) });
+        return { data: one ? null : [], error: null };
+      }
+      if (state.op === "update" && state.payload && denyArchive.has(table) && "archived_at" in state.payload) {
+        writes.push({ table, op: "update", payload: structuredClone(state.payload) });
+        return { data: one ? null : [], error: null };
+      }
       if (state.op === "update" && state.payload) {
         writes.push({ table, op: "update", payload: structuredClone(state.payload) });
         const matched = rows(table, state.filters, null, null);
-        for (const row of matched) Object.assign(row, state.payload);
+        for (const row of matched) Object.assign(row, state.payload, { updated_at: stamp() });
         if (table === "budgets" && "driver_value" in state.payload) {
           for (const row of matched) recomputeDriver(String(row.id));
         }
@@ -172,6 +194,7 @@ function memory(options?: { missing?: string[]; hide?: string[]; denyInsert?: st
     from: (table: string) => query(table),
     async rpc(name: string, args: Record<string, unknown>) {
       writes.push({ table: "rpc", op: name, payload: structuredClone(args) });
+      if (options?.rpcError) return { data: null, error: options.rpcError };
       if (missing.has("create_budget_from_template") || name !== "create_budget_from_template") {
         return { data: null, error: { code: "PGRST202", message: "Could not find the function public.create_budget_from_template in the schema cache" } };
       }
@@ -230,6 +253,7 @@ function memory(options?: { missing?: string[]; hide?: string[]; denyInsert?: st
         fundraising_goal_cents: null,
         notes: null,
         archived_at: null,
+        updated_at: stamp(),
       });
       const sections = [
         ["overview", "Overview", 10],
@@ -246,7 +270,7 @@ function memory(options?: { missing?: string[]; hide?: string[]; denyInsert?: st
     },
   };
 
-  return { client, tables, writes };
+  return { client, tables, writes, denyInsert, denyUpdate, denyArchive };
 }
 
 const period = {
@@ -261,6 +285,7 @@ function sheet(extra: Record<string, unknown> = {}) {
     name: "DTS 2027",
     ownerKind: "program",
     ownerId: OWNER,
+    periodId: PERIOD,
     ...period,
     ...extra,
   };
@@ -428,33 +453,35 @@ describe("budget workbook save and load", () => {
     expect((result.body.budget as { orgId: string; currency: string }).currency).toBe("ZAR");
   });
 
-  it("uses the period's org and leaves a new period for someone who can edit budgets", async () => {
-    const created = await createBudgetWorkbook(
-      db.client,
-      sheet({ periodLabel: "Term 1", periodKind: "term", periodStart: "2027-01-15", periodEnd: "2027-03-31" })
-    );
-    expect(created.status).toBe(201);
-    const periodInsert = db.writes.find((write) => write.table === "fiscal_periods" && write.op === "insert");
-    expect(periodInsert?.payload).toMatchObject({ org_id: NPC, kind: "term", label: "Term 1", is_current: false });
-    const rpc = db.writes.find((write) => write.op === "create_budget_from_template");
-    expect(rpc?.payload).toMatchObject({ p_org_id: NPC, p_currency: null });
+  it("does not invent a fiscal period when only a typed period is sent", async () => {
+    const body: Record<string, unknown> = sheet({ periodLabel: "Term 1", periodKind: "term", periodStart: "2027-01-15", periodEnd: "2027-03-31" });
+    delete body.periodId;
+    const created = await createBudgetWorkbook(db.client, body);
+    expect(created.status).toBe(400);
+    expect(created.body.error).toBe("Choose a period that already exists.");
+    expect(db.writes.some((write) => write.table === "fiscal_periods" || write.op === "create_budget_from_template")).toBe(false);
   });
 
-  it("refuses a period whose dates disagree with the one already stored", async () => {
+  it("refuses a typed period that does not match the chosen period id", async () => {
     const result = await createBudgetWorkbook(db.client, sheet({ periodEnd: "2027-06-30" }));
-    expect(result.status).toBe(409);
-    expect(db.writes.some((write) => write.op === "create_budget_from_template")).toBe(false);
+    expect(result.status).toBe(400);
+    expect(db.writes.some((write) => write.op === "create_budget_from_template" || write.table === "fiscal_periods")).toBe(false);
   });
 
-  it("tells a person who cannot add a period, and does not invent a permission", async () => {
-    db = memory({ denyInsert: ["fiscal_periods"] });
-    const result = await createBudgetWorkbook(
-      db.client,
-      sheet({ periodLabel: "2028", periodStart: "2028-01-01", periodEnd: "2028-12-31" })
-    );
-    expect(result.status).toBe(403);
-    expect(result.body.error).toMatch(/period/);
-    expect(JSON.stringify(result.body)).not.toMatch(/can_edit_all_budgets/);
+  it("does not pass a short unknown database message through as a 500", async () => {
+    db = memory({ rpcError: { code: "XX000", message: "boom" } });
+    const result = await createBudgetWorkbook(db.client, sheet());
+    expect(result.status).toBe(500);
+    expect(result.body.error).toBe("The budget couldn't be saved.");
+    expect(result.body.error).not.toBe("boom");
+  });
+
+  it("turns a short database period error into a 400 without the raw text", async () => {
+    db = memory({ rpcError: { code: "22023", message: "Period not found or archived" } });
+    const result = await createBudgetWorkbook(db.client, sheet());
+    expect(result.status).toBe(400);
+    expect(result.body.error).toBe("That period isn't available.");
+    expect(result.body.error).not.toBe("Period not found or archived");
   });
 
   it("leaves outreach creation to the database permission", async () => {
@@ -512,6 +539,7 @@ describe("budget workbook save and load", () => {
       ownerKind: "program",
       ownerId: OWNER,
       ...period,
+      updatedAt: updatedAtOf(created),
       notes: "Updated",
       lines: [{ id: LINE, kind: "variable", name: "Food", amountCents: 20000, frequency: 12, multiplier: 8, notes: "lunch" }],
       expenses: [{ date: "2027-03-01", description: "Bread", amountCents: -500 }],
@@ -540,6 +568,138 @@ describe("budget workbook save and load", () => {
     });
     expect(saved.status).toBe(400);
     expect(saved.body.error).toMatch(/owner and period/);
+  });
+
+  it("saves tracker rows on a submitted budget without rewriting unchanged lines", async () => {
+    const created = await createBudgetWorkbook(db.client, sheet({
+      lines: [{ id: LINE, kind: "fixed", name: "Van", amountCents: 100, multiplier: 1 }],
+      expenses: [{ id: EXPENSE, date: "2027-02-01", description: "Fuel", amountCents: 500, lineId: LINE }],
+    }));
+    expect(created.status).toBe(201);
+    db.tables.budgets[0].status = "submitted";
+    db.denyUpdate.add("budget_lines");
+    db.writes.length = 0;
+    const saved = await saveBudgetWorkbook(db.client, budgetId(created), {
+      updatedAt: updatedAtOf(created),
+      lines: [{ id: LINE, kind: "fixed", name: "Van", amountCents: 100, multiplier: 1 }],
+      expenses: [
+        { id: EXPENSE, date: "2027-02-01", description: "Fuel", amountCents: 500, lineId: LINE },
+        { date: "2027-03-01", description: "Bread", amountCents: 200 },
+      ],
+    });
+    expect(saved.status).toBe(200);
+    expect(db.writes.filter((write) => write.table === "budget_lines")).toEqual([]);
+    expect(db.writes.some((write) => write.table === "budget_expenses" && write.op === "insert")).toBe(true);
+    db.tables.budgets[0].status = "approved";
+    const again = await saveBudgetWorkbook(db.client, budgetId(created), {
+      updatedAt: updatedAtOf(saved),
+      lines: [{ id: LINE, kind: "fixed", name: "Van", amountCents: 100, multiplier: 1 }],
+      expenses: [
+        { id: EXPENSE, date: "2027-02-01", description: "Fuel", amountCents: 500, lineId: LINE },
+        { id: expenseId(saved, "Bread"), date: "2027-03-01", description: "Bread", amountCents: 250 },
+      ],
+    });
+    expect(again.status).toBe(200);
+    expect(db.writes.filter((write) => write.table === "budget_lines")).toEqual([]);
+  });
+
+  it("does not update a line or an expense when the sheet sends the same values", async () => {
+    const created = await createBudgetWorkbook(db.client, sheet({
+      lines: [{ id: LINE, kind: "fixed", name: "Van", amountCents: 100, multiplier: 1, notes: "once" }],
+      expenses: [{ id: EXPENSE, date: "2027-02-01", description: "Fuel", amountCents: 500, lineId: LINE }],
+    }));
+    db.writes.length = 0;
+    const saved = await saveBudgetWorkbook(db.client, budgetId(created), {
+      updatedAt: updatedAtOf(created),
+      notes: (created.body.budget as { notes: string | null }).notes,
+      lines: [{ id: LINE, kind: "fixed", name: "Van", amountCents: 100, multiplier: 1, notes: "once" }],
+      expenses: [{ id: EXPENSE, date: "2027-02-01", description: "Fuel", amountCents: 500, lineId: LINE }],
+    });
+    expect(saved.status).toBe(200);
+    expect(db.writes.filter((write) => write.table === "budget_lines" || write.table === "budget_expenses")).toEqual([]);
+  });
+
+  it("rejects a stale updatedAt before it archives anyone else's rows", async () => {
+    const created = await createBudgetWorkbook(db.client, sheet({
+      lines: [{ id: LINE, kind: "fixed", name: "Van", amountCents: 100, multiplier: 1 }],
+    }));
+    db.tables.budget_lines.find((line) => line.id === LINE)!.updated_at = "2026-12-01T00:00:00.000Z";
+    db.writes.length = 0;
+    const saved = await saveBudgetWorkbook(db.client, budgetId(created), {
+      updatedAt: updatedAtOf(created),
+      lines: [],
+    });
+    expect(saved.status).toBe(409);
+    expect(saved.body.error).toMatch(/Reload/);
+    expect(db.writes.filter((write) => write.table === "budget_lines")).toEqual([]);
+    expect(db.tables.budget_lines.find((line) => line.id === LINE)?.archived_at).toBeNull();
+  });
+
+  it("checks a huge line total before creating a budget", async () => {
+    const result = await createBudgetWorkbook(db.client, sheet({
+      lines: [{ kind: "fixed", name: "Huge", amountCents: 100_000_000_000_000, multiplier: 100000 }],
+    }));
+    expect(result.status).toBe(400);
+    expect(result.body.error).toMatch(/too large/);
+    expect(db.tables.budgets).toHaveLength(0);
+    expect(db.writes.some((write) => write.op === "create_budget_from_template")).toBe(false);
+  });
+
+  it("archives a draft when a later step fails, so a retry is not a bare name clash", async () => {
+    db.denyInsert.add("budget_lines");
+    const first = await createBudgetWorkbook(db.client, sheet({
+      lines: [{ id: LINE, kind: "fixed", name: "Van", amountCents: 100, multiplier: 1 }],
+    }));
+    expect(first.status).toBe(403);
+    expect(first.body.code).toBeUndefined();
+    expect(db.tables.budgets.filter((row) => !row.archived_at)).toHaveLength(0);
+    db.denyInsert.delete("budget_lines");
+    const second = await createBudgetWorkbook(db.client, sheet({
+      lines: [{ id: LINE, kind: "fixed", name: "Van", amountCents: 100, multiplier: 1 }],
+    }));
+    expect(second.status).toBe(201);
+  });
+
+  it("reports a partial draft when the half-saved budget cannot be archived", async () => {
+    db.denyInsert.add("budget_lines");
+    db.denyUpdate.add("budgets");
+    const result = await createBudgetWorkbook(db.client, sheet({
+      lines: [{ id: LINE, kind: "fixed", name: "Van", amountCents: 100, multiplier: 1 }],
+    }));
+    expect(result.status).toBe(409);
+    expect(result.body).toMatchObject({ code: "partial_draft" });
+    expect(result.body.error).toMatch(/partly saved/);
+    expect(typeof result.body.budgetId).toBe("string");
+    expect(db.tables.budgets.filter((row) => !row.archived_at)).toHaveLength(1);
+  });
+
+  it("does not report success when archiving a line is skipped", async () => {
+    const created = await createBudgetWorkbook(db.client, sheet({
+      lines: [{ id: LINE, kind: "fixed", name: "Van", amountCents: 100, multiplier: 1 }],
+    }));
+    db.denyArchive.add("budget_lines");
+    const saved = await saveBudgetWorkbook(db.client, budgetId(created), {
+      updatedAt: updatedAtOf(created),
+      lines: [],
+    });
+    expect(saved.status).toBe(403);
+    expect(db.tables.budget_lines.find((line) => line.id === LINE)?.archived_at).toBeNull();
+  });
+
+  it("does not archive a line that still has live expenses when the tracker is left out", async () => {
+    const created = await createBudgetWorkbook(db.client, sheet({
+      lines: [{ id: LINE, kind: "fixed", name: "Van", amountCents: 100, multiplier: 1 }],
+      expenses: [{ id: EXPENSE, date: "2027-02-01", description: "Fuel", amountCents: 500, lineId: LINE }],
+    }));
+    db.writes.length = 0;
+    const saved = await saveBudgetWorkbook(db.client, budgetId(created), {
+      updatedAt: updatedAtOf(created),
+      lines: [],
+    });
+    expect(saved.status).toBe(200);
+    expect(db.tables.budget_lines.find((line) => line.id === LINE)?.archived_at).toBeNull();
+    expect(db.tables.budget_expenses.find((row) => row.id === EXPENSE)?.archived_at).toBeNull();
+    expect(db.writes.filter((write) => write.table === "budget_lines" && write.op === "update")).toEqual([]);
   });
 
   it("lists only rand workbooks", async () => {
@@ -576,4 +736,15 @@ describe("budget workbook save and load", () => {
 
 function budgetId(result: { body: Record<string, unknown> }): string {
   return (result.body.budget as { id: string }).id;
+}
+
+function updatedAtOf(result: { body: Record<string, unknown> }): string {
+  return (result.body.budget as { updatedAt: string }).updatedAt;
+}
+
+function expenseId(result: { body: Record<string, unknown> }, description: string): string {
+  const expenses = (result.body.budget as { expenses: { id: string; description: string }[] }).expenses;
+  const found = expenses.find((row) => row.description === description);
+  if (!found) throw new Error(`missing expense ${description}`);
+  return found.id;
 }

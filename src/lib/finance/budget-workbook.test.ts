@@ -9,6 +9,7 @@ import {
 } from "./budget-workbook";
 
 const OWNER = "33333333-3333-4333-8333-333333333333";
+const PERIOD = "66666666-6666-4666-8666-666666666666";
 
 describe("line totals", () => {
   it("rounds amount × frequency × multiplier half away from zero", () => {
@@ -57,6 +58,7 @@ describe("parseWorkbookWrite", () => {
     periodLabel: "2027",
     periodStart: "2027-01-01",
     periodEnd: "2027-12-31",
+    periodId: PERIOD,
   };
 
   it("keeps fixed frequency at 1 and reads a sheet amount", () => {
@@ -101,6 +103,22 @@ describe("parseWorkbookWrite", () => {
     expect(parsed.value.notes).toBe("Bring receipts.");
     expect(parsed.value.ignored).toContain("purpose");
     expect("purpose" in parsed.value).toBe(false);
+  });
+
+  it("treats a null currency as unset", () => {
+    const parsed = parseWorkbookWrite({ ...createBody, currency: null }, "create");
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(JSON.stringify(parsed.value)).not.toContain("NULL");
+  });
+
+  it("requires a period id and does not accept a typed period on its own", () => {
+    const body: Record<string, unknown> = { ...createBody };
+    delete body.periodId;
+    expect(parseWorkbookWrite(body, "create")).toEqual({
+      ok: false,
+      error: "Choose a period that already exists.",
+    });
   });
 
   it("rejects a US org key and any currency other than rand", () => {
