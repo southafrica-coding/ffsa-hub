@@ -24,6 +24,7 @@ import {
   ownerColumn,
   ownerIdFromRow,
   parseWorkbookWrite,
+  periodOrgDecision,
   safeLineTotal,
   type BudgetOwnerKind,
   type SouthAfricaOrg,
@@ -39,7 +40,10 @@ type Client = any;
 export const FINANCE_ORG_COLUMNS = "id, key, name, record_currency, is_active";
 
 export type OrgReader = {
+  /** Read by finance_orgs.key. Used when the signed-in user cannot see the NPC row. */
   readFinanceOrg: (key: string) => Promise<{ data: SouthAfricaOrg | null; error: { code?: string; message?: string } | null }>;
+  /** Read by id. Used to check the fiscal period's org without swapping it. */
+  readFinanceOrgById?: (id: string) => Promise<{ data: SouthAfricaOrg | null; error: { code?: string; message?: string } | null }>;
 };
 
 export type ApiResult = { status: number; body: Record<string, unknown> };
@@ -179,22 +183,43 @@ async function probe(supabase: Client): Promise<ApiResult | null> {
   return fail(500, "The budget couldn't be read.");
 }
 
-async function resolveZaOrg(supabase: Client, deps?: OrgReader): Promise<{ org: SouthAfricaOrg } | { failure: ApiResult }> {
-  const own = await supabase.from("finance_orgs").select(FINANCE_ORG_COLUMNS).eq("key", "npc").maybeSingle();
+async function readOrgRow(
+  supabase: Client,
+  lookup: { id?: string; key?: string },
+  deps?: OrgReader
+): Promise<{ row: SouthAfricaOrg | null } | { failure: ApiResult }> {
+  let query = supabase.from("finance_orgs").select(FINANCE_ORG_COLUMNS);
+  query = lookup.id ? query.eq("id", lookup.id) : query.eq("key", lookup.key);
+  const own = await query.maybeSingle();
   if (own.error && isBudgetSchemaMissing(own.error)) {
     return { failure: fail(503, "South Africa organisation couldn't be read.") };
   }
-  if (isSouthAfricaOrg(own.data)) return { org: own.data };
-  if (own.data) return { failure: fail(400, "Budgets are for South Africa only, in rand.") };
+  if (own.data) return { row: own.data as SouthAfricaOrg };
+  if (!deps) return { row: null };
+  if (lookup.id) {
+    if (!deps.readFinanceOrgById) return { row: null };
+    return finishOrgRead(await deps.readFinanceOrgById(lookup.id));
+  }
+  return finishOrgRead(await deps.readFinanceOrg(lookup.key ?? "npc"));
+}
 
-  if (!deps) return { failure: fail(400, "The South Africa organisation isn't available.") };
-  const fallback = await deps.readFinanceOrg("npc");
-  if (fallback.error?.code === "preview_writes_disabled") return { failure: mapDbError(fallback.error, "read") };
-  if (fallback.error && isBudgetSchemaMissing(fallback.error)) {
+function finishOrgRead(result: {
+  data: SouthAfricaOrg | null;
+  error: { code?: string; message?: string } | null;
+}): { row: SouthAfricaOrg | null } | { failure: ApiResult } {
+  if (result.error?.code === "preview_writes_disabled") return { failure: mapDbError(result.error, "read") };
+  if (result.error && isBudgetSchemaMissing(result.error)) {
     return { failure: fail(503, "South Africa organisation couldn't be read.") };
   }
-  if (isSouthAfricaOrg(fallback.data)) return { org: fallback.data };
-  if (fallback.error) return { failure: fail(503, "South Africa organisation couldn't be read.") };
+  if (result.error) return { failure: fail(503, "South Africa organisation couldn't be read.") };
+  return { row: result.data };
+}
+
+async function resolveZaOrg(supabase: Client, deps?: OrgReader): Promise<{ org: SouthAfricaOrg } | { failure: ApiResult }> {
+  const read = await readOrgRow(supabase, { key: "npc" }, deps);
+  if ("failure" in read) return { failure: read.failure };
+  if (isSouthAfricaOrg(read.row)) return { org: read.row };
+  if (read.row) return { failure: fail(400, "Budgets are for South Africa only, in rand.") };
   return { failure: fail(400, "The South Africa organisation isn't available.") };
 }
 
@@ -206,21 +231,18 @@ function samePeriod(row: PeriodRow, input: NonNullable<WorkbookWrite["period"]>)
   return row.kind === input.kind && row.label.trim().toLowerCase() === input.label.trim().toLowerCase() && row.start_date === input.start && row.end_date === input.end;
 }
 
+async function loadPeriodById(supabase: Client, periodId: string): Promise<{ period: PeriodRow } | { failure: ApiResult }> {
+  const { data, error } = await supabase
+    .from("fiscal_periods")
+    .select("id, org_id, label, kind, start_date, end_date, archived_at")
+    .eq("id", periodId)
+    .maybeSingle();
+  if (error) return { failure: mapDbError(error, "period") };
+  if (!data || data.archived_at) return { failure: fail(400, "That period isn't available.") };
+  return { period: data };
+}
+
 async function resolvePeriod(supabase: Client, orgId: string, input: WorkbookWrite): Promise<{ period: PeriodRow } | { failure: ApiResult }> {
-  if (input.periodId) {
-    const { data, error } = await supabase
-      .from("fiscal_periods")
-      .select("id, org_id, label, kind, start_date, end_date, archived_at")
-      .eq("id", input.periodId)
-      .maybeSingle();
-    if (error) return { failure: mapDbError(error, "period") };
-    if (!data || data.archived_at) return { failure: fail(400, "That period isn't available.") };
-    if (data.org_id !== orgId) return { failure: fail(400, "Budgets are for South Africa only, in rand.") };
-    if (input.period && !samePeriod(data, input.period)) {
-      return { failure: fail(400, "A budget's period stays as it was when you name a different one.") };
-    }
-    return { period: data };
-  }
   if (!input.period) return { failure: fail(400, "A budget needs a period with a start and an end.") };
 
   const { data, error } = await supabase
@@ -626,7 +648,7 @@ function headerPatch(input: WorkbookWrite, mode: "create" | "save", current?: Bu
 
 function scopeUnchanged(input: WorkbookWrite, budget: BudgetRow, period: PeriodRow | null): ApiResult | null {
   if (input.orgId && input.orgId !== budget.org_id) {
-    return fail(400, "Budgets are for South Africa only, in rand.");
+    return fail(400, "The organisation comes from the period.");
   }
   if (input.present.ownerKind && input.ownerKind !== budget.owner_kind) {
     return fail(400, "A budget's owner and period stay as they were.");
@@ -689,6 +711,48 @@ async function expenseLineIds(
   return { ids: new Set(existing.lines.filter((line) => !line.archived_at).map((line) => line.id)) };
 }
 
+/**
+ * org_id is the fiscal period's org. That org must already be the active
+ * NPC row in ZAR. A US period is rejected and left where it is. A passed
+ * org id that is not the period's org is rejected. Currency sent by the
+ * caller is never written; anything other than ZAR is refused earlier.
+ */
+async function choosePeriod(
+  supabase: Client,
+  input: WorkbookWrite,
+  deps?: OrgReader
+): Promise<{ period: PeriodRow } | { failure: ApiResult }> {
+  if (input.periodId) {
+    const loaded = await loadPeriodById(supabase, input.periodId);
+    if ("failure" in loaded) return loaded;
+    const orgRead = await readOrgRow(supabase, { id: loaded.period.org_id }, deps);
+    if ("failure" in orgRead) return { failure: orgRead.failure };
+    const decision = periodOrgDecision({ periodOrg: orgRead.row, passedOrgId: input.orgId });
+    if (!decision.ok) return { failure: fail(400, decision.error) };
+    if (loaded.period.org_id !== decision.orgId) {
+      return { failure: fail(400, "Budgets are for South Africa only, in rand.") };
+    }
+    if (input.period && !samePeriod(loaded.period, input.period)) {
+      return { failure: fail(400, "A budget's period stays as it was when you name a different one.") };
+    }
+    return { period: loaded.period };
+  }
+
+  const za = await resolveZaOrg(supabase, deps);
+  if ("failure" in za) return { failure: za.failure };
+  if (input.orgId && input.orgId !== za.org.id) {
+    return { failure: fail(400, "Budgets are for South Africa only, in rand.") };
+  }
+  const created = await resolvePeriod(supabase, za.org.id, input);
+  if ("failure" in created) return created;
+  const decision = periodOrgDecision({ periodOrg: za.org, passedOrgId: input.orgId });
+  if (!decision.ok) return { failure: fail(400, decision.error) };
+  if (created.period.org_id !== decision.orgId) {
+    return { failure: fail(400, "The organisation comes from the period.") };
+  }
+  return created;
+}
+
 export async function createBudgetWorkbook(supabase: Client, body: unknown, deps?: OrgReader): Promise<ApiResult> {
   const blocked = await probe(supabase);
   if (blocked) return blocked;
@@ -697,11 +761,7 @@ export async function createBudgetWorkbook(supabase: Client, body: unknown, deps
   const input = parsed.value;
   if (!input.name || !input.ownerKind || !input.ownerId) return fail(400, "Name the budget.");
 
-  const org = await resolveZaOrg(supabase, deps);
-  if ("failure" in org) return org.failure;
-  if (input.orgId && input.orgId !== org.org.id) return fail(400, "Budgets are for South Africa only, in rand.");
-
-  const period = await resolvePeriod(supabase, org.org.id, input);
+  const period = await choosePeriod(supabase, input, deps);
   if ("failure" in period) return period.failure;
   const template = await loadTemplate(supabase);
   if ("failure" in template) return template.failure;

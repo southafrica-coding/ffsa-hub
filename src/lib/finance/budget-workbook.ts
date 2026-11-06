@@ -147,6 +147,24 @@ export function isSouthAfricaOrg(org: Partial<SouthAfricaOrg> | null | undefined
   return !!org && org.key === "npc" && org.record_currency === "ZAR" && org.is_active !== false && typeof org.id === "string";
 }
 
+/**
+ * The budget's org is the fiscal period's org. That row must already be the
+ * active FFSA NPC org in ZAR. A US org is rejected. A passed org id that is
+ * not the period's org is rejected. Neither case is rewritten onto NPC.
+ */
+export function periodOrgDecision(input: {
+  periodOrg: Partial<SouthAfricaOrg> | null | undefined;
+  passedOrgId?: string;
+}): { ok: true; orgId: string } | { ok: false; error: string } {
+  if (!isSouthAfricaOrg(input.periodOrg)) {
+    return { ok: false, error: "Budgets are for South Africa only, in rand." };
+  }
+  if (input.passedOrgId && input.passedOrgId !== input.periodOrg.id) {
+    return { ok: false, error: "The organisation comes from the period." };
+  }
+  return { ok: true, orgId: input.periodOrg.id };
+}
+
 export function isBudgetSchemaMissing(error: { code?: string; message?: string } | null | undefined): boolean {
   if (!error) return false;
   const msg = `${error.code ?? ""} ${error.message ?? ""}`;
@@ -517,6 +535,12 @@ export function parseWorkbookWrite(body: unknown, mode: "create" | "save"): Pars
     const currency = String(record.currency ?? record.record_currency).trim().toUpperCase();
     if (currency !== "" && currency !== "ZAR") {
       return { ok: false, error: "Amounts stay in rand. There's no currency to choose." };
+    }
+  }
+  const orgKeyRaw = record.orgKey ?? record.org_key;
+  if (orgKeyRaw !== undefined && orgKeyRaw !== null && orgKeyRaw !== "") {
+    if (typeof orgKeyRaw !== "string" || orgKeyRaw.trim().toLowerCase() !== "npc") {
+      return { ok: false, error: "Budgets are for South Africa only, in rand." };
     }
   }
 

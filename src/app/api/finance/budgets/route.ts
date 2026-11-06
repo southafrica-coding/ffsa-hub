@@ -26,16 +26,17 @@ async function caller() {
 }
 
 function orgReader(): OrgReader {
+  async function read(column: "id" | "key", value: string) {
+    try {
+      const admin = guardServiceRoleClient(createAdminClient());
+      return await admin.from("finance_orgs").select(FINANCE_ORG_COLUMNS).eq(column, value).maybeSingle();
+    } catch {
+      return { data: null, error: { message: "South Africa organisation couldn't be read." } };
+    }
+  }
   return {
-    async readFinanceOrg(key) {
-      try {
-        const admin = guardServiceRoleClient(createAdminClient());
-        const result = await admin.from("finance_orgs").select(FINANCE_ORG_COLUMNS).eq("key", key).maybeSingle();
-        return result;
-      } catch {
-        return { data: null, error: { message: "South Africa organisation couldn't be read." } };
-      }
-    },
+    readFinanceOrg: (key) => read("key", key),
+    readFinanceOrgById: (id) => read("id", id),
   };
 }
 

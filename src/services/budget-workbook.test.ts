@@ -390,7 +390,42 @@ describe("budget workbook save and load", () => {
     expect(usd.body.error).toMatch(/rand/);
     const usa = await createBudgetWorkbook(db.client, sheet({ orgId: USA }));
     expect(usa.status).toBe(400);
+    expect(db.writes.some((write) => write.op === "create_budget_from_template" || write.table === "fiscal_periods")).toBe(false);
+  });
+
+  it("rejects a US period instead of moving it onto South Africa", async () => {
+    const usPeriod = "99999999-9999-4999-8999-999999999999";
+    db.tables.fiscal_periods.push({
+      id: usPeriod,
+      org_id: USA,
+      kind: "year",
+      label: "2027",
+      start_date: "2027-01-01",
+      end_date: "2027-12-31",
+      archived_at: null,
+    });
+    const result = await createBudgetWorkbook(db.client, sheet({ periodId: usPeriod, orgId: NPC }));
+    expect(result.status).toBe(400);
+    expect(result.body.error).toMatch(/South Africa/);
+    expect(db.tables.budgets).toHaveLength(0);
+    expect(db.tables.fiscal_periods.find((row) => row.id === usPeriod)?.org_id).toBe(USA);
+    expect(db.writes.some((write) => write.op === "create_budget_from_template" || write.table === "fiscal_periods")).toBe(false);
+  });
+
+  it("rejects a passed org id that is not the period's org", async () => {
+    const result = await createBudgetWorkbook(db.client, sheet({ periodId: PERIOD, orgId: USA }));
+    expect(result.status).toBe(400);
+    expect(result.body.error).toBe("The organisation comes from the period.");
+    expect(db.tables.budgets).toHaveLength(0);
     expect(db.writes.some((write) => write.op === "create_budget_from_template")).toBe(false);
+  });
+
+  it("stores the period's org and does not write a client currency", async () => {
+    const result = await createBudgetWorkbook(db.client, sheet({ periodId: PERIOD, orgId: NPC, currency: "ZAR" }));
+    expect(result.status).toBe(201);
+    const rpc = db.writes.find((write) => write.op === "create_budget_from_template");
+    expect(rpc?.payload).toMatchObject({ p_org_id: NPC, p_period_id: PERIOD, p_currency: null });
+    expect((result.body.budget as { orgId: string; currency: string }).currency).toBe("ZAR");
   });
 
   it("uses the period's org and leaves a new period for someone who can edit budgets", async () => {
@@ -434,9 +469,10 @@ describe("budget workbook save and load", () => {
     db = memory({ hide: ["finance_orgs"] });
     let reads = 0;
     const result = await createBudgetWorkbook(db.client, sheet({ periodId: PERIOD }), {
-      readFinanceOrg: async (key) => {
+      readFinanceOrg: async () => ({ data: null, error: { message: "not used" } }),
+      readFinanceOrgById: async (id) => {
         reads += 1;
-        expect(key).toBe("npc");
+        expect(id).toBe(NPC);
         return { data: { id: NPC, key: "npc", name: "FFSA NPC", record_currency: "ZAR", is_active: true }, error: null };
       },
     });
@@ -448,7 +484,11 @@ describe("budget workbook save and load", () => {
   it("stops before a service-role write when that read is refused", async () => {
     db = memory({ hide: ["finance_orgs"] });
     const result = await createBudgetWorkbook(db.client, sheet({ periodId: PERIOD }), {
-      readFinanceOrg: async () => ({ data: null, error: { code: "preview_writes_disabled", message: "This preview can't change budgets with the service role." } }),
+      readFinanceOrg: async () => ({ data: null, error: null }),
+      readFinanceOrgById: async () => ({
+        data: null,
+        error: { code: "preview_writes_disabled", message: "This preview can't change budgets with the service role." },
+      }),
     });
     expect(result.status).toBe(403);
     expect(result.body).toMatchObject({ error: "preview_writes_disabled" });

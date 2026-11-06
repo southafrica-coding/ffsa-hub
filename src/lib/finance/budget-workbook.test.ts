@@ -4,6 +4,7 @@ import {
   isSouthAfricaOrg,
   lineTotalCents,
   parseWorkbookWrite,
+  periodOrgDecision,
   roundNumeric,
 } from "./budget-workbook";
 
@@ -23,11 +24,27 @@ describe("line totals", () => {
 });
 
 describe("South Africa org", () => {
+  const npc = { id: "npc", key: "npc", name: "FFSA NPC", record_currency: "ZAR", is_active: true };
+  const usa = { id: "usa", key: "usa", name: "FF USA Inc", record_currency: "USD", is_active: true };
+
   it("accepts the active NPC rand org and rejects a US org", () => {
-    expect(isSouthAfricaOrg({ id: "npc", key: "npc", record_currency: "ZAR", is_active: true })).toBe(true);
-    expect(isSouthAfricaOrg({ id: "usa", key: "usa", record_currency: "USD", is_active: true })).toBe(false);
-    expect(isSouthAfricaOrg({ id: "npc", key: "npc", record_currency: "USD", is_active: true })).toBe(false);
-    expect(isSouthAfricaOrg({ id: "npc", key: "npc", record_currency: "ZAR", is_active: false })).toBe(false);
+    expect(isSouthAfricaOrg(npc)).toBe(true);
+    expect(isSouthAfricaOrg(usa)).toBe(false);
+    expect(isSouthAfricaOrg({ ...npc, record_currency: "USD" })).toBe(false);
+    expect(isSouthAfricaOrg({ ...npc, is_active: false })).toBe(false);
+  });
+
+  it("uses the period's org and does not rewrite a US org onto NPC", () => {
+    expect(periodOrgDecision({ periodOrg: usa, passedOrgId: "npc" })).toEqual({
+      ok: false,
+      error: "Budgets are for South Africa only, in rand.",
+    });
+    expect(periodOrgDecision({ periodOrg: npc, passedOrgId: "usa" })).toEqual({
+      ok: false,
+      error: "The organisation comes from the period.",
+    });
+    expect(periodOrgDecision({ periodOrg: npc, passedOrgId: "npc" })).toEqual({ ok: true, orgId: "npc" });
+    expect(periodOrgDecision({ periodOrg: npc })).toEqual({ ok: true, orgId: "npc" });
   });
 });
 
@@ -84,6 +101,14 @@ describe("parseWorkbookWrite", () => {
     expect(parsed.value.notes).toBe("Bring receipts.");
     expect(parsed.value.ignored).toContain("purpose");
     expect("purpose" in parsed.value).toBe(false);
+  });
+
+  it("rejects a US org key and any currency other than rand", () => {
+    expect(parseWorkbookWrite({ ...createBody, orgKey: "usa" }, "create")).toEqual({
+      ok: false,
+      error: "Budgets are for South Africa only, in rand.",
+    });
+    expect(parseWorkbookWrite({ ...createBody, currency: "EUR" }, "create").ok).toBe(false);
   });
 
   it("rejects a currency and a Xero code", () => {
