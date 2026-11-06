@@ -48,7 +48,7 @@ export default async function AgreementPage({
   return (
     <div className="ffsa-screen">
       <Masthead context="Reservations" title={VEHICLE_POLICY_TITLE} />
-      <div className="max-w-3xl space-y-5 px-8 py-7">
+      <div className="max-w-3xl space-y-5 px-5 py-6 md:px-8 md:py-7">
         <p className="text-[13px] text-[color:var(--text-secondary)]">
           {b.booking_name} · Policy version {VEHICLE_POLICY_VERSION}
         </p>

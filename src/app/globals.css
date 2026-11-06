@@ -500,11 +500,13 @@
   /* Black section bar — the header for any panel or table group */
   .section-bar {
     display: flex; align-items: center; justify-content: space-between;
-    background: var(--ink); color: #FFFFFF; padding: 11px 22px;
+    flex-wrap: wrap; gap: 4px 12px;
+    background: var(--ink); color: #FFFFFF; padding: 11px 20px;
   }
+  @media (min-width: 768px) { .section-bar { padding: 11px 22px; } }
   .section-bar-title {
     font-family: var(--font-condensed); font-weight: 900; font-size: 16px;
-    letter-spacing: 0.05em; text-transform: uppercase;
+    letter-spacing: 0.05em; text-transform: uppercase; min-width: 0;
   }
   .section-bar-meta {
     font-family: var(--font-mono-brand); font-size: 9px; font-weight: 700;
@@ -546,7 +548,8 @@
   }
 
   /* KPI strip cell */
-  .kpi { padding: 20px 24px 18px; border-right: 1px solid var(--rule); }
+  .kpi { padding: 16px 14px 14px; border-right: 1px solid var(--rule); }
+  @media (min-width: 768px) { .kpi { padding: 20px 24px 18px; } }
   .kpi:last-child { border-right: none; }
 
   /* Square progress bar */

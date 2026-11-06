@@ -230,7 +230,7 @@ export function BookingsView({
           <Button
             variant="outline"
             size="icon"
-            className="h-8 w-8"
+            className="h-11 w-11 md:h-8 md:w-8"
             onClick={() => go({ date: prevDate })}
             aria-label={`Previous ${unit}`}
           >
@@ -242,7 +242,7 @@ export function BookingsView({
           <Button
             variant="outline"
             size="icon"
-            className="h-8 w-8"
+            className="h-11 w-11 md:h-8 md:w-8"
             onClick={() => go({ date: nextDate })}
             aria-label={`Next ${unit}`}
           >

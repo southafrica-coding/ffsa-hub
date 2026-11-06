@@ -140,20 +140,26 @@ export function OrgCanvas({
   const drag = useRef<{ x: number; y: number; tx: number; ty: number; moved: boolean } | null>(null);
   const fitted = useRef(false);
 
-  // Fit the base to the viewport's width once, before the first paint.
+  // Open at full size so a name stays readable and a row stays tappable.
+  // Fitting the whole base into a laptop window used to shrink 11px type to
+  // about 8px. Zoom out, or Fit, when you want every table in view at once.
+  // The canvas is display:none below xl, so wait until it actually has a width
+  // before locking that first view — a hidden mount reports 0.
   useLayoutEffect(() => {
     const el = viewport.current;
-    if (!el || fitted.current) return;
-    fitted.current = true;
-    setSize({ w: el.clientWidth, h: el.clientHeight });
-    setView({ s: clamp(el.clientWidth / layout.width, 0.35, 1), tx: 0, ty: 0 });
-  }, [layout.width]);
-
-  // Keep the measured size current for zooming and centring.
-  useEffect(() => {
-    const el = viewport.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setSize({ w: el.clientWidth, h: el.clientHeight }));
+    const measure = () => {
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      if (w < 40) return;
+      setSize({ w, h });
+      if (!fitted.current) {
+        fitted.current = true;
+        setView({ s: 1, tx: 0, ty: 0 });
+      }
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
@@ -229,6 +235,11 @@ export function OrgCanvas({
       const cy = size.h / 2;
       return { s, tx: cx - ((cx - v.tx) / v.s) * s, ty: cy - ((cy - v.ty) / v.s) * s };
     });
+
+  const fitWidth = () => {
+    const s = clamp(size.w / layout.width, 0.3, 1);
+    setView({ s, tx: 0, ty: 0 });
+  };
 
   const centerOn = useCallback(
     (id: string) => {
@@ -803,7 +814,7 @@ export function OrgCanvas({
     : `ORG CHART · FFSA ${model.cycleName ?? ""} · ${model.staffCount} STAFF · ${model.teams.length} TEAMS`;
 
   return (
-    <div className="org-theme flex h-[100dvh] min-h-[640px] flex-col" style={{ ...ORG_VARS, background: T.frame, color: T.ink }}>
+    <div className="org-theme flex h-[calc(100dvh-2rem)] min-h-[480px] flex-col" style={{ ...ORG_VARS, background: T.frame, color: T.ink }}>
       <style>{ORG_CSS}</style>
       {/* Top bar: 40a's masthead row */}
       <div className="flex flex-col gap-4 border-b border-[color:var(--org-border)] bg-[color:var(--org-surface)] px-5 pb-4 pt-5 lg:flex-row lg:items-center lg:justify-between lg:px-6">
@@ -934,6 +945,14 @@ export function OrgCanvas({
               </span>
               <button type="button" aria-label="Zoom in" onClick={() => zoomBy(1.2)} className={`${MONO} flex h-11 w-11 items-center justify-center text-[14px] lg:h-9 lg:w-9`}>
                 +
+              </button>
+              <button
+                type="button"
+                onClick={fitWidth}
+                className={`${MONO} flex h-11 items-center border-l px-3 text-[9px] tracking-[0.12em] lg:h-9`}
+                style={{ borderColor: T.row }}
+              >
+                FIT
               </button>
             </div>
             <div className="hidden flex-wrap items-center gap-[18px] border border-[color:var(--org-border)] bg-[color:var(--org-surface)] px-3.5 py-2.5 md:flex">

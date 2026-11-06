@@ -329,7 +329,7 @@ export function OutreachDashboardClient({
       )}
 
       {/* Filter strip — bone, sits directly under the masthead */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-rule bg-bone px-8 py-3">
+      <div className="flex flex-wrap items-center gap-2 border-b border-rule bg-bone px-5 py-3 md:px-8">
         <span className="mono-label mr-1">Filter</span>
         {groups.length > 0 && (
           <Select value={groupFilter} onValueChange={setGroupFilter}>
@@ -376,7 +376,7 @@ export function OutreachDashboardClient({
         </Select>
       </div>
 
-      <div className="space-y-7 px-8 py-7">
+      <div className="space-y-7 px-5 py-6 md:px-8 md:py-7">
         {/* Money strip — four cells, each measuring itself against a real ratio */}
         <div className="border-x border-t border-ink">
           <KpiStrip>

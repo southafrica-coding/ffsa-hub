@@ -274,7 +274,7 @@ export function ProgramFeesDetail({
         </NeedsYou>
       )}
 
-      <div className="space-y-6 px-8 py-7">
+      <div className="space-y-6 px-5 py-6 md:px-8 md:py-7">
         <p className="text-[13px] text-[color:var(--text-secondary)]">
           Fee structures and student payments.
         </p>

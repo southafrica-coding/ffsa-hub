@@ -134,7 +134,7 @@ export default async function VehiclesPage({
         </NeedsYou>
       )}
 
-      <div className="space-y-5 px-8 py-7">
+      <div className="space-y-5 px-5 py-6 md:px-8 md:py-7">
         {hasFleet ? (
           <AvailabilityCalendar
             availability={availability}

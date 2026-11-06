@@ -248,7 +248,7 @@ export function AdminSidebar({ userRoles, permittedModules, menuLoadFailed, init
       <div className="fixed left-0 right-0 top-0 z-50 flex h-14 items-center justify-between bg-ink px-4 md:hidden">
         <Image src="/brand/ff-wordmark-white.png" alt="Fire & Fragrance" width={120} height={14}
                style={{ objectFit: "contain" }} priority />
-        <button onClick={() => setMobileOpen(true)} className="p-2 text-white">
+        <button onClick={() => setMobileOpen(true)} aria-label="Open menu" className="flex h-11 w-11 items-center justify-center text-white">
           <Menu className="h-5 w-5" />
         </button>
       </div>
@@ -257,7 +257,8 @@ export function AdminSidebar({ userRoles, permittedModules, menuLoadFailed, init
         <SheetContent side="left" data-shell-panel className="w-[280px] border-r border-ink bg-bone p-0">
           <SheetTitle className="sr-only">Navigation</SheetTitle>
           <div className="flex h-full flex-col">
-            <div className="flex gap-1 bg-ink p-2">
+            {/* pr-14 keeps System clear of the sheet's close button. */}
+            <div className="flex gap-1 bg-ink p-2 pr-14">
               {AREAS.map((a) => (
                 <button key={a.id} onClick={() => setArea(a.id)}
                   className={cn(

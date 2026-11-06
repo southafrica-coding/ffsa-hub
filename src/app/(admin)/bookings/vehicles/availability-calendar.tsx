@@ -42,7 +42,7 @@ export function AvailabilityCalendar({
         <Link
           href={`/bookings/vehicles?month=${monthParam(prev.year, prev.month)}`}
           aria-label="Previous month"
-          className="flex h-7 w-7 items-center justify-center border border-rule-strong bg-white hover:bg-bone"
+          className="flex h-11 w-11 items-center justify-center border border-rule-strong bg-white hover:bg-bone md:h-8 md:w-8"
         >
           <ChevronLeft className="h-4 w-4" />
         </Link>
@@ -55,12 +55,65 @@ export function AvailabilityCalendar({
         <Link
           href={`/bookings/vehicles?month=${monthParam(next.year, next.month)}`}
           aria-label="Next month"
-          className="flex h-7 w-7 items-center justify-center border border-rule-strong bg-white hover:bg-bone"
+          className="flex h-11 w-11 items-center justify-center border border-rule-strong bg-white hover:bg-bone md:h-8 md:w-8"
         >
           <ChevronRight className="h-4 w-4" />
         </Link>
       </div>
 
+      {/* Phone: one day per row. The 7-column grid leaves ~50px a cell. */}
+      <div className="md:hidden">
+        {days.filter((d) => isoMonth(d) === month).map((d) => {
+          const isToday = d === today;
+          const isPast = d < today;
+          const a = availability.get(d);
+          const requested = (a?.vansRequested ?? 0) + (a?.carsRequested ?? 0);
+          const bookable = canRequest && !isPast;
+          return (
+            <div
+              key={d}
+              className={cn(
+                "flex min-h-[52px] items-center gap-3 border-b border-rule px-4 py-2 last:border-b-0",
+                isPast && "opacity-55"
+              )}
+            >
+              <span
+                className={cn(
+                  "flex h-8 w-8 shrink-0 items-center justify-center font-display text-[16px] font-black tabular-nums",
+                  isToday ? "bg-ink text-white" : "text-ink"
+                )}
+              >
+                {isoDay(d)}
+              </span>
+              <div className="min-w-0 flex-1 text-[13px]">
+                {a && a.vanTotal > 0 && (
+                  <span className="mr-3">
+                    Vans {a.vans === 0 ? "full" : `${a.vans}/${a.vanTotal}`}
+                  </span>
+                )}
+                {a && a.carTotal > 0 && (
+                  <span>
+                    Cars {a.cars === 0 ? "full" : `${a.cars}/${a.carTotal}`}
+                  </span>
+                )}
+                {requested > 0 && (
+                  <div className="mono-label mt-0.5">{requested} requested</div>
+                )}
+              </div>
+              {bookable && (
+                <Link
+                  href={`/bookings/vehicles/new?date=${d}`}
+                  className="flex h-11 shrink-0 items-center font-mono text-[10px] font-bold uppercase tracking-[0.12em]"
+                >
+                  Request
+                </Link>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="hidden md:block">
       {/* Weekday header */}
       <div className="grid grid-cols-7 bg-ink">
         {WEEKDAY_HEADERS.map((wd) => (
@@ -157,6 +210,7 @@ export function AvailabilityCalendar({
             </div>
           );
         })}
+      </div>
       </div>
 
       {/* Legend */}

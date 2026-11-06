@@ -96,7 +96,7 @@ export default async function FeedbackResponsesPage({
         </KpiStrip>
       </div>
 
-      <div className="flex flex-wrap items-center gap-1.5 border-b border-rule bg-bone px-8 py-3">
+      <div className="flex flex-wrap items-center gap-1.5 border-b border-rule bg-bone px-5 py-3 md:px-8">
         <Link href={`/events/${eventId}/feedback/${formId}/responses`}>
           <span
             className={`px-3 py-1.5 text-xs uppercase tracking-[0.12em] border ${
@@ -117,7 +117,7 @@ export default async function FeedbackResponsesPage({
         </Link>
       </div>
 
-      <div className="space-y-6 px-8 py-7">
+      <div className="space-y-6 px-5 py-6 md:px-8 md:py-7">
         {rows.length === 0 ? (
           <p className="mono-label">
             No responses yet. They appear here the moment someone submits the

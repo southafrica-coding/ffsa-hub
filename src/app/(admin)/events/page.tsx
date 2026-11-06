@@ -117,14 +117,51 @@ export default async function EventsPage({
 
       <div className="flex flex-wrap items-center gap-1.5 border-b border-rule bg-bone px-5 py-3 md:px-8">
         {VIEWS.map(([key, label]) => (
-          <Link key={key} href={`/events${key === "active" ? "" : `?status=${key}`}`}>
+          <Link key={key} href={`/events${key === "active" ? "" : `?status=${key}`}`} className="inline-flex min-h-11 items-center">
             <Chip active={view === key}>{label}</Chip>
           </Link>
         ))}
       </div>
 
       <div className="px-5 py-6 md:px-8 md:py-7">
-        <div className="border border-ink">
+        <div className="border border-ink md:hidden">
+          {rows.length === 0 ? (
+            <p className="mono-label px-4 py-10 text-center">
+              {view === "active"
+                ? "No active events — closed-out ones are under Completed and Cancelled"
+                : "No events found"}
+            </p>
+          ) : (
+            rows.map((event) => {
+              const start = parseDay(event.start_date);
+              const multiDay = !!event.end_date && event.end_date !== event.start_date;
+              return (
+                <Link
+                  key={event.id}
+                  href={`/events/${event.id}`}
+                  className={`block border-b border-rule px-4 py-3.5 last:border-b-0 ${isClosedEventStatus(event.status) ? "opacity-60" : ""}`}
+                >
+                  <div className="flex items-start gap-3">
+                    <DateBlock day={start.day} mon={start.mon} />
+                    <div className="min-w-0 flex-1">
+                      <div className="font-display text-[20px] font-black uppercase leading-none">{event.title}</div>
+                      <p className="mt-1 text-[12px] text-[color:var(--text-tertiary)]">
+                        {event.location ?? "Location TBC"}
+                        {multiDay ? ` · runs to ${formatDay(event.end_date!)}` : ""}
+                      </p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className="mono-label">{BRAND_LABELS[event.brand] ?? "F&F"}</span>
+                        <span className="mono-label">{event.is_public ? "Public" : "Internal"}</span>
+                        <StatusPill tone={STATUS_TONE[event.status] ?? "quiet"}>{event.status}</StatusPill>
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              );
+            })
+          )}
+        </div>
+        <div className="hidden border border-ink md:block">
           <Table>
             <TableHeader>
               <TableRow>

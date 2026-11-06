@@ -63,7 +63,7 @@ export default async function NewBookingPage({
   return (
     <div className="ffsa-screen">
       <Masthead context="Venue scheduling" title="New booking request" />
-      <div className="max-w-2xl px-8 py-7">
+      <div className="max-w-2xl px-5 py-6 md:px-8 md:py-7">
         <BookingForm
           venues={venues}
           ministries={ministries}

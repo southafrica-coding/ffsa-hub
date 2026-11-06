@@ -58,7 +58,7 @@ export function MastheadAction({ href, children }: { href: string; children: Rea
   return (
     <Link
       href={href}
-      className="shrink-0 border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-white hover:bg-[#262622] hover:text-white"
+      className="inline-flex min-h-11 shrink-0 items-center border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-white hover:bg-[#262622] hover:text-white"
     >
       {children}
     </Link>
@@ -81,7 +81,7 @@ export function MastheadButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "shrink-0 border px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em]",
+        "inline-flex min-h-11 shrink-0 items-center border px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em]",
         tone === "solid"
           ? "border-ink bg-ink text-white hover:bg-[#262622]"
           : "border-ink bg-bone text-ink hover:bg-bone-2"
@@ -97,7 +97,7 @@ export function NeedsYouAction({ href, children }: { href: string; children: Rea
   return (
     <Link
       href={href}
-      className="shrink-0 border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-yellow hover:bg-[#262622]"
+      className="inline-flex min-h-11 shrink-0 items-center border border-ink bg-ink px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-yellow hover:bg-[#262622]"
     >
       {children}
     </Link>
@@ -177,7 +177,7 @@ export function Drawer({
                 NEXT ↓
               </button>
             )}
-            <button type="button" onClick={onClose} aria-label="Close" className="text-[14px] text-white">
+            <button type="button" onClick={onClose} aria-label="Close" className="flex h-11 w-11 items-center justify-center text-[16px] text-white">
               ✕
             </button>
           </div>
@@ -214,7 +214,7 @@ export function ModuleTabs({
               type="button"
               onClick={() => onChange(t.key)}
               className={cn(
-                "flex items-center gap-1.5 px-4 py-2.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em]",
+                "flex min-h-11 items-center gap-1.5 px-4 py-2.5 font-mono text-[10px] font-bold uppercase tracking-[0.14em]",
                 on
                   ? "bg-ink text-white"
                   : "border border-b-0 border-rule text-[#7C786C] hover:text-ink"
@@ -308,7 +308,10 @@ export function Kpi({
     <div className={cn("kpi", lead && "bg-bone")}>
       <div className="mono-label mb-2.5">{label}</div>
       <div className="flex items-end gap-2.5">
-        <span className="numeral leading-none" style={{ fontSize: size, color: valueColor }}>
+        <span
+          className="numeral leading-none"
+          style={{ fontSize: `clamp(22px, 7vw, ${size}px)`, color: valueColor }}
+        >
           {value}
         </span>
         {showTick && <span className="mb-2 h-[3px] w-5 bg-yellow" />}

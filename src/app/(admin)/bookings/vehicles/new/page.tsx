@@ -35,7 +35,7 @@ export default async function NewVehicleBookingPage({
   return (
     <div className="ffsa-screen">
       <Masthead context="Reservations" title="New vehicle request" />
-      <div className="max-w-3xl space-y-5 px-8 py-7">
+      <div className="max-w-3xl space-y-5 px-5 py-6 md:px-8 md:py-7">
         <p className="text-[13px] text-[color:var(--text-secondary)]">
           Submitting a request does not guarantee a vehicle — it goes to the Vehicle
           Coordinator for approval.

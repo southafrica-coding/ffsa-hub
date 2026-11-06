@@ -31,8 +31,8 @@ export default async function PortalLayout({
         keeps the last row clear of the bottom tab bar.
 
       */}
-      <main className="flex-1 overflow-y-auto bg-white pb-20 pt-14 md:pb-0 md:pt-0">
-        <div className="px-5 pt-5 md:px-8 md:pt-6">
+      <main data-shell-main className="min-w-0 flex-1 overflow-y-auto bg-white pb-20 pt-14 md:pb-0 md:pt-0">
+        <div className="empty:hidden">
           <AutoRefresh />
           <BackButton />
         </div>

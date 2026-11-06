@@ -159,11 +159,14 @@ export function OrgEditPanel({
   model,
   team,
   onClose,
+  variant = "drawer",
 }: {
   t: OrgTeam;
   model: OrgModel;
   team: Map<string, OrgTeam>;
   onClose: () => void;
+  /** `page` fills the phone directory. `drawer` is the canvas inspector. */
+  variant?: "drawer" | "page";
 }) {
   const { save, saving, savedAt, error } = useOrgSave();
   const [open, setOpen] = useState<string | null>(null);
@@ -173,7 +176,16 @@ export function OrgEditPanel({
   const kicker = (CLUSTERS.find(([k]) => k === (t.clusterRaw ?? ""))?.[1] ?? "").toUpperCase();
 
   return (
-    <div data-no-pan className="absolute bottom-0 right-0 top-0 z-20 flex w-full flex-col border-l border-[color:var(--org-border)] bg-[color:var(--org-drawer)] sm:w-[400px]" onPointerDown={(e) => e.stopPropagation()} style={{ cursor: "default" }}>
+    <div
+      data-no-pan
+      className={
+        variant === "page"
+          ? "absolute inset-0 z-20 flex w-full flex-col bg-[color:var(--org-drawer)]"
+          : "absolute bottom-0 right-0 top-0 z-20 flex w-full flex-col border-l border-[color:var(--org-border)] bg-[color:var(--org-drawer)] sm:w-[400px]"
+      }
+      onPointerDown={(e) => e.stopPropagation()}
+      style={{ cursor: "default" }}
+    >
       <div className="border-b border-[color:var(--org-border)] px-[22px] pb-4 pt-5">
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-[9px]">

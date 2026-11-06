@@ -624,7 +624,7 @@ export function ProgramDetail({
       {/* A state, not a task — so it stays bone. The yellow band is reserved
           for something actually waiting on you. */}
       {program.status === "archived" && (
-        <div className="flex items-center gap-3 border-b border-ink bg-bone px-8 py-3">
+        <div className="flex items-center gap-3 border-b border-ink bg-bone px-5 py-3 md:px-8">
           <Archive className="h-4 w-4 shrink-0 text-[color:var(--text-secondary)]" />
           <p className="text-[13px] text-[color:var(--text-secondary)]">
             This program is archived. It is hidden from non-admin users and no new enrollments can be made.

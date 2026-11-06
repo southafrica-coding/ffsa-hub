@@ -106,7 +106,7 @@ export default async function CampaignComposerPage({
     <div className="ffsa-screen">
       <Masthead context="Communications · Email" title={campaign.name} />
 
-      <div className="space-y-4 px-8 py-7">
+      <div className="space-y-4 px-5 py-6 md:px-8 md:py-7">
         {stats && <CampaignAnalytics stats={stats} />}
         {linkClicks && (
           <CampaignLinkClicks links={linkClicks} labels={linkLabels} />
