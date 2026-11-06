@@ -28,8 +28,10 @@
 -- admins, including the author. #499's current visible() helper
 -- matches that: a withheld story is not returned to its author.
 --
--- evangelism_removals is the tombstone recordRemoval / listRemovalsSince
--- write and read (testimony_id, reason, removed_at). The keys above
+-- evangelism_removals is the tombstone recordRemoval writes
+-- (testimony_id, reason, removed_at). One row per story. Publishers
+-- and admins may read it; evangelism.view does not. The TV reads
+-- tombstones through the API with the service role. The keys above
 -- are seeded only. This file does not grant them to any role bundle
 -- or user.
 --
@@ -120,7 +122,14 @@ CREATE TABLE IF NOT EXISTS public.evangelism_testimonies (
   -- The API also rejects a future occurred_on in Africa/Johannesburg.
   -- A CHECK cannot see "today" without breaking dumps and replays.
   CONSTRAINT evangelism_testimonies_consent_to_share
-    CHECK (status NOT IN ('submitted', 'published') OR consent_to_share)
+    CHECK (status NOT IN ('submitted', 'published') OR consent_to_share),
+  -- Applies to every writer, including service_role. RLS and the
+  -- guard trigger repeat this for a user JWT; they are not the only check.
+  CONSTRAINT evangelism_testimonies_published_stamp
+    CHECK (
+      status IS DISTINCT FROM 'published'
+      OR (published_at IS NOT NULL AND published_by IS NOT NULL)
+    )
 );
 
 CREATE INDEX IF NOT EXISTS evangelism_testimonies_status_updated
@@ -597,27 +606,40 @@ GRANT ALL ON TABLE public.evangelism_media TO service_role;
 -- ────────────────────────────────────────────────────────────
 -- 6. Removals (TV tombstones)
 -- ────────────────────────────────────────────────────────────
--- Shape used by #499's recordRemoval and listRemovalsSince:
+-- Shape used by #499's recordRemoval:
 --   insert { testimony_id, reason: 'withheld' | 'deleted', removed_at }
---   select testimony_id where removed_at > cursor
--- recordRemoval runs as the publisher's user JWT, before the
--- testimony is updated to withheld or deleted. listRemovalsSince
--- runs as the feed caller (evangelism.view). The current tip of
--- #499 stopped calling them because this table was missing; the
--- columns here are the ones those functions send and read.
+-- recordRemoval runs as the publisher's user JWT. The insert is
+-- allowed while the testimony is still published OR already has
+-- published_at, so it still succeeds if the status was changed to
+-- withheld first. A second insert for the same story fails the
+-- unique key. Withhold-then-delete does not need another row: the
+-- first tombstone already takes the story off the wall. There is
+-- no UPDATE policy to rewrite reason from withheld to deleted.
+--
+-- SELECT is is_admin() or evangelism.publish only. evangelism.view
+-- and evangelism.submit are not in that policy, so a later view
+-- grant cannot read reason or removed_at directly. The TV/ops feed
+-- loads tombstones with the service role (GRANT ALL below).
 --
 -- testimony_id is not a foreign key. The row has to keep the id
 -- after the testimony is deleted. ON DELETE CASCADE would drop the
 -- id the screen needs. ON DELETE RESTRICT would block that delete.
--- There is no UPDATE or DELETE policy. authenticated gets SELECT
--- and INSERT only — not the UPDATE/DELETE granted on the other
--- evangelism tables.
+-- authenticated gets SELECT and INSERT only — not the UPDATE/DELETE
+-- granted on the other evangelism tables. RLS still hides the rows
+-- from anyone who is not an admin or a publisher.
 CREATE TABLE IF NOT EXISTS public.evangelism_removals (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   testimony_id  uuid NOT NULL,
   reason        text NOT NULL CHECK (reason IN ('withheld', 'deleted')),
-  removed_at    timestamptz NOT NULL DEFAULT now()
+  removed_at    timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT evangelism_removals_one_story UNIQUE (testimony_id)
 );
+
+-- Re-run: CREATE TABLE IF NOT EXISTS will not add the unique key to a
+-- table created by an earlier copy of this file. The index name matches
+-- the constraint, so the first apply does not create a second index.
+CREATE UNIQUE INDEX IF NOT EXISTS evangelism_removals_one_story
+  ON public.evangelism_removals (testimony_id);
 
 CREATE INDEX IF NOT EXISTS evangelism_removals_removed_at
   ON public.evangelism_removals (removed_at);
@@ -630,8 +652,6 @@ CREATE POLICY "evangelism_removals_select"
   FOR SELECT TO authenticated
   USING (
     public.is_admin()
-    OR public.has_permission('evangelism.view')
-    OR public.has_permission('evangelism.submit')
     OR public.has_permission('evangelism.publish')
   );
 
