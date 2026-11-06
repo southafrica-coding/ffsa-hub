@@ -7,6 +7,10 @@ import {
   addProgramLeader,
   removeProgramLeader,
 } from "@/services/program-leaders";
+import {
+  ensureSchoolLeaderRole,
+  revokeSchoolLeaderRoleIfOrphaned,
+} from "@/lib/schools/school-leader-role";
 
 // POST   /api/schools/programs/[programId]/leaders   { userId }  → add
 // DELETE /api/schools/programs/[programId]/leaders   { userId }  → remove
@@ -15,6 +19,10 @@ import {
 // admins, global schools managers, AND existing leaders of this program
 // can grow or prune the team (a school led by a team can add its own
 // members). RLS enforces the same rule as defense-in-depth.
+//
+// Each add / remove also syncs the school_leader role (migration 292), which
+// is what lets school leaders request space bookings: granted on add if
+// missing, revoked on remove only when they lead no other program.
 
 async function authorize(programId: string) {
   const supabase = await createClient();
@@ -51,6 +59,8 @@ export async function POST(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  await ensureSchoolLeaderRole(admin, userId, auth.user.id);
+
   const { data: leaders } = await listProgramLeaders(admin, programId);
   return NextResponse.json({ leaders: leaders ?? [] });
 }
@@ -77,6 +87,8 @@ export async function DELETE(
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  await revokeSchoolLeaderRoleIfOrphaned(admin, userId);
 
   const { data: leaders } = await listProgramLeaders(admin, programId);
   return NextResponse.json({ leaders: leaders ?? [] });

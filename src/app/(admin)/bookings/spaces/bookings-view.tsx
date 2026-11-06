@@ -35,6 +35,11 @@ import {
 } from "@/lib/bookings/dates";
 import { conflictingIds, type BookingWindow } from "@/lib/bookings/conflicts";
 import { buildSpacesHref } from "@/lib/bookings/nav";
+import {
+  VIEW_ONLY_NOTE,
+  canCreateBooking,
+  showViewOnlyNote,
+} from "@/lib/bookings/view-only";
 import type {
   BookingAccess,
   BookingWithRefs,
@@ -134,10 +139,10 @@ export function BookingsView({
   const clashIds = conflictingIds(bookings as unknown as BookingWindow[]);
 
   // Making a booking is the write side of the module. Everyone can SEE the
-  // schedule; only ministry leaders and the booking admins can add to it, so
-  // every create affordance — and "My requests", which can only ever be empty
-  // for someone who cannot request — hangs off this.
-  const canCreate = access.canRequest || access.canApprove || access.canManage;
+  // schedule; only ministry / school leaders and the booking admins can add to
+  // it, so every create affordance — and "My requests", which can only ever be
+  // empty for someone who cannot request — hangs off this.
+  const canCreate = canCreateBooking(access);
 
   const columnVenues = venues.filter(
     (v) => v.is_active && (filters.venue === "all" || v.id === filters.venue)
@@ -208,6 +213,14 @@ export function BookingsView({
             ? "1 booking request is waiting on your review"
             : `${pendingCount} booking requests are waiting on your review`}
         </NeedsYou>
+      )}
+
+      {/* View-only viewers: a plain line, not a band — the yellow stays with
+          the approvals NeedsYou above. */}
+      {showViewOnlyNote(access) && (
+        <p className="border-b border-rule px-5 py-2.5 text-[13px] text-muted-foreground md:px-8">
+          {VIEW_ONLY_NOTE}
+        </p>
       )}
 
       {/* Controls */}
