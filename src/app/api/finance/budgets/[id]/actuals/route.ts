@@ -25,12 +25,16 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   if (!id) return NextResponse.json({ error: "Missing budget id" }, { status: 400 });
 
   // The user's own row-level access is enough for a budget they can already
-  // read. canReadFinanceXero remains the way to see a budget you are not on.
-  const result = await getBudgetActuals(supabase, createAdminClient(), id);
-  if (result.status === 200 || result.status === 400 || result.status === 503) {
-    return NextResponse.json(result.body, { status: result.status });
+  // read. A 404 from that read can mean the row is hidden, not missing.
+  // canReadFinanceXero may then load the same budget with the service role.
+  // Anyone else is refused and the admin client is not used for the row.
+  const admin = createAdminClient();
+  const result = await getBudgetActuals(supabase, admin, id);
+  if (result.status === 404 && (await canReadFinanceXero(supabase, user.id))) {
+    const asFinance = await getBudgetActuals(admin, admin, id);
+    return NextResponse.json(asFinance.body, { status: asFinance.status });
   }
-  if (await canReadFinanceXero(supabase, user.id)) {
+  if (result.status !== 404) {
     return NextResponse.json(result.body, { status: result.status });
   }
   return NextResponse.json({ error: "You don't have permission to see this budget" }, { status: 403 });

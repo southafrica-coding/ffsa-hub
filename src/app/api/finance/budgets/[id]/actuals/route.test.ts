@@ -3,13 +3,16 @@ import { createFakeSupabase, permissionWorldResolver, type FakeQuery, type Permi
 
 const state = vi.hoisted(() => ({
   fake: null as unknown as ReturnType<typeof import("@/lib/testing/fake-supabase").createFakeSupabase>,
+  admin: null as null | ReturnType<typeof import("@/lib/testing/fake-supabase").createFakeSupabase>,
   xero: { ok: true, transactions: [] as unknown[], partial: false } as
     | { ok: true; transactions: unknown[]; partial: boolean }
     | { ok: false; reason: "not_connected" | "xero"; message: string },
 }));
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => state.fake.client }));
-vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => state.fake.client }));
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: () => (state.admin ?? state.fake).client,
+}));
 vi.mock("@/services/xero", async (orig) => ({
   ...(await orig<typeof import("@/services/xero")>()),
   listXeroSpendTransactions: async () => state.xero,
@@ -36,6 +39,7 @@ const call = (id = "b1") => GET(new Request("http://x/api/finance/budgets/b1/act
 
 describe("GET /api/finance/budgets/[id]/actuals", () => {
   beforeEach(() => {
+    state.admin = null;
     state.xero = { ok: true, transactions: [], partial: false };
   });
 
@@ -132,5 +136,50 @@ describe("GET /api/finance/budgets/[id]/actuals", () => {
     const res = await call();
     expect(res.status).toBe(200);
     expect((await res.json()).source).toBe("xero");
+  });
+
+  it("reloads with the admin client when finance can read Xero but RLS hid the budget", async () => {
+    world(NO_ROLES, ["finance.view"], { id: "finance" }, (q) => {
+      if (q.table === "budgets") return { data: null };
+      return undefined;
+    });
+    state.admin = createFakeSupabase({
+      user: { id: "finance" },
+      resolve: (q: FakeQuery) => {
+        if (q.table === "budgets" && q.single) {
+          return {
+            data: {
+              id: "b1",
+              name: "Hidden from the member",
+              currency: "ZAR",
+              archived_at: null,
+              fiscal_periods: { start_date: "2026-01-01", end_date: "2026-12-31" },
+              budget_lines: [],
+            },
+          };
+        }
+        if (q.table === "budgets") return { data: [] };
+        return { data: [] };
+      },
+    });
+    const res = await call();
+    expect(res.status).toBe(200);
+    expect((await res.json()).name).toBe("Hidden from the member");
+  });
+
+  it("does not use the admin client for someone who cannot see the budget and is not finance", async () => {
+    world(NO_ROLES, [], { id: "stranger" }, (q) => {
+      if (q.table === "budgets") return { data: null };
+      return undefined;
+    });
+    state.admin = createFakeSupabase({
+      user: { id: "stranger" },
+      resolve: () => {
+        throw new Error("admin client must not read the budget");
+      },
+    });
+    const res = await call();
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "You don't have permission to see this budget" });
   });
 });
