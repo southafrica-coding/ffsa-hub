@@ -1,5 +1,7 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { syncXeroMirror } from "@/lib/finance/xero-mirror-sync";
 import { saveTokens, xeroRedirectUri } from "@/services/xero";
 import type { XeroRegion } from "@/services/xero";
 
@@ -167,6 +169,22 @@ export async function GET(request: Request) {
       token_set: tokenSet,
       connected_by: user.id,
       region,
+    });
+
+    // Catch the Hub up with this organisation straight away (accounts,
+    // tracking options, projects). Read-only toward Xero; runs after the
+    // redirect so connecting never waits on it.
+    after(async () => {
+      const results = await syncXeroMirror(createAdminClient(), {
+        regions: [region],
+        trigger: "reconnect",
+        startedBy: user.id,
+      });
+      for (const r of results) {
+        if (r.status === "failed" || r.status === "partial") {
+          console.error(`Xero mirror sync after connecting (${region}):`, r.status, r.error ?? "");
+        }
+      }
     });
 
     const regionLabel = region === "us" ? "US" : "SA";
