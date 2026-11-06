@@ -17,6 +17,29 @@ export const EVANGELISM_FEED_POLL_SECONDS = 15;
 /** Signed read URLs handed to the dashboard. Refreshed on each poll. */
 export const EVANGELISM_MEDIA_READ_TTL_SECONDS = 10 * 60;
 
+export function mediaExpiresAt(now = Date.now()): string {
+  return new Date(now + EVANGELISM_MEDIA_READ_TTL_SECONDS * 1000).toISOString();
+}
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Comma-separated or array of testimony ids, capped. */
+export function parseTestimonyIds(value: unknown, max = 40): { ok: true; ids: string[] } | { ok: false; message: string } {
+  const raw = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(",")
+      : value == null
+        ? []
+        : null;
+  if (!raw) return { ok: false, message: "Story ids must be a list." };
+  const ids = [...new Set(raw.map((item) => String(item).trim()).filter(Boolean))];
+  if (ids.length > max) return { ok: false, message: `Send at most ${max} story ids.` };
+  if (ids.some((id) => !UUID_RE.test(id))) return { ok: false, message: "Story ids must be uuids." };
+  return { ok: true, ids };
+}
+
 export const TESTIMONY_OUTCOMES = [
   "conversation",
   "prayer",
@@ -367,6 +390,23 @@ export function canEditTestimony(
 ): boolean {
   if (access.publish) return true;
   return row.author_user_id === userId && (row.status === "draft" || row.status === "submitted");
+}
+
+/**
+ * Publishing needs the story's own consent flag and a separate publisher
+ * confirmation. confirm_consent does not turn a false consent into a true one.
+ */
+export function publishNeedsConfirmation(input: {
+  consentToShare: boolean;
+  confirmConsent: unknown;
+}): string | null {
+  if (!input.consentToShare) {
+    return "This story cannot be published without consent to share it.";
+  }
+  if (input.confirmConsent !== true) {
+    return "Confirm consent before publishing this story.";
+  }
+  return null;
 }
 
 export function canDeleteTestimony(

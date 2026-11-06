@@ -3,9 +3,12 @@ import { getRateLimiter, retryAfterSeconds } from "@/lib/rate-limit";
 import {
   EVANGELISM_MEDIA_BUCKET,
   isOwnedMediaPath,
+  publishNeedsConfirmation,
   validateTestimonyWrite,
+  type MediaKind,
   type TestimonyWrite,
 } from "@/lib/evangelism/contract";
+import { assessUpload } from "@/lib/evangelism/media-bytes";
 import { asError, guardEvangelism, isGuard, json, notEnabled, readBody } from "@/lib/evangelism/http";
 import { presentTestimony, type TestimonyRow } from "@/lib/evangelism/present";
 import { isEvangelismNotReady } from "@/lib/evangelism/schema-error";
@@ -104,7 +107,8 @@ export async function POST(request: Request) {
     );
   }
 
-  const parsed = validateTestimonyWrite((await readBody(request)) as Partial<TestimonyWrite>, {
+  const raw = (await readBody(request)) as Partial<TestimonyWrite> & { confirm_consent?: unknown };
+  const parsed = validateTestimonyWrite(raw ?? {}, {
     mode: "create",
     canPublish: access.publish,
   });
@@ -113,6 +117,13 @@ export async function POST(request: Request) {
   }
   const story = parsed.value;
   const status = story.status ?? "draft";
+  if (status === "published") {
+    const consent = publishNeedsConfirmation({
+      consentToShare: story.consent_to_share,
+      confirmConsent: raw?.confirm_consent,
+    });
+    if (consent) return json({ error: "bad_request", message: consent }, 400);
+  }
 
   const media = story.media ?? [];
   for (const item of media) {
@@ -124,14 +135,22 @@ export async function POST(request: Request) {
     }
   }
 
-  const sizes = new Map<string, number>();
+  const checked = new Map<string, { size: number; contentType: string; kind: MediaKind }>();
   if (media.length > 0) {
-    const confirmed = await confirmUploads(media.map((item) => item.path));
-    if (!confirmed.ok) return confirmed.reason === "not_ready" ? notEnabled() : json(
-      { error: "bad_request", message: "One of the files has not finished uploading." },
-      400
-    );
-    for (const [path, size] of confirmed.sizes) sizes.set(path, size);
+    const confirmed = await confirmUploads(media);
+    if (!confirmed.ok) {
+      return confirmed.reason === "not_ready"
+        ? notEnabled()
+        : json({ error: "bad_request", message: confirmed.message }, 400);
+    }
+    let videos = 0;
+    for (const [path, file] of confirmed.files) {
+      checked.set(path, file);
+      if (file.kind === "video") videos += 1;
+    }
+    if (videos > 4) {
+      return json({ error: "bad_request", message: "Attach at most 4 videos." }, 400);
+    }
   }
 
   const now = new Date().toISOString();
@@ -160,8 +179,8 @@ export async function POST(request: Request) {
         testimony_id: row.id,
         kind: item.kind,
         storage_path: item.path,
-        content_type: item.content_type,
-        size_bytes: sizes.get(item.path) ?? 0,
+        content_type: checked.get(item.path)?.contentType ?? item.content_type,
+        size_bytes: checked.get(item.path)?.size ?? 0,
         sort_order: index,
         created_by: user.id,
       }))
@@ -180,25 +199,53 @@ export async function POST(request: Request) {
 }
 
 async function confirmUploads(
-  paths: string[]
-): Promise<{ ok: true; sizes: Map<string, number> } | { ok: false; reason: "missing" | "not_ready" }> {
+  media: Array<{ path: string; kind: MediaKind }>
+): Promise<
+  | { ok: true; files: Map<string, { size: number; contentType: string; kind: MediaKind }> }
+  | { ok: false; reason: "rejected" | "not_ready"; message: string }
+> {
   let admin;
   try {
     admin = createAdminClient();
   } catch {
-    return { ok: false, reason: "not_ready" };
+    return { ok: false, reason: "not_ready", message: "Uploads are not available yet." };
   }
   const bucket = admin.storage.from(EVANGELISM_MEDIA_BUCKET);
-  const sizes = new Map<string, number>();
-  for (const path of paths) {
-    const slash = path.lastIndexOf("/");
-    const folder = path.slice(0, slash);
-    const name = path.slice(slash + 1);
-    const { data, error } = await bucket.list(folder, { search: name });
-    if (error) return { ok: false, reason: isEvangelismNotReady(error) ? "not_ready" : "missing" };
-    const found = (data ?? []).find((object: { name: string; metadata?: { size?: number } }) => object.name === name);
-    if (!found) return { ok: false, reason: "missing" };
-    sizes.set(path, Number(found.metadata?.size ?? 0));
+  const files = new Map<string, { size: number; contentType: string; kind: MediaKind }>();
+  const accepted: string[] = [];
+  const reject = async (message: string) => {
+    if (accepted.length > 0) await bucket.remove(accepted);
+    return { ok: false as const, reason: "rejected" as const, message };
+  };
+  for (const item of media) {
+    const slash = item.path.lastIndexOf("/");
+    const folder = item.path.slice(0, slash);
+    const name = item.path.slice(slash + 1);
+    const listed = await bucket.list(folder, { search: name });
+    if (listed.error) {
+      return isEvangelismNotReady(listed.error)
+        ? { ok: false, reason: "not_ready", message: "Uploads are not available yet." }
+        : reject("One of the files has not finished uploading.");
+    }
+    const found = (listed.data ?? []).find((object: { name: string; metadata?: { size?: number } }) => object.name === name);
+    const size = Number(found?.metadata?.size ?? 0);
+    if (!found || !Number.isInteger(size) || size <= 0) {
+      return reject("One of the files has not finished uploading.");
+    }
+    accepted.push(item.path);
+
+    const signed = await bucket.createSignedUrl(item.path, 60);
+    if (signed.error || !signed.data?.signedUrl) {
+      return isEvangelismNotReady(signed.error)
+        ? { ok: false, reason: "not_ready", message: "Uploads are not available yet." }
+        : reject("One of the files could not be checked.");
+    }
+    const head = await fetch(signed.data.signedUrl, { headers: { Range: "bytes=0-31" } });
+    if (!head.ok && head.status !== 206) return reject("One of the files could not be checked.");
+    const header = new Uint8Array(await head.arrayBuffer());
+    const assessed = assessUpload({ declaredKind: item.kind, size, header });
+    if (!assessed.ok) return reject(assessed.message);
+    files.set(item.path, { size: assessed.size, contentType: assessed.contentType, kind: assessed.kind });
   }
-  return { ok: true, sizes };
+  return { ok: true, files };
 }

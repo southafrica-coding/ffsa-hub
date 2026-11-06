@@ -1,13 +1,17 @@
+import { createAdminClient } from "@/lib/supabase/admin";
 import {
+  EVANGELISM_MEDIA_BUCKET,
   canDeleteTestimony,
   canEditTestimony,
+  publishNeedsConfirmation,
   validateTestimonyWrite,
   type TestimonyWrite,
 } from "@/lib/evangelism/contract";
-import { asError, guardEvangelism, isGuard, json, readBody } from "@/lib/evangelism/http";
+import { asError, guardEvangelism, isGuard, json, notEnabled, readBody } from "@/lib/evangelism/http";
 import { presentTestimony, type TestimonyRow } from "@/lib/evangelism/present";
+import { isEvangelismNotReady } from "@/lib/evangelism/schema-error";
 import { loadAuthorNames, signTestimonyMedia } from "@/lib/evangelism/signed-media";
-import { deleteTestimony, getTestimony, updateTestimony } from "@/services/evangelism";
+import { deleteTestimony, getTestimony, recordRemoval, updateTestimony } from "@/services/evangelism";
 
 // GET    /api/evangelism/testimonies/:id
 // PATCH  /api/evangelism/testimonies/:id
@@ -119,11 +123,16 @@ export async function PATCH(request: Request, context: Ctx) {
   }
 
   if ("status" in body && next.status) {
-    patch.status = next.status;
     if (next.status === "published" && row.status !== "published") {
+      const consent = publishNeedsConfirmation({
+        consentToShare: next.consent_to_share,
+        confirmConsent: body.confirm_consent,
+      });
+      if (consent) return json({ error: "bad_request", message: consent }, 400);
       patch.published_at = new Date().toISOString();
       patch.published_by = user.id;
     }
+    patch.status = next.status;
     if (next.status !== "published" && next.status !== "withheld") {
       patch.withheld_reason = null;
     }
@@ -131,6 +140,13 @@ export async function PATCH(request: Request, context: Ctx) {
 
   if (Object.keys(patch).length === 0) {
     return json({ error: "bad_request", message: "Nothing to update." }, 400);
+  }
+
+  if (patch.status === "withheld" && (row.status === "published" || row.published_at)) {
+    const removal = await recordRemoval(supabase, { testimony_id: id, reason: "withheld" });
+    if (removal.error && !isEvangelismNotReady(removal.error)) {
+      return asError(removal.error, "Couldn't update the testimony.");
+    }
   }
 
   const updated = await updateTestimony(supabase, id, patch);
@@ -152,6 +168,30 @@ export async function DELETE(_request: Request, context: Ctx) {
   if (!canDeleteTestimony(access, row, user.id)) {
     return json({ error: "forbidden", message: "You cannot delete this story." }, 403);
   }
+
+  const wasOnTheWall = row.status === "published" || row.published_at != null;
+  if (wasOnTheWall) {
+    const removal = await recordRemoval(supabase, { testimony_id: id, reason: "deleted" });
+    if (removal.error) {
+      if (isEvangelismNotReady(removal.error)) return notEnabled();
+      return asError(removal.error, "Couldn't delete the testimony.");
+    }
+  }
+
+  const paths = (row.evangelism_media ?? []).map((item) => item.storage_path).filter(Boolean);
+  if (paths.length > 0) {
+    let admin;
+    try {
+      admin = createAdminClient();
+    } catch {
+      return notEnabled();
+    }
+    const { error: storageError } = await admin.storage.from(EVANGELISM_MEDIA_BUCKET).remove(paths);
+    if (storageError && !isEvangelismNotReady(storageError)) {
+      return asError(storageError, "Couldn't delete the testimony files.");
+    }
+  }
+
   const removed = await deleteTestimony(supabase, id);
   if (removed.error) return asError(removed.error, "Couldn't delete the testimony.");
   return json({ ok: true });

@@ -13,8 +13,7 @@ export function notEnabled() {
   return json(
     {
       error: "evangelism_not_enabled",
-      message:
-        "Evangelism testimonies are not switched on yet. Hub Data still has to apply the tables and the evangelism-media bucket.",
+      message: "Evangelism stories are not available yet.",
     },
     503
   );

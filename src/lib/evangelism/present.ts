@@ -36,6 +36,8 @@ export function presentTestimony(
     urls: Map<string, string | null>;
     publish: boolean;
     authorName: string | null;
+    /** When the signed read URLs stop working. Same value for every file in this response. */
+    mediaExpiresAt?: string | null;
   }
 ) {
   const media = [...(row.evangelism_media ?? [])].sort((a, b) => a.sort_order - b.sort_order);
@@ -63,6 +65,7 @@ export function presentTestimony(
       size_bytes: item.size_bytes,
       sort_order: item.sort_order,
       url: options.urls.get(item.storage_path) ?? null,
+      expires_at: options.mediaExpiresAt ?? null,
     })),
   };
 }

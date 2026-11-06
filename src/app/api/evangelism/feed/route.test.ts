@@ -22,6 +22,9 @@ vi.mock("@/services/evangelism", () => ({
   STATS_ROW_CAP: 5000,
   listPublishedFeed: async () => ({ data: h.feed, error: null }),
   listPublishedForStats: async () => ({ data: [], error: null }),
+  listPublishedByIds: async () => ({ data: [], error: null }),
+  listWithheldSince: async () => ({ data: [{ id: "gone" }], error: null }),
+  listRemovalsSince: async () => ({ data: [{ testimony_id: "deleted-row" }], error: null }),
 }));
 
 import { GET } from "./route";
@@ -83,6 +86,16 @@ describe("GET /api/evangelism/feed", () => {
     expect(body.cursor).toBe("2026-11-06T12:00:00.000Z");
     expect(body.testimonies[0].withheld_reason).toBeUndefined();
     expect(body.stats.range).toBe("month");
+    expect(body.media_expires_at).toEqual(expect.any(String));
+    expect(body.refreshed).toEqual([]);
+    expect(body.removed_ids).toEqual([]);
+  });
+
+  it("drops withheld and deleted stories once the screen has a cursor", async () => {
+    const res = await GET(new Request("http://x/api/evangelism/feed?since=2026-11-01T00:00:00.000Z"));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.removed_ids).toEqual(expect.arrayContaining(["gone", "deleted-row"]));
   });
 
   it("rejects a bad cursor and a viewer with no access", async () => {

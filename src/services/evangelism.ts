@@ -129,6 +129,41 @@ export async function listPublishedForStats(
     .limit(STATS_ROW_CAP);
 }
 
+export async function listPublishedByIds(supabase: Client, ids: string[]) {
+  if (ids.length === 0) return { data: [], error: null };
+  return supabase.from("evangelism_testimonies").select(STORY).eq("status", "published").in("id", ids);
+}
+
+/** Stories that were on the wall and have since been withheld. */
+export async function listWithheldSince(supabase: Client, since: string) {
+  return supabase
+    .from("evangelism_testimonies")
+    .select("id")
+    .eq("status", "withheld")
+    .not("published_at", "is", null)
+    .gt("updated_at", since);
+}
+
+/** Proposed table. A published story that was withheld or deleted after `since`. */
+export async function listRemovalsSince(supabase: Client, since: string) {
+  return supabase
+    .from("evangelism_removals")
+    .select("testimony_id")
+    .gt("removed_at", since)
+    .limit(200);
+}
+
+export async function recordRemoval(
+  supabase: Client,
+  row: { testimony_id: string; reason: "withheld" | "deleted" }
+) {
+  return supabase.from("evangelism_removals").insert({
+    testimony_id: row.testimony_id,
+    reason: row.reason,
+    removed_at: new Date().toISOString(),
+  });
+}
+
 export async function authorNames(supabase: Client, ids: string[]) {
   if (ids.length === 0) return { data: [], error: null };
   return supabase

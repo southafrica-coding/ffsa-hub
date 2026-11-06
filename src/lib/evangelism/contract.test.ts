@@ -4,6 +4,7 @@ import {
   canDeleteTestimony,
   canEditTestimony,
   isOwnedMediaPath,
+  publishNeedsConfirmation,
   validateSignMedia,
   validateTestimonyWrite,
 } from "./contract";
@@ -69,6 +70,14 @@ describe("testimony media paths", () => {
     expect(isOwnedMediaPath(USER, path!, "image/jpeg")).toBe(true);
     expect(isOwnedMediaPath(USER, `testimonies/someone-else/${FILE}.jpg`, "image/jpeg")).toBe(false);
     expect(isOwnedMediaPath(USER, `testimonies/${USER}/../${FILE}.jpg`, "image/jpeg")).toBe(false);
+  });
+});
+
+describe("publish consent", () => {
+  it("requires the consent flag and a separate publisher confirmation", () => {
+    expect(publishNeedsConfirmation({ consentToShare: true, confirmConsent: true })).toBeNull();
+    expect(publishNeedsConfirmation({ consentToShare: false, confirmConsent: true })).toMatch(/consent/);
+    expect(publishNeedsConfirmation({ consentToShare: true, confirmConsent: false })).toMatch(/Confirm consent/);
   });
 });
 
