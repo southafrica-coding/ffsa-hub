@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getFinanceHubAccess } from "@/lib/finance-access";
-import { Globe, Wallet, CreditCard, Home, HeartHandshake, FolderKanban, BookOpen } from "lucide-react";
+import { Globe, Wallet, CreditCard, Home, HeartHandshake, FolderKanban, BookOpen, Sheet } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Masthead, SectionBar, StatusPill } from "@/components/ffsa";
 import { XeroConnection } from "./xero-connection";
@@ -22,6 +22,14 @@ const FINANCE_MODULES = [
     description: "Track budgets, expenses, receipts, cash batches, and closeouts for international outreach teams.",
     href: "/finance/outreach",
     icon: Globe,
+    ready: true,
+  },
+  {
+    title: "Budgets",
+    description:
+      "A team budget sheet: overview, dashboard, variable and fixed costs, an expense tracker and notes. One owner, one organisation, one currency, one period. Separate from outreach cash.",
+    href: "/finance/budgets",
+    icon: Sheet,
     ready: true,
   },
   {
@@ -79,7 +87,9 @@ export default async function FinancePage() {
   const modules = fullFinance
     ? FINANCE_MODULES
     : FINANCE_MODULES.filter(
-        (m) => m.href === "/finance/outreach" || (financeOffice && m.href === "/finance/donor-statements")
+        (m) =>
+          m.href === "/finance/outreach" ||
+          (financeOffice && (m.href === "/finance/donor-statements" || m.href === "/finance/budgets"))
       );
   const liveCount = modules.filter((m) => m.ready).length;
 

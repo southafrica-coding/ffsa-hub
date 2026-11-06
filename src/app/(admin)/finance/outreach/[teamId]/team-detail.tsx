@@ -39,6 +39,7 @@ import { PayoutsTab } from "./payouts-tab";
 import { DashboardTab } from "./dashboard-tab";
 import { CloseoutTab } from "./closeout-tab";
 import { SlackSettings } from "./slack-settings";
+import type { ConfirmedReceiptDraft } from "@/lib/finance/receipt-xero-retry";
 import { MoneyAlertSettings } from "./money-alert-settings";
 import { BudgetLines, type BudgetLine } from "./budget-lines";
 import { Planner } from "./planner";
@@ -233,6 +234,8 @@ export function TeamDetail({
   deleteBlockers = [],
   alertRecipient,
   cashAllocations = [],
+  confirmedReceipts = [],
+  canRetryXero = false,
 }: {
   team: Team;
   members: Member[];
@@ -251,6 +254,8 @@ export function TeamDetail({
   deleteBlockers?: string[];
   alertRecipient: (UserOption & { slack_user_id: string | null }) | null;
   cashAllocations?: AllocationRow[];
+  confirmedReceipts?: ConfirmedReceiptDraft[];
+  canRetryXero?: boolean;
 }) {
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat("en-ZA", { style: "currency", currency: "ZAR" }).format(amount);
@@ -470,6 +475,8 @@ export function TeamDetail({
             cashBatches={cashBatches}
             receiptCounts={receiptCounts}
             readOnly={readOnly}
+            confirmedReceipts={confirmedReceipts}
+            canRetryXero={canRetryXero}
           />
         </TabsContent>
 

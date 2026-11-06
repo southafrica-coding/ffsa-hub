@@ -34,6 +34,8 @@ import {
 import { Plus, Trash2, Edit2, Loader2, Upload, X } from "lucide-react";
 import { CurrencySelect } from "@/components/ui/currency-select";
 import { ReceiptGallery } from "./receipt-gallery";
+import { ConfirmedReceipts } from "./retry-xero-receipt";
+import type { ConfirmedReceiptDraft } from "@/lib/finance/receipt-xero-retry";
 import { createClient } from "@/lib/supabase/client";
 import { ExpenseImport } from "./expense-import";
 import { CategoryPicker } from "./category-picker";
@@ -104,6 +106,8 @@ export function ExpensesTab({
   cashBatches,
   receiptCounts = {},
   readOnly = false,
+  confirmedReceipts = [],
+  canRetryXero = false,
 }: {
   teamId: string;
   /** Shown on the form, so someone on several teams knows which budget it goes to. */
@@ -113,6 +117,10 @@ export function ExpensesTab({
   cashBatches: CashBatch[];
   receiptCounts?: Record<string, number>;
   readOnly?: boolean;
+  /** Slack receipts already confirmed (status logged). Empty when none were readable. */
+  confirmedReceipts?: ConfirmedReceiptDraft[];
+  /** Finance editors. Anyone else sees the receipt without a retry button. */
+  canRetryXero?: boolean;
 }) {
   const router = useRouter();
   // Local copy so a category added from the form is selectable at once.
@@ -364,6 +372,7 @@ export function ExpensesTab({
 
   return (
     <div className="space-y-4">
+      <ConfirmedReceipts drafts={confirmedReceipts} canRetry={canRetryXero} />
       <div className="flex items-center justify-between">
         <h3 className="font-medium">
           Expenses{" "}
