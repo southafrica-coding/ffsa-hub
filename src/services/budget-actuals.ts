@@ -7,7 +7,6 @@
 import {
   attributeActuals,
   isMissingRelation,
-  regionForBudgetCurrency,
   xeroDateOnly,
   xeroLineSpendCents,
   type ActualLineInput,
@@ -163,7 +162,8 @@ export async function getBudgetActuals(
     return { status: 400, body: { error: "This budget has no period dates, so Xero actuals can't be bounded." } };
   }
 
-  const region = regionForBudgetCurrency(data.currency);
+  // Hub budget workbooks are South Africa / ZAR. Actuals are read from the ZA org.
+  const region = "za" as const;
   const lineRows = ((data.budget_lines ?? []) as LineRow[]).filter((line) => !line.archived_at);
   const codingFor = (line: LineRow) => (line.budget_line_coding ?? []).find((c) => c.org_region === region) ?? null;
 

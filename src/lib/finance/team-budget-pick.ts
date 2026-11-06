@@ -4,11 +4,11 @@
  * has to pick the org and the fiscal period. It does not take "the" budget
  * for the team.
  *
- * FFSA NPC records ZAR. FF USA Inc records USD. A dollar slip is the USA
- * budget; every other slip is the NPC budget, in the period that contains
- * the receipt date. The org is taken from the budget currency, not from a
- * finance_orgs read. Two budgets still in that org and period are not guessed
- * apart unless the note names one of them.
+ * Hub budget workbooks are South Africa / ZAR only. A dollar slip does not
+ * open a US workbook. The receipt still belongs to the team's ZAR budget
+ * in the fiscal period that contains the date. NPC versus USA is not read
+ * from finance_orgs. Two ZAR budgets in that period are not guessed apart
+ * unless the note names one of them.
  */
 
 export type BudgetOrgKey = "npc" | "usa";
@@ -38,9 +38,10 @@ export type BudgetSelection =
   | { ok: true; budget: TeamBudgetRow }
   | { ok: false; reason: "none" | "ambiguous" };
 
-/** A USD slip is recorded on FF USA Inc. Everything else is ZAR on FFSA NPC. */
+/** Workbooks are the SA / ZAR org. The slip currency does not choose a US book. */
 export function orgForReceiptCurrency(localCurrency: string | null | undefined): BudgetOrgKey {
-  return (localCurrency ?? "").toUpperCase() === "USD" ? "usa" : "npc";
+  void localCurrency;
+  return "npc";
 }
 
 export function regionForOrg(org: BudgetOrgKey | null): "za" | "us" {
@@ -48,27 +49,19 @@ export function regionForOrg(org: BudgetOrgKey | null): "za" | "us" {
 }
 
 /**
- * The amount Xero is asked to record, in the org's own currency.
- * NPC gets the rand figure. USA gets the dollar figure on the slip,
- * not a rand conversion.
+ * Confirmed spends post on the ZA bank-account path, in rand. A foreign
+ * slip still uses the rand figure already collected. No FX rate is invented
+ * here, and a USD workbook is not opened to store dollar cents.
  */
 export function xeroBook(
-  org: BudgetOrgKey | null,
+  _org: BudgetOrgKey | null,
   args: {
     localCurrency: string | null;
     localAmount: number | null;
     zarAmount: number;
     zarConfirmed: boolean;
   }
-): { region: "za" | "us"; currency: "ZAR" | "USD"; amount: number; zarConfirmed: boolean } {
-  if (org === "usa") {
-    return {
-      region: "us",
-      currency: "USD",
-      amount: Number(args.localAmount),
-      zarConfirmed: (args.localCurrency ?? "").toUpperCase() === "USD" && Number(args.localAmount) > 0,
-    };
-  }
+): { region: "za" | "us"; currency: "ZAR"; amount: number; zarConfirmed: boolean } {
   return {
     region: "za",
     currency: "ZAR",
@@ -99,14 +92,15 @@ function nameHits(budgetName: string, hint: string): boolean {
 }
 
 /**
- * Live budgets for one team, narrowed to one org and the fiscal period
- * that contains the receipt date. Ambiguous when more than one name remains.
+ * Live ZAR budgets for one team in the fiscal period that contains the
+ * receipt date. A USD book is never chosen. Ambiguous when more than one
+ * ZAR name remains.
  */
 export function selectTeamBudget(rows: TeamBudgetRow[], book: ReceiptBook): BudgetSelection {
   let matched = rows.filter(
     (row) =>
       row.status !== "archived" &&
-      orgMatches(row, book.org) &&
+      orgMatches(row, "npc") &&
       inPeriod(book.expenseDate, row.periodStart, row.periodEnd)
   );
   // An approved budget wins over a draft or a submitted one in the same period.

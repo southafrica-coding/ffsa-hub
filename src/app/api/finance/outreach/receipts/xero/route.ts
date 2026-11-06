@@ -66,15 +66,13 @@ export async function POST(request: Request) {
     local_currency?: string | null;
   };
 
-  const org: BudgetOrgKey | null =
-    proposal.budget_org_key === "usa" || proposal.budget_org_key === "npc" ? proposal.budget_org_key : null;
   let localCurrency = proposal.local_currency ?? "ZAR";
   const localAmount = proposal.local_amount ?? null;
   let zarAmount = Number(proposal.zar_amount);
   let zarConfirmed = (proposal.local_currency ?? "").toUpperCase() === "ZAR" || Boolean(proposal.zar_confirmed);
   let date = proposal.expense_date ?? "";
-  // The saved expense is the rand book. A USA budget keeps the dollar slip instead.
-  if (draft.expense_id && org !== "usa") {
+  // Workbooks are ZAR. The saved expense's rand is what gets posted, even when the slip was in dollars.
+  if (draft.expense_id) {
     const { data: expense } = await admin
       .from("outreach_expenses")
       .select("zar_amount, zar_confirmed, local_currency, expense_date")
@@ -88,7 +86,7 @@ export async function POST(request: Request) {
     }
   }
 
-  const book = xeroBook(org, { localCurrency, localAmount, zarAmount, zarConfirmed });
+  const book = xeroBook("npc", { localCurrency, localAmount, zarAmount, zarConfirmed });
   const result = await writeConfirmedSpend(admin, {
     draftId,
     expenseId: draft.expense_id ?? null,
@@ -103,9 +101,9 @@ export async function POST(request: Request) {
     vendor: proposal.vendor ?? null,
     budgetId: proposal.budget_id ?? null,
     budgetLineId: proposal.budget_line_id ?? null,
-    orgKey: org,
-    currency: book.currency,
-    region: book.region,
+    orgKey: proposal.budget_id ? "npc" : null,
+    currency: "ZAR",
+    region: "za",
     paymentMethod: proposal.payment_method === "card" || proposal.payment_method === "bank_transfer" ? proposal.payment_method : "cash",
     budgetStatus: proposal.budget_status ?? null,
     periodStart: proposal.budget_period_start ?? null,

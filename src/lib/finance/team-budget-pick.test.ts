@@ -40,13 +40,14 @@ describe("selectTeamBudget", () => {
     expect(picked).toEqual({ ok: true, budget: npc2026 });
   });
 
-  it("sends a dollar slip to the USA budget in that period", () => {
+  it("keeps a dollar slip on the SA rand budget, not a US workbook", () => {
+    expect(orgForReceiptCurrency("USD")).toBe("npc");
     const picked = selectTeamBudget([npc2026, usa2026], {
       org: orgForReceiptCurrency("USD"),
       expenseDate: "2026-04-01",
       nameHint: null,
     });
-    expect(picked.ok && picked.budget.id).toBe("b-usa");
+    expect(picked.ok && picked.budget.id).toBe("b-2026");
   });
 
   it("prefers the approved budget over a draft in the same period", () => {
@@ -81,25 +82,25 @@ describe("selectTeamBudget", () => {
     expect(selectTeamBudget([npc2026], { org: "npc", expenseDate: "2027-01-01", nameHint: null }).ok).toBe(false);
   });
 
-  it("matches on currency when the org key is not on the row yet", () => {
+  it("does not treat a USD currency as the workbook when the org key is missing", () => {
     const byCurrency = budget({ id: "cur", name: "USA by currency", orgKey: null, currency: "USD" });
     const picked = selectTeamBudget([npc2026, byCurrency], {
       org: "usa",
       expenseDate: "2026-06-01",
       nameHint: null,
     });
-    expect(picked.ok && picked.budget.id).toBe("cur");
+    expect(picked.ok && picked.budget.id).toBe("b-2026");
   });
 });
 
 describe("xeroBook", () => {
-  it("posts rand to NPC and dollars to USA", () => {
+  it("posts the collected rand on the ZA path, including a dollar slip", () => {
     expect(
       xeroBook("npc", { localCurrency: "BWP", localAmount: 100, zarAmount: 80, zarConfirmed: false })
     ).toMatchObject({ region: "za", currency: "ZAR", amount: 80, zarConfirmed: false });
     expect(
       xeroBook("usa", { localCurrency: "USD", localAmount: 40, zarAmount: 720, zarConfirmed: false })
-    ).toMatchObject({ region: "us", currency: "USD", amount: 40, zarConfirmed: true });
+    ).toMatchObject({ region: "za", currency: "ZAR", amount: 720, zarConfirmed: false });
     expect(xeroBook(null, { localCurrency: "ZAR", localAmount: 10, zarAmount: 10, zarConfirmed: true })).toMatchObject({
       region: "za",
       currency: "ZAR",

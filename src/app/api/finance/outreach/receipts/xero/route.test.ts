@@ -97,14 +97,16 @@ describe("POST /api/finance/outreach/receipts/xero", () => {
     expect(await res.json()).toEqual({ status: "no_account", bankTransactionId: null });
   });
 
-  it("uses the US bank account when the budget is FF USA Inc", async () => {
+  it("posts a dollar slip as rand on the ZA bank account", async () => {
     state.draft = {
       ...state.draft,
       proposal: {
         ...(state.draft?.proposal as object),
+        budget_id: "b-zar",
         budget_org_key: "usa",
         local_currency: "USD",
         local_amount: 40,
+        zar_amount: 720,
         payment_method: "card",
         budget_status: "approved",
         budget_period_start: "2026-01-01",
@@ -113,7 +115,7 @@ describe("POST /api/finance/outreach/receipts/xero", () => {
     };
     const res = await call({ draftId: "d1" });
     expect(res.status).toBe(200);
-    expect(state.calls[0]).toMatchObject({ region: "us", currency: "USD", amountZar: 40, paymentMethod: "card" });
+    expect(state.calls[0]).toMatchObject({ region: "za", currency: "ZAR", amountZar: 12, orgKey: "npc", paymentMethod: "card" });
   });
 
   it("refuses to write from a preview deployment", async () => {

@@ -254,10 +254,11 @@ async function linesForReceipt(
   const candidates: TeamBudgetRow[] = rows.flatMap((row) => {
     const period = onePeriod(row.fiscal_periods);
     // The period's org and the budget's org are the same composite key.
-    // Leaders cannot read finance_orgs, so npc/usa comes from the currency.
+    // Workbooks are ZAR. A USD book is not a candidate, and finance_orgs is not read.
     if (row.org_id && period?.org_id && row.org_id !== period.org_id) return [];
     const currency = (row.currency ?? "").toUpperCase();
-    const orgKey: BudgetOrgKey | null = currency === "USD" ? "usa" : currency === "ZAR" ? "npc" : null;
+    if (currency === "USD") return [];
+    const orgKey: BudgetOrgKey | null = currency === "ZAR" ? "npc" : null;
     return [{
       id: row.id,
       name: row.name,
@@ -1148,12 +1149,9 @@ export async function confirmCardPayment(draftId: string, expenseId: string, sla
     const target = origin ?? draft;
     const originProposal = (target.proposal ?? {}) as Proposal;
     let xeroStatus = "failed";
-    // The bank notification confirms rand, so it posts to FFSA NPC. A dollar
-    // slip was already booked on FF USA Inc at Confirm and is not re-posted in rand.
+    // The bank notification confirms rand on the SA book. There is no US workbook post.
     const merchant = origin && origin.kind !== "card_confirm" ? origin : null;
-    if (originProposal.budget_org_key === "usa") {
-      xeroStatus = originProposal.xero_write?.status ?? "not_confirmed";
-    } else if (!merchant?.storage_path) {
+    if (!merchant?.storage_path) {
       xeroStatus = "bank_proof_only";
     } else {
       try {
@@ -1378,7 +1376,7 @@ export async function logReceipt(draftId: string, slackUserId: string, reply: Re
     const { data: saved } = await admin.from("outreach_expenses").select("zar_amount").eq("id", expense.id).maybeSingle();
     const zarFinal = saved?.zar_amount != null ? Number(saved.zar_amount) : p.zar_amount;
     const fromPulls = p.payment_method === "cash" && p.local_currency !== "ZAR";
-    const book = xeroBook(p.budget_org_key ?? null, {
+    const book = xeroBook("npc", {
       localCurrency: p.local_currency,
       localAmount: p.local_amount,
       zarAmount: Number(zarFinal),
@@ -1400,9 +1398,9 @@ export async function logReceipt(draftId: string, slackUserId: string, reply: Re
         vendor: p.vendor,
         budgetId: p.budget_id ?? null,
         budgetLineId: p.budget_line_id ?? null,
-        orgKey: p.budget_org_key ?? null,
-        currency: book.currency,
-        region: book.region,
+        orgKey: p.budget_id ? "npc" : null,
+        currency: "ZAR",
+        region: "za",
         paymentMethod: p.payment_method,
         budgetStatus: p.budget_status ?? null,
         periodStart: p.budget_period_start ?? null,
