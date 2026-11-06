@@ -53,5 +53,7 @@ export async function listRemovalIds(since: string | null): Promise<string[]> {
     }
     return [];
   }
-  return ((data ?? []) as Array<{ testimony_id: string }>).map((row) => row.testimony_id);
+  return [
+    ...new Set(((data ?? []) as Array<{ testimony_id: string }>).map((row) => row.testimony_id).filter(Boolean)),
+  ];
 }

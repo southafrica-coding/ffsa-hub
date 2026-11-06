@@ -35,10 +35,11 @@ describe("evangelism_removals hook", () => {
     expect(isMissingRemovalsTable({ code: "23502", message: "null value" })).toBe(false);
   });
 
-  it("writes a tombstone when the table accepts the row", async () => {
+  it("writes a tombstone when the table accepts the row and uniques ids", async () => {
     expect(await recordRemovalBestEffort("t-1", "deleted")).toBe(true);
     expect(h.inserted).toMatchObject({ testimony_id: "t-1", reason: "deleted" });
-    expect(await listRemovalIds("2026-11-01T00:00:00.000Z")).toEqual(["t-1"]);
+    h.rows = [{ testimony_id: "t-1" }, { testimony_id: "t-1" }, { testimony_id: "t-2" }];
+    expect(await listRemovalIds("2026-11-01T00:00:00.000Z")).toEqual(["t-1", "t-2"]);
   });
 
   it("skips a missing table without throwing", async () => {

@@ -6,7 +6,10 @@
 //
 // Visibility matches that SQL: viewers read published rows only. Authors
 // read and write their own draft and submitted rows, and delete drafts.
-// Withheld rows are visible to publishers only. There is no removals table.
+// Withheld rows are visible to publishers only.
+// evangelism_removals is optional (not in migration 293). recordRemoval and
+// listRemovalsSince still target it. Callers use the service role and treat
+// a missing table as an empty log. UNIQUE(testimony_id) is upserted, not inserted twice.
 //
 // This module only builds queries. Permission checks live in the routes.
 
@@ -140,32 +143,67 @@ export async function listPublishedByIds(supabase: Client, ids: string[]) {
 }
 
 /**
- * Ids only, for the TV feed. Call this with the service role: a viewer
- * JWT cannot SELECT withheld rows (migration 293), but the screen still
- * needs the id so it can drop a story that left the wall.
- */
-/**
- * TV tombstones. Hub Data has been asked to add evangelism_removals on
- * #508. It is not in migration 293. Callers must treat a missing table
- * as an empty log, not an error.
+ * Tombstones newer than `since`. One id per testimony even if the table
+ * returns the same id twice. Call with the service role: viewers are not
+ * granted SELECT on evangelism_removals.
  */
 export async function listRemovalsSince(supabase: Client, since: string) {
-  return supabase
+  const result = await supabase
     .from("evangelism_removals")
     .select("testimony_id")
     .gt("removed_at", since)
     .limit(200);
+  if (result.error || !Array.isArray(result.data)) return result;
+  const seen = new Set<string>();
+  const data = [];
+  for (const row of result.data as Array<{ testimony_id: string }>) {
+    if (!row?.testimony_id || seen.has(row.testimony_id)) continue;
+    seen.add(row.testimony_id);
+    data.push(row);
+  }
+  return { ...result, data };
 }
 
+/**
+ * One tombstone per testimony. A second withhold, delete, or retry updates
+ * reason and removed_at instead of failing UNIQUE(testimony_id).
+ * If that unique is not created yet, fall back to insert, and on a unique
+ * violation update the existing row.
+ */
 export async function recordRemoval(
   supabase: Client,
   row: { testimony_id: string; reason: "withheld" | "deleted" }
 ) {
-  return supabase.from("evangelism_removals").insert({
+  const payload = {
     testimony_id: row.testimony_id,
     reason: row.reason,
     removed_at: new Date().toISOString(),
-  });
+  };
+  const upserted = await supabase
+    .from("evangelism_removals")
+    .upsert(payload, { onConflict: "testimony_id" })
+    .select("testimony_id")
+    .maybeSingle();
+  if (!upserted.error) return upserted;
+  if (upserted.error.code === "42P10") {
+    const inserted = await supabase.from("evangelism_removals").insert(payload).select("testimony_id").maybeSingle();
+    if (!inserted.error || inserted.error.code !== "23505") return inserted;
+    return updateRemoval(supabase, payload);
+  }
+  if (upserted.error.code === "23505") return updateRemoval(supabase, payload);
+  return upserted;
+}
+
+async function updateRemoval(
+  supabase: Client,
+  payload: { testimony_id: string; reason: "withheld" | "deleted"; removed_at: string }
+) {
+  return supabase
+    .from("evangelism_removals")
+    .update({ reason: payload.reason, removed_at: payload.removed_at })
+    .eq("testimony_id", payload.testimony_id)
+    .select("testimony_id")
+    .maybeSingle();
 }
 
 export async function listWithheldSince(supabase: Client, since: string) {
