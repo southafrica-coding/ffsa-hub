@@ -78,6 +78,16 @@ describe("resolveTarget", () => {
     expect(resolveTarget("/my-schools-old")).toEqual({ kind: "web", path: "/my-schools-old" });
   });
 
+  it("ministry items open Ministries; a staff profile stays on the website", () => {
+    const id = "11111111-2222-4333-8444-555555555555";
+    expect(resolveTarget("/ministry")).toEqual({ kind: "app", path: "/ministries" });
+    expect(resolveTarget("/ministry?tab=x")).toEqual({ kind: "app", path: "/ministries" });
+    expect(resolveTarget(`/ministry/${id}`)).toEqual({ kind: "app", path: `/ministries/${id}` });
+    expect(resolveTarget(`/ministry/${id}?from=email`)).toEqual({ kind: "app", path: `/ministries/${id}` });
+    expect(resolveTarget("/ministry/staff/u1")).toEqual({ kind: "web", path: "/ministry/staff/u1" });
+    expect(resolveTarget("/ministry-old")).toEqual({ kind: "web", path: "/ministry-old" });
+  });
+
   it("the browser for everything else (today's feed items all go here)", () => {
     for (const href of ["/users?filter=pending", "/prayer-room?tab=practice", "/records-library/match-queue"]) {
       expect(resolveTarget(href)).toEqual({ kind: "web", path: href });
