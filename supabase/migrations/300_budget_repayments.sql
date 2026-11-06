@@ -55,6 +55,9 @@ CREATE TABLE public.budget_repayments (
   line_id         uuid,
   hub_user_id     uuid REFERENCES public.users(id) ON DELETE SET NULL,
   slack_user_id   text,
+  -- Slack confirm-card message.ts. No draft id and no other stable confirm
+  -- id existed on this table (id and confirmed_at are new on every insert).
+  slack_message_ts text NOT NULL,
   team_id         uuid REFERENCES public.outreach_teams(id) ON DELETE RESTRICT,
   -- Always a positive amount the person owes, in the parent budget's
   -- currency. bigint, not a signed spend. See the column comment.
@@ -68,6 +71,12 @@ CREATE TABLE public.budget_repayments (
   CONSTRAINT budget_repayments_slack_user_check CHECK (
     slack_user_id IS NULL OR (btrim(slack_user_id) <> '' AND char_length(slack_user_id) <= 64)
   ),
+  CONSTRAINT budget_repayments_slack_message_ts_check CHECK (
+    char_length(btrim(slack_message_ts)) BETWEEN 1 AND 64
+  ),
+  -- One row per confirm card. Not description, amount, or reason: two real
+  -- purchases with the same text are two cards and two message timestamps.
+  CONSTRAINT budget_repayments_slack_message_ts_key UNIQUE (slack_message_ts),
   CONSTRAINT budget_repayments_line_budget_fkey
     FOREIGN KEY (line_id, budget_id)
     REFERENCES public.budget_lines (id, budget_id)
@@ -92,28 +101,11 @@ COMMENT ON COLUMN public.budget_repayments.team_id IS
 COMMENT ON COLUMN public.budget_repayments.reason IS
   'Why the row exists. The only value PR #507 writes is no_receipt.';
 
--- PR #507 has no idempotency token for repayments (the Xero Idempotency-Key
--- belongs to a receipt draft, and a repayment never reaches Xero). A repeat
--- of the same confirmation is the same budget, line, person, Slack user,
--- team, amount, reason, and description. NULL line_id, hub_user_id,
--- slack_user_id, and team_id count as equal (NULLS NOT DISTINCT) so a
--- double-tap still collides when those are absent. Description is compared
--- case-insensitively. Two genuine purchases that match on every column are
--- also rejected until a real confirmation id exists. Postgres 15+.
-CREATE UNIQUE INDEX budget_repayments_one_confirm
-  ON public.budget_repayments (
-    budget_id,
-    line_id,
-    hub_user_id,
-    slack_user_id,
-    team_id,
-    amount_cents,
-    reason,
-    lower(description)
-  ) NULLS NOT DISTINCT;
+COMMENT ON COLUMN public.budget_repayments.slack_message_ts IS
+  'Message ts of the Slack confirm card (block_actions message.ts / container.message_ts). A double-tap of that card repeats this value and is rejected by budget_repayments_slack_message_ts_key. A second real purchase is a new card, so it has a new ts and can share amount, reason, and description. No-receipt repayments have no outreach_receipt_drafts id. action_ts is not used: it changes on every tap.';
 
-COMMENT ON INDEX public.budget_repayments_one_confirm IS
-  'Blocks a repeat confirm of the same repayment. PR #507 sends no separate idempotency key. NULLS NOT DISTINCT so a missing line or user still counts.';
+COMMENT ON INDEX public.budget_repayments_slack_message_ts_key IS
+  'One repayment per Slack confirm card, keyed on slack_message_ts. Description, amount, and reason are not part of the key.';
 
 CREATE INDEX budget_repayments_line_idx
   ON public.budget_repayments (line_id, budget_id)
@@ -131,15 +123,16 @@ DECLARE
 BEGIN
   NEW.reason := btrim(NEW.reason);
   NEW.description := btrim(NEW.description);
+  NEW.slack_message_ts := btrim(NEW.slack_message_ts);
   IF NEW.slack_user_id IS NOT NULL THEN
     NEW.slack_user_id := NULLIF(btrim(NEW.slack_user_id), '');
   END IF;
 
   IF TG_OP = 'UPDATE'
-     AND ROW(NEW.budget_id, NEW.created_at, NEW.confirmed_at, NEW.hub_user_id, NEW.slack_user_id, NEW.team_id)
+     AND ROW(NEW.budget_id, NEW.created_at, NEW.confirmed_at, NEW.hub_user_id, NEW.slack_user_id, NEW.slack_message_ts, NEW.team_id)
          IS DISTINCT FROM
-         ROW(OLD.budget_id, OLD.created_at, OLD.confirmed_at, OLD.hub_user_id, OLD.slack_user_id, OLD.team_id) THEN
-    RAISE EXCEPTION 'Repayment budget, person, team, confirmed_at and created_at are immutable'
+         ROW(OLD.budget_id, OLD.created_at, OLD.confirmed_at, OLD.hub_user_id, OLD.slack_user_id, OLD.slack_message_ts, OLD.team_id) THEN
+    RAISE EXCEPTION 'Repayment budget, person, team, confirm message, confirmed_at and created_at are immutable'
       USING ERRCODE = '23514';
   END IF;
 
