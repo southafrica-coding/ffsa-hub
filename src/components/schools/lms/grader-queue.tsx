@@ -139,7 +139,7 @@ export function GraderQueue({
                       {row.courseCode} · {row.courseName}
                     </span>
                   </span>
-                  {letter ? <StatusPill tone="good">{letter}</StatusPill> : <StatusPill tone="warn">No letter</StatusPill>}
+                  {letter ? <StatusPill tone="good">Letter posted</StatusPill> : <StatusPill tone="warn">No letter</StatusPill>}
                 </button>
               </li>
             );
@@ -418,7 +418,7 @@ function MarkDrawer({
     if (!cell) return;
     setLetter("A");
     setMarkNotes("");
-    setOfficial(officialLetter ?? "");
+    setOfficial("");
     setOfficialNotes("");
     setCanPostOfficial(false);
     setCanSeeOtherNotes(false);
@@ -436,7 +436,10 @@ function MarkDrawer({
         const mine = (body.marks ?? []).find((mark) => mark.grader_user_id === viewerId);
         if (mine && isLetterGrade(mine.letter_grade)) setLetter(mine.letter_grade);
         if (mine?.notes) setMarkNotes(mine.notes);
-        if (marksAllowsOfficialPost(body) && body.combined?.letter && !posted) setOfficial(body.combined.letter);
+        if (marksAllowsOtherNotes(body)) {
+          if (posted) setOfficial(posted);
+          else if (body.combined?.letter) setOfficial(body.combined.letter);
+        }
         setNote(null);
       })
       .catch((caught) => {
@@ -516,12 +519,20 @@ function MarkDrawer({
             <h2 className="font-display text-[28px] font-black uppercase leading-none">{cell.studentName}</h2>
             <p className="mono-label mt-2">
               {cell.courseCode} · {cell.courseName}
-              {officialLetter ? ` · official ${officialLetter}` : " · no official letter"}
+              {officialLetter
+                ? canSeeOtherNotes
+                  ? ` · official ${officialLetter}`
+                  : " · letter posted"
+                : " · no official letter"}
             </p>
           </div>
           {note ? <Notice>{note}</Notice> : null}
           {error ? <Notice tone="warn">{error}</Notice> : null}
-          {combined ? <p className="text-[14px]">{combineReasonCopy(combined)}</p> : null}
+          {combined ? (
+            <p className="text-[14px]">
+              {combined.reason === "ready" && !canSeeOtherNotes ? "The marks are in." : combineReasonCopy(combined)}
+            </p>
+          ) : null}
           {marks.length > 0 ? (
             <ul className="border-t border-ink">
               {marks.map((mark) => (
@@ -531,7 +542,9 @@ function MarkDrawer({
                       {personName(peopleById.get(mark.grader_user_id))}
                       {mark.grader_user_id === viewerId ? " · you" : ""}
                     </span>
-                    <StatusPill>{mark.letter_grade}</StatusPill>
+                    <StatusPill>
+                      {mark.grader_user_id === viewerId || canSeeOtherNotes ? mark.letter_grade : "Letter posted"}
+                    </StatusPill>
                   </div>
                   {mark.notes && (mark.grader_user_id === viewerId || canSeeOtherNotes) ? (
                     <p className="mt-2 text-[13px] leading-snug text-[#55524A]">{mark.notes}</p>

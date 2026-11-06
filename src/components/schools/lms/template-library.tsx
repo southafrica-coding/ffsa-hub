@@ -89,13 +89,13 @@ export function TemplateLibrary({
         <p className="px-5 py-8 mono-label md:px-8">Loading templates…</p>
       ) : (
         <>
-          <TemplateGroup title="This school" rows={school} busyId={busyId} programId={programId} canDelete={() => true} onDelete={remove} />
+          <TemplateGroup title="This school" rows={school} busyId={busyId} programId={programId} canChange={() => true} onDelete={remove} />
           <TemplateGroup
             title="Every school"
             rows={shared}
             busyId={busyId}
             programId={programId}
-            canDelete={() => canSaveBaseWide}
+            canChange={() => canSaveBaseWide}
             onDelete={remove}
           />
         </>
@@ -109,14 +109,14 @@ function TemplateGroup({
   rows,
   programId,
   busyId,
-  canDelete,
+  canChange,
   onDelete,
 }: {
   title: string;
   rows: TemplateRow[];
   programId: string;
   busyId: string | null;
-  canDelete: (row: TemplateRow) => boolean;
+  canChange: (row: TemplateRow) => boolean;
   onDelete: (row: TemplateRow) => void;
 }) {
   return (
@@ -137,13 +137,15 @@ function TemplateGroup({
                 {row.description ? <p className="mt-1 text-[13px] text-[#55524A]">{row.description}</p> : null}
               </div>
               <div className="flex flex-wrap gap-2">
-                <Link
-                  href={`/schools/${programId}/classroom/templates/${row.id}`}
-                  className="inline-flex min-h-11 items-center border border-ink bg-ink px-3 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-white"
-                >
-                  Edit
-                </Link>
-                {canDelete(row) ? (
+                {canChange(row) ? (
+                  <Link
+                    href={`/schools/${programId}/classroom/templates/${row.id}`}
+                    className="inline-flex min-h-11 items-center border border-ink bg-ink px-3 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-white"
+                  >
+                    Edit
+                  </Link>
+                ) : null}
+                {canChange(row) ? (
                   <SquareButton tone="quiet" disabled={busyId === row.id} onClick={() => onDelete(row)}>
                     Delete
                   </SquareButton>
