@@ -164,10 +164,14 @@ describe("migrations 295–299 — the budget model", () => {
     expect(foundation).toMatch(/Period org, dates and kind are immutable/);
   });
 
-  it("keeps exactly one entity owner and still allows the existing member roles", () => {
+  it("keeps one entity, the outreach team fk, and one responsible owner on budget_members", () => {
     expect(core).toMatch(/num_nonnulls\(staff_ministry_id, subcategory_id, program_id, event_id, outreach_team_id\) = 1/);
+    expect(core).toMatch(/outreach_team_id\s+uuid REFERENCES public\.outreach_teams\(id\)/);
+    expect(core).toMatch(/WHEN 'outreach_team'\s+THEN outreach_team_id IS NOT NULL/);
     expect(core).toMatch(/CHECK \(role IN \('owner', 'editor', 'viewer'\)\)/);
-    expect(core).not.toMatch(/UNIQUE\s*\(\s*budget_id\s*\)\s*WHERE role = 'owner'/);
+    expect(core).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS budget_members_one_responsible_owner\s+ON public\.budget_members \(budget_id\)\s+WHERE role = 'owner'/);
+    expect(core).toMatch(/A budget has one responsible owner/);
+    expect(core).not.toMatch(/CREATE TABLE public\.budget_repayments|CREATE TABLE public\.budget_xero_spends/);
   });
 
   it("codes one org per line and does not map a ministry name onto a finance project", () => {
@@ -186,12 +190,23 @@ describe("migrations 295–299 — the budget model", () => {
     expect(core).toMatch(/NEW\.line_total_cents := round\(NEW\.amount_cents \* NEW\.frequency \* NEW\.multiplier\)::bigint;/);
   });
 
-  it("stores manual expenses on the same budget, in the budget currency, with no receipt bucket", () => {
+  it("stores the sheet expense tracker only, with no Xero or outreach posting columns", () => {
     expect(expenses).toMatch(/CREATE TABLE public\.budget_expenses/);
+    expect(expenses).toMatch(/line_id uuid/);
+    expect(expenses).toMatch(/expense_date date NOT NULL/);
+    expect(expenses).toMatch(/vendor text/);
+    expect(expenses).toMatch(/description text NOT NULL/);
+    expect(expenses).toMatch(/amount_cents bigint NOT NULL CHECK\(amount_cents<>0\)/);
+    expect(expenses).toMatch(/created_by uuid/);
+    expect(expenses).toMatch(/archived_at timestamptz/);
     expect(expenses).toMatch(/FOREIGN KEY\(line_id,budget_id\)\s+REFERENCES public\.budget_lines\(id,budget_id\)/);
-    expect(expenses).toMatch(/amount_cents<>0/);
-    expect(expenses).toMatch(/Expense date must fall within the budget period/);
+    expect(expenses).toMatch(/Not a Xero ledger/);
+    expect(expenses).not.toMatch(/\bcurrency\s+text\b/);
+    expect(expenses).not.toMatch(/budget_line_id|spent_on|purchaser_user_id|has_receipt|xero_bank_transaction_id|xero_status|outreach_expense_id|receipt_draft_id/);
     expect(expenses).not.toMatch(/storage\.|receipt/i);
+    expect(joined).not.toMatch(/CREATE TABLE public\.budget_repayments|CREATE TABLE public\.budget_xero_spends/);
+    expect(joined).not.toMatch(/INSERT INTO public\.outreach_expenses|FROM public\.outreach_expenses/);
+    expect(expenses).toMatch(/Expense date must fall within the budget period/);
     expect(views).toMatch(/CREATE VIEW public\.v_budget_expense_tracker/);
     expect(views).toMatch(/CREATE VIEW public\.v_budget_overview/);
     expect(views).toMatch(/WHEN sb\.id IS NOT NULL AND sb\.org_id=b\.org_id AND sb\.currency=b\.currency/);

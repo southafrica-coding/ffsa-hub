@@ -1,6 +1,8 @@
 -- DRAFT ONLY. DO NOT APPLY to production.
--- Replaces the unapplied #475 file 278_budgets_core.sql. Same approval and
--- membership rules: one entity owner, multiple human owner-role members allowed.
+-- Replaces the unapplied #475 file 278_budgets_core.sql. Same approval rules.
+-- One entity (typed FK, including outreach_team_id) and one responsible
+-- person: a single budget_members row with role owner. Editors and viewers
+-- stay on that same table.
 -- One finance org per budget; currency must match that org's record_currency;
 -- org, currency and period are frozen on the header. Coding is one row per line
 -- and must use that org's Xero region. No outreach import and no ministry-name
@@ -213,6 +215,11 @@ CREATE TABLE IF NOT EXISTS public.budget_members (
   updated_at  timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT budget_members_budget_user_key UNIQUE (budget_id, user_id)
 );
+
+-- One responsible person. Editors and viewers are unlimited.
+CREATE UNIQUE INDEX IF NOT EXISTS budget_members_one_responsible_owner
+  ON public.budget_members (budget_id)
+  WHERE role = 'owner';
 
 CREATE INDEX IF NOT EXISTS idx_budget_members_user ON public.budget_members (user_id);
 
@@ -614,13 +621,64 @@ $$;
 CREATE OR REPLACE FUNCTION finance_private.budgets_after_insert()
 RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE
+  v_owner uuid := coalesce(auth.uid(), NEW.created_by);
 BEGIN
-  IF auth.uid() IS NOT NULL THEN
-    INSERT INTO public.budget_members (budget_id, user_id, role, added_by)
-    VALUES (NEW.id, auth.uid(), 'owner', auth.uid())
-    ON CONFLICT (budget_id, user_id) DO NOTHING;
+  IF v_owner IS NULL THEN
+    RAISE EXCEPTION 'A budget needs one responsible owner' USING ERRCODE = '23514';
   END IF;
+  INSERT INTO public.budget_members (budget_id, user_id, role, added_by)
+  VALUES (NEW.id, v_owner, 'owner', auth.uid())
+  ON CONFLICT (budget_id, user_id) DO NOTHING;
   RETURN NULL;
+END;
+$$;
+
+-- The owner row is singular. Hand-off changes that row's user. Editors and
+-- viewers can still be added and removed. This is the same members table.
+CREATE OR REPLACE FUNCTION finance_private.budget_members_one_owner()
+RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    IF OLD.role = 'owner' THEN
+      RAISE EXCEPTION 'The responsible owner stays on the budget. Hand it to someone else by changing that member'
+        USING ERRCODE = '23514';
+    END IF;
+    RETURN OLD;
+  END IF;
+
+  IF NEW.budget_id IS NULL OR NEW.user_id IS NULL THEN
+    RAISE EXCEPTION 'A budget member needs a budget and a user' USING ERRCODE = '23514';
+  END IF;
+
+  IF TG_OP = 'UPDATE' AND OLD.role = 'owner' AND NEW.role IS DISTINCT FROM 'owner' THEN
+    RAISE EXCEPTION 'The responsible owner cannot be demoted. Hand the budget on by changing who that member is'
+      USING ERRCODE = '23514';
+  END IF;
+
+  IF TG_OP = 'UPDATE' AND OLD.role = 'owner' AND NEW.budget_id IS DISTINCT FROM OLD.budget_id THEN
+    RAISE EXCEPTION 'The responsible owner cannot move to another budget' USING ERRCODE = '23514';
+  END IF;
+
+  IF NEW.role = 'owner' AND EXISTS (
+    SELECT 1 FROM public.budget_members m
+     WHERE m.budget_id = NEW.budget_id
+       AND m.role = 'owner'
+       AND m.id IS DISTINCT FROM NEW.id
+  ) THEN
+    RAISE EXCEPTION 'A budget has one responsible owner' USING ERRCODE = '23505';
+  END IF;
+
+  -- The person taking the budget may already be an editor or a viewer.
+  IF TG_OP = 'UPDATE' AND OLD.role = 'owner' AND NEW.user_id IS DISTINCT FROM OLD.user_id THEN
+    DELETE FROM public.budget_members
+     WHERE budget_id = NEW.budget_id
+       AND user_id = NEW.user_id
+       AND id IS DISTINCT FROM NEW.id;
+  END IF;
+
+  RETURN NEW;
 END;
 $$;
 
@@ -937,6 +995,11 @@ DROP TRIGGER IF EXISTS trg_budget_templates_touch ON public.budget_templates;
 CREATE TRIGGER trg_budget_templates_touch
   BEFORE UPDATE ON public.budget_templates
   FOR EACH ROW EXECUTE FUNCTION finance_private.finance_touch_updated_at();
+
+DROP TRIGGER IF EXISTS trg_budget_members_one_owner ON public.budget_members;
+CREATE TRIGGER trg_budget_members_one_owner
+  BEFORE INSERT OR UPDATE OR DELETE ON public.budget_members
+  FOR EACH ROW EXECUTE FUNCTION finance_private.budget_members_one_owner();
 
 DROP TRIGGER IF EXISTS trg_budget_members_touch ON public.budget_members;
 CREATE TRIGGER trg_budget_members_touch
@@ -1509,7 +1572,7 @@ COMMENT ON TABLE public.budget_template_line_coding IS
   'The one Xero coding row for a template line, in that template''s org region. Copied from the source line and re-checked against the mirror when a budget is made from the template. Finance only.';
 
 COMMENT ON TABLE public.budgets IS
-  'One budget for one entity owner (staff ministry, ministry sub-category, school or event), one finance org and one fiscal period. Currency matches that org. Created by create_budget_from_template() or copy_budget_to_period(); always starts as a draft. Money in cents. Archived, never deleted. Members see their own; finance sees all. Several people may hold the owner member role.';
+  'One budget for one entity (staff ministry, ministry sub-category, school, event, or outreach team via outreach_team_id), one finance org and one fiscal period. Currency matches that org. One person is the responsible owner. Created by create_budget_from_template() or copy_budget_to_period(); always starts as a draft. Money in cents. Archived, never deleted. Members see their own; finance sees all.';
 COMMENT ON COLUMN public.budgets.owner_kind IS
   'Which owner column is set: staff_ministry, ministry_subcategory, program, event (or outreach_team, reserved). Exactly one owner column is non-null and it matches this.';
 COMMENT ON COLUMN public.budgets.template_version IS
@@ -1537,7 +1600,7 @@ COMMENT ON TABLE public.budget_sections IS
   'A budget''s sections, copied at creation: overview, dashboard, variable, fixed, expense_tracker, notes. Lines live in fixed and variable only.';
 
 COMMENT ON TABLE public.budget_members IS
-  'Who can see or edit ONE budget: owner (header, members, lines, save as template, copy to a new period), editor (lines while draft), viewer (read). The creator becomes owner automatically.';
+  'Who can see or edit ONE budget. Exactly one row has role owner: that person is the responsible owner (header, members, save as template, copy). Hand-off changes that row''s user. Editors change lines while the budget is a draft. Viewers read. Other editors and viewers are not owners.';
 
 COMMENT ON TABLE public.budget_lines IS
   'A cost on a budget. Total = round(amount_cents × frequency × multiplier), computed by trigger. Fixed lines have frequency 1 and a quantity as multiplier. Archived, never deleted.';

@@ -21,7 +21,7 @@ CREATE TABLE public.budget_expenses (
  CONSTRAINT budget_expenses_line_budget_fkey FOREIGN KEY(line_id,budget_id)
  REFERENCES public.budget_lines(id,budget_id) ON DELETE RESTRICT
 );
-COMMENT ON TABLE public.budget_expenses IS 'Manual expense tracker in the parent budget currency, not a Xero ledger. Positive spend; negative refund. NULL line_id means unallocated. Future Xero actuals must reconcile rather than add to these rows.';
+COMMENT ON TABLE public.budget_expenses IS 'Sheet Expense Tracker only. Amounts are signed cents in the parent budget currency (no currency column on this table). Not a Xero ledger, not an outreach import, and not a posting table. Positive spend; negative refund. NULL line_id is unallocated. Later Xero actuals must reconcile with these rows rather than replace this shape.';
 CREATE INDEX budget_expenses_budget_date_idx ON public.budget_expenses(budget_id,expense_date,id) WHERE archived_at IS NULL;
 CREATE INDEX budget_expenses_line_idx ON public.budget_expenses(line_id,budget_id) WHERE line_id IS NOT NULL;
 CREATE FUNCTION finance_private.can_record_budget_expenses(p_budget_id uuid) RETURNS boolean
