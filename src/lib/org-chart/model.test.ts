@@ -161,6 +161,34 @@ describe("buildOrgModel", () => {
     expect(m.teams.find((t) => t.id === "hope")!.cluster).toBe("parttime");
     expect(m.teams.find((t) => t.id === "rca")!.parentId).toBe("tr");
   });
+
+  it("shows a leader without a point-leader flag, and prefers role title over job title", () => {
+    const base = input();
+    const shaped = buildOrgModel(
+      input({
+        teams: [
+          ...base.teams,
+          { id: "fin", name: "Finances & Legal", slug: "finances_legal", cluster: "backbone", parent_id: null, purpose: null, description: null, ministry_type: "main", sort_order: 8 },
+        ],
+        members: [
+          ...base.members,
+          { id: "mf", staff_ministry_id: "fin", user_id: "coreen", member_role: "leader", is_point_leader: false, role_title: "Finance & Legal lead", responsibilities: [], share_pct: null, staff_kind: null, subcategories: [] },
+          { id: "mb", staff_ministry_id: "events", user_id: "brendon", member_role: "leader", is_point_leader: false, role_title: "finance", responsibilities: [], share_pct: null, staff_kind: null, subcategories: [] },
+        ],
+        people: [
+          ...base.people,
+          { id: "coreen", name: "Coreen Steyn", job_title: "Unused job title" },
+          { id: "brendon", name: "Brendon Homan", job_title: "Business Development" },
+        ],
+      })
+    );
+    const fin = shaped.teams.find((t) => t.id === "fin")!;
+    expect(fin.leads).toEqual(["Coreen Steyn"]);
+    expect(fin.members.find((x) => x.userId === "coreen")).toMatchObject({ isLead: true, title: "Finance & Legal lead" });
+    const events = shaped.teams.find((t) => t.id === "events")!;
+    expect(events.members.find((x) => x.userId === "brendon")?.title).toBe("finance");
+    expect(shaped.teams.some((t) => t.id === "none")).toBe(false);
+  });
 });
 
 describe("computeLayout", () => {

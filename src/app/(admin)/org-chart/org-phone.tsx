@@ -5,7 +5,7 @@
 // names to a few pixels and turns every row into a miss. Below xl this list
 // is the chart — same model, readable type, 44px targets, one team at a time.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Search } from "lucide-react";
 import {
@@ -84,10 +84,20 @@ export function OrgPhone({ model, canManage }: { model: OrgModel; canManage: boo
 
   // The first history entry is the list. Each team or person pushes another,
   // so the browser Back button steps through the directory before leaving it.
+  // Next restores this page from its router cache on popstate, which resets
+  // useState to the list. The history entry is the source of truth after that.
+  const readDir = () =>
+    (history.state as { orgDir?: DirectoryScreen } | null)?.orgDir ?? null;
   useEffect(() => {
-    history.replaceState({ orgDir: DIRECTORY_HOME }, "");
-    const onPop = (e: PopStateEvent) => {
-      const next = (e.state as { orgDir?: DirectoryScreen } | null)?.orgDir ?? DIRECTORY_HOME;
+    const existing = readDir();
+    if (existing) {
+      screenRef.current = existing;
+      setScreen(existing);
+    } else {
+      history.replaceState({ orgDir: DIRECTORY_HOME }, "");
+    }
+    const onPop = () => {
+      const next = readDir() ?? DIRECTORY_HOME;
       screenRef.current = next;
       setScreen(next);
     };
@@ -104,6 +114,15 @@ export function OrgPhone({ model, canManage }: { model: OrgModel; canManage: boo
       unsub();
     };
   }, []);
+  useLayoutEffect(() => {
+    const saved = readDir();
+    if (!saved) return;
+    if (saved.screen === screen.screen && saved.id === screen.id && saved.edit === screen.edit && saved.q === screen.q) return;
+    if (screen.screen === "home" && saved.screen !== "home") {
+      screenRef.current = saved;
+      setScreen(saved);
+    }
+  }, [screen]);
 
   useEffect(() => {
     document.querySelector("[data-shell-main]")?.scrollTo({ top: 0 });

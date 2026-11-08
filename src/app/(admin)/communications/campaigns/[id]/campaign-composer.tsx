@@ -1150,7 +1150,7 @@ export function CampaignComposer({
         }}
         onDragEnd={handleDragEnd}
       >
-        <div className="grid min-w-0 gap-3 lg:-mx-6 lg:grid-cols-[200px_minmax(0,1fr)_330px] lg:items-start">
+        <div className="grid min-w-0 gap-3 lg:grid-cols-[200px_minmax(0,1fr)_330px] lg:items-start">
           <div className="sticky top-14 z-10 grid grid-cols-3 border border-ink bg-white lg:hidden" role="tablist" aria-label="Email builder">
             {(
               [
