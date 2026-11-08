@@ -1631,6 +1631,39 @@ export type XeroBankTransactionResult =
  * function does not check that policy. Idempotency-Key stops a retry
  * from creating a second spend.
  */
+/**
+ * GET BankTransactions filtered by the documented References query.
+ * One page. A full page is partial, not a complete answer.
+ * This does not POST.
+ */
+export async function listXeroBankTransactionsByReference(
+  supabase: Client,
+  region: XeroRegion,
+  reference: string
+): Promise<
+  | { ok: true; transactions: XeroBankTransactionPage[]; partial: boolean }
+  | { ok: false; reason: "not_connected" | "xero"; message: string }
+> {
+  if (!reference || reference.length > 128 || /[",]/.test(reference)) {
+    return { ok: false, reason: "xero", message: "The correlation reference is not a single References filter value." };
+  }
+  const auth = await getValidAccessToken(supabase, region);
+  if (!auth) {
+    return { ok: false, reason: "not_connected", message: "This organisation is not connected to Xero." };
+  }
+  const query = `BankTransactions?References=${encodeURIComponent(`"${reference}"`)}&page=1`;
+  try {
+    const json = (await xeroGet(auth.accessToken, auth.tenantId, query)) as {
+      BankTransactions?: XeroBankTransactionPage[];
+    };
+    const transactions = json.BankTransactions ?? [];
+    return { ok: true, transactions, partial: transactions.length >= 100 };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, reason: "xero", message };
+  }
+}
+
 export async function createXeroSpendMoney(
   supabase: Client,
   region: XeroRegion,
@@ -1656,9 +1689,12 @@ export async function createXeroSpendMoney(
 export type XeroBankTransactionPage = {
   BankTransactionID?: string;
   Date?: string;
+  DateString?: string;
   Reference?: string;
   Status?: string;
   Type?: string;
+  CurrencyCode?: string;
+  Total?: number;
   LineItems?: {
     Description?: string;
     AccountCode?: string;

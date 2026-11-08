@@ -15,7 +15,9 @@ import { isMissingRelation } from "@/lib/finance/budget-actuals";
 import { isActiveSouthAfricaOrg } from "@/lib/finance/team-budget-pick";
 import { xeroPreviewWriteBlock } from "@/lib/finance/xero-preview-guard";
 import { decideXeroSpend, spendBankAccountCode, type XeroTracking } from "@/lib/finance/xero-spend";
-import { createXeroSpendMoney, type XeroRegion } from "@/services/xero";
+import { matchStalledSpend } from "@/lib/finance/xero-spend-reconcile";
+import { xeroDateOnly } from "@/lib/finance/budget-actuals";
+import { createXeroSpendMoney, listXeroBankTransactionsByReference, type XeroBankTransactionPage, type XeroRegion } from "@/services/xero";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Admin = any;
@@ -362,17 +364,31 @@ export async function writeConfirmedSpend(
         }
         return { status: claim === "busy" ? "in_flight" : "failed", bankTransactionId: null };
       }
-      const posted = await createXeroSpendMoney(admin, region, {
-        idempotencyKey: `ffsa-expense-${input.expenseId}`,
-        payload: decision.payload,
-      });
+      let posted: Awaited<ReturnType<typeof createXeroSpendMoney>>;
+      try {
+        posted = await createXeroSpendMoney(admin, region, {
+          idempotencyKey: spendIdempotencyKey(input.expenseId),
+          payload: decision.payload,
+        });
+      } catch (err) {
+        posted = {
+          ok: false,
+          reason: "xero",
+          message: err instanceof Error ? err.message : "The Xero request did not finish.",
+        };
+      }
       if (posted.ok) {
         status = "written";
         bankTransactionId = posted.bankTransactionId;
-      } else {
+      } else if (posted.reason === "not_connected") {
+        // No request was sent. A later confirm may post.
         status = "failed";
         error = posted.message;
-        console.error("[xero] spend not written", input.expenseId, posted.message);
+      } else {
+        // The request may have been received. Do not mark it retryable.
+        status = "blocked";
+        error = posted.message || "Xero did not prove whether the spend was created.";
+        console.error("[xero] spend outcome unproven", input.expenseId, error);
       }
     }
   }
@@ -391,4 +407,167 @@ export async function writeConfirmedSpend(
     await rememberXeroSpend(admin, input, status, bankTransactionId);
   }
   return { status, bankTransactionId };
+}
+
+export function spendIdempotencyKey(expenseId: string): string {
+  return `ffsa-expense-${expenseId}`;
+}
+
+export type ReconcileBody = {
+  status: "reconciled" | "already_recorded" | "blocked" | "not_stalled";
+  reason?: "not_found" | "ambiguous" | "mismatch" | "unproven" | "not_stalled" | "persistence_failed";
+  message?: string;
+  bankTransactionId?: string | null;
+  draftSaved?: boolean;
+};
+
+/**
+ * Read-only against Xero. Marks the local claim written only when one
+ * GET BankTransactions References result agrees with the claim. Does not POST.
+ * The log update uses the signed-in client so the budget audit records that person.
+ */
+export async function reconcileStalledSpend(
+  user: Admin,
+  admin: Admin,
+  draftId: string
+): Promise<{ httpStatus: number; body: ReconcileBody }> {
+  const draft = await user.from("outreach_receipt_drafts").select("id, expense_id, proposal").eq("id", draftId).maybeSingle();
+  if (draft.error) return { httpStatus: 500, body: { status: "blocked", reason: "persistence_failed", message: draft.error.message } };
+  if (!draft.data) return { httpStatus: 404, body: { status: "blocked", reason: "not_found", message: "Receipt not found." } };
+
+  const log = await user
+    .from("budget_xero_spends")
+    .select("id, budget_id, outreach_expense_id, amount_cents, spent_on, xero_status, xero_bank_transaction_id")
+    .eq("receipt_draft_id", draftId)
+    .maybeSingle();
+  if (log.error) return { httpStatus: 500, body: { status: "blocked", reason: "persistence_failed", message: log.error.message } };
+  const row = log.data as {
+    id: string;
+    budget_id: string;
+    outreach_expense_id: string | null;
+    amount_cents: number;
+    spent_on: string;
+    xero_status: string;
+    xero_bank_transaction_id: string | null;
+  } | null;
+  if (!row) {
+    return { httpStatus: 409, body: { status: "not_stalled", reason: "not_stalled", message: "This receipt has no stalled Xero claim." } };
+  }
+  if (row.xero_bank_transaction_id) {
+    return { httpStatus: 200, body: { status: "already_recorded", bankTransactionId: row.xero_bank_transaction_id } };
+  }
+  if (row.xero_status !== "posting" && row.xero_status !== "blocked") {
+    return {
+      httpStatus: 409,
+      body: { status: "not_stalled", reason: "not_stalled", message: "This claim is not waiting on proof from Xero." },
+    };
+  }
+  const org = await budgetOrgState(user, row.budget_id);
+  if (org !== "yes") {
+    return {
+      httpStatus: 409,
+      body: { status: "blocked", reason: "mismatch", message: "This budget is not the active South Africa organisation." },
+    };
+  }
+  if (!row.outreach_expense_id) {
+    return await persistBlocked(user, admin, draftId, row.id, "unproven", "The claim has no expense to correlate.");
+  }
+  const reference = spendIdempotencyKey(row.outreach_expense_id);
+  const read = await listXeroBankTransactionsByReference(admin, "za", reference);
+  if (!read.ok || read.partial) {
+    const reason = !read.ok ? "unproven" : "ambiguous";
+    const message = !read.ok ? read.message : "The Xero read was cut off, so the match is not proven.";
+    return await persistBlocked(user, admin, draftId, row.id, reason, message);
+  }
+  const remote = read.transactions.map((txn) => ({
+    bankTransactionId: txn.BankTransactionID ?? null,
+    reference: txn.Reference ?? null,
+    type: txn.Type ?? null,
+    status: txn.Status ?? null,
+    date: remoteSpendDate(txn),
+    currencyCode: txn.CurrencyCode ?? null,
+    total: txn.Total ?? null,
+  }));
+  const matched = matchStalledSpend(remote, {
+    reference,
+    spentOn: String(row.spent_on).slice(0, 10),
+    amountCents: Number(row.amount_cents),
+    currency: "ZAR",
+  });
+  if (!matched.ok) {
+    const message =
+      matched.reason === "not_found"
+        ? "Xero did not return a spend with this receipt's reference. It was not posted again."
+        : matched.reason === "ambiguous"
+          ? "Xero returned more than one spend with this reference. None was chosen."
+          : "The Xero spend does not agree with this claim. It was not marked successful.";
+    return await persistBlocked(user, admin, draftId, row.id, matched.reason, message);
+  }
+  const saved = await user
+    .from("budget_xero_spends")
+    .update({ xero_bank_transaction_id: matched.bankTransactionId, xero_status: "written" })
+    .eq("id", row.id)
+    .is("xero_bank_transaction_id", null)
+    .select("id, xero_bank_transaction_id");
+  if (saved.error) {
+    if (isUniqueViolation(saved.error)) {
+      return await persistBlocked(user, admin, draftId, row.id, "ambiguous", "That Xero id is already recorded on another claim.");
+    }
+    return { httpStatus: 500, body: { status: "blocked", reason: "persistence_failed", message: saved.error.message } };
+  }
+  const savedRows = Array.isArray(saved.data) ? saved.data : saved.data ? [saved.data] : [];
+  if (savedRows.length === 0) {
+    const again = await user.from("budget_xero_spends").select("xero_bank_transaction_id").eq("id", row.id).maybeSingle();
+    const current = (again.data as { xero_bank_transaction_id?: string | null } | null)?.xero_bank_transaction_id ?? null;
+    if (current && current === matched.bankTransactionId) {
+      return { httpStatus: 200, body: { status: "already_recorded", bankTransactionId: current } };
+    }
+    if (current) {
+      return await persistBlocked(user, admin, draftId, row.id, "ambiguous", "The claim changed while it was being checked. No id was overwritten.");
+    }
+    return { httpStatus: 500, body: { status: "blocked", reason: "persistence_failed", message: "The matching Xero id was not saved." } };
+  }
+  const draftSaved = await saveXeroOnDraft(admin, draftId, {
+    status: "written",
+    bank_transaction_id: matched.bankTransactionId,
+    error: null,
+    at: new Date().toISOString(),
+  });
+  return {
+    httpStatus: 200,
+    body: { status: "reconciled", bankTransactionId: matched.bankTransactionId, draftSaved: draftSaved.ok },
+  };
+}
+
+function remoteSpendDate(txn: XeroBankTransactionPage): string | null {
+  const fromString = xeroDateOnly(txn.DateString);
+  const fromDate = xeroDateOnly(txn.Date);
+  if (fromString && fromDate && fromString !== fromDate) return null;
+  return fromString ?? fromDate;
+}
+
+async function persistBlocked(
+  user: Admin,
+  admin: Admin,
+  draftId: string,
+  logId: string,
+  reason: "not_found" | "ambiguous" | "mismatch" | "unproven",
+  message: string
+): Promise<{ httpStatus: number; body: ReconcileBody }> {
+  const saved = await user
+    .from("budget_xero_spends")
+    .update({ xero_status: "blocked" })
+    .eq("id", logId)
+    .is("xero_bank_transaction_id", null)
+    .select("id");
+  if (saved.error) {
+    return { httpStatus: 500, body: { status: "blocked", reason: "persistence_failed", message: saved.error.message } };
+  }
+  await saveXeroOnDraft(admin, draftId, {
+    status: "blocked",
+    bank_transaction_id: null,
+    error: message,
+    at: new Date().toISOString(),
+  });
+  return { httpStatus: 200, body: { status: "blocked", reason, message } };
 }

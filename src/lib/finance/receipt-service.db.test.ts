@@ -19,7 +19,12 @@ const xero = vi.hoisted(() => ({
   lists: 0,
   posts: 0,
   failOnce: false,
+  disconnectOnce: false,
   keys: [] as string[],
+  reads: [] as { region: string; reference: string }[],
+  readResult: { ok: true as const, transactions: [] as Record<string, unknown>[], partial: false } as
+    | { ok: true; transactions: Record<string, unknown>[]; partial: boolean }
+    | { ok: false; reason: "xero"; message: string },
 }));
 
 vi.mock("@/services/xero", () => ({
@@ -27,13 +32,21 @@ vi.mock("@/services/xero", () => ({
     xero.lists += 1;
     return { ok: true, transactions: [], partial: false };
   },
+  listXeroBankTransactionsByReference: async (_client: unknown, region: string, reference: string) => {
+    xero.reads.push({ region, reference });
+    return xero.readResult;
+  },
   // Each call is counted. This mock does not imitate Xero's Idempotency-Key store.
   createXeroSpendMoney: async (_admin: unknown, _region: unknown, args: { idempotencyKey: string }) => {
     xero.posts += 1;
     xero.keys.push(args.idempotencyKey);
+    if (xero.disconnectOnce) {
+      xero.disconnectOnce = false;
+      return { ok: false, reason: "not_connected", message: "not connected" };
+    }
     if (xero.failOnce) {
       xero.failOnce = false;
-      return { ok: false, message: "test xero failure" };
+      return { ok: false, reason: "xero", message: "timeout" };
     }
     return { ok: true as const, bankTransactionId: `test-${xero.posts}-${args.idempotencyKey}` };
   },
@@ -58,7 +71,8 @@ vi.mock("@/lib/supabase/admin", () => ({
 }));
 
 import { GET } from "@/app/api/finance/budgets/[id]/actuals/route";
-import { writeConfirmedSpend, type ConfirmedSpend } from "@/lib/finance/record-xero-spend";
+import { reconcileStalledSpend, writeConfirmedSpend, type ConfirmedSpend } from "@/lib/finance/record-xero-spend";
+import { POST as reconcilePost } from "@/app/api/finance/outreach/receipts/xero/reconcile/route";
 import { getBudgetActuals } from "@/services/budget-actuals";
 import { confirmRepayment } from "@/lib/slack/outreach/repayments";
 
@@ -338,13 +352,17 @@ describe.skipIf(!enabled)("receipt services on local PostgREST", () => {
     process.env.XERO_SPEND_BANK_ACCOUNT_ZA = "TEST-ONLY-NOT-PRODUCTION";
     const input = await freshSpend("fail");
     xero.posts = 0;
+    xero.keys = [];
     xero.failOnce = true;
     const failed = await writeConfirmedSpend(service, input);
-    expect(failed.status).toBe("failed");
-    const recovered = await writeConfirmedSpend(service, input);
-    expect(recovered.status).toBe("written");
-    const afterRetry = await service.from("budget_xero_spends").select("id").eq("receipt_draft_id", input.draftId);
+    expect(failed.status).toBe("blocked");
+    const again = await writeConfirmedSpend(service, input);
+    expect(again.status).toBe("in_flight");
+    expect(xero.posts).toBe(1);
+    expect(xero.keys).toEqual([`ffsa-expense-${input.expenseId}`]);
+    const afterRetry = await service.from("budget_xero_spends").select("xero_status, xero_bank_transaction_id").eq("receipt_draft_id", input.draftId);
     expect(afterRetry.data).toHaveLength(1);
+    expect(afterRetry.data?.[0]).toMatchObject({ xero_status: "blocked", xero_bank_transaction_id: null });
 
     const raceInput = await freshSpend(`race-${Date.now()}`);
     xero.posts = 0;
@@ -375,6 +393,91 @@ describe.skipIf(!enabled)("receipt services on local PostgREST", () => {
     expect(xero.keys).toEqual([`ffsa-expense-${input.expenseId}`]);
     const paid = await service.from("budget_xero_spends").select("xero_bank_transaction_id").eq("receipt_draft_id", input.draftId).maybeSingle();
     expect(paid.data?.xero_bank_transaction_id).toBe(first.bankTransactionId);
+  });
+
+  it("reconciles a stalled claim only when one read matches, and never posts", async () => {
+    process.env.XERO_SPEND_BANK_ACCOUNT_ZA = "TEST-ONLY-NOT-PRODUCTION";
+    const input = await freshSpend(`stall-${Date.now()}`);
+    xero.posts = 0;
+    const claimed = await service.from("budget_xero_spends").insert({
+      budget_id: input.budgetId,
+      line_id: input.budgetLineId,
+      outreach_expense_id: input.expenseId,
+      receipt_draft_id: input.draftId,
+      purchaser_user_id: input.hubUserId,
+      amount_cents: 1200,
+      spent_on: input.date,
+      description: "Food",
+      has_receipt: true,
+      xero_status: "posting",
+      confirmed_at: new Date().toISOString(),
+    }).select("xero_status");
+    expect(claimed.error).toBeNull();
+    expect(xero.posts).toBe(0);
+
+    const reference = `ffsa-expense-${input.expenseId}`;
+    const good = {
+      BankTransactionID: `bt-${input.draftId}`,
+      Reference: reference,
+      Type: "SPEND",
+      Status: "AUTHORISED",
+      DateString: String(proposal.expense_date),
+      CurrencyCode: "ZAR",
+      Total: 12,
+    };
+    gate.user = finance;
+    gate.admin = service;
+
+    xero.reads = [];
+    xero.readResult = { ok: false, reason: "xero", message: "timeout" };
+    const timedOut = await reconcilePost(new Request("http://127.0.0.1/reconcile", { method: "POST", body: JSON.stringify({ draftId: input.draftId, bankTransactionId: "forged" }) }));
+    expect(timedOut.status).toBe(200);
+    expect(await timedOut.json()).toMatchObject({ status: "blocked", reason: "unproven" });
+    expect(xero.posts).toBe(0);
+
+    xero.readResult = { ok: true, transactions: [], partial: false };
+    const missing = await reconcileStalledSpend(finance, service, input.draftId);
+    expect(missing.body).toMatchObject({ status: "blocked", reason: "not_found" });
+
+    xero.readResult = { ok: true, transactions: [good, { ...good, BankTransactionID: "bt-2" }], partial: false };
+    const many = await reconcileStalledSpend(finance, service, input.draftId);
+    expect(many.body).toMatchObject({ status: "blocked", reason: "ambiguous" });
+
+    xero.readResult = { ok: true, transactions: [{ ...good, Total: 99 }], partial: false };
+    const wrongAmount = await reconcileStalledSpend(finance, service, input.draftId);
+    expect(wrongAmount.body).toMatchObject({ status: "blocked", reason: "mismatch" });
+
+    xero.readResult = { ok: true, transactions: [{ ...good, CurrencyCode: "USD" }], partial: false };
+    expect((await reconcileStalledSpend(finance, service, input.draftId)).body).toMatchObject({ reason: "mismatch" });
+
+    xero.readResult = { ok: true, transactions: [{ ...good, DateString: "2001-01-01" }], partial: false };
+    expect((await reconcileStalledSpend(finance, service, input.draftId)).body).toMatchObject({ reason: "mismatch" });
+
+    xero.posts = 0;
+    xero.reads = [];
+    xero.readResult = { ok: true, transactions: [good], partial: false };
+    const [first, second] = await Promise.all([
+      reconcileStalledSpend(finance, service, input.draftId),
+      reconcileStalledSpend(finance, service, input.draftId),
+    ]);
+    const statuses = [first.body.status, second.body.status].sort();
+    expect(statuses).toEqual(["already_recorded", "reconciled"]);
+    expect(xero.posts).toBe(0);
+    expect(xero.reads.every((read) => read.region === "za" && read.reference === reference)).toBe(true);
+    const row = await service.from("budget_xero_spends").select("xero_bank_transaction_id, xero_status").eq("receipt_draft_id", input.draftId).maybeSingle();
+    expect(row.data).toMatchObject({ xero_bank_transaction_id: `bt-${input.draftId}`, xero_status: "written" });
+    const audit = await finance
+      .from("finance_audit_log")
+      .select("actor_user_id, action, entity_type")
+      .eq("entity_type", "budget_xero_spends")
+      .eq("action", "update")
+      .order("at", { ascending: false })
+      .limit(1);
+    expect(audit.data?.[0]).toMatchObject({ actor_user_id: FINANCE, action: "update" });
+
+    gate.user = outsider;
+    const denied = await reconcilePost(new Request("http://127.0.0.1/reconcile", { method: "POST", body: JSON.stringify({ draftId: input.draftId }) }));
+    expect(denied.status).toBe(403);
   });
 
   it("does not post from a preview deployment", async () => {
