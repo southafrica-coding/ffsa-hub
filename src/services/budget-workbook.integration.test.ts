@@ -25,10 +25,12 @@ vi.mock("@/lib/supabase/server", () => ({
 
 import { GET as listGet, POST } from "@/app/api/finance/budgets/route";
 import { GET as oneGet, PUT } from "@/app/api/finance/budgets/[id]/route";
+import { GET as periodsGet } from "@/app/api/finance/budgets/periods/route";
 
 const FINANCE = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1";
 const EDITOR = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2";
 const APPROVER = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3";
+const OUTSIDER = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4";
 const LEADER = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5";
 const MINISTRY = "cccccccc-cccc-4ccc-8ccc-ccccccccccc1";
 
@@ -471,5 +473,113 @@ describe.skipIf(!enabled)("workbook routes on local PostgREST", () => {
     expect(blocked.status).toBe(403);
     const finalLoad = await jsonOf(await oneGet(new Request("http://127.0.0.1/"), { params: Promise.resolve({ id }) }));
     expect((finalLoad.body.budget as { lines: { amountCents: number }[] }).lines[0].amountCents).toBe(100);
+  });
+
+  it("lets an owning leader discover NPC periods and create the first budget, and hides every other period", async () => {
+    const usa = await finance.from("finance_orgs").select("id").eq("key", "usa").single();
+    expect(usa.error).toBeNull();
+    const usaPeriod = await finance
+      .from("fiscal_periods")
+      .insert({
+        org_id: usa.data!.id,
+        label: `USA SECRET ${randomUUID().slice(0, 8)}`,
+        kind: "year",
+        start_date: "2027-01-01",
+        end_date: "2027-12-31",
+      })
+      .select("id")
+      .single();
+    expect(usaPeriod.error).toBeNull();
+    const otherMinistry = randomUUID();
+    const otherSub = randomUUID();
+    const ownSub = randomUUID();
+    const pendingUser = randomUUID();
+    const memberUser = randomUUID();
+    const added = await finance.from("staff_ministries").insert({ id: otherMinistry, name: "Other team", slug: `other-${otherMinistry.slice(0, 8)}` });
+    expect(added.error).toBeNull();
+    const subs = await finance.from("staff_ministry_subcategories").insert([
+      { id: ownSub, staff_ministry_id: MINISTRY, name: `Worship youth ${ownSub.slice(0, 8)}` },
+      { id: otherSub, staff_ministry_id: otherMinistry, name: `Other youth ${otherSub.slice(0, 8)}` },
+    ]);
+    expect(subs.error).toBeNull();
+    const people = await finance.from("users").insert([
+      { id: pendingUser, display_name: "Pending" },
+      { id: memberUser, display_name: "Member" },
+    ]);
+    expect(people.error).toBeNull();
+    const roster = await finance.from("staff_ministry_members").insert([
+      { staff_ministry_id: MINISTRY, user_id: pendingUser, member_role: "leader", status: "pending" },
+      { staff_ministry_id: MINISTRY, user_id: memberUser, member_role: "member", status: "active" },
+    ]);
+    expect(roster.error).toBeNull();
+
+    gate.client = leader;
+    const hiddenOrgs = await leader.from("finance_orgs").select("id");
+    expect(hiddenOrgs.data).toEqual([]);
+    const listed = await jsonOf(
+      await periodsGet(new Request(`http://127.0.0.1/api/finance/budgets/periods?ownerKind=staff_ministry&ownerId=${MINISTRY}`))
+    );
+    expect(listed.status).toBe(200);
+    const periods = listed.body.periods as { id: string; label: string; kind: string; start: string; end: string; current: boolean }[];
+    expect(periods.some((period) => period.id === periodId)).toBe(true);
+    expect(periods.some((period) => period.id === usaPeriod.data!.id || period.label.startsWith("USA SECRET"))).toBe(false);
+    expect(JSON.stringify(listed.body)).not.toMatch(/org_id|orgId|npc|usa|ZAR|USD/i);
+    const chosen = periods.find((period) => period.id === periodId)!;
+
+    const created = await jsonOf(
+      await POST(
+        new Request("http://127.0.0.1/api/finance/budgets", {
+          method: "POST",
+          body: JSON.stringify({
+            name: `First from discovery ${randomUUID().slice(0, 8)}`,
+            ownerKind: "staff_ministry",
+            ownerId: MINISTRY,
+            periodId: chosen.id,
+          }),
+        })
+      )
+    );
+    expect(created.status).toBe(201);
+
+    const ownSubPeriods = await jsonOf(
+      await periodsGet(new Request(`http://127.0.0.1/api/finance/budgets/periods?ownerKind=ministry_subcategory&ownerId=${ownSub}`))
+    );
+    expect(ownSubPeriods.status).toBe(200);
+    expect((ownSubPeriods.body.periods as { id: string }[]).some((period) => period.id === periodId)).toBe(true);
+
+    const denied = async (url: string, user = leader) => {
+      gate.client = user;
+      const result = await jsonOf(await periodsGet(new Request(url)));
+      expect(result.status).toBe(403);
+      expect(JSON.stringify(result.body)).not.toContain(periodId);
+      expect(JSON.stringify(result.body)).not.toContain("USA SECRET");
+      expect(result.body).not.toHaveProperty("periods");
+    };
+    await denied(`http://127.0.0.1/api/finance/budgets/periods?ownerKind=staff_ministry&ownerId=${otherMinistry}`);
+    await denied(`http://127.0.0.1/api/finance/budgets/periods?ownerKind=ministry_subcategory&ownerId=${otherSub}`);
+    await denied(`http://127.0.0.1/api/finance/budgets/periods?ownerKind=program&ownerId=bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1`);
+    await denied(`http://127.0.0.1/api/finance/budgets/periods?ownerKind=event&ownerId=${randomUUID()}`);
+    await denied(`http://127.0.0.1/api/finance/budgets/periods?ownerKind=outreach_team&ownerId=${randomUUID()}`);
+    await denied(`http://127.0.0.1/api/finance/budgets/periods?ownerKind=staff_ministry&ownerId=${MINISTRY}`, asUser(full, OUTSIDER));
+    await denied(`http://127.0.0.1/api/finance/budgets/periods?ownerKind=staff_ministry&ownerId=${MINISTRY}`, asUser(full, pendingUser));
+    await denied(`http://127.0.0.1/api/finance/budgets/periods?ownerKind=staff_ministry&ownerId=${MINISTRY}`, asUser(full, memberUser));
+
+    gate.client = leader;
+    const bad = await jsonOf(await periodsGet(new Request("http://127.0.0.1/api/finance/budgets/periods?ownerKind=school&ownerId=" + MINISTRY)));
+    expect(bad.status).toBe(400);
+    expect(bad.body).not.toHaveProperty("periods");
+
+    const { error: deactivatedError } = await leader.from("users").update({ is_active: false }).eq("id", LEADER);
+    expect(deactivatedError).toBeNull();
+    try {
+      const deactivated = await jsonOf(
+        await periodsGet(new Request(`http://127.0.0.1/api/finance/budgets/periods?ownerKind=staff_ministry&ownerId=${MINISTRY}`))
+      );
+      expect(deactivated.status).toBe(403);
+      expect(deactivated.body).toMatchObject({ error: "deactivated" });
+      expect(JSON.stringify(deactivated.body)).not.toContain(periodId);
+    } finally {
+      await finance.from("users").update({ is_active: true }).eq("id", LEADER);
+    }
   });
 });

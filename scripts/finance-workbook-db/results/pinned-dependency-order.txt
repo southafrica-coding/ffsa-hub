@@ -12,6 +12,7 @@ bank mapping: unset, not inferred
 #507 head files were not modified
 fn apply_budget_workbook
 fn budget_workbook_org_ok
+fn budget_workbook_periods
 fn create_budget_from_template
 fn create_budget_workbook_sheet
 rel budgets

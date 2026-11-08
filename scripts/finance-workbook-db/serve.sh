@@ -85,7 +85,7 @@ order="$BASE/pinned-dependency-order.txt"
 } > "$order"
 "${PSQL[@]}" -d "$DB" -Atc "
 SELECT 'fn ' || p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
- WHERE n.nspname='public' AND p.proname IN ('create_budget_from_template','create_budget_workbook_sheet','apply_budget_workbook','budget_workbook_org_ok')
+ WHERE n.nspname='public' AND p.proname IN ('create_budget_from_template','create_budget_workbook_sheet','apply_budget_workbook','budget_workbook_org_ok','budget_workbook_periods')
  ORDER BY 1;
 SELECT 'rel ' || to_regclass(c) FROM (VALUES ('public.budgets'),('public.budget_expenses'),('public.budget_repayments'),('public.budget_xero_spends'),('public.budget_workbook_revisions')) v(c);
 SELECT 'con ' || conname FROM pg_constraint WHERE conname IN ('budgets_period_org_fkey','budget_repayments_slack_message_ts_key','budget_xero_spends_receipt_draft_key');

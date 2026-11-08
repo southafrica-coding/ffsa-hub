@@ -406,6 +406,65 @@ async function readWorkbook(supabase: Client, budget: BudgetRow): Promise<ApiRes
   };
 }
 
+const OWNER_KINDS = ["staff_ministry", "ministry_subcategory", "program", "event", "outreach_team"];
+
+/**
+ * Periods the caller may pass as periodId for a first budget of this owner.
+ * The database function applies can_create_budget_row and returns only
+ * unarchived periods of the active NPC org in ZAR. No org columns.
+ */
+export async function listWorkbookPeriods(
+  supabase: Client,
+  ownerKind: string | null,
+  ownerId: string | null
+): Promise<ApiResult> {
+  const blocked = await probe(supabase);
+  if (blocked) return blocked;
+  if (!ownerKind || !ownerId || !OWNER_KINDS.includes(ownerKind) || !isUuid(ownerId)) {
+    return fail(400, "Choose one owner.");
+  }
+  const { data, error } = await supabase.rpc("budget_workbook_periods", {
+    p_owner_kind: ownerKind,
+    p_owner_id: ownerId,
+  });
+  if (error) {
+    if (isBudgetSchemaMissing(error)) return schemaMissing();
+    const message = error.message ?? "";
+    if (message === "deactivated") {
+      return {
+        status: 403,
+        body: {
+          error: "deactivated",
+          message: "This account has been deactivated. Contact an administrator.",
+        },
+      };
+    }
+    if (error.code === "42501" || /can't create a budget for that owner/i.test(message)) {
+      return fail(403, "You can't create a budget for that owner.");
+    }
+    if (error.code === "22023" || /choose one owner/i.test(message)) {
+      return fail(400, "Choose one owner.");
+    }
+    return mapDbError(error, "read");
+  }
+  const periods = (Array.isArray(data) ? data : []).flatMap((row: Record<string, unknown>) => {
+    if (typeof row.id !== "string" || typeof row.label !== "string") return [];
+    if (row.kind !== "year" && row.kind !== "term" && row.kind !== "event") return [];
+    if (typeof row.start_date !== "string" || typeof row.end_date !== "string") return [];
+    return [
+      {
+        id: row.id,
+        label: row.label,
+        kind: row.kind,
+        start: row.start_date,
+        end: row.end_date,
+        current: row.is_current === true,
+      },
+    ];
+  });
+  return { status: 200, body: { periods } };
+}
+
 export async function getBudgetWorkbook(supabase: Client, budgetId: string): Promise<ApiResult> {
   const blocked = await probe(supabase);
   if (blocked) return blocked;

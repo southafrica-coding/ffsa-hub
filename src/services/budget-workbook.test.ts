@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { randomUUID } from "crypto";
 import { lineTotalCents } from "@/lib/finance/budget-workbook";
-import { createBudgetWorkbook, getBudgetWorkbook, listBudgetWorkbooks, saveBudgetWorkbook } from "./budget-workbook";
+import { createBudgetWorkbook, getBudgetWorkbook, listBudgetWorkbooks, listWorkbookPeriods, saveBudgetWorkbook } from "./budget-workbook";
 
 const NPC = "11111111-1111-4111-8111-111111111111";
 const USA = "22222222-2222-4222-8222-222222222222";
@@ -466,6 +466,23 @@ function memory(options?: {
     async rpc(name: string, args: Record<string, unknown>) {
       writes.push({ table: "rpc", op: name, payload: structuredClone(args) });
       if (options?.rpcError) return { data: null, error: options.rpcError };
+      if (name === "budget_workbook_periods") {
+        if (flags.periodRpc) return { data: null, error: flags.periodRpc };
+        return {
+          data: [
+            {
+              id: PERIOD,
+              label: "2027",
+              kind: "year",
+              start_date: "2027-01-01",
+              end_date: "2027-12-31",
+              is_current: false,
+              org_id: "should-not-pass-through",
+            },
+          ],
+          error: null,
+        };
+      }
       if (name === "budget_workbook_org_ok") {
         if (flags.inactiveOrg) return { data: false, error: null };
         const visible = tables.budgets.some((row) => row.id === args.p_budget_id && !row.archived_at);
@@ -495,7 +512,10 @@ function memory(options?: {
     },
   };
 
-  const flags = { inactiveOrg: options?.inactiveOrg === true };
+  const flags: { inactiveOrg: boolean; periodRpc: { code: string; message: string } | null } = {
+    inactiveOrg: options?.inactiveOrg === true,
+    periodRpc: null,
+  };
   return { client, tables, writes, denyInsert, denyUpdate, denyArchive, loseRace, flags };
 }
 
@@ -973,6 +993,41 @@ describe("budget workbook save and load", () => {
     const budgets = listed.body.budgets as { name: string; currency: string }[];
     expect(budgets.map((budget) => budget.name)).toEqual(["DTS 2027"]);
     expect(budgets[0].currency).toBe("ZAR");
+  });
+
+  it("lists only the period fields the database returned for that owner", async () => {
+    const result = await listWorkbookPeriods(db.client, "staff_ministry", OWNER);
+    expect(result.status).toBe(200);
+    expect(result.body.periods).toEqual([
+      { id: PERIOD, label: "2027", kind: "year", start: "2027-01-01", end: "2027-12-31", current: false },
+    ]);
+    expect(JSON.stringify(result.body)).not.toContain("org_id");
+    expect(db.writes.some((write) => write.table === "finance_orgs")).toBe(false);
+    const rpc = db.writes.find((write) => write.op === "budget_workbook_periods");
+    expect(rpc?.payload).toEqual({ p_owner_kind: "staff_ministry", p_owner_id: OWNER });
+  });
+
+  it("does not list periods when that owner is not one this user can create for", async () => {
+    db.flags.periodRpc = { code: "42501", message: "You can't create a budget for that owner." };
+    const result = await listWorkbookPeriods(db.client, "outreach_team", OWNER);
+    expect(result.status).toBe(403);
+    expect(result.body).toEqual({ error: "You can't create a budget for that owner." });
+    expect(result.body).not.toHaveProperty("periods");
+  });
+
+  it("rejects a deactivated user before listing periods", async () => {
+    db.flags.periodRpc = { code: "42501", message: "deactivated" };
+    const result = await listWorkbookPeriods(db.client, "staff_ministry", OWNER);
+    expect(result.status).toBe(403);
+    expect(result.body).toMatchObject({ error: "deactivated" });
+  });
+
+  it("rejects an owner selector the create API does not accept", async () => {
+    const missing = await listWorkbookPeriods(db.client, "program", null);
+    expect(missing.status).toBe(400);
+    expect(missing.body.error).toBe("Choose one owner.");
+    const weird = await listWorkbookPeriods(db.client, "school", OWNER);
+    expect(weird.status).toBe(400);
   });
 });
 

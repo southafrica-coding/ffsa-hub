@@ -530,3 +530,68 @@ COMMENT ON FUNCTION public.apply_budget_workbook(uuid, timestamptz, jsonb, jsonb
 
 COMMENT ON FUNCTION public.create_budget_workbook_sheet(uuid, text, uuid, uuid, uuid, text, text, text, numeric, jsonb, jsonb, jsonb) IS
   'Create a workbook from a template and its first lines and expenses in one transaction. INVOKER. p_currency null lets the org trigger store ZAR.';
+
+-- Periods a caller may choose before their first budget. Same create check as
+-- the budgets INSERT policy (can_create_budget_row, null source). Rows are
+-- only unarchived periods of the active NPC org in ZAR. No org columns.
+CREATE FUNCTION public.budget_workbook_periods(p_owner_kind text, p_owner_id uuid)
+RETURNS TABLE (
+  id uuid,
+  label text,
+  kind text,
+  start_date date,
+  end_date date,
+  is_current boolean
+)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'Not authenticated' USING ERRCODE = '42501';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM public.users u
+    WHERE u.id = auth.uid() AND u.is_active IS FALSE
+  ) THEN
+    RAISE EXCEPTION 'deactivated' USING ERRCODE = '42501';
+  END IF;
+  IF p_owner_kind IS NULL
+     OR p_owner_id IS NULL
+     OR p_owner_kind NOT IN (
+       'staff_ministry', 'ministry_subcategory', 'program', 'event', 'outreach_team'
+     ) THEN
+    RAISE EXCEPTION 'Choose one owner.' USING ERRCODE = '22023';
+  END IF;
+  IF NOT finance_private.can_create_budget_row(
+    p_owner_kind,
+    CASE WHEN p_owner_kind = 'staff_ministry' THEN p_owner_id END,
+    CASE WHEN p_owner_kind = 'ministry_subcategory' THEN p_owner_id END,
+    CASE WHEN p_owner_kind = 'program' THEN p_owner_id END,
+    CASE WHEN p_owner_kind = 'event' THEN p_owner_id END,
+    CASE WHEN p_owner_kind = 'outreach_team' THEN p_owner_id END,
+    NULL,
+    NULL
+  ) THEN
+    RAISE EXCEPTION 'You can''t create a budget for that owner.' USING ERRCODE = '42501';
+  END IF;
+
+  RETURN QUERY
+  SELECT p.id, p.label, p.kind, p.start_date, p.end_date, p.is_current
+  FROM public.fiscal_periods p
+  JOIN public.finance_orgs o ON o.id = p.org_id
+  WHERE p.archived_at IS NULL
+    AND o.key = 'npc'
+    AND o.is_active
+    AND o.record_currency = 'ZAR'
+  ORDER BY p.start_date DESC, p.label;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.budget_workbook_periods(text, uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.budget_workbook_periods(text, uuid) TO authenticated, service_role;
+
+COMMENT ON FUNCTION public.budget_workbook_periods(text, uuid) IS
+  'Periods for a first workbook. DEFINER so a ministry leader need not select finance_orgs. Uses can_create_budget_row. Does not grant create rights and does not return org columns.';
