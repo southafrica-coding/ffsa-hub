@@ -126,7 +126,7 @@ async function otherBudgetLines(admin: Client, budgetId: string, region: XeroReg
       if (line.archived_at) continue;
       const coding = (line.budget_line_coding ?? []).find((row) => row.org_region === region);
       const account = Array.isArray(coding?.xero_accounts) ? coding?.xero_accounts[0] : coding?.xero_accounts;
-      const code = account?.status === "ACTIVE" ? account.code ?? null : null;
+      const code = account && String(account.status).toLowerCase() === "active" ? account.code ?? null : null;
       const tracking: { name: string; option: string }[] = [];
       for (const opt of [coding?.opt1, coding?.opt2]) {
         if (!opt?.name) continue;
@@ -207,8 +207,14 @@ export async function getBudgetActuals(
 
   // Hub budget workbooks are South Africa / ZAR. Actuals are read from the ZA org.
   const region = "za" as const;
-  const lineRows = ((data.budget_lines ?? []) as LineRow[]).filter((line) => !line.archived_at);
-  const codingFor = (line: LineRow) => (line.budget_line_coding ?? []).find((c) => c.org_region === region) ?? null;
+  // PostgREST returns a to-one embed as an object. budget_line_coding is unique per line.
+  const asRows = <T,>(value: T | T[] | null | undefined): T[] =>
+    !value ? [] : Array.isArray(value) ? value : [value];
+  const lineRows = asRows(data.budget_lines as LineRow | LineRow[] | null).filter((line) => !line.archived_at);
+  const codingFor = (line: LineRow) =>
+    asRows(line.budget_line_coding as LineRow["budget_line_coding"] | NonNullable<LineRow["budget_line_coding"]>[number]).find(
+      (c) => c.org_region === region
+    ) ?? null;
 
   const accountIds = [...new Set(lineRows.map((line) => codingFor(line)?.account_id).filter((id): id is string => !!id))];
   const optionIds = [
@@ -238,7 +244,7 @@ export async function getBudgetActuals(
   const catRows = (cats ?? []) as { id: string; name: string }[];
   const accountCode = new Map<string, string>();
   for (const account of accountRows) {
-    if (account.status === "ACTIVE" && account.code) accountCode.set(account.id, account.code);
+    if (String(account.status).toLowerCase() === "active" && account.code) accountCode.set(account.id, account.code);
   }
   const catName = new Map(catRows.map((c) => [c.id, c.name]));
   const optionById = new Map<string, { name: string; option: string }>();

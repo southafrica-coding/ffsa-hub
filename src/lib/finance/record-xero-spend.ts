@@ -70,7 +70,7 @@ async function loadCoding(admin: Admin, lineId: string | null, region: XeroRegio
     : Promise.resolve({ data: [] as { id: string; name: string; category_id: string }[] });
   const [{ data: account }, { data: options, error: optionError }] = await Promise.all([accountQuery, optionQuery]);
   const accountCode =
-    account && account.status === "ACTIVE" && typeof account.code === "string" && account.code.trim() ? account.code.trim() : null;
+    account && String(account.status).toLowerCase() === "active" && typeof account.code === "string" && account.code.trim() ? account.code.trim() : null;
   if (optionError || (options ?? []).length !== optionIds.length) {
     return { accountCode, tracking: [], incomplete: optionIds.length > 0 };
   }
@@ -210,6 +210,9 @@ async function rememberXeroSpend(
   const { error } = prior.length
     ? await admin.from("budget_xero_spends").update(row).eq("id", prior[0].id)
     : await admin.from("budget_xero_spends").insert(row);
+  // A second session can insert the same draft or bank id first. The unique
+  // key already kept one row, so this attempt is the same confirm.
+  if (error && (error.code === "23505" || /duplicate key|unique constraint/i.test(error.message ?? ""))) return;
   if (error && !isMissingRelation(error)) {
     console.error("[xero] budget_xero_spends write failed", input.draftId, error.message ?? error);
   }
