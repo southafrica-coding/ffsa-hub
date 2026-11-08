@@ -1,11 +1,10 @@
 "use client";
 
 import { PayLaterCountry } from "./pay-later-country";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PhoneInputNative } from "@/components/ui/phone-input-native";
 import { EventDescription } from "@/components/events/event-description";
 import type { FormField } from "@/lib/forms/schema";
-import { validateCheckoutAnswers } from "@/lib/ticketing/checkout-questions";
 import {
   computeTicketSlots,
   collectTicketAnswers,
@@ -40,8 +39,9 @@ import {
 import { TicketQuestionsSection } from "./ticket-questions-section";
 import { WaiverSignatureSection } from "./waiver-signature-section";
 import {
-  WAIVER_BLOCK_MESSAGE,
-  revealTargetId,
+  PAY_SUMMARY_TITLE,
+  planWildOnesCheckout,
+  type MissingPayItem,
 } from "@/lib/ticketing/wild-ones-checkout-focus";
 
 // Custom checkout questions, themed to WILD ONES' scoped `.wo-*` classes.
@@ -213,6 +213,7 @@ export function WildOnesStorefront({
   // Pay later only: which of our Xero orgs invoices them (see PayLaterCountry).
   const [invoiceCountry, setInvoiceCountry] = useState("");
   const [err, setErr] = useState<string | null>(null);
+  const [missing, setMissing] = useState<MissingPayItem[]>([]);
 
   const questionsByTier = useMemo(() => {
     const m: Record<string, FormField[]> = {};
@@ -378,79 +379,71 @@ export function WildOnesStorefront({
     setPromoError(null);
   }
 
-  // Scroll after React paints the field errors. The mobile CHECKOUT bar
-  // calls this from whatever section is on screen, so the target has to
-  // be the block that failed — not the top of the buyer section.
-  function revealFailure(failure: "buyer" | "checkout" | "tickets" | "waiver" | "consent") {
-    const id = revealTargetId(failure);
-    requestAnimationFrame(() => {
-      const root = document.getElementById(id);
-      const flagged =
-        failure === "checkout" || failure === "tickets" || failure === "waiver"
-          ? root?.querySelector("[data-field-error], .wo-promo-error")
-          : null;
-      (flagged ?? root)?.scrollIntoView({
-        behavior: "smooth",
-        block: failure === "buyer" ? "start" : "center",
-      });
+  // Scroll, focus, and highlight the first missing control. The summary
+  // stays on screen (fixed) so the list is visible while the field is focused.
+  function focusMissing(fieldId: string) {
+    const root = document.getElementById(fieldId);
+    const el =
+      root instanceof HTMLInputElement ||
+      root instanceof HTMLSelectElement ||
+      root instanceof HTMLTextAreaElement
+        ? root
+        : root?.querySelector("input, select, textarea");
+    document.querySelectorAll("[data-wo-flagged]").forEach((node) => {
+      node.removeAttribute("data-wo-flagged");
+      node.removeAttribute("aria-invalid");
+      node.classList.remove("wo-field-highlight");
     });
+    if (!(el instanceof HTMLElement)) {
+      root?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    el.classList.add("wo-field-highlight");
+    el.setAttribute("data-wo-flagged", "");
+    el.setAttribute("aria-invalid", "true");
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.focus({ preventScroll: true });
   }
 
-  // Email always required; other fields only block checkout when enabled +
-  // marked required (buyer_fields, migration 140).
-  const buyerValid =
-    (!bf.first_name.enabled || !bf.first_name.required || firstName.trim().length > 0) &&
-    (!bf.last_name.enabled || !bf.last_name.required || lastName.trim().length > 0) &&
-    (!bf.phone.enabled || !bf.phone.required || phone.trim().length > 0) &&
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  useEffect(() => {
+    if (missing.length === 0) return;
+    const id = missing[0].fieldId;
+    const frame = requestAnimationFrame(() => focusMissing(id));
+    return () => cancelAnimationFrame(frame);
+  }, [missing]);
 
   async function submit(provider: "payfast" | "stripe" | "invoice" = "payfast") {
-    if (provider === "invoice" && !invoiceCountry) {
-      setErr("Choose your country so we can send your invoice from the right office.");
-      return;
-    }
-    if (lineCount === 0) {
-      setErr("Add at least one pass first.");
-      return;
-    }
-    if (!buyerValid) {
-      setErr("Add your name and a valid email to lock it in.");
-      revealFailure("buyer");
-      return;
-    }
-    if (checkoutQuestions.length > 0) {
-      const v = validateCheckoutAnswers(checkoutQuestions, customAnswers);
-      if (!v.valid) {
-        setCustomErrors(v.errors);
-        setErr("Answer the required questions to lock it in.");
-        revealFailure("checkout");
-        return;
-      }
-      setCustomErrors({});
-    }
+    if (submitting) return;
     const ticketCollect = collectTicketAnswers(ticketSlots, ticketAnswers);
-    if (!ticketCollect.valid) {
-      setTicketErrors(ticketCollect.errors);
-      setErr("Answer the required questions for each ticket to lock it in.");
-      revealFailure("tickets");
-      return;
-    }
-    setTicketErrors({});
     const waiverCollect = collectWaiverSignatures(waiverSlots, waiverValues);
-    if (!waiverCollect.valid) {
-      setWaiverErrors(waiverCollect.errors);
-      setErr(WAIVER_BLOCK_MESSAGE);
-      revealFailure("waiver");
+    const plan = planWildOnesCheckout({
+      lineCount,
+      buyerFields,
+      firstName,
+      lastName,
+      email,
+      phone,
+      checkoutQuestions,
+      customAnswers,
+      ticketSlots,
+      ticketAnswers,
+      waiverSlots,
+      waiverValues,
+      termsAccepted: consentAccepted,
+      ...(provider === "invoice" ? { invoiceCountry } : {}),
+    });
+    if (plan.action !== "post") {
+      setCustomErrors(plan.checkoutErrors);
+      setTicketErrors(plan.ticketErrors);
+      setWaiverErrors(plan.waiverErrors);
+      setMissing(plan.items);
+      setErr(null);
       return;
     }
+    setMissing([]);
+    setCustomErrors({});
+    setTicketErrors({});
     setWaiverErrors({});
-    if (!consentAccepted) {
-      setErr(
-        "Please accept the Ticket Purchase Terms & Consent Agreement to continue."
-      );
-      revealFailure("consent");
-      return;
-    }
     setSubmitting(provider);
     setErr(null);
 
@@ -850,12 +843,13 @@ export function WildOnesStorefront({
                 {consentAccepted ? "✓ Accepted" : "Required"}
               </span>
             </div>
-            <label className="wo-consent">
+            <label className="wo-consent" htmlFor="wo-terms">
               <input
+                id="wo-terms"
                 type="checkbox"
                 checked={consentAccepted}
                 onChange={(e) => setConsentAccepted(e.target.checked)}
-                required
+                aria-required="true"
               />
               <span>
                 <span className="wo-consent-star">* </span>
@@ -871,7 +865,7 @@ export function WildOnesStorefront({
             </label>
             {!consentAccepted && (
               <p className="wo-consent-warn">
-                ⚠ Please tick this box to enable the payment button below.
+                This agreement is separate from the parent or guardian consent on the form. Both are required.
               </p>
             )}
           </div>
@@ -912,18 +906,36 @@ export function WildOnesStorefront({
             {lineCount} pass
             {lineCount === 1 ? "" : "es"} held for you.
           </p>
-          {err && <p className="wo-error">{err}</p>}
-          {!err && !buyerValid && (
-            <p className="wo-error">
-              Enter your details above — a valid email address is needed before
-              the payment button turns on.
-            </p>
+          {missing.length > 0 && (
+            <div
+              id="wo-pay-summary"
+              className="wo-missing"
+              role="alert"
+              aria-labelledby="wo-pay-summary-title"
+              tabIndex={-1}
+              key={missing.map((item) => item.text).join("|")}
+            >
+              <p id="wo-pay-summary-title" className="wo-missing-title">
+                {PAY_SUMMARY_TITLE}
+              </p>
+              <ul>
+                {missing.map((item) => (
+                  <li key={`${item.fieldId}:${item.text}`}>
+                    <button type="button" onClick={() => focusMissing(item.fieldId)}>
+                      {item.text}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
+          {err && <p className="wo-error">{err}</p>}
           {isFreeOrder ? (
             <button
               type="button"
               onClick={() => submit(canUsePayfast ? "payfast" : "stripe")}
-              disabled={submitting !== null || !buyerValid || !consentAccepted}
+              disabled={submitting !== null}
+              aria-describedby={missing.length > 0 ? "wo-pay-summary" : undefined}
               className="wo-paybtn"
             >
               {submitting !== null ? "LOCKING IT IN…" : "GET MY PASSES"}
@@ -937,7 +949,8 @@ export function WildOnesStorefront({
               <button
                 type="button"
                 onClick={() => submit("payfast")}
-                disabled={submitting !== null || !buyerValid || !consentAccepted}
+                disabled={submitting !== null}
+                aria-describedby={missing.length > 0 ? "wo-pay-summary" : undefined}
                 className="wo-paybtn"
               >
                 {submitting === "payfast" ? "LOCKING IT IN…" : `PAY ${money(totalCents)}`}
@@ -951,7 +964,8 @@ export function WildOnesStorefront({
               <button
                 type="button"
                 onClick={() => submit("stripe")}
-                disabled={submitting !== null || !buyerValid || !consentAccepted}
+                disabled={submitting !== null}
+                aria-describedby={missing.length > 0 ? "wo-pay-summary" : undefined}
                 className={canUsePayfast ? "wo-paybtn-alt" : "wo-paybtn"}
               >
                 {submitting === "stripe"
@@ -971,12 +985,13 @@ export function WildOnesStorefront({
               )}
             </div>
             {event.pay_later && (
-              <div className="wo-paybtn-alt-wrap">
+              <div className="wo-paybtn-alt-wrap" id="wo-invoice-country">
                 <PayLaterCountry value={invoiceCountry} onChange={setInvoiceCountry} disabled={submitting !== null} />
                 <button
                   type="button"
                   onClick={() => submit("invoice")}
-                  disabled={submitting !== null || !buyerValid || !consentAccepted || !invoiceCountry}
+                  disabled={submitting !== null}
+                  aria-describedby={missing.length > 0 ? "wo-pay-summary" : undefined}
                   className="wo-paybtn-alt"
                 >
                   {submitting === "invoice" ? "SENDING YOUR INVOICE…" : "INVOICE ME — PAY LATER"}
@@ -1024,6 +1039,7 @@ export function WildOnesStorefront({
               submit(canUsePayfast ? "payfast" : "stripe")
             }
             disabled={submitting !== null}
+            aria-describedby={missing.length > 0 ? "wo-pay-summary" : undefined}
             className="wo-sticky-btn"
           >
             {submitting !== null ? "…" : "CHECKOUT"}
@@ -1588,6 +1604,32 @@ const scopedCss = `
 .wo-pay-total-v{font-family:var(--display);font-weight:700;font-size:42px;color:var(--offwhite);line-height:1;}
 .wo-pay-note{font-size:11px;font-weight:700;letter-spacing:.04em;color:var(--bone);opacity:.65;margin:0 0 14px;}
 .wo-error{background:var(--ember);color:var(--offwhite);padding:10px 13px;font-size:12px;font-weight:700;letter-spacing:.04em;margin:0 0 14px;}
+.wo-missing{
+  background:#2A140C;color:var(--offwhite);border:2px solid var(--ember);
+  padding:12px 14px;margin:0 0 14px;
+}
+/* Kept on screen for the pay attempt, including the mobile CHECKOUT bar.
+   Specificity beats the grain rule that would otherwise pin it in flow. */
+.wo .wo-missing{
+  position:fixed;top:0;left:0;right:0;z-index:70;margin:0;
+  max-height:42vh;overflow:auto;
+  box-shadow:0 8px 24px rgba(0,0,0,.45);
+}
+.wo-missing-title{
+  font-family:var(--display);font-weight:700;font-size:18px;letter-spacing:.04em;
+  text-transform:uppercase;margin:0 0 6px;color:var(--ember);
+}
+.wo-missing ul{list-style:none;margin:0;padding:0;}
+.wo-missing li{border-top:1px solid rgba(242,107,33,.35);}
+.wo-missing button{
+  display:flex;align-items:center;width:100%;min-height:44px;
+  background:transparent;color:var(--offwhite);border:0;padding:8px 0;
+  font-family:var(--body);font-size:15px;font-weight:700;line-height:1.35;
+  letter-spacing:0;text-transform:none;text-align:left;cursor:pointer;
+}
+.wo-missing button:hover,.wo-missing button:focus{color:var(--ember);outline:none;}
+.wo-missing button:focus-visible{outline:2px solid var(--ember);outline-offset:2px;}
+.wo-field-highlight{outline:3px solid var(--ember) !important;outline-offset:3px;scroll-margin-top:46vh;scroll-margin-bottom:140px;}
 .wo-paybtn{
   width:100%;background:var(--ember);color:var(--offwhite);border:2px solid var(--ember);
   font-family:var(--display);font-weight:700;font-size:28px;letter-spacing:.03em;
