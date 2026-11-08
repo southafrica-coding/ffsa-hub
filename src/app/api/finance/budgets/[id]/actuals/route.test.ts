@@ -4,6 +4,7 @@ import { createFakeSupabase, permissionWorldResolver, type FakeQuery, type Permi
 const state = vi.hoisted(() => ({
   fake: null as unknown as ReturnType<typeof import("@/lib/testing/fake-supabase").createFakeSupabase>,
   admin: null as null | ReturnType<typeof import("@/lib/testing/fake-supabase").createFakeSupabase>,
+  xeroCalls: 0,
   xero: { ok: true, transactions: [] as unknown[], partial: false } as
     | { ok: true; transactions: unknown[]; partial: boolean }
     | { ok: false; reason: "not_connected" | "xero"; message: string },
@@ -15,7 +16,10 @@ vi.mock("@/lib/supabase/admin", () => ({
 }));
 vi.mock("@/services/xero", async (orig) => ({
   ...(await orig<typeof import("@/services/xero")>()),
-  listXeroSpendTransactions: async () => state.xero,
+  listXeroSpendTransactions: async () => {
+    state.xeroCalls += 1;
+    return state.xero;
+  },
 }));
 
 import { GET } from "./route";
@@ -40,6 +44,7 @@ const call = (id = "b1") => GET(new Request("http://x/api/finance/budgets/b1/act
 describe("GET /api/finance/budgets/[id]/actuals", () => {
   beforeEach(() => {
     state.admin = null;
+    state.xeroCalls = 0;
     state.xero = { ok: true, transactions: [], partial: false };
   });
 
@@ -114,6 +119,29 @@ describe("GET /api/finance/budgets/[id]/actuals", () => {
       { lineId: "l1", name: "Food for the team", plannedCents: 100000, actualCents: 18000, differenceCents: 82000 },
     ]);
     expect(JSON.stringify(state.fake.queries.map((q) => q.table))).not.toContain("outreach_expenses");
+  });
+
+  it("does not read Xero for a budget that is not rand", async () => {
+    world(NO_ROLES, [], { id: "leader" }, (q) => {
+      if (q.table === "budgets" && q.single) {
+        return {
+          data: {
+            id: "b1",
+            name: "Dollar book",
+            currency: "USD",
+            archived_at: null,
+            fiscal_periods: { start_date: "2026-01-01", end_date: "2026-12-31" },
+            budget_lines: [],
+          },
+        };
+      }
+      if (q.table === "budgets") return { data: [] };
+      return undefined;
+    });
+    const res = await call();
+    expect(res.status).toBe(409);
+    expect(state.xeroCalls).toBe(0);
+    expect(JSON.stringify(state.fake.queries.map((q) => q.table))).not.toContain("budget_expenses");
   });
 
   it("lets someone read actuals for a budget they can already see, without finance.view", async () => {

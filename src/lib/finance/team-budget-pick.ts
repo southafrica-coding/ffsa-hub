@@ -17,7 +17,7 @@ export type TeamBudgetRow = {
   id: string;
   name: string;
   status: string;
-  /** npc or usa from the budget currency. Null when the currency is neither ZAR nor USD. */
+  /** npc when budgets.currency is ZAR. A USD row is not selected. */
   orgKey: BudgetOrgKey | null;
   /** budgets.currency, used when orgKey is absent. */
   currency: string | null;

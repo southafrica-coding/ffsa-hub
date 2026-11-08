@@ -33,10 +33,11 @@ export type ConfirmedSpend = {
   vendor: string | null;
   budgetId: string | null;
   budgetLineId: string | null;
-  /** npc or usa, when a budget was chosen. Null when the receipt is not on one yet. */
+  /** npc when a ZAR budget was chosen. usa is ignored and does not open a dollar log. */
   orgKey: "npc" | "usa" | null;
-  /** Book currency of that org: ZAR for NPC, USD for USA. */
+  /** Parent budget currency. Only ZAR is logged. */
   currency: "ZAR" | "USD";
+  /** Ignored for the post. Confirmed spends use the ZA region. */
   region: XeroRegion;
   paymentMethod: "cash" | "card" | "bank_transfer";
   budgetStatus: string | null;
@@ -153,7 +154,8 @@ async function rememberXeroSpend(
   status: string,
   bankTransactionId: string | null
 ) {
-  const budgetCurrency = input.orgKey === "usa" ? "USD" : input.orgKey === "npc" ? "ZAR" : null;
+  // Parent books are ZAR. A USA org key does not open a dollar log.
+  const budgetCurrency = input.orgKey === "npc" && input.currency === "ZAR" ? "ZAR" : null;
   const row = xeroSpendLogRow({
     budgetId: input.budgetId,
     lineId: input.budgetLineId,
@@ -219,7 +221,9 @@ export async function writeConfirmedSpend(
     if (already) return { status: "already_written", bankTransactionId: already };
   }
 
-  const coding = await loadCoding(admin, input.budgetLineId, input.region);
+  // Confirmed spends use the ZA bank path. A stored "usa" proposal does not switch region.
+  const region = "za" as const;
+  const coding = await loadCoding(admin, input.budgetLineId, region);
   let status = "failed";
   let bankTransactionId: string | null = null;
   let error: string | null = null;
@@ -251,13 +255,13 @@ export async function writeConfirmedSpend(
       vendor: input.vendor,
       reference: `ffsa-expense-${input.expenseId}`,
       accountCode: coding.accountCode,
-      bankAccountCode: spendBankAccountCode(input.region),
+      bankAccountCode: spendBankAccountCode(region),
       tracking: coding.tracking,
     });
     if (!decision.write) {
       status = decision.status;
     } else {
-      const posted = await createXeroSpendMoney(admin, input.region, {
+      const posted = await createXeroSpendMoney(admin, region, {
         idempotencyKey: `ffsa-expense-${input.expenseId}`,
         payload: decision.payload,
       });

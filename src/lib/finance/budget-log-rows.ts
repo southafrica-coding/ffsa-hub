@@ -29,7 +29,7 @@ export function xeroSpendLogRow(args: {
   outreachExpenseId: string | null;
   receiptDraftId: string;
   purchaserUserId: string | null;
-  /** Major units already in the budget's currency. Dollars for a USD budget, not a rand conversion. */
+  /** Rand already collected. These workbooks are ZAR, so this is not a dollar figure and not a new FX rate. */
   bookAmount: number;
   bookCurrency: BudgetCurrency;
   budgetCurrency: BudgetCurrency | null;
@@ -43,8 +43,8 @@ export function xeroSpendLogRow(args: {
   xeroStatus: string;
   confirmedAt: string;
 }): XeroSpendLogRow | null {
-  if (!args.budgetId || !args.budgetCurrency) return null;
-  if (args.bookCurrency !== args.budgetCurrency) return null;
+  // #475 locks budgets.currency to ZAR (FFSA NPC). A USD pair is not a rand book.
+  if (!args.budgetId || args.budgetCurrency !== "ZAR" || args.bookCurrency !== "ZAR") return null;
   const description = args.description.trim();
   const spentOn = args.spentOn.slice(0, 10);
   const periodStart = args.periodStart?.slice(0, 10) ?? "";

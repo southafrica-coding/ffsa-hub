@@ -9,8 +9,8 @@ describe("xeroSpendLogRow", () => {
     receiptDraftId: "d1",
     purchaserUserId: "u1",
     bookAmount: 40,
-    bookCurrency: "USD" as const,
-    budgetCurrency: "USD" as const,
+    bookCurrency: "ZAR" as const,
+    budgetCurrency: "ZAR" as const,
     periodStart: "2026-01-01",
     periodEnd: "2026-12-31",
     spentOn: "2026-11-06",
@@ -44,7 +44,8 @@ describe("xeroSpendLogRow", () => {
 
   it("skips when there is no budget or the book currency is not the budget's", () => {
     expect(xeroSpendLogRow({ ...base, budgetId: null })).toBeNull();
-    expect(xeroSpendLogRow({ ...base, bookCurrency: "ZAR", bookAmount: 720 })).toBeNull();
+    expect(xeroSpendLogRow({ ...base, bookCurrency: "USD", budgetCurrency: "USD", bookAmount: 40 })).toBeNull();
+    expect(xeroSpendLogRow({ ...base, budgetCurrency: "USD" })).toBeNull();
     expect(xeroSpendLogRow({ ...base, bookAmount: 0 })).toBeNull();
     expect(xeroSpendLogRow({ ...base, spentOn: "2025-12-31" })).toBeNull();
     expect(xeroSpendLogRow({ ...base, spentOn: "2027-01-01" })).toBeNull();

@@ -154,6 +154,12 @@ export async function getBudgetActuals(
     return { status: 500, body: { error: error.message ?? "Couldn't read that budget" } };
   }
   if (!data || data.archived_at) return { status: 404, body: { error: "Budget not found" } };
+  if ((data.currency ?? "").toUpperCase() !== "ZAR") {
+    return {
+      status: 409,
+      body: { error: "This budget is not a South Africa rand workbook, so its Xero actuals are not read." },
+    };
+  }
 
   const period = data.fiscal_periods as { start_date?: string; end_date?: string } | null;
   const start = period?.start_date ?? null;

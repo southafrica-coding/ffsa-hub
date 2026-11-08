@@ -210,10 +210,9 @@ function onePeriod(
 
 /**
  * Lines from the one budget this receipt belongs to. Look up by
- * outreach_team_id, then narrow with selectTeamBudget: NPC/ZAR or USA/USD
- * from the slip's currency (leaders do not read finance_orgs), and the
- * fiscal period that contains the date. Several budgets for the team are
- * not merged.
+ * outreach_team_id, then the fiscal period. Only a ZAR workbook is a
+ * candidate. A US period or a USD currency is not selected, and leaders
+ * do not read finance_orgs. Several budgets for the team are not merged.
  */
 async function linesForReceipt(
   admin: Admin,
@@ -346,7 +345,7 @@ async function withPlainLine(
 export async function budgetForSlip(
   admin: Admin,
   args: { teamId: string | null; localCurrency: string; expenseDate: string; nameHint: string | null }
-): Promise<{ budgetId: string; currency: "ZAR" | "USD"; lineId: string | null; teamId: string } | null> {
+): Promise<{ budgetId: string; currency: "ZAR"; lineId: string | null; teamId: string } | null> {
   if (!args.teamId) return null;
   const found = await linesForReceipt(
     admin,
@@ -354,9 +353,8 @@ export async function budgetForSlip(
     { local_currency: args.localCurrency, expense_date: args.expenseDate, description: args.nameHint ?? "" } as Proposal,
     args.nameHint
   );
-  if (!found.budgetId || (found.org !== "npc" && found.org !== "usa")) return null;
-  const currency = found.org === "usa" ? "USD" : "ZAR";
-  if (args.localCurrency.toUpperCase() !== currency) return null;
+  if (!found.budgetId || found.org !== "npc") return null;
+  if (args.localCurrency.toUpperCase() !== "ZAR") return null;
   const named = choosePlainBudgetLine({
     userNote: args.nameHint,
     suggested: null,
@@ -364,7 +362,7 @@ export async function budgetForSlip(
     categoryName: null,
     lines: found.status === "approved" ? found.lines : [],
   });
-  return { budgetId: found.budgetId, currency, lineId: named.budget_line_id, teamId: args.teamId };
+  return { budgetId: found.budgetId, currency: "ZAR", lineId: named.budget_line_id, teamId: args.teamId };
 }
 
 async function loadCategories(admin: Admin): Promise<BudgetCategory[]> {
