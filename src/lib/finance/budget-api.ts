@@ -4,6 +4,7 @@
  * POST /api/finance/budgets → 201 { budget, ignored }
  * GET  /api/finance/budgets/:id → { budget }
  * PUT  /api/finance/budgets/:id sends updatedAt from the last load.
+ * It does not send status. A save cannot submit or approve.
  *
  * A 409 that asks for a reload wrote nothing. Other errors leave the
  * sheet as the caller still has it.
@@ -269,8 +270,7 @@ function moneyField(value: string): { ok: true; cents: number | null } | { ok: f
 export function buildWorkbookBody(
   draft: BudgetSheetDraft,
   mode: "create" | "save",
-  updatedAt: string | null,
-  status: string | null
+  updatedAt: string | null
 ): { ok: true; body: Record<string, unknown> } | { ok: false; error: string } {
   if (!draft.name.trim() || !draft.ownerKind || !draft.ownerId || !draft.periodId) {
     return { ok: false, error: "Name the budget, choose who it belongs to, and choose a period." };
@@ -346,7 +346,6 @@ export function buildWorkbookBody(
   if (mode === "save") {
     if (!updatedAt) return { ok: false, error: "Reload this budget before saving." };
     body.updatedAt = updatedAt;
-    if (status) body.status = status;
   }
   return { ok: true, body };
 }

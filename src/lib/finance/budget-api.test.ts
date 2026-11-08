@@ -97,7 +97,7 @@ describe("buildWorkbookBody", () => {
       lines: [{ ...newSheetLine("variable", LINE), name: "Food", amount: "190", frequency: "12", multiplier: "8" }],
       expenses: [{ ...newSheetExpense(EXPENSE), expenseDate: "2026-02-01", description: "Groceries", amount: "50", lineId: LINE }],
     };
-    const built = buildWorkbookBody(draft, "save", "2026-11-08T10:00:00.000Z", "draft");
+    const built = buildWorkbookBody(draft, "save", "2026-11-08T10:00:00.000Z");
     expect(built.ok).toBe(true);
     if (!built.ok) return;
     expect(built.body.updatedAt).toBe("2026-11-08T10:00:00.000Z");
@@ -105,6 +105,7 @@ describe("buildWorkbookBody", () => {
     expect(built.body.orgId).toBe(ORG);
     expect(built.body).not.toHaveProperty("purpose");
     expect(built.body).not.toHaveProperty("currency");
+    expect(built.body).not.toHaveProperty("status");
     expect((built.body.lines as { amountCents: number }[])[0].amountCents).toBe(19000);
     expect((built.body.expenses as { lineId: string }[])[0].lineId).toBe(LINE);
   });
@@ -117,7 +118,7 @@ describe("buildWorkbookBody", () => {
       ownerId: OWNER,
       periodId: PERIOD,
     };
-    expect(buildWorkbookBody(draft, "save", null, "draft")).toEqual({
+    expect(buildWorkbookBody(draft, "save", null)).toEqual({
       ok: false,
       error: "Reload this budget before saving.",
     });

@@ -155,7 +155,7 @@ export function BudgetSheet({
 
   const dirty = sheetSignature(draft) !== baseline;
   const approved = stamp?.status === "approved";
-  const locked = saving || approved;
+  const structureLocked = saving || approved;
   const active = TEAM_BUDGET_SECTIONS.find((item) => item.key === section) ?? TEAM_BUDGET_SECTIONS[0];
 
   function adopt(budget: CanonicalBudget, purpose: string) {
@@ -187,8 +187,8 @@ export function BudgetSheet({
   }
 
   async function saveSheet() {
-    if (saving || approved) return;
-    const built = buildWorkbookBody(draft, stamp ? "save" : "create", stamp?.updatedAt ?? null, stamp?.status ?? null);
+    if (saving) return;
+    const built = buildWorkbookBody(draft, stamp ? "save" : "create", stamp?.updatedAt ?? null);
     if (!built.ok) {
       setNotice(built.error);
       return;
@@ -241,6 +241,7 @@ export function BudgetSheet({
   }
 
   function clearSheet() {
+    if (approved) return;
     if (draftIsDirty(draft) && !window.confirm("Clear this sheet? It is not saved anywhere else.")) return;
     setDraft(emptyBudgetDraft());
     setSection("overview");
@@ -303,7 +304,8 @@ export function BudgetSheet({
       )}
       {approved && (
         <p className="border-b border-rule px-5 py-3 text-[13px] md:px-8">
-          This budget is approved. It can&apos;t be changed until it is reopened.
+          This budget is approved. Lines, notes, and who it belongs to stay as they are until it is reopened. The expense
+          tracker can still be updated.
         </p>
       )}
       {stamp?.status === "submitted" && (
@@ -331,7 +333,7 @@ export function BudgetSheet({
         </div>
       )}
 
-      <fieldset disabled={locked} className="min-w-0 border-0 p-0">
+      <fieldset disabled={structureLocked} className="min-w-0 border-0 p-0">
       <div className="grid grid-cols-1 gap-px bg-ink sm:grid-cols-2 xl:grid-cols-4">
         <Field label="Name">
           <input
@@ -455,6 +457,7 @@ export function BudgetSheet({
           )}
         </div>
       </div>
+      </fieldset>
 
       <ModuleTabs
         tabs={TEAM_BUDGET_SECTIONS.map((item) => ({ key: item.key, label: item.label }))}
@@ -463,6 +466,8 @@ export function BudgetSheet({
       />
 
       <div className="min-w-0 max-w-full px-5 py-6 md:px-8" data-section={section}>
+        {section !== "expense_tracker" && (
+        <fieldset disabled={structureLocked} className="min-w-0 border-0 p-0">
         {section === "overview" && (
           <Overview draft={draft} driverValue={driverValue} onChange={patch} />
         )}
@@ -515,22 +520,6 @@ export function BudgetSheet({
             />
           </div>
         )}
-        {section === "expense_tracker" && (
-          <ExpenseTracker
-            help={active.help}
-            expenses={draft.expenses}
-            lines={draft.lines}
-            readOnly={locked}
-            onAdd={() => setDraft((prev) => ({ ...prev, expenses: [...prev.expenses, newSheetExpense(newId())] }))}
-            onChange={(id, expensePatch) =>
-              setDraft((prev) => ({
-                ...prev,
-                expenses: prev.expenses.map((row) => (row.id === id ? { ...row, ...expensePatch } : row)),
-              }))
-            }
-            onRemove={(id) => setDraft((prev) => ({ ...prev, expenses: prev.expenses.filter((row) => row.id !== id) }))}
-          />
-        )}
         {section === "notes" && (
           <div className="border border-ink">
             <SectionBar title="Notes" />
@@ -544,8 +533,25 @@ export function BudgetSheet({
             />
           </div>
         )}
+        </fieldset>
+        )}
+        {section === "expense_tracker" && (
+          <ExpenseTracker
+            help={active.help}
+            expenses={draft.expenses}
+            lines={draft.lines}
+            readOnly={saving}
+            onAdd={() => setDraft((prev) => ({ ...prev, expenses: [...prev.expenses, newSheetExpense(newId())] }))}
+            onChange={(id, expensePatch) =>
+              setDraft((prev) => ({
+                ...prev,
+                expenses: prev.expenses.map((row) => (row.id === id ? { ...row, ...expensePatch } : row)),
+              }))
+            }
+            onRemove={(id) => setDraft((prev) => ({ ...prev, expenses: prev.expenses.filter((row) => row.id !== id) }))}
+          />
+        )}
       </div>
-      </fieldset>
     </div>
   );
 }

@@ -9,7 +9,9 @@ import puppeteer from "/tmp/puppeteer-check/node_modules/puppeteer-core/lib/pupp
 
 const base = process.argv[2] || "http://127.0.0.1:3010";
 const FINANCE = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1";
+const OUTSIDER = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4";
 const LEADER = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5";
+const MINISTRY = "cccccccc-cccc-4ccc-8ccc-ccccccccccc1";
 const PERIOD = "dddddddd-dddd-4ddd-8ddd-ddddddddddd1";
 const PSQL = process.env.PSQL_BIN || "/usr/lib/postgresql/16/bin/psql";
 const SOCKET = process.env.FFSA_VERIFY_SOCKET || "/tmp/ffsa-workbook-verify/socket";
@@ -241,6 +243,11 @@ try {
   assert(reloadedNotes.includes("Saved from the other session."), `reload notes were ${reloadedNotes}`);
   note("reload replaced the typed amount with the saved 190 and the other session's note");
 
+  const submitted = psql(`UPDATE public.budgets SET status = 'submitted' WHERE id = '${id}' RETURNING status;`);
+  assert(submitted === "submitted", `status update returned ${submitted}`);
+  await page.reload({ waitUntil: "networkidle0" });
+  const submittedText = await bodyText(page);
+  assert(submittedText.includes("This budget is submitted. Only finance can change it."), "submitted note missing");
   await clickExact(page, "Expense tracker");
   await clickExact(page, "Add an expense");
   await setValue(page, '[aria-label="Expense date"]', "2026-03-02");
@@ -248,62 +255,134 @@ try {
   await setValue(page, '[aria-label="Expense amount"]', "40.00");
   await clickExact(page, "Save");
   await waitIdle(page);
-  const withExpense = await readBudget(page, id);
-  assert(
-    withExpense.budget.expenses.some((row) => row.description === "Tea for the team" && row.amountCents === 4000),
-    `expense was not stored ${JSON.stringify(withExpense.budget?.expenses)}`
-  );
   await page.reload({ waitUntil: "networkidle0" });
   await clickExact(page, "Expense tracker");
-  await page.waitForFunction(
-    () => document.querySelector('[aria-label="What the expense was for"]')?.value === "Tea for the team"
-  );
-  const expenseAmount = await page.$eval('[aria-label="Expense amount"]', (el) => el.value);
-  assert(expenseAmount === "40.00", `expense amount ${expenseAmount}`);
-  note("expense row survived refresh");
-  await shot(page, "budget-expense-375", 375);
-
-  const submitted = psql(`UPDATE public.budgets SET status = 'submitted' WHERE id = '${id}' RETURNING status;`);
-  assert(submitted === "submitted", `status update returned ${submitted}`);
+  await page.waitForFunction(() => document.querySelector('[aria-label="Expense amount"]')?.value === "40.00");
+  await setValue(page, '[aria-label="Expense amount"]', "45.00");
+  await clickExact(page, "Save");
+  await waitIdle(page);
   await page.reload({ waitUntil: "networkidle0" });
-  const submittedText = await bodyText(page);
-  assert(submittedText.includes("This budget is submitted. Only finance can change it."), "submitted note missing");
-  note("submitted tracker note is on the sheet");
+  await clickExact(page, "Expense tracker");
+  await page.waitForFunction(() => document.querySelector('[aria-label="Expense amount"]')?.value === "45.00");
+  note("submitted tracker add and edit survived refresh");
   await shot(page, "budget-submitted-desktop", 1280);
   await shot(page, "budget-submitted-320", 320);
 
+  await clickExact(page, "Variable cost");
+  await setValue(page, '[aria-label="Amount for Food"]', "250.00");
   const approved = psql(`UPDATE public.budgets SET status = 'approved' WHERE id = '${id}' RETURNING status;`);
   assert(approved === "approved", `approve update returned ${approved}`);
-  await clickExact(page, "Notes");
-  await setValue(page, '[aria-label="Notes"]', "Still typed after approval");
   await clickExact(page, "Save");
-  await page.waitForFunction(
-    () =>
-      /approved budget|can't be changed|doesn't submit or approve/i.test(document.body.innerText) &&
-      !document.body.innerText.includes("Saving")
-  );
-  const forbiddenText = await bodyText(page);
-  const typedNote = await page.$eval('[aria-label="Notes"]', (el) => el.value);
-  assert(typedNote === "Still typed after approval", `forbidden save left ${typedNote}`);
-  note(`server refused the save: ${forbiddenText.split("\n").find((line) => /approved|submit or approve|can't/i.test(line)) || forbiddenText.slice(0, 240)}`);
-  const stillApproved = psql(`SELECT notes FROM public.budgets WHERE id = '${id}';`);
-  assert(stillApproved.includes("Saved from the other session."), `approved row notes changed: ${stillApproved}`);
-  assert(!stillApproved.includes("Still typed after approval"), "approved row stored the rejected note");
-  note("save after approval kept the typed note and did not write it");
+  await waitIdle(page);
+  const remoteText = await bodyText(page);
+  assert(!/doesn't submit or approve/i.test(remoteText), `save tried to change status: ${remoteText.slice(0, 400)}`);
+  assert(/Nothing you typed was overwritten/i.test(remoteText), `remote approval notice: ${remoteText.slice(0, 400)}`);
+  const typedAmount = await page.$eval('[aria-label="Amount for Food"]', (el) => el.value);
+  assert(typedAmount === "250.00", `remote approval dropped the typed amount ${typedAmount}`);
+  const storedLine = psql(`SELECT amount_cents FROM public.budget_lines WHERE budget_id = '${id}' AND name = 'Food';`);
+  assert(storedLine === "19000", `structural edit was stored as ${storedLine}`);
+  const storedTea = psql(`SELECT amount_cents FROM public.budget_expenses WHERE budget_id = '${id}' AND description = 'Tea for the team';`);
+  assert(storedTea === "4500", `submitted expense changed during the rejected line save: ${storedTea}`);
+  note("remote approval kept the typed line and did not change status from the sheet");
 
   await page.reload({ waitUntil: "networkidle0" });
   const lockedText = await bodyText(page);
-  assert(lockedText.includes("This budget is approved. It can't be changed until it is reopened."), "approved lock copy missing");
-  const disabled = await page.$eval("fieldset", (el) => el.disabled);
-  assert(disabled, "approved sheet fieldset is still editable");
+  assert(lockedText.includes("The expense tracker can still be updated."), "approved tracker copy missing");
+  await clickExact(page, "Variable cost");
+  const lineLocked = await page.$eval(
+    '[aria-label="Amount for Food"]',
+    (el) => el.matches(":disabled") && el.value === "190.00"
+  );
+  assert(lineLocked, "approved line amount is still editable");
+  await clickExact(page, "Expense tracker");
+  const trackerOpen = await page.$eval(
+    '[aria-label="Expense amount"]',
+    (el) => !el.matches(":disabled") && el.value === "45.00"
+  );
+  assert(trackerOpen, "approved tracker amount is locked or not 45.00");
+  await setValue(page, '[aria-label="Expense amount"]', "55.00");
+  await clickExact(page, "Save");
+  await waitIdle(page);
+  await page.reload({ waitUntil: "networkidle0" });
+  await clickExact(page, "Expense tracker");
+  await page.waitForFunction(() => document.querySelector('[aria-label="Expense amount"]')?.value === "55.00");
+  await clickExact(page, "Add an expense");
+  const expenseDates = await page.$$('[aria-label="Expense date"]');
+  const expenseNames = await page.$$('[aria-label="What the expense was for"]');
+  const expenseAmounts = await page.$$('[aria-label="Expense amount"]');
+  await expenseDates[1].evaluate((el) => {
+    const desc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+    desc.set.call(el, "2026-03-03");
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expenseNames[1].evaluate((el) => {
+    const desc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+    desc.set.call(el, "Bread");
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expenseAmounts[1].evaluate((el) => {
+    const desc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+    desc.set.call(el, "20.00");
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await clickExact(page, "Save");
+  await waitIdle(page);
+  await page.reload({ waitUntil: "networkidle0" });
+  await clickExact(page, "Expense tracker");
+  await page.waitForFunction(() => document.body.innerText.length >= 0 && document.querySelectorAll('[aria-label="What the expense was for"]').length === 2);
+  const beforeRemove = await page.$$eval('[aria-label="What the expense was for"]', (els) => els.map((el) => el.value));
+  assert(beforeRemove.includes("Tea for the team") && beforeRemove.includes("Bread"), `approved rows ${beforeRemove.join(", ")}`);
+  await page.evaluate(() => {
+    const rows = [...document.querySelectorAll("tr")];
+    const tea = rows.find((row) => row.querySelector('[aria-label="What the expense was for"]')?.value === "Tea for the team");
+    tea.querySelector("button").click();
+  });
+  await clickExact(page, "Save");
+  await waitIdle(page);
+  await page.reload({ waitUntil: "networkidle0" });
+  await clickExact(page, "Expense tracker");
+  await page.waitForFunction(() => document.querySelectorAll('[aria-label="What the expense was for"]').length === 1);
+  const left = await page.$eval('[aria-label="What the expense was for"]', (el) => el.value);
+  assert(left === "Bread", `remove left ${left}`);
+  const lineAfter = psql(`SELECT amount_cents FROM public.budget_lines WHERE budget_id = '${id}' AND name = 'Food';`);
+  assert(lineAfter === "19000", `approved tracker save changed the line to ${lineAfter}`);
+  const fresh = await readBudget(page, id);
+  const structural = await fetch(`${base}/api/finance/budgets/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Cookie: `ffsa-harness-sub=${FINANCE}` },
+    body: JSON.stringify({
+      updatedAt: fresh.budget.updatedAt,
+      lines: fresh.budget.lines.map((line) => ({
+        id: line.id,
+        kind: line.kind,
+        name: line.name,
+        amountCents: line.name === "Food" ? 5 : line.amountCents,
+        frequency: line.frequency,
+        multiplier: line.multiplier,
+      })),
+      expenses: fresh.budget.expenses.map((row) => ({
+        id: row.id,
+        lineId: row.lineId,
+        expenseDate: row.expenseDate,
+        description: row.description,
+        amountCents: row.amountCents,
+      })),
+    }),
+  });
+  assert(structural.status === 403, `fresh structural save ${structural.status} ${JSON.stringify(await structural.clone().json()).slice(0, 240)}`);
+  const lineStill = psql(`SELECT amount_cents FROM public.budget_lines WHERE budget_id = '${id}' AND name = 'Food';`);
+  assert(lineStill === "19000", `fresh structural save stored ${lineStill}`);
+  note("approved tracker edit, add, and remove survived refresh; a current-revision line change was refused");
   await shot(page, "budget-approved-desktop", 1280);
   await shot(page, "budget-approved-320", 320);
-  note("approved sheet is locked");
 
-  const leaderPage = await browser.newPage();
-  await leaderPage.setCookie({ name: "ffsa-harness-sub", value: LEADER, domain: "127.0.0.1", path: "/" });
-  await leaderPage.goto(`${base}/finance/budgets/${id}`, { waitUntil: "domcontentloaded" });
-  await new Promise((resolve) => setTimeout(resolve, 1000));
+  const leaderContext = await browser.createBrowserContext();
+  const leaderPage = await leaderContext.newPage();
+  await leaderPage.setCookie({ name: "ffsa-harness-sub", value: LEADER, url: base });
+  await leaderPage.goto(`${base}/finance/budgets/${id}`, { waitUntil: "networkidle0" });
   const leaderUrl = leaderPage.url();
   let leaderText = "";
   try {
@@ -313,7 +392,10 @@ try {
   }
   writeFileSync("/tmp/ffsa-ui-budget-leader.txt", `${leaderUrl}\n${leaderText.slice(0, 1500)}`);
   assert(new URL(leaderUrl).pathname === "/finance", `leader stayed on ${leaderUrl}`);
-  note(`leader landed on ${leaderUrl}`);
+  const leaderRoles = psql(
+    `SELECT coalesce(string_agg(r.name, ','), '(none)') FROM public.user_roles ur JOIN public.roles r ON r.id = ur.role_id WHERE ur.user_id = '${LEADER}';`
+  );
+  note(`leader page gate redirected to /finance. user_roles=${leaderRoles}. This is not an owning-leader sheet pass.`);
   const currentRes = await fetch(`${base}/api/finance/budgets/${id}`, {
     headers: { Cookie: `ffsa-harness-sub=${FINANCE}` },
   });
@@ -331,7 +413,48 @@ try {
   const unchanged = psql(`SELECT notes FROM public.budgets WHERE id = '${id}';`);
   assert(unchanged.includes("Saved from the other session."), `leader write changed notes: ${unchanged}`);
   assert(!unchanged.includes("leader should not write"), "leader note was stored");
-  note(`leader write rejected ${leaderWrite.status} and the sheet was not changed`);
+  note(`non-member leader write on the finance-created budget returned ${leaderWrite.status}; notes unchanged`);
+
+  const leaderLine = crypto.randomUUID();
+  const leaderName = `Leader own ${Date.now().toString(36)}`;
+  const leaderCreate = await fetch(`${base}/api/finance/budgets`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: `ffsa-harness-sub=${LEADER}` },
+    body: JSON.stringify({
+      name: leaderName,
+      ownerKind: "staff_ministry",
+      ownerId: MINISTRY,
+      periodId: PERIOD,
+      lines: [{ id: leaderLine, kind: "fixed", name: "Van", amountCents: 100, multiplier: 1 }],
+    }),
+  });
+  const leaderCreated = await leaderCreate.json();
+  assert(leaderCreate.status === 201, `owning leader create ${leaderCreate.status} ${JSON.stringify(leaderCreated).slice(0, 300)}`);
+  const leaderId = leaderCreated.budget.id;
+  const leaderSave = await fetch(`${base}/api/finance/budgets/${leaderId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Cookie: `ffsa-harness-sub=${LEADER}` },
+    body: JSON.stringify({
+      updatedAt: leaderCreated.budget.updatedAt,
+      lines: [{ id: leaderLine, kind: "fixed", name: "Van", amountCents: 250, multiplier: 1 }],
+    }),
+  });
+  const leaderSaved = await leaderSave.json();
+  assert(leaderSave.status === 200, `owning leader save ${leaderSave.status} ${JSON.stringify(leaderSaved).slice(0, 300)}`);
+  assert(leaderSaved.budget.lines[0].amountCents === 250, "owning leader save did not store 250");
+  const leaderList = await fetch(
+    `${base}/api/finance/budgets?ownerKind=staff_ministry&ownerId=${MINISTRY}`,
+    { headers: { Cookie: `ffsa-harness-sub=${LEADER}` } }
+  );
+  const leaderListed = await leaderList.json();
+  assert(leaderList.status === 200 && leaderListed.budgets.some((row) => row.id === leaderId), "owning leader list missed the budget");
+  const outsiderWrite = await fetch(`${base}/api/finance/budgets/${leaderId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Cookie: `ffsa-harness-sub=${OUTSIDER}` },
+    body: JSON.stringify({ updatedAt: leaderSaved.budget.updatedAt, notes: "outsider" }),
+  });
+  assert(outsiderWrite.status === 404 || outsiderWrite.status === 403, `outsider write ${outsiderWrite.status}`);
+  note(`API owning-leader create/load/save/list returned 201/200. Outsider write ${outsiderWrite.status}. The sheet page still redirects this leader.`);
 
   writeFileSync(
     "/tmp/ffsa-workbook-verify/ui-drive-result.txt",
