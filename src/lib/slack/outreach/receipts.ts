@@ -60,7 +60,9 @@ import {
 } from "./pull-logic";
 import { xeroResultSentence } from "@/lib/finance/xero-spend";
 import { writeConfirmedSpend } from "@/lib/finance/record-xero-spend";
+import { isMissingRelation } from "@/lib/finance/budget-actuals";
 import {
+  isActiveSouthAfricaOrg,
   orgForReceiptCurrency,
   selectTeamBudget,
   xeroBook,
@@ -211,8 +213,9 @@ function onePeriod(
 /**
  * Lines from the one budget this receipt belongs to. Look up by
  * outreach_team_id, then the fiscal period. Only a ZAR workbook is a
- * candidate. A US period or a USD currency is not selected, and leaders
- * do not read finance_orgs. Several budgets for the team are not merged.
+ * candidate. The service role reads finance_orgs and keeps the row only
+ * when that org is the active FFSA NPC in ZAR. A matching org id and a
+ * ZAR currency are not enough. Several budgets for the team are not merged.
  */
 async function linesForReceipt(
   admin: Admin,
@@ -250,14 +253,28 @@ async function linesForReceipt(
   if (error || !data) return none;
 
   const rows = data as BudgetQueryRow[];
+  const orgIds = [...new Set(rows.map((row) => row.org_id).filter((id): id is string => Boolean(id)))];
+  const allowedOrgs = new Set<string>();
+  if (orgIds.length) {
+    const orgRead = await admin.from("finance_orgs").select("id, key, is_active, record_currency").in("id", orgIds);
+    if (orgRead.error) {
+      if (!isMissingRelation(orgRead.error)) {
+        console.error("[slack/outreach] finance org read failed", orgRead.error.message ?? orgRead.error);
+      }
+      return none;
+    }
+    for (const org of (orgRead.data ?? []) as { id: string; key?: string | null; is_active?: boolean | null; record_currency?: string | null }[]) {
+      if (org.id && isActiveSouthAfricaOrg(org)) allowedOrgs.add(org.id);
+    }
+  }
   const candidates: TeamBudgetRow[] = rows.flatMap((row) => {
     const period = onePeriod(row.fiscal_periods);
-    // The period's org and the budget's org are the same composite key.
-    // Workbooks are ZAR. A USD book is not a candidate, and finance_orgs is not read.
+    // Period and budget share the composite key, and the org itself is the active NPC rand org.
+    if (!row.org_id || !allowedOrgs.has(row.org_id)) return [];
     if (row.org_id && period?.org_id && row.org_id !== period.org_id) return [];
     const currency = (row.currency ?? "").toUpperCase();
-    if (currency === "USD") return [];
-    const orgKey: BudgetOrgKey | null = currency === "ZAR" ? "npc" : null;
+    if (currency !== "ZAR") return [];
+    const orgKey: BudgetOrgKey | null = "npc";
     return [{
       id: row.id,
       name: row.name,

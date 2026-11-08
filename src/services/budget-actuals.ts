@@ -12,6 +12,7 @@ import {
   type ActualLineInput,
   type XeroActualSpend,
 } from "@/lib/finance/budget-actuals";
+import { isActiveSouthAfricaOrg } from "@/lib/finance/team-budget-pick";
 import { cachedXeroRead } from "@/lib/finance/xero-spend-cache";
 import { listXeroSpendTransactions, type XeroBankTransactionPage, type XeroRegion } from "@/services/xero";
 
@@ -78,7 +79,7 @@ async function otherBudgetLines(admin: Client, budgetId: string, region: XeroReg
   const { data, error } = await admin
     .from("budgets")
     .select(
-      `id,
+      `id, org_id, currency,
        budget_lines!budget_lines_budget_id_fkey(
          id, name, archived_at,
          budget_line_coding(org_region, account_id, tracking_option_1_id, tracking_option_2_id,
@@ -92,8 +93,9 @@ async function otherBudgetLines(admin: Client, budgetId: string, region: XeroReg
     .is("archived_at", null);
   if (error || !Array.isArray(data)) return [];
 
-  const out: ActualLineInput[] = [];
-  for (const budget of data as {
+  const siblingRows = data as {
+    org_id?: string | null;
+    currency?: string | null;
     budget_lines?: {
       id: string;
       name: string;
@@ -105,7 +107,21 @@ async function otherBudgetLines(admin: Client, budgetId: string, region: XeroReg
         opt2?: { name?: string; xero_tracking_categories?: { name?: string } | { name?: string }[] | null } | null;
       }[];
     }[];
-  }[]) {
+  }[];
+  const orgIds = [...new Set(siblingRows.map((row) => row.org_id).filter((id): id is string => Boolean(id)))];
+  const orgRead = orgIds.length
+    ? await admin.from("finance_orgs").select("id, key, is_active, record_currency").in("id", orgIds)
+    : { data: [], error: null };
+  if (orgRead.error) return [];
+  const allowed = new Set(
+    ((orgRead.data ?? []) as { id: string; key?: string | null; is_active?: boolean | null; record_currency?: string | null }[])
+      .filter((org) => org.id && isActiveSouthAfricaOrg(org))
+      .map((org) => org.id)
+  );
+
+  const out: ActualLineInput[] = [];
+  for (const budget of siblingRows) {
+    if ((budget.currency ?? "").toUpperCase() !== "ZAR" || !budget.org_id || !allowed.has(budget.org_id)) continue;
     for (const line of budget.budget_lines ?? []) {
       if (line.archived_at) continue;
       const coding = (line.budget_line_coding ?? []).find((row) => row.org_region === region);
@@ -131,7 +147,7 @@ export async function getBudgetActuals(
   const { data, error } = await supabase
     .from("budgets")
     .select(
-      `id, name, currency, archived_at,
+      `id, name, currency, org_id, archived_at,
        fiscal_periods!budgets_period_org_fkey(id, org_id, label, kind, start_date, end_date),
        budget_lines!budget_lines_budget_id_fkey(
          id, name, line_total_cents, archived_at,
@@ -158,6 +174,27 @@ export async function getBudgetActuals(
     return {
       status: 409,
       body: { error: "This budget is not a South Africa rand workbook, so its Xero actuals are not read." },
+    };
+  }
+  const orgRead = data.org_id
+    ? await admin.from("finance_orgs").select("key, is_active, record_currency").eq("id", data.org_id).maybeSingle()
+    : { data: null, error: null };
+  if (orgRead.error) {
+    if (isMissingRelation(orgRead.error)) {
+      return {
+        status: 503,
+        body: {
+          error: "Finance organisations are not readable, so this budget's actuals stay unread.",
+          code: "schema_not_applied",
+        },
+      };
+    }
+    return { status: 500, body: { error: orgRead.error.message ?? "Couldn't read that budget's organisation" } };
+  }
+  if (!isActiveSouthAfricaOrg(orgRead.data)) {
+    return {
+      status: 409,
+      body: { error: "This budget is not on the active South Africa organisation, so its Xero actuals are not read." },
     };
   }
 

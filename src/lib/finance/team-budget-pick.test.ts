@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { orgForReceiptCurrency, selectTeamBudget, xeroBook, type TeamBudgetRow } from "./team-budget-pick";
+import { isActiveSouthAfricaOrg, orgForReceiptCurrency, selectTeamBudget, xeroBook, type TeamBudgetRow } from "./team-budget-pick";
 
 const line = (id: string, name: string) => ({ id, name });
 
@@ -28,6 +28,16 @@ const usa2026 = budget({
   orgKey: "usa",
   currency: "USD",
   lines: [line("l-usa", "Food")],
+});
+
+describe("isActiveSouthAfricaOrg", () => {
+  it("accepts only the active FFSA NPC rand org", () => {
+    expect(isActiveSouthAfricaOrg({ key: "npc", is_active: true, record_currency: "ZAR" })).toBe(true);
+    expect(isActiveSouthAfricaOrg({ key: "npc", is_active: false, record_currency: "ZAR" })).toBe(false);
+    expect(isActiveSouthAfricaOrg({ key: "usa", is_active: true, record_currency: "ZAR" })).toBe(false);
+    expect(isActiveSouthAfricaOrg({ key: "npc", is_active: true, record_currency: "USD" })).toBe(false);
+    expect(isActiveSouthAfricaOrg(null)).toBe(false);
+  });
 });
 
 describe("selectTeamBudget", () => {

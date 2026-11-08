@@ -39,6 +39,7 @@ function world(access: PermissionWorld, perms: string[] = [], user: { id: string
 }
 
 const NO_ROLES: PermissionWorld = { roles: [], direct: [] };
+const SA_ORG = { id: "org-npc", key: "npc", is_active: true, record_currency: "ZAR" };
 const call = (id = "b1") => GET(new Request("http://x/api/finance/budgets/b1/actuals"), { params: Promise.resolve({ id }) });
 
 describe("GET /api/finance/budgets/[id]/actuals", () => {
@@ -84,12 +85,14 @@ describe("GET /api/finance/budgets/[id]/actuals", () => {
       ],
     };
     world(NO_ROLES, ["finance.view"], { id: "me" }, (q) => {
+      if (q.table === "finance_orgs") return { data: SA_ORG };
       if (q.table === "budgets") {
         return {
           data: {
             id: "b1",
             name: "Botswana",
             currency: "ZAR",
+            org_id: "org-npc",
             archived_at: null,
             fiscal_periods: { start_date: "2026-01-01", end_date: "2026-12-31" },
             budget_lines: [
@@ -144,14 +147,46 @@ describe("GET /api/finance/budgets/[id]/actuals", () => {
     expect(JSON.stringify(state.fake.queries.map((q) => q.table))).not.toContain("budget_expenses");
   });
 
+  it("does not read Xero when the rand budget's org is inactive or not NPC", async () => {
+    for (const org of [
+      { id: "org-npc", key: "npc", is_active: false, record_currency: "ZAR" },
+      { id: "org-usa", key: "usa", is_active: true, record_currency: "ZAR" },
+    ]) {
+      state.xeroCalls = 0;
+      world(NO_ROLES, [], { id: "leader" }, (q) => {
+        if (q.table === "finance_orgs") return { data: org };
+        if (q.table === "budgets" && q.single) {
+          return {
+            data: {
+              id: "b1",
+              name: "Wrong org",
+              currency: "ZAR",
+              org_id: org.id,
+              archived_at: null,
+              fiscal_periods: { start_date: "2026-01-01", end_date: "2026-12-31" },
+              budget_lines: [],
+            },
+          };
+        }
+        if (q.table === "budgets") return { data: [] };
+        return undefined;
+      });
+      const res = await call();
+      expect(res.status).toBe(409);
+      expect(state.xeroCalls).toBe(0);
+    }
+  });
+
   it("lets someone read actuals for a budget they can already see, without finance.view", async () => {
     world(NO_ROLES, [], { id: "leader" }, (q) => {
+      if (q.table === "finance_orgs") return { data: SA_ORG };
       if (q.table === "budgets" && q.single) {
         return {
           data: {
             id: "b1",
             name: "Botswana",
             currency: "ZAR",
+            org_id: "org-npc",
             archived_at: null,
             fiscal_periods: { start_date: "2026-01-01", end_date: "2026-12-31" },
             budget_lines: [],
@@ -174,12 +209,14 @@ describe("GET /api/finance/budgets/[id]/actuals", () => {
     state.admin = createFakeSupabase({
       user: { id: "finance" },
       resolve: (q: FakeQuery) => {
+        if (q.table === "finance_orgs") return { data: SA_ORG };
         if (q.table === "budgets" && q.single) {
           return {
             data: {
               id: "b1",
               name: "Hidden from the member",
               currency: "ZAR",
+              org_id: "org-npc",
               archived_at: null,
               fiscal_periods: { start_date: "2026-01-01", end_date: "2026-12-31" },
               budget_lines: [],

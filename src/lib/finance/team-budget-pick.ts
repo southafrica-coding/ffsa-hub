@@ -38,6 +38,17 @@ export type BudgetSelection =
   | { ok: true; budget: TeamBudgetRow }
   | { ok: false; reason: "none" | "ambiguous" };
 
+/**
+ * The same gate as #475's assert_south_africa_budget_org: finance_orgs.key
+ * npc, is_active, and record_currency ZAR. A ZAR budget currency and a
+ * matching period id do not prove this. An inactive NPC row fails.
+ */
+export function isActiveSouthAfricaOrg(
+  org: { key?: string | null; is_active?: boolean | null; record_currency?: string | null } | null | undefined
+): boolean {
+  return org?.key === "npc" && org.is_active === true && (org.record_currency ?? "").toUpperCase() === "ZAR";
+}
+
 /** Workbooks are the SA / ZAR org. The slip currency does not choose a US book. */
 export function orgForReceiptCurrency(localCurrency: string | null | undefined): BudgetOrgKey {
   void localCurrency;

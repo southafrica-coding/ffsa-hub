@@ -12,6 +12,7 @@
 
 import { xeroSpendLogRow } from "@/lib/finance/budget-log-rows";
 import { isMissingRelation } from "@/lib/finance/budget-actuals";
+import { isActiveSouthAfricaOrg } from "@/lib/finance/team-budget-pick";
 import { xeroPreviewWriteBlock } from "@/lib/finance/xero-preview-guard";
 import { decideXeroSpend, spendBankAccountCode, type XeroTracking } from "@/lib/finance/xero-spend";
 import { createXeroSpendMoney, type XeroRegion } from "@/services/xero";
@@ -147,6 +148,17 @@ async function saveXeroOnDraft(
   return { ok: true };
 }
 
+/** Active FFSA NPC in ZAR, or the budget cannot be the parent of a spend. */
+async function budgetOrgState(admin: Admin, budgetId: string): Promise<"yes" | "no" | "missing"> {
+  const budget = await admin.from("budgets").select("org_id, currency").eq("id", budgetId).maybeSingle();
+  if (budget.error) return isMissingRelation(budget.error) ? "missing" : "no";
+  const orgId = budget.data?.org_id as string | null | undefined;
+  if (!orgId || (budget.data?.currency ?? "").toUpperCase() !== "ZAR") return "no";
+  const org = await admin.from("finance_orgs").select("key, is_active, record_currency").eq("id", orgId).maybeSingle();
+  if (org.error) return isMissingRelation(org.error) ? "missing" : "no";
+  return isActiveSouthAfricaOrg(org.data) ? "yes" : "no";
+}
+
 /** The receipt/Xero log (#513). Not budget_expenses. One row per expense or draft. */
 async function rememberXeroSpend(
   admin: Admin,
@@ -219,6 +231,21 @@ export async function writeConfirmedSpend(
   if (input.expenseId) {
     const already = await xeroIdForExpense(admin, input.expenseId);
     if (already) return { status: "already_written", bankTransactionId: already };
+  }
+
+  if (input.budgetId) {
+    const org = await budgetOrgState(admin, input.budgetId);
+    if (org !== "yes") {
+      const status = org === "missing" ? "schema_not_applied" : "org_not_south_africa";
+      const saved = await saveXeroOnDraft(admin, input.draftId, {
+        status,
+        bank_transaction_id: null,
+        error: null,
+        at: new Date().toISOString(),
+      });
+      if (!saved.ok) console.error("[xero] draft did not store the org refusal", input.draftId, saved.message);
+      return { status, bankTransactionId: null };
+    }
   }
 
   // Confirmed spends use the ZA bank path. A stored "usa" proposal does not switch region.

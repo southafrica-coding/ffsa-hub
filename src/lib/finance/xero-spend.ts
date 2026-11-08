@@ -119,6 +119,8 @@ export function xeroResultSentence(status: string): string {
       return "Not sent to Xero. Cash from a withdrawal is already out of the bank, so this purchase is not posted again.";
     case "outside_period":
       return "Not sent to Xero — the date is outside that budget's period.";
+    case "org_not_south_africa":
+      return "Not sent to Xero — that budget is not on the active South Africa organisation.";
     case "unapproved_budget":
       return "Not sent to Xero — that budget is not approved yet.";
     case "preview_blocked":
