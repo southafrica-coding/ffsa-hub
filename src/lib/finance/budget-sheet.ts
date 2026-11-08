@@ -426,9 +426,14 @@ export function scopeGaps(draft: BudgetSheetDraft, ctx: ScopeContext = { npcId: 
   const gaps: ScopeGap[] = [];
   if (!draft.name.trim()) gaps.push("name");
   if (!draft.ownerKind || !draft.ownerId) gaps.push("owner");
-  if (!ctx.npcId) gaps.push("organisation");
-  const period = ctx.periods.find((row) => row.id === draft.periodId && row.org_id === ctx.npcId);
-  if (!period || draft.org_id !== period.org_id) gaps.push("period");
+  if (!ctx.npcId && !draft.org_id) gaps.push("organisation");
+  const period = ctx.periods.find((row) => {
+    if (row.id !== draft.periodId) return false;
+    if (ctx.npcId && row.org_id !== ctx.npcId) return false;
+    if (draft.org_id && row.org_id !== draft.org_id) return false;
+    return true;
+  });
+  if (!period || (draft.org_id && period.org_id !== draft.org_id)) gaps.push("period");
   return gaps;
 }
 

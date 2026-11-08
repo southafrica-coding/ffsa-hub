@@ -7,6 +7,7 @@
  * they are not on this branch.
  */
 
+import type { BudgetGate } from "@/lib/finance/budget-access";
 import { listFinanceOrgs } from "@/lib/finance/orgs";
 import {
   currencyFromRecord,
@@ -93,7 +94,7 @@ function rows<T>(result: { data: T[] | null; error: unknown }): T[] {
 
 const PERIOD_KINDS = new Set(["year", "term", "event"]);
 
-export async function loadBudgetScopeOptions(supabase: Client): Promise<BudgetScopeOptions> {
+export async function loadBudgetScopeOptions(supabase: Client, gate: BudgetGate): Promise<BudgetScopeOptions> {
   const [ministries, subcategories, programs, events, orgs, teams] = await Promise.all([
     listActiveMinistriesForLinking(supabase),
     supabase
@@ -115,7 +116,12 @@ export async function loadBudgetScopeOptions(supabase: Client): Promise<BudgetSc
     ministryName.set(ministry.id, ministry.name);
   }
 
+  const lead = new Set(gate.leadMinistryIds);
+  const ministryRows = (rows(ministries) as { id: string; name: string }[]).filter(
+    (ministry) => gate.editAll || lead.has(ministry.id)
+  );
   const subOptions = (rows(subcategories) as { id: string; name: string; staff_ministry_id: string }[])
+    .filter((sub) => gate.editAll || lead.has(sub.staff_ministry_id))
     .map((sub) => {
       const parent = ministryName.get(sub.staff_ministry_id);
       return {
@@ -127,23 +133,31 @@ export async function loadBudgetScopeOptions(supabase: Client): Promise<BudgetSc
 
   return {
     owners: {
-      staff_ministry: (rows(ministries) as { id: string; name: string }[]).map((ministry) => ({
+      staff_ministry: ministryRows.map((ministry) => ({
         id: ministry.id,
         label: ministry.name,
       })),
       ministry_subcategory: subOptions,
-      program: (rows(programs) as { id: string; name: string; code: string | null }[]).map((program) => ({
-        id: program.id,
-        label: program.code ? `${program.name} (${program.code})` : program.name,
-      })),
-      event: (rows(events) as { id: string; title: string; start_date: string | null }[]).map((event) => ({
-        id: event.id,
-        label: event.start_date ? `${event.title} · ${event.start_date}` : event.title,
-      })),
-      outreach_team: (rows(teams) as { id: string; team_name: string; start_date: string | null }[]).map((team) => ({
-        id: team.id,
-        label: team.start_date ? `${team.team_name} · ${team.start_date}` : team.team_name,
-      })),
+      // can_create_budget_for allows a program, event, or outreach team only
+      // for someone who edits every budget. A ministry lead is not that.
+      program: gate.editAll
+        ? (rows(programs) as { id: string; name: string; code: string | null }[]).map((program) => ({
+            id: program.id,
+            label: program.code ? `${program.name} (${program.code})` : program.name,
+          }))
+        : [],
+      event: gate.editAll
+        ? (rows(events) as { id: string; title: string; start_date: string | null }[]).map((event) => ({
+            id: event.id,
+            label: event.start_date ? `${event.title} · ${event.start_date}` : event.title,
+          }))
+        : [],
+      outreach_team: gate.editAll
+        ? (rows(teams) as { id: string; team_name: string; start_date: string | null }[]).map((team) => ({
+            id: team.id,
+            label: team.start_date ? `${team.team_name} · ${team.start_date}` : team.team_name,
+          }))
+        : [],
     },
     orgs: (() => {
       const mapped = (rows(orgs) as {

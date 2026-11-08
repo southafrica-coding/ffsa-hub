@@ -74,6 +74,7 @@ export function BudgetSheet({
   const [phase, setPhase] = useState<"loading" | "ready" | "missing">(budgetId ? "loading" : "ready");
   const [savedList, setSavedList] = useState<BudgetListItem[] | null>(null);
   const [listNote, setListNote] = useState<string | null>(null);
+  const [loadedPeriod, setLoadedPeriod] = useState<CanonicalBudget["period"]>(null);
 
   const driverValue = parseDriver(draft.driverValue);
   const variable = useMemo(() => rollup(draft.lines, "variable", driverValue), [draft.lines, driverValue]);
@@ -83,12 +84,15 @@ export function BudgetSheet({
     options.orgs.find((item) => item.key === "npc" && item.currency === "ZAR" && !item.inactive) ?? null;
   const periods = options.periods.filter((period) => npc !== null && period.org_id === npc.id);
   const selectedPeriod = periods.find((period) => period.id === draft.periodId) ?? null;
-  const currency = npc ? "ZAR" : null;
-  const gapPeriods =
-    selectedPeriod || !draft.periodId || !npc || draft.org_id !== npc.id
-      ? periods
-      : [...periods, { id: draft.periodId, org_id: draft.org_id }];
-  const gaps = scopeGaps(draft, { npcId: npc?.id ?? null, periods: gapPeriods });
+  const currency = npc || (stamp && draft.org_id) ? "ZAR" : null;
+  const gapPeriods = selectedPeriod
+    ? periods
+    : loadedPeriod && draft.periodId === loadedPeriod.id && draft.org_id
+      ? [{ id: loadedPeriod.id, org_id: draft.org_id, label: loadedPeriod.label, kind: loadedPeriod.kind, start: loadedPeriod.start, end: loadedPeriod.end, current: false }]
+      : !draft.periodId || !npc || draft.org_id !== npc.id
+        ? periods
+        : [...periods, { id: draft.periodId, org_id: draft.org_id }];
+  const gaps = scopeGaps(draft, { npcId: npc?.id ?? (draft.org_id || null), periods: gapPeriods });
   const owners = draft.ownerKind ? options.owners[draft.ownerKind] : [];
   const owner = owners.find((item) => item.id === draft.ownerId) ?? null;
 
@@ -104,6 +108,7 @@ export function BudgetSheet({
         if (outcome.kind === "saved") {
           const next = draftFromCanonical(outcome.budget, "");
           setDraft(next);
+          setLoadedPeriod(outcome.budget.period);
           setBaseline(sheetSignature(next));
           setStamp({ id: outcome.budget.id, updatedAt: outcome.budget.updatedAt, status: outcome.budget.status });
           setPhase("ready");
@@ -161,6 +166,7 @@ export function BudgetSheet({
   function adopt(budget: CanonicalBudget, purpose: string) {
     const next = draftFromCanonical(budget, purpose);
     setDraft(next);
+    setLoadedPeriod(budget.period);
     setBaseline(sheetSignature(next));
     setStamp({ id: budget.id, updatedAt: budget.updatedAt, status: budget.status });
   }
@@ -379,20 +385,22 @@ export function BudgetSheet({
         </Field>
         <div className="bg-white px-3 py-3">
           <div className="mono-label">Organisation</div>
-          <div className="mt-2 text-sm">{npc ? npc.name : "—"}</div>
+          <div className="mt-2 text-sm">{npc ? npc.name : stamp && draft.org_id ? "South Africa" : "—"}</div>
           <p className="mt-2 text-[12px] leading-snug text-[color:var(--text-secondary)]">
             {npc
               ? "FFSA NPC. South Africa only. The organisation comes from the period."
-              : options.orgsReadable
-                ? "FFSA NPC is not on this Hub yet. This budget cannot be started."
-                : "FFSA NPC could not be read. This budget cannot be started."}
+              : stamp && draft.org_id
+                ? "South Africa, in rand. This account cannot read the organisation list. The saved period is the one this budget uses."
+                : options.orgsReadable
+                  ? "The South Africa organisation is not visible on this account, so a new budget cannot pick a period here."
+                  : "FFSA NPC could not be read. This budget cannot be started."}
           </p>
         </div>
         <div className="bg-white px-3 py-3">
           <div className="mono-label">Currency</div>
           <div className="numeral mt-2 text-[28px] leading-none">{currency ?? "—"}</div>
           <p className="mt-2 text-[12px] leading-snug text-[color:var(--text-secondary)]">
-            {npc ? "Rand. Locked to FFSA NPC." : "Rand, once FFSA NPC is on the Hub."}
+            {npc ? "Rand. Locked to FFSA NPC." : currency ? "Rand. Locked to the South Africa organisation." : "Rand, once that organisation is visible."}
           </p>
         </div>
         <div className="bg-white px-3 py-3 xl:col-span-3">
@@ -420,10 +428,17 @@ export function BudgetSheet({
                   </option>
                 ))}
               </select>
+            ) : loadedPeriod && draft.periodId === loadedPeriod.id ? (
+              <p className="mt-2 text-sm">
+                {(loadedPeriod.kind === "year" || loadedPeriod.kind === "term" || loadedPeriod.kind === "event"
+                  ? PERIOD_KIND_LABEL[loadedPeriod.kind]
+                  : loadedPeriod.kind)}{" "}
+                · {loadedPeriod.label} · {loadedPeriod.start} – {loadedPeriod.end}
+              </p>
             ) : (
               <p className="mt-2 text-[13px] leading-snug text-amber">
                 {!npc
-                  ? "A period is only offered for FFSA NPC."
+                  ? "A period is only offered when the South Africa organisation is visible."
                   : options.periodsReadable
                     ? "FFSA NPC has no periods yet. A budget cannot invent one."
                     : "Periods could not be read. A budget uses a period that already exists."}

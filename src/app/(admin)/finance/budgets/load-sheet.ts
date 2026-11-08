@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getFinanceHubAccess } from "@/lib/finance-access";
+import { loadBudgetGate } from "@/lib/finance/budget-access";
 import { loadBudgetScopeOptions, type BudgetScopeOptions } from "@/lib/finance/budget-scope";
 import { canReadFinanceXero } from "@/lib/finance/orgs";
 
@@ -11,11 +11,11 @@ export async function loadBudgetSheet(): Promise<{ options: BudgetScopeOptions; 
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const access = await getFinanceHubAccess(supabase, user.id);
-  if (!access.fullFinance && !access.financeOffice) redirect("/finance");
+  const gate = await loadBudgetGate(supabase);
+  if (!gate.canOpen) redirect("/finance");
 
   const [options, canReadXero] = await Promise.all([
-    loadBudgetScopeOptions(supabase),
+    loadBudgetScopeOptions(supabase, gate),
     canReadFinanceXero(supabase, user.id),
   ]);
   return { options, canReadXero };

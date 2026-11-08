@@ -9,9 +9,16 @@ import puppeteer from "/tmp/puppeteer-check/node_modules/puppeteer-core/lib/pupp
 
 const base = process.argv[2] || "http://127.0.0.1:3010";
 const FINANCE = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1";
+const APPROVER = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3";
 const OUTSIDER = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4";
 const LEADER = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5";
+const OTHER_LEADER = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa6";
+const PENDING_LEADER = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa7";
+const DEACTIVATED = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa8";
+const OFFICE = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa9";
 const MINISTRY = "cccccccc-cccc-4ccc-8ccc-ccccccccccc1";
+const OTHER_MINISTRY = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1";
+const US_PERIOD = "dddddddd-dddd-4ddd-8ddd-ddddddddddd2";
 const PERIOD = "dddddddd-dddd-4ddd-8ddd-ddddddddddd1";
 const PSQL = process.env.PSQL_BIN || "/usr/lib/postgresql/16/bin/psql";
 const SOCKET = process.env.FFSA_VERIFY_SOCKET || "/tmp/ffsa-workbook-verify/socket";
@@ -38,6 +45,104 @@ function psql(sql) {
 
 function assert(cond, message) {
   if (!cond) throw new Error(message);
+}
+
+function prepareAccounts() {
+  psql(`
+    ALTER TABLE public.users
+      ADD COLUMN IF NOT EXISTS first_name text,
+      ADD COLUMN IF NOT EXISTS last_name text,
+      ADD COLUMN IF NOT EXISTS gender text,
+      ADD COLUMN IF NOT EXISTS marital_status text,
+      ADD COLUMN IF NOT EXISTS date_of_birth date,
+      ADD COLUMN IF NOT EXISTS nationality text,
+      ADD COLUMN IF NOT EXISTS phone text,
+      ADD COLUMN IF NOT EXISTS country text,
+      ADD COLUMN IF NOT EXISTS address_line_1 text,
+      ADD COLUMN IF NOT EXISTS city text,
+      ADD COLUMN IF NOT EXISTS province text,
+      ADD COLUMN IF NOT EXISTS postal_code text,
+      ADD COLUMN IF NOT EXISTS emergency_contact_name text,
+      ADD COLUMN IF NOT EXISTS emergency_contact_phone text,
+      ADD COLUMN IF NOT EXISTS emergency_contact_relationship text,
+      ADD COLUMN IF NOT EXISTS health_insurance_provider text,
+      ADD COLUMN IF NOT EXISTS health_insurance_policy_number text,
+      ADD COLUMN IF NOT EXISTS health_insurance_expiry_date date,
+      ADD COLUMN IF NOT EXISTS is_international boolean DEFAULT false,
+      ADD COLUMN IF NOT EXISTS passport_country text,
+      ADD COLUMN IF NOT EXISTS passport_number text,
+      ADD COLUMN IF NOT EXISTS passport_expiry_date date;
+    UPDATE public.users SET is_active = false WHERE id = '${DEACTIVATED}';
+    UPDATE public.users SET
+      first_name = 'Sam',
+      last_name = 'Nkosi',
+      gender = 'male',
+      marital_status = 'single',
+      date_of_birth = DATE '1995-01-01',
+      nationality = 'South Africa',
+      phone = '+27821234567',
+      country = 'South Africa',
+      address_line_1 = '1 Main Rd',
+      city = 'Potchefstroom',
+      province = 'North West',
+      postal_code = '2520',
+      emergency_contact_name = 'Ada',
+      emergency_contact_phone = '+27821234568',
+      emergency_contact_relationship = 'parent',
+      health_insurance_provider = 'Discovery Health',
+      health_insurance_policy_number = '123456',
+      health_insurance_expiry_date = DATE '2030-06-01',
+      is_international = false,
+      passport_country = 'South Africa',
+      passport_number = 'A1234567',
+      passport_expiry_date = DATE '2030-01-01';
+    INSERT INTO auth.users (id, email) VALUES
+      ('${OTHER_LEADER}', 'other-leader@example.test'),
+      ('${PENDING_LEADER}', 'pending-leader@example.test'),
+      ('${DEACTIVATED}', 'inactive@example.test'),
+      ('${OFFICE}', 'finance-office@example.test')
+    ON CONFLICT (id) DO NOTHING;
+    INSERT INTO public.users (id, display_name, is_active) VALUES
+      ('${OTHER_LEADER}', 'Other leader', true),
+      ('${PENDING_LEADER}', 'Pending leader', true),
+      ('${DEACTIVATED}', 'Deactivated leader', false),
+      ('${OFFICE}', 'Finance office', true)
+    ON CONFLICT (id) DO UPDATE SET is_active = EXCLUDED.is_active;
+    UPDATE public.users SET is_active = false WHERE id = '${DEACTIVATED}';
+    INSERT INTO public.staff_ministries (id, name, slug)
+    VALUES ('${OTHER_MINISTRY}', 'Media', 'media')
+    ON CONFLICT (id) DO NOTHING;
+    INSERT INTO public.staff_ministry_members (staff_ministry_id, user_id, member_role, status) VALUES
+      ('${OTHER_MINISTRY}', '${OTHER_LEADER}', 'leader', 'active'),
+      ('${MINISTRY}', '${PENDING_LEADER}', 'leader', 'pending')
+    ON CONFLICT (staff_ministry_id, user_id) DO UPDATE SET member_role = EXCLUDED.member_role, status = EXCLUDED.status;
+    INSERT INTO public.roles (name, display_name, is_system)
+    VALUES ('finance_office', 'Finance Office', true)
+    ON CONFLICT (name) DO NOTHING;
+    INSERT INTO public.user_roles (user_id, role_id)
+    SELECT '${OFFICE}', id FROM public.roles WHERE name = 'finance_office'
+    ON CONFLICT DO NOTHING;
+    UPDATE public.users SET is_active = false WHERE id = '${DEACTIVATED}';
+    UPDATE public.users SET
+      first_name = 'Sam', last_name = 'Nkosi', gender = 'male', marital_status = 'single',
+      date_of_birth = DATE '1995-01-01', nationality = 'South Africa', phone = '+27821234567',
+      country = 'South Africa', address_line_1 = '1 Main Rd', city = 'Potchefstroom',
+      province = 'North West', postal_code = '2520', emergency_contact_name = 'Ada',
+      emergency_contact_phone = '+27821234568', emergency_contact_relationship = 'parent',
+      health_insurance_provider = 'Discovery Health', health_insurance_policy_number = '123456',
+      health_insurance_expiry_date = DATE '2030-06-01', is_international = false,
+      passport_country = 'South Africa', passport_number = 'A1234567', passport_expiry_date = DATE '2030-01-01';
+  `);
+  const bin = process.env.PGRST_BIN || "/tmp/ffsa-workbook-verify/postgrest";
+  const conf = "/tmp/ffsa-workbook-verify/postgrest-3001.conf";
+  spawnSync("tmux", ["-f", "/exec-daemon/tmux.portal.conf", "kill-session", "-t", "pgrst-3001"], { encoding: "utf8" });
+  const started = spawnSync(
+    "tmux",
+    ["-f", "/exec-daemon/tmux.portal.conf", "new-session", "-d", "-s", "pgrst-3001", "--", bin, conf],
+    { encoding: "utf8" }
+  );
+  if (started.status !== 0) throw new Error(`PostgREST restart failed: ${started.stderr}`);
+  spawnSync("sleep", ["2"]);
 }
 
 async function setValue(page, selector, value) {
@@ -121,6 +226,153 @@ async function readBudget(page, id) {
   }, id);
 }
 
+async function openAs(browser, sub, path) {
+  const context = await browser.createBrowserContext();
+  const page = await context.newPage();
+  page.setDefaultTimeout(30000);
+  await page.setCookie({ name: "ffsa-harness-sub", value: sub, url: base });
+  await page.goto(`${base}${path}`, { waitUntil: "networkidle0" });
+  return { context, page };
+}
+
+async function api(sub, path, options = {}) {
+  const res = await fetch(`${base}${path}`, {
+    ...options,
+    headers: { ...(options.headers || {}), Cookie: `ffsa-harness-sub=${sub}` },
+  });
+  const body = await res.json().catch(() => ({}));
+  return { status: res.status, body };
+}
+
+async function roleMatrix(browser, financeBudgetId, financeName) {
+  const leaderRoles = psql(
+    `SELECT coalesce(string_agg(r.name, ','), '(none)') FROM public.user_roles ur JOIN public.roles r ON r.id = ur.role_id WHERE ur.user_id = '${LEADER}';`
+  );
+  assert(leaderRoles === "(none)", `owning leader roles were ${leaderRoles}`);
+
+  const hidden = await api(LEADER, `/api/finance/budgets/${financeBudgetId}`);
+  assert(hidden.status === 404, `leader read the finance-created budget ${hidden.status}`);
+  const wrongOwner = await api(LEADER, "/api/finance/budgets", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: `Not their team ${Date.now().toString(36)}`,
+      ownerKind: "staff_ministry",
+      ownerId: OTHER_MINISTRY,
+      periodId: PERIOD,
+    }),
+  });
+  assert(wrongOwner.status === 403, `leader created another team's budget ${wrongOwner.status}`);
+
+  const home = await openAs(browser, LEADER, "/finance/budgets");
+  assert(new URL(home.page.url()).pathname === "/finance/budgets", `leader sheet url ${home.page.url()}`);
+  const homeText = await bodyText(home.page);
+  assert(homeText.includes("not visible"), `leader period copy: ${homeText.slice(0, 500)}`);
+  assert(!homeText.includes(financeName), "leader list showed a finance-created budget");
+  assert(!homeText.includes("US year"), "leader sheet offered a US period");
+  await choose(home.page, "What this budget belongs to", "staff_ministry");
+  await home.page.waitForFunction(() => document.body.innerText.includes("Worship"));
+  const owners = await home.page.$eval('[aria-label="Owner"]', (el) => [...el.options].map((option) => option.textContent));
+  assert(owners.includes("Worship"), `leader owners ${owners.join(", ")}`);
+  assert(!owners.includes("Media"), `leader owners included Media: ${owners.join(", ")}`);
+  note("owning leader opens only Worship and cannot see the finance-created budget");
+
+  const lineId = crypto.randomUUID();
+  const created = await api(LEADER, "/api/finance/budgets", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: `Leader own ${Date.now().toString(36)}`,
+      ownerKind: "staff_ministry",
+      ownerId: MINISTRY,
+      periodId: PERIOD,
+      lines: [{ id: lineId, kind: "fixed", name: "Van", amountCents: 10000, multiplier: 1 }],
+    }),
+  });
+  assert(created.status === 201, `owning leader create ${created.status} ${JSON.stringify(created.body).slice(0, 240)}`);
+  const own = await openAs(browser, LEADER, `/finance/budgets/${created.body.budget.id}`);
+  await own.page.waitForFunction(() => document.querySelector('input[placeholder="Name this budget"]')?.value?.startsWith("Leader own"));
+  await clickExact(own.page, "Fixed cost");
+  await own.page.waitForFunction(() => document.querySelector('[aria-label="Amount for Van"]')?.value === "100.00");
+  await setValue(own.page, '[aria-label="Amount for Van"]', "250.00");
+  await clickExact(own.page, "Save");
+  await waitIdle(own.page);
+  await own.page.reload({ waitUntil: "networkidle0" });
+  await own.page.waitForFunction(() => document.querySelector('input[placeholder="Name this budget"]')?.value?.startsWith("Leader own"));
+  await clickExact(own.page, "Fixed cost");
+  await own.page.waitForFunction(() => document.querySelector('[aria-label="Amount for Van"]')?.value === "250.00");
+  const listed = await api(LEADER, `/api/finance/budgets?ownerKind=staff_ministry&ownerId=${MINISTRY}`);
+  assert(listed.body.budgets?.some((row) => row.id === created.body.budget.id), "leader list missed their budget");
+  assert(!listed.body.budgets?.some((row) => row.id === financeBudgetId), "leader list included the finance budget");
+  await shot(own.page, "budget-leader-desktop", 1280);
+  note("owning leader loaded and saved their own sheet in the browser");
+  await own.context.close();
+  await home.context.close();
+
+  const other = await openAs(browser, OTHER_LEADER, "/finance/budgets");
+  await choose(other.page, "What this budget belongs to", "staff_ministry");
+  await other.page.waitForFunction(() => document.body.innerText.includes("Media"));
+  const otherOwners = await other.page.$eval('[aria-label="Owner"]', (el) => [...el.options].map((option) => option.textContent));
+  assert(otherOwners.includes("Media") && !otherOwners.includes("Worship"), `other leader owners ${otherOwners.join(", ")}`);
+  const otherHidden = await api(OTHER_LEADER, `/api/finance/budgets/${created.body.budget.id}`);
+  assert(otherHidden.status === 404, `other leader read Worship ${otherHidden.status}`);
+  note("other-team leader sees Media only");
+  await other.context.close();
+
+  const pending = await openAs(browser, PENDING_LEADER, "/finance/budgets");
+  assert(new URL(pending.page.url()).pathname === "/finance", `pending leader url ${pending.page.url()}`);
+  const pendingCreate = await api(PENDING_LEADER, "/api/finance/budgets", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: "Pending", ownerKind: "staff_ministry", ownerId: MINISTRY, periodId: PERIOD }),
+  });
+  assert(pendingCreate.status === 403, `pending leader create ${pendingCreate.status}`);
+  note("pending leader is not an active lead and cannot open or create");
+  await pending.context.close();
+
+  const office = await openAs(browser, OFFICE, "/finance");
+  const officeLinks = await office.page.$$eval("a", (nodes) => nodes.map((node) => node.getAttribute("href")));
+  assert(!officeLinks.includes("/finance/budgets"), `finance office saw budgets ${officeLinks.join(",")}`);
+  const officeSheet = await openAs(browser, OFFICE, "/finance/budgets");
+  assert(new URL(officeSheet.page.url()).pathname === "/finance", `finance office url ${officeSheet.page.url()}`);
+  note("finance office without a budget permission does not get the sheet");
+  await office.context.close();
+  await officeSheet.context.close();
+
+  const dead = await openAs(browser, DEACTIVATED, "/finance/budgets");
+  assert(dead.page.url().includes("error=deactivated"), `deactivated url ${dead.page.url()}`);
+  note("deactivated account is sent to login");
+  await dead.context.close();
+
+  const approver = await openAs(browser, APPROVER, `/finance/budgets/${financeBudgetId}`);
+  await approver.page.waitForFunction(
+    (name) => document.querySelector('input[placeholder="Name this budget"]')?.value === name,
+    {},
+    financeName
+  );
+  const approveButton = await approver.page.evaluate(
+    () => [...document.querySelectorAll("button")].some((button) => /approve/i.test(button.textContent || ""))
+  );
+  assert(!approveButton, "the sheet offered an approve action");
+  const approverLoad = await api(APPROVER, `/api/finance/budgets/${financeBudgetId}`);
+  assert(approverLoad.status === 200, `approver load ${approverLoad.status}`);
+  const approverWrite = await api(APPROVER, `/api/finance/budgets/${financeBudgetId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ updatedAt: approverLoad.body.budget.updatedAt, notes: "approver edit" }),
+  });
+  assert(approverWrite.status === 403, `approver structural save ${approverWrite.status} ${JSON.stringify(approverWrite.body).slice(0, 200)}`);
+  note(`budget.approve can open the sheet and has no approve button; save returned ${approverWrite.status}`);
+  await approver.context.close();
+
+  const outsider = await openAs(browser, OUTSIDER, "/finance/budgets");
+  assert(new URL(outsider.page.url()).pathname === "/finance", `outsider url ${outsider.page.url()}`);
+  const outsiderRead = await api(OUTSIDER, `/api/finance/budgets/${financeBudgetId}`);
+  assert(outsiderRead.status === 404, `outsider read ${outsiderRead.status}`);
+  note("outsider cannot open the sheet or read the budget");
+  await outsider.context.close();
+}
+
 const browser = await puppeteer.launch({
   executablePath: "/usr/local/bin/google-chrome",
   headless: true,
@@ -133,8 +385,13 @@ try {
     SELECT '${PERIOD}', id, '2026', 'year', DATE '2026-01-01', DATE '2026-12-31', true
     FROM public.finance_orgs WHERE key = 'npc'
     ON CONFLICT (id) DO NOTHING;
+    INSERT INTO public.fiscal_periods (id, org_id, label, kind, start_date, end_date, is_current)
+    SELECT '${US_PERIOD}', id, 'US year', 'year', DATE '2026-01-01', DATE '2026-12-31', false
+    FROM public.finance_orgs WHERE key = 'usa'
+    ON CONFLICT (id) DO NOTHING;
   `);
-  note("inserted NPC period 2026");
+  prepareAccounts();
+  note("inserted NPC period 2026 and a US period the sheet must not offer");
 
   const page = await browser.newPage();
   page.setDefaultTimeout(45000);
@@ -146,6 +403,7 @@ try {
   assert(!opened.includes("Complete your profile"), "profile gate hid the sheet");
   assert(opened.includes("FFSA NPC"), "FFSA NPC was not on the sheet");
   assert(opened.includes("2026"), "NPC period 2026 was not offered");
+  assert(!opened.includes("US year"), "a US period was offered on the finance sheet");
   note("empty sheet shows FFSA NPC and the 2026 period");
 
   await setValue(page, 'input[placeholder="Name this budget"]', NAME);
@@ -379,82 +637,7 @@ try {
   await shot(page, "budget-approved-desktop", 1280);
   await shot(page, "budget-approved-320", 320);
 
-  const leaderContext = await browser.createBrowserContext();
-  const leaderPage = await leaderContext.newPage();
-  await leaderPage.setCookie({ name: "ffsa-harness-sub", value: LEADER, url: base });
-  await leaderPage.goto(`${base}/finance/budgets/${id}`, { waitUntil: "networkidle0" });
-  const leaderUrl = leaderPage.url();
-  let leaderText = "";
-  try {
-    leaderText = await bodyText(leaderPage);
-  } catch {
-    leaderText = "(page navigated before the text could be read)";
-  }
-  writeFileSync("/tmp/ffsa-ui-budget-leader.txt", `${leaderUrl}\n${leaderText.slice(0, 1500)}`);
-  assert(new URL(leaderUrl).pathname === "/finance", `leader stayed on ${leaderUrl}`);
-  const leaderRoles = psql(
-    `SELECT coalesce(string_agg(r.name, ','), '(none)') FROM public.user_roles ur JOIN public.roles r ON r.id = ur.role_id WHERE ur.user_id = '${LEADER}';`
-  );
-  note(`leader page gate redirected to /finance. user_roles=${leaderRoles}. This is not an owning-leader sheet pass.`);
-  const currentRes = await fetch(`${base}/api/finance/budgets/${id}`, {
-    headers: { Cookie: `ffsa-harness-sub=${FINANCE}` },
-  });
-  const current = await currentRes.json();
-  const leaderWrite = await fetch(`${base}/api/finance/budgets/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json", Cookie: `ffsa-harness-sub=${LEADER}` },
-    body: JSON.stringify({ notes: "leader should not write", updatedAt: current.budget.updatedAt }),
-  });
-  const leaderBody = await leaderWrite.json();
-  assert(
-    leaderWrite.status === 403 || leaderWrite.status === 404,
-    `leader write status ${leaderWrite.status} ${JSON.stringify(leaderBody).slice(0, 300)}`
-  );
-  const unchanged = psql(`SELECT notes FROM public.budgets WHERE id = '${id}';`);
-  assert(unchanged.includes("Saved from the other session."), `leader write changed notes: ${unchanged}`);
-  assert(!unchanged.includes("leader should not write"), "leader note was stored");
-  note(`non-member leader write on the finance-created budget returned ${leaderWrite.status}; notes unchanged`);
-
-  const leaderLine = crypto.randomUUID();
-  const leaderName = `Leader own ${Date.now().toString(36)}`;
-  const leaderCreate = await fetch(`${base}/api/finance/budgets`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Cookie: `ffsa-harness-sub=${LEADER}` },
-    body: JSON.stringify({
-      name: leaderName,
-      ownerKind: "staff_ministry",
-      ownerId: MINISTRY,
-      periodId: PERIOD,
-      lines: [{ id: leaderLine, kind: "fixed", name: "Van", amountCents: 100, multiplier: 1 }],
-    }),
-  });
-  const leaderCreated = await leaderCreate.json();
-  assert(leaderCreate.status === 201, `owning leader create ${leaderCreate.status} ${JSON.stringify(leaderCreated).slice(0, 300)}`);
-  const leaderId = leaderCreated.budget.id;
-  const leaderSave = await fetch(`${base}/api/finance/budgets/${leaderId}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json", Cookie: `ffsa-harness-sub=${LEADER}` },
-    body: JSON.stringify({
-      updatedAt: leaderCreated.budget.updatedAt,
-      lines: [{ id: leaderLine, kind: "fixed", name: "Van", amountCents: 250, multiplier: 1 }],
-    }),
-  });
-  const leaderSaved = await leaderSave.json();
-  assert(leaderSave.status === 200, `owning leader save ${leaderSave.status} ${JSON.stringify(leaderSaved).slice(0, 300)}`);
-  assert(leaderSaved.budget.lines[0].amountCents === 250, "owning leader save did not store 250");
-  const leaderList = await fetch(
-    `${base}/api/finance/budgets?ownerKind=staff_ministry&ownerId=${MINISTRY}`,
-    { headers: { Cookie: `ffsa-harness-sub=${LEADER}` } }
-  );
-  const leaderListed = await leaderList.json();
-  assert(leaderList.status === 200 && leaderListed.budgets.some((row) => row.id === leaderId), "owning leader list missed the budget");
-  const outsiderWrite = await fetch(`${base}/api/finance/budgets/${leaderId}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json", Cookie: `ffsa-harness-sub=${OUTSIDER}` },
-    body: JSON.stringify({ updatedAt: leaderSaved.budget.updatedAt, notes: "outsider" }),
-  });
-  assert(outsiderWrite.status === 404 || outsiderWrite.status === 403, `outsider write ${outsiderWrite.status}`);
-  note(`API owning-leader create/load/save/list returned 201/200. Outsider write ${outsiderWrite.status}. The sheet page still redirects this leader.`);
+  await roleMatrix(browser, id, NAME);
 
   writeFileSync(
     "/tmp/ffsa-workbook-verify/ui-drive-result.txt",

@@ -131,33 +131,59 @@ middle = root / "src/middleware.ts"
 text = middle.read_text()
 needle = "  const isApi = pathname === \"/api\" || pathname.startsWith(\"/api/\");\n"
 insert = needle + """
-  if (process.env.FFSA_HARNESS === "1" && request.cookies.get("ffsa-harness-sub")?.value) {
-    return NextResponse.next();
+  if (process.env.FFSA_HARNESS === "1") {
+    const sub = request.cookies.get("ffsa-harness-sub")?.value;
+    if (sub) {
+      const active = await harnessAccountActive(sub);
+      if (active === false) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/login";
+        url.searchParams.set("error", "deactivated");
+        return NextResponse.redirect(url);
+      }
+      if (active === null) {
+        return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      }
+      return NextResponse.next();
+    }
   }
 
 """
 if needle not in text:
     raise SystemExit("middleware isApi line not found")
+if "async function harnessAccountActive" not in text:
+    insert += """
+async function harnessAccountActive(sub: string): Promise<boolean | null> {
+  const secret = process.env.FFSA_PGRST_JWT_SECRET || "local-harness-secret-not-production";
+  const url = process.env.FFSA_PGRST_URL;
+  if (!url) return null;
+  const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" })).replace(/=/g, "").replace(/\\+/g, "-").replace(/\\//g, "_");
+  const payload = btoa(JSON.stringify({ role: "authenticated", sub, exp: 1893456000 })).replace(/=/g, "").replace(/\\+/g, "-").replace(/\\//g, "_");
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const raw = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(header + "." + payload));
+  const sig = btoa(String.fromCharCode(...new Uint8Array(raw))).replace(/=/g, "").replace(/\\+/g, "-").replace(/\\//g, "_");
+  const res = await fetch(url + "/users?id=eq." + sub + "&select=is_active", {
+    headers: { Authorization: "Bearer " + header + "." + payload + "." + sig, Accept: "application/json" },
+  });
+  if (!res.ok) return null;
+  const rows = await res.json();
+  if (!Array.isArray(rows) || !rows[0]) return null;
+  return rows[0].is_active !== false;
+}
+
+"""
 middle.write_text(text.replace(needle, insert, 1))
-
-gate = root / "src/components/profile-completion-gate.tsx"
-text = gate.read_text()
-needle = """}) {
-  const supabase = await createClient();
-"""
-insert = """}) {
-  if (process.env.FFSA_HARNESS === "1") return <>{children}</>;
-
-  const supabase = await createClient();
-"""
-if needle not in text:
-    raise SystemExit("profile gate not found")
-gate.write_text(text.replace(needle, insert, 1))
 PY
 
-# The fixture users table has no profile columns. The production profile gate
-# would hide the sheet. The bypass above is worktree-only and only when
-# FFSA_HARNESS=1.
+# The profile gate is the real one. The harness only replaces getUser.
+# A deactivated account is still sent to /login by the check above, which
+# reads is_active from the disposable database.
 
 export FFSA_HARNESS=1
 export FFSA_PGRST_URL="${FFSA_PGRST_URL:-http://127.0.0.1:3001}"

@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getFinanceHubAccess } from "@/lib/finance-access";
+import { loadBudgetGate } from "@/lib/finance/budget-access";
 import { Globe, Wallet, CreditCard, Home, HeartHandshake, FolderKanban, BookOpen, Sheet } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Masthead, SectionBar, StatusPill } from "@/components/ffsa";
@@ -83,13 +84,17 @@ export default async function FinancePage() {
   // Anyone can run an outreach budget, so Outreach Finance is open to all.
   // The Finance Office role (migration 248) also runs donor statements;
   // finance staff see every module and the Xero card.
-  const { fullFinance, financeOffice } = await getFinanceHubAccess(supabase, user.id);
+  const [{ fullFinance, financeOffice }, budgetGate] = await Promise.all([
+    getFinanceHubAccess(supabase, user.id),
+    loadBudgetGate(supabase),
+  ]);
   const modules = fullFinance
     ? FINANCE_MODULES
     : FINANCE_MODULES.filter(
         (m) =>
           m.href === "/finance/outreach" ||
-          (financeOffice && (m.href === "/finance/donor-statements" || m.href === "/finance/budgets"))
+          (m.href === "/finance/budgets" && budgetGate.canOpen) ||
+          (financeOffice && m.href === "/finance/donor-statements")
       );
   const liveCount = modules.filter((m) => m.ready).length;
 

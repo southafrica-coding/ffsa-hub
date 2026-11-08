@@ -95,6 +95,19 @@ describe("period and scope", () => {
     expect(scopeGaps(usPeriod, { npcId: npc, periods })).toContain("period");
     expect(scopeGaps(draft({ org_id: "usa-id", periodId: "per-1" }), { npcId: npc, periods })).toContain("period");
   });
+
+  it("keeps a saved period when the organisation list is not visible", () => {
+    const saved = draft({
+      name: "Worship",
+      ownerKind: "staff_ministry",
+      ownerId: "m1",
+      org_id: "org-from-period",
+      periodId: "per-9",
+    });
+    expect(
+      scopeGaps(saved, { npcId: null, periods: [{ id: "per-9", org_id: "org-from-period" }] })
+    ).toEqual([]);
+  });
 });
 
 describe("parseBudgetDraft", () => {
