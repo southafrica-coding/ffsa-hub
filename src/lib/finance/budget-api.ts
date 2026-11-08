@@ -2,6 +2,7 @@
  * Speaks to the Next budget routes. It does not call database functions.
  *
  * POST /api/finance/budgets → 201 { budget, ignored }
+ * GET  /api/finance/budgets/periods?ownerKind=&ownerId= → { periods }
  * GET  /api/finance/budgets/:id → { budget }
  * PUT  /api/finance/budgets/:id sends updatedAt from the last load.
  * It does not send status. A save cannot submit or approve.
@@ -388,6 +389,43 @@ export function interpretBudgetWrite(status: number, body: unknown): WorkbookWri
     return { kind: "saved", budget: parsed.budget, ignored: parsed.ignored };
   }
   return { kind: "rejected", message: message || "The budget wasn't saved. Your edits are still here." };
+}
+
+export type WorkbookPeriod = {
+  id: string;
+  label: string;
+  kind: "year" | "term" | "event";
+  start: string;
+  end: string;
+  current: boolean;
+};
+
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Periods from GET /api/finance/budgets/periods. No organisation fields. */
+export function parseWorkbookPeriods(body: unknown): WorkbookPeriod[] | null {
+  const row = record(body);
+  if (!row || !Array.isArray(row.periods)) return null;
+  const periods: WorkbookPeriod[] = [];
+  for (const item of row.periods) {
+    const period = record(item);
+    if (!period || typeof period.id !== "string" || !UUID.test(period.id)) return null;
+    if (period.kind !== "year" && period.kind !== "term" && period.kind !== "event") return null;
+    if (typeof period.label !== "string") return null;
+    const start = typeof period.start === "string" ? period.start.slice(0, 10) : "";
+    const end = typeof period.end === "string" ? period.end.slice(0, 10) : "";
+    if (!DAY.test(start) || !DAY.test(end)) return null;
+    if ("orgId" in period || "org_id" in period || "currency" in period) return null;
+    periods.push({
+      id: period.id,
+      label: period.label,
+      kind: period.kind,
+      start,
+      end,
+      current: period.current === true,
+    });
+  }
+  return periods;
 }
 
 export function parseBudgetList(body: unknown): BudgetListItem[] | null {

@@ -7,6 +7,7 @@ import {
   draftFromCanonical,
   interpretBudgetWrite,
   parseBudgetList,
+  parseWorkbookPeriods,
 } from "./budget-api";
 
 const LINE = "11111111-1111-4111-8111-111111111111";
@@ -145,6 +146,22 @@ describe("interpretBudgetWrite", () => {
       "forbidden"
     );
     expect(interpretBudgetWrite(201, { budget: canonical(), ignored: [] }).kind).toBe("saved");
+  });
+});
+
+describe("parseWorkbookPeriods", () => {
+  it("reads day periods and rejects an organisation field", () => {
+    expect(
+      parseWorkbookPeriods({
+        periods: [{ id: PERIOD, label: "2026", kind: "year", start: "2026-01-01", end: "2026-12-31", current: true }],
+      })
+    ).toEqual([{ id: PERIOD, label: "2026", kind: "year", start: "2026-01-01", end: "2026-12-31", current: true }]);
+    expect(
+      parseWorkbookPeriods({
+        periods: [{ id: PERIOD, label: "2026", kind: "year", start: "2026-01-01", end: "2026-12-31", orgId: "npc" }],
+      })
+    ).toBeNull();
+    expect(parseWorkbookPeriods({ periods: [{ id: "not-a-uuid", label: "2026", kind: "year", start: "2026-01-01", end: "2026-12-31" }] })).toBeNull();
   });
 });
 

@@ -414,26 +414,29 @@ export type ScopeGap = "name" | "owner" | "organisation" | "period";
 export type ScopeContext = {
   /** FFSA NPC id. Null when that org is not available. */
   npcId: string | null;
-  /** Real fiscal periods for that org only. A US period is never in this list. */
-  periods: readonly { id: string; org_id: string }[];
+  /**
+   * Periods the sheet may use. Rows from GET /api/finance/budgets/periods have
+   * no org id. A row that does carry org_id must match the draft and NPC.
+   */
+  periods: readonly { id: string; org_id?: string }[];
 };
 
 /**
- * A period counts only when it is one of the supplied rows and the draft's
- * org_id is that row's org. A typed name or a US period does not count.
+ * A period counts when it is one of the supplied rows. A typed name or a
+ * period for another org does not. The organisation is not chosen here.
  */
 export function scopeGaps(draft: BudgetSheetDraft, ctx: ScopeContext = { npcId: null, periods: [] }): ScopeGap[] {
   const gaps: ScopeGap[] = [];
   if (!draft.name.trim()) gaps.push("name");
   if (!draft.ownerKind || !draft.ownerId) gaps.push("owner");
-  if (!ctx.npcId && !draft.org_id) gaps.push("organisation");
   const period = ctx.periods.find((row) => {
     if (row.id !== draft.periodId) return false;
-    if (ctx.npcId && row.org_id !== ctx.npcId) return false;
-    if (draft.org_id && row.org_id !== draft.org_id) return false;
+    if (ctx.npcId && row.org_id && row.org_id !== ctx.npcId) return false;
+    if (draft.org_id && row.org_id && row.org_id !== draft.org_id) return false;
     return true;
   });
-  if (!period || (draft.org_id && period.org_id !== draft.org_id)) gaps.push("period");
+  if (!ctx.npcId && !draft.org_id && !period) gaps.push("organisation");
+  if (!period || (draft.org_id && period.org_id && period.org_id !== draft.org_id)) gaps.push("period");
   return gaps;
 }
 

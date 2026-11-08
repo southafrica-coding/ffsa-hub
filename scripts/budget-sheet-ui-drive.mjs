@@ -15,6 +15,7 @@ const LEADER = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5";
 const OTHER_LEADER = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa6";
 const PENDING_LEADER = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa7";
 const DEACTIVATED = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa8";
+const REMOVED_LEADER = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa0";
 const OFFICE = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa9";
 const MINISTRY = "cccccccc-cccc-4ccc-8ccc-ccccccccccc1";
 const OTHER_MINISTRY = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1";
@@ -100,13 +101,15 @@ function prepareAccounts() {
       ('${OTHER_LEADER}', 'other-leader@example.test'),
       ('${PENDING_LEADER}', 'pending-leader@example.test'),
       ('${DEACTIVATED}', 'inactive@example.test'),
-      ('${OFFICE}', 'finance-office@example.test')
+      ('${OFFICE}', 'finance-office@example.test'),
+      ('${REMOVED_LEADER}', 'removed-leader@example.test')
     ON CONFLICT (id) DO NOTHING;
     INSERT INTO public.users (id, display_name, is_active) VALUES
       ('${OTHER_LEADER}', 'Other leader', true),
       ('${PENDING_LEADER}', 'Pending leader', true),
       ('${DEACTIVATED}', 'Deactivated leader', false),
-      ('${OFFICE}', 'Finance office', true)
+      ('${OFFICE}', 'Finance office', true),
+      ('${REMOVED_LEADER}', 'Removed leader', true)
     ON CONFLICT (id) DO UPDATE SET is_active = EXCLUDED.is_active;
     UPDATE public.users SET is_active = false WHERE id = '${DEACTIVATED}';
     INSERT INTO public.staff_ministries (id, name, slug)
@@ -114,7 +117,8 @@ function prepareAccounts() {
     ON CONFLICT (id) DO NOTHING;
     INSERT INTO public.staff_ministry_members (staff_ministry_id, user_id, member_role, status) VALUES
       ('${OTHER_MINISTRY}', '${OTHER_LEADER}', 'leader', 'active'),
-      ('${MINISTRY}', '${PENDING_LEADER}', 'leader', 'pending')
+      ('${MINISTRY}', '${PENDING_LEADER}', 'leader', 'pending'),
+      ('${OTHER_MINISTRY}', '${REMOVED_LEADER}', 'leader', 'active')
     ON CONFLICT (staff_ministry_id, user_id) DO UPDATE SET member_role = EXCLUDED.member_role, status = EXCLUDED.status;
     INSERT INTO public.roles (name, display_name, is_system)
     VALUES ('finance_office', 'Finance Office', true)
@@ -267,47 +271,58 @@ async function roleMatrix(browser, financeBudgetId, financeName) {
   const home = await openAs(browser, LEADER, "/finance/budgets");
   assert(new URL(home.page.url()).pathname === "/finance/budgets", `leader sheet url ${home.page.url()}`);
   const homeText = await bodyText(home.page);
-  assert(homeText.includes("not visible"), `leader period copy: ${homeText.slice(0, 500)}`);
   assert(!homeText.includes(financeName), "leader list showed a finance-created budget");
-  assert(!homeText.includes("US year"), "leader sheet offered a US period");
+  assert(!homeText.includes("US year"), "leader sheet offered a US period before an owner");
+  const discovered = await api(LEADER, `/api/finance/budgets/periods?ownerKind=staff_ministry&ownerId=${MINISTRY}`);
+  assert(discovered.status === 200, `leader periods ${discovered.status} ${JSON.stringify(discovered.body).slice(0, 240)}`);
+  const discoveredText = JSON.stringify(discovered.body);
+  assert(discoveredText.includes("2026") && !discoveredText.includes("US year"), `leader period payload ${discoveredText}`);
+  assert(!discoveredText.includes("orgId") && !discoveredText.includes("org_id"), "period payload included an organisation");
+  const missingSelector = await api(LEADER, "/api/finance/budgets/periods");
+  assert(missingSelector.status === 400, `missing selector ${missingSelector.status}`);
+  const otherPeriods = await api(LEADER, `/api/finance/budgets/periods?ownerKind=staff_ministry&ownerId=${OTHER_MINISTRY}`);
+  assert(otherPeriods.status === 403, `leader periods for another ministry ${otherPeriods.status}`);
+  const unsigned = await fetch(`${base}/api/finance/budgets/periods?ownerKind=staff_ministry&ownerId=${MINISTRY}`);
+  assert(unsigned.status === 401, `unsigned periods ${unsigned.status}`);
   await choose(home.page, "What this budget belongs to", "staff_ministry");
   await home.page.waitForFunction(() => document.body.innerText.includes("Worship"));
   const owners = await home.page.$eval('[aria-label="Owner"]', (el) => [...el.options].map((option) => option.textContent));
   assert(owners.includes("Worship"), `leader owners ${owners.join(", ")}`);
   assert(!owners.includes("Media"), `leader owners included Media: ${owners.join(", ")}`);
-  note("owning leader opens only Worship and cannot see the finance-created budget");
-
-  const lineId = crypto.randomUUID();
-  const created = await api(LEADER, "/api/finance/budgets", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      name: `Leader own ${Date.now().toString(36)}`,
-      ownerKind: "staff_ministry",
-      ownerId: MINISTRY,
-      periodId: PERIOD,
-      lines: [{ id: lineId, kind: "fixed", name: "Van", amountCents: 10000, multiplier: 1 }],
-    }),
-  });
-  assert(created.status === 201, `owning leader create ${created.status} ${JSON.stringify(created.body).slice(0, 240)}`);
-  const own = await openAs(browser, LEADER, `/finance/budgets/${created.body.budget.id}`);
-  await own.page.waitForFunction(() => document.querySelector('input[placeholder="Name this budget"]')?.value?.startsWith("Leader own"));
-  await clickExact(own.page, "Fixed cost");
-  await own.page.waitForFunction(() => document.querySelector('[aria-label="Amount for Van"]')?.value === "100.00");
-  await setValue(own.page, '[aria-label="Amount for Van"]', "250.00");
-  await clickExact(own.page, "Save");
-  await waitIdle(own.page);
-  await own.page.reload({ waitUntil: "networkidle0" });
-  await own.page.waitForFunction(() => document.querySelector('input[placeholder="Name this budget"]')?.value?.startsWith("Leader own"));
-  await clickExact(own.page, "Fixed cost");
-  await own.page.waitForFunction(() => document.querySelector('[aria-label="Amount for Van"]')?.value === "250.00");
+  await choose(home.page, "Owner", "Worship");
+  await home.page.waitForFunction(() => [...document.querySelectorAll('[aria-label="Period"] option')].some((option) => option.textContent.includes("2026")));
+  const leaderPeriodText = await home.page.$eval('[aria-label="Period"]', (el) => el.innerText);
+  assert(!leaderPeriodText.includes("US year"), `leader periods included a US period: ${leaderPeriodText}`);
+  const leaderName = `Leader own ${Date.now().toString(36)}`;
+  await setValue(home.page, 'input[placeholder="Name this budget"]', leaderName);
+  await choose(home.page, "Period", "2026");
+  await clickExact(home.page, "Fixed cost");
+  await clickExact(home.page, "Add a line");
+  await setValue(home.page, '[aria-label="Name for this line"]', "Van");
+  await setValue(home.page, '[aria-label="Amount for Van"]', "100.00");
+  await clickExact(home.page, "Create");
+  await home.page.waitForFunction(() => /\/finance\/budgets\/[0-9a-f-]{36}/i.test(location.pathname), { timeout: 60000 });
+  const leaderId = await home.page.evaluate(() => location.pathname.match(/\/finance\/budgets\/([0-9a-f-]{36})/i)[1]);
+  await home.page.waitForFunction((name) => document.querySelector('input[placeholder="Name this budget"]')?.value === name, {}, leaderName);
+  await home.page.reload({ waitUntil: "networkidle0" });
+  await home.page.waitForFunction((name) => document.querySelector('input[placeholder="Name this budget"]')?.value === name, {}, leaderName);
+  await clickExact(home.page, "Fixed cost");
+  await home.page.waitForFunction(() => document.querySelector('[aria-label="Amount for Van"]')?.value === "100.00");
+  await setValue(home.page, '[aria-label="Amount for Van"]', "250.00");
+  await clickExact(home.page, "Save");
+  await waitIdle(home.page);
+  await home.page.reload({ waitUntil: "networkidle0" });
+  await home.page.waitForFunction((name) => document.querySelector('input[placeholder="Name this budget"]')?.value === name, {}, leaderName);
+  await clickExact(home.page, "Fixed cost");
+  await home.page.waitForFunction(() => document.querySelector('[aria-label="Amount for Van"]')?.value === "250.00");
   const listed = await api(LEADER, `/api/finance/budgets?ownerKind=staff_ministry&ownerId=${MINISTRY}`);
-  assert(listed.body.budgets?.some((row) => row.id === created.body.budget.id), "leader list missed their budget");
+  assert(listed.body.budgets?.some((row) => row.id === leaderId), "leader list missed their budget");
   assert(!listed.body.budgets?.some((row) => row.id === financeBudgetId), "leader list included the finance budget");
-  await shot(own.page, "budget-leader-desktop", 1280);
-  note("owning leader loaded and saved their own sheet in the browser");
-  await own.context.close();
+  await shot(home.page, "budget-leader-desktop", 1280);
+  note("blank owning leader discovered a period, created, saved, and refreshed");
   await home.context.close();
+
+  const created = { body: { budget: { id: leaderId } } };
 
   const other = await openAs(browser, OTHER_LEADER, "/finance/budgets");
   await choose(other.page, "What this budget belongs to", "staff_ministry");
@@ -327,8 +342,20 @@ async function roleMatrix(browser, financeBudgetId, financeName) {
     body: JSON.stringify({ name: "Pending", ownerKind: "staff_ministry", ownerId: MINISTRY, periodId: PERIOD }),
   });
   assert(pendingCreate.status === 403, `pending leader create ${pendingCreate.status}`);
-  note("pending leader is not an active lead and cannot open or create");
+  const pendingPeriods = await api(PENDING_LEADER, `/api/finance/budgets/periods?ownerKind=staff_ministry&ownerId=${MINISTRY}`);
+  assert(pendingPeriods.status === 403, `pending leader periods ${pendingPeriods.status}`);
+  note("pending leader is not an active lead and cannot open, list periods, or create");
   await pending.context.close();
+
+  const removedBefore = await api(REMOVED_LEADER, `/api/finance/budgets/periods?ownerKind=staff_ministry&ownerId=${OTHER_MINISTRY}`);
+  assert(removedBefore.status === 200, `removed-leader before delete ${removedBefore.status}`);
+  psql(`DELETE FROM public.staff_ministry_members WHERE user_id = '${REMOVED_LEADER}';`);
+  const removedAfter = await api(REMOVED_LEADER, `/api/finance/budgets/periods?ownerKind=staff_ministry&ownerId=${OTHER_MINISTRY}`);
+  assert(removedAfter.status === 403, `removed leader periods ${removedAfter.status} ${JSON.stringify(removedAfter.body).slice(0, 180)}`);
+  const removedPage = await openAs(browser, REMOVED_LEADER, "/finance/budgets");
+  assert(new URL(removedPage.page.url()).pathname === "/finance", `removed leader url ${removedPage.page.url()}`);
+  note("deleting the membership row removes period discovery; pending was not used as that proof");
+  await removedPage.context.close();
 
   const office = await openAs(browser, OFFICE, "/finance");
   const officeLinks = await office.page.$$eval("a", (nodes) => nodes.map((node) => node.getAttribute("href")));
@@ -341,7 +368,9 @@ async function roleMatrix(browser, financeBudgetId, financeName) {
 
   const dead = await openAs(browser, DEACTIVATED, "/finance/budgets");
   assert(dead.page.url().includes("error=deactivated"), `deactivated url ${dead.page.url()}`);
-  note("deactivated account is sent to login");
+  const deadApi = await api(DEACTIVATED, `/api/finance/budgets/periods?ownerKind=staff_ministry&ownerId=${MINISTRY}`);
+  assert(deadApi.status === 403 && deadApi.body.error === "deactivated", `deactivated periods ${deadApi.status} ${JSON.stringify(deadApi.body).slice(0, 160)}`);
+  note("deactivated account is sent to login, and the periods request is 403");
   await dead.context.close();
 
   const approver = await openAs(browser, APPROVER, `/finance/budgets/${financeBudgetId}`);
@@ -402,14 +431,16 @@ try {
   assert(/budget/i.test(opened), `finance page did not render the sheet:\n${opened.slice(0, 800)}`);
   assert(!opened.includes("Complete your profile"), "profile gate hid the sheet");
   assert(opened.includes("FFSA NPC"), "FFSA NPC was not on the sheet");
-  assert(opened.includes("2026"), "NPC period 2026 was not offered");
-  assert(!opened.includes("US year"), "a US period was offered on the finance sheet");
-  note("empty sheet shows FFSA NPC and the 2026 period");
+  assert(!opened.includes("US year"), "a US period was offered before an owner was chosen");
+  note("empty sheet shows FFSA NPC and waits for an owner before listing periods");
 
   await setValue(page, 'input[placeholder="Name this budget"]', NAME);
   await choose(page, "What this budget belongs to", "staff_ministry");
   await page.waitForFunction(() => document.body.innerText.includes("Worship"));
   await choose(page, "Owner", "Worship");
+  await page.waitForFunction(() => [...document.querySelectorAll('[aria-label="Period"] option')].some((option) => option.textContent.includes("2026")));
+  const financePeriodText = await page.$eval('[aria-label="Period"]', (el) => el.innerText);
+  assert(!financePeriodText.includes("US year"), `finance periods included a US period: ${financePeriodText}`);
   await choose(page, "Period", "2026");
   await clickExact(page, "Variable cost");
   await clickExact(page, "Add a line");

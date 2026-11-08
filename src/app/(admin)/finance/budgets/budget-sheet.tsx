@@ -33,7 +33,9 @@ import {
   draftFromCanonical,
   interpretBudgetWrite,
   parseBudgetList,
+  parseWorkbookPeriods,
   sheetSignature,
+  type WorkbookPeriod,
   type BudgetListItem,
   type CanonicalBudget,
 } from "@/lib/finance/budget-api";
@@ -75,6 +77,8 @@ export function BudgetSheet({
   const [savedList, setSavedList] = useState<BudgetListItem[] | null>(null);
   const [listNote, setListNote] = useState<string | null>(null);
   const [loadedPeriod, setLoadedPeriod] = useState<CanonicalBudget["period"]>(null);
+  const [offeredPeriods, setOfferedPeriods] = useState<WorkbookPeriod[]>([]);
+  const [periodNote, setPeriodNote] = useState<string | null>(null);
 
   const driverValue = parseDriver(draft.driverValue);
   const variable = useMemo(() => rollup(draft.lines, "variable", driverValue), [draft.lines, driverValue]);
@@ -82,16 +86,16 @@ export function BudgetSheet({
   const totalCents = variable.cents + fixed.cents;
   const npc =
     options.orgs.find((item) => item.key === "npc" && item.currency === "ZAR" && !item.inactive) ?? null;
-  const periods = options.periods.filter((period) => npc !== null && period.org_id === npc.id);
-  const selectedPeriod = periods.find((period) => period.id === draft.periodId) ?? null;
-  const currency = npc || (stamp && draft.org_id) ? "ZAR" : null;
-  const gapPeriods = selectedPeriod
-    ? periods
-    : loadedPeriod && draft.periodId === loadedPeriod.id && draft.org_id
-      ? [{ id: loadedPeriod.id, org_id: draft.org_id, label: loadedPeriod.label, kind: loadedPeriod.kind, start: loadedPeriod.start, end: loadedPeriod.end, current: false }]
-      : !draft.periodId || !npc || draft.org_id !== npc.id
-        ? periods
-        : [...periods, { id: draft.periodId, org_id: draft.org_id }];
+  const selectedOffered = offeredPeriods.find((period) => period.id === draft.periodId) ?? null;
+  const shownPeriod =
+    selectedOffered ?? (loadedPeriod && draft.periodId === loadedPeriod.id ? loadedPeriod : null);
+  const currency = npc || stamp || offeredPeriods.some((period) => period.id === draft.periodId) ? "ZAR" : null;
+  const gapPeriods = [
+    ...offeredPeriods.map((period) => ({ id: period.id })),
+    ...(loadedPeriod && draft.periodId === loadedPeriod.id
+      ? [{ id: loadedPeriod.id, org_id: draft.org_id || undefined }]
+      : []),
+  ];
   const gaps = scopeGaps(draft, { npcId: npc?.id ?? (draft.org_id || null), periods: gapPeriods });
   const owners = draft.ownerKind ? options.owners[draft.ownerKind] : [];
   const owner = owners.find((item) => item.id === draft.ownerId) ?? null;
@@ -157,6 +161,49 @@ export function BudgetSheet({
       cancel = true;
     };
   }, [budgetId]);
+
+  useEffect(() => {
+    if (stamp || !draft.ownerKind || !draft.ownerId) {
+      setOfferedPeriods([]);
+      setPeriodNote(null);
+      return;
+    }
+    let cancel = false;
+    setPeriodNote("Reading periods…");
+    const ownerKind = draft.ownerKind;
+    const ownerId = draft.ownerId;
+    (async () => {
+      try {
+        const params = new URLSearchParams({ ownerKind, ownerId });
+        const res = await fetch(`/api/finance/budgets/periods?${params}`, { cache: "no-store" });
+        const body = await res.json().catch(() => ({}));
+        if (cancel) return;
+        const listed = parseWorkbookPeriods(body);
+        if (res.ok && listed) {
+          setOfferedPeriods(listed);
+          setPeriodNote(listed.length === 0 ? "No period is available for this owner." : null);
+          setDraft((prev) =>
+            listed.some((period) => period.id === prev.periodId) ? prev : { ...prev, periodId: "", org_id: "" }
+          );
+          return;
+        }
+        setOfferedPeriods([]);
+        const message =
+          body && typeof body === "object" && "message" in body && typeof body.message === "string" && body.message
+            ? body.message
+            : "Periods for this owner could not be read.";
+        setPeriodNote(message);
+      } catch {
+        if (!cancel) {
+          setOfferedPeriods([]);
+          setPeriodNote("Periods for this owner could not be read.");
+        }
+      }
+    })();
+    return () => {
+      cancel = true;
+    };
+  }, [draft.ownerKind, draft.ownerId, stamp]);
 
   const dirty = sheetSignature(draft) !== baseline;
   const approved = stamp?.status === "approved";
@@ -370,7 +417,7 @@ export function BudgetSheet({
             aria-label="Owner"
             value={draft.ownerId}
             disabled={!draft.ownerKind}
-            onChange={(e) => patch({ ownerId: e.target.value })}
+            onChange={(e) => patch({ ownerId: e.target.value, periodId: "", org_id: "" })}
           >
             <option value="">{draft.ownerKind ? "Choose one" : "Choose a kind first"}</option>
             {owners.map((item) => (
@@ -390,38 +437,34 @@ export function BudgetSheet({
             {npc
               ? "FFSA NPC. South Africa only. The organisation comes from the period."
               : stamp && draft.org_id
-                ? "South Africa, in rand. This account cannot read the organisation list. The saved period is the one this budget uses."
-                : options.orgsReadable
-                  ? "The South Africa organisation is not visible on this account, so a new budget cannot pick a period here."
-                  : "FFSA NPC could not be read. This budget cannot be started."}
+                ? "South Africa, in rand. The organisation came from the period."
+                : shownPeriod
+                  ? "The organisation is taken from the period when this budget is created."
+                  : "Choose an owner. Periods for that owner are listed here. The organisation comes from the period."}
           </p>
         </div>
         <div className="bg-white px-3 py-3">
           <div className="mono-label">Currency</div>
           <div className="numeral mt-2 text-[28px] leading-none">{currency ?? "—"}</div>
           <p className="mt-2 text-[12px] leading-snug text-[color:var(--text-secondary)]">
-            {npc ? "Rand. Locked to FFSA NPC." : currency ? "Rand. Locked to the South Africa organisation." : "Rand, once that organisation is visible."}
+            {npc ? "Rand. Locked to FFSA NPC." : currency ? "Rand. The period list is South Africa only." : "Rand, once a period is chosen."}
           </p>
         </div>
         <div className="bg-white px-3 py-3 xl:col-span-3">
           <label className="block">
             <span className="mono-label">Period</span>
-            {periods.length > 0 ? (
+            {!stamp && offeredPeriods.length > 0 ? (
               <select
                 className={control}
                 aria-label="Period"
-                value={selectedPeriod?.id ?? ""}
+                value={selectedOffered?.id ?? ""}
                 onChange={(e) => {
-                  const period = periods.find((row) => row.id === e.target.value);
-                  if (!period || period.org_id !== npc?.id) {
-                    patch({ periodId: "", org_id: "" });
-                    return;
-                  }
-                  patch({ periodId: period.id, org_id: period.org_id });
+                  const period = offeredPeriods.find((row) => row.id === e.target.value);
+                  patch({ periodId: period?.id ?? "", org_id: "" });
                 }}
               >
                 <option value="">Choose a period</option>
-                {periods.map((period) => (
+                {offeredPeriods.map((period) => (
                   <option key={period.id} value={period.id}>
                     {PERIOD_KIND_LABEL[period.kind]} · {period.label} · {period.start} – {period.end}
                     {period.current ? " · current" : ""}
@@ -437,17 +480,13 @@ export function BudgetSheet({
               </p>
             ) : (
               <p className="mt-2 text-[13px] leading-snug text-amber">
-                {!npc
-                  ? "A period is only offered when the South Africa organisation is visible."
-                  : options.periodsReadable
-                    ? "FFSA NPC has no periods yet. A budget cannot invent one."
-                    : "Periods could not be read. A budget uses a period that already exists."}
+                {periodNote ?? "Choose an owner to see periods."}
               </p>
             )}
           </label>
-          {selectedPeriod && (
+          {shownPeriod && (
             <p className="mt-2 text-[12px] leading-snug text-[color:var(--text-secondary)]">
-              {selectedPeriod.start} – {selectedPeriod.end}. This period&apos;s organisation is the budget&apos;s.
+              {shownPeriod.start} – {shownPeriod.end}. This period&apos;s organisation is the budget&apos;s.
             </p>
           )}
         </div>
@@ -458,13 +497,13 @@ export function BudgetSheet({
             This sheet has no chart-of-accounts picker.
             {draft.lines.length > 0 && " Every line is not coded yet."}
           </p>
-          {(owner || npc || selectedPeriod) && (
+          {(owner || npc || shownPeriod) && (
             <p className="mono-label mt-3">
               {[
                 owner?.label,
                 npc?.name,
                 currency,
-                selectedPeriod ? `${selectedPeriod.label} · ${selectedPeriod.start} – ${selectedPeriod.end}` : null,
+                shownPeriod ? `${shownPeriod.label} · ${shownPeriod.start} – ${shownPeriod.end}` : null,
               ]
                 .filter(Boolean)
                 .join("  ·  ")}

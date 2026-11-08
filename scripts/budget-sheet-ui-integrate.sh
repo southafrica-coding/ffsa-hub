@@ -3,7 +3,7 @@
 # Postgres + PostgREST. This does not start, write, or deploy production.
 #
 # Dependency pins (contract of Hub Backend #522, unchanged at this head):
-#   #522 f129e8aec5f02dab427a48e539fe972d178b5996
+#   #522 fa03d7c18aefdbaaabd760cf41bfd097a274789b
 #        supabase/migrations/303_budget_workbook_atomic_save.sql
 #   #475 54fd09e0cd11974850bcb43b842c3ce5c697f1a6
 #        migrations 295 296 297 298 299
@@ -39,7 +39,7 @@ UI_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BACKEND="${FFSA_522_DIR:-/tmp/ffsa-522}"
 WORKTREE="${FFSA_UI_WORKTREE:-/tmp/ffsa-ui-budget}"
 PORT="${FFSA_UI_PORT:-3010}"
-HEAD_522="f129e8aec5f02dab427a48e539fe972d178b5996"
+HEAD_522="fa03d7c18aefdbaaabd760cf41bfd097a274789b"
 
 if [ ! -d "$BACKEND/scripts/finance-workbook-db" ]; then
   echo "refusing: backend checkout missing at ${BACKEND}" >&2
@@ -69,6 +69,7 @@ copy() {
   cp "$BACKEND/$1" "$WORKTREE/$1"
 }
 copy src/app/api/finance/budgets/route.ts
+copy src/app/api/finance/budgets/periods/route.ts
 copy "src/app/api/finance/budgets/[id]/route.ts"
 copy src/services/budget-workbook.ts
 copy src/lib/finance/budget-workbook.ts
@@ -136,6 +137,12 @@ insert = needle + """
     if (sub) {
       const active = await harnessAccountActive(sub);
       if (active === false) {
+        if (isApi) {
+          return NextResponse.json(
+            { error: "deactivated", message: "This account has been deactivated. Contact an administrator." },
+            { status: 403 }
+          );
+        }
         const url = request.nextUrl.clone();
         url.pathname = "/login";
         url.searchParams.set("error", "deactivated");

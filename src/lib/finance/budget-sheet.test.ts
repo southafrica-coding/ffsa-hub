@@ -96,6 +96,17 @@ describe("period and scope", () => {
     expect(scopeGaps(draft({ org_id: "usa-id", periodId: "per-1" }), { npcId: npc, periods })).toContain("period");
   });
 
+  it("accepts a period from the owner period list when that list has no org id", () => {
+    const chosen = draft({
+      name: "Worship",
+      ownerKind: "staff_ministry",
+      ownerId: "m1",
+      periodId: "per-9",
+    });
+    expect(scopeGaps(chosen, { npcId: null, periods: [{ id: "per-9" }] })).toEqual([]);
+    expect(scopeGaps(chosen, { npcId: null, periods: [] })).toContain("period");
+  });
+
   it("keeps a saved period when the organisation list is not visible", () => {
     const saved = draft({
       name: "Worship",
