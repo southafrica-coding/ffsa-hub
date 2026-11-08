@@ -19,7 +19,7 @@ const xero = vi.hoisted(() => ({
   lists: 0,
   posts: 0,
   failOnce: false,
-  seen: new Map<string, { ok: true; bankTransactionId: string }>(),
+  keys: [] as string[],
 }));
 
 vi.mock("@/services/xero", () => ({
@@ -27,17 +27,15 @@ vi.mock("@/services/xero", () => ({
     xero.lists += 1;
     return { ok: true, transactions: [], partial: false };
   },
+  // Each call is counted. This mock does not imitate Xero's Idempotency-Key store.
   createXeroSpendMoney: async (_admin: unknown, _region: unknown, args: { idempotencyKey: string }) => {
     xero.posts += 1;
+    xero.keys.push(args.idempotencyKey);
     if (xero.failOnce) {
       xero.failOnce = false;
       return { ok: false, message: "test xero failure" };
     }
-    const prior = xero.seen.get(args.idempotencyKey);
-    if (prior) return prior;
-    const result = { ok: true as const, bankTransactionId: `test-${args.idempotencyKey}` };
-    xero.seen.set(args.idempotencyKey, result);
-    return result;
+    return { ok: true as const, bankTransactionId: `test-${xero.posts}-${args.idempotencyKey}` };
   },
 }));
 
@@ -94,6 +92,45 @@ function client(url: string, role: "authenticated" | "service_role", sub: string
   });
   db.auth.getUser = (async () => ({ data: { user: { id: sub } }, error: null })) as typeof db.auth.getUser;
   return db;
+}
+
+function failBankIdUpdateOnce(inner: SupabaseClient): SupabaseClient {
+  let armed = true;
+  return new Proxy(inner, {
+    get(target, prop, recv) {
+      if (prop !== "from") return Reflect.get(target, prop, recv);
+      return (table: string) => {
+        const query = (target.from as (name: string) => { update: (row: unknown) => unknown })(table);
+        if (table !== "budget_xero_spends") return query;
+        return new Proxy(query, {
+          get(builder, key, builderRecv) {
+            const value = Reflect.get(builder, key, builderRecv);
+            if (key !== "update" || typeof value !== "function") {
+              return typeof value === "function" ? value.bind(builder) : value;
+            }
+            return (row: { xero_bank_transaction_id?: string | null }) => {
+              if (armed && row?.xero_bank_transaction_id) {
+                armed = false;
+                const rejected = {
+                  eq() {
+                    return rejected;
+                  },
+                  select() {
+                    return rejected;
+                  },
+                  then(resolve: (value: unknown) => unknown) {
+                    return Promise.resolve({ data: null, error: { code: "P0001", message: "test log write failed" } }).then(resolve);
+                  },
+                };
+                return rejected;
+              }
+              return value.call(builder, row);
+            };
+          },
+        });
+      };
+    },
+  }) as SupabaseClient;
 }
 
 function spendFrom(proposal: Record<string, unknown>, date: string): ConfirmedSpend {
@@ -309,10 +346,35 @@ describe.skipIf(!enabled)("receipt services on local PostgREST", () => {
     const afterRetry = await service.from("budget_xero_spends").select("id").eq("receipt_draft_id", input.draftId);
     expect(afterRetry.data).toHaveLength(1);
 
-    const raceInput = await freshSpend("race");
+    const raceInput = await freshSpend(`race-${Date.now()}`);
+    xero.posts = 0;
+    xero.keys = [];
     await Promise.all([writeConfirmedSpend(service, raceInput), writeConfirmedSpend(service, raceInput)]);
-    const raced = await service.from("budget_xero_spends").select("id").eq("receipt_draft_id", raceInput.draftId);
+    const raced = await service.from("budget_xero_spends").select("id, xero_bank_transaction_id").eq("receipt_draft_id", raceInput.draftId);
     expect(raced.data).toHaveLength(1);
+    expect(xero.posts).toBe(1);
+    expect(xero.keys).toEqual([`ffsa-expense-${raceInput.expenseId}`]);
+  });
+
+  it("repairs the log after Xero succeeded and the log write failed, without a second post", async () => {
+    process.env.XERO_SPEND_BANK_ACCOUNT_ZA = "TEST-ONLY-NOT-PRODUCTION";
+    const input = await freshSpend(`log-fail-${Date.now()}`);
+    xero.posts = 0;
+    xero.keys = [];
+    const flaky = failBankIdUpdateOnce(service);
+    const first = await writeConfirmedSpend(flaky, input);
+    expect(first.status).toBe("written");
+    expect(xero.posts).toBe(1);
+    expect(xero.keys).toEqual([`ffsa-expense-${input.expenseId}`]);
+    const unpaid = await service.from("budget_xero_spends").select("xero_bank_transaction_id").eq("receipt_draft_id", input.draftId).maybeSingle();
+    expect(unpaid.data?.xero_bank_transaction_id ?? null).toBeNull();
+
+    const retry = await writeConfirmedSpend(service, input);
+    expect(retry.status).toBe("already_written");
+    expect(xero.posts).toBe(1);
+    expect(xero.keys).toEqual([`ffsa-expense-${input.expenseId}`]);
+    const paid = await service.from("budget_xero_spends").select("xero_bank_transaction_id").eq("receipt_draft_id", input.draftId).maybeSingle();
+    expect(paid.data?.xero_bank_transaction_id).toBe(first.bankTransactionId);
   });
 
   it("does not post from a preview deployment", async () => {

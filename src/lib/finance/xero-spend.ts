@@ -121,6 +121,8 @@ export function xeroResultSentence(status: string): string {
       return "Not sent to Xero — the date is outside that budget's period.";
     case "org_not_south_africa":
       return "Not sent to Xero — that budget is not on the active South Africa organisation.";
+    case "in_flight":
+      return "Not sent to Xero again — another confirm is already posting this receipt.";
     case "unapproved_budget":
       return "Not sent to Xero — that budget is not approved yet.";
     case "preview_blocked":

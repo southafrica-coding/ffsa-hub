@@ -212,10 +212,68 @@ async function rememberXeroSpend(
     : await admin.from("budget_xero_spends").insert(row);
   // A second session can insert the same draft or bank id first. The unique
   // key already kept one row, so this attempt is the same confirm.
-  if (error && (error.code === "23505" || /duplicate key|unique constraint/i.test(error.message ?? ""))) return;
+  if (error && isUniqueViolation(error)) return false;
   if (error && !isMissingRelation(error)) {
     console.error("[xero] budget_xero_spends write failed", input.draftId, error.message ?? error);
+    return false;
   }
+  return true;
+}
+
+function isUniqueViolation(error: { code?: string; message?: string } | null | undefined): boolean {
+  if (!error) return false;
+  return error.code === "23505" || /duplicate key|unique constraint/i.test(error.message ?? "");
+}
+
+/**
+ * One poster per receipt draft. The insert is the claim. A second confirm
+ * sees that row and does not call Xero. A failed attempt can be taken over.
+ * The Idempotency-Key stays ffsa-expense-<expenseId> for the call that does post.
+ */
+async function claimSpend(admin: Admin, input: ConfirmedSpend): Promise<"mine" | "busy" | "skip"> {
+  const row = xeroSpendLogRow({
+    budgetId: input.budgetId,
+    lineId: input.budgetLineId,
+    outreachExpenseId: input.expenseId,
+    receiptDraftId: input.draftId,
+    purchaserUserId: input.hubUserId,
+    bookAmount: input.amountZar,
+    bookCurrency: input.currency,
+    budgetCurrency: input.orgKey === "npc" && input.currency === "ZAR" ? "ZAR" : null,
+    periodStart: input.periodStart,
+    periodEnd: input.periodEnd,
+    spentOn: input.date,
+    description: input.description,
+    hasReceipt: input.hasReceipt,
+    xeroBankTransactionId: null,
+    xeroStatus: "posting",
+    confirmedAt: new Date().toISOString(),
+  });
+  if (!row) return "skip";
+  const inserted = await admin.from("budget_xero_spends").insert(row).select("id");
+  if (!inserted.error) return "mine";
+  if (!isUniqueViolation(inserted.error)) {
+    console.error("[xero] spend claim failed", input.draftId, inserted.error.message ?? inserted.error);
+    return "skip";
+  }
+  const existing = await admin
+    .from("budget_xero_spends")
+    .select("id, xero_bank_transaction_id, xero_status")
+    .eq("receipt_draft_id", input.draftId)
+    .maybeSingle();
+  const held = existing.data as { id?: string; xero_bank_transaction_id?: string | null; xero_status?: string } | null;
+  if (!held?.id) return "busy";
+  if (held.xero_bank_transaction_id) return "busy";
+  if (held.xero_status !== "failed") return "busy";
+  const taken = await admin
+    .from("budget_xero_spends")
+    .update({ xero_status: "posting" })
+    .eq("id", held.id)
+    .eq("xero_status", "failed")
+    .select("id");
+  const takenRows = Array.isArray(taken.data) ? taken.data : taken.data ? [taken.data] : [];
+  if (taken.error || takenRows.length === 0) return "busy";
+  return "mine";
 }
 
 /**
@@ -233,7 +291,11 @@ export async function writeConfirmedSpend(
 
   if (input.expenseId) {
     const already = await xeroIdForExpense(admin, input.expenseId);
-    if (already) return { status: "already_written", bankTransactionId: already };
+    if (already) {
+      // The spend was already sent. A lost log row is written now, without another post.
+      await rememberXeroSpend(admin, input, "written", already);
+      return { status: "already_written", bankTransactionId: already };
+    }
   }
 
   if (input.budgetId) {
@@ -291,6 +353,15 @@ export async function writeConfirmedSpend(
     if (!decision.write) {
       status = decision.status;
     } else {
+      const claim = await claimSpend(admin, input);
+      if (claim !== "mine") {
+        const held = input.expenseId ? await xeroIdForExpense(admin, input.expenseId) : null;
+        if (held) {
+          await rememberXeroSpend(admin, input, "written", held);
+          return { status: "already_written", bankTransactionId: held };
+        }
+        return { status: claim === "busy" ? "in_flight" : "failed", bankTransactionId: null };
+      }
       const posted = await createXeroSpendMoney(admin, region, {
         idempotencyKey: `ffsa-expense-${input.expenseId}`,
         payload: decision.payload,
