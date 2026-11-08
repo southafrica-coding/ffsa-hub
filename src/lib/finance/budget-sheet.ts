@@ -112,6 +112,19 @@ export type SheetLine = {
   multiplier: string;
   usesDriver: boolean;
   notes: string;
+  /** Read from the server. Never sent back. */
+  codingStatus?: string;
+};
+
+export type SheetExpense = {
+  id: string;
+  /** Empty means the expense is not on a line. */
+  lineId: string;
+  expenseDate: string;
+  description: string;
+  amount: string;
+  reference: string;
+  notes: string;
 };
 
 export type BudgetSheetDraft = {
@@ -135,6 +148,7 @@ export type BudgetSheetDraft = {
   fundraisingGoal: string;
   notes: string;
   lines: SheetLine[];
+  expenses: SheetExpense[];
 };
 
 export function emptyBudgetDraft(): BudgetSheetDraft {
@@ -153,6 +167,19 @@ export function emptyBudgetDraft(): BudgetSheetDraft {
     fundraisingGoal: "",
     notes: "",
     lines: [],
+    expenses: [],
+  };
+}
+
+export function newSheetExpense(id: string): SheetExpense {
+  return {
+    id,
+    lineId: "",
+    expenseDate: "",
+    description: "",
+    amount: "",
+    reference: "",
+    notes: "",
   };
 }
 
@@ -216,7 +243,8 @@ export function parseBudgetDraft(value: unknown): BudgetSheetDraft | null {
     incomeGoal === null ||
     fundraisingGoal === null ||
     notes === null ||
-    !Array.isArray(raw.lines)
+    !Array.isArray(raw.lines) ||
+    (raw.expenses !== undefined && !Array.isArray(raw.expenses))
   ) {
     return null;
   }
@@ -251,6 +279,26 @@ export function parseBudgetDraft(value: unknown): BudgetSheetDraft | null {
     });
   }
 
+  const expenses: SheetExpense[] = [];
+  for (const item of (raw.expenses as unknown[] | undefined) ?? []) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as Record<string, unknown>;
+    const id = asText(row.id, 80);
+    const description = asText(row.description, 500);
+    const expenseDate = asText(row.expenseDate, 10);
+    const amount = asText(row.amount, 40);
+    if (!id || description === null || expenseDate === null || amount === null) continue;
+    expenses.push({
+      id,
+      lineId: asText(row.lineId, 80) ?? "",
+      expenseDate,
+      description,
+      amount,
+      reference: asText(row.reference, 500) ?? "",
+      notes: asText(row.notes, 2000) ?? "",
+    });
+  }
+
   return {
     name,
     ownerKind: ownerKind === "" || isOwnerKind(ownerKind) ? ownerKind : "",
@@ -266,6 +314,7 @@ export function parseBudgetDraft(value: unknown): BudgetSheetDraft | null {
     fundraisingGoal,
     notes,
     lines,
+    expenses,
   };
 }
 

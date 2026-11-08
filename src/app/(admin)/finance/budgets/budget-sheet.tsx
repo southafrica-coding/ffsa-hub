@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Bar, KpiStrip, Masthead, MastheadButton, ModuleTabs, NeedsYou, SectionBar, StatusPill } from "@/components/ffsa";
 import { MoneyKpi } from "../money-kpi";
 import type { BudgetLineKind } from "@/lib/finance/budget-lines";
@@ -16,6 +17,7 @@ import {
   emptyBudgetDraft,
   formatBudgetMoney,
   needsYouCopy,
+  newSheetExpense,
   newSheetLine,
   parseDriver,
   parseOptionalMoney,
@@ -26,6 +28,15 @@ import {
   type BudgetSheetDraft,
   type SheetLine,
 } from "@/lib/finance/budget-sheet";
+import {
+  buildWorkbookBody,
+  draftFromCanonical,
+  interpretBudgetWrite,
+  parseBudgetList,
+  sheetSignature,
+  type BudgetListItem,
+  type CanonicalBudget,
+} from "@/lib/finance/budget-api";
 import { BudgetActuals } from "./budget-actuals";
 import { CostGrid } from "./cost-grid";
 
@@ -52,8 +63,17 @@ export function BudgetSheet({
   invalidBudgetId?: boolean;
   initialSection?: BudgetSectionKey;
 }) {
+  const router = useRouter();
   const [draft, setDraft] = useState<BudgetSheetDraft>(emptyBudgetDraft);
   const [section, setSection] = useState<BudgetSectionKey>(initialSection);
+  const [stamp, setStamp] = useState<{ id: string; updatedAt: string; status: string } | null>(null);
+  const [baseline, setBaseline] = useState(() => sheetSignature(emptyBudgetDraft()));
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [conflict, setConflict] = useState<string | null>(null);
+  const [phase, setPhase] = useState<"loading" | "ready" | "missing">(budgetId ? "loading" : "ready");
+  const [savedList, setSavedList] = useState<BudgetListItem[] | null>(null);
+  const [listNote, setListNote] = useState<string | null>(null);
 
   const driverValue = parseDriver(draft.driverValue);
   const variable = useMemo(() => rollup(draft.lines, "variable", driverValue), [draft.lines, driverValue]);
@@ -64,19 +84,142 @@ export function BudgetSheet({
   const periods = options.periods.filter((period) => npc !== null && period.org_id === npc.id);
   const selectedPeriod = periods.find((period) => period.id === draft.periodId) ?? null;
   const currency = npc ? "ZAR" : null;
-  const gaps = scopeGaps(draft, { npcId: npc?.id ?? null, periods });
+  const gapPeriods =
+    selectedPeriod || !draft.periodId || !npc || draft.org_id !== npc.id
+      ? periods
+      : [...periods, { id: draft.periodId, org_id: draft.org_id }];
+  const gaps = scopeGaps(draft, { npcId: npc?.id ?? null, periods: gapPeriods });
   const owners = draft.ownerKind ? options.owners[draft.ownerKind] : [];
   const owner = owners.find((item) => item.id === draft.ownerId) ?? null;
+
   useEffect(() => {
-    if (!selectedPeriod) {
-      setDraft((prev) => (prev.periodId === "" && prev.org_id === "" ? prev : { ...prev, periodId: "", org_id: "" }));
+    if (!budgetId) return;
+    let cancel = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/finance/budgets/${budgetId}`, { cache: "no-store" });
+        const body = await res.json().catch(() => ({}));
+        if (cancel) return;
+        const outcome = interpretBudgetWrite(res.status, body);
+        if (outcome.kind === "saved") {
+          const next = draftFromCanonical(outcome.budget, "");
+          setDraft(next);
+          setBaseline(sheetSignature(next));
+          setStamp({ id: outcome.budget.id, updatedAt: outcome.budget.updatedAt, status: outcome.budget.status });
+          setPhase("ready");
+          return;
+        }
+        setNotice(outcome.kind === "rejected" && res.status === 404 ? "That budget wasn't found." : outcome.message);
+        setPhase(res.status === 404 ? "missing" : "ready");
+      } catch {
+        if (!cancel) {
+          setNotice("The budget couldn't be read. Nothing here was saved.");
+          setPhase("ready");
+        }
+      }
+    })();
+    return () => {
+      cancel = true;
+    };
+  }, [budgetId]);
+
+  useEffect(() => {
+    if (budgetId) return;
+    let cancel = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/finance/budgets", { cache: "no-store" });
+        const body = await res.json().catch(() => ({}));
+        if (cancel) return;
+        if (res.status === 503) {
+          setListNote("Saved budgets aren't available yet.");
+          setSavedList([]);
+          return;
+        }
+        const list = parseBudgetList(body);
+        if (!res.ok || !list) {
+          setListNote("Saved budgets couldn't be read.");
+          setSavedList([]);
+          return;
+        }
+        setSavedList(list);
+        setListNote(null);
+      } catch {
+        if (!cancel) setListNote("Saved budgets couldn't be read.");
+      }
+    })();
+    return () => {
+      cancel = true;
+    };
+  }, [budgetId]);
+
+  const dirty = sheetSignature(draft) !== baseline;
+  const approved = stamp?.status === "approved";
+  const locked = saving || approved;
+  const active = TEAM_BUDGET_SECTIONS.find((item) => item.key === section) ?? TEAM_BUDGET_SECTIONS[0];
+
+  function adopt(budget: CanonicalBudget, purpose: string) {
+    const next = draftFromCanonical(budget, purpose);
+    setDraft(next);
+    setBaseline(sheetSignature(next));
+    setStamp({ id: budget.id, updatedAt: budget.updatedAt, status: budget.status });
+  }
+
+  async function reloadSaved() {
+    if (!stamp || saving) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/finance/budgets/${stamp.id}`, { cache: "no-store" });
+      const body = await res.json().catch(() => ({}));
+      const outcome = interpretBudgetWrite(res.status, body);
+      if (outcome.kind === "saved") {
+        adopt(outcome.budget, "");
+        setConflict(null);
+        setNotice(null);
+        return;
+      }
+      setNotice(outcome.message);
+    } catch {
+      setNotice("The saved copy couldn't be read. What you typed is still here.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveSheet() {
+    if (saving || approved) return;
+    const built = buildWorkbookBody(draft, stamp ? "save" : "create", stamp?.updatedAt ?? null, stamp?.status ?? null);
+    if (!built.ok) {
+      setNotice(built.error);
       return;
     }
-    if (draft.org_id !== selectedPeriod.org_id) {
-      setDraft((prev) => ({ ...prev, org_id: selectedPeriod.org_id }));
+    setSaving(true);
+    setNotice(null);
+    try {
+      const res = await fetch(stamp ? `/api/finance/budgets/${stamp.id}` : "/api/finance/budgets", {
+        method: stamp ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(built.body),
+      });
+      const body = await res.json().catch(() => ({}));
+      const outcome = interpretBudgetWrite(res.status, body);
+      if (outcome.kind === "saved") {
+        adopt(outcome.budget, draft.purpose);
+        setConflict(null);
+        if (!stamp) router.push(`/finance/budgets/${outcome.budget.id}`);
+        return;
+      }
+      if (outcome.kind === "stale") {
+        setConflict(outcome.message);
+        return;
+      }
+      setNotice(outcome.message);
+    } catch {
+      setNotice("Couldn't reach the Hub. Your edits are still here.");
+    } finally {
+      setSaving(false);
     }
-  }, [selectedPeriod, draft.org_id]);
-  const active = TEAM_BUDGET_SECTIONS.find((item) => item.key === section) ?? TEAM_BUDGET_SECTIONS[0];
+  }
 
   function patch(partial: Partial<BudgetSheetDraft>) {
     setDraft((prev) => ({ ...prev, ...partial }));
@@ -104,6 +247,22 @@ export function BudgetSheet({
   }
 
   const money = (cents: number) => formatBudgetMoney(cents, currency);
+  const attention = gaps.length
+    ? needsYouCopy(gaps)
+    : !stamp
+      ? "Save stores this sheet. Until you save, refreshing drops what you typed."
+      : dirty
+        ? "These changes aren't saved. Refreshing drops them."
+        : null;
+
+  if (phase === "loading") {
+    return (
+      <div data-testid="budget-sheet" className="max-w-full overflow-x-clip">
+        <Masthead context="Finance · Budget" title="Budget" />
+        <p className="px-5 py-8 text-sm md:px-8">Opening this budget…</p>
+      </div>
+    );
+  }
 
   return (
     <div data-testid="budget-sheet" className="max-w-full overflow-x-clip">
@@ -112,7 +271,8 @@ export function BudgetSheet({
         title="Budget"
         actions={
           <>
-            <StatusPill tone="warn">Not saved</StatusPill>
+            <StatusPill tone={stamp && !dirty ? "good" : "warn"}>{stamp ? (dirty ? "Unsaved" : stamp.status) : "Not saved"}</StatusPill>
+            <MastheadButton onClick={saveSheet}>{saving ? "Saving…" : stamp ? "Save" : "Create"}</MastheadButton>
             <MastheadButton tone="outline" onClick={clearSheet}>
               Clear sheet
             </MastheadButton>
@@ -126,8 +286,52 @@ export function BudgetSheet({
         }
       />
 
-      <NeedsYou>{needsYouCopy(gaps)}</NeedsYou>
+      {attention && <NeedsYou>{attention}</NeedsYou>}
+      {notice && <p className="border-b border-rule px-5 py-3 text-[13px] text-amber md:px-8">{notice}</p>}
+      {conflict && (
+        <div className="flex flex-col gap-3 border-b border-ink bg-bone px-5 py-3 md:flex-row md:items-center md:justify-between md:px-8">
+          <p className="text-[13px]">{conflict} Nothing you typed was overwritten.</p>
+          <div className="flex gap-2">
+            <button type="button" onClick={reloadSaved} className="min-h-11 border border-ink bg-ink px-3 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-white">
+              Reload saved copy
+            </button>
+            <button type="button" onClick={() => setConflict(null)} className="min-h-11 border border-ink px-3 font-mono text-[9px] font-bold uppercase tracking-[0.14em]">
+              Keep what I typed
+            </button>
+          </div>
+        </div>
+      )}
+      {approved && (
+        <p className="border-b border-rule px-5 py-3 text-[13px] md:px-8">
+          This budget is approved. It can&apos;t be changed until it is reopened.
+        </p>
+      )}
+      {stamp?.status === "submitted" && (
+        <p className="border-b border-rule px-5 py-3 text-[13px] md:px-8">
+          This budget is submitted. Only finance can change it.
+        </p>
+      )}
+      {!budgetId && (savedList || listNote) && (
+        <div className="border-b border-rule px-5 py-3 md:px-8">
+          <div className="mono-label">Saved budgets</div>
+          {listNote && <p className="mt-2 text-[13px]">{listNote}</p>}
+          {savedList && savedList.length > 0 && (
+            <ul className="mt-2">
+              {savedList.map((item) => (
+                <li key={item.id} className="border-b border-rule py-2 text-sm">
+                  <Link href={`/finance/budgets/${item.id}`} className="font-display text-[16px] font-black uppercase">
+                    {item.name}
+                  </Link>
+                  <span className="mono-label ml-2">{[item.status, item.periodLabel].filter(Boolean).join(" · ")}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {savedList && savedList.length === 0 && !listNote && <p className="mt-2 text-[13px]">No saved budgets yet.</p>}
+        </div>
+      )}
 
+      <fieldset disabled={locked} className="min-w-0 border-0 p-0">
       <div className="grid grid-cols-1 gap-px bg-ink sm:grid-cols-2 xl:grid-cols-4">
         <Field label="Name">
           <input
@@ -189,7 +393,7 @@ export function BudgetSheet({
             {npc ? "Rand. Locked to FFSA NPC." : "Rand, once FFSA NPC is on the Hub."}
           </p>
         </div>
-        <div className="bg-white px-3 py-3 sm:col-span-2">
+        <div className="bg-white px-3 py-3 xl:col-span-3">
           <label className="block">
             <span className="mono-label">Period</span>
             {periods.length > 0 ? (
@@ -311,7 +515,22 @@ export function BudgetSheet({
             />
           </div>
         )}
-        {section === "expense_tracker" && <ExpenseTracker help={active.help} />}
+        {section === "expense_tracker" && (
+          <ExpenseTracker
+            help={active.help}
+            expenses={draft.expenses}
+            lines={draft.lines}
+            readOnly={locked}
+            onAdd={() => setDraft((prev) => ({ ...prev, expenses: [...prev.expenses, newSheetExpense(newId())] }))}
+            onChange={(id, expensePatch) =>
+              setDraft((prev) => ({
+                ...prev,
+                expenses: prev.expenses.map((row) => (row.id === id ? { ...row, ...expensePatch } : row)),
+              }))
+            }
+            onRemove={(id) => setDraft((prev) => ({ ...prev, expenses: prev.expenses.filter((row) => row.id !== id) }))}
+          />
+        )}
         {section === "notes" && (
           <div className="border border-ink">
             <SectionBar title="Notes" />
@@ -326,6 +545,7 @@ export function BudgetSheet({
           </div>
         )}
       </div>
+      </fieldset>
     </div>
   );
 }
@@ -356,7 +576,7 @@ function Overview({
   return (
     <div className="border border-ink">
       <SectionBar title="Overview" meta={TEAM_BUDGET_TEMPLATE_NAME} />
-      <p className="border-b border-rule px-4 py-3 text-[13px]">{help} The sheet starts empty. No lines are imported.</p>
+      <p className="border-b border-rule px-4 py-3 text-[13px]">{help} Lines are added on Variable cost and Fixed cost.</p>
       <div className="grid grid-cols-1 md:grid-cols-[220px_1fr]">
         <OverviewRow label="What this covers">
           <textarea
@@ -366,6 +586,7 @@ function Overview({
             placeholder="Who it is for, and what the money is meant to do."
             onChange={(e) => onChange({ purpose: e.target.value })}
           />
+          <p className="mt-1.5 text-[12px] text-[color:var(--text-secondary)]">This description is not stored.</p>
         </OverviewRow>
         <OverviewRow label="Driver">
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -544,33 +765,132 @@ function DashRow({ label, value, strong }: { label: string; value: string; stron
   );
 }
 
-function ExpenseTracker({ help }: { help: string }) {
-  const headers = ["Date", "What it was for", "Amount", "Budget line", "Proof", "Checked"];
+function ExpenseTracker({
+  help,
+  expenses,
+  lines,
+  readOnly,
+  onAdd,
+  onChange,
+  onRemove,
+}: {
+  help: string;
+  expenses: BudgetSheetDraft["expenses"];
+  lines: BudgetSheetDraft["lines"];
+  readOnly: boolean;
+  onAdd: () => void;
+  onChange: (id: string, patch: Partial<BudgetSheetDraft["expenses"][number]>) => void;
+  onRemove: (id: string) => void;
+}) {
   return (
     <div className="border border-ink">
-      <SectionBar title="Expense tracker" meta="Not connected" />
-      <p className="border-b border-rule px-4 py-3 text-[13px]">
-        {help} When spending is connected, each receipt will sit on a budget line. This tracker is not the Xero
-        spend log. Actuals are read from Xero on the Dashboard, and they are not added up from outreach expenses.
-        Nothing here asks for a Xero code.
-      </p>
+      <SectionBar title="Expense tracker" meta={`${expenses.length} ${expenses.length === 1 ? "row" : "rows"}`} />
+      <div className="flex flex-col gap-3 border-b border-rule bg-bone px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="max-w-2xl text-[13px] leading-snug">
+          {help} These rows are this budget&apos;s expenses. They are not the Xero spend log, and they are not outreach
+          expenses. Nothing here asks for a Xero code.
+        </p>
+        {!readOnly && (
+          <button
+            type="button"
+            onClick={onAdd}
+            className="inline-flex min-h-11 shrink-0 items-center border border-ink bg-ink px-3 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-white"
+          >
+            Add an expense
+          </button>
+        )}
+      </div>
       <div className="max-w-full min-w-0 overflow-x-auto">
-        <table className="w-full min-w-[720px] border-collapse text-left">
+        <table className="w-full min-w-[880px] border-collapse text-left">
           <thead>
             <tr className="border-b border-ink bg-bone">
-              {headers.map((header) => (
-                <th key={header} className="mono-label px-3 py-2 font-bold">
+              {["Date", "What it was for", "Amount", "Budget line", "Proof", "Note", ""].map((header) => (
+                <th key={header || "remove"} className="mono-label px-2 py-2 font-bold">
                   {header}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td colSpan={headers.length} className="px-4 py-8 text-[13px] text-[color:var(--text-secondary)]">
-                Nothing has been spent against this budget.
-              </td>
-            </tr>
+            {expenses.length === 0 && (
+              <tr>
+                <td colSpan={7} className="px-4 py-8 text-[13px] text-[color:var(--text-secondary)]">
+                  Nothing has been spent against this budget.
+                </td>
+              </tr>
+            )}
+            {expenses.map((expense) => (
+              <tr key={expense.id} className="border-b border-rule">
+                <td className="p-0">
+                  <input
+                    type="date"
+                    aria-label="Expense date"
+                    className="h-11 w-full bg-transparent px-2 text-sm outline-none focus:bg-bone"
+                    value={expense.expenseDate}
+                    onChange={(e) => onChange(expense.id, { expenseDate: e.target.value })}
+                  />
+                </td>
+                <td className="p-0">
+                  <input
+                    aria-label="What the expense was for"
+                    className="h-11 w-full bg-transparent px-2 text-sm outline-none focus:bg-bone"
+                    value={expense.description}
+                    onChange={(e) => onChange(expense.id, { description: e.target.value })}
+                  />
+                </td>
+                <td className="p-0">
+                  <input
+                    aria-label="Expense amount"
+                    inputMode="decimal"
+                    className="h-11 w-full bg-transparent px-2 text-right font-mono text-sm tabular-nums outline-none focus:bg-bone"
+                    value={expense.amount}
+                    onChange={(e) => onChange(expense.id, { amount: e.target.value })}
+                  />
+                </td>
+                <td className="p-0">
+                  <select
+                    aria-label="Budget line"
+                    className="h-11 w-full bg-transparent px-2 text-sm outline-none focus:bg-bone"
+                    value={expense.lineId}
+                    onChange={(e) => onChange(expense.id, { lineId: e.target.value })}
+                  >
+                    <option value="">No line</option>
+                    {lines.map((line) => (
+                      <option key={line.id} value={line.id}>
+                        {line.name.trim() || "Untitled line"}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td className="p-0">
+                  <input
+                    aria-label="Proof"
+                    className="h-11 w-full bg-transparent px-2 text-sm outline-none focus:bg-bone"
+                    value={expense.reference}
+                    onChange={(e) => onChange(expense.id, { reference: e.target.value })}
+                  />
+                </td>
+                <td className="p-0">
+                  <input
+                    aria-label="Expense note"
+                    className="h-11 w-full bg-transparent px-2 text-sm outline-none focus:bg-bone"
+                    value={expense.notes}
+                    onChange={(e) => onChange(expense.id, { notes: e.target.value })}
+                  />
+                </td>
+                <td className="px-2">
+                  {!readOnly && (
+                    <button
+                      type="button"
+                      onClick={() => onRemove(expense.id)}
+                      className="min-h-11 font-mono text-[9px] font-bold uppercase tracking-[0.14em]"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>

@@ -145,7 +145,9 @@ export function CostGrid({
                   )}
                 </td>
                 <td className="px-2 py-2">
-                  <StatusPill tone="warn">Not coded</StatusPill>
+                  <StatusPill tone={!line.codingStatus || line.codingStatus === "needs_coding" ? "warn" : "good"}>
+                    {!line.codingStatus || line.codingStatus === "needs_coding" ? "Not coded" : "Mapped"}
+                  </StatusPill>
                 </td>
                 <td className="p-0">
                   <input
