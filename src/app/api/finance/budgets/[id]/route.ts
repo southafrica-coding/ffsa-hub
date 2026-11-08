@@ -3,9 +3,9 @@
  * PUT /api/finance/budgets/[id]
  * PATCH /api/finance/budgets/[id]
  *
- * Load or save one sheet-shaped workbook. Saving sends the lines and, when
- * the tracker is included, the expense rows. Owner, organisation, currency
- * and period stay as they were. Coding is not accepted.
+ * Load or save one sheet-shaped workbook. Saving calls apply_budget_workbook
+ * as the signed-in user. Send updatedAt from the last load. Owner,
+ * organisation, currency and period stay as they were. Coding is not accepted.
  * Until the workbook tables exist this returns 503 schema_not_applied.
  */
 

@@ -1,0 +1,6 @@
+npc_currency_check	PASS	budgets.currency CHECK is ZAR only and budgets_period_org_fkey exists (CHECK ((currency = 'ZAR'::text)))
+no_org_key_or_currency	PASS	budget_repayments and budget_xero_spends have no org_key or currency column
+reject_usd_currency	PASS	authenticated finance USD insert was rejected and left no row
+duplicate_slack_message_ts	PASS	second session failed the unique slack_message_ts; one row remains
+xero_spend_constraints	PASS	duplicate receipt_draft_id rejected, date outside the period rejected, two null drafts allowed
+authenticated_vs_service_role	PASS	outsider insert failed; service_role insert ran as service_role

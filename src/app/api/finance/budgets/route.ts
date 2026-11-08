@@ -3,15 +3,15 @@
  * POST /api/finance/budgets
  *
  * List and create sheet-shaped budget workbooks. Creates call
- * create_budget_from_template as the signed-in user. The organisation comes
- * from the fiscal period, and that period belongs to South Africa (ZAR).
+ * create_budget_workbook_sheet as the signed-in user, which calls
+ * create_budget_from_template and the first lines in one transaction.
+ * The organisation comes from the fiscal period, and that period belongs
+ * to South Africa (ZAR).
  * Until those tables exist this returns 503 schema_not_applied.
  */
 
 import { NextResponse } from "next/server";
-import { FINANCE_ORG_COLUMNS, createBudgetWorkbook, listBudgetWorkbooks, type OrgReader } from "@/services/budget-workbook";
-import { guardServiceRoleClient } from "@/lib/finance/preview-service-write";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createBudgetWorkbook, listBudgetWorkbooks } from "@/services/budget-workbook";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -23,21 +23,6 @@ async function caller() {
   } = await supabase.auth.getUser();
   if (!user) return null;
   return supabase;
-}
-
-function orgReader(): OrgReader {
-  async function read(column: "id" | "key", value: string) {
-    try {
-      const admin = guardServiceRoleClient(createAdminClient());
-      return await admin.from("finance_orgs").select(FINANCE_ORG_COLUMNS).eq(column, value).maybeSingle();
-    } catch {
-      return { data: null, error: { message: "South Africa organisation couldn't be read." } };
-    }
-  }
-  return {
-    readFinanceOrg: (key) => read("key", key),
-    readFinanceOrgById: (id) => read("id", id),
-  };
 }
 
 export async function GET(request: Request) {
@@ -60,6 +45,6 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
-  const result = await createBudgetWorkbook(supabase, body, orgReader());
+  const result = await createBudgetWorkbook(supabase, body);
   return NextResponse.json(result.body, { status: result.status });
 }

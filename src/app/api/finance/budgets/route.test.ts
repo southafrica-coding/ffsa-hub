@@ -79,7 +79,7 @@ describe("POST /api/finance/budgets", () => {
     );
     expect(res.status).toBe(201);
     expect(state.created).toEqual([{ name: "DTS 2027" }]);
-    expect(state.adminCalls.filter((call) => /insert|update|upsert|delete|rpc/.test(call))).toEqual([]);
+    expect(state.adminCalls).toEqual([]);
   });
 });
 

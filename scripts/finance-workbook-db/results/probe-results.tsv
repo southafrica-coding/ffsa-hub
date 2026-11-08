@@ -1,0 +1,14 @@
+rls_editor_submitted_line_edit	PASS	authenticated editor updated 0 submitted lines
+rls_editor_submitted_expense	PASS	authenticated editor inserted a submitted expense
+rls_editor_approved_line_edit	PASS	authenticated editor updated 0 approved lines
+rls_editor_approved_expense	PASS	authenticated editor inserted an approved expense
+rls_outsider_expense	PASS	outsider insert did not return an id
+rls_identity	PASS	SET ROLE authenticated and auth.uid() is the editor fixture
+superuser_bypasses_rls	PASS	table owner updated 1 submitted lines; this is not an authenticated result
+noop_update_audit_churn	PASS	no-op UPDATE added no audit row
+separate_statements_leave_partial	FAIL	failed expense left line c3b77f0d-676d-4560-b4e8-8e16c519609f live; no partial_draft id was returned by SQL
+db_allows_archive_with_live_expense	FAIL	archived line c3b77f0d-676d-4560-b4e8-8e16c519609f while 1 live expense(s) remain; no FK forbids it
+unconditional_overlap_lost_update	FAIL	both sessions committed an amount write; final amount_cents=222 (last writer wins, not one atomic sheet)
+per_row_cas_overlap	PASS	overlapping CAS updates changed the row once (A=1 B=0); not a sheet transaction
+sheet_not_one_transaction	FAIL	two sessions committed different rows (Fuel=from-b
+Van=from-a); no sheet-wide atomicity

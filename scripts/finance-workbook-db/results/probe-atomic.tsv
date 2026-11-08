@@ -1,0 +1,6 @@
+sheet_one_transaction	PASS	second session conflicted; both lines stayed session A (Van from A
+Fuel from A)
+noop_function_no_audit	PASS	unchanged apply added no audit row (62)
+editor_submitted_expense_function	PASS	editor expense save committed one row and did not rewrite the line
+editor_line_change_rolls_back	PASS	submitted line edit rolled back the expense too (amount=100)
+archive_blocked_with_live_expense	PASS	database refused to archive a line that a live expense points at

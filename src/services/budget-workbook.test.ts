@@ -198,83 +198,281 @@ function memory(options?: {
     return builder;
   }
 
+  function restore(snap: Record<string, Row[]>) {
+    for (const key of Object.keys(tables)) tables[key] = snap[key];
+  }
+
+  function insertTemplate(args: Record<string, unknown>) {
+    if (denyInsert.has("budgets")) {
+      return { data: null, error: { code: "42501", message: 'new row violates row-level security policy for table "budgets"' } };
+    }
+    const period = tables.fiscal_periods.find((row) => row.id === args.p_period_id && !row.archived_at);
+    if (!period) return { data: null, error: { code: "22023", message: "Period not found or archived" } };
+    if (args.p_org_id && args.p_org_id !== period.org_id) {
+      return { data: null, error: { code: "23514", message: "Budget org comes from the fiscal period" } };
+    }
+    const org = tables.finance_orgs.find((row) => row.id === period.org_id);
+    if (!org || org.key !== "npc" || org.record_currency !== "ZAR" || args.p_currency === "USD") {
+      return { data: null, error: { code: "23514", message: "Hub budgets are for South Africa only" } };
+    }
+    const ownerColumn =
+      args.p_owner_kind === "staff_ministry"
+        ? "staff_ministry_id"
+        : args.p_owner_kind === "ministry_subcategory"
+          ? "subcategory_id"
+          : args.p_owner_kind === "program"
+            ? "program_id"
+            : args.p_owner_kind === "event"
+              ? "event_id"
+              : "outreach_team_id";
+    const duplicate = tables.budgets.find(
+      (row) =>
+        !row.archived_at &&
+        row.org_id === period.org_id &&
+        row.owner_kind === args.p_owner_kind &&
+        row[ownerColumn] === args.p_owner_id &&
+        row.period_id === period.id &&
+        String(row.name).toLowerCase() === String(args.p_name).trim().toLowerCase()
+    );
+    if (duplicate) return { data: null, error: { code: "23505", message: "duplicate key" } };
+    const id = randomUUID();
+    tables.budgets.push({
+      id,
+      name: args.p_name,
+      status: "draft",
+      org_id: period.org_id,
+      currency: "ZAR",
+      owner_kind: args.p_owner_kind,
+      staff_ministry_id: null,
+      subcategory_id: null,
+      program_id: null,
+      event_id: null,
+      outreach_team_id: null,
+      [ownerColumn]: args.p_owner_id,
+      period_id: period.id,
+      driver_label: args.p_driver_label ?? null,
+      driver_value: args.p_driver_value ?? null,
+      funding_goal_cents: null,
+      funds_in_hand_cents: null,
+      income_goal_cents: null,
+      fundraising_goal_cents: null,
+      notes: null,
+      archived_at: null,
+      updated_at: stamp(),
+    });
+    const sections = [
+      ["overview", "Overview", 10],
+      ["dashboard", "Dashboard", 20],
+      ["variable", "Variable cost", 30],
+      ["fixed", "Fixed cost", 40],
+      ["expense_tracker", "Expense tracker", 50],
+      ["notes", "Notes", 60],
+    ];
+    for (const [key, label, sort] of sections) {
+      tables.budget_sections.push({ id: randomUUID(), budget_id: id, key, label, sort });
+    }
+    return { data: id, error: null };
+  }
+
+  function revisionOf(budgetId: string): string | null {
+    const budget = tables.budgets.find((row) => row.id === budgetId && !row.archived_at);
+    if (!budget || typeof budget.updated_at !== "string") return null;
+    const stamps = [budget.updated_at as string];
+    for (const line of tables.budget_lines) {
+      if (line.budget_id === budgetId && !line.archived_at && typeof line.updated_at === "string") stamps.push(line.updated_at);
+    }
+    for (const expense of tables.budget_expenses) {
+      if (expense.budget_id === budgetId && !expense.archived_at && typeof expense.updated_at === "string") stamps.push(expense.updated_at);
+    }
+    return stamps.reduce((latest, stamp) => (Date.parse(stamp) >= Date.parse(latest) ? stamp : latest));
+  }
+
+  function applySheet(
+    budgetId: string,
+    header: unknown,
+    lines: unknown,
+    expenses: unknown,
+    expected: unknown,
+    checkRevision: boolean
+  ): { revision?: string | null; error: { code: string; message: string } | null } {
+    const budget = tables.budgets.find((row) => row.id === budgetId && !row.archived_at);
+    if (!budget) return { error: { code: "P0002", message: "Budget not found" } };
+    const revision = revisionOf(budgetId);
+    if (checkRevision) {
+      const expectedMs = typeof expected === "string" ? Date.parse(expected) : NaN;
+      const revisionMs = revision ? Date.parse(revision) : NaN;
+      if (!revision || expectedMs !== revisionMs) return { error: { code: "40001", message: "workbook revision conflict" } };
+    }
+    const lineRows = Array.isArray(lines) ? (lines as Row[]) : null;
+    const expenseRows = Array.isArray(expenses) ? (expenses as Row[]) : null;
+    if (loseRace.has("budget_lines") && lineRows) {
+      const live = tables.budget_lines.filter((row) => row.budget_id === budgetId && !row.archived_at);
+      const changes = lineRows.some((line) => {
+        const current = live.find((row) => row.id === line.id);
+        if (!current) return true;
+        return Number(current.amount_cents) !== Number(line.amount_cents) || current.name !== line.name || (current.notes ?? null) !== (line.notes ?? null);
+      });
+      const archives = live.some((row) => {
+        if (lineRows.some((line) => line.id === row.id)) return false;
+        if (!expenseRows && tables.budget_expenses.some((expense) => expense.budget_id === budgetId && expense.line_id === row.id && !expense.archived_at)) {
+          return false;
+        }
+        return true;
+      });
+      if (changes || archives) return { error: { code: "40001", message: "workbook revision conflict" } };
+    }
+    if (header && typeof header === "object") {
+      const patch = header as Row;
+      const differs = Object.keys(patch).some((key) => (budget[key] ?? null) !== (patch[key] ?? null));
+      if (differs) {
+        if (denyUpdate.has("budgets")) return { error: { code: "42501", message: "row-level security" } };
+        writes.push({ table: "budgets", op: "update", payload: structuredClone(patch) });
+        Object.assign(budget, patch, { updated_at: stamp() });
+        if ("driver_value" in patch) recomputeDriver(budgetId);
+      }
+    }
+    const kept = new Set<string>();
+    if (lineRows) {
+      for (const line of lineRows) {
+        const section = tables.budget_sections.find((row) => row.budget_id === budgetId && row.key === line.kind);
+        const payload = {
+          section_id: section?.id,
+          kind: line.kind,
+          name: line.name,
+          amount_cents: line.amount_cents,
+          frequency: line.kind === "fixed" ? 1 : line.frequency,
+          multiplier: line.multiplier,
+          uses_driver: line.uses_driver === true,
+          sort: line.sort ?? 0,
+          notes: line.notes ?? null,
+        };
+        const current = line.id
+          ? tables.budget_lines.find((row) => row.id === line.id && row.budget_id === budgetId && !row.archived_at)
+          : undefined;
+        if (current) {
+          kept.add(String(current.id));
+          const unchanged =
+            current.section_id === payload.section_id &&
+            current.kind === payload.kind &&
+            current.name === payload.name &&
+            Number(current.amount_cents) === Number(payload.amount_cents) &&
+            Number(current.frequency) === Number(payload.frequency) &&
+            Number(current.multiplier) === Number(payload.multiplier) &&
+            current.uses_driver === payload.uses_driver &&
+            (current.sort ?? 0) === payload.sort &&
+            (current.notes ?? null) === payload.notes;
+          if (unchanged) continue;
+          if (denyUpdate.has("budget_lines")) return { error: { code: "42501", message: "row-level security" } };
+          writes.push({ table: "budget_lines", op: "update", payload });
+          Object.assign(current, payload, { updated_at: stamp() });
+          applyLine(current);
+        } else {
+          if (denyInsert.has("budget_lines")) {
+            return { error: { code: "42501", message: 'new row violates row-level security policy for table "budget_lines"' } };
+          }
+          const id = (typeof line.id === "string" && line.id) || randomUUID();
+          const stored: Row = { ...payload, id, budget_id: budgetId, updated_at: stamp(), archived_at: null };
+          writes.push({ table: "budget_lines", op: "insert", payload: { ...payload, id, budget_id: budgetId } });
+          applyLine(stored);
+          tables.budget_lines.push(stored);
+          kept.add(id);
+        }
+      }
+    }
+    const keptExpenses = new Set<string>();
+    if (expenseRows) {
+      for (const expense of expenseRows) {
+        if (expense.line_id && lineRows && !kept.has(String(expense.line_id))) {
+          return { error: { code: "23514", message: "Expense must reference a live line of this budget" } };
+        }
+        const payload = {
+          line_id: expense.line_id ?? null,
+          expense_date: expense.expense_date,
+          vendor: expense.vendor ?? null,
+          description: expense.description,
+          amount_cents: expense.amount_cents,
+          reference: expense.reference ?? null,
+          notes: expense.notes ?? null,
+        };
+        const current = expense.id
+          ? tables.budget_expenses.find((row) => row.id === expense.id && row.budget_id === budgetId && !row.archived_at)
+          : undefined;
+        if (current) {
+          keptExpenses.add(String(current.id));
+          const unchanged =
+            (current.line_id ?? null) === payload.line_id &&
+            current.expense_date === payload.expense_date &&
+            (current.vendor ?? null) === payload.vendor &&
+            current.description === payload.description &&
+            Number(current.amount_cents) === Number(payload.amount_cents) &&
+            (current.reference ?? null) === payload.reference &&
+            (current.notes ?? null) === payload.notes;
+          if (unchanged) continue;
+          if (denyUpdate.has("budget_expenses")) return { error: { code: "42501", message: "row-level security" } };
+          writes.push({ table: "budget_expenses", op: "update", payload });
+          Object.assign(current, payload, { updated_at: stamp() });
+        } else {
+          if (denyInsert.has("budget_expenses")) return { error: { code: "42501", message: "row-level security" } };
+          const id = (typeof expense.id === "string" && expense.id) || randomUUID();
+          writes.push({ table: "budget_expenses", op: "insert", payload: { ...payload, id, budget_id: budgetId } });
+          tables.budget_expenses.push({ ...payload, id, budget_id: budgetId, archived_at: null, updated_at: stamp() });
+          keptExpenses.add(id);
+        }
+      }
+      for (const expense of tables.budget_expenses) {
+        if (expense.budget_id !== budgetId || expense.archived_at || keptExpenses.has(String(expense.id))) continue;
+        if (denyArchive.has("budget_expenses")) return { error: { code: "42501", message: "row-level security" } };
+        expense.archived_at = stamp();
+        expense.updated_at = stamp();
+      }
+    }
+    if (lineRows) {
+      const protect = new Set<string>();
+      if (!expenseRows) {
+        for (const expense of tables.budget_expenses) {
+          if (expense.budget_id === budgetId && !expense.archived_at && expense.line_id) protect.add(String(expense.line_id));
+        }
+      }
+      for (const line of tables.budget_lines) {
+        if (line.budget_id !== budgetId || line.archived_at || kept.has(String(line.id)) || protect.has(String(line.id))) continue;
+        if (tables.budget_expenses.some((expense) => expense.budget_id === budgetId && expense.line_id === line.id && !expense.archived_at)) {
+          return { error: { code: "23514", message: "A line with a live expense cannot be archived" } };
+        }
+        if (denyArchive.has("budget_lines")) return { error: { code: "42501", message: "row-level security" } };
+        writes.push({ table: "budget_lines", op: "update", payload: { archived_at: true } });
+        line.archived_at = stamp();
+        line.updated_at = stamp();
+      }
+    }
+    return { revision: revisionOf(budgetId), error: null };
+  }
+
   const client = {
     from: (table: string) => query(table),
     async rpc(name: string, args: Record<string, unknown>) {
       writes.push({ table: "rpc", op: name, payload: structuredClone(args) });
       if (options?.rpcError) return { data: null, error: options.rpcError };
-      if (missing.has("create_budget_from_template") || name !== "create_budget_from_template") {
-        return { data: null, error: { code: "PGRST202", message: "Could not find the function public.create_budget_from_template in the schema cache" } };
+      if (name === "create_budget_workbook_sheet") {
+        const snap = structuredClone(tables);
+        const created = insertTemplate(args);
+        if (created.error) return created;
+        const applied = applySheet(String(created.data), args.p_header ?? null, args.p_lines ?? null, args.p_expenses ?? null, null, false);
+        if (applied.error) {
+          restore(snap);
+          return { data: null, error: applied.error };
+        }
+        return created;
       }
-      if (denyInsert.has("budgets")) {
-        return { data: null, error: { code: "42501", message: 'new row violates row-level security policy for table "budgets"' } };
+      if (name === "apply_budget_workbook") {
+        const snap = structuredClone(tables);
+        const applied = applySheet(String(args.p_budget_id), args.p_header ?? null, args.p_lines ?? null, args.p_expenses ?? null, args.p_expected_updated_at, true);
+        if (applied.error) {
+          restore(snap);
+          return { data: null, error: applied.error };
+        }
+        return { data: applied.revision, error: null };
       }
-      const period = tables.fiscal_periods.find((row) => row.id === args.p_period_id && !row.archived_at);
-      if (!period) return { data: null, error: { code: "22023", message: "Period not found or archived" } };
-      if (args.p_org_id && args.p_org_id !== period.org_id) {
-        return { data: null, error: { code: "23514", message: "Budget org comes from the fiscal period" } };
-      }
-      const org = tables.finance_orgs.find((row) => row.id === period.org_id);
-      if (!org || org.key !== "npc" || org.record_currency !== "ZAR" || args.p_currency === "USD") {
-        return { data: null, error: { code: "23514", message: "Hub budgets are for South Africa only" } };
-      }
-      const ownerColumn =
-        args.p_owner_kind === "staff_ministry"
-          ? "staff_ministry_id"
-          : args.p_owner_kind === "ministry_subcategory"
-            ? "subcategory_id"
-            : args.p_owner_kind === "program"
-              ? "program_id"
-              : args.p_owner_kind === "event"
-                ? "event_id"
-                : "outreach_team_id";
-      const duplicate = tables.budgets.find(
-        (row) =>
-          !row.archived_at &&
-          row.org_id === period.org_id &&
-          row.owner_kind === args.p_owner_kind &&
-          row[ownerColumn] === args.p_owner_id &&
-          row.period_id === period.id &&
-          String(row.name).toLowerCase() === String(args.p_name).trim().toLowerCase()
-      );
-      if (duplicate) return { data: null, error: { code: "23505", message: "duplicate key" } };
-      const id = randomUUID();
-      tables.budgets.push({
-        id,
-        name: args.p_name,
-        status: "draft",
-        org_id: period.org_id,
-        currency: "ZAR",
-        owner_kind: args.p_owner_kind,
-        staff_ministry_id: null,
-        subcategory_id: null,
-        program_id: null,
-        event_id: null,
-        outreach_team_id: null,
-        [ownerColumn]: args.p_owner_id,
-        period_id: period.id,
-        driver_label: args.p_driver_label,
-        driver_value: args.p_driver_value,
-        funding_goal_cents: null,
-        funds_in_hand_cents: null,
-        income_goal_cents: null,
-        fundraising_goal_cents: null,
-        notes: null,
-        archived_at: null,
-        updated_at: stamp(),
-      });
-      const sections = [
-        ["overview", "Overview", 10],
-        ["dashboard", "Dashboard", 20],
-        ["variable", "Variable cost", 30],
-        ["fixed", "Fixed cost", 40],
-        ["expense_tracker", "Expense tracker", 50],
-        ["notes", "Notes", 60],
-      ];
-      for (const [key, label, sort] of sections) {
-        tables.budget_sections.push({ id: randomUUID(), budget_id: id, key, label, sort });
-      }
-      return { data: id, error: null };
+      return { data: null, error: { code: "PGRST202", message: `Could not find the function public.${name} in the schema cache` } };
     },
   };
 
@@ -334,7 +532,7 @@ describe("budget workbook save and load", () => {
       })
     );
     expect(result.status).toBe(201);
-    const rpc = db.writes.find((write) => write.op === "create_budget_from_template");
+    const rpc = db.writes.find((write) => write.op === "create_budget_workbook_sheet");
     expect(rpc?.payload).toMatchObject({
       p_template_id: "tpl-standard",
       p_owner_kind: "outreach_team",
@@ -345,7 +543,6 @@ describe("budget workbook save and load", () => {
       p_currency: null,
       p_driver_label: "Volunteers",
       p_driver_value: 8,
-      p_submit: false,
     });
     const lineInserts = db.writes.filter((write) => write.table === "budget_lines" && write.op === "insert");
     expect(lineInserts).toHaveLength(2);
@@ -423,7 +620,7 @@ describe("budget workbook save and load", () => {
     expect(usd.body.error).toMatch(/rand/);
     const usa = await createBudgetWorkbook(db.client, sheet({ orgId: USA }));
     expect(usa.status).toBe(400);
-    expect(db.writes.some((write) => write.op === "create_budget_from_template" || write.table === "fiscal_periods")).toBe(false);
+    expect(db.writes.some((write) => write.op === "create_budget_workbook_sheet" || write.table === "fiscal_periods")).toBe(false);
   });
 
   it("rejects a US period instead of moving it onto South Africa", async () => {
@@ -437,12 +634,14 @@ describe("budget workbook save and load", () => {
       end_date: "2027-12-31",
       archived_at: null,
     });
-    const result = await createBudgetWorkbook(db.client, sheet({ periodId: usPeriod, orgId: NPC }));
+    const rewritten = await createBudgetWorkbook(db.client, sheet({ periodId: usPeriod, orgId: NPC }));
+    expect(rewritten.status).toBe(400);
+    expect(rewritten.body.error).toBe("The organisation comes from the period.");
+    const result = await createBudgetWorkbook(db.client, sheet({ periodId: usPeriod }));
     expect(result.status).toBe(400);
     expect(result.body.error).toMatch(/South Africa/);
     expect(db.tables.budgets).toHaveLength(0);
     expect(db.tables.fiscal_periods.find((row) => row.id === usPeriod)?.org_id).toBe(USA);
-    expect(db.writes.some((write) => write.op === "create_budget_from_template" || write.table === "fiscal_periods")).toBe(false);
   });
 
   it("rejects a passed org id that is not the period's org", async () => {
@@ -450,13 +649,13 @@ describe("budget workbook save and load", () => {
     expect(result.status).toBe(400);
     expect(result.body.error).toBe("The organisation comes from the period.");
     expect(db.tables.budgets).toHaveLength(0);
-    expect(db.writes.some((write) => write.op === "create_budget_from_template")).toBe(false);
+    expect(db.writes.some((write) => write.op === "create_budget_workbook_sheet")).toBe(false);
   });
 
   it("stores the period's org and does not write a client currency", async () => {
     const result = await createBudgetWorkbook(db.client, sheet({ periodId: PERIOD, orgId: NPC, currency: "ZAR" }));
     expect(result.status).toBe(201);
-    const rpc = db.writes.find((write) => write.op === "create_budget_from_template");
+    const rpc = db.writes.find((write) => write.op === "create_budget_workbook_sheet");
     expect(rpc?.payload).toMatchObject({ p_org_id: NPC, p_period_id: PERIOD, p_currency: null });
     expect((result.body.budget as { orgId: string; currency: string }).currency).toBe("ZAR");
   });
@@ -467,13 +666,13 @@ describe("budget workbook save and load", () => {
     const created = await createBudgetWorkbook(db.client, body);
     expect(created.status).toBe(400);
     expect(created.body.error).toBe("Choose a period that already exists.");
-    expect(db.writes.some((write) => write.table === "fiscal_periods" || write.op === "create_budget_from_template")).toBe(false);
+    expect(db.writes.some((write) => write.table === "fiscal_periods" || write.op === "create_budget_workbook_sheet")).toBe(false);
   });
 
   it("refuses a typed period that does not match the chosen period id", async () => {
     const result = await createBudgetWorkbook(db.client, sheet({ periodEnd: "2027-06-30" }));
     expect(result.status).toBe(400);
-    expect(db.writes.some((write) => write.op === "create_budget_from_template" || write.table === "fiscal_periods")).toBe(false);
+    expect(db.writes.some((write) => write.op === "create_budget_workbook_sheet" || write.table === "fiscal_periods")).toBe(false);
   });
 
   it("does not pass a short unknown database message through as a 500", async () => {
@@ -500,34 +699,12 @@ describe("budget workbook save and load", () => {
     expect(db.tables.budgets).toHaveLength(0);
   });
 
-  it("reads the South Africa org with the fallback when the signed-in user cannot see it", async () => {
+  it("creates a workbook when the signed-in user cannot see finance_orgs", async () => {
     db = memory({ hide: ["finance_orgs"] });
-    let reads = 0;
-    const result = await createBudgetWorkbook(db.client, sheet({ periodId: PERIOD }), {
-      readFinanceOrg: async () => ({ data: null, error: { message: "not used" } }),
-      readFinanceOrgById: async (id) => {
-        reads += 1;
-        expect(id).toBe(NPC);
-        return { data: { id: NPC, key: "npc", name: "FFSA NPC", record_currency: "ZAR", is_active: true }, error: null };
-      },
-    });
-    expect(reads).toBe(1);
+    const result = await createBudgetWorkbook(db.client, sheet({ periodId: PERIOD }));
     expect(result.status).toBe(201);
     expect((result.body.budget as { orgId: string }).orgId).toBe(NPC);
-  });
-
-  it("stops before a service-role write when that read is refused", async () => {
-    db = memory({ hide: ["finance_orgs"] });
-    const result = await createBudgetWorkbook(db.client, sheet({ periodId: PERIOD }), {
-      readFinanceOrg: async () => ({ data: null, error: null }),
-      readFinanceOrgById: async () => ({
-        data: null,
-        error: { code: "preview_writes_disabled", message: "This preview can't change budgets with the service role." },
-      }),
-    });
-    expect(result.status).toBe(403);
-    expect(result.body).toMatchObject({ error: "preview_writes_disabled" });
-    expect(db.writes.some((write) => write.op === "create_budget_from_template")).toBe(false);
+    expect(db.writes.some((write) => write.table === "finance_orgs")).toBe(false);
   });
 
   it("saves amounts and notes, archives a removed line, and keeps the owner", async () => {
@@ -677,7 +854,7 @@ describe("budget workbook save and load", () => {
     expect(result.status).toBe(400);
     expect(result.body.error).toMatch(/too large/);
     expect(db.tables.budgets).toHaveLength(0);
-    expect(db.writes.some((write) => write.op === "create_budget_from_template")).toBe(false);
+    expect(db.writes.some((write) => write.op === "create_budget_workbook_sheet")).toBe(false);
   });
 
   it("archives a draft when a later step fails, so a retry is not a bare name clash", async () => {
@@ -695,17 +872,15 @@ describe("budget workbook save and load", () => {
     expect(second.status).toBe(201);
   });
 
-  it("reports a partial draft when the half-saved budget cannot be archived", async () => {
+  it("rolls the whole create back when a line cannot be saved", async () => {
     db.denyInsert.add("budget_lines");
     db.denyUpdate.add("budgets");
     const result = await createBudgetWorkbook(db.client, sheet({
       lines: [{ id: LINE, kind: "fixed", name: "Van", amountCents: 100, multiplier: 1 }],
     }));
-    expect(result.status).toBe(409);
-    expect(result.body).toMatchObject({ code: "partial_draft" });
-    expect(result.body.error).toMatch(/partly saved/);
-    expect(typeof result.body.budgetId).toBe("string");
-    expect(db.tables.budgets.filter((row) => !row.archived_at)).toHaveLength(1);
+    expect(result.status).toBe(403);
+    expect(result.body.code).toBeUndefined();
+    expect(db.tables.budgets).toHaveLength(0);
   });
 
   it("does not report success when archiving a line is skipped", async () => {
