@@ -182,7 +182,11 @@ export function WaiverSignatureSection({
                 style={inputStyle}
                 placeholder="e.g. Jane Smith"
               />
-              {e.guardian_name && <p style={errStyle}>{e.guardian_name}</p>}
+              {e.guardian_name && (
+                <p data-field-error="" style={errStyle}>
+                  {e.guardian_name}
+                </p>
+              )}
             </div>
 
             {slot.waiver.require_relationship && (
@@ -197,7 +201,11 @@ export function WaiverSignatureSection({
                   style={inputStyle}
                   placeholder="e.g. Mother, Father, Legal guardian"
                 />
-                {e.relationship && <p style={errStyle}>{e.relationship}</p>}
+                {e.relationship && (
+                  <p data-field-error="" style={errStyle}>
+                    {e.relationship}
+                  </p>
+                )}
               </div>
             )}
 
@@ -213,7 +221,11 @@ export function WaiverSignatureSection({
                   style={inputStyle}
                   placeholder="The child attending"
                 />
-                {e.minor_name && <p style={errStyle}>{e.minor_name}</p>}
+                {e.minor_name && (
+                  <p data-field-error="" style={errStyle}>
+                    {e.minor_name}
+                  </p>
+                )}
               </div>
             )}
 
@@ -232,7 +244,11 @@ export function WaiverSignatureSection({
                 }}
                 placeholder="Your signature"
               />
-              {e.typed_signature && <p style={errStyle}>{e.typed_signature}</p>}
+              {e.typed_signature && (
+                <p data-field-error="" style={errStyle}>
+                  {e.typed_signature}
+                </p>
+              )}
             </div>
 
             <label
@@ -257,7 +273,11 @@ export function WaiverSignatureSection({
                 attendee.
               </span>
             </label>
-            {e.agreed && <p style={errStyle}>{e.agreed}</p>}
+            {e.agreed && (
+              <p data-field-error="" style={errStyle}>
+                {e.agreed}
+              </p>
+            )}
           </div>
         );
       })}

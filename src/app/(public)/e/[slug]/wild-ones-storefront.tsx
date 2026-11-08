@@ -39,6 +39,10 @@ import {
 } from "./checkout-questions-fields";
 import { TicketQuestionsSection } from "./ticket-questions-section";
 import { WaiverSignatureSection } from "./waiver-signature-section";
+import {
+  WAIVER_BLOCK_MESSAGE,
+  revealTargetId,
+} from "@/lib/ticketing/wild-ones-checkout-focus";
 
 // Custom checkout questions, themed to WILD ONES' scoped `.wo-*` classes.
 const WILD_ONES_CHECKOUT_CLASSES: CheckoutFieldClasses = {
@@ -374,6 +378,24 @@ export function WildOnesStorefront({
     setPromoError(null);
   }
 
+  // Scroll after React paints the field errors. The mobile CHECKOUT bar
+  // calls this from whatever section is on screen, so the target has to
+  // be the block that failed — not the top of the buyer section.
+  function revealFailure(failure: "buyer" | "checkout" | "tickets" | "waiver" | "consent") {
+    const id = revealTargetId(failure);
+    requestAnimationFrame(() => {
+      const root = document.getElementById(id);
+      const flagged =
+        failure === "checkout" || failure === "tickets" || failure === "waiver"
+          ? root?.querySelector("[data-field-error], .wo-promo-error")
+          : null;
+      (flagged ?? root)?.scrollIntoView({
+        behavior: "smooth",
+        block: failure === "buyer" ? "start" : "center",
+      });
+    });
+  }
+
   // Email always required; other fields only block checkout when enabled +
   // marked required (buyer_fields, migration 140).
   const buyerValid =
@@ -393,9 +415,7 @@ export function WildOnesStorefront({
     }
     if (!buyerValid) {
       setErr("Add your name and a valid email to lock it in.");
-      document
-        .getElementById("wo-buyer")
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      revealFailure("buyer");
       return;
     }
     if (checkoutQuestions.length > 0) {
@@ -403,9 +423,7 @@ export function WildOnesStorefront({
       if (!v.valid) {
         setCustomErrors(v.errors);
         setErr("Answer the required questions to lock it in.");
-        document
-          .getElementById("wo-buyer")
-          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+        revealFailure("checkout");
         return;
       }
       setCustomErrors({});
@@ -414,16 +432,15 @@ export function WildOnesStorefront({
     if (!ticketCollect.valid) {
       setTicketErrors(ticketCollect.errors);
       setErr("Answer the required questions for each ticket to lock it in.");
-      document
-        .getElementById("wo-buyer")
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      revealFailure("tickets");
       return;
     }
     setTicketErrors({});
     const waiverCollect = collectWaiverSignatures(waiverSlots, waiverValues);
     if (!waiverCollect.valid) {
       setWaiverErrors(waiverCollect.errors);
-      setErr("Please read and sign the required form for each ticket below.");
+      setErr(WAIVER_BLOCK_MESSAGE);
+      revealFailure("waiver");
       return;
     }
     setWaiverErrors({});
@@ -431,9 +448,7 @@ export function WildOnesStorefront({
       setErr(
         "Please accept the Ticket Purchase Terms & Consent Agreement to continue."
       );
-      document
-        .getElementById("wo-consent")
-        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      revealFailure("consent");
       return;
     }
     setSubmitting(provider);
@@ -782,34 +797,38 @@ export function WildOnesStorefront({
             />
           )}
           {waiverSlots.length > 0 && (
-            <WaiverSignatureSection
-              eventId={event.id}
-              slots={waiverSlots}
-              valuesBySlot={waiverValues}
-              errorsBySlot={waiverErrors}
-              onChange={(slotKey, field, val) =>
-                setWaiverValues((prev) => ({
-                  ...prev,
-                  [slotKey]: { ...(prev[slotKey] ?? {}), [field]: val },
-                }))
-              }
-            />
+            <div id="wo-waiver">
+              <WaiverSignatureSection
+                eventId={event.id}
+                slots={waiverSlots}
+                valuesBySlot={waiverValues}
+                errorsBySlot={waiverErrors}
+                onChange={(slotKey, field, val) =>
+                  setWaiverValues((prev) => ({
+                    ...prev,
+                    [slotKey]: { ...(prev[slotKey] ?? {}), [field]: val },
+                  }))
+                }
+              />
+            </div>
           )}
 
           {ticketSlots.length > 0 && (
-            <TicketQuestionsSection
-              slots={ticketSlots}
-              valuesBySlot={ticketAnswers}
-              errorsBySlot={ticketErrors}
-              onChange={(slotKey, k, val) =>
-                setTicketAnswers((prev) => ({
-                  ...prev,
-                  [slotKey]: { ...(prev[slotKey] ?? {}), [k]: val },
-                }))
-              }
-              classes={WILD_ONES_CHECKOUT_CLASSES}
-              titleClassName="wo-label"
-            />
+            <div id="wo-ticket-questions">
+              <TicketQuestionsSection
+                slots={ticketSlots}
+                valuesBySlot={ticketAnswers}
+                errorsBySlot={ticketErrors}
+                onChange={(slotKey, k, val) =>
+                  setTicketAnswers((prev) => ({
+                    ...prev,
+                    [slotKey]: { ...(prev[slotKey] ?? {}), [k]: val },
+                  }))
+                }
+                classes={WILD_ONES_CHECKOUT_CLASSES}
+                titleClassName="wo-label"
+              />
+            </div>
           )}
           {bf.marketing_consent.enabled && (
             <label className="wo-consent">
