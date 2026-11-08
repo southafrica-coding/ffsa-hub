@@ -79,7 +79,7 @@ echo "LOAD seed"
 
 echo "CHECKSUMS"
 cat "$sums"
-echo "PROBE baseline (before migration 302)"
+echo "PROBE baseline (before migration 303)"
 FFSA_VERIFY_SOCKET="$SOCKET" FFSA_VERIFY_DB="$DB" "$ROOT/probe.sh"
 
 echo "LOAD outreach fk targets (id only, not migrations 008 or 244)"
@@ -90,9 +90,9 @@ for name in 300_budget_repayments.sql 301_budget_xero_spends.sql; do
   echo "LOAD $name from $SHA513"
   "${PSQL[@]}" -d "$DB" -f "$cache/$name"
 done
-echo "LOAD 302_budget_workbook_atomic_save.sql from this branch"
-sha256sum "$REPO/supabase/migrations/302_budget_workbook_atomic_save.sql" | awk '{print "302_budget_workbook_atomic_save.sql", $1}' | tee -a "$sums"
-"${PSQL[@]}" -d "$DB" -f "$REPO/supabase/migrations/302_budget_workbook_atomic_save.sql"
+echo "LOAD 303_budget_workbook_atomic_save.sql from this branch"
+sha256sum "$REPO/supabase/migrations/303_budget_workbook_atomic_save.sql" | awk '{print "303_budget_workbook_atomic_save.sql", $1}' | tee -a "$sums"
+"${PSQL[@]}" -d "$DB" -f "$REPO/supabase/migrations/303_budget_workbook_atomic_save.sql"
 
 echo "PROBE atomic"
 FFSA_VERIFY_SOCKET="$SOCKET" FFSA_VERIFY_DB="$DB" "$ROOT/probe-atomic.sh"

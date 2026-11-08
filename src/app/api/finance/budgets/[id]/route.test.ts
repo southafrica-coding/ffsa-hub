@@ -25,6 +25,7 @@ const context = { params: Promise.resolve({ id: "44444444-4444-4444-8444-4444444
 beforeEach(() => {
   state.userId = "pat";
   state.saved = [];
+  delete process.env.VERCEL_ENV;
 });
 
 describe("/api/finance/budgets/[id]", () => {
@@ -38,6 +39,17 @@ describe("/api/finance/budgets/[id]", () => {
     const res = await GET(new Request("http://localhost/api/finance/budgets/x"), context);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ budget: { id: "44444444-4444-4444-8444-444444444444" } });
+  });
+
+  it("blocks a preview save before any workbook call", async () => {
+    process.env.VERCEL_ENV = "preview";
+    const body = JSON.stringify({ notes: "Bring receipts.", updatedAt: "2026-11-08T00:00:00.000Z" });
+    const put = await PUT(new Request("http://localhost/api/finance/budgets/x", { method: "PUT", body }), context);
+    const patch = await PATCH(new Request("http://localhost/api/finance/budgets/x", { method: "PATCH", body }), context);
+    expect(put.status).toBe(403);
+    expect(patch.status).toBe(403);
+    expect(await put.json()).toMatchObject({ error: "preview_writes_disabled" });
+    expect(state.saved).toEqual([]);
   });
 
   it("saves on PUT and PATCH", async () => {

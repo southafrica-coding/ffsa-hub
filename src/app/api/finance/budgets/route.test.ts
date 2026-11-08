@@ -69,7 +69,7 @@ describe("POST /api/finance/budgets", () => {
     expect(state.created).toEqual([]);
   });
 
-  it("saves as the signed-in user on a preview deployment and does not write with the service role", async () => {
+  it("blocks a preview create before any workbook call", async () => {
     process.env.VERCEL_ENV = "preview";
     const res = await POST(
       new Request("http://localhost/api/finance/budgets", {
@@ -77,8 +77,12 @@ describe("POST /api/finance/budgets", () => {
         body: JSON.stringify({ name: "DTS 2027" }),
       })
     );
-    expect(res.status).toBe(201);
-    expect(state.created).toEqual([{ name: "DTS 2027" }]);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({
+      error: "preview_writes_disabled",
+      message: "This preview deployment cannot change budgets.",
+    });
+    expect(state.created).toEqual([]);
     expect(state.adminCalls).toEqual([]);
   });
 });

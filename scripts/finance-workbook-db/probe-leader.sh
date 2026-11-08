@@ -8,7 +8,7 @@ DB="${FFSA_VERIFY_DB:?}"
 PSQL=(/usr/lib/postgresql/16/bin/psql -h "$SOCKET" -d "$DB" -v ON_ERROR_STOP=1 -X)
 OUT="${FFSA_VERIFY_ROOT:-/tmp/ffsa-workbook-verify}/probe-leader.tsv"
 : > "$OUT"
-record() { printf '%s\t%s\t%s\n' "$1" "$2" "$3" | tee -a "$OUT"; }
+record() { printf '%s\t%s\t%s\n' "$1" "$2" "$(printf '%s' "$3" | tr '\n' ' ')" | tee -a "$OUT"; }
 
 LEADER=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5
 MINISTRY=cccccccc-cccc-4ccc-8ccc-ccccccccccc1
@@ -51,11 +51,7 @@ else
 fi
 
 LINE="$(as_user "$LEADER" "SELECT id FROM public.budget_lines WHERE budget_id = '$BID' AND archived_at IS NULL;")"
-REV="$(as_user "$LEADER" "
-SELECT max(stamp) FROM (
-  SELECT updated_at AS stamp FROM public.budgets WHERE id = '$BID'
-  UNION ALL SELECT updated_at FROM public.budget_lines WHERE budget_id = '$BID' AND archived_at IS NULL
-) s;")"
+REV="$(as_user "$LEADER" "SELECT revision FROM public.budget_workbook_revisions WHERE budget_id = '$BID';")"
 as_user "$LEADER" "
 SELECT public.apply_budget_workbook(
   '$BID'::uuid, '$REV'::timestamptz, NULL,
@@ -70,31 +66,28 @@ else
 fi
 
 "${PSQL[@]}" -c "UPDATE public.finance_orgs SET is_active = false WHERE key = 'npc';" >/dev/null
-REV2="$(as_user "$LEADER" "
-SELECT max(stamp) FROM (
-  SELECT updated_at AS stamp FROM public.budgets WHERE id = '$BID'
-  UNION ALL SELECT updated_at FROM public.budget_lines WHERE budget_id = '$BID' AND archived_at IS NULL
-) s;")"
-as_user "$LEADER" "
+REV2="$(as_user "$LEADER" "SELECT revision FROM public.budget_workbook_revisions WHERE budget_id = '$BID';")"
+ok="$(as_user "$LEADER" "SELECT public.budget_workbook_org_ok('$BID'::uuid);")"
+set +e
+save_err="$(as_user "$LEADER" "
 SELECT public.apply_budget_workbook(
   '$BID'::uuid, '$REV2'::timestamptz, NULL,
   jsonb_build_array(jsonb_build_object('id','$LINE','kind','fixed','name','Van','amount_cents',260,'frequency',1,'multiplier',1,'uses_driver',false,'sort',0)),
   NULL
-)::text;" >/dev/null
-amt2="$(as_user "$LEADER" "SELECT amount_cents FROM public.budget_lines WHERE id = '$LINE';")"
-set +e
+)::text;" 2>&1)"
 second="$(as_user "$LEADER" "
 SELECT public.create_budget_workbook_sheet(
   '$TPL'::uuid, 'staff_ministry', '$MINISTRY'::uuid, '$PERIOD'::uuid, '$NPC'::uuid,
   'Leader sheet two', NULL, NULL, NULL, NULL, NULL, NULL
 )::text;" 2>&1)"
 set -e
+amt2="$(as_user "$LEADER" "SELECT amount_cents FROM public.budget_lines WHERE id = '$LINE';")"
 "${PSQL[@]}" -c "UPDATE public.finance_orgs SET is_active = true WHERE key = 'npc';" >/dev/null
 live="$("${PSQL[@]}" -At -c "SELECT count(*) FROM public.budgets WHERE name = 'Leader sheet two' AND archived_at IS NULL;")"
-if [[ "$amt2" == "260" && "$live" == "0" && "$second" == *South\ Africa* ]]; then
-  record leader_inactive_org PASS "existing save still worked; a new create was rejected while NPC was inactive"
+if [[ "$ok" == "f" && "$amt2" == "250" && "$live" == "0" && "$save_err" == *active\ South\ Africa* && "$second" == *South\ Africa* ]]; then
+  record leader_inactive_org PASS "leader read and save fail closed while NPC is inactive; amount stayed 250"
 else
-  record leader_inactive_org FAIL "amount=$amt2 live=$live err=$second"
+  record leader_inactive_org FAIL "ok=$ok amount=$amt2 live=$live save=$save_err create=$second"
 fi
 
 echo "---- leader ----"

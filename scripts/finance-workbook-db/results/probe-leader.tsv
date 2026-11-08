@@ -1,4 +1,4 @@
 leader_cannot_read_finance_orgs	PASS	authenticated leader sees 0 finance_orgs rows (authenticated|aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5)
-leader_create	PASS	leader created 64a60d2f-12cd-4fe5-a2f1-8aa7fc270652 on the period org without reading finance_orgs
+leader_create	PASS	leader created 2f110e2e-947c-4355-8ab5-27b8f4eb4b99 on the period org without reading finance_orgs
 leader_load_save	PASS	leader loaded the line and saved 250 cents
-leader_inactive_org	PASS	existing save still worked; a new create was rejected while NPC was inactive
+leader_inactive_org	PASS	leader read and save fail closed while NPC is inactive; amount stayed 250

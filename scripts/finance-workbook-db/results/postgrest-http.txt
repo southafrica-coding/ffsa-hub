@@ -1,0 +1,28 @@
+PostgREST 16.5 on 127.0.0.1:3001 against disposable ffsa_workbook_verify (unix socket only).
+Not the Next.js routes. Not production. JWT secret was local-harness-secret-not-production.
+Role claim authenticated, except the anon request which sent no token.
+harness_pgrst_claims copied request.jwt.claims.sub into request.jwt.claim.sub for this database only.
+
+## org_ok finance authenticated
+HTTP 200
+true
+
+## apply stale revision
+HTTP 500
+{"code":"40001","details":null,"hint":null,"message":"workbook revision conflict"}
+
+## apply current revision no-op
+HTTP 200
+"2026-11-08T10:23:53.526366+00:00"
+
+## composite fk embed
+HTTP 200
+[{"id":"5cbaac4f-76ff-467a-a409-910c6b4cabe7","name":"Atomic sheet","fiscal_periods":{"id": "99d65d67-2248-47af-b95e-ce202d56d93d", "label": "Harness 2027", "org_id": "6c615132-25a0-4966-bd85-4654178a7543"}}]
+
+## anon budgets
+HTTP 401
+{"code":"42501","details":null,"hint":null,"message":"permission denied for table budgets"}
+
+## leader finance_orgs
+HTTP 200
+[]

@@ -10,6 +10,7 @@
  */
 
 import { NextResponse } from "next/server";
+import { previewBudgetWriteBlocked } from "@/lib/finance/preview-service-write";
 import { getBudgetWorkbook, saveBudgetWorkbook } from "@/services/budget-workbook";
 import { createClient } from "@/lib/supabase/server";
 
@@ -33,6 +34,8 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
 }
 
 async function save(request: Request, context: { params: Promise<{ id: string }> }) {
+  const preview = previewBudgetWriteBlocked();
+  if (preview) return NextResponse.json(preview, { status: 403 });
   const supabase = await caller();
   if (!supabase) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   const { id } = await context.params;

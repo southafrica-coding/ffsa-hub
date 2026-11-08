@@ -21,6 +21,7 @@ function memory(options?: {
   denyArchive?: string[];
   loseRace?: string[];
   rpcError?: { code: string; message: string };
+  inactiveOrg?: boolean;
 }) {
   const tables: Record<string, Row[]> = {
     finance_orgs: [
@@ -43,6 +44,7 @@ function memory(options?: {
     budget_sections: [],
     budget_lines: [],
     budget_expenses: [],
+    budget_workbook_revisions: [],
   };
   const missing = new Set(options?.missing ?? []);
   const hide = new Set(options?.hide ?? []);
@@ -271,7 +273,15 @@ function memory(options?: {
     for (const [key, label, sort] of sections) {
       tables.budget_sections.push({ id: randomUUID(), budget_id: id, key, label, sort });
     }
+    tables.budget_workbook_revisions.push({ budget_id: id, revision: stamp() });
     return { data: id, error: null };
+  }
+
+  function bumpRevision(budgetId: string) {
+    const row = tables.budget_workbook_revisions.find((item) => item.budget_id === budgetId);
+    const revision = stamp();
+    if (row) row.revision = revision;
+    else tables.budget_workbook_revisions.push({ budget_id: budgetId, revision });
   }
 
   function revisionOf(budgetId: string): string | null {
@@ -297,12 +307,14 @@ function memory(options?: {
   ): { revision?: string | null; error: { code: string; message: string } | null } {
     const budget = tables.budgets.find((row) => row.id === budgetId && !row.archived_at);
     if (!budget) return { error: { code: "P0002", message: "Budget not found" } };
-    const revision = revisionOf(budgetId);
+    const tokenRow = tables.budget_workbook_revisions.find((row) => row.budget_id === budgetId);
+    const token = typeof tokenRow?.revision === "string" ? tokenRow.revision : null;
     if (checkRevision) {
       const expectedMs = typeof expected === "string" ? Date.parse(expected) : NaN;
-      const revisionMs = revision ? Date.parse(revision) : NaN;
-      if (!revision || expectedMs !== revisionMs) return { error: { code: "40001", message: "workbook revision conflict" } };
+      const tokenMs = token ? Date.parse(token) : NaN;
+      if (!token || expectedMs !== tokenMs) return { error: { code: "40001", message: "workbook revision conflict" } };
     }
+    const writesAtStart = writes.length;
     const lineRows = Array.isArray(lines) ? (lines as Row[]) : null;
     const expenseRows = Array.isArray(expenses) ? (expenses as Row[]) : null;
     if (loseRace.has("budget_lines") && lineRows) {
@@ -444,7 +456,9 @@ function memory(options?: {
         line.updated_at = stamp();
       }
     }
-    return { revision: revisionOf(budgetId), error: null };
+    if (writes.length !== writesAtStart) bumpRevision(budgetId);
+    const next = tables.budget_workbook_revisions.find((row) => row.budget_id === budgetId);
+    return { revision: typeof next?.revision === "string" ? next.revision : null, error: null };
   }
 
   const client = {
@@ -452,6 +466,11 @@ function memory(options?: {
     async rpc(name: string, args: Record<string, unknown>) {
       writes.push({ table: "rpc", op: name, payload: structuredClone(args) });
       if (options?.rpcError) return { data: null, error: options.rpcError };
+      if (name === "budget_workbook_org_ok") {
+        if (flags.inactiveOrg) return { data: false, error: null };
+        const visible = tables.budgets.some((row) => row.id === args.p_budget_id && !row.archived_at);
+        return { data: visible ? true : null, error: null };
+      }
       if (name === "create_budget_workbook_sheet") {
         const snap = structuredClone(tables);
         const created = insertTemplate(args);
@@ -476,7 +495,8 @@ function memory(options?: {
     },
   };
 
-  return { client, tables, writes, denyInsert, denyUpdate, denyArchive, loseRace };
+  const flags = { inactiveOrg: options?.inactiveOrg === true };
+  return { client, tables, writes, denyInsert, denyUpdate, denyArchive, loseRace, flags };
 }
 
 const period = {
@@ -745,6 +765,18 @@ describe("budget workbook save and load", () => {
     expect(db.writes.some((write) => write.table === "budget_xero_spends" || write.table === "budget_line_coding")).toBe(false);
   });
 
+  it("does not save when the organisation is no longer the active South Africa one", async () => {
+    const created = await createBudgetWorkbook(db.client, sheet());
+    db.flags.inactiveOrg = true;
+    const saved = await saveBudgetWorkbook(db.client, budgetId(created), {
+      updatedAt: updatedAtOf(created),
+      notes: "Should not stick",
+    });
+    expect(saved.status).toBe(409);
+    expect(saved.body.error).toBe("This budget is not on the active South Africa organisation.");
+    expect(db.writes.some((write) => write.op === "apply_budget_workbook")).toBe(false);
+  });
+
   it("does not change the owner or the period on save", async () => {
     const created = await createBudgetWorkbook(db.client, sheet());
     const saved = await saveBudgetWorkbook(db.client, budgetId(created), {
@@ -808,7 +840,7 @@ describe("budget workbook save and load", () => {
     const created = await createBudgetWorkbook(db.client, sheet({
       lines: [{ id: LINE, kind: "fixed", name: "Van", amountCents: 100, multiplier: 1 }],
     }));
-    db.tables.budget_lines.find((line) => line.id === LINE)!.updated_at = "2026-12-01T00:00:00.000Z";
+    db.tables.budget_workbook_revisions.find((row) => row.budget_id === budgetId(created))!.revision = "2026-12-01T00:00:00.000Z";
     db.writes.length = 0;
     const saved = await saveBudgetWorkbook(db.client, budgetId(created), {
       updatedAt: updatedAtOf(created),

@@ -8,7 +8,7 @@ DB="${FFSA_VERIFY_DB:?}"
 PSQL=(/usr/lib/postgresql/16/bin/psql -h "$SOCKET" -d "$DB" -v ON_ERROR_STOP=1 -X)
 OUT="${FFSA_VERIFY_ROOT:-/tmp/ffsa-workbook-verify}/probe-atomic.tsv"
 : > "$OUT"
-record() { printf '%s\t%s\t%s\n' "$1" "$2" "$3" | tee -a "$OUT"; }
+record() { printf '%s\t%s\t%s\n' "$1" "$2" "$(printf '%s' "$3" | tr '\n' ' ')" | tee -a "$OUT"; }
 
 FINANCE=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1
 EDITOR=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2
@@ -46,12 +46,7 @@ if [[ ! "$BID" =~ ^[0-9a-f-]{36}$ ]]; then
 fi
 VAN="$("${PSQL[@]}" -At -c "SELECT id FROM public.budget_lines WHERE budget_id = '$BID' AND name = 'Van';")"
 FUEL="$("${PSQL[@]}" -At -c "SELECT id FROM public.budget_lines WHERE budget_id = '$BID' AND name = 'Fuel';")"
-REV="$("${PSQL[@]}" -At -c "
-SELECT max(stamp) FROM (
-  SELECT updated_at AS stamp FROM public.budgets WHERE id = '$BID'
-  UNION ALL SELECT updated_at FROM public.budget_lines WHERE budget_id = '$BID' AND archived_at IS NULL
-  UNION ALL SELECT updated_at FROM public.budget_expenses WHERE budget_id = '$BID' AND archived_at IS NULL
-) s;")"
+REV="$("${PSQL[@]}" -At -c "SELECT revision FROM public.budget_workbook_revisions WHERE budget_id = '$BID';")"
 
 lines_json() {
   local van_name="$1"
@@ -100,11 +95,7 @@ else
 fi
 
 before="$("${PSQL[@]}" -At -c "SELECT count(*) FROM public.finance_audit_log;")"
-REV2="$("${PSQL[@]}" -At -c "
-SELECT max(stamp) FROM (
-  SELECT updated_at AS stamp FROM public.budgets WHERE id = '$BID'
-  UNION ALL SELECT updated_at FROM public.budget_lines WHERE budget_id = '$BID' AND archived_at IS NULL
-) s;")"
+REV2="$("${PSQL[@]}" -At -c "SELECT revision FROM public.budget_workbook_revisions WHERE budget_id = '$BID';")"
 as_user "$FINANCE" "
 SELECT public.apply_budget_workbook(
   '$BID'::uuid, '$REV2'::timestamptz, NULL,
@@ -129,11 +120,7 @@ as_user "$FINANCE" "
 INSERT INTO public.budget_members (budget_id, user_id, role) VALUES ('$SUB', '$EDITOR', 'editor');
 UPDATE public.budgets SET status = 'submitted' WHERE id = '$SUB';
 " >/dev/null
-SREV="$("${PSQL[@]}" -At -c "
-SELECT max(stamp) FROM (
-  SELECT updated_at AS stamp FROM public.budgets WHERE id = '$SUB'
-  UNION ALL SELECT updated_at FROM public.budget_lines WHERE budget_id = '$SUB' AND archived_at IS NULL
-) s;")"
+SREV="$("${PSQL[@]}" -At -c "SELECT revision FROM public.budget_workbook_revisions WHERE budget_id = '$SUB';")"
 as_user "$EDITOR" "
 SELECT public.apply_budget_workbook(
   '$SUB'::uuid, '$SREV'::timestamptz, NULL,
@@ -147,12 +134,7 @@ else
   record editor_submitted_expense_function FAIL "bread count=$bread"
 fi
 
-SREV3="$("${PSQL[@]}" -At -c "
-SELECT max(stamp) FROM (
-  SELECT updated_at AS stamp FROM public.budgets WHERE id = '$SUB'
-  UNION ALL SELECT updated_at FROM public.budget_lines WHERE budget_id = '$SUB' AND archived_at IS NULL
-  UNION ALL SELECT updated_at FROM public.budget_expenses WHERE budget_id = '$SUB' AND archived_at IS NULL
-) s;")"
+SREV3="$("${PSQL[@]}" -At -c "SELECT revision FROM public.budget_workbook_revisions WHERE budget_id = '$SUB';")"
 set +e
 bad="$(as_user "$EDITOR" "
 SELECT public.apply_budget_workbook(
@@ -181,6 +163,70 @@ if [[ "$still" == "t" && "$arch_err" == *live\ expense* ]]; then
   record archive_blocked_with_live_expense PASS "database refused to archive a line that a live expense points at"
 else
   record archive_blocked_with_live_expense FAIL "still_live=$still err=$arch_err"
+fi
+
+DID="$(as_user "$FINANCE" "
+SELECT public.create_budget_workbook_sheet(
+  '$TPL'::uuid, 'program', '$PROGRAM'::uuid, '$PERIOD'::uuid, '$NPC'::uuid,
+  'Direct writer', NULL, NULL, NULL, NULL,
+  jsonb_build_array(jsonb_build_object('kind','fixed','name','Van','amount_cents',100,'frequency',1,'multiplier',1,'uses_driver',false,'sort',0)),
+  NULL
+)::text;" | grep -E '^[0-9a-f-]{36}$' | tail -1)"
+DREV="$("${PSQL[@]}" -At -c "SELECT revision FROM public.budget_workbook_revisions WHERE budget_id = '$DID';")"
+cat > /tmp/ffsa-workbook-verify/direct-b.sql <<SQL
+SELECT set_config('request.jwt.claim.sub', '$FINANCE', false);
+SET ROLE authenticated;
+BEGIN;
+INSERT INTO public.budget_expenses (budget_id, expense_date, description, amount_cents)
+VALUES ('$DID', '2027-06-01', 'Direct insert', 80);
+SELECT pg_sleep(2);
+COMMIT;
+SELECT 'B_EXPENSE';
+SQL
+cat > /tmp/ffsa-workbook-verify/direct-a.sql <<SQL
+SELECT set_config('request.jwt.claim.sub', '$FINANCE', false);
+SET ROLE authenticated;
+SELECT public.apply_budget_workbook(
+  '$DID'::uuid, '$DREV'::timestamptz, NULL,
+  jsonb_build_array(jsonb_build_object('kind','fixed','name','Van','amount_cents',777,'frequency',1,'multiplier',1,'uses_driver',false,'sort',0)),
+  NULL
+);
+SELECT 'A_APPLY';
+SQL
+"${PSQL[@]}" -f /tmp/ffsa-workbook-verify/direct-b.sql > /tmp/ffsa-workbook-verify/direct-b.out 2>&1 &
+sleep 0.3
+set +e
+"${PSQL[@]}" -f /tmp/ffsa-workbook-verify/direct-a.sql > /tmp/ffsa-workbook-verify/direct-a.out 2>&1
+set -e
+wait || true
+damt="$("${PSQL[@]}" -At -c "SELECT amount_cents FROM public.budget_lines WHERE budget_id = '$DID' AND archived_at IS NULL;")"
+dexp="$("${PSQL[@]}" -At -c "SELECT count(*) FROM public.budget_expenses WHERE budget_id = '$DID' AND description = 'Direct insert' AND archived_at IS NULL;")"
+if grep -q B_EXPENSE /tmp/ffsa-workbook-verify/direct-b.out \
+  && grep -q "workbook revision conflict" /tmp/ffsa-workbook-verify/direct-a.out \
+  && [[ "$damt" == "100" && "$dexp" == "1" ]]; then
+  record direct_expense_insert_blocks_apply PASS "a direct expense insert moved the revision; the in-flight apply changed nothing"
+else
+  record direct_expense_insert_blocks_apply FAIL "amount=$damt expenses=$dexp a=$(tr '\n' ' ' < /tmp/ffsa-workbook-verify/direct-a.out) b=$(tr '\n' ' ' < /tmp/ffsa-workbook-verify/direct-b.out)"
+fi
+
+R1="$("${PSQL[@]}" -At -c "SELECT revision FROM public.budget_workbook_revisions WHERE budget_id = '$DID';")"
+as_user "$FINANCE" "UPDATE public.budget_lines SET archived_at = now() WHERE budget_id = '$DID' AND archived_at IS NULL;" >/dev/null || true
+R2="$("${PSQL[@]}" -At -c "SELECT revision FROM public.budget_workbook_revisions WHERE budget_id = '$DID';")"
+forward="$("${PSQL[@]}" -At -c "SELECT ('$R2'::timestamptz > '$R1'::timestamptz);")"
+live_max="$("${PSQL[@]}" -At -c "
+SELECT max(stamp) FROM (
+  SELECT updated_at AS stamp FROM public.budgets WHERE id = '$DID' AND archived_at IS NULL
+  UNION ALL SELECT updated_at FROM public.budget_lines WHERE budget_id = '$DID' AND archived_at IS NULL
+  UNION ALL SELECT updated_at FROM public.budget_expenses WHERE budget_id = '$DID' AND archived_at IS NULL
+) s;")"
+older="$("${PSQL[@]}" -At -c "SELECT ('$live_max'::timestamptz < '$R2'::timestamptz);")"
+set +e
+back="$(as_user "$FINANCE" "SELECT public.apply_budget_workbook('$DID'::uuid, '$R1'::timestamptz, NULL, '[]'::jsonb, NULL);" 2>&1)"
+set -e
+if [[ "$forward" == "t" && "$older" == "t" && "$back" == *workbook\ revision\ conflict* ]]; then
+  record revision_does_not_move_backwards PASS "archiving the live rows moved revision forward ($R1 -> $R2); the old token conflicts"
+else
+  record revision_does_not_move_backwards FAIL "forward=$forward older=$older live_max=$live_max r1=$R1 r2=$R2 err=$back"
 fi
 
 echo "---- atomic ----"

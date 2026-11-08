@@ -9,7 +9,7 @@ PSQL=(/usr/lib/postgresql/16/bin/psql -h "$SOCKET" -d "$DB" -v ON_ERROR_STOP=1 -
 OUT="${FFSA_VERIFY_ROOT:-/tmp/ffsa-workbook-verify}/probe-results.tsv"
 : > "$OUT"
 
-record() { printf '%s\t%s\t%s\n' "$1" "$2" "$3" | tee -a "$OUT"; }
+record() { printf '%s\t%s\t%s\n' "$1" "$2" "$(printf '%s' "$3" | tr '\n' ' ')" | tee -a "$OUT"; }
 
 FINANCE=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1
 EDITOR=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2

@@ -1,8 +1,8 @@
 /**
  * Preview deployments share the live database. Vercel sets VERCEL_ENV to
- * "preview" on those URLs. A service-role write from one is refused.
- * Session writes are not service-role writes: the budget routes save as the
- * signed-in user so the budget permissions still apply.
+ * "preview" on those URLs. A signed-in session can still pass the budget
+ * policies and write that shared database, so the workbook create and save
+ * routes refuse every write there. This is not a service-role check.
  *
  * This file does not set VERCEL_ENV.
  */
@@ -15,6 +15,11 @@ export type PreviewWriteBlock = {
 const PREVIEW_MESSAGE = "This preview deployment cannot change budgets.";
 
 export function serviceRoleWriteBlock(): PreviewWriteBlock | null {
+  return previewBudgetWriteBlocked();
+}
+
+/** Fail closed before any workbook write. The signed-in client is not called. */
+export function previewBudgetWriteBlocked(): PreviewWriteBlock | null {
   if (process.env.VERCEL_ENV === "preview") {
     return { error: "preview_writes_disabled", message: PREVIEW_MESSAGE };
   }

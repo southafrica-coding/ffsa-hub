@@ -1,21 +1,32 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- 302 — atomic budget workbook save
+-- 303 — atomic budget workbook save
 --
 -- DRAFT ONLY. DO NOT APPLY to production or any shared database.
 --
+-- Number 303 is unused on main (which stops at 292) and on the open drafts
+-- checked with this change: 293 #508, 294 #506, 295–299 #475, 300–301 #513,
+-- 302 #514 (302_communications_rls_orphan_keys.sql at 42a88aab). This file
+-- does not edit those.
+--
 -- Depends on PR #475 migrations 295–299. Does not edit those files.
--- Does not create or alter budget_repayments (300) or budget_xero_spends
--- (301). Those numbers belong to PR #513.
+-- Does not create or alter budget_repayments (300) or budget_xero_spends (301).
 --
 -- One signed-in call creates a sheet or replaces the rows the caller sent.
--- Both functions are SECURITY INVOKER: budget policies still decide each
--- write. They do not read finance_orgs. Active NPC/ZAR is checked on insert
--- by finance_private.assert_south_africa_budget_org (SECURITY DEFINER,
--- search_path empty), which a ministry leader cannot call directly and
--- which a later save does not repeat. A transaction advisory lock on the
--- budget id is taken before the revision is read, so two workbook saves
--- cannot interleave. Direct SQL that does not call apply_budget_workbook
--- does not take that lock.
+-- apply_budget_workbook and create_budget_workbook_sheet are SECURITY INVOKER:
+-- budget policies still decide each write. They do not read finance_orgs.
+-- Active NPC/ZAR is checked by finance_private.assert_south_africa_budget_org
+-- on insert, and again on read and save by public.budget_workbook_org_ok
+-- (SECURITY DEFINER, search_path empty). A ministry leader cannot select
+-- finance_orgs. #475 does not say an existing workbook stays editable after
+-- the NPC row is deactivated, and #507 fails closed for that org, so save
+-- and read do too.
+--
+-- Every insert, update, and delete on budgets, budget_lines, and
+-- budget_expenses takes the same transaction advisory lock and moves
+-- budget_workbook_revisions.revision forward. That includes a direct
+-- expense insert or a line update, not only apply_budget_workbook.
+-- The revision is not the max of the live rows' updated_at, so archiving
+-- the newest row cannot move it backwards.
 --
 -- Once-only. Not safe to re-run.
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -27,10 +38,124 @@ BEGIN
      OR to_regclass('public.budget_expenses') IS NULL
      OR to_regprocedure('public.create_budget_from_template(uuid,text,uuid,uuid,uuid,text,text,text,numeric,boolean)') IS NULL THEN
     RAISE EXCEPTION
-      'DO NOT APPLY 302_budget_workbook_atomic_save.sql until PR #475 migrations 295-299 are applied.';
+      'DO NOT APPLY 303_budget_workbook_atomic_save.sql until PR #475 migrations 295-299 are applied.';
   END IF;
 END
 $guard$;
+
+CREATE TABLE public.budget_workbook_revisions (
+  budget_id uuid PRIMARY KEY REFERENCES public.budgets(id) ON DELETE CASCADE,
+  revision  timestamptz NOT NULL
+);
+
+ALTER TABLE public.budget_workbook_revisions ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.budget_workbook_revisions FROM PUBLIC, anon, authenticated, service_role;
+GRANT SELECT ON public.budget_workbook_revisions TO authenticated, service_role;
+
+-- Same read rule as "Finance and members read budgets" in 296. No insert,
+-- update, or delete policy: only the definer trigger writes the token.
+CREATE POLICY budget_workbook_revisions_read
+  ON public.budget_workbook_revisions
+  FOR SELECT
+  TO authenticated
+  USING (
+    finance_private.can_view_all_budgets()
+    OR finance_private.is_budget_member(budget_id)
+  );
+
+CREATE FUNCTION finance_private.budget_workbook_lock_and_revise()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  v_budget uuid;
+BEGIN
+  IF TG_TABLE_NAME = 'budgets' THEN
+    v_budget := COALESCE(NEW.id, OLD.id);
+  ELSE
+    v_budget := COALESCE(NEW.budget_id, OLD.budget_id);
+  END IF;
+
+  PERFORM pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended('ffsa-budget-workbook:' || v_budget::text, 0)
+  );
+
+  -- The budget row does not exist yet during BEFORE INSERT, so the token
+  -- is written AFTER the row change. Deleting the budget itself cascades
+  -- the token; inserting it again would fail the foreign key.
+  IF TG_WHEN = 'AFTER' AND NOT (TG_OP = 'DELETE' AND TG_TABLE_NAME = 'budgets') THEN
+    INSERT INTO public.budget_workbook_revisions (budget_id, revision)
+    VALUES (v_budget, pg_catalog.clock_timestamp())
+    ON CONFLICT (budget_id) DO UPDATE
+      SET revision = pg_catalog.clock_timestamp();
+  END IF;
+
+  IF TG_OP = 'DELETE' THEN
+    RETURN OLD;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION finance_private.budget_workbook_lock_and_revise()
+  FROM PUBLIC, anon, authenticated, service_role;
+
+CREATE TRIGGER budget_workbook_lock_budgets
+  BEFORE INSERT OR UPDATE OR DELETE ON public.budgets
+  FOR EACH ROW EXECUTE FUNCTION finance_private.budget_workbook_lock_and_revise();
+CREATE TRIGGER budget_workbook_revise_budgets
+  AFTER INSERT OR UPDATE OR DELETE ON public.budgets
+  FOR EACH ROW EXECUTE FUNCTION finance_private.budget_workbook_lock_and_revise();
+CREATE TRIGGER budget_workbook_lock_lines
+  BEFORE INSERT OR UPDATE OR DELETE ON public.budget_lines
+  FOR EACH ROW EXECUTE FUNCTION finance_private.budget_workbook_lock_and_revise();
+CREATE TRIGGER budget_workbook_revise_lines
+  AFTER INSERT OR UPDATE OR DELETE ON public.budget_lines
+  FOR EACH ROW EXECUTE FUNCTION finance_private.budget_workbook_lock_and_revise();
+CREATE TRIGGER budget_workbook_lock_expenses
+  BEFORE INSERT OR UPDATE OR DELETE ON public.budget_expenses
+  FOR EACH ROW EXECUTE FUNCTION finance_private.budget_workbook_lock_and_revise();
+CREATE TRIGGER budget_workbook_revise_expenses
+  AFTER INSERT OR UPDATE OR DELETE ON public.budget_expenses
+  FOR EACH ROW EXECUTE FUNCTION finance_private.budget_workbook_lock_and_revise();
+
+INSERT INTO public.budget_workbook_revisions (budget_id, revision)
+SELECT b.id, b.updated_at
+FROM public.budgets b
+ON CONFLICT (budget_id) DO NOTHING;
+
+-- Null when the caller cannot see the budget. False when they can see it
+-- but it is not the active FFSA NPC workbook in ZAR. True otherwise.
+CREATE FUNCTION public.budget_workbook_org_ok(p_budget_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+  SELECT CASE
+    WHEN NOT (
+      finance_private.can_view_all_budgets()
+      OR finance_private.is_budget_member(p_budget_id)
+    ) THEN NULL
+    WHEN EXISTS (
+      SELECT 1
+      FROM public.budgets b
+      JOIN public.finance_orgs o ON o.id = b.org_id
+      WHERE b.id = p_budget_id
+        AND b.currency = 'ZAR'
+        AND o.key = 'npc'
+        AND o.is_active
+        AND o.record_currency = 'ZAR'
+    ) THEN TRUE
+    ELSE FALSE
+  END;
+$$;
+
+REVOKE ALL ON FUNCTION public.budget_workbook_org_ok(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.budget_workbook_org_ok(uuid) TO authenticated, service_role;
 
 CREATE FUNCTION finance_private.budget_lines_block_live_expense_archive()
 RETURNS trigger
@@ -109,20 +234,16 @@ BEGIN
     pg_catalog.hashtextextended('ffsa-budget-workbook:' || p_budget_id::text, 0)
   );
 
-  SELECT max(stamp) INTO v_rev
-  FROM (
-    SELECT b.updated_at AS stamp
-    FROM public.budgets b
-    WHERE b.id = p_budget_id AND b.archived_at IS NULL
-    UNION ALL
-    SELECT l.updated_at
-    FROM public.budget_lines l
-    WHERE l.budget_id = p_budget_id AND l.archived_at IS NULL
-    UNION ALL
-    SELECT e.updated_at
-    FROM public.budget_expenses e
-    WHERE e.budget_id = p_budget_id AND e.archived_at IS NULL
-  ) s;
+  IF public.budget_workbook_org_ok(p_budget_id) IS NULL THEN
+    RAISE EXCEPTION 'Budget not found' USING ERRCODE = 'P0002';
+  END IF;
+  IF public.budget_workbook_org_ok(p_budget_id) IS NOT TRUE THEN
+    RAISE EXCEPTION 'This budget is not on the active South Africa organisation' USING ERRCODE = '23514';
+  END IF;
+
+  SELECT r.revision INTO v_rev
+  FROM public.budget_workbook_revisions r
+  WHERE r.budget_id = p_budget_id;
 
   IF v_rev IS NULL THEN
     RAISE EXCEPTION 'Budget not found' USING ERRCODE = 'P0002';
@@ -355,14 +476,9 @@ BEGIN
     END IF;
   END IF;
 
-  SELECT max(stamp) INTO v_rev
-  FROM (
-    SELECT b.updated_at AS stamp FROM public.budgets b WHERE b.id = p_budget_id AND b.archived_at IS NULL
-    UNION ALL
-    SELECT l.updated_at FROM public.budget_lines l WHERE l.budget_id = p_budget_id AND l.archived_at IS NULL
-    UNION ALL
-    SELECT e.updated_at FROM public.budget_expenses e WHERE e.budget_id = p_budget_id AND e.archived_at IS NULL
-  ) s;
+  SELECT r.revision INTO v_rev
+  FROM public.budget_workbook_revisions r
+  WHERE r.budget_id = p_budget_id;
   RETURN v_rev;
 END;
 $$;
@@ -396,14 +512,9 @@ BEGIN
     p_template_id, p_owner_kind, p_owner_id, p_period_id, p_org_id, p_name,
     p_currency, p_driver_label, p_driver_value, false
   );
-  SELECT max(stamp) INTO v_rev
-  FROM (
-    SELECT b.updated_at AS stamp FROM public.budgets b WHERE b.id = v_id
-    UNION ALL
-    SELECT l.updated_at FROM public.budget_lines l WHERE l.budget_id = v_id AND l.archived_at IS NULL
-    UNION ALL
-    SELECT e.updated_at FROM public.budget_expenses e WHERE e.budget_id = v_id AND e.archived_at IS NULL
-  ) s;
+  SELECT r.revision INTO v_rev
+  FROM public.budget_workbook_revisions r
+  WHERE r.budget_id = v_id;
   PERFORM public.apply_budget_workbook(v_id, v_rev, p_header, p_lines, p_expenses);
   RETURN v_id;
 END;

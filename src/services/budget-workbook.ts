@@ -138,6 +138,9 @@ function mapDbError(error: DbError, action: "create" | "save" | "period" | "read
     return fail(409, RELOAD_CONFLICT);
   }
   if (error.code === "P0002") return fail(404, "Budget not found");
+  if (/not on the active South Africa organisation/i.test(message)) {
+    return fail(409, "This budget is not on the active South Africa organisation.");
+  }
   if (/line with a live expense cannot be archived/i.test(message)) {
     return fail(400, "Archive the expense before removing its line.");
   }
@@ -256,17 +259,34 @@ function conflict(): ApiResult {
   return fail(409, RELOAD_CONFLICT);
 }
 
-function sheetRevision(budget: BudgetRow, lines: LineRow[], expenses: ExpenseRow[]): string | null {
-  const stamps = [budget.updated_at, ...lines.filter((line) => !line.archived_at).map((line) => line.updated_at), ...expenses.filter((row) => !row.archived_at).map((row) => row.updated_at)].filter(
-    (stamp): stamp is string => typeof stamp === "string" && stamp.length > 0
-  );
-  if (stamps.length === 0) return null;
-  return stamps.reduce((latest, stamp) => {
-    const left = Date.parse(latest);
-    const right = Date.parse(stamp);
-    if (Number.isFinite(left) && Number.isFinite(right)) return right >= left ? stamp : latest;
-    return stamp > latest ? stamp : latest;
-  });
+async function loadRevision(
+  supabase: Client,
+  budgetId: string
+): Promise<{ revision: string } | { failure: ApiResult }> {
+  const { data, error } = await supabase
+    .from("budget_workbook_revisions")
+    .select("revision")
+    .eq("budget_id", budgetId)
+    .maybeSingle();
+  if (error) {
+    if (isBudgetSchemaMissing(error)) return { failure: schemaMissing() };
+    return { failure: mapDbError(error, "read") };
+  }
+  if (!data?.revision || typeof data.revision !== "string") {
+    return { failure: fail(409, RELOAD_CONFLICT) };
+  }
+  return { revision: data.revision };
+}
+
+async function requireActiveOrg(supabase: Client, budgetId: string): Promise<ApiResult | null> {
+  const { data, error } = await supabase.rpc("budget_workbook_org_ok", { p_budget_id: budgetId });
+  if (error) {
+    if (isBudgetSchemaMissing(error)) return schemaMissing();
+    return mapDbError(error, "read");
+  }
+  if (data === true) return null;
+  if (data === false) return fail(409, "This budget is not on the active South Africa organisation.");
+  return fail(404, "Budget not found");
 }
 
 function sameInstant(left: string, right: string): boolean {
@@ -306,7 +326,14 @@ function toExpense(row: ExpenseRow) {
   };
 }
 
-function toWorkbook(budget: BudgetRow, period: PeriodRow, sections: SectionRow[], lines: LineRow[], expenses: ExpenseRow[]) {
+function toWorkbook(
+  budget: BudgetRow,
+  period: PeriodRow,
+  sections: SectionRow[],
+  lines: LineRow[],
+  expenses: ExpenseRow[],
+  revision: string
+) {
   const ownerKind = budget.owner_kind as BudgetOwnerKind;
   return {
     id: budget.id,
@@ -324,7 +351,7 @@ function toWorkbook(budget: BudgetRow, period: PeriodRow, sections: SectionRow[]
     incomeGoalCents: centsFromDb(budget.income_goal_cents),
     fundraisingGoalCents: centsFromDb(budget.fundraising_goal_cents),
     notes: budget.notes,
-    updatedAt: sheetRevision(budget, lines, expenses),
+    updatedAt: revision,
     sections: [...sections]
       .sort((a, b) => a.sort - b.sort || a.key.localeCompare(b.key))
       .map((section) => ({
@@ -369,7 +396,14 @@ async function readWorkbook(supabase: Client, budget: BudgetRow): Promise<ApiRes
   if ("failure" in sections) return sections.failure;
   if ("failure" in lines) return lines.failure;
   if ("failure" in expenses) return expenses.failure;
-  return { status: 200, body: { budget: toWorkbook(budget, periodResult.data, sections.sections, lines.lines, expenses.expenses) } };
+  const org = await requireActiveOrg(supabase, budget.id);
+  if (org) return org;
+  const revision = await loadRevision(supabase, budget.id);
+  if ("failure" in revision) return revision.failure;
+  return {
+    status: 200,
+    body: { budget: toWorkbook(budget, periodResult.data, sections.sections, lines.lines, expenses.expenses, revision.revision) },
+  };
 }
 
 export async function getBudgetWorkbook(supabase: Client, budgetId: string): Promise<ApiResult> {
@@ -400,7 +434,14 @@ export async function listBudgetWorkbooks(
   if (ownerKind && ownerId) query = query.eq(ownerColumn(ownerKind as BudgetOwnerKind), ownerId);
   const { data, error } = await query;
   if (error) return mapDbError(error, "read");
-  const rows = (data ?? []) as BudgetRow[];
+  const loaded = (data ?? []) as BudgetRow[];
+  const rows: BudgetRow[] = [];
+  for (const row of loaded) {
+    const org = await requireActiveOrg(supabase, row.id);
+    if (org?.status === 409 || org?.status === 404) continue;
+    if (org) return org;
+    rows.push(row);
+  }
   const periodIds = [...new Set(rows.map((row) => row.period_id).filter(Boolean))];
   let periods: PeriodRow[] = [];
   if (periodIds.length) {
@@ -667,13 +708,16 @@ export async function saveBudgetWorkbook(supabase: Client, budgetId: string, bod
   if (!input.updatedAt) {
     return fail(400, "Reload this budget before saving. The save needs the updatedAt from the last load.");
   }
+  const org = await requireActiveOrg(supabase, budget.id);
+  if (org) return org;
   const [existingLines, existingExpenses] = await Promise.all([loadLines(supabase, budget.id), loadExpenses(supabase, budget.id)]);
   if ("failure" in existingLines) return existingLines.failure;
   if ("failure" in existingExpenses) return existingExpenses.failure;
-  // The function locks the budget and checks this again. Two saves can both
-  // pass here; the one that waits then finds a new revision and changes nothing.
-  const revision = sheetRevision(budget, existingLines.lines, existingExpenses.expenses);
-  if (!revision || !sameInstant(input.updatedAt, revision)) {
+  // The function locks the budget and checks this token again. A direct
+  // expense or line write moves the same token, so this save then conflicts.
+  const loadedRevision = await loadRevision(supabase, budget.id);
+  if ("failure" in loadedRevision) return loadedRevision.failure;
+  if (!sameInstant(input.updatedAt, loadedRevision.revision)) {
     return conflict();
   }
   const expenseCheck = await rejectUnknownExpenseLines(supabase, budget.id, input);
@@ -686,7 +730,7 @@ export async function saveBudgetWorkbook(supabase: Client, budgetId: string, bod
 
   const applied = await supabase.rpc("apply_budget_workbook", {
     p_budget_id: budget.id,
-    p_expected_updated_at: revision,
+    p_expected_updated_at: loadedRevision.revision,
     p_header: headerPatch(input, "save", budget),
     p_lines: lines ? lines.rows : null,
     p_expenses: expensesToJson(input.expenses),
