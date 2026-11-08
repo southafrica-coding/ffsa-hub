@@ -125,6 +125,8 @@ function schemaMissing(): ApiResult {
   return { status: 503, body: { ...SCHEMA_NOT_APPLIED } };
 }
 
+const RELOAD_CONFLICT = "Someone else saved this budget. Reload it and try again.";
+
 function mapDbError(error: DbError, action: "create" | "save" | "period" | "read"): ApiResult {
   if (!error) return fail(500, action === "read" ? "The budget couldn't be read." : "The budget couldn't be saved.");
   if (isBudgetSchemaMissing(error)) return schemaMissing();
@@ -313,20 +315,48 @@ function lineUnchanged(existing: LineRow, payload: NonNullable<ReturnType<typeof
   );
 }
 
-async function archiveRow(supabase: Client, table: "budget_lines" | "budget_expenses", id: string, budgetId: string): Promise<ApiResult | null> {
-  const archived = await supabase
+function conflict(): ApiResult {
+  return fail(409, RELOAD_CONFLICT);
+}
+
+/** 0 rows from a compare-and-swap: a changed updated_at is a conflict; an unchanged row is row-level security. */
+async function missedWrite(
+  supabase: Client,
+  table: "budgets" | "budget_lines" | "budget_expenses",
+  id: string,
+  expectedUpdatedAt: string | null | undefined
+): Promise<ApiResult> {
+  const still = await supabase.from(table).select("id, archived_at, updated_at").eq("id", id).maybeSingle();
+  if (still.error) return mapDbError(still.error, "read");
+  if (!still.data || still.data.archived_at) return conflict();
+  if (
+    expectedUpdatedAt &&
+    typeof still.data.updated_at === "string" &&
+    !sameInstant(still.data.updated_at, expectedUpdatedAt)
+  ) {
+    return conflict();
+  }
+  return fail(403, "You can't change this budget.");
+}
+
+async function archiveRow(
+  supabase: Client,
+  table: "budget_lines" | "budget_expenses",
+  id: string,
+  budgetId: string,
+  expectedUpdatedAt: string | null | undefined
+): Promise<ApiResult | null> {
+  let query = supabase
     .from(table)
     .update({ archived_at: new Date().toISOString() })
     .eq("id", id)
     .eq("budget_id", budgetId)
-    .is("archived_at", null)
-    .select("id");
+    .is("archived_at", null);
+  if (expectedUpdatedAt) query = query.eq("updated_at", expectedUpdatedAt);
+  const archived = await query.select("id");
   if (archived.error) return mapDbError(archived.error, "save");
   if (Array.isArray(archived.data) && archived.data.length > 0) return null;
-  const still = await supabase.from(table).select("id, archived_at").eq("id", id).eq("budget_id", budgetId).maybeSingle();
-  if (still.error) return mapDbError(still.error, "read");
-  if (still.data && !still.data.archived_at) return fail(403, "You can't change this budget.");
-  return null;
+  return missedWrite(supabase, table, id, expectedUpdatedAt);
 }
 
 async function syncLines(
@@ -334,12 +364,13 @@ async function syncLines(
   budgetId: string,
   lines: WorkbookLineInput[],
   driverValue: number | null,
-  keepBecauseOfExpenses: Set<string>
+  keepBecauseOfExpenses: Set<string>,
+  snapshot?: LineRow[]
 ): Promise<ApiResult | null> {
   const sections = await loadSections(supabase, budgetId);
   if ("failure" in sections) return sections.failure;
   const byKind = sectionByKind(sections.sections);
-  const existing = await loadLines(supabase, budgetId);
+  const existing = snapshot ? { lines: snapshot } : await loadLines(supabase, budgetId);
   if ("failure" in existing) return existing.failure;
   const live = new Map(existing.lines.filter((line) => !line.archived_at).map((line) => [line.id, line]));
   const kept = new Set<string>();
@@ -351,10 +382,14 @@ async function syncLines(
     if (!payload) return fail(400, "That line total is too large.");
     if (line.id && live.has(line.id)) {
       kept.add(line.id);
-      if (lineUnchanged(live.get(line.id) as LineRow, payload)) continue;
-      const updated = await supabase.from("budget_lines").update(payload).eq("id", line.id).eq("budget_id", budgetId).select("id").maybeSingle();
+      const current = live.get(line.id) as LineRow;
+      if (lineUnchanged(current, payload)) continue;
+      const expectedUpdatedAt = current.updated_at;
+      let update = supabase.from("budget_lines").update(payload).eq("id", line.id).eq("budget_id", budgetId);
+      if (expectedUpdatedAt) update = update.eq("updated_at", expectedUpdatedAt);
+      const updated = await update.select("id").maybeSingle();
       if (updated.error) return mapDbError(updated.error, "save");
-      if (!updated.data) return fail(403, "You can't change this budget.");
+      if (!updated.data) return missedWrite(supabase, "budget_lines", line.id, expectedUpdatedAt);
     } else {
       const id = line.id ?? randomUUID();
       kept.add(id);
@@ -370,7 +405,7 @@ async function syncLines(
 
   for (const [id] of live) {
     if (kept.has(id) || keepBecauseOfExpenses.has(id)) continue;
-    const archived = await archiveRow(supabase, "budget_lines", id, budgetId);
+    const archived = await archiveRow(supabase, "budget_lines", id, budgetId, live.get(id)?.updated_at);
     if (archived) return archived;
   }
   return null;
@@ -380,14 +415,15 @@ async function syncExpenses(
   supabase: Client,
   budgetId: string,
   expenses: WorkbookExpenseInput[],
-  liveLineIds: Set<string>
+  liveLineIds: Set<string>,
+  snapshot?: ExpenseRow[]
 ): Promise<ApiResult | null> {
   for (const expense of expenses) {
     if (expense.lineId && !liveLineIds.has(expense.lineId)) {
       return fail(400, "An expense has to sit on a line of this budget, or on none.");
     }
   }
-  const existing = await loadExpenses(supabase, budgetId);
+  const existing = snapshot ? { expenses: snapshot } : await loadExpenses(supabase, budgetId);
   if ("failure" in existing) return existing.failure;
   const live = new Map(existing.expenses.filter((row) => !row.archived_at).map((row) => [row.id, row]));
   const kept = new Set<string>();
@@ -414,9 +450,12 @@ async function syncExpenses(
         (current.reference ?? null) === payload.reference &&
         (current.notes ?? null) === payload.notes;
       if (unchanged) continue;
-      const updated = await supabase.from("budget_expenses").update(payload).eq("id", expense.id).eq("budget_id", budgetId).select("id").maybeSingle();
+      const expectedUpdatedAt = current.updated_at;
+      let update = supabase.from("budget_expenses").update(payload).eq("id", expense.id).eq("budget_id", budgetId);
+      if (expectedUpdatedAt) update = update.eq("updated_at", expectedUpdatedAt);
+      const updated = await update.select("id").maybeSingle();
       if (updated.error) return mapDbError(updated.error, "save");
-      if (!updated.data) return fail(403, "You can't change this budget.");
+      if (!updated.data) return missedWrite(supabase, "budget_expenses", expense.id, expectedUpdatedAt);
     } else {
       const id = expense.id ?? randomUUID();
       kept.add(id);
@@ -432,7 +471,7 @@ async function syncExpenses(
 
   for (const [id] of live) {
     if (kept.has(id)) continue;
-    const archived = await archiveRow(supabase, "budget_expenses", id, budgetId);
+    const archived = await archiveRow(supabase, "budget_expenses", id, budgetId, live.get(id)?.updated_at);
     if (archived) return archived;
   }
   return null;
@@ -661,10 +700,12 @@ function scopeUnchanged(input: WorkbookWrite, budget: BudgetRow, period: PeriodR
   return null;
 }
 
-async function applyHeader(supabase: Client, budgetId: string, patch: Record<string, unknown>): Promise<ApiResult | null> {
-  const updated = await supabase.from("budgets").update(patch).eq("id", budgetId).select("id").maybeSingle();
+async function applyHeader(supabase: Client, budget: BudgetRow, patch: Record<string, unknown>): Promise<ApiResult | null> {
+  let query = supabase.from("budgets").update(patch).eq("id", budget.id);
+  if (budget.updated_at) query = query.eq("updated_at", budget.updated_at);
+  const updated = await query.select("id").maybeSingle();
   if (updated.error) return mapDbError(updated.error, "save");
-  if (!updated.data) return fail(403, "You can't change this budget.");
+  if (!updated.data) return missedWrite(supabase, "budgets", budget.id, budget.updated_at);
   return null;
 }
 
@@ -828,7 +869,7 @@ export async function createBudgetWorkbook(supabase: Client, body: unknown, deps
 
   const patch = headerPatch(input, "create");
   if (patch) {
-    const headerError = await applyHeader(supabase, budgetId, patch);
+    const headerError = await applyHeader(supabase, { id: budgetId } as BudgetRow, patch);
     if (headerError) return finishPartialCreate(supabase, budgetId, headerError);
   }
 
@@ -876,9 +917,12 @@ export async function saveBudgetWorkbook(supabase: Client, budgetId: string, bod
   const [existingLines, existingExpenses] = await Promise.all([loadLines(supabase, budget.id), loadExpenses(supabase, budget.id)]);
   if ("failure" in existingLines) return existingLines.failure;
   if ("failure" in existingExpenses) return existingExpenses.failure;
+  // This comparison is not a lock. Each later write repeats it inside one
+  // UPDATE ... WHERE updated_at = <the value just read>. Two saves can both
+  // pass here; the statement that loses the row matches nothing and reloads.
   const revision = sheetRevision(budget, existingLines.lines, existingExpenses.expenses);
   if (!revision || !sameInstant(input.updatedAt, revision)) {
-    return fail(409, "Someone else saved this budget. Reload it and try again.");
+    return conflict();
   }
   const expenseCheck = await rejectUnknownExpenseLines(supabase, budget.id, input);
   if (expenseCheck) return expenseCheck;
@@ -889,7 +933,7 @@ export async function saveBudgetWorkbook(supabase: Client, budgetId: string, bod
   const patch = headerPatch(input, "save", budget);
   let wrote = false;
   if (patch) {
-    const headerError = await applyHeader(supabase, budget.id, patch);
+    const headerError = await applyHeader(supabase, budget, patch);
     if (headerError) return headerError;
     wrote = true;
   }
@@ -901,7 +945,7 @@ export async function saveBudgetWorkbook(supabase: Client, budgetId: string, bod
     }
   }
   if (input.lines) {
-    const lineError = await syncLines(supabase, budget.id, input.lines, driverValue, protectedLines);
+    const lineError = await syncLines(supabase, budget.id, input.lines, driverValue, protectedLines, existingLines.lines);
     if (lineError) {
       if (wrote && patch && !(await revertHeader(supabase, budget, patch))) return partialSave(budget.id);
       return lineError;
@@ -911,7 +955,7 @@ export async function saveBudgetWorkbook(supabase: Client, budgetId: string, bod
   if (input.expenses) {
     const ids = await expenseLineIds(supabase, budget.id, input.lines);
     if ("failure" in ids) return wrote ? partialSave(budget.id) : ids.failure;
-    const expenseError = await syncExpenses(supabase, budget.id, input.expenses, ids.ids);
+    const expenseError = await syncExpenses(supabase, budget.id, input.expenses, ids.ids, existingExpenses.expenses);
     if (expenseError) return wrote ? partialSave(budget.id) : expenseError;
   }
 

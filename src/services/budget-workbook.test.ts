@@ -19,6 +19,7 @@ function memory(options?: {
   denyInsert?: string[];
   denyUpdate?: string[];
   denyArchive?: string[];
+  loseRace?: string[];
   rpcError?: { code: string; message: string };
 }) {
   const tables: Record<string, Row[]> = {
@@ -48,6 +49,7 @@ function memory(options?: {
   const denyInsert = new Set(options?.denyInsert ?? []);
   const denyUpdate = new Set(options?.denyUpdate ?? []);
   const denyArchive = new Set(options?.denyArchive ?? []);
+  const loseRace = new Set(options?.loseRace ?? []);
   const writes: Write[] = [];
   let clock = Date.parse("2026-11-06T00:00:00.000Z");
   const stamp = () => {
@@ -156,6 +158,12 @@ function memory(options?: {
         if (table === "budget_expenses") stored.archived_at = null;
         tables[table].push(stored);
         return { data: one ? stored : [stored], error: null };
+      }
+      if (state.op === "update" && state.payload && loseRace.has(table)) {
+        const matched = rows(table, state.filters, null, null);
+        writes.push({ table, op: "update", payload: structuredClone(state.payload) });
+        for (const row of matched) row.updated_at = stamp();
+        return { data: one ? null : [], error: null };
       }
       if (state.op === "update" && state.payload && denyUpdate.has(table)) {
         writes.push({ table, op: "update", payload: structuredClone(state.payload) });
@@ -270,7 +278,7 @@ function memory(options?: {
     },
   };
 
-  return { client, tables, writes, denyInsert, denyUpdate, denyArchive };
+  return { client, tables, writes, denyInsert, denyUpdate, denyArchive, loseRace };
 }
 
 const period = {
@@ -632,6 +640,33 @@ describe("budget workbook save and load", () => {
     expect(saved.status).toBe(409);
     expect(saved.body.error).toMatch(/Reload/);
     expect(db.writes.filter((write) => write.table === "budget_lines")).toEqual([]);
+    expect(db.tables.budget_lines.find((line) => line.id === LINE)?.archived_at).toBeNull();
+  });
+
+  it("does not overwrite a line when its updated_at moves after the save was checked", async () => {
+    const created = await createBudgetWorkbook(db.client, sheet({
+      lines: [{ id: LINE, kind: "fixed", name: "Van", amountCents: 100, multiplier: 1 }],
+    }));
+    db.loseRace.add("budget_lines");
+    const saved = await saveBudgetWorkbook(db.client, budgetId(created), {
+      updatedAt: updatedAtOf(created),
+      lines: [{ id: LINE, kind: "fixed", name: "Van", amountCents: 900, multiplier: 1 }],
+    });
+    expect(saved.status).toBe(409);
+    expect(saved.body.error).toMatch(/Reload/);
+    expect(db.tables.budget_lines.find((line) => line.id === LINE)?.amount_cents).toBe(100);
+  });
+
+  it("does not archive a line when that row changes after the save was checked", async () => {
+    const created = await createBudgetWorkbook(db.client, sheet({
+      lines: [{ id: LINE, kind: "fixed", name: "Van", amountCents: 100, multiplier: 1 }],
+    }));
+    db.loseRace.add("budget_lines");
+    const saved = await saveBudgetWorkbook(db.client, budgetId(created), {
+      updatedAt: updatedAtOf(created),
+      lines: [],
+    });
+    expect(saved.status).toBe(409);
     expect(db.tables.budget_lines.find((line) => line.id === LINE)?.archived_at).toBeNull();
   });
 
