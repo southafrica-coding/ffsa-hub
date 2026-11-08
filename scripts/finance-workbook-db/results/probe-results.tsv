@@ -6,8 +6,8 @@ rls_outsider_expense	PASS	outsider insert did not return an id
 rls_identity	PASS	SET ROLE authenticated and auth.uid() is the editor fixture
 superuser_bypasses_rls	PASS	table owner updated 1 submitted lines; this is not an authenticated result
 noop_update_audit_churn	PASS	no-op UPDATE added no audit row
-separate_statements_leave_partial	FAIL	failed expense left line 71d4ceea-91ce-4e50-b41f-f0e54b637b43 live; no partial_draft id was returned by SQL
-db_allows_archive_with_live_expense	FAIL	archived line 71d4ceea-91ce-4e50-b41f-f0e54b637b43 while 1 live expense(s) remain; no FK forbids it
+separate_statements_leave_partial	FAIL	failed expense left line 205ada8a-1124-4ec7-8bbc-46b06640f1a0 live; no partial_draft id was returned by SQL
+db_allows_archive_with_live_expense	FAIL	archived line 205ada8a-1124-4ec7-8bbc-46b06640f1a0 while 1 live expense(s) remain; no FK forbids it
 unconditional_overlap_lost_update	FAIL	both sessions committed an amount write; final amount_cents=222 (last writer wins, not one atomic sheet)
 per_row_cas_overlap	PASS	overlapping CAS updates changed the row once (A=1 B=0); not a sheet transaction
 sheet_not_one_transaction	FAIL	two sessions committed different rows (Fuel=from-b Van=from-a); no sheet-wide atomicity

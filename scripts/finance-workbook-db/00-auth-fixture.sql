@@ -35,3 +35,18 @@ GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
 GRANT CREATE ON SCHEMA public TO authenticated, service_role;
 GRANT USAGE ON SCHEMA auth TO anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION auth.uid(), auth.jwt() TO anon, authenticated, service_role;
+
+-- Local PostgREST only. Not a product migration and not Supabase Auth.
+-- PostgREST puts the JWT in request.jwt.claims. auth.uid() reads
+-- request.jwt.claim.sub. This copies sub across for the disposable database.
+CREATE OR REPLACE FUNCTION public.harness_pgrst_claims() RETURNS void
+LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM set_config(
+    'request.jwt.claim.sub',
+    coalesce(current_setting('request.jwt.claims', true)::json->>'sub', ''),
+    true
+  );
+END $$;
+REVOKE ALL ON FUNCTION public.harness_pgrst_claims() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.harness_pgrst_claims() TO anon, authenticated, service_role;

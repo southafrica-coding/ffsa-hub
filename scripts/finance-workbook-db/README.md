@@ -4,7 +4,10 @@ Disposable Postgres on a Unix socket. It refuses `DATABASE_URL`, `SUPABASE_DB_UR
 
 ```bash
 scripts/finance-workbook-db/run.sh
+scripts/finance-workbook-db/integrate.sh
 ```
+
+`run.sh` reloads the pinned schema and runs the SQL probes. `integrate.sh` reloads that same schema (full, without migration 303, and without the budgets table), starts PostgREST on 127.0.0.1 ports 3001–3003, and runs the Next route handlers. `serve.sh` is the same startup without the route tests, and writes `/tmp/ffsa-workbook-verify/postgrest.env` for another draft to use. Neither script reads production credentials.
 
 What it loads, in order:
 

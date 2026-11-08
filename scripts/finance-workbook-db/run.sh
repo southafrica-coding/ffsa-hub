@@ -49,50 +49,22 @@ case "$tcp" in
   *) refuse "server is not socket-only (got $tcp)" ;;
 esac
 
+for port in 3001 3002 3003; do
+  tmux -f /exec-daemon/tmux.portal.conf kill-session -t "pgrst-${port}" 2>/dev/null || true
+done
+"${PSQL[@]}" -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$DB' AND pid <> pg_backend_pid();" >/dev/null || true
 "${PSQL[@]}" -d postgres -c "DROP DATABASE IF EXISTS $DB;"
 "${PSQL[@]}" -d postgres -c "CREATE DATABASE $DB;"
 
-echo "LOAD auth fixture"
-"${PSQL[@]}" -d "$DB" -f "$ROOT/00-auth-fixture.sql"
-echo "LOAD prerequisites"
-"${PSQL[@]}" -d "$DB" -f "$ROOT/01-prerequisites.sql"
-
-cache="$BASE/schema475"
-mkdir -p "$cache"
-sums="$BASE/checksums.txt"
-: > "$sums"
-for name in \
-  295_finance_audit_permissions_periods.sql \
-  296_budgets_core.sql \
-  297_budget_expense_tracker.sql \
-  298_budget_views.sql \
-  299_budget_privilege_hardening.sql
-do
-  git -C "$REPO" show "$SHA475:supabase/migrations/$name" > "$cache/$name"
-  sha256sum "$cache/$name" | awk -v n="$name" '{print n, $1}' | tee -a "$sums"
-  echo "LOAD $name from $SHA475"
-  "${PSQL[@]}" -d "$DB" -f "$cache/$name"
-done
-
-echo "LOAD seed"
-"${PSQL[@]}" -d "$DB" -f "$ROOT/02-seed.sql"
-
+# shellcheck disable=SC1091
+source "$ROOT/schema-load.sh"
+load_pinned_schema "$DB" 475
+sums="$BASE/checksums-${DB}.txt"
 echo "CHECKSUMS"
 cat "$sums"
 echo "PROBE baseline (before migration 303)"
 FFSA_VERIFY_SOCKET="$SOCKET" FFSA_VERIFY_DB="$DB" "$ROOT/probe.sh"
-
-echo "LOAD outreach fk targets (id only, not migrations 008 or 244)"
-"${PSQL[@]}" -d "$DB" -f "$ROOT/04-outreach-fk-targets.sql"
-for name in 300_budget_repayments.sql 301_budget_xero_spends.sql; do
-  git -C "$REPO" show "$SHA513:supabase/migrations/$name" > "$cache/$name"
-  sha256sum "$cache/$name" | awk -v n="$name" '{print n, $1}' | tee -a "$sums"
-  echo "LOAD $name from $SHA513"
-  "${PSQL[@]}" -d "$DB" -f "$cache/$name"
-done
-echo "LOAD 303_budget_workbook_atomic_save.sql from this branch"
-sha256sum "$REPO/supabase/migrations/303_budget_workbook_atomic_save.sql" | awk '{print "303_budget_workbook_atomic_save.sql", $1}' | tee -a "$sums"
-"${PSQL[@]}" -d "$DB" -f "$REPO/supabase/migrations/303_budget_workbook_atomic_save.sql"
+load_pinned_after_475 "$DB" 303
 
 echo "PROBE atomic"
 FFSA_VERIFY_SOCKET="$SOCKET" FFSA_VERIFY_DB="$DB" "$ROOT/probe-atomic.sh"
@@ -101,5 +73,6 @@ FFSA_VERIFY_SOCKET="$SOCKET" FFSA_VERIFY_DB="$DB" "$ROOT/probe-leader.sh"
 echo "PROBE 513 constraints"
 FFSA_VERIFY_SOCKET="$SOCKET" FFSA_VERIFY_DB="$DB" "$ROOT/probe-513.sh"
 mkdir -p "$ROOT/results"
-cp "$BASE"/probe-results.tsv "$BASE"/probe-atomic.tsv "$BASE"/probe-leader.tsv "$BASE"/probe-513.tsv "$sums" "$ROOT/results/"
+cp "$BASE"/probe-results.tsv "$BASE"/probe-atomic.tsv "$BASE"/probe-leader.tsv "$BASE"/probe-513.tsv "$ROOT/results/"
+cp "$sums" "$ROOT/results/checksums.txt"
 echo "HARNESS_OK"

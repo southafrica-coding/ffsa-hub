@@ -1,0 +1,25 @@
+order:
+  1. scripts/finance-workbook-db/00-auth-fixture.sql
+  2. scripts/finance-workbook-db/01-prerequisites.sql
+  3. scripts/finance-workbook-db/02-seed.sql
+  4. #475 54fd09e0cd11974850bcb43b842c3ce5c697f1a6 migrations 295 296 297 298 299
+  5. scripts/finance-workbook-db/04-outreach-fk-targets.sql (id-only, not 008 or 244)
+  6. #513 a985758c66761bfeba255e685437278a870c4fda migrations 300 301
+  7. this branch supabase/migrations/303_budget_workbook_atomic_save.sql
+not loaded: #514 302_communications_rls_orphan_keys.sql (42a88aab)
+not loaded: #507 2e1bcaec401c4675cee9f7c8533f6b23f365a3c0 (read for compatibility, not applied)
+bank mapping: unset, not inferred
+#507 head files were not modified
+fn apply_budget_workbook
+fn budget_workbook_org_ok
+fn create_budget_from_template
+fn create_budget_workbook_sheet
+rel budgets
+rel budget_expenses
+rel budget_repayments
+rel budget_xero_spends
+rel budget_workbook_revisions
+con budgets_period_org_fkey
+con budget_repayments_slack_message_ts_key
+con budget_xero_spends_receipt_draft_key
+#507 2e1bcaec401c4675cee9f7c8533f6b23f365a3c0 budget-actuals.ts selects fiscal_periods!budgets_period_org_fkey
