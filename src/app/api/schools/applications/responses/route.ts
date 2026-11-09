@@ -648,16 +648,20 @@ export async function PATCH(request: Request) {
     if (!id) {
       return NextResponse.json({ error: "id is required" }, { status: 400 });
     }
-    // Service-role write below bypasses RLS, so the gate has to carry the
-    // program. A program-scoped program_leader (312) may archive their own
-    // school; they do not pass the global check.
+    // Service-role write below bypasses RLS. The gate is the whole program
+    // check (312): admins, named leaders, schools.* grants, and a
+    // program_leader role scoped to this school. A missing row has no
+    // program, so it stays on the global check.
     const adminSupabase = createAdminClient();
     const { data: target } = await adminSupabase
       .from("application_responses")
       .select("program_id")
       .eq("id", id)
       .maybeSingle();
-    if (!(await userCanManageApplications(supabase, user.id, target?.program_id))) {
+    const allowed = target?.program_id
+      ? await userCanManageProgram(supabase, user.id, target.program_id)
+      : await userCanManageApplications(supabase, user.id);
+    if (!allowed) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     // RLS-backed: the 6-month expiry lock (migration 223) applies here too.
@@ -772,10 +776,12 @@ export async function DELETE(request: Request) {
     .eq("id", id)
     .single();
 
-  // Same gate as archive: global managers, or a program_leader scoped to
-  // this application's program. Someone who fails it gets 403, including
-  // when the row was not found.
-  if (!(await userCanManageApplications(supabase, user.id, existing?.program_id))) {
+  // Same gate as archive. Someone who fails it gets 403, including when
+  // the row was not found (no program id → global check).
+  const allowed = existing?.program_id
+    ? await userCanManageProgram(supabase, user.id, existing.program_id)
+    : await userCanManageApplications(supabase, user.id);
+  if (!allowed) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
