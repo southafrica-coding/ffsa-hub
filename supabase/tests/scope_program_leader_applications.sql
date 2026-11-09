@@ -104,6 +104,15 @@ BEGIN
     (phase || ' ' || who || ' lms_can_edit(B)', rb.lms, want_b);
 END $$;
 
+-- can_manage_program_applications(NULL) as one person. NULL is not a program id.
+CREATE FUNCTION pg_temp.cmpa_null(who text) RETURNS boolean
+LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', current_setting('t312.ids')::jsonb->>who, 'role', 'authenticated')::text, true);
+  RETURN public.can_manage_program_applications(NULL);
+END $$;
+
 -- ── Phase 1: role without its bundle (tests the 312 branch alone) ──
 SELECT pg_temp.expect('p1', 'plA',    true,  false);  -- scoped leader: A only (no program_leaders row)
 SELECT pg_temp.expect('p1', 'plU',    true,  true);   -- unscoped role: every program
@@ -115,12 +124,83 @@ SELECT pg_temp.expect('p1', 'enrG',   true,  true);   -- manage_enrollments unsc
 SELECT pg_temp.expect('p1', 'stfA',   false, false);  -- program staff are not managers
 SELECT pg_temp.expect('p1', 'nobody', false, false);
 
+-- ── NULL program id (still phase 1: the program_leader bundle is empty) ──
+-- A null id is not a school. Scoped leader, team-scoped holder and a plain
+-- user are not-true. false and NULL both count: NOT COALESCE(result, false).
+--   plA    scope_id = NULL is not true, so the 312 branch misses
+--   plT    scope_type 'team' is neither unscoped nor this program
+--   nobody no role and no grant
+-- plU is not in that list. 312's unscoped arm is `scope_type IS NULL`, which
+-- does not read target_program_id (same shape as an unscoped grant in
+-- has_permission_for, 089). NULL still matches, so the function returns true.
+-- Asserting not-true for plU would fail against this definition.
+--
+-- adm: 304's body (304_program_staff.sql, the SELECT at the old lines
+-- 641-650) ORs has_schools_access(target) first. has_schools_access
+-- (145) is is_admin() OR has_permission_for('schools.manage', target) OR
+-- is_program_leader(target). is_admin() (002) is has_any_role of an
+-- unscoped super_admin/admin row and never reads the program argument.
+-- adm holds that unscoped admin row, so 304 returns true for NULL.
+-- 312 leaves this branch unchanged. Expect true.
+INSERT INTO t312
+SELECT 'null prog ' || who || ' not-true',
+       NOT COALESCE(pg_temp.cmpa_null(who), false),
+       true
+  FROM (VALUES ('plA'), ('plT'), ('nobody')) AS v(who);
+INSERT INTO t312 SELECT 'null prog plU', pg_temp.cmpa_null('plU'), true;
+INSERT INTO t312 SELECT 'null prog adm', pg_temp.cmpa_null('adm'), true;
+
 -- ── Phase 2: prod-like bundle (program_leader carries schools.manage) ──
 INSERT INTO public.role_permissions (role_id, permission_id)
 VALUES (current_setting('t312.ppl')::uuid, current_setting('t312.kmanage')::uuid);
 SELECT pg_temp.expect('p2', 'plA',  true,  false);
 SELECT pg_temp.expect('p2', 'plU',  true,  true);
 SELECT pg_temp.expect('p2', 'plT',  false, false);
+
+-- ── Revoked role ──
+-- plA passed for A in phase 1 on the scoped program_leader row alone.
+-- The fixture gives plA no program_leaders row and no user_permissions.
+-- Phase 2 only hangs schools.manage on that role, so deleting the
+-- assignment removes both paths.
+DELETE FROM public.user_roles
+ WHERE user_id = (current_setting('t312.ids')::jsonb->>'plA')::uuid
+   AND role_id = current_setting('t312.ppl')::uuid;
+
+INSERT INTO t312
+SELECT 'revoked plA holds no other grant',
+       NOT EXISTS (
+         SELECT 1 FROM public.user_roles
+          WHERE user_id = (current_setting('t312.ids')::jsonb->>'plA')::uuid
+       )
+       AND NOT EXISTS (
+         SELECT 1 FROM public.user_permissions
+          WHERE user_id = (current_setting('t312.ids')::jsonb->>'plA')::uuid
+       )
+       AND NOT EXISTS (
+         SELECT 1 FROM public.program_leaders
+          WHERE user_id = (current_setting('t312.ids')::jsonb->>'plA')::uuid
+       ),
+       true;
+
+SELECT set_config('request.jwt.claims',
+  json_build_object('sub', current_setting('t312.ids')::jsonb->>'plA', 'role', 'authenticated')::text,
+  true);
+INSERT INTO t312
+SELECT 'revoked plA cmpa(A)',
+       public.can_manage_program_applications(current_setting('t312.pa')::uuid),
+       false;
+
+-- 305's lms_can_edit. The rest of this file already calls it; skip the
+-- row only if this database was built without that function.
+DO $$
+BEGIN
+  IF to_regprocedure('public.lms_can_edit(uuid)') IS NOT NULL THEN
+    INSERT INTO t312
+    SELECT 'revoked plA lms_can_edit(A)',
+           public.lms_can_edit(current_setting('t312.pa')::uuid),
+           false;
+  END IF;
+END $$;
 
 -- ── No auth.uid() (signed-in token without sub) ──
 SELECT set_config('request.jwt.claims', '{"role":"authenticated"}', true);
