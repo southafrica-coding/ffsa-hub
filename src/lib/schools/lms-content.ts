@@ -276,6 +276,20 @@ function cleanLessonContent(
   return { ok: false, error: "content_type must be rich_text or link" };
 }
 
+/**
+ * Whether the Classroom "Add lesson" button may submit. Same rules as
+ * validateLessonInput: a text lesson needs a non-blank body, a link lesson
+ * needs an http(s) URL, and the title cannot be empty.
+ */
+export function lessonDraftReady(draft: {
+  title: string;
+  content_type: LmsContentType;
+  body: string;
+  link_url: string;
+}): boolean {
+  return validateLessonInput(draft).ok;
+}
+
 export function validateLessonInput(raw: unknown): Result<LessonInput> {
   const body = (raw ?? {}) as Record<string, unknown>;
   const title = cleanTitle(body.title);

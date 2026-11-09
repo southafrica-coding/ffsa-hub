@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { StatusPill } from "@/components/ffsa";
 import { ArrowDown, ArrowUp, Check, ChevronLeft, ExternalLink, Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
 import {
+  lessonDraftReady,
   lessonEditPayload,
   moveId,
   type LmsContentType,
@@ -233,7 +234,12 @@ function AddLessonForm({ onAdd, busy }: { onAdd: (input: Record<string, unknown>
       ) : (
         <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" aria-label="Lesson link" />
       )}
-      <Button type="submit" size="sm" variant="outline" disabled={busy || !title.trim()}>
+      <Button
+        type="submit"
+        size="sm"
+        variant="outline"
+        disabled={busy || !lessonDraftReady({ title, content_type: type, body, link_url: url })}
+      >
         <Plus className="mr-1 h-4 w-4" /> Add lesson
       </Button>
     </form>

@@ -11,11 +11,22 @@ import {
   userIsProgramStaff,
 } from "@/lib/schools/program-staff-access";
 import { isInterviewOutcome } from "@/lib/schools/interview-outcomes";
+import { preserveInterviewWrite } from "@/lib/schools/interview-review-form";
 
 // GET  /api/schools/applications/reviews?response_id=
 //      /api/schools/applications/reviews?program_id=
 // PUT  /api/schools/applications/reviews
-//      { response_id, notes, interview_outcome }
+//      { response_id, notes, interview_outcome, clear_outcome?, clear_notes? }
+//
+// clear_outcome and clear_notes must be boolean true to count. Anything else
+// is ignored. Without clear_outcome, an incoming "pending" does not replace a
+// stored recommend, hold, or decline — that is the form's empty default, not
+// a decision. Without clear_notes, an empty note does not replace a stored
+// note. The form sends clear_outcome only after the reviewer changes the
+// outcome select to "No decision yet", and clear_notes only after they clear
+// a note that was on screen. The two flags are independent: clearing the note
+// does not change the outcome, and clearing the outcome does not require
+// clearing the note.
 //
 // Assigned program staff write a review on the application assigned to them.
 // Leaders and other managers (userCanManageProgram / can_manage_program_applications)
@@ -122,11 +133,16 @@ export async function PUT(request: Request) {
     response_id?: string;
     notes?: string | null;
     interview_outcome?: string;
+    /** True only when the reviewer changed the outcome select to "No decision yet". */
+    clear_outcome?: boolean;
+    /** True only when the reviewer cleared a note that was on screen. */
+    clear_notes?: boolean;
   };
   if (!body.response_id) {
     return NextResponse.json({ error: "response_id is required" }, { status: 400 });
   }
-  if (!isInterviewOutcome(body.interview_outcome)) {
+  const requestedOutcome = body.interview_outcome;
+  if (!isInterviewOutcome(requestedOutcome)) {
     return NextResponse.json(
       { error: "interview_outcome must be pending, recommend, hold, or decline" },
       { status: 400 }
@@ -164,6 +180,26 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
+  // The form's first paint is "No decision yet" and an empty note. A re-save
+  // before the saved row is on screen must not replace that row. Clearing
+  // either field is an explicit choice from the form (clear_outcome / clear_notes).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: existing, error: existingError } = await (admin as any)
+    .from("application_staff_reviews")
+    .select("notes, interview_outcome")
+    .eq("application_response_id", body.response_id)
+    .eq("author_id", user.id)
+    .maybeSingle();
+  if (existingError) return NextResponse.json({ error: existingError.message }, { status: 500 });
+
+  const write = preserveInterviewWrite({
+    existing: existing ?? null,
+    notes,
+    outcome: requestedOutcome,
+    clearOutcome: body.clear_outcome === true,
+    clearNotes: body.clear_notes === true,
+  });
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("application_staff_reviews")
@@ -172,8 +208,8 @@ export async function PUT(request: Request) {
         application_response_id: body.response_id,
         program_id: programId,
         author_id: user.id,
-        notes: notes || null,
-        interview_outcome: body.interview_outcome,
+        notes: write.notes,
+        interview_outcome: write.outcome,
       },
       { onConflict: "application_response_id,author_id" }
     )

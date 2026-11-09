@@ -11,6 +11,7 @@ import {
   publishedOnly,
   validateCourseInput,
   validateCoursePatch,
+  lessonDraftReady,
   validateLessonInput,
   validateLessonPatch,
   validateModulePatch,
@@ -18,7 +19,7 @@ import {
   type LmsLesson,
   type LmsModule,
 } from "./lms-content";
-import { sanitizeLessonBody } from "./lms-render";
+import { linkifyLessonText, sanitizeLessonBody, splitUrlTrailingPunctuation } from "./lms-render";
 
 const at = "2026-11-09T00:00:00Z";
 const course = (over: Partial<LmsCourse> = {}): LmsCourse => ({
@@ -155,6 +156,16 @@ describe("validation", () => {
     expect(validateModulePatch({ published: false })).toEqual({ ok: true, value: { published: false } });
   });
 
+  it("keeps Add lesson off while the text body is empty or whitespace", () => {
+    expect(lessonDraftReady({ title: "Week 1", content_type: "rich_text", body: "", link_url: "" })).toBe(false);
+    expect(lessonDraftReady({ title: "Week 1", content_type: "rich_text", body: "   ", link_url: "" })).toBe(false);
+    expect(lessonDraftReady({ title: "  ", content_type: "rich_text", body: "Read Acts", link_url: "" })).toBe(false);
+    expect(lessonDraftReady({ title: "Week 1", content_type: "rich_text", body: "Read Acts", link_url: "" })).toBe(true);
+    expect(
+      lessonDraftReady({ title: "Video", content_type: "link", body: "", link_url: "javascript:alert(1)" })
+    ).toBe(false);
+  });
+
   it("a rich_text lesson needs a body and clears link_url", () => {
     expect(validateLessonInput({ title: "T", content_type: "rich_text" }).ok).toBe(false);
     expect(validateLessonInput({ title: "T", content_type: "rich_text", body: "   " }).ok).toBe(false);
@@ -230,11 +241,40 @@ describe("access", () => {
 });
 
 describe("lesson body rendering", () => {
-  it("strips scripts and forces safe link attributes", () => {
-    const html = sanitizeLessonBody('<p>Hi</p><script>alert(1)</script><a href="https://a.test">x</a>');
+  it("escapes raw HTML instead of rendering it", () => {
+    const html = sanitizeLessonBody('<p>Hi</p><script>alert(1)</script><a href="javascript:alert(1)">x</a>');
     expect(html).not.toContain("<script");
-    expect(html).toContain('rel="noopener noreferrer"');
-    expect(html).toContain('target="_blank"');
+    expect(html).not.toContain("<p>");
+    expect(html).not.toContain("<a ");
+    expect(html).toContain("&lt;script&gt;");
+    expect(html).toContain("&lt;p&gt;");
+    expect(html).toContain("javascript:alert(1)");
+    expect(html).not.toContain('href="javascript:');
+  });
+
+  it("linkifies plain http and https URLs only", () => {
+    const html = linkifyLessonText("Read https://a.test/acts and http://b.test/notes.");
+    expect(html).toContain('<a href="https://a.test/acts" target="_blank" rel="noopener noreferrer">https://a.test/acts</a>');
+    expect(html).toContain('<a href="http://b.test/notes" target="_blank" rel="noopener noreferrer">http://b.test/notes</a>');
+    expect(html.endsWith(".")).toBe(true);
+    const hostile = linkifyLessonText("javascript:alert(1) data:text/html,hi");
+    expect(hostile).not.toContain("<a ");
+    expect(hostile).toContain("javascript:alert(1)");
+    expect(hostile).toContain("data:text/html,hi");
+  });
+
+  it("keeps a balanced closing parenthesis inside a wiki URL", () => {
+    const wiki = "https://en.wikipedia.org/wiki/Foo_(bar)";
+    expect(splitUrlTrailingPunctuation(wiki)).toEqual({ core: wiki, suffix: "" });
+    const html = linkifyLessonText(`See ${wiki}.`);
+    expect(html).toContain(`href="${wiki}"`);
+    expect(html.endsWith(".")).toBe(true);
+    const wrapped = linkifyLessonText(`(See ${wiki}).`);
+    expect(wrapped).toContain(`href="${wiki}"`);
+    expect(wrapped.endsWith(").")).toBe(true);
+    const prose = linkifyLessonText("See (https://example.com/notes).");
+    expect(prose).toContain('href="https://example.com/notes"');
+    expect(prose).not.toContain('href="https://example.com/notes)"');
   });
 
   it("keeps plain-text line breaks and escapes markup-looking text", () => {

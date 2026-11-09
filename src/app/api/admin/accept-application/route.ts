@@ -17,6 +17,7 @@ import {
   substitutePlaceholders,
   plainTextToEmailHtml,
 } from "@/lib/email/placeholders";
+import { applicantEmailIlikePattern } from "@/lib/applications/applicant-identity";
 
 
 export async function POST(request: Request) {
@@ -128,6 +129,20 @@ export async function POST(request: Request) {
     );
   }
 
+  // Same rule as the public duplicate check: ILIKE is case-insensitive, `_`
+  // and `%` are escaped, and `*` is refused. PostgREST treats `*` as a
+  // wildcard a backslash cannot escape, so matching on it could attach this
+  // application to the wrong account.
+  let applicantEmailPattern: string;
+  try {
+    applicantEmailPattern = applicantEmailIlikePattern(applicantEmail);
+  } catch {
+    return NextResponse.json(
+      { error: "This applicant's email can't be matched safely." },
+      { status: 400 }
+    );
+  }
+
   // Update response status to accepted
   const { error: statusError } = await adminSupabase
     .from("application_responses")
@@ -173,7 +188,7 @@ export async function POST(request: Request) {
     const { data: existingUser } = await adminSupabase
       .from("users")
       .select("id, first_name")
-      .eq("email", applicantEmail)
+      .ilike("email", applicantEmailPattern)
       .maybeSingle();
 
     if (existingUser) {

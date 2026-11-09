@@ -6,7 +6,7 @@ import { fetchAssignableContacts } from "@/lib/auth/assignable-contacts";
 import { listProgramLeaders } from "@/services/program-leaders";
 import { StaffApplicants, type StaffApplicant } from "./staff-applicants";
 import { AssignmentsSection } from "@/components/schools/lms/assignments-section";
-import type { InterviewOutcome } from "@/lib/schools/interview-outcomes";
+import { interviewFormFromReview } from "@/lib/schools/interview-review-form";
 import {
   applicationsForViewer,
   canOpenSchools,
@@ -129,11 +129,7 @@ function staffApplicantFromResponse(
         answer: answer.answer || "",
       }))
     : [];
-  const outcome = review?.interview_outcome;
-  const interviewOutcome: InterviewOutcome =
-    outcome === "recommend" || outcome === "hold" || outcome === "decline" || outcome === "pending"
-      ? outcome
-      : "pending";
+  const form = interviewFormFromReview(review);
   return {
     id: row.id,
     name,
@@ -141,8 +137,8 @@ function staffApplicantFromResponse(
     status: row.status,
     submittedAt: row.submitted_at ?? null,
     answers,
-    notes: review?.notes ?? "",
-    interviewOutcome,
+    notes: form.notes,
+    interviewOutcome: form.outcome,
   };
 }
 
@@ -431,7 +427,7 @@ export default async function ProgramDetailPage({
   const applicationIds = (responses ?? []).map((r: any) => r.id);
   const [{ data: refRequests }, interviewReviewResult] = await Promise.all([
     getReferenceRequestSummaries(supabase, applicationIds),
-    getInterviewReviewSummaries(supabase, applicationIds),
+    getInterviewReviewSummaries(supabase, applicationIds, session.user.id),
   ]);
   if (interviewReviewResult.error) {
     console.error("interview reviews for pipeline:", interviewReviewResult.error);
@@ -501,6 +497,7 @@ export default async function ProgramDetailPage({
         referenceQuestions={referenceQuestions ?? []}
         refRequestSummaries={refRequests ?? []}
         interviewReviews={interviewReviewResult.data ?? []}
+        viewerId={session.user.id}
         applicationExpiry={applicationExpiry}
         staffDecisionPanel={staffDecisionPanel ?? undefined}
         canEditClassroom={viewer.canManage}
