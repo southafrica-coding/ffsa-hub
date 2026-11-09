@@ -77,14 +77,15 @@ export async function resolveProgramEmail(
   }
 
   const catalog = getProgramEmailType(emailType);
-  const subjectTemplate = hasSubject
-    ? (row!.subject as string)
-    : catalog?.defaultSubject ?? defaults.subject;
+  // A saved subject is the school's override and wins. No saved subject
+  // keeps the caller's subject (already filled in), so a body-only edit
+  // does not freeze an older catalog subject in place.
+  const subject = hasSubject
+    ? substituteTokens(row!.subject as string, ctx.values)
+    : defaults.subject;
   const bodyTemplate = hasBody
     ? (row!.body as string)
     : catalog?.defaultBody ?? "";
-
-  const subject = substituteTokens(subjectTemplate, ctx.values);
   const heading = substituteTokens(
     catalog?.defaultHeading ?? "",
     ctx.values

@@ -12,6 +12,14 @@ import { StudentsExportPanel } from "./students-export-panel";
 import { ENROLLMENT_STATUS_LABELS } from "@/lib/schools/student-export-columns";
 import type { ArrivalInsuranceInfo } from "@/lib/schools/arrival-insurance";
 import { Badge } from "@/components/ui/badge";
+import {
+  badgeVariant,
+  presentationForMessage,
+} from "@/lib/email/delivery-state";
+import {
+  REFERENCE_BOUNCE_MESSAGE,
+  REFERENCE_NOT_SENT_MESSAGE,
+} from "@/lib/references/reference-delivery";
 import { Chip, Masthead, StatusPill } from "@/components/ffsa";
 import { TrackTab } from "./track-tab";
 import type { PipelinePerson, TrackSummary } from "@/lib/schools/track-pipeline";
@@ -186,6 +194,7 @@ type ReferenceRequest = {
   submitted_at: string | null;
   form_data: Record<string, any> | null;
   reference_slots: { label: string; description: string | null } | null;
+  email_problem?: "bounced" | "not_sent" | null;
 };
 
 type ApplicantInfo = {
@@ -1587,24 +1596,12 @@ function prettyCategory(c: string | null): string {
     .join(" ");
 }
 
-function ApplicantEmailStatusBadge({ status }: { status: string }) {
-  const map: Record<
-    string,
-    { label: string; variant: "default" | "secondary" | "destructive" | "outline" }
-  > = {
-    delivered: { label: "Delivered", variant: "secondary" },
-    opened: { label: "Opened", variant: "secondary" },
-    sent: { label: "Sent", variant: "outline" },
-    queued: { label: "Queued", variant: "outline" },
-    bounced: { label: "Bounced", variant: "destructive" },
-    complained: { label: "Spam", variant: "destructive" },
-    dropped: { label: "Dropped", variant: "destructive" },
-    failed: { label: "Failed", variant: "destructive" },
-  };
-  const meta = map[status] ?? { label: status, variant: "outline" as const };
+function ApplicantEmailStatusBadge({ email }: { email: ApplicantEmailRow }) {
+  // Sent and delivered are success. A missing open or click is not a problem.
+  const view = presentationForMessage(email);
   return (
-    <Badge variant={meta.variant} className="shrink-0">
-      {meta.label}
+    <Badge variant={badgeVariant(view.tone)} className="shrink-0">
+      {view.label}
     </Badge>
   );
 }
@@ -1751,7 +1748,7 @@ function ApplicantsTab({
           alert(
             data.emailed
               ? "Reference updated — a fresh invite was sent to the new email and the old link no longer works."
-              : "Reference updated, but the invite email could not be sent. Use 'Remind' to retry."
+              : "Reference updated, but the invite email could not be sent. Check the address and try again."
           );
         }
         cancelEditReference();
@@ -2065,7 +2062,14 @@ function ApplicantsTab({
         }),
       });
       if (res.ok) {
-        alert("Reminder sent!");
+        const data = await res.json();
+        alert(
+          data.skipped
+            ? "This program has reference reminders switched off."
+            : data.emailed
+              ? "Reminder sent!"
+              : "The reminder was not sent. Check the address and try again."
+        );
         fetchReferences(reviewingResponse!.id);
       } else {
         const data = await res.json();
@@ -2828,13 +2832,11 @@ function ApplicantsTab({
                         ).toLocaleString()}
                       </p>
                       {em.error &&
-                        ["bounced", "complained", "failed", "dropped"].includes(
-                          em.status
-                        ) && (
+                        presentationForMessage(em).tone === "problem" && (
                           <p className="text-xs text-destructive">{em.error}</p>
                         )}
                     </div>
-                    <ApplicantEmailStatusBadge status={em.status} />
+                    <ApplicantEmailStatusBadge email={em} />
                   </li>
                 ))}
               </ul>
@@ -2914,6 +2916,16 @@ function ApplicantsTab({
                           <p className="text-xs text-muted-foreground">
                             {ref.referee_name} · {ref.referee_email}
                           </p>
+                          {ref.status !== "submitted" && ref.email_problem === "bounced" && (
+                            <p className="mt-1 text-xs text-destructive" role="status">
+                              {REFERENCE_BOUNCE_MESSAGE}
+                            </p>
+                          )}
+                          {ref.status !== "submitted" && ref.email_problem === "not_sent" && (
+                            <p className="mt-1 text-xs text-destructive" role="status">
+                              {REFERENCE_NOT_SENT_MESSAGE}
+                            </p>
+                          )}
                         </div>
                         <div className="flex items-center gap-2">
                           {ref.status !== "submitted" && editingRefId !== ref.id && (
@@ -2945,9 +2957,13 @@ function ApplicantsTab({
                               Remind
                             </Button>
                           )}
-                          <Badge variant={ref.status === "submitted" ? "default" : "secondary"}>
-                            {ref.status === "submitted" ? "Submitted" : "Pending"}
-                          </Badge>
+                          {ref.status !== "submitted" && ref.email_problem === "bounced" ? (
+                            <Badge variant="destructive">Email bounced</Badge>
+                          ) : (
+                            <Badge variant={ref.status === "submitted" ? "default" : "secondary"}>
+                              {ref.status === "submitted" ? "Submitted" : "Pending"}
+                            </Badge>
+                          )}
                         </div>
                       </div>
 

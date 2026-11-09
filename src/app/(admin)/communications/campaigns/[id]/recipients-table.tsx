@@ -6,7 +6,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { SectionBar, StatusPill, type Tone } from "@/components/ffsa";
+import { SectionBar, StatusPill } from "@/components/ffsa";
+import { recipientLogStatus } from "@/lib/email/delivery-state";
 
 
 type Contact = {
@@ -28,26 +29,8 @@ export type RecipientRow = {
   contacts: Contact;
 };
 
-// Furthest-reached status for a recipient, worst-case (bounce/complaint) first.
-function statusFor(r: RecipientRow): { label: string; tone: Tone; at: string | null } {
-  if (r.complained_at)
-    return { label: "Spam", tone: "bad", at: r.complained_at };
-  // Only a bounce that never delivered counts. A transient bounce (e.g.
-  // Mailtrap "hourly_rate_exceeded") stamps bounced_at but later delivers —
-  // such a recipient should show its real reached status, not "Bounced".
-  if (r.bounced_at && !r.delivered_at)
-    return { label: "Bounced", tone: "bad", at: r.bounced_at };
-  if (r.unsubscribed_at)
-    return { label: "Unsubscribed", tone: "quiet", at: r.unsubscribed_at };
-  if (r.first_clicked_at)
-    return { label: "Clicked", tone: "good", at: r.first_clicked_at };
-  if (r.opened_at)
-    return { label: "Opened", tone: "good", at: r.opened_at };
-  if (r.delivered_at)
-    return { label: "Delivered", tone: "good", at: r.delivered_at };
-  if (r.sent_at) return { label: "Sent", tone: "warn", at: r.sent_at };
-  return { label: "Pending", tone: "quiet", at: null };
-}
+// Sent and delivered are success. A missing open or click is not a warning —
+// open and click tracking is off. A bounce that later delivered stays delivered.
 
 function nameFor(c: Contact): string {
   if (!c) return "Unknown";
@@ -79,7 +62,7 @@ export function CampaignRecipientsTable({
           </TableHeader>
           <TableBody>
             {recipients.map((r) => {
-              const s = statusFor(r);
+              const s = recipientLogStatus(r);
               return (
                 <TableRow key={r.id}>
                   <TableCell>

@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { updateReferenceRequest } from "@/services/schools";
 import { sendReferenceInvite } from "@/lib/email/send-reference-invite";
+import { referenceSendConfirmed } from "@/lib/email/reference-email";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
@@ -11,7 +12,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // joined select (see REFERENCE_EDIT_SELECT) so applicant/program/slot names are
 // available for the re-invite email.
 export const REFERENCE_EDIT_SELECT =
-  "*, reference_slots(label), application_responses(status_token, applicant_info, programs(name), users!application_responses_user_id_fkey(first_name, last_name))";
+  "*, reference_slots(label), application_responses(status_token, program_id, applicant_info, programs(name), users!application_responses_user_id_fkey(first_name, last_name))";
 
 type EditResult =
   | { ok: true; data: unknown; emailed: boolean; emailChanged: boolean }
@@ -75,7 +76,7 @@ export async function editReferenceContact(
     referee_name: string;
     referee_email: string;
     token?: string;
-    email_sent_at?: string;
+    email_sent_at?: string | null;
     reminder_sent_at?: string | null;
   } = { referee_name: name, referee_email: email };
 
@@ -83,7 +84,9 @@ export async function editReferenceContact(
   if (emailChanged) {
     token = randomUUID();
     payload.token = token;
-    payload.email_sent_at = new Date().toISOString();
+    // Cleared until the provider confirms a message id. A previous stamp
+    // belonged to the old address.
+    payload.email_sent_at = null;
     payload.reminder_sent_at = null;
   }
 
@@ -102,18 +105,26 @@ export async function editReferenceContact(
   if (emailChanged) {
     const app = ref.application_responses;
     try {
-      await sendReferenceInvite({
+      const sent = await sendReferenceInvite({
         toEmail: email,
         refereeName: name,
         applicantName: resolveApplicantName(app),
         programName: app?.programs?.name ?? "School Program",
         slotLabel: ref.reference_slots?.label ?? "Reference",
         token,
+        programId: app?.program_id ?? null,
+        referenceRequestId: ref.id,
       });
-      emailed = true;
+      // A result with no provider id (or ok: false) is not a send. Don't
+      // throw — the corrected details are already saved.
+      if (referenceSendConfirmed(sent)) {
+        emailed = true;
+        await adminSupabase
+          .from("reference_requests")
+          .update({ email_sent_at: new Date().toISOString() })
+          .eq("id", ref.id);
+      }
     } catch {
-      // The corrected details are saved even if the invite email fails to send;
-      // the caller can surface a "saved, but email didn't send" notice.
       emailed = false;
     }
   }

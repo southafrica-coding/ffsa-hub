@@ -21,7 +21,8 @@ import {
   applicationConfirmationEmailHtml,
   applicationReferenceNotice,
 } from "@/lib/email/templates/application-confirmation";
-import { referenceRequestEmailHtml } from "@/lib/email/templates/reference-request";
+import { sendReferenceInvite } from "@/lib/email/send-reference-invite";
+import { referenceSendConfirmed } from "@/lib/email/reference-email";
 
 
 function findAnswerByType(
@@ -453,48 +454,23 @@ export async function POST(request: Request) {
           url: referenceUrl,
         });
 
-        const refDefaults = {
-          subject: `Reference Request — ${program.name}`,
-          html: referenceRequestEmailHtml({
-            refereeName: ref.referee_name,
-            applicantName,
-            programName: program.name,
-            slotLabel: slot?.label ?? "Reference",
-            referenceUrl,
-          }),
-        };
-        const resolvedRef = await resolveProgramEmail(
-          supabase,
-          program_id,
-          "reference_request",
-          refDefaults,
-          {
-            values: {
-              program_name: program.name,
-              applicant_name: applicantName,
-              referee_name: ref.referee_name,
-              reference_type: slot?.label ?? "Reference",
-            },
-            cta: { label: "Complete the reference", url: referenceUrl },
-            siteUrl,
-          }
-        );
-        if (!resolvedRef.skip) {
-          await sendTransactional({
-            to: ref.referee_email,
-            subject: resolvedRef.subject,
-            html: resolvedRef.html,
-            category: "reference_request",
-            sourceType: "school_application",
-            sourceId: response.id,
-            programDocuments: { programId: program_id, emailType: "reference_request" },
-          });
-        }
+        const sent = await sendReferenceInvite({
+          toEmail: ref.referee_email,
+          refereeName: ref.referee_name,
+          applicantName,
+          programName: program.name,
+          slotLabel: slot?.label ?? "Reference",
+          token: refRequest.token,
+          programId: program_id,
+          referenceRequestId: refRequest.id,
+        });
 
-        await (supabase as any)
-          .from("reference_requests")
-          .update({ email_sent_at: new Date().toISOString() })
-          .eq("id", refRequest.id);
+        if (referenceSendConfirmed(sent)) {
+          await (supabase as any)
+            .from("reference_requests")
+            .update({ email_sent_at: new Date().toISOString() })
+            .eq("id", refRequest.id);
+        }
       }
     }
   }

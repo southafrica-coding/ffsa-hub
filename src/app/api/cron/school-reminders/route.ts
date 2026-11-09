@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendTransactional } from "@/lib/email/send-transactional";
-import { resolveProgramEmail } from "@/lib/email/render-program-email";
-import { referenceReminderEmailHtml } from "@/lib/email/templates/reference-reminder";
+import { sendReferenceReminder } from "@/lib/email/send-reference-reminder";
+import { referenceSendConfirmed } from "@/lib/email/reference-email";
 
 export const maxDuration = 60;
 
@@ -30,7 +29,6 @@ export async function GET(request: Request) {
   }
 
   const admin: Client = createAdminClient();
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://ffsahub.com";
 
   // Programs opted into auto reference reminders.
   const { data: configs, error: cfgErr } = await admin
@@ -79,69 +77,33 @@ export async function GET(request: Request) {
               ]
                 .filter(Boolean)
                 .join(" ")) || "An applicant";
-        const referenceUrl = `${siteUrl}/reference/${req.token}`;
 
-        const defaults = {
-          subject: `Reference Reminder — ${programName}`,
-          html: referenceReminderEmailHtml({
-            refereeName: req.referee_name,
-            applicantName,
-            programName,
-            slotLabel: req.reference_slots?.label ?? "Reference",
-            referenceUrl,
-          }),
-        };
-
-        const resolved = await resolveProgramEmail(
-          admin,
-          cfg.program_id,
-          "reference_reminder",
-          defaults,
-          {
-            values: {
-              program_name: programName,
-              applicant_name: applicantName,
-              referee_name: req.referee_name,
-              reference_type: req.reference_slots?.label ?? "Reference",
-            },
-            cta: { label: "Complete the reference", url: referenceUrl },
-            siteUrl,
-          }
-        );
-
-        if (resolved.skip) {
-          skipped += 1;
-          continue;
-        }
-
-        const result = await sendTransactional({
-          to: req.referee_email,
-          subject: resolved.subject,
-          html: resolved.html,
-          category: "reference_reminder",
-          sourceType: "school_application",
-          sourceId: app?.id ?? null,
-          programDocuments: {
-            programId: cfg.program_id,
-            emailType: "reference_reminder",
-          },
+        const result = await sendReferenceReminder({
+          toEmail: req.referee_email,
+          refereeName: req.referee_name,
+          applicantName,
+          programName,
+          slotLabel: req.reference_slots?.label ?? "Reference",
+          token: req.token,
+          programId: cfg.program_id,
+          referenceRequestId: req.id,
         });
 
-        // Stamp reminder_sent_at whenever the send left our hands (sent,
-        // or dropped-because-suppressed) so we don't retry a bad address
-        // every night. A hard provider error leaves it null to try again.
+        // Stamp reminder_sent_at when the provider confirmed an id, or when
+        // the address is suppressed, so we don't retry a bad address every
+        // night. A send that returns no id is left unstamped to try again.
         const stamp = () =>
           admin
             .from("reference_requests")
             .update({ reminder_sent_at: new Date().toISOString() })
             .eq("id", req.id);
 
-        if (result.ok) {
+        if (referenceSendConfirmed(result)) {
           sent += 1;
           await stamp();
         } else {
           skipped += 1;
-          if (result.suppressed) await stamp();
+          if (!result.ok && result.suppressed) await stamp();
         }
       } catch (e) {
         console.error("[school-reminders] failed for request", req.id, e);

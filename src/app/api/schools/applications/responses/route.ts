@@ -18,8 +18,9 @@ import { ensureStudentRole, deactivateMembershipProfile } from "@/lib/auth/membe
 import { sendTransactional } from "@/lib/email/send-transactional";
 import { resolveProgramEmail } from "@/lib/email/render-program-email";
 import { sendReferenceInvite } from "@/lib/email/send-reference-invite";
+import { sendReferenceReminder } from "@/lib/email/send-reference-reminder";
+import { referenceSendConfirmed } from "@/lib/email/reference-email";
 import { syncApplicantToContact } from "@/lib/applications/sync-contact";
-import { referenceReminderEmailHtml } from "@/lib/email/templates/reference-reminder";
 import { applicationRejectedEmailHtml } from "@/lib/email/templates/application-rejected";
 import { applicationWaitlistedEmailHtml } from "@/lib/email/templates/application-waitlisted";
 import { interviewScheduledEmailHtml } from "@/lib/email/templates/interview-scheduled";
@@ -318,7 +319,7 @@ export async function POST(request: Request) {
       if (refRequest) {
         const slot = slotMap.get(ref.slot_id);
 
-        await sendReferenceInvite({
+        const sent = await sendReferenceInvite({
           toEmail: ref.referee_email,
           refereeName: ref.referee_name,
           applicantName,
@@ -326,12 +327,15 @@ export async function POST(request: Request) {
           slotLabel: slot?.label ?? "Reference",
           token: refRequest.token,
           programId: program_id,
+          referenceRequestId: refRequest.id,
         });
 
-        await (adminSupabase as any)
-          .from("reference_requests")
-          .update({ email_sent_at: new Date().toISOString() })
-          .eq("id", refRequest.id);
+        if (referenceSendConfirmed(sent)) {
+          await (adminSupabase as any)
+            .from("reference_requests")
+            .update({ email_sent_at: new Date().toISOString() })
+            .eq("id", refRequest.id);
+        }
       }
     }
   }
@@ -644,7 +648,6 @@ export async function PATCH(request: Request) {
 
   if (action === "send_reference_reminder" && reference_request_id) {
     const adminSupabase = createAdminClient();
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://ffsahub.com";
 
     const { data: refReq } = await (adminSupabase as any)
       .from("reference_requests")
@@ -667,64 +670,31 @@ export async function PATCH(request: Request) {
       ? [app.users.first_name, app.users.last_name].filter(Boolean).join(" ")
       : [app?.applicant_info?.first_name, app?.applicant_info?.last_name].filter(Boolean).join(" ") || "An applicant";
 
-    const referenceUrl = `${siteUrl}/reference/${refReq.token}`;
     const reminderProgramName = app?.programs?.name ?? "School Program";
-    const reminderDefaults = {
-      subject: `Reference Reminder — ${reminderProgramName}`,
-      html: referenceReminderEmailHtml({
-        refereeName: refReq.referee_name,
-        applicantName,
-        programName: reminderProgramName,
-        slotLabel: refReq.reference_slots?.label ?? "Reference",
-        referenceUrl,
-      }),
-    };
-
-    // Apply the school's per-program override; a custom body still gets the
-    // "complete the reference" button re-appended so the link is never lost.
-    let reminderSubject = reminderDefaults.subject;
-    let reminderHtml = reminderDefaults.html;
-    if (app?.program_id) {
-      const resolved = await resolveProgramEmail(
-        adminSupabase,
-        app.program_id,
-        "reference_reminder",
-        reminderDefaults,
-        {
-          values: {
-            program_name: reminderProgramName,
-            applicant_name: applicantName,
-            referee_name: refReq.referee_name,
-            reference_type: refReq.reference_slots?.label ?? "Reference",
-          },
-          cta: { label: "Complete the reference", url: referenceUrl },
-          siteUrl,
-        }
-      );
-      if (resolved.skip) {
-        return NextResponse.json({ success: true, skipped: true });
-      }
-      reminderSubject = resolved.subject;
-      reminderHtml = resolved.html;
-    }
-
-    await sendTransactional({
-      to: refReq.referee_email,
-      subject: reminderSubject,
-      html: reminderHtml,
-      category: "reference_reminder",
-      sourceType: "school_application",
-      sourceId: app?.id ?? null,
-      programDocuments: { programId: app?.program_id, emailType: "reference_reminder" },
+    const sent = await sendReferenceReminder({
+      toEmail: refReq.referee_email,
+      refereeName: refReq.referee_name,
+      applicantName,
+      programName: reminderProgramName,
+      slotLabel: refReq.reference_slots?.label ?? "Reference",
+      token: refReq.token,
+      programId: app?.program_id ?? null,
+      referenceRequestId: refReq.id,
     });
 
-    // Update reminder_sent_at
-    await (adminSupabase as any)
-      .from("reference_requests")
-      .update({ reminder_sent_at: new Date().toISOString() })
-      .eq("id", reference_request_id);
+    if (!sent.ok && sent.error === "disabled") {
+      return NextResponse.json({ success: true, skipped: true, emailed: false });
+    }
 
-    return NextResponse.json({ success: true });
+    const emailed = referenceSendConfirmed(sent);
+    if (emailed) {
+      await (adminSupabase as any)
+        .from("reference_requests")
+        .update({ reminder_sent_at: new Date().toISOString() })
+        .eq("id", reference_request_id);
+    }
+
+    return NextResponse.json({ success: true, emailed });
   }
 
   return NextResponse.json({ error: "Invalid action" }, { status: 400 });

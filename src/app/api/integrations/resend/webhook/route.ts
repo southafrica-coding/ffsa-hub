@@ -161,6 +161,12 @@ export async function POST(request: Request) {
   // Hard bounces + complaints feed the global suppression list — a bad
   // address is bad on every channel. A transient (soft) bounce is a full
   // mailbox or a slow server; suppressing it would drop a real person.
+  //
+  // A hard-bounced reference invite or reminder shows up on the dashboard
+  // feed (referenceBounceNotifs) and on the application itself. That feed
+  // is derived from this ledger row and keyed by the reference, so a
+  // retried webhook does not raise a second alert. Open and click events
+  // are no longer a delivery signal — tracking is off for ffsahub.com.
   const isHardBounce = ev.status === "bounced" && ev.bounceType === "hard";
   if (isHardBounce || ev.status === "complained") {
     const to = payload.data?.to;

@@ -16,12 +16,19 @@ const C = {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+const PROBLEM_COPY: Record<"bounced" | "not_sent", string> = {
+  bounced: "This email bounced. Please check the address and correct it.",
+  not_sent: "We couldn't email this address. Please check it and try again.",
+};
+
 export type EditableReference = {
   id: string;
   status: string;
   referee_name: string;
   referee_email: string;
   slot_label: string;
+  /** Set when the invite hard-bounced or never confirmed a send. */
+  email_problem?: "bounced" | "not_sent" | null;
 };
 
 export type MissingSlot = {
@@ -94,6 +101,7 @@ export function ReferenceEditor({
           referee_name: trimmedName,
           referee_email: trimmedEmail,
           slot_label: slot.label,
+          email_problem: data.emailed ? null : "not_sent",
         },
       ]);
       setPendingSlots((prev) => prev.filter((s) => s.id !== slot.id));
@@ -159,7 +167,16 @@ export function ReferenceEditor({
       setRows((prev) =>
         prev.map((r) =>
           r.id === refId
-            ? { ...r, referee_name: trimmedName, referee_email: trimmedEmail }
+            ? {
+                ...r,
+                referee_name: trimmedName,
+                referee_email: trimmedEmail,
+                email_problem: data.email_changed
+                  ? data.emailed
+                    ? null
+                    : "not_sent"
+                  : r.email_problem,
+              }
             : r
         )
       );
@@ -256,6 +273,11 @@ export function ReferenceEditor({
                       }}
                     >
                       {ref.referee_name} · {ref.referee_email}
+                    </p>
+                  )}
+                  {!submitted && ref.email_problem && (
+                    <p role="status" style={{ fontSize: 12, color: "hsl(0 75% 70%)", marginTop: 6, lineHeight: 1.45 }}>
+                      {PROBLEM_COPY[ref.email_problem]}
                     </p>
                   )}
                 </div>

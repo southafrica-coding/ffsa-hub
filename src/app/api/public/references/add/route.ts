@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createReferenceRequest } from "@/services/schools";
 import { sendReferenceInvite } from "@/lib/email/send-reference-invite";
+import { referenceSendConfirmed } from "@/lib/email/reference-email";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -101,9 +102,9 @@ export async function POST(request: Request) {
     );
   }
 
-  // Send the standard referee invite and stamp email_sent_at, mirroring the
-  // application-submission flow. A send failure doesn't undo the saved row —
-  // the applicant can re-send by editing the referee from the status page.
+  // Send the standard referee invite. email_sent_at is stamped only when the
+  // provider returns a message id. A failed send doesn't undo the saved row —
+  // the applicant can correct the address from the status page.
   const applicantInfo = application.applicant_info as Record<string, string> | null;
   const applicantName =
     [applicantInfo?.first_name, applicantInfo?.last_name].filter(Boolean).join(" ") ||
@@ -113,19 +114,23 @@ export async function POST(request: Request) {
 
   let emailed = false;
   try {
-    await sendReferenceInvite({
+    const sent = await sendReferenceInvite({
       toEmail: refereeEmail,
       refereeName,
       applicantName,
       programName,
       slotLabel: slot.label,
       token: refRequest.token,
+      programId: application.program_id,
+      referenceRequestId: refRequest.id,
     });
-    await supabase
-      .from("reference_requests")
-      .update({ email_sent_at: new Date().toISOString() })
-      .eq("id", refRequest.id);
-    emailed = true;
+    if (referenceSendConfirmed(sent)) {
+      await supabase
+        .from("reference_requests")
+        .update({ email_sent_at: new Date().toISOString() })
+        .eq("id", refRequest.id);
+      emailed = true;
+    }
   } catch {
     emailed = false;
   }

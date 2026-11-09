@@ -42,18 +42,39 @@ export async function GET(
   // as untyped everywhere, so do the same here.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin: any = createAdminClient();
-  const { data, error } = await admin
-    .from("email_messages")
-    .select(
-      "id, category, subject, to_email, status, error, sent_at, delivered_at, opened_at, bounced_at, complained_at, created_at"
-    )
-    .eq("source_type", "school_application")
-    .eq("source_id", applicationId)
-    .order("created_at", { ascending: false });
+  const columns =
+    "id, category, subject, to_email, status, error, sent_at, delivered_at, opened_at, bounced_at, complained_at, created_at";
+
+  const [{ data: appEmails, error }, { data: refRows }] = await Promise.all([
+    admin
+      .from("email_messages")
+      .select(columns)
+      .eq("source_type", "school_application")
+      .eq("source_id", applicationId)
+      .order("created_at", { ascending: false }),
+    admin.from("reference_requests").select("id").eq("application_id", applicationId),
+  ]);
 
   if (error) {
     // email_messages missing (pre-migration) → empty, never break the UI.
     return NextResponse.json({ emails: [] });
   }
-  return NextResponse.json({ emails: data ?? [] });
+
+  const refIds = ((refRows ?? []) as Array<{ id: string }>).map((r) => r.id);
+  let refEmails: Array<{ id: string; created_at: string }> = [];
+  if (refIds.length > 0) {
+    const { data } = await admin
+      .from("email_messages")
+      .select(columns)
+      .eq("source_type", "reference_request")
+      .in("source_id", refIds);
+    refEmails = data ?? [];
+  }
+
+  const emails = [...(appEmails ?? []), ...refEmails].sort((a, b) => {
+    const ta = a.created_at ? Date.parse(a.created_at) : 0;
+    const tb = b.created_at ? Date.parse(b.created_at) : 0;
+    return tb - ta;
+  });
+  return NextResponse.json({ emails });
 }

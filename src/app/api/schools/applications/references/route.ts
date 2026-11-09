@@ -8,6 +8,7 @@ import {
   REFERENCE_EDIT_SELECT,
 } from "@/lib/references/edit-reference-contact";
 import { userCanReadApplication, APPLICATIONS_EXPIRED_MESSAGE } from "@/lib/auth/application-expiry";
+import { annotateReferenceDelivery } from "@/lib/references/reference-delivery";
 
 export async function GET(request: Request) {
   const supabase = await createClient();
@@ -42,7 +43,19 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ references: data });
+  const references = await annotateReferenceDelivery(
+    createAdminClient(),
+    applicationId,
+    (data ?? []) as Array<{
+      id: string;
+      application_id?: string | null;
+      referee_email: string;
+      status: string;
+      email_sent_at?: string | null;
+    }>
+  );
+
+  return NextResponse.json({ references });
 }
 
 // PATCH — swap out a pending reference's contact (name/email). Admin path:

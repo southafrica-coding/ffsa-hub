@@ -22,6 +22,10 @@ import { isPrayerRoomStaff } from "@/lib/auth/prayer-room-access";
 import { getBookingSuggestions } from "./prayer-room-booking-suggestions";
 import { staffSignupNotifyEmails } from "@/lib/email/send-new-staff-notice";
 import {
+  listReferenceBounceAlerts,
+  staffCanSeeReferenceAlert,
+} from "@/lib/references/reference-delivery";
+import {
   getInsuranceStatus,
   getInsuranceConfirmation,
   hasValidQueuedPolicy,
@@ -34,7 +38,7 @@ type Client = any;
 
 export type AppNotification = {
   key: string; // stable identity, e.g. "booking:<uuid>"
-  kind: "booking" | "user" | "records" | "vehicle" | "insurance" | "practice";
+  kind: "booking" | "user" | "records" | "vehicle" | "insurance" | "practice" | "reference";
   title: string;
   body: string;
   href: string;
@@ -612,7 +616,53 @@ async function insuranceExpiryNotifs(supabase: Client, userId: string): Promise<
 // Surfaces staff accounts that haven't logged in for 3+ months so admins
 // can manually offboard leavers without relying on memory. Only visible to
 // admin / super_admin — not shown to ministry leaders or regular staff.
-const PROVIDERS = [bookingNotifs, prayerRoomBookingNotifs, bookingDecisionNotifs, staffApprovalNotifs, newStaffOnboardedNotifs, vehicleRequestNotifs, recordsMatchNotifs, insuranceExpiryNotifs, practiceNotifs];
+// Hard-bounced reference invites and reminders. The feed is derived from
+// email_messages, so a retried Resend webhook does not add a second item —
+// the key is the reference id. Admins see every program; a program leader
+// sees their programs; assigned staff see the applications they hold.
+async function referenceBounceNotifs(
+  supabase: Client,
+  userId: string
+): Promise<AppNotification[]> {
+  const admin = createAdminClient();
+  const alerts = await listReferenceBounceAlerts(admin);
+  if (alerts.length === 0) return [];
+
+  const isAdmin = await isSuperAdmin(supabase, userId);
+  let programIds: string[] = [];
+  let applicationIds: string[] = [];
+  if (!isAdmin) {
+    const [{ data: led }, { data: assigned }] = await Promise.all([
+      supabase.from("program_leaders").select("program_id").eq("user_id", userId),
+      supabase
+        .from("application_responses")
+        .select("id")
+        .eq("assigned_staff_id", userId),
+    ]);
+    programIds = ((led ?? []) as Array<{ program_id: string }>).map((r) => r.program_id);
+    applicationIds = ((assigned ?? []) as Array<{ id: string }>).map((r) => r.id);
+  }
+
+  const access = { isAdmin, programIds, applicationIds };
+  return alerts
+    .filter((a) => staffCanSeeReferenceAlert(a, access))
+    .slice(0, CAP)
+    .map((a) => {
+      const { label, ts } = timeAgo(a.at);
+      return {
+        key: a.key,
+        kind: "reference" as const,
+        title: a.title,
+        body: a.body,
+        href: a.href,
+        when: label,
+        ts,
+        read: false,
+      };
+    });
+}
+
+const PROVIDERS = [bookingNotifs, prayerRoomBookingNotifs, bookingDecisionNotifs, staffApprovalNotifs, newStaffOnboardedNotifs, vehicleRequestNotifs, recordsMatchNotifs, insuranceExpiryNotifs, practiceNotifs, referenceBounceNotifs];
 
 // ── Public API ─────────────────────────────────────────────
 
