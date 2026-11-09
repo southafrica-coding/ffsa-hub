@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createCourse, updateCourse, deleteCourse } from "@/services/schools";
+import { gradeMarksRestrictMessage } from "@/lib/schools/lms-http";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -90,6 +91,10 @@ export async function DELETE(request: Request) {
   const { error } = await deleteCourse(supabase, id);
 
   if (error) {
+    const marks = gradeMarksRestrictMessage(error);
+    if (marks) {
+      return NextResponse.json({ error: marks }, { status: 409 });
+    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

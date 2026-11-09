@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { refuseSuperAdminTarget } from "@/lib/auth/super-admin-target";
+import { gradeMarksRestrictMessage } from "@/lib/schools/lms-http";
 
 export async function POST(request: Request) {
   // Verify the calling user is an admin
@@ -206,6 +207,10 @@ export async function POST(request: Request) {
     .eq("id", user_id);
 
   if (deleteError) {
+    const marks = gradeMarksRestrictMessage(deleteError);
+    if (marks) {
+      return NextResponse.json({ error: marks }, { status: 409 });
+    }
     return NextResponse.json(
       { error: `Failed to delete user: ${deleteError.message}` },
       { status: 500 }
