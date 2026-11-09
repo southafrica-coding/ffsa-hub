@@ -566,8 +566,10 @@ CREATE POLICY "Assigned staff can read their enrollments"
 -- ────────────────────────────────────────────────────────────
 -- 6. Leader notes move to their own table. Table grants on
 --    application_responses are unchanged. The old column stays
---    so existing selects do not break, but it is cleared and
---    deprecated. Nothing in this migration writes it again.
+--    populated so a server that has not been deployed yet can
+--    still write it. This migration only copies. Clearing the
+--    column is the follow-up in docs/program-staff.md, run once
+--    that new build is the only one live.
 -- ────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.application_admin_notes (
   application_response_id uuid PRIMARY KEY REFERENCES public.application_responses(id) ON DELETE CASCADE,
@@ -584,20 +586,17 @@ COMMENT ON TABLE public.application_admin_notes IS
   'Leader notes for an application. Readable and writable by the same people userCanManageProgram accepts. Not visible to program staff.';
 
 COMMENT ON COLUMN public.application_responses.admin_notes IS
-  'Deprecated. Copied into application_admin_notes by migration 304 and then cleared. Do not read or write. Drop in a later migration.';
+  'Deprecated. Copied into application_admin_notes by migration 304. Still holds the text until the follow-up in docs/program-staff.md, which runs once the new build is the only one live. Do not read or write from the new app. Drop in a later migration.';
 
--- Idempotent copy, then retire the column. A second run finds nothing
--- left to copy and leaves the notes table as it is.
+-- Idempotent copy. A second run inserts nothing new and does not
+-- change a notes row that already exists, including one a leader
+-- edited in the new table after the first copy.
 INSERT INTO public.application_admin_notes (application_response_id, program_id, notes)
 SELECT id, program_id, admin_notes
   FROM public.application_responses
  WHERE admin_notes IS NOT NULL
    AND btrim(admin_notes) <> ''
 ON CONFLICT (application_response_id) DO NOTHING;
-
-UPDATE public.application_responses
-   SET admin_notes = NULL
- WHERE admin_notes IS NOT NULL;
 
 -- The client's program_id is ignored. The row always belongs to the
 -- application's school, so a leader of school A cannot park a note on

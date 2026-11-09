@@ -49,7 +49,7 @@ They cannot:
 
 Leaders, `schools.*` holders, and admins keep the school page they already have. A person who is both a leader and staff is still a leader. Finance access does not open the rest of the school: it only adds the fees panel on the staff view.
 
-Leader notes are in `application_admin_notes`. `application_responses.admin_notes` is copied across, set to null, and left in place as a deprecated column. Do not write it. Staff do not receive the notes in the application PDF.
+Leader notes are in `application_admin_notes`. Migration 304 copies `application_responses.admin_notes` into that table and leaves the column in place, deprecated. Do not write it from this app. Staff do not receive the notes in the application PDF. Once this build is the only one live, run the follow-up below. Drop the column in a later migration.
 
 Removing someone from staff clears their assignments only when they can no longer be a contact for that school (not a leader, no `schools.assignable_as_contact` for this program or globally, and not a super admin).
 
@@ -108,6 +108,82 @@ SELECT p.key, up.scope_type, up.scope_id
   JOIN public.permissions p ON p.id = up.permission_id
  WHERE up.user_id = '<user uuid>'
    AND p.key LIKE 'schools.%';
+```
+
+## Follow-up: retire `application_responses.admin_notes`
+
+Run this by hand once the build that reads and writes `application_admin_notes` is the only one live. It is not a migration. The same statements are in `docs/retire-application-admin-notes-column.sql`.
+
+It copies any note that arrived after 304 and has no notes row. Where the old column and the notes row disagree, it selects those rows and stops. `updated_at` is not used to pick a winner: `application_responses.updated_at` moves on every update, and `application_admin_notes.updated_at` is not bumped when this app saves a note, so the newer timestamp can be the stale text. Write the text you want to keep into `application_admin_notes`, then run it again. Only then does it set the column to null. A second successful run changes nothing. Drop the column in a later migration.
+
+```sql
+-- Follow-up. Not a migration. Do not number it and do not run it with 304.
+-- Run it by hand in the SQL editor once the build that reads and writes
+-- application_admin_notes is the only one live.
+--
+-- What it does, in one transaction:
+--   1. Inserts a notes row for any application whose old column still has
+--      text and has no notes row yet (a straggler written after 304).
+--   2. Stops, without clearing the column, when the old column and the
+--      notes row disagree. updated_at is not a safe way to pick a winner:
+--      application_responses.updated_at moves on every update (status,
+--      assignment, anything else), and application_admin_notes.updated_at
+--      is not bumped when this app saves a note. Copy the text you want
+--      to keep into application_admin_notes, then run this script again.
+--   3. Sets application_responses.admin_notes to null only when nothing
+--      still disagrees. Running it again after that changes nothing.
+--
+-- Drop the column in a later migration, after this has been applied.
+
+BEGIN;
+
+INSERT INTO public.application_admin_notes (application_response_id, program_id, notes)
+SELECT ar.id, ar.program_id, ar.admin_notes
+  FROM public.application_responses ar
+ WHERE ar.admin_notes IS NOT NULL
+   AND btrim(ar.admin_notes) <> ''
+   AND NOT EXISTS (
+     SELECT 1
+       FROM public.application_admin_notes n
+      WHERE n.application_response_id = ar.id
+   )
+ON CONFLICT (application_response_id) DO NOTHING;
+
+-- Review list. Empty when it is safe to clear the column.
+SELECT ar.id AS application_response_id,
+       ar.admin_notes AS column_note,
+       n.notes AS table_note
+  FROM public.application_responses ar
+  JOIN public.application_admin_notes n
+    ON n.application_response_id = ar.id
+ WHERE ar.admin_notes IS NOT NULL
+   AND btrim(ar.admin_notes) <> ''
+   AND ar.admin_notes IS DISTINCT FROM n.notes;
+
+DO $$
+DECLARE
+  pending integer;
+BEGIN
+  SELECT count(*) INTO pending
+    FROM public.application_responses ar
+    JOIN public.application_admin_notes n
+      ON n.application_response_id = ar.id
+   WHERE ar.admin_notes IS NOT NULL
+     AND btrim(ar.admin_notes) <> ''
+     AND ar.admin_notes IS DISTINCT FROM n.notes;
+
+  IF pending > 0 THEN
+    RAISE EXCEPTION
+      '% note(s) on application_responses.admin_notes differ from application_admin_notes. The rows are selected above. Write the text you want to keep into application_admin_notes, then run this script again. The column was not cleared.',
+      pending;
+  END IF;
+
+  UPDATE public.application_responses
+     SET admin_notes = NULL
+   WHERE admin_notes IS NOT NULL;
+END $$;
+
+COMMIT;
 ```
 
 ## UI ownership

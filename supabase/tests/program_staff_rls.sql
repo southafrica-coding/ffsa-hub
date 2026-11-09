@@ -413,7 +413,7 @@ BEGIN
 END $$;
 
 -- The copy ran on the second apply (after the seed wrote the column).
--- It is idempotent: the note is stored once and the column is null.
+-- It is idempotent: the note is stored once. 304 does not null the column.
 RESET ROLE;
 DO $$
 BEGIN
@@ -423,8 +423,9 @@ BEGIN
     RAISE EXCEPTION 'notes were not copied once';
   END IF;
   IF (SELECT admin_notes FROM public.application_responses
-       WHERE id = '55555555-5555-5555-5555-555555555555') IS NOT NULL THEN
-    RAISE EXCEPTION 'deprecated admin_notes column was not cleared';
+       WHERE id = '55555555-5555-5555-5555-555555555555')
+     IS DISTINCT FROM 'Leader only' THEN
+    RAISE EXCEPTION '304 cleared or changed the deprecated admin_notes column';
   END IF;
 END $$;
 
@@ -433,15 +434,12 @@ SELECT set_config('request.jwt.claim.sub', '11111111-1111-1111-1111-111111111111
 SELECT set_config('test.perms', '', false);
 SELECT set_config('test.admin', '', false);
 
--- Staff cannot read the notes table. The column itself is null.
+-- Staff cannot read the notes table. The deprecated column still holds
+-- the copied text until the follow-up; this app does not display it.
 DO $$
 BEGIN
   IF (SELECT count(*) FROM public.application_admin_notes) <> 0 THEN
     RAISE EXCEPTION 'staff read leader notes';
-  END IF;
-  IF (SELECT admin_notes FROM public.application_responses
-       WHERE id = '55555555-5555-5555-5555-555555555555') IS NOT NULL THEN
-    RAISE EXCEPTION 'staff saw a note on the deprecated column';
   END IF;
 END $$;
 
@@ -466,8 +464,9 @@ RESET ROLE;
 DO $$
 BEGIN
   IF (SELECT admin_notes FROM public.application_responses
-       WHERE id = '55555555-5555-5555-5555-555555555555') IS NOT NULL THEN
-    RAISE EXCEPTION 'writing the notes table wrote the deprecated column';
+       WHERE id = '55555555-5555-5555-5555-555555555555')
+     IS DISTINCT FROM 'Leader only' THEN
+    RAISE EXCEPTION 'writing the notes table changed the deprecated column';
   END IF;
   IF (SELECT program_id FROM public.application_admin_notes
        WHERE application_response_id = '55555555-5555-5555-5555-555555555555')
@@ -1011,5 +1010,75 @@ BEGIN
 END $$;
 RESET ROLE;
 
+-- Follow-up SQL. A straggler is copied. A column that was edited after
+-- the copy is not overwritten; the script stops and leaves the column.
+-- After a human keeps that edited text, the same script nulls the column.
+-- Running it once more changes nothing.
 RESET ROLE;
+INSERT INTO public.application_responses (id, program_id, admin_notes, status) VALUES
+  ('d1d1d1d1-d1d1-d1d1-d1d1-d1d1d1d1d1d1', '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48', 'Straggler note', 'submitted');
+UPDATE public.application_responses
+   SET admin_notes = 'Edited on the old server'
+ WHERE id = '55555555-5555-5555-5555-555555555555';
+
+\set ON_ERROR_STOP off
+\ir ../../docs/retire-application-admin-notes-column.sql
+\set ON_ERROR_STOP on
+
+DO $$
+BEGIN
+  IF (SELECT count(*) FROM public.application_admin_notes
+       WHERE application_response_id = 'd1d1d1d1-d1d1-d1d1-d1d1-d1d1d1d1d1d1') <> 0 THEN
+    RAISE EXCEPTION 'a disagreed note let the straggler insert commit';
+  END IF;
+  IF (SELECT notes FROM public.application_admin_notes
+       WHERE application_response_id = '55555555-5555-5555-5555-555555555555')
+     IS DISTINCT FROM 'Updated by leader' THEN
+    RAISE EXCEPTION 'the follow-up overwrote the notes row from the old column';
+  END IF;
+  IF (SELECT admin_notes FROM public.application_responses
+       WHERE id = '55555555-5555-5555-5555-555555555555')
+     IS DISTINCT FROM 'Edited on the old server' THEN
+    RAISE EXCEPTION 'the follow-up cleared the column while a note still disagreed';
+  END IF;
+END $$;
+
+-- The human keeps the text the old server wrote.
+UPDATE public.application_admin_notes
+   SET notes = 'Edited on the old server'
+ WHERE application_response_id = '55555555-5555-5555-5555-555555555555';
+
+\ir ../../docs/retire-application-admin-notes-column.sql
+
+DO $$
+BEGIN
+  IF (SELECT notes FROM public.application_admin_notes
+       WHERE application_response_id = 'd1d1d1d1-d1d1-d1d1-d1d1-d1d1d1d1d1d1')
+     IS DISTINCT FROM 'Straggler note' THEN
+    RAISE EXCEPTION 'follow-up did not copy the straggler';
+  END IF;
+  IF (SELECT notes FROM public.application_admin_notes
+       WHERE application_response_id = '55555555-5555-5555-5555-555555555555')
+     IS DISTINCT FROM 'Edited on the old server' THEN
+    RAISE EXCEPTION 'follow-up changed the note a human had already kept';
+  END IF;
+  IF (SELECT count(*) FROM public.application_responses WHERE admin_notes IS NOT NULL) <> 0 THEN
+    RAISE EXCEPTION 'follow-up left admin_notes populated';
+  END IF;
+END $$;
+
+-- Idempotent once the column is clear.
+\ir ../../docs/retire-application-admin-notes-column.sql
+
+DO $$
+BEGIN
+  IF (SELECT count(*) FROM public.application_admin_notes
+       WHERE application_response_id = 'd1d1d1d1-d1d1-d1d1-d1d1-d1d1d1d1d1d1') <> 1 THEN
+    RAISE EXCEPTION 'running the follow-up twice duplicated the straggler';
+  END IF;
+  IF (SELECT count(*) FROM public.application_responses WHERE admin_notes IS NOT NULL) <> 0 THEN
+    RAISE EXCEPTION 'running the follow-up twice restored admin_notes';
+  END IF;
+END $$;
+
 \echo 'program staff RLS checks passed'

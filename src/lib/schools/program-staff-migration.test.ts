@@ -2,11 +2,13 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+const root = path.resolve(__dirname, "../../..");
+
 // Migration 304 is applied by hand. These checks pin the access rules and
 // the promise that applying it does not rewrite SBI (or anyone else's) rows.
 
 const sql = readFileSync(
-  path.resolve(__dirname, "../../../supabase/migrations/304_program_staff.sql"),
+  path.resolve(root, "supabase/migrations/304_program_staff.sql"),
   "utf8"
 );
 const executable = sql
@@ -51,6 +53,8 @@ describe("migration 304", () => {
   it("does not change application_responses grants or sync notes back onto the column", () => {
     expect(executable).not.toMatch(/CREATE OR REPLACE FUNCTION public\.sync_admin_notes/);
     expect(executable).toMatch(/DROP FUNCTION IF EXISTS public\.sync_admin_notes_from_response/);
+    expect(executable).toMatch(/ON CONFLICT \(application_response_id\) DO NOTHING/);
+    expect(executable).not.toMatch(/SET admin_notes = NULL/);
     expect(executable).not.toMatch(/GRANT[^;]*application_responses/);
     expect(executable).not.toMatch(/REVOKE[^;]*application_responses/);
     expect(executable).toMatch(
@@ -59,5 +63,19 @@ describe("migration 304", () => {
     expect(executable).not.toMatch(
       /GRANT EXECUTE ON FUNCTION public\.clear_program_contact_assignments/
     );
+  });
+
+  it("keeps the column-clearing follow-up out of the numbered migrations", () => {
+    const followUp = readFileSync(
+      path.resolve(root, "docs/retire-application-admin-notes-column.sql"),
+      "utf8"
+    );
+    const doc = readFileSync(path.resolve(root, "docs/program-staff.md"), "utf8");
+    expect(doc).toContain(followUp.trim());
+    expect(followUp).toMatch(/BEGIN;/);
+    expect(followUp).toMatch(/ON CONFLICT \(application_response_id\) DO NOTHING/);
+    expect(followUp).toMatch(/SET admin_notes = NULL/);
+    expect(followUp).toMatch(/COMMIT;/);
+    expect(sql).not.toMatch(/retire-application-admin-notes-column/);
   });
 });

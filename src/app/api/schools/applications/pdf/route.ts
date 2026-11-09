@@ -123,9 +123,10 @@ export async function GET(request: Request) {
     answersMap.set(a.question_id, a.answer);
   }
 
-  // select("*") above still returns admin_notes. After migration 304 that
-  // column is always null, so it is not the notes. Leaders' notes are loaded
-  // below, and only for someone who can manage the program.
+  // select("*") above still returns admin_notes. This PDF does not print
+  // that column. Leaders' notes are loaded below from application_admin_notes,
+  // and only for someone who can manage the program. The column stays
+  // populated until the follow-up SQL in docs/program-staff.md.
   let adminNotes = "";
   if (await userCanManageProgram(supabase, user.id, response.program_id)) {
     const notes = await adminNotesByResponse(supabase, [responseId]);

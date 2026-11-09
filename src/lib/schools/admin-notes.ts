@@ -1,6 +1,7 @@
 // Leader notes live in application_admin_notes (migration 304).
-// application_responses.admin_notes is deprecated and null after that
-// migration. A query error is thrown: an empty map would look like
+// application_responses.admin_notes is deprecated. 304 copies it and
+// leaves it in place until the follow-up SQL in docs/program-staff.md.
+// A query error is thrown: an empty map would look like
 // "no notes" and a later save would wipe the real ones. A person the
 // policy rejects gets no rows and no error, which is an empty map.
 
