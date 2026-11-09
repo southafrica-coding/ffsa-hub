@@ -257,9 +257,24 @@ CREATE POLICY "evangelism_testimonies_delete_publisher"
 --    (publishers and the author). Others' non-published rows hide
 --    the author name and the withheld reason unless the caller
 --    is a moderator.
+--
+--    withheld_by_other is the last column. It tells the author that
+--    a moderator took the story down, without returning withheld_by.
+--    pg_depend and the repo: no view or function depends on
+--    evangelism_attribution, so the drop does not cascade. Adding an
+--    output column cannot be CREATE OR REPLACE. Drop and create again
+--    on every run, including the second.
 -- ────────────────────────────────────────────────────────────
-CREATE OR REPLACE FUNCTION public.evangelism_attribution(p_ids uuid[])
-RETURNS TABLE (id uuid, is_mine boolean, author_name text, published_by uuid, withheld_reason text)
+DROP FUNCTION IF EXISTS public.evangelism_attribution(uuid[]);
+CREATE FUNCTION public.evangelism_attribution(p_ids uuid[])
+RETURNS TABLE (
+  id uuid,
+  is_mine boolean,
+  author_name text,
+  published_by uuid,
+  withheld_reason text,
+  withheld_by_other boolean
+)
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
@@ -292,7 +307,13 @@ AS $$
            WHEN me.mod THEN t.withheld_reason
            WHEN t.author_user_id = me.uid AND t.status = 'withheld' THEN t.withheld_reason
            WHEN t.status = 'published' AND me.pub THEN t.withheld_reason
-         END
+         END,
+         coalesce(
+           t.status = 'withheld'
+             AND t.withheld_by IS NOT NULL
+             AND t.withheld_by IS DISTINCT FROM auth.uid()
+             AND NOT public.can_moderate_evangelism(),
+           false)
   FROM public.evangelism_testimonies t
   CROSS JOIN me
   LEFT JOIN public.users u ON u.id = t.author_user_id

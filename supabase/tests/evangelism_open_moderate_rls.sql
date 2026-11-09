@@ -714,6 +714,7 @@ DO $$
 DECLARE
   got text;
   n int;
+  flag boolean;
 BEGIN
   BEGIN
     UPDATE public.evangelism_testimonies SET status = 'published'
@@ -792,6 +793,30 @@ BEGIN
     PERFORM public.ev_open_moderate_log(
       'author withholds their own story', false, SQLSTATE || ' ' || SQLERRM);
   END;
+
+  SELECT withheld_by_other INTO flag
+  FROM public.evangelism_attribution(ARRAY['10000000-0000-0000-0000-00000000000b'::uuid]);
+  PERFORM public.ev_open_moderate_log(
+    'author sees withheld_by_other after a moderator withheld their story',
+    flag IS TRUE, coalesce(flag::text, 'null'));
+
+  SELECT withheld_by_other INTO flag
+  FROM public.evangelism_attribution(ARRAY['10000000-0000-0000-0000-00000000000c'::uuid]);
+  PERFORM public.ev_open_moderate_log(
+    'author sees withheld_by_other false on their own self-withheld story',
+    flag IS FALSE, coalesce(flag::text, 'null'));
+
+  SELECT withheld_by_other INTO flag
+  FROM public.evangelism_attribution(ARRAY['10000000-0000-0000-0000-000000000003'::uuid]);
+  PERFORM public.ev_open_moderate_log(
+    'author sees withheld_by_other false on their published story',
+    flag IS FALSE, coalesce(flag::text, 'null'));
+
+  SELECT withheld_by_other INTO flag
+  FROM public.evangelism_attribution(ARRAY['10000000-0000-0000-0000-000000000004'::uuid]);
+  PERFORM public.ev_open_moderate_log(
+    'author sees withheld_by_other false when withheld_by is null',
+    flag IS FALSE, coalesce(flag::text, 'null'));
 END $$;
 RESET ROLE;
 
@@ -818,6 +843,23 @@ BEGIN
     by_c = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
     coalesce(by_c::text, 'null'));
 END $$;
+
+-- Admin is a moderator via is_admin(), and did not withhold 00b.
+SELECT set_config('request.jwt.claim.sub', 'dddddddd-dddd-dddd-dddd-dddddddddddd', false);
+SELECT set_config('request.jwt.claim.role', 'authenticated', false);
+SELECT set_config('request.jwt.claims', '{"sub":"dddddddd-dddd-dddd-dddd-dddddddddddd","role":"authenticated"}', false);
+SET ROLE authenticated;
+DO $$
+DECLARE
+  flag boolean;
+BEGIN
+  SELECT withheld_by_other INTO flag
+  FROM public.evangelism_attribution(ARRAY['10000000-0000-0000-0000-00000000000b'::uuid]);
+  PERFORM public.ev_open_moderate_log(
+    'another moderator sees withheld_by_other false on a story someone else withheld',
+    flag IS FALSE, coalesce(flag::text, 'null'));
+END $$;
+RESET ROLE;
 
 SELECT set_config('request.jwt.claim.sub', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', false);
 SELECT set_config('request.jwt.claims', '{"sub":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","role":"authenticated"}', false);
@@ -921,6 +963,16 @@ BEGIN
     PERFORM public.ev_open_moderate_log('anon cannot call attribution', false, 'call succeeded');
   EXCEPTION WHEN insufficient_privilege THEN
     PERFORM public.ev_open_moderate_log('anon cannot call attribution', true, SQLSTATE);
+  END;
+
+  BEGIN
+    PERFORM withheld_by_other
+    FROM public.evangelism_attribution(ARRAY['10000000-0000-0000-0000-000000000003'::uuid]);
+    PERFORM public.ev_open_moderate_log(
+      'anon calling evangelism_attribution is denied', false, 'call succeeded');
+  EXCEPTION WHEN insufficient_privilege THEN
+    PERFORM public.ev_open_moderate_log(
+      'anon calling evangelism_attribution is denied', true, SQLSTATE);
   END;
 
   BEGIN
