@@ -6,6 +6,7 @@ import {
   applicationExpiryDenial,
   getApplicationExpiry,
   passesApplicationExpiry,
+  userCanReadApplication,
 } from "./application-expiry";
 
 const PROGRAM = "11111111-1111-4111-8111-111111111111";
@@ -91,5 +92,25 @@ describe("passesApplicationExpiry", () => {
     const expiry = await getApplicationExpiry(supabase, PROGRAM);
     expect(expiry).toMatchObject({ expired: true, canAccess: false, lookupFailed: true });
     expect(await passesApplicationExpiry(supabase, PROGRAM)).toBe(false);
+  });
+});
+
+describe("userCanReadApplication", () => {
+  it("returns false when the query returns an error", async () => {
+    const supabase = client((q) => {
+      if (q.table === "application_responses") {
+        return { data: [{ id: "app" }], error: { message: "boom" } };
+      }
+      return { data: null };
+    });
+    expect(await userCanReadApplication(supabase, "app")).toBe(false);
+  });
+
+  it("returns false when the query throws", async () => {
+    const supabase = client((q) => {
+      if (q.table === "application_responses") throw new Error("boom");
+      return { data: null };
+    });
+    expect(await userCanReadApplication(supabase, "app")).toBe(false);
   });
 });
