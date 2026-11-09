@@ -180,12 +180,30 @@ export async function POST(
     }
   }
 
-  const recorded = await recordFeedbackSends(supabase, sendRows);
-  if (writeBlocked(recorded.error, recorded.data)) {
-    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
-  }
-  if (recorded.error) {
-    return NextResponse.json({ error: recorded.error.message }, { status: 500 });
+  // The emails have already gone out. A ledger failure must not look like
+  // a refusal — staff would resend, and the same people would get it twice.
+  const ledgerWarning = "Emails sent but the send log could not be saved; do not resend.";
+  try {
+    const recorded = await recordFeedbackSends(supabase, sendRows);
+    const ledgerMissed =
+      !!recorded.error || (sendRows.length > 0 && Array.isArray(recorded.data) && recorded.data.length === 0);
+    if (ledgerMissed) {
+      return NextResponse.json({
+        sent,
+        failed,
+        total: recipients.length,
+        invalid,
+        warning: ledgerWarning,
+      });
+    }
+  } catch {
+    return NextResponse.json({
+      sent,
+      failed,
+      total: recipients.length,
+      invalid,
+      warning: ledgerWarning,
+    });
   }
 
   return NextResponse.json({ sent, failed, total: recipients.length, invalid });

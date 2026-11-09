@@ -15,7 +15,13 @@ const stripeRefund = vi.hoisted(() => vi.fn());
 const payfastRefund = vi.hoisted(() => vi.fn());
 const sendViaResend = vi.hoisted(() => vi.fn());
 const fulfillOrder = vi.hoisted(() => vi.fn());
-const adminHits = vi.hoisted(() => ({ n: 0, voids: [] as Array<Record<string, unknown>> }));
+const sendRefundEmail = vi.hoisted(() => vi.fn(async () => ({ sent: true })));
+const sendTransactional = vi.hoisted(() => vi.fn(async () => ({ ok: true })));
+const adminHits = vi.hoisted(() => ({
+  n: 0,
+  voidError: false,
+  voids: [] as Array<{ payload: Record<string, unknown>; filters: unknown[][] }>,
+}));
 
 vi.mock("@/lib/payments/stripe", () => ({
   stripeProvider: {
@@ -36,15 +42,21 @@ vi.mock("@/lib/payments/payfast", () => ({
 }));
 vi.mock("@/lib/email/resend", () => ({ getResend: () => null, isEmailConfigured: () => false }));
 vi.mock("@/lib/email/resend-send", () => ({ sendViaResend, isEmailConfigured: () => false }));
-vi.mock("@/lib/ticketing/fulfillment", () => ({ fulfillOrder }));
+vi.mock("@/lib/ticketing/fulfillment", () => ({
+  fulfillOrder,
+  resolveEventBrand: () => "ff",
+}));
+vi.mock("@/lib/ticketing/refund-email", () => ({ sendRefundEmail }));
+vi.mock("@/lib/email/send-transactional", () => ({ sendTransactional }));
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => {
     adminHits.n += 1;
     return {
       from(table: string) {
-        const op: { action: string; payload: Record<string, unknown> | null } = {
+        const op: { action: string; payload: Record<string, unknown> | null; filters: unknown[][] } = {
           action: "select",
           payload: null,
+          filters: [],
         };
         const builder: Record<string, unknown> = {
           update(payload: Record<string, unknown>) {
@@ -55,7 +67,8 @@ vi.mock("@/lib/supabase/admin", () => ({
           select() {
             return builder;
           },
-          eq() {
+          eq(...args: unknown[]) {
+            op.filters.push(args);
             return builder;
           },
           insert() {
@@ -63,7 +76,15 @@ vi.mock("@/lib/supabase/admin", () => ({
             return builder;
           },
           then(onFulfilled: (value: unknown) => unknown, onRejected?: (error: unknown) => unknown) {
-            if (table === "tickets" && op.action === "update") adminHits.voids.push(op.payload ?? {});
+            if (table === "tickets" && op.action === "update") {
+              adminHits.voids.push({ payload: op.payload ?? {}, filters: op.filters });
+              if (adminHits.voidError) {
+                return Promise.resolve({ data: null, error: { message: "void failed" } }).then(
+                  onFulfilled,
+                  onRejected
+                );
+              }
+            }
             return Promise.resolve({ data: [{ id: "t1" }], error: null }).then(onFulfilled, onRejected);
           },
         };
@@ -85,6 +106,7 @@ import { DELETE as deleteTier } from "./[id]/ticket-types/[ticketTypeId]/route";
 import { GET as scanLink } from "./[id]/scan-link/route";
 import { PATCH as ticketingPatch } from "./[id]/ticketing/route";
 import { POST as promoPost } from "./[id]/promo-codes/route";
+import { POST as feedbackSend } from "./[id]/feedback/[formId]/send/route";
 
 const EVENT_A = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const EVENT_B = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
@@ -149,7 +171,10 @@ beforeEach(() => {
   sendViaResend.mockReset();
   fulfillOrder.mockReset();
   adminHits.n = 0;
+  adminHits.voidError = false;
   adminHits.voids = [];
+  sendRefundEmail.mockClear();
+  sendTransactional.mockClear();
   stripeRefund.mockResolvedValue({ status: "succeeded", providerRefundId: "re", amountCents: 5000, error: null });
   payfastRefund.mockResolvedValue({ status: "succeeded", providerRefundId: "re", amountCents: 5000, error: null });
 });
@@ -228,8 +253,86 @@ describe("full refund voids tickets after the provider, without attendance right
     const res = await refundPost(json({}), { params: Promise.resolve({ id: EVENT_B, orderId: "order-1" }) });
     expect(res.status).not.toBe(403);
     expect(steps).toEqual(["provider"]);
-    expect(adminHits.voids).toEqual([{ status: "void" }]);
+    expect(adminHits.voids).toEqual([
+      {
+        payload: { status: "void" },
+        filters: [
+          ["order_id", "order-1"],
+          ["event_id", EVENT_B],
+        ],
+      },
+    ]);
     expect(stripeRefund).toHaveBeenCalledTimes(1);
+  });
+
+  it("still releases holds and emails the buyer when the void fails", async () => {
+    adminHits.voidError = true;
+    worldOf({
+      roles: [{ id: "r", name: "staff" }],
+      direct: [{ module: "events", key: "events.manage_registrations", scopeType: "event", scopeId: EVENT_B }],
+    });
+    const res = await refundPost(json({ method: "manual" }), {
+      params: Promise.resolve({ id: EVENT_B, orderId: "order-1" }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; warning?: string };
+    expect(body.ok).toBe(true);
+    expect(body.warning).toMatch(/tickets not voided/i);
+    expect(sendRefundEmail).toHaveBeenCalled();
+    expect(state.fake.queries.some((q) => q.rpc?.name === "release_ticket_holds")).toBe(true);
+    expect(adminHits.voids[0]?.filters).toEqual([
+      ["order_id", "order-1"],
+      ["event_id", EVENT_B],
+    ]);
+    expect(stripeRefund).not.toHaveBeenCalled();
+  });
+
+  it("refund-all keeps the same tickets-not-voided warning", async () => {
+    adminHits.voidError = true;
+    state.fake = createFakeSupabase({
+      user: { id: "u1" },
+      resolve: (q: FakeQuery) => {
+        if (q.rpc?.name === "has_event_permission") {
+          return {
+            error: {
+              code: "PGRST202",
+              message: "Could not find the function public.has_event_permission in the schema cache",
+            },
+          };
+        }
+        if (q.rpc?.name === "release_ticket_holds") return { data: null };
+        if (q.table === "orders" && q.single) return { data: PAID };
+        if (q.table === "orders") return { data: [{ id: "order-1" }] };
+        if (q.table === "events") {
+          return { data: { id: EVENT_B, created_by: "other", title: "B", cancellation_message: null } };
+        }
+        return (
+          permissionWorldResolver({
+            roles: [{ id: "r", name: "staff" }],
+            direct: [{ module: "events", key: "events.manage_registrations", scopeType: "event", scopeId: EVENT_B }],
+          })(q) ?? { data: [] }
+        );
+      },
+    });
+    stripeRefund.mockResolvedValue({
+      status: "succeeded",
+      providerRefundId: "re",
+      amountCents: 5000,
+      error: null,
+    });
+    const res = await refundAll(json({}), { params: Promise.resolve({ id: EVENT_B }) });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { refunded: number; warning?: string };
+    expect(body.refunded).toBe(1);
+    expect(body.warning).toMatch(/tickets not voided/i);
+    expect(sendRefundEmail).toHaveBeenCalled();
+    expect(state.fake.queries.some((q) => q.rpc?.name === "release_ticket_holds")).toBe(true);
+    expect(adminHits.voids[0]?.filters).toEqual(
+      expect.arrayContaining([
+        ["order_id", "order-1"],
+        ["event_id", EVENT_B],
+      ])
+    );
   });
 
   it("does not void or call the provider when the order is outside scope", async () => {
@@ -293,6 +396,61 @@ describe("RLS denials are 403", () => {
       params: Promise.resolve({ id: EVENT_B }),
     });
     expect(res.status).toBe(403);
+  });
+});
+
+describe("feedback send ledger", () => {
+  it("returns 200 with a do-not-resend warning when the ledger write fails after the emails go out", async () => {
+    state.fake = createFakeSupabase({
+      user: { id: "u1" },
+      resolve: (q: FakeQuery) => {
+        if (q.rpc?.name === "has_event_permission") {
+          return {
+            error: {
+              code: "PGRST202",
+              message: "Could not find the function public.has_event_permission in the schema cache",
+            },
+          };
+        }
+        if (q.table === "event_feedback_forms") {
+          return {
+            data: {
+              id: "form-1",
+              event_id: EVENT_B,
+              status: "open",
+              slug: "debrief",
+              is_anonymous: false,
+              events: { title: "B" },
+            },
+          };
+        }
+        if (q.table === "event_feedback_sends" && q.action === "insert") {
+          return { error: { code: "42501", message: "permission denied for table event_feedback_sends" } };
+        }
+        if (q.table === "events") return { data: { id: EVENT_B, created_by: "other", title: "B" } };
+        return permissionWorldResolver(eventsAdmin)(q) ?? { data: [] };
+      },
+    });
+    const res = await feedbackSend(
+      json({ recipients: [{ email: "ada@example.com", name: "Ada" }] }),
+      { params: Promise.resolve({ id: EVENT_B, formId: "form-1" }) }
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { sent: number; failed: number; warning?: string };
+    expect(body.sent).toBe(1);
+    expect(body.failed).toBe(0);
+    expect(body.warning).toMatch(/do not resend/i);
+    expect(sendTransactional).toHaveBeenCalledTimes(1);
+  });
+
+  it("still 403 before any email when the caller cannot send", async () => {
+    worldOf(finance);
+    const res = await feedbackSend(
+      json({ recipients: [{ email: "ada@example.com", name: "Ada" }] }),
+      { params: Promise.resolve({ id: EVENT_B, formId: "form-1" }) }
+    );
+    expect(res.status).toBe(403);
+    expect(sendTransactional).not.toHaveBeenCalled();
   });
 });
 

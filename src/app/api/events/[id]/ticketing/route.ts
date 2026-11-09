@@ -181,7 +181,13 @@ export async function PATCH(
         .eq("id", tier.id)
         .select("id");
       if (writeBlocked(saveErr, pricedRows)) {
-        return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+        return NextResponse.json(
+          {
+            error:
+              "Currency saved, but you don't have permission to update ticket prices for this event.",
+          },
+          { status: 403 }
+        );
       }
       if (saveErr) {
         return NextResponse.json(

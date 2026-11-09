@@ -58,6 +58,8 @@ export type RefundResult =
       orderStatus: string;
       emailSent: boolean;
       dryRunPreview?: unknown;
+      /** Set when the money moved but the tickets could not be voided. */
+      warning?: string;
     }
   | { ok: false; error: string; httpStatus: number };
 
@@ -288,17 +290,17 @@ export async function refundOrder(
   // and a registrations or finance refunder must not leave paid tickets
   // scannable. This runs only after the provider refund (or a manual
   // record) has succeeded — the route's permission check is earlier.
+  // A void failure still releases the hold and emails the buyer: the
+  // money has already moved, and a 500 would invite a second refund.
+  let warning: string | undefined;
   if (isFullRefund) {
     const { error: voidErr } = await createAdminClient()
       .from("tickets")
       .update({ status: "void" })
-      .eq("order_id", order.id);
+      .eq("order_id", order.id)
+      .eq("event_id", order.event_id);
     if (voidErr) {
-      return {
-        ok: false,
-        error: `Refund recorded but the tickets could not be voided: ${voidErr.message}`,
-        httpStatus: 500,
-      };
+      warning = "Refunded, but tickets not voided. They may still scan.";
     }
 
     // Recorded on the order, so the seats come back exactly once — and
@@ -365,6 +367,7 @@ export async function refundOrder(
     isFullRefund,
     orderStatus,
     emailSent,
+    warning,
   };
 }
 
@@ -455,6 +458,8 @@ export type RefundAllResult = {
   failed: number;
   totalRefundedCents: number;
   failures: Array<{ orderId: string; error: string }>;
+  /** Set when a refund succeeded but its tickets could not be voided. */
+  warning?: string;
 };
 
 /**
@@ -492,6 +497,7 @@ export async function refundEventOrders(
     totalRefundedCents: 0,
     failures: [],
   };
+  let ticketsNotVoided = false;
 
   for (const row of rows) {
     const r = await refundOrder(supabase, userId, {
@@ -503,10 +509,14 @@ export async function refundEventOrders(
     if (r.ok) {
       result.refunded++;
       result.totalRefundedCents += r.amountCents;
+      if (r.warning) ticketsNotVoided = true;
     } else {
       result.failed++;
       result.failures.push({ orderId: row.id, error: r.error });
     }
+  }
+  if (ticketsNotVoided) {
+    result.warning = "Refunded, but tickets not voided. They may still scan.";
   }
 
   return result;
