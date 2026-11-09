@@ -167,12 +167,18 @@ async function hasUnscopedAdminRole(
   supabase: SupabaseClient,
   userId: string
 ): Promise<boolean> {
-  const { data, error } = await supabase
-    .from("user_roles")
-    .select("scope_type, roles!inner(name)")
-    .eq("user_id", userId)
-    .in("roles.name", ["super_admin", "admin"]);
-  if (error) return false;
+  let data;
+  try {
+    const result = await supabase
+      .from("user_roles")
+      .select("scope_type, roles!inner(name)")
+      .eq("user_id", userId)
+      .in("roles.name", ["super_admin", "admin"]);
+    if (result.error) return false;
+    data = result.data;
+  } catch {
+    return false;
+  }
 
   for (const row of data ?? []) {
     const name = embeddedName(row.roles);
@@ -186,13 +192,17 @@ async function userAccountIsActive(
   supabase: SupabaseClient,
   userId: string
 ): Promise<boolean> {
-  const { data, error } = await supabase
-    .from("users")
-    .select("is_active")
-    .eq("id", userId)
-    .maybeSingle();
-  if (error || !data) return false;
-  return data.is_active !== false;
+  try {
+    const { data, error } = await supabase
+      .from("users")
+      .select("is_active")
+      .eq("id", userId)
+      .maybeSingle();
+    if (error || !data) return false;
+    return data.is_active !== false;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -206,35 +216,53 @@ async function hasDeletePermissionForProgram(
 ): Promise<boolean> {
   if (!(await userAccountIsActive(supabase, userId))) return false;
 
-  const { data: direct, error: directError } = await supabase
-    .from("user_permissions")
-    .select("scope_type, scope_id, permissions!inner(key)")
-    .eq("user_id", userId)
-    .in("permissions.key", [...DELETE_PERMISSION_KEYS]);
-  if (directError) return false;
+  let direct;
+  try {
+    const result = await supabase
+      .from("user_permissions")
+      .select("scope_type, scope_id, permissions!inner(key)")
+      .eq("user_id", userId)
+      .in("permissions.key", [...DELETE_PERMISSION_KEYS]);
+    if (result.error) return false;
+    direct = result.data;
+  } catch {
+    return false;
+  }
 
   for (const row of direct ?? []) {
     if (!isDeletePermission(permissionKey(row.permissions))) continue;
     if (scopeCoversProgram(row.scope_type, row.scope_id, programId)) return true;
   }
 
-  const { data: roles, error: rolesError } = await supabase
-    .from("user_roles")
-    .select("role_id, scope_type, scope_id")
-    .eq("user_id", userId);
-  if (rolesError) return false;
+  let roles;
+  try {
+    const result = await supabase
+      .from("user_roles")
+      .select("role_id, scope_type, scope_id")
+      .eq("user_id", userId);
+    if (result.error) return false;
+    roles = result.data;
+  } catch {
+    return false;
+  }
   const roleIds = (roles ?? [])
     .filter((row) => scopeCoversProgram(row.scope_type, row.scope_id, programId))
     .map((row) => row.role_id)
     .filter((id): id is string => typeof id === "string" && id.length > 0);
   if (roleIds.length === 0) return false;
 
-  const { data: bundle, error: bundleError } = await supabase
-    .from("role_permissions")
-    .select("permissions!inner(key)")
-    .in("role_id", roleIds)
-    .in("permissions.key", [...DELETE_PERMISSION_KEYS]);
-  if (bundleError) return false;
+  let bundle;
+  try {
+    const result = await supabase
+      .from("role_permissions")
+      .select("permissions!inner(key)")
+      .in("role_id", roleIds)
+      .in("permissions.key", [...DELETE_PERMISSION_KEYS]);
+    if (result.error) return false;
+    bundle = result.data;
+  } catch {
+    return false;
+  }
 
   for (const row of bundle ?? []) {
     if (isDeletePermission(permissionKey(row.permissions))) return true;

@@ -349,3 +349,87 @@ describe("userCanDeleteApplication expiry gate", () => {
     expect(await userCanDeleteApplication(f.client, USER, PROGRAM_A)).toBe(false);
   });
 });
+
+describe("userCanDeleteApplication scope and lookup failures", () => {
+  function live(
+    resolve: (q: { table: string; columns: string | null }) => { data?: unknown; error?: unknown } | undefined
+  ) {
+    return createFakeSupabase({
+      resolve: (q) => {
+        if (q.table === "rpc:program_end_date") return { data: null };
+        if (q.table === "rpc:program_applications_expired") return { data: false };
+        if (q.table === "rpc:can_access_expired_applications") return { data: false };
+        if (q.table === "users") return { data: [{ is_active: true }] };
+        return resolve(q) ?? { data: [] };
+      },
+    }).client;
+  }
+
+  it("denies team- and event-scoped grants, direct and via a role", async () => {
+    for (const key of ["schools.manage", "schools.approve_applications"] as const) {
+      for (const scopeType of ["team", "event"] as const) {
+        const direct = live((q) => {
+          if (q.table === "user_permissions") {
+            return {
+              data: [{ scope_type: scopeType, scope_id: `${scopeType}-1`, permissions: { key } }],
+            };
+          }
+          return undefined;
+        });
+        expect(await userCanDeleteApplication(direct, USER, PROGRAM_A), `direct ${key} ${scopeType}`).toBe(
+          false
+        );
+
+        const viaRole = live((q) => {
+          if (q.table === "user_roles") {
+            return {
+              data: [{ role_id: "r1", scope_type: scopeType, scope_id: `${scopeType}-1` }],
+            };
+          }
+          if (q.table === "role_permissions") {
+            return { data: [{ permissions: { key } }] };
+          }
+          return undefined;
+        });
+        expect(await userCanDeleteApplication(viaRole, USER, PROGRAM_A), `role ${key} ${scopeType}`).toBe(
+          false
+        );
+      }
+    }
+  });
+
+  it("denies when the user_roles lookup errors or throws", async () => {
+    const errored = live((q) => {
+      if (q.table !== "user_roles") return undefined;
+      if (q.columns?.includes("role_id")) return { data: null, error: { message: "down" } };
+      return { data: [] };
+    });
+    expect(await userCanDeleteApplication(errored, USER, PROGRAM_A)).toBe(false);
+
+    const thrown = live((q) => {
+      if (q.table === "user_roles" && q.columns?.includes("role_id")) throw new Error("down");
+      return undefined;
+    });
+    expect(await userCanDeleteApplication(thrown, USER, PROGRAM_A)).toBe(false);
+  });
+
+  it("denies when the role_permissions lookup errors or throws", async () => {
+    const errored = live((q) => {
+      if (q.table === "user_roles") {
+        return { data: [{ role_id: "r1", scope_type: null, scope_id: null }] };
+      }
+      if (q.table === "role_permissions") return { data: null, error: { message: "down" } };
+      return undefined;
+    });
+    expect(await userCanDeleteApplication(errored, USER, PROGRAM_A)).toBe(false);
+
+    const thrown = live((q) => {
+      if (q.table === "user_roles") {
+        return { data: [{ role_id: "r1", scope_type: null, scope_id: null }] };
+      }
+      if (q.table === "role_permissions") throw new Error("down");
+      return undefined;
+    });
+    expect(await userCanDeleteApplication(thrown, USER, PROGRAM_A)).toBe(false);
+  });
+});

@@ -239,6 +239,23 @@ describe("archive stays on the program check; delete follows the DELETE policy",
     }
   });
 
+  it("denies a team- or event-scoped role bundle even when the read check passes", async () => {
+    h.canRead = true;
+    for (const key of ["schools.manage", "schools.approve_applications"] as const) {
+      for (const scopeType of ["team", "event"] as const) {
+        h.deleted = 0;
+        signIn({
+          roles: [{ id: "r-scope", name: "staff", scope_type: scopeType, scope_id: `${scopeType}-1` }],
+          bundles: [{ role_id: "r-scope", key }],
+        });
+        const res = await remove();
+        expect(res.status, `${scopeType} ${key}`).toBe(403);
+        expect(await res.json(), `${scopeType} ${key}`).toEqual({ error: "Forbidden" });
+        expect(h.deleted, `${scopeType} ${key}`).toBe(0);
+      }
+    }
+  });
+
   it("lets an unscoped admin or super_admin delete", async () => {
     for (const name of ["admin", "super_admin"]) {
       h.deleted = 0;
