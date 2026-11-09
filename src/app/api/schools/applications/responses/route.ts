@@ -820,7 +820,7 @@ export async function DELETE(request: Request) {
     canRead = false;
   }
   if (!canRead) {
-    return NextResponse.json({ error: APPLICATIONS_EXPIRED_MESSAGE }, { status: 403 });
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   if (fetchError || !existing) {

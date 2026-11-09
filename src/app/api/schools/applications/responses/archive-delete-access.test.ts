@@ -219,7 +219,11 @@ describe("archive stays on the program check; delete follows the DELETE policy",
       const inThisSchool = perm.scope_type == null || perm.scope_id === PROGRAM_A;
       h.canRead = inThisSchool;
       expect((await archive()).status, label).toBe(inThisSchool ? 200 : 403);
-      expect((await remove()).status, label).toBe(inThisSchool ? 200 : 403);
+      const deleted = await remove();
+      expect(deleted.status, label).toBe(inThisSchool ? 200 : 403);
+      if (!inThisSchool) {
+        expect(await deleted.json(), label).toEqual({ error: "Forbidden" });
+      }
       expect(h.deleted, label).toBe(inThisSchool ? 1 : 0);
     }
   });
@@ -249,7 +253,11 @@ describe("archive stays on the program check; delete follows the DELETE policy",
       signIn({ roles: [programLeader(scopeType, scopeId)], bundles: leaderBundle });
       const label = `${scopeType ?? "null"}:${scopeId ?? "null"}`;
       expect((await archive()).status, label).toBe(inThisSchool ? 200 : 403);
-      expect((await remove()).status, label).toBe(inThisSchool ? 200 : 403);
+      const deleted = await remove();
+      expect(deleted.status, label).toBe(inThisSchool ? 200 : 403);
+      if (!inThisSchool) {
+        expect(await deleted.json(), label).toEqual({ error: "Forbidden" });
+      }
       expect(h.deleted, label).toBe(inThisSchool ? 1 : 0);
     }
   });
@@ -257,12 +265,15 @@ describe("archive stays on the program check; delete follows the DELETE policy",
   it("does not delete when the read check is false or throws", async () => {
     signIn({ roles: [{ name: "admin", scope_type: null, scope_id: null }] });
     h.canRead = false;
-    expect((await remove()).status).toBe(403);
+    const missed = await remove();
+    expect(missed.status).toBe(403);
+    expect(await missed.json()).toEqual({ error: "Forbidden" });
     expect(h.deleted).toBe(0);
 
     h.canRead = "throw";
     const thrown = await remove();
     expect(thrown.status).toBe(403);
+    expect(await thrown.json()).toEqual({ error: "Forbidden" });
     expect(h.deleted).toBe(0);
   });
 
@@ -274,8 +285,25 @@ describe("archive stays on the program check; delete follows the DELETE policy",
       signIn({ perms: [{ key, scope_type: "program", scope_id: PROGRAM_A }] });
       const res = await remove();
       expect(res.status, key).toBe(403);
+      expect(await res.json(), key).toEqual({ error: "Forbidden" });
       expect(h.deleted, key).toBe(0);
     }
+  });
+
+  it("denies with Forbidden when the expiry lookup fails", async () => {
+    signIn({ perms: [{ key: "schools.manage", scope_type: null, scope_id: null }] });
+    h.canRead = true;
+    h.expiry = {
+      endDate: null,
+      expiresOn: null,
+      expired: false,
+      canAccess: false,
+      lookupFailed: true,
+    };
+    const res = await remove();
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "Forbidden" });
+    expect(h.deleted).toBe(0);
   });
 
   it("returns the archived-applications message when the school is expired", async () => {
