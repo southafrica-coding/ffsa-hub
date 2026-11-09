@@ -10,6 +10,14 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isApi = pathname === "/api" || pathname.startsWith("/api/");
 
+  // Sign-out clears its own cookies on the redirect to /login. Do not
+  // refresh the session here: getSession() would write the cookies back
+  // onto the response, and /login would bounce a still-signed-in user
+  // to /dashboard.
+  if (pathname === "/auth/sign-out" && request.method === "POST") {
+    return NextResponse.next({ request });
+  }
+
   // A bearer token (the phone app) only ever authenticates /api/*. Pages are
   // cookie-only: drop the header before anything downstream can see it, so
   // server components' createClient() never switches to a bearer client.

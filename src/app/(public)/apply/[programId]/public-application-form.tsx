@@ -21,6 +21,11 @@ import {
   referenceHeadsUpNote,
   referenceSubmittedNote,
 } from "@/lib/references/reference-status-copy";
+import {
+  identityGaps,
+  isValidApplicantEmail,
+  type IdentityQuestion,
+} from "@/lib/applications/applicant-identity";
 
 type DbQuestion = {
   id: string;
@@ -43,14 +48,22 @@ type ReferenceSlot = {
 
 type ReferenceLink = { label: string; url: string };
 
+function confirmationSentence(sent: boolean): string {
+  return sent
+    ? "We've sent a confirmation to your email."
+    : "We couldn't send a confirmation email.";
+}
+
 function SuccessScreen({
   programName,
   referenceLinks,
   statusUrl,
+  confirmationEmailed,
 }: {
   programName: string;
   referenceLinks: ReferenceLink[];
   statusUrl: string | null;
+  confirmationEmailed: boolean;
 }) {
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const hasReferences = referenceLinks.length > 0;
@@ -71,8 +84,7 @@ function SuccessScreen({
         {hasReferences ? (
           <>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              Thank you for applying to {programName}. We&apos;ve sent a
-              confirmation to your email.
+              Thank you for applying to {programName}. {confirmationSentence(confirmationEmailed)}
             </p>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
               {referenceSubmittedNote(referenceLinks.length)}
@@ -86,9 +98,8 @@ function SuccessScreen({
         ) : (
           <>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              Thank you for applying to {programName}. We&apos;ve sent a
-              confirmation to your email. Our team will review your application
-              and get back to you soon.
+              Thank you for applying to {programName}. {confirmationSentence(confirmationEmailed)}{" "}
+              Our team will review your application and get back to you soon.
             </p>
             <p className="text-xs text-muted-foreground max-w-md mx-auto">
               You don&apos;t have an account yet — you&apos;ll receive an email
@@ -178,6 +189,7 @@ export function PublicApplicationForm({
   const [applicationId, setApplicationId] = useState("");
   const [referenceLinks, setReferenceLinks] = useState<ReferenceLink[]>([]);
   const [statusUrl, setStatusUrl] = useState<string | null>(null);
+  const [confirmationEmailed, setConfirmationEmailed] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
   const [refNames, setRefNames] = useState<Record<string, string>>({});
@@ -188,6 +200,13 @@ export function PublicApplicationForm({
   const [homeCountryError, setHomeCountryError] = useState<string | null>(null);
   const [nationality, setNationality] = useState("");
   const [nationalityError, setNationalityError] = useState<string | null>(null);
+  // Name and email are collected here when this school's questions don't
+  // already ask for them. Schools that do are left alone — no second box.
+  const gaps = useMemo(() => identityGaps(questions as IdentityQuestion[]), [questions]);
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [identityError, setIdentityError] = useState<string | null>(null);
   // Track selection (migration 221) — which segment(s), or the whole
   // program. Defaults to whole-program when that's on offer, otherwise to
   // no selection (a segment-only school must have the applicant choose).
@@ -297,6 +316,23 @@ export function PublicApplicationForm({
   async function onSubmit(data: Record<string, unknown>) {
     setServerError(null);
 
+    if (gaps.firstName && !firstName.trim()) {
+      setIdentityError("Please enter your first name.");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    if (gaps.lastName && !lastName.trim()) {
+      setIdentityError("Please enter your last name.");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    if (gaps.email && !isValidApplicantEmail(email)) {
+      setIdentityError("Please enter a valid email address.");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    setIdentityError(null);
+
     if (!nationality) {
       setNationalityError("Please select your nationality.");
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -323,6 +359,27 @@ export function PublicApplicationForm({
       question_label: string;
       answer: string;
     }> = [];
+    if (gaps.firstName) {
+      answers.push({
+        question_id: "first_name",
+        question_label: "First name",
+        answer: firstName.trim(),
+      });
+    }
+    if (gaps.lastName) {
+      answers.push({
+        question_id: "last_name",
+        question_label: "Last name",
+        answer: lastName.trim(),
+      });
+    }
+    if (gaps.email) {
+      answers.push({
+        question_id: "email",
+        question_label: "Email",
+        answer: email.trim(),
+      });
+    }
     const files: Array<{
       questionId: string;
       storagePath: string;
@@ -412,6 +469,9 @@ export function PublicApplicationForm({
           references,
           nationality,
           home_country: homeCountry,
+          first_name: gaps.firstName ? firstName.trim() : undefined,
+          last_name: gaps.lastName ? lastName.trim() : undefined,
+          email: gaps.email ? email.trim() : undefined,
           track_choice: showTrackPicker
             ? trackMode === "whole_program"
               ? { whole_program: true, segment_ids: [] }
@@ -433,6 +493,7 @@ export function PublicApplicationForm({
       setApplicationId(result.id);
       setReferenceLinks(result.referenceLinks ?? []);
       setStatusUrl(result.statusUrl ?? null);
+      setConfirmationEmailed(result.confirmationEmailed === true);
       setSubmitted(true);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch {
@@ -452,6 +513,7 @@ export function PublicApplicationForm({
         programName={programName}
         referenceLinks={referenceLinks}
         statusUrl={statusUrl}
+        confirmationEmailed={confirmationEmailed}
       />
     );
   }
@@ -470,6 +532,68 @@ export function PublicApplicationForm({
 
       {hasAttemptedSubmit && Object.keys(errors).length > 0 && (
         <ErrorSummary errors={errors} questions={allQuestions} />
+      )}
+
+      {(gaps.firstName || gaps.lastName || gaps.email) && (
+        <div className="rounded-lg border bg-card p-6 space-y-4">
+          <h2 className="font-semibold text-foreground">Your details</h2>
+          {identityError && <p className="text-sm text-destructive">{identityError}</p>}
+          {gaps.firstName && (
+            <div className="space-y-1.5">
+              <Label htmlFor="identity_first_name">
+                First name
+                <span className="text-destructive ml-0.5">*</span>
+              </Label>
+              <Input
+                id="identity_first_name"
+                autoComplete="given-name"
+                value={firstName}
+                onChange={(e) => {
+                  setFirstName(e.target.value);
+                  if (e.target.value.trim()) setIdentityError(null);
+                }}
+                required
+              />
+            </div>
+          )}
+          {gaps.lastName && (
+            <div className="space-y-1.5">
+              <Label htmlFor="identity_last_name">
+                Last name
+                <span className="text-destructive ml-0.5">*</span>
+              </Label>
+              <Input
+                id="identity_last_name"
+                autoComplete="family-name"
+                value={lastName}
+                onChange={(e) => {
+                  setLastName(e.target.value);
+                  if (e.target.value.trim()) setIdentityError(null);
+                }}
+                required
+              />
+            </div>
+          )}
+          {gaps.email && (
+            <div className="space-y-1.5">
+              <Label htmlFor="identity_email">
+                Email
+                <span className="text-destructive ml-0.5">*</span>
+              </Label>
+              <Input
+                id="identity_email"
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (isValidApplicantEmail(e.target.value)) setIdentityError(null);
+                }}
+                required
+              />
+            </div>
+          )}
+        </div>
       )}
 
       {/* Application Questions — includes the locked system fields
