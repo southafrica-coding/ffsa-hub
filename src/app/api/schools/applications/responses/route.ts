@@ -648,7 +648,16 @@ export async function PATCH(request: Request) {
     if (!id) {
       return NextResponse.json({ error: "id is required" }, { status: 400 });
     }
-    if (!(await userCanManageApplications(supabase, user.id))) {
+    // Service-role write below bypasses RLS, so the gate has to carry the
+    // program. A program-scoped program_leader (312) may archive their own
+    // school; they do not pass the global check.
+    const adminSupabase = createAdminClient();
+    const { data: target } = await adminSupabase
+      .from("application_responses")
+      .select("program_id")
+      .eq("id", id)
+      .maybeSingle();
+    if (!(await userCanManageApplications(supabase, user.id, target?.program_id))) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     // RLS-backed: the 6-month expiry lock (migration 223) applies here too.
@@ -659,7 +668,6 @@ export async function PATCH(request: Request) {
     // Gate is the permission check above; write with the admin client so the
     // broader set of application managers isn't blocked by the narrower
     // row-update RLS policy.
-    const adminSupabase = createAdminClient();
     const { data, error } = await setResponseRemoved(
       adminSupabase,
       id,
@@ -750,18 +758,10 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  if (!(await userCanManageApplications(supabase, user.id))) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
   const body = await request.json().catch(() => ({}));
   const { id } = body;
   if (!id) {
     return NextResponse.json({ error: "id is required" }, { status: 400 });
-  }
-
-  if (!(await userCanReadApplication(supabase, id))) {
-    return NextResponse.json({ error: APPLICATIONS_EXPIRED_MESSAGE }, { status: 403 });
   }
 
   const adminSupabase = createAdminClient();
@@ -771,6 +771,17 @@ export async function DELETE(request: Request) {
     .select("id, status, program_id, applicant_email, user_id")
     .eq("id", id)
     .single();
+
+  // Same gate as archive: global managers, or a program_leader scoped to
+  // this application's program. Someone who fails it gets 403, including
+  // when the row was not found.
+  if (!(await userCanManageApplications(supabase, user.id, existing?.program_id))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  if (!(await userCanReadApplication(supabase, id))) {
+    return NextResponse.json({ error: APPLICATIONS_EXPIRED_MESSAGE }, { status: 403 });
+  }
 
   if (fetchError || !existing) {
     return NextResponse.json({ error: "Application not found" }, { status: 404 });

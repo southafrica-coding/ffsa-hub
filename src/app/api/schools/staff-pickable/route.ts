@@ -18,13 +18,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const hasAccess = await userCanManageApplications(supabase, authUser.id);
+  const url = new URL(request.url);
+  const programId = url.searchParams.get("program_id");
+  // Global sources, or a program_leader role scoped to this program (312).
+  // A missing program_id stays a global check, so the 403/400 order is unchanged.
+  const hasAccess = await userCanManageApplications(supabase, authUser.id, programId);
   if (!hasAccess) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
-  const url = new URL(request.url);
-  const programId = url.searchParams.get("program_id");
   if (!programId) {
     return NextResponse.json({ error: "program_id is required" }, { status: 400 });
   }
