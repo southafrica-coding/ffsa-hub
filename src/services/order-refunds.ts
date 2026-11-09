@@ -17,6 +17,7 @@
 
 import { payfastProvider } from "@/lib/payments/payfast";
 import { stripeProvider } from "@/lib/payments/stripe";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type {
   PaymentProvider,
   RefundOutcome,
@@ -283,11 +284,22 @@ export async function refundOrder(
 
   // Only a full refund invalidates the tickets. A partial refund
   // (one ticket of three, a goodwill discount) leaves them scanning.
+  // Void through the service role: tickets UPDATE is events.manage_attendance,
+  // and a registrations or finance refunder must not leave paid tickets
+  // scannable. This runs only after the provider refund (or a manual
+  // record) has succeeded — the route's permission check is earlier.
   if (isFullRefund) {
-    await supabase
+    const { error: voidErr } = await createAdminClient()
       .from("tickets")
       .update({ status: "void" })
       .eq("order_id", order.id);
+    if (voidErr) {
+      return {
+        ok: false,
+        error: `Refund recorded but the tickets could not be voided: ${voidErr.message}`,
+        httpStatus: 500,
+      };
+    }
 
     // Recorded on the order, so the seats come back exactly once — and
     // SECURITY DEFINER, so it works for finance staff too (the old

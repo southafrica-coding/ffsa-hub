@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import { getFormById } from "@/services/forms";
+import { formOnEventStatus } from "@/lib/auth/event-access";
 import { getEventOutcomes } from "@/services/event-outcomes";
 import { getCachedActiveLabels } from "@/lib/cached-reads";
 import { emptyFormSchema, type FormSchema } from "@/lib/forms/schema";
@@ -19,7 +20,7 @@ export default async function FormBuilderPage({
   if (!user) redirect("/login");
 
   const { data: form, error } = await getFormById(supabase, formId);
-  if (error || !form) notFound();
+  if (error || formOnEventStatus(form, eventId) !== 200) notFound();
 
   const [{ data: outcomes }, { data: labels }] = await Promise.all([
     getEventOutcomes(supabase, eventId),

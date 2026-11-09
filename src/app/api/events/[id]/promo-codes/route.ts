@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createPromoCode, listTicketTypesByEvent } from "@/services/ticketing";
 import { getAuthedUser } from "@/lib/api-auth";
-import { canManageEvent, EVENT_CREATE_GATE } from "@/lib/auth/event-access";
+import { canManageEvent, EVENT_CREATE_GATE, writeBlocked } from "@/lib/auth/event-access";
 import { validatePromoConfig, type PromoConfigInput } from "@/lib/ticketing/promo-config";
 import type { FormField } from "@/lib/forms/schema";
 
@@ -35,6 +35,9 @@ export async function POST(
   // Tier scope and waived questions are checked against the event's
   // real tiers, so a code can't point at another event's tier.
   const { data: tiers, error: tiersErr } = await listTicketTypesByEvent(supabase, eventId);
+  if (writeBlocked(tiersErr)) {
+    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  }
   if (tiersErr) {
     return NextResponse.json({ error: tiersErr.message }, { status: 500 });
   }
@@ -52,6 +55,9 @@ export async function POST(
     created_by: user.id,
   });
 
+  if (writeBlocked(error, data)) {
+    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  }
   if (error) {
     if (error.code === "23505") {
       return NextResponse.json(

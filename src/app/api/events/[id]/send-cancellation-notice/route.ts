@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthedUser } from "@/lib/api-auth";
-import { canManageEvent, ORDERS_GATE } from "@/lib/auth/event-access";
+import { canManageEvent, REGISTRATIONS_GATE } from "@/lib/auth/event-access";
 import { sendCancellationNotice } from "@/services/event-cancellation-notice";
 
 // POST /api/events/[id]/send-cancellation-notice
@@ -23,7 +23,9 @@ export async function POST(
   if (!user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
-  if (!(await canManageEvent(supabase, user.id, ORDERS_GATE.keys, id, ORDERS_GATE))) {
+  // Registrations, not the orders gate: finance_admin may refund, and that
+  // role alone must not email every attendee. Checked before any send.
+  if (!(await canManageEvent(supabase, user.id, REGISTRATIONS_GATE.keys, id, REGISTRATIONS_GATE))) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 

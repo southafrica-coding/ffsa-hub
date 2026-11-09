@@ -15,7 +15,7 @@ const stripeRefund = vi.hoisted(() => vi.fn());
 const payfastRefund = vi.hoisted(() => vi.fn());
 const sendViaResend = vi.hoisted(() => vi.fn());
 const fulfillOrder = vi.hoisted(() => vi.fn());
-const adminHits = vi.hoisted(() => ({ n: 0 }));
+const adminHits = vi.hoisted(() => ({ n: 0, voids: [] as Array<Record<string, unknown>> }));
 
 vi.mock("@/lib/payments/stripe", () => ({
   stripeProvider: {
@@ -40,7 +40,36 @@ vi.mock("@/lib/ticketing/fulfillment", () => ({ fulfillOrder }));
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => {
     adminHits.n += 1;
-    throw new Error("service role used before the event gate");
+    return {
+      from(table: string) {
+        const op: { action: string; payload: Record<string, unknown> | null } = {
+          action: "select",
+          payload: null,
+        };
+        const builder: Record<string, unknown> = {
+          update(payload: Record<string, unknown>) {
+            op.action = "update";
+            op.payload = payload;
+            return builder;
+          },
+          select() {
+            return builder;
+          },
+          eq() {
+            return builder;
+          },
+          insert() {
+            op.action = "insert";
+            return builder;
+          },
+          then(onFulfilled: (value: unknown) => unknown, onRejected?: (error: unknown) => unknown) {
+            if (table === "tickets" && op.action === "update") adminHits.voids.push(op.payload ?? {});
+            return Promise.resolve({ data: [{ id: "t1" }], error: null }).then(onFulfilled, onRejected);
+          },
+        };
+        return builder;
+      },
+    };
   },
 }));
 vi.mock("@/lib/supabase/server", () => ({
@@ -54,6 +83,8 @@ import { POST as resendEmail } from "./[id]/orders/[orderId]/resend-email/route"
 import { DELETE as deletePromo } from "./[id]/promo-codes/[promoCodeId]/route";
 import { DELETE as deleteTier } from "./[id]/ticket-types/[ticketTypeId]/route";
 import { GET as scanLink } from "./[id]/scan-link/route";
+import { PATCH as ticketingPatch } from "./[id]/ticketing/route";
+import { POST as promoPost } from "./[id]/promo-codes/route";
 
 const EVENT_A = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const EVENT_B = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
@@ -118,6 +149,7 @@ beforeEach(() => {
   sendViaResend.mockReset();
   fulfillOrder.mockReset();
   adminHits.n = 0;
+  adminHits.voids = [];
   stripeRefund.mockResolvedValue({ status: "succeeded", providerRefundId: "re", amountCents: 5000, error: null });
   payfastRefund.mockResolvedValue({ status: "succeeded", providerRefundId: "re", amountCents: 5000, error: null });
 });
@@ -157,6 +189,13 @@ describe("refund and refund-all stay inside the order's event", () => {
 });
 
 describe("email side effects", () => {
+  it("finance_admin alone cannot send the cancellation notice", async () => {
+    worldOf(finance);
+    const res = await cancelNotice(json({}), { params: Promise.resolve({ id: EVENT_B }) });
+    expect(res.status).toBe(403);
+    expect(sendViaResend).not.toHaveBeenCalled();
+  });
+
   it("cancellation notice 403 does not send", async () => {
     worldOf(scopedRegs);
     const res = await cancelNotice(json({}), { params: Promise.resolve({ id: EVENT_B }) });
@@ -172,6 +211,88 @@ describe("email side effects", () => {
     expect(res.status).toBe(403);
     expect(fulfillOrder).not.toHaveBeenCalled();
     expect(sendViaResend).not.toHaveBeenCalled();
+  });
+});
+
+describe("full refund voids tickets after the provider, without attendance rights", () => {
+  it("voids through the service role when the refunder cannot manage attendance", async () => {
+    worldOf({
+      roles: [{ id: "r", name: "staff" }],
+      direct: [{ module: "events", key: "events.manage_registrations", scopeType: "event", scopeId: EVENT_B }],
+    });
+    const steps: string[] = [];
+    stripeRefund.mockImplementation(async () => {
+      steps.push("provider");
+      return { status: "succeeded", providerRefundId: "re", amountCents: 5000, error: null };
+    });
+    const res = await refundPost(json({}), { params: Promise.resolve({ id: EVENT_B, orderId: "order-1" }) });
+    expect(res.status).not.toBe(403);
+    expect(steps).toEqual(["provider"]);
+    expect(adminHits.voids).toEqual([{ status: "void" }]);
+    expect(stripeRefund).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not void or call the provider when the order is outside scope", async () => {
+    worldOf(scopedRegs);
+    const res = await refundPost(json({}), { params: Promise.resolve({ id: EVENT_B, orderId: "order-1" }) });
+    expect(res.status).toBe(403);
+    expect(stripeRefund).not.toHaveBeenCalled();
+    expect(payfastRefund).not.toHaveBeenCalled();
+    expect(adminHits.voids).toEqual([]);
+    expect(adminHits.n).toBe(0);
+  });
+});
+
+describe("RLS denials are 403", () => {
+  it("ticketing settings update maps 42501 to 403", async () => {
+    state.fake = createFakeSupabase({
+      user: { id: "u1" },
+      resolve: (q: FakeQuery) => {
+        if (q.rpc?.name === "has_event_permission") {
+          return {
+            error: {
+              code: "PGRST202",
+              message: "Could not find the function public.has_event_permission in the schema cache",
+            },
+          };
+        }
+        if (q.table === "events" && q.action === "update") {
+          return { error: { code: "42501", message: "permission denied for table events" } };
+        }
+        if (q.table === "events") return { data: { id: EVENT_B, created_by: "other", public_slug: "send-night" } };
+        return permissionWorldResolver(eventsAdmin)(q) ?? { data: [] };
+      },
+    });
+    const res = await ticketingPatch(json({ ticketing_enabled: false }), {
+      params: Promise.resolve({ id: EVENT_B }),
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it("promo insert maps 42501 to 403", async () => {
+    state.fake = createFakeSupabase({
+      user: { id: "u1" },
+      resolve: (q: FakeQuery) => {
+        if (q.rpc?.name === "has_event_permission") {
+          return {
+            error: {
+              code: "PGRST202",
+              message: "Could not find the function public.has_event_permission in the schema cache",
+            },
+          };
+        }
+        if (q.table === "promo_codes" && q.action === "insert") {
+          return { error: { code: "42501", message: "new row violates row-level security policy" } };
+        }
+        if (q.table === "ticket_types") return { data: [] };
+        if (q.table === "events") return { data: { id: EVENT_B, created_by: "other" } };
+        return permissionWorldResolver(eventsAdmin)(q) ?? { data: [] };
+      },
+    });
+    const res = await promoPost(json({ code: "DOOR", kind: "comp" }), {
+      params: Promise.resolve({ id: EVENT_B }),
+    });
+    expect(res.status).toBe(403);
   });
 });
 

@@ -239,13 +239,36 @@ export function eventIdScope(snap: EventAccessSnapshot, gate: EventGate): EventI
 }
 
 export type EventUiCapabilities = {
+  /** events UPDATE: events.create, or the caller created the event. */
   edit: boolean;
+  /** events.create on this event (ticket setup, feedback). Not the bare creator arm. */
+  create: boolean;
   refund: boolean;
   checkIn: boolean;
   scanLink: boolean;
   outcomes: boolean;
   forms: boolean;
 };
+
+/**
+ * The details-tab sentence names editing, refunds and deletes together.
+ * Show it only when the person lacks all of those. A finance admin can
+ * refund; that sentence would be false for them.
+ */
+export function showViewOnlyBanner(caps: { edit: boolean; refund: boolean }): boolean {
+  return !caps.edit && !caps.refund;
+}
+
+/** Form responses (and the builder) must belong to the event in the URL. */
+export function formOnEventStatus(
+  form: { event_id?: string | null } | null | undefined,
+  eventId: string
+): 200 | 403 | 404 {
+  if (!form) return 404;
+  const owner = (form.event_id ?? "").toLowerCase();
+  if (!owner || owner !== eventId.toLowerCase()) return 403;
+  return 200;
+}
 
 export function capabilitiesFrom(
   snap: EventAccessSnapshot,
@@ -257,6 +280,7 @@ export function capabilitiesFrom(
   const allow = (gate: EventGate) => allowsEventGate(snap, gate, eventId, { createdByCaller });
   return {
     edit: allow(EVENT_UPDATE_GATE),
+    create: allow(EVENT_CREATE_GATE),
     refund: allow(ORDERS_GATE),
     checkIn: allow(ATTENDANCE_GATE),
     scanLink: allow(SCAN_LINK_GATE),
@@ -277,6 +301,23 @@ function relKey(permissions: unknown): string | null {
   return key ?? null;
 }
 
+function raiseLookup(error: { code?: string; message?: string } | null | undefined) {
+  if (!error) return;
+  const err = new Error(error.message ?? "Lookup failed") as Error & {
+    code?: string;
+    permissionDenied?: boolean;
+  };
+  err.code = error.code;
+  err.permissionDenied = writeBlocked(error);
+  throw err;
+}
+
+function isDeniedError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const err = error as { code?: string; message?: string; permissionDenied?: boolean };
+  return err.permissionDenied === true || writeBlocked(err);
+}
+
 export async function loadEventAccess(supabase: Client, userId: string): Promise<EventAccessSnapshot> {
   const [userRes, rolesRes, directRes] = await Promise.all([
     supabase.from("users").select("is_active").eq("id", userId).maybeSingle(),
@@ -289,6 +330,9 @@ export async function loadEventAccess(supabase: Client, userId: string): Promise
       .select("scope_type, scope_id, permissions!inner(key)")
       .eq("user_id", userId),
   ]);
+  raiseLookup(userRes.error);
+  raiseLookup(rolesRes.error);
+  raiseLookup(directRes.error);
 
   const active = !!userRes.data && userRes.data.is_active !== false;
 
@@ -316,10 +360,11 @@ export async function loadEventAccess(supabase: Client, userId: string): Promise
 
   const roleIds = [...new Set(roles.map((r) => r.roleId))];
   if (roleIds.length > 0) {
-    const { data: bundles } = await supabase
+    const { data: bundles, error: bundleErr } = await supabase
       .from("role_permissions")
       .select("role_id, permissions!inner(key)")
       .in("role_id", roleIds);
+    raiseLookup(bundleErr);
     const byRole = new Map<string, string[]>();
     for (const row of (bundles ?? []) as Array<Record<string, unknown>>) {
       const key = relKey(row.permissions);
@@ -377,23 +422,38 @@ async function rpcHasEventPermission(
   supabase: Client,
   key: string,
   eventId: string | null
-): Promise<boolean | "fallback"> {
+): Promise<boolean | "fallback" | "denied"> {
   if (rpcUnavailable) return "fallback";
-  const { data, error } = await supabase.rpc("has_event_permission", {
-    required_permission: key,
-    target_event_id: eventId,
-  });
-  if (error) {
-    if (rpcMissing(error)) rpcUnavailable = true;
+  try {
+    const { data, error } = await supabase.rpc("has_event_permission", {
+      required_permission: key,
+      target_event_id: eventId,
+    });
+    if (error) {
+      if (rpcMissing(error)) {
+        rpcUnavailable = true;
+        return "fallback";
+      }
+      // An RLS / permission failure must not fall through to the wider mirror.
+      if (writeBlocked(error)) return "denied";
+      raiseLookup(error);
+    }
+    if (data === true || data === false) return data;
     return "fallback";
+  } catch (error) {
+    if (isDeniedError(error)) return "denied";
+    throw error;
   }
-  if (data === true || data === false) return data;
-  return "fallback";
 }
 
 async function callerCreated(supabase: Client, userId: string, eventId: string | null): Promise<boolean> {
   if (!eventId) return false;
-  const { data } = await supabase.from("events").select("created_by").eq("id", eventId).maybeSingle();
+  const { data, error } = await supabase.from("events").select("created_by").eq("id", eventId).maybeSingle();
+  // Can't see the row: they are not treated as its creator. Other failures stay 500.
+  if (error) {
+    if (writeBlocked(error)) return false;
+    raiseLookup(error);
+  }
   return sameId(data?.created_by, userId);
 }
 
@@ -416,7 +476,13 @@ export async function canManageEvent(
     bypassRoles: options?.bypassRoles,
     allowCreator: options?.allowCreator,
   };
-  const snap = await loadEventAccess(supabase, userId);
+  let snap: EventAccessSnapshot;
+  try {
+    snap = await loadEventAccess(supabase, userId);
+  } catch (error) {
+    if (isDeniedError(error)) return false;
+    throw error;
+  }
   if (isUnscopedAdmin(snap) || hasUnscopedRole(snap, gate.bypassRoles ?? [])) return true;
 
   const createdByCaller = await callerCreated(supabase, userId, eventId);
@@ -425,6 +491,7 @@ export async function canManageEvent(
   let sawFalse = false;
   for (const required of gate.keys) {
     const rpc = await rpcHasEventPermission(supabase, required, eventId);
+    if (rpc === "denied") return false;
     if (rpc === true) return true;
     if (rpc === false) sawFalse = true;
     else return gate.keys.some((k) => hasEventPermission(snap, k, eventId, { createdByCaller }));
@@ -476,7 +543,11 @@ export async function readEventId(
   table: string,
   id: string
 ): Promise<string | null> {
-  const { data } = await supabase.from(table).select("event_id").eq("id", id).maybeSingle();
+  const { data, error } = await supabase.from(table).select("event_id").eq("id", id).maybeSingle();
+  if (error) {
+    if (writeBlocked(error)) return null;
+    raiseLookup(error);
+  }
   return (data?.event_id as string | null) ?? null;
 }
 

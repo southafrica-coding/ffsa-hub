@@ -13,8 +13,12 @@ import {
   allowsEventGate,
   canInsertEvent,
   canManageEvent,
+  capabilitiesFrom,
+  formOnEventStatus,
   hasEventPermission,
   resetEventPermissionRpcCache,
+  showViewOnlyBanner,
+  writeBlocked,
   type EventAccessSnapshot,
   type EventGrant,
 } from "./event-access";
@@ -139,6 +143,34 @@ describe("role bypasses sit outside the helper", () => {
   });
 });
 
+describe("view-only banner and form/event match", () => {
+  it("the banner is only for someone who can neither edit nor refund", () => {
+    const finance = snap({
+      roles: [{ roleId: "r", name: "finance_admin", scopeType: null, scopeId: null }],
+    });
+    const caps = capabilitiesFrom(finance, EVENT_B, "someone-else", "u1");
+    expect(caps.refund).toBe(true);
+    expect(caps.edit).toBe(false);
+    expect(caps.create).toBe(false);
+    expect(showViewOnlyBanner(caps)).toBe(false);
+    expect(showViewOnlyBanner({ edit: false, refund: false })).toBe(true);
+    expect(showViewOnlyBanner({ edit: true, refund: false })).toBe(false);
+  });
+
+  it("a form from another event is rejected", () => {
+    expect(formOnEventStatus(null, EVENT_A)).toBe(404);
+    expect(formOnEventStatus({ event_id: EVENT_B }, EVENT_A)).toBe(403);
+    expect(formOnEventStatus({ event_id: null }, EVENT_A)).toBe(403);
+    expect(formOnEventStatus({ event_id: EVENT_A }, EVENT_A)).toBe(200);
+  });
+
+  it("42501 is a blocked write", () => {
+    expect(writeBlocked({ code: "42501", message: "permission denied" })).toBe(true);
+    expect(writeBlocked(null, [])).toBe(true);
+    expect(writeBlocked({ code: "23505", message: "duplicate" })).toBe(false);
+  });
+});
+
 describe("canInsertEvent", () => {
   it("allows unscoped create, and any-scope create only as self", () => {
     const unscoped = snap({ grants: [grant("events.create", null)] });
@@ -176,6 +208,19 @@ describe("canManageEvent loads grants and falls back when the RPC is missing", (
     const db = client(
       { roles: [], direct: [{ module: "events", key: "events.create" }] },
       (q) => (q.rpc?.name === "has_event_permission" ? { data: false } : null)
+    );
+    expect(await canManageEvent(db, "u1", "events.create", EVENT_A, EVENT_CREATE_GATE)).toBe(false);
+  });
+
+  it("an RLS denial from the permission RPC is a denial, not the wider mirror", async () => {
+    const db = client(
+      { roles: [], direct: [{ module: "events", key: "events.create" }] },
+      (q) =>
+        q.rpc?.name === "has_event_permission"
+          ? { error: { code: "42501", message: "permission denied for function has_event_permission" } }
+          : q.table === "events"
+            ? { data: { created_by: "nope" } }
+            : null
     );
     expect(await canManageEvent(db, "u1", "events.create", EVENT_A, EVENT_CREATE_GATE)).toBe(false);
   });

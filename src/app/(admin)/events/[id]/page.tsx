@@ -31,7 +31,7 @@ import { RolesRoster } from "./roles-roster";
 import { BaseLabelPicker } from "./base-label-picker";
 import { getEventLabelIds } from "@/services/event-labels";
 import { getEventFinanceOrgPicker } from "@/lib/finance/orgs";
-import { loadEventCapabilities } from "@/lib/auth/event-access";
+import { loadEventCapabilities, showViewOnlyBanner } from "@/lib/auth/event-access";
 import { FormsTab } from "./forms-tab";
 import { WorkflowsManager } from "./workflows-manager";
 import { OutcomeFormLink } from "./outcome-form-link";
@@ -94,7 +94,15 @@ export default async function EventDetailPage({
 
   const access = user
     ? await loadEventCapabilities(supabase, user.id, id, event.created_by ?? null)
-    : { edit: false, refund: false, checkIn: false, scanLink: false, outcomes: false, forms: false };
+    : {
+        edit: false,
+        create: false,
+        refund: false,
+        checkIn: false,
+        scanLink: false,
+        outcomes: false,
+        forms: false,
+      };
 
   const [
     { data: registrations },
@@ -262,6 +270,7 @@ export default async function EventDetailPage({
             baseLabelIds={baseLabelIds}
             financeOrgPicker={financeOrgPicker}
             canEdit={access.edit}
+            canRefund={access.refund}
           />
         )}
 
@@ -301,7 +310,7 @@ export default async function EventDetailPage({
             }
             buyerFields={event.buyer_fields ?? []}
             startDate={event.start_date ?? null}
-            canEdit={access.edit}
+            canEdit={access.create}
           />
         )}
 
@@ -343,7 +352,7 @@ export default async function EventDetailPage({
             eventId={id}
             forms={feedbackRows}
             responseCounts={feedbackCounts}
-            canEdit={access.edit}
+            canEdit={access.create}
           />
         )}
       </div>
@@ -366,7 +375,7 @@ function formatDayRange(start: string, end: string | null) {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function DetailsTab(props: any) {
-  const { event, eventId, roles, labels, users, registrations, attendance, coming, baseLabelIds, financeOrgPicker, canEdit } =
+  const { event, eventId, roles, labels, users, registrations, attendance, coming, baseLabelIds, financeOrgPicker, canEdit, canRefund } =
     props;
 
   // "1 140 / 2 000" won't fit at the strip's 54px, so a ratio drops to
@@ -400,11 +409,11 @@ function DetailsTab(props: any) {
         event={event}
         financeOrgs={financeOrgPicker.canPick ? financeOrgPicker.orgs : null}
       />
-      ) : (
+      ) : showViewOnlyBanner({ edit: false, refund: !!canRefund }) ? (
         <p className="text-sm text-muted-foreground">
           You can view this event. Editing, refunds and deletes are limited to events you are assigned to.
         </p>
-      )}
+      ) : null}
 
       <div className="border-x border-t border-ink">
         <KpiStrip>

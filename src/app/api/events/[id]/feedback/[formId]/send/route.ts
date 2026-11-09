@@ -11,7 +11,7 @@ import {
 import { sendTransactional } from "@/lib/email/send-transactional";
 import { eventFeedbackRequestEmailHtml } from "@/lib/email/templates/event-feedback-request";
 import { getAuthedUser } from "@/lib/api-auth";
-import { canManageEvent, EVENT_CREATE_GATE } from "@/lib/auth/event-access";
+import { canManageEvent, EVENT_CREATE_GATE, writeBlocked } from "@/lib/auth/event-access";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // A debrief goes to a team, not a mailing list. The cap is a guard against
@@ -46,7 +46,9 @@ export async function POST(
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
-  const { data: form } = await getFeedbackFormById(supabase, formId);
+  const { data: form, error: formErr } = await getFeedbackFormById(supabase, formId);
+  if (writeBlocked(formErr)) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  if (formErr) return NextResponse.json({ error: formErr.message }, { status: 500 });
   if (!form || form.event_id !== eventId) {
     return NextResponse.json({ error: "Feedback form not found" }, { status: 404 });
   }
@@ -178,9 +180,13 @@ export async function POST(
     }
   }
 
-  // The audit rows are best-effort: a ledger hiccup must not report a
-  // successful send as a failure.
-  await recordFeedbackSends(supabase, sendRows);
+  const recorded = await recordFeedbackSends(supabase, sendRows);
+  if (writeBlocked(recorded.error, recorded.data)) {
+    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  }
+  if (recorded.error) {
+    return NextResponse.json({ error: recorded.error.message }, { status: 500 });
+  }
 
   return NextResponse.json({ sent, failed, total: recipients.length, invalid });
 }
