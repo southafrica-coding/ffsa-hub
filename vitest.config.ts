@@ -5,6 +5,11 @@ import path from "node:path";
 // be declared here too — without it any test whose import chain reaches an
 // "@/" import fails to resolve.
 export default defineConfig({
+  oxc: {
+    // tsconfig uses "jsx": "preserve" for Next. Vitest has to transform JSX
+    // itself when a test imports a component.
+    jsx: { runtime: "automatic" },
+  },
   resolve: {
     alias: { "@": path.resolve(__dirname, "src") },
   },

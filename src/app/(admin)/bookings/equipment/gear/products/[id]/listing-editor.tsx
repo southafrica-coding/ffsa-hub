@@ -50,6 +50,8 @@ export function ListingEditor({
 }) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
+  const replaceRef = useRef<HTMLInputElement>(null);
+  const replaceTarget = useRef<string | null>(null);
 
   const [leave, setLeave] = useState(product.can_leave_building);
   const [money, setMoney] = useState<Record<MoneyKey, string>>({
@@ -65,6 +67,7 @@ export function ListingEditor({
   const [specs, setSpecs] = useState(specsToText(product.specs));
   const [category, setCategory] = useState(product.store_category_id ?? "");
   const [photos, setPhotos] = useState(initialPhotos);
+  const [replacingId, setReplacingId] = useState<string | null>(null);
 
   const [busy, setBusy] = useState<null | "save" | "live" | "off" | "photo">(null);
   const [error, setError] = useState<string | null>(null);
@@ -161,6 +164,34 @@ export function ListingEditor({
     router.refresh();
   }
 
+  function pickReplace(id: string) {
+    replaceTarget.current = id;
+    replaceRef.current?.click();
+  }
+
+  async function replacePhoto(files: FileList | null) {
+    const id = replaceTarget.current;
+    replaceTarget.current = null;
+    const file = files?.[0];
+    if (replaceRef.current) replaceRef.current.value = "";
+    if (!id || !file) return;
+    setBusy("photo");
+    setReplacingId(id);
+    setError(null);
+    setSaved(false);
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`/api/equipment/products/${product.id}/photos/${id}`, { method: "PATCH", body: form });
+    const json = await res.json().catch(() => ({}));
+    setBusy(null);
+    setReplacingId(null);
+    if (json.photo?.id && json.photo?.url) {
+      setPhotos((list) => list.map((p) => (p.id === id ? { id: json.photo.id, url: json.photo.url } : p)));
+    }
+    if (!res.ok) setError(json.error ?? "That photo couldn't be replaced.");
+    router.refresh();
+  }
+
   const box = "rounded-[8px] border border-[color:var(--hire-line-strong)]";
   const disabled = !canEdit;
 
@@ -222,20 +253,33 @@ export function ListingEditor({
             <div className="hire-label mb-2">
               Photos · {photos.length}
             </div>
-            <div className="grid grid-cols-4 gap-1.5 md:grid-cols-6">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
               {photos.map((p) => (
-                <div key={p.id} className="relative aspect-square overflow-hidden rounded-[6px] bg-[color:var(--hire-surface2)]">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={p.url} alt="" className="h-full w-full object-cover" />
+                <div key={p.id} className="flex flex-col gap-1">
+                  <div className="relative aspect-square overflow-hidden rounded-[6px] bg-[color:var(--hire-surface2)]">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={p.url} alt="" className="h-full w-full object-cover" />
+                    {canEdit && (
+                      <button
+                        type="button"
+                        onClick={() => removePhoto(p.id)}
+                        disabled={busy !== null}
+                        aria-label="Remove photo"
+                        className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-[999px] bg-black/70 text-[color:var(--hire-ink)]"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
                   {canEdit && (
                     <button
                       type="button"
-                      onClick={() => removePhoto(p.id)}
+                      onClick={() => pickReplace(p.id)}
                       disabled={busy !== null}
-                      aria-label="Remove photo"
-                      className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-[999px] bg-black/70 text-[color:var(--hire-ink)]"
+                      aria-label="Replace photo"
+                      className="flex min-h-11 items-center justify-center rounded-[6px] border border-[color:var(--hire-line-strong)] px-2 text-[13px] text-[color:var(--hire-ink)] disabled:opacity-60"
                     >
-                      <X className="h-4 w-4" />
+                      {replacingId === p.id ? <Loader2 className="h-4 w-4 animate-spin" /> : "Replace"}
                     </button>
                   )}
                 </div>
@@ -245,9 +289,13 @@ export function ListingEditor({
                   type="button"
                   onClick={() => fileRef.current?.click()}
                   disabled={busy !== null}
-                  className="flex aspect-square flex-col items-center justify-center gap-1 rounded-[6px] border border-dashed border-[color:var(--hire-dim)] text-[12px] text-[color:var(--hire-muted)]"
+                  className="flex aspect-square flex-col items-center justify-center gap-1 self-start rounded-[6px] border border-dashed border-[color:var(--hire-dim)] text-[12px] text-[color:var(--hire-muted)]"
                 >
-                  {busy === "photo" ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImagePlus className="h-5 w-5" />}
+                  {busy === "photo" && !replacingId ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <ImagePlus className="h-5 w-5" />
+                  )}
                   Add
                 </button>
               )}
@@ -259,6 +307,14 @@ export function ListingEditor({
               multiple
               className="hidden"
               onChange={(e) => upload(e.target.files)}
+            />
+            <input
+              ref={replaceRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              aria-label="Replacement photo"
+              onChange={(e) => replacePhoto(e.target.files)}
             />
           </div>
 
