@@ -4,8 +4,10 @@ import {
   conflict,
   dbError,
   json,
+  lmsRestrictMessageFor,
   notFound,
   readJson,
+  previewWritesDisabled,
 } from "@/lib/schools/lms-assignments-auth";
 import { validateAssignmentPatch } from "@/lib/schools/lms-assignments";
 import {
@@ -33,6 +35,8 @@ export async function GET(_request: Request, context: Ctx) {
 }
 
 export async function PATCH(request: Request, context: Ctx) {
+  const blocked = previewWritesDisabled();
+  if (blocked) return blocked;
   const { programId, assignmentId } = await context.params;
   const auth = await authorizeAssignments(programId, "edit");
   if ("response" in auth) return auth.response;
@@ -48,6 +52,8 @@ export async function PATCH(request: Request, context: Ctx) {
 }
 
 export async function DELETE(_request: Request, context: Ctx) {
+  const blocked = previewWritesDisabled();
+  if (blocked) return blocked;
   const { programId, assignmentId } = await context.params;
   const auth = await authorizeAssignments(programId, "edit");
   if ("response" in auth) return auth.response;
@@ -55,12 +61,9 @@ export async function DELETE(_request: Request, context: Ctx) {
   if (existing.error) return dbError(existing.error);
   if (!existing.data || existing.data.program_id !== programId) return notFound("Assignment");
   if ((await countSubmittedAttempts(auth.supabase, assignmentId)) > 0) {
-    return conflict(
-      "has_student_work",
-      "Students have submitted work for this assignment. Unpublish it instead of deleting, so their work and grades are kept."
-    );
+    return conflict("has_student_work", lmsRestrictMessageFor("assignment"));
   }
   const { error } = await deleteAssignment(auth.supabase, assignmentId);
-  if (error) return dbError(error);
+  if (error) return dbError(error, "assignment");
   return json({ ok: true });
 }

@@ -1,4 +1,4 @@
-import { authorizeAssignments, badRequest, dbError, json, notFound, readJson } from "@/lib/schools/lms-assignments-auth";
+import { authorizeAssignments, badRequest, dbError, json, notFound, previewWritesDisabled, readJson } from "@/lib/schools/lms-assignments-auth";
 import { isUuid } from "@/lib/schools/lms-assignments";
 import { getAssignment, listSubmittedAttempts, releaseGrades } from "@/services/lms-assignments";
 
@@ -9,6 +9,8 @@ import { getAssignment, listSubmittedAttempts, releaseGrades } from "@/services/
 type Ctx = { params: Promise<{ programId: string; assignmentId: string }> };
 
 export async function POST(request: Request, context: Ctx) {
+  const blocked = previewWritesDisabled();
+  if (blocked) return blocked;
   const { programId, assignmentId } = await context.params;
   const auth = await authorizeAssignments(programId, "grade");
   if ("response" in auth) return auth.response;

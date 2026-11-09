@@ -101,6 +101,7 @@ describe("student assignment routes", () => {
       graded_at: new Date().toISOString(),
       released_at: null,
       released_by: null,
+      updated_at: new Date().toISOString(),
     });
     let body = await (await detail(jsonRequest("GET"), p({ enrollmentId: ids.e1, assignmentId: ids.onTime }))).json();
     expect(body.attempts[0].grade).toBeNull();

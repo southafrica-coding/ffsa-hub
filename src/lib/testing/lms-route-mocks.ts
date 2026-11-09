@@ -71,6 +71,7 @@ export function serviceMock() {
     "updateAssignment",
     "deleteAssignment",
     "countSubmittedAttempts",
+    "countSubmittedAttemptsForCourse",
     "gradingRoster",
     "listSubmittedAttempts",
     "listAttempts",

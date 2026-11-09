@@ -140,6 +140,16 @@ export async function deleteAssignment(supabase: Client, assignmentId: string): 
   return { error };
 }
 
+/** Submitted attempts under any assignment of a course (editors see these under RLS). */
+export async function countSubmittedAttemptsForCourse(supabase: Client, courseId: string): Promise<{ count: number; error: DbError }> {
+  const { count, error } = await supabase
+    .from("lms_submissions")
+    .select("id, lms_assignments!inner(course_id)", { count: "exact", head: true })
+    .eq("lms_assignments.course_id", courseId)
+    .eq("status", "submitted");
+  return { count: count ?? 0, error };
+}
+
 /** Submitted attempts on an assignment (graders see these under RLS). */
 export async function countSubmittedAttempts(supabase: Client, assignmentId: string): Promise<number> {
   const { count } = await supabase
@@ -234,21 +244,32 @@ export async function getSubmission(supabase: Client, submissionId: string): Pro
   return { data: data ? toAttempt(data) : null, error: null };
 }
 
-/** Insert or update the grade on one attempt. release: true also posts it to the student. */
+/**
+ * Insert or update the grade on one attempt. release: true also posts it to
+ * the student. An update only lands if the row still has the updated_at the
+ * caller based its edit on (`basedOn`); otherwise `stale` is true and nothing
+ * changes, so two graders cannot silently overwrite each other.
+ */
 export async function upsertGrade(
   supabase: Client,
   submissionId: string,
   input: { points: number; feedback: string | null; release: boolean },
-  existing: LmsGrade | null
-): Promise<DbResult<LmsGrade>> {
+  existing: LmsGrade | null,
+  basedOn: string | null = existing?.updated_at ?? null
+): Promise<DbResult<LmsGrade> & { stale?: boolean }> {
   const releasedAt = input.release ? new Date().toISOString() : existing?.released_at ?? null;
   if (existing) {
-    return supabase
+    if (!basedOn) return { data: null, error: null, stale: true };
+    const { data, error } = await supabase
       .from("lms_grades")
       .update({ points: input.points, feedback: input.feedback, released_at: releasedAt })
       .eq("id", existing.id)
+      .eq("updated_at", basedOn)
       .select("*")
       .maybeSingle();
+    if (error) return { data: null, error };
+    if (!data) return { data: null, error: null, stale: true };
+    return { data, error: null };
   }
   return supabase
     .from("lms_grades")

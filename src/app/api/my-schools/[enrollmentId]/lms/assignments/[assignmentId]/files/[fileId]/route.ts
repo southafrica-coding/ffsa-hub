@@ -1,4 +1,4 @@
-import { authorizeStudent, dbError, json, notFound } from "@/lib/schools/lms-assignments-auth";
+import { authorizeStudent, dbError, json, notFound, previewWritesDisabled } from "@/lib/schools/lms-assignments-auth";
 import { loadStudentAssignment } from "@/lib/schools/lms-student-assignment";
 import { removeObjects, signDownload } from "@/lib/schools/lms-storage";
 import { deleteFileRow, getFile, getSubmission } from "@/services/lms-assignments";
@@ -34,6 +34,8 @@ export async function GET(_request: Request, context: Ctx) {
 }
 
 export async function DELETE(_request: Request, context: Ctx) {
+  const blocked = previewWritesDisabled();
+  if (blocked) return blocked;
   const { enrollmentId, assignmentId, fileId } = await context.params;
   const own = await ownFile(enrollmentId, assignmentId, fileId);
   if ("response" in own) return own.response;

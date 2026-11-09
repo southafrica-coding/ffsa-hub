@@ -5,10 +5,13 @@ import {
   buildSubmissionPath,
   countStatuses,
   currentAttempt,
+  formatDue,
   fromJohannesburgInput,
   gradingStatus,
   isPastDue,
   lateDecision,
+  mimeFromFileName,
+  resolveFileMime,
   openDraft,
   releasedOnly,
   safeHref,
@@ -201,6 +204,7 @@ describe("status", () => {
       graded_at: PAST,
       released_at: null,
       released_by: null,
+      updated_at: PAST,
     };
     expect(releasedOnly({ grade }).grade).toBeNull();
     expect(releasedOnly({ grade: { ...grade, released_at: PAST } }).grade?.points).toBe(5);
@@ -259,6 +263,7 @@ describe("row builders", () => {
       graded_at: PAST,
       released_at,
       released_by: null,
+      updated_at: PAST,
     });
     const items = buildStudentItems(
       assignments,
@@ -299,7 +304,42 @@ describe("files", () => {
   });
 });
 
+describe("mime fallback (phones send HEIC / Office with an empty type)", () => {
+  it("derives the mime from the extension", () => {
+    expect(mimeFromFileName("IMG_0001.HEIC")).toBe("image/heic");
+    expect(mimeFromFileName("photo.jpeg")).toBe("image/jpeg");
+    expect(mimeFromFileName("talk.pptx")).toBe("application/vnd.openxmlformats-officedocument.presentationml.presentation");
+    expect(mimeFromFileName("essay.docx")).toBe("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+    expect(mimeFromFileName("virus.exe")).toBeNull();
+    expect(mimeFromFileName("noext")).toBeNull();
+  });
+
+  it("keeps a good browser type, falls back on empty / octet-stream, refuses a bad one", () => {
+    expect(resolveFileMime("a.pdf", "application/pdf")).toBe("application/pdf");
+    expect(resolveFileMime("a.heic", "")).toBe("image/heic");
+    expect(resolveFileMime("a.docx", "application/octet-stream")).toBe(
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    );
+    expect(resolveFileMime("a.pdf", "application/x-msdownload")).toBeNull();
+  });
+
+  it("upload validation uses the fallback", () => {
+    expect(validateUploadRequest({ file_name: "IMG_1.heic", mime: "", size_bytes: 10 }, 0)).toEqual({
+      ok: true,
+      value: { file_name: "IMG_1.heic", mime: "image/heic", size_bytes: 10, ext: "heic" },
+    });
+    expect(validateUploadRequest({ file_name: "a.exe", mime: "", size_bytes: 10 }, 0).ok).toBe(false);
+  });
+});
+
 describe("display helpers", () => {
+  it("formatDue shows the year in Johannesburg time", () => {
+    const out = formatDue("2026-12-31T22:30:00Z"); // 1 Jan 2027, 00:30 SAST
+    expect(out).toContain("2027");
+    expect(out).toMatch(/Jan/);
+    expect(formatDue(null)).toBe("No due date");
+  });
+
   it("safeHref allows http(s) only", () => {
     expect(safeHref("https://example.org/a")).toBe("https://example.org/a");
     expect(safeHref("javascript:alert(1)")).toBeNull();

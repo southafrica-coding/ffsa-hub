@@ -501,6 +501,7 @@ export default async function ProgramDetailPage({
         applicationExpiry={applicationExpiry}
         staffDecisionPanel={staffDecisionPanel ?? undefined}
         canEditClassroom={viewer.canManage}
+        canGradeAssignments={viewer.canManage || viewer.isStaff}
       />
     </>
   );

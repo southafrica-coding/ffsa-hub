@@ -34,6 +34,28 @@ export const ALLOWED_FILE_TYPES: Readonly<Record<string, string>> = {
   "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
   "text/plain": "txt",
 };
+/** Extension → mime, for phones that hand over HEIC / Office files with an empty file.type. */
+const MIME_BY_EXT: Readonly<Record<string, string>> = {
+  ...Object.fromEntries(Object.entries(ALLOWED_FILE_TYPES).map(([mime, ext]) => [ext, mime])),
+  jpeg: "image/jpeg",
+  heif: "image/heic",
+};
+
+/** The allowed mime for a file name's extension, or null. */
+export function mimeFromFileName(name: string): string | null {
+  const dot = name.lastIndexOf(".");
+  if (dot < 0) return null;
+  return MIME_BY_EXT[name.slice(dot + 1).toLowerCase()] ?? null;
+}
+
+/** The browser's type when it gave one we accept; else derived from the extension. */
+export function resolveFileMime(name: string, browserType: string | null | undefined): string | null {
+  const t = (browserType ?? "").toLowerCase();
+  if (t && ALLOWED_FILE_TYPES[t]) return t;
+  if (!t || t === "application/octet-stream") return mimeFromFileName(name);
+  return null;
+}
+
 export const FILE_ACCEPT_ATTR = [
   ...Object.keys(ALLOWED_FILE_TYPES),
   ...Object.values(ALLOWED_FILE_TYPES).map((ext) => `.${ext}`),
@@ -88,6 +110,8 @@ export type LmsGrade = {
   graded_at: string;
   released_at: string | null;
   released_by: string | null;
+  /** Optimistic-concurrency token for re-grading (PUT …/grade). */
+  updated_at: string;
 };
 
 export type AttemptWithDetail = LmsSubmission & {
@@ -437,7 +461,9 @@ export function validateUploadRequest(raw: unknown, existingFiles: number): Resu
   const body = (raw ?? {}) as Record<string, unknown>;
   const name = typeof body.file_name === "string" ? body.file_name.trim() : "";
   if (!name) return { ok: false, error: "file_name is required" };
-  const mime = typeof body.mime === "string" ? body.mime.toLowerCase() : "";
+  // An empty / octet-stream type (common for HEIC and Office files on
+  // iOS and Android) falls back to the file extension.
+  const mime = resolveFileMime(name, typeof body.mime === "string" ? body.mime : "") ?? "";
   const ext = ALLOWED_FILE_TYPES[mime];
   if (!ext) {
     return { ok: false, error: "That file type is not allowed. Use PDF, an image, Word, PowerPoint or plain text." };
@@ -499,6 +525,7 @@ export function formatDue(iso: string | null): string {
     timeZone: "Africa/Johannesburg",
     day: "numeric",
     month: "short",
+    year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(iso));

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { authorizeStudent, badRequest, dbError, json, readJson } from "@/lib/schools/lms-assignments-auth";
+import { authorizeStudent, badRequest, dbError, json, previewWritesDisabled, readJson } from "@/lib/schools/lms-assignments-auth";
 import { buildSubmissionPath, openDraft, validateUploadRequest } from "@/lib/schools/lms-assignments";
 import { loadStudentAssignment } from "@/lib/schools/lms-student-assignment";
 import { signUpload } from "@/lib/schools/lms-storage";
@@ -14,6 +14,8 @@ import { insertAttempt, insertFileRow, listAttempts } from "@/services/lms-assig
 type Ctx = { params: Promise<{ enrollmentId: string; assignmentId: string }> };
 
 export async function POST(request: Request, context: Ctx) {
+  const blocked = previewWritesDisabled();
+  if (blocked) return blocked;
   const { enrollmentId, assignmentId } = await context.params;
   const auth = await authorizeStudent(enrollmentId);
   if ("response" in auth) return auth.response;

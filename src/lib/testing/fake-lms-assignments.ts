@@ -51,10 +51,20 @@ export function emptyWorld(): LmsWorld {
 
 const err = (message: string, code: string) => ({ data: null, error: { message, code } });
 let seq = 0;
+let tick = 0;
 const nextId = () => {
   seq += 1;
   return `00000000-0000-4000-8000-${seq.toString().padStart(12, "0")}`;
 };
+
+/** 310 F5: at least one piece of content of an accepted type. */
+function hasAcceptedContent(a: LmsAssignment, c: SubmissionContent, files: number) {
+  return (
+    (a.submission_types.includes("text") && !!c.body_text?.trim()) ||
+    (a.submission_types.includes("link") && !!c.link_url) ||
+    (a.submission_types.includes("file") && files > 0)
+  );
+}
 
 export function createFakeLmsService(w: LmsWorld) {
   const uid = () => w.userId;
@@ -140,8 +150,19 @@ export function createFakeLmsService(w: LmsWorld) {
     },
     async deleteAssignment(_c: unknown, id: string) {
       const a = w.assignments.find((x) => x.id === id);
-      if (a && isEditor(programOfCourse(a.course_id))) w.assignments = w.assignments.filter((x) => x.id !== id);
+      if (!a || !isEditor(programOfCourse(a.course_id))) return { error: null };
+      // 310 F2: a submitted attempt is never cascaded away.
+      if (w.submissions.some((s) => s.assignment_id === id && s.status === "submitted")) {
+        return { error: { message: "This assignment has submitted student work and cannot be deleted", code: "23503" } };
+      }
+      w.submissions = w.submissions.filter((s) => s.assignment_id !== id);
+      w.assignments = w.assignments.filter((x) => x.id !== id);
       return { error: null };
+    },
+    async countSubmittedAttemptsForCourse(_c: unknown, courseId: string) {
+      const ids = new Set(w.assignments.filter((a) => a.course_id === courseId).map((a) => a.id));
+      const count = w.submissions.filter((s) => ids.has(s.assignment_id) && s.status === "submitted" && submissionVisible(s)).length;
+      return { count, error: null };
     },
     async countSubmittedAttempts(_c: unknown, assignmentId: string) {
       return w.submissions.filter((s) => s.assignment_id === assignmentId && s.status === "submitted" && submissionVisible(s)).length;
@@ -185,10 +206,12 @@ export function createFakeLmsService(w: LmsWorld) {
       _c: unknown,
       submissionId: string,
       input: { points: number; feedback: string | null; release: boolean },
-      existing: LmsGrade | null
+      existing: LmsGrade | null,
+      basedOn: string | null = existing?.updated_at ?? null
     ) {
       const s = w.submissions.find((x) => x.id === submissionId);
-      if (!s || s.status !== "submitted" || !canGrade(programOfAssignment(s.assignment_id))) {
+      // 310 F3: never your own attempt.
+      if (!s || s.status !== "submitted" || !canGrade(programOfAssignment(s.assignment_id)) || ownsEnrollment(s.enrollment_id)) {
         return err("new row violates row-level security policy", "42501");
       }
       const a = w.assignments.find((x) => x.id === s.assignment_id)!;
@@ -207,9 +230,13 @@ export function createFakeLmsService(w: LmsWorld) {
         return err("A later attempt exists; this attempt's grade is frozen", "23514");
       }
       const now = w.now().toISOString();
+      tick += 1;
+      const stamp = new Date(w.now().getTime() + tick).toISOString();
       const releasedAt = input.release ? row?.released_at ?? now : existing?.released_at ?? null;
       if (row) {
-        Object.assign(row, { points: input.points, feedback: input.feedback, released_at: releasedAt });
+        // Optimistic check: .eq("updated_at", basedOn) matches no row.
+        if (!basedOn || basedOn !== row.updated_at) return { data: null, error: null, stale: true };
+        Object.assign(row, { points: input.points, feedback: input.feedback, released_at: releasedAt, updated_at: stamp });
         return { data: { ...row }, error: null };
       }
       const created: LmsGrade = {
@@ -221,6 +248,7 @@ export function createFakeLmsService(w: LmsWorld) {
         graded_at: now,
         released_at: releasedAt,
         released_by: releasedAt ? uid() : null,
+        updated_at: stamp,
       };
       w.grades.push(created);
       return { data: { ...created }, error: null };
@@ -233,6 +261,8 @@ export function createFakeLmsService(w: LmsWorld) {
           if (!canGrade(programOfAssignment(s.assignment_id))) continue;
           g.released_at = w.now().toISOString();
           g.released_by = uid();
+          tick += 1;
+          g.updated_at = new Date(w.now().getTime() + tick).toISOString();
           out.push({ ...g });
         }
       }
@@ -254,6 +284,7 @@ export function createFakeLmsService(w: LmsWorld) {
       if (mine.some((s) => s.status === "draft")) return err("draft_exists: finish or delete the open draft first", "23505");
       const late = !!a.due_at && w.now().getTime() > Date.parse(a.due_at);
       if (status === "submitted" && late && !a.allow_late) return err("late_not_allowed", "23514");
+      if (status === "submitted" && !hasAcceptedContent(a, content, 0)) return err("empty_submission: nothing to hand in", "23514");
       const row: LmsSubmission = {
         id: nextId(),
         assignment_id: assignmentId,
@@ -275,6 +306,10 @@ export function createFakeLmsService(w: LmsWorld) {
       const a = w.assignments.find((x) => x.id === s.assignment_id)!;
       const late = !!a.due_at && w.now().getTime() > Date.parse(a.due_at);
       if (status === "submitted" && late && !a.allow_late) return err("late_not_allowed", "23514");
+      const files = w.files.filter((f) => f.submission_id === s.id).length;
+      if (status === "submitted" && !hasAcceptedContent(a, content, files)) {
+        return err("empty_submission: nothing to hand in", "23514");
+      }
       Object.assign(s, content, {
         status,
         submitted_at: status === "submitted" ? w.now().toISOString() : null,

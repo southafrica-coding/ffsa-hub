@@ -1,4 +1,4 @@
-import { authorizeStudent, badRequest, dbError, json, notFound, readJson } from "@/lib/schools/lms-assignments-auth";
+import { authorizeStudent, badRequest, dbError, json, notFound, previewWritesDisabled, readJson } from "@/lib/schools/lms-assignments-auth";
 import { openDraft, validateSubmissionContent } from "@/lib/schools/lms-assignments";
 import { loadStudentAssignment } from "@/lib/schools/lms-student-assignment";
 import { removeObjects } from "@/lib/schools/lms-storage";
@@ -11,6 +11,8 @@ import { deleteDraft, insertAttempt, listAttempts, updateDraft } from "@/service
 type Ctx = { params: Promise<{ enrollmentId: string; assignmentId: string }> };
 
 export async function PUT(request: Request, context: Ctx) {
+  const blocked = previewWritesDisabled();
+  if (blocked) return blocked;
   const { enrollmentId, assignmentId } = await context.params;
   const auth = await authorizeStudent(enrollmentId);
   if ("response" in auth) return auth.response;
@@ -35,6 +37,8 @@ export async function PUT(request: Request, context: Ctx) {
 }
 
 export async function DELETE(_request: Request, context: Ctx) {
+  const blocked = previewWritesDisabled();
+  if (blocked) return blocked;
   const { enrollmentId, assignmentId } = await context.params;
   const auth = await authorizeStudent(enrollmentId);
   if ("response" in auth) return auth.response;

@@ -137,7 +137,9 @@ export function GradeDrawer({
   async function download(fileId: string) {
     const r = await call(`${base}/files/${fileId}`);
     if (!r.ok) return setError(r.message);
-    window.open(r.data.url as string, "_blank", "noopener,noreferrer");
+    // location.assign, not window.open: mobile browsers block a new tab
+    // opened after an await. The signed URL downloads as an attachment.
+    window.location.assign(r.data.url as string);
   }
 
   async function save(release: boolean) {
@@ -145,10 +147,21 @@ export function GradeDrawer({
     setBusy(true);
     setError(null);
     const r = isCurrent
-      ? await call(`${base}/submissions/${selected.id}/grade`, "PUT", { points, feedback, release })
+      ? await call(`${base}/submissions/${selected.id}/grade`, "PUT", {
+          points,
+          feedback,
+          release,
+          // Optimistic check: the grade we were editing (null = none yet).
+          expected_updated_at: selected.grade?.updated_at ?? null,
+        })
       : await call(`${base}/assignments/${assignmentId}/release`, "POST", { submission_id: selected.id });
     setBusy(false);
-    if (!r.ok) return setError(r.message);
+    if (!r.ok) {
+      setError(r.message);
+      // Someone else graded meanwhile: show their version.
+      if (r.data.error === "grade_changed") await load();
+      return;
+    }
     await load();
     onChanged();
   }

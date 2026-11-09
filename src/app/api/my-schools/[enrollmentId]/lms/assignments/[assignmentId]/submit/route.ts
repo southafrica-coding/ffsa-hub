@@ -7,6 +7,7 @@ import {
   lateNotAllowed,
   notFound,
   readJson,
+  previewWritesDisabled,
 } from "@/lib/schools/lms-assignments-auth";
 import {
   lateDecision,
@@ -27,6 +28,8 @@ import { insertAttempt, listAttempts, updateDraft } from "@/services/lms-assignm
 type Ctx = { params: Promise<{ enrollmentId: string; assignmentId: string }> };
 
 export async function POST(request: Request, context: Ctx) {
+  const blocked = previewWritesDisabled();
+  if (blocked) return blocked;
   const { enrollmentId, assignmentId } = await context.params;
   const auth = await authorizeStudent(enrollmentId);
   if ("response" in auth) return auth.response;

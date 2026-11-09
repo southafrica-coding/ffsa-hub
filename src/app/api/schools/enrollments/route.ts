@@ -188,7 +188,7 @@ export async function DELETE(request: Request) {
 
   if (error) {
     // Classroom submissions hold the enrolment (migration 310, RESTRICT).
-    const restrict = lmsRestrictMessage(error);
+    const restrict = lmsRestrictMessage(error, "enrollment");
     if (restrict) return NextResponse.json({ error: restrict }, { status: 409 });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

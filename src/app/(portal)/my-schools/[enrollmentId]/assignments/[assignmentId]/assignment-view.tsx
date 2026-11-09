@@ -13,6 +13,7 @@ import {
   formatDue,
   formatPoints,
   MAX_FILE_BYTES,
+  resolveFileMime,
   type AttemptWithDetail,
   type LmsAssignment,
 } from "@/lib/schools/lms-assignments";
@@ -41,11 +42,11 @@ async function call(url: string, method = "GET", body?: unknown) {
 }
 
 /** PUT the file to the signed upload URL, reporting progress (0..1). */
-function putWithProgress(url: string, file: File, onProgress: (p: number) => void): Promise<boolean> {
+function putWithProgress(url: string, file: File, mime: string, onProgress: (p: number) => void): Promise<boolean> {
   return new Promise((resolve) => {
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", url);
-    xhr.setRequestHeader("content-type", file.type);
+    xhr.setRequestHeader("content-type", mime);
     xhr.setRequestHeader("x-upsert", "false");
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable) onProgress(e.loaded / e.total);
@@ -125,14 +126,20 @@ export function AssignmentView({ enrollmentId, assignmentId }: { enrollmentId: s
         setError(`${file.name} is larger than 20 MB.`);
         continue;
       }
-      const r = await call(`${base}/files`, "POST", { file_name: file.name, mime: file.type, size_bytes: file.size });
+      // iOS / Android often give HEIC and Office files an empty type.
+      const mime = resolveFileMime(file.name, file.type);
+      if (!mime) {
+        setError(`${file.name}: that file type is not allowed. Use PDF, an image, Word, PowerPoint or plain text.`);
+        continue;
+      }
+      const r = await call(`${base}/files`, "POST", { file_name: file.name, mime, size_bytes: file.size });
       if (!r.ok) {
         setError(`${file.name}: ${r.message}`);
         continue;
       }
       const signed = (r.data.upload as { signed_url: string }).signed_url;
       setUploads((u) => [...u, { name: file.name, progress: 0 }]);
-      const ok = await putWithProgress(signed, file, (p) =>
+      const ok = await putWithProgress(signed, file, mime, (p) =>
         setUploads((u) => u.map((x) => (x.name === file.name ? { ...x, progress: p } : x)))
       );
       setUploads((u) => (ok ? u.filter((x) => x.name !== file.name) : u.map((x) => (x.name === file.name ? { ...x, failed: true } : x))));
@@ -153,7 +160,9 @@ export function AssignmentView({ enrollmentId, assignmentId }: { enrollmentId: s
   async function download(fileId: string) {
     const r = await call(`${base}/files/${fileId}`);
     if (!r.ok) return setError(r.message);
-    window.open(r.data.url as string, "_blank", "noopener,noreferrer");
+    // location.assign, not window.open: mobile browsers block a new tab
+    // opened after an await. The signed URL downloads as an attachment.
+    window.location.assign(r.data.url as string);
   }
 
   const current = detail.attempts.find((a) => a.id === detail.current_submission_id) ?? null;

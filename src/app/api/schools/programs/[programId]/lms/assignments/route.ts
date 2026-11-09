@@ -5,6 +5,7 @@ import {
   json,
   notFound,
   readJson,
+  previewWritesDisabled,
 } from "@/lib/schools/lms-assignments-auth";
 import {
   buildGradingRows,
@@ -57,6 +58,8 @@ export async function GET(_request: Request, context: Ctx) {
 }
 
 export async function POST(request: Request, context: Ctx) {
+  const blocked = previewWritesDisabled();
+  if (blocked) return blocked;
   const { programId } = await context.params;
   const auth = await authorizeAssignments(programId, "edit");
   if ("response" in auth) return auth.response;
