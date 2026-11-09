@@ -7,6 +7,8 @@ function clientFor(state: {
   app: App | null;
   slots: Array<{ id: string; is_required: boolean }>;
   refs: Array<{ slot_id: string; status: string }>;
+  /** False when the guarded update matches no row. */
+  matched?: boolean;
 }) {
   const updates: Array<{ status: string; id: string; guard: string[] }> = [];
 
@@ -26,7 +28,11 @@ function clientFor(state: {
           updates.at(-1)!.guard = value as string[];
           updates.at(-1)!.id = String(filters.find((f) => f.op === "eq")?.args[1] ?? "");
         }
-        return Promise.resolve({ error: null });
+        const matched = state.matched !== false;
+        return Promise.resolve({
+          data: matched && state.app ? [{ id: state.app.id }] : [],
+          error: null,
+        });
       },
       maybeSingle: async () => {
         if (table !== "application_responses") return { data: null, error: null };
@@ -103,6 +109,18 @@ describe("advanceApplicationWhenReferencesComplete", () => {
       advanced: false,
     });
     expect(db.updates).toEqual([]);
+  });
+
+  it("returns advanced false when the guarded update matches no row", async () => {
+    const db = clientFor({
+      app: { id: "maggie", program_id: "sbi", status: "submitted" },
+      slots,
+      refs: bothIn,
+      matched: false,
+    });
+    expect(await advanceApplicationWhenReferencesComplete(db.client, "maggie")).toEqual({
+      advanced: false,
+    });
   });
 
   it("does not move interview_scheduled or a decision", async () => {

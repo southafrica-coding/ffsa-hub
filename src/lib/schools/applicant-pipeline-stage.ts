@@ -100,6 +100,26 @@ export function requiredReferencesComplete(
   return requiredSlotIds.every((slotId) => submittedSlots.has(slotId));
 }
 
+/**
+ * Progress the applicant status page shows. Counts required slots only:
+ * an optional request does not add to the total, and a required slot with
+ * no request row stays outstanding. `complete` is requiredReferencesComplete.
+ */
+export function requiredReferenceProgress(
+  slots: readonly { id: string; is_required: boolean }[],
+  requests: readonly ReferenceRequestFact[]
+): { required: number; received: number; complete: boolean } {
+  const requiredSlotIds = slots.filter((slot) => slot.is_required).map((slot) => slot.id);
+  const received = requiredSlotIds.filter((slotId) =>
+    requests.some((request) => request.slotId === slotId && request.status === "submitted")
+  ).length;
+  return {
+    required: requiredSlotIds.length,
+    received,
+    complete: requiredReferencesComplete(requiredSlotIds, requests),
+  };
+}
+
 export function interviewIsComplete(reviews: readonly InterviewReviewFact[]): boolean {
   return reviews.some((review) => isDecisiveInterviewOutcome(review.interviewOutcome));
 }

@@ -5,6 +5,7 @@ import {
   PIPELINE_TABS,
   derivePipelineStage,
   interviewOutcomeBadge,
+  requiredReferenceProgress,
   requiredReferencesComplete,
   statusAfterReferencesComplete,
   type InterviewReviewFact,
@@ -99,6 +100,30 @@ describe("required reference counts", () => {
     expect(
       requiredReferencesComplete([], refs({ slotId: FRIEND, status: "submitted" }))
     ).toBe(false);
+  });
+});
+
+describe("applicant status page reference progress", () => {
+  const slots = [
+    { id: FRIEND, is_required: true },
+    { id: LEADER, is_required: true },
+    { id: "optional", is_required: false },
+  ];
+
+  it("ignores an optional pending reference and still counts both required slots in", () => {
+    expect(
+      requiredReferenceProgress(slots, [
+        { slotId: FRIEND, status: "submitted" },
+        { slotId: LEADER, status: "submitted" },
+        { slotId: "optional", status: "pending" },
+      ])
+    ).toEqual({ required: 2, received: 2, complete: true });
+  });
+
+  it("does not treat a required slot with no request row as received", () => {
+    expect(
+      requiredReferenceProgress(slots, [{ slotId: FRIEND, status: "submitted" }])
+    ).toEqual({ required: 2, received: 1, complete: false });
   });
 });
 

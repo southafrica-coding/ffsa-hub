@@ -1,4 +1,5 @@
 import { sendReferencesCompleteEmail } from "@/lib/email/send-references-complete";
+import { requiredReferencesComplete } from "@/lib/schools/applicant-pipeline-stage";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
@@ -58,8 +59,9 @@ async function getProgramLeaders(
  * After a reference is submitted, notify the application's assigned staff member
  * IF every required reference is now in.
  *
- * - "Complete" = all reference slots marked `is_required` for this application
- *   have `status = 'submitted'`. Optional-slot references don't gate it.
+ * - "Complete" is requiredReferencesComplete: every required slot has a
+ *   submitted request. A required slot with no request row is not complete.
+ *   Optional slots do not count. The stage advance uses the same helper.
  * - Fires at most once naturally: only the final required submission flips the
  *   set to complete, and a submitted reference can't be re-opened.
  * - Assigned → emails the assignee. Unassigned → emails the program's
@@ -73,16 +75,38 @@ export async function maybeNotifyReferencesComplete(
   applicationId: string
 ): Promise<void> {
   try {
-    const { data: refs } = await adminSupabase
-      .from("reference_requests")
-      .select("status, reference_slots!inner(is_required)")
-      .eq("application_id", applicationId);
+    const { data: head, error: headError } = await adminSupabase
+      .from("application_responses")
+      .select("program_id")
+      .eq("id", applicationId)
+      .maybeSingle();
+    if (headError || !head?.program_id) return;
 
-    const required = ((refs ?? []) as any[]).filter(
-      (r) => r.reference_slots?.is_required
+    const [{ data: slots, error: slotError }, { data: refs, error: refError }] =
+      await Promise.all([
+        adminSupabase
+          .from("reference_slots")
+          .select("id, is_required")
+          .eq("program_id", head.program_id),
+        adminSupabase
+          .from("reference_requests")
+          .select("slot_id, status")
+          .eq("application_id", applicationId),
+      ]);
+    if (slotError || refError) return;
+
+    const requiredSlotIds = (
+      (slots ?? []) as Array<{ id: string; is_required: boolean }>
+    )
+      .filter((slot) => slot.is_required)
+      .map((slot) => slot.id);
+    const complete = requiredReferencesComplete(
+      requiredSlotIds,
+      ((refs ?? []) as Array<{ slot_id: string; status: string }>).map((row) => ({
+        slotId: row.slot_id,
+        status: row.status,
+      }))
     );
-    const complete =
-      required.length > 0 && required.every((r) => r.status === "submitted");
     if (!complete) return;
 
     const { data: app } = await adminSupabase

@@ -53,12 +53,14 @@ export async function advanceApplicationWhenReferencesComplete(
     });
     if (!next) return { advanced: false };
 
-    const { error: updateError } = await admin
+    const { data: updated, error: updateError } = await admin
       .from("application_responses")
       .update({ status: next })
       .eq("id", applicationId)
+      .select("id")
       .in("status", ["submitted", "waiting_for_references"]);
-    if (updateError) return { advanced: false };
+    const updatedRows = Array.isArray(updated) ? updated : [];
+    if (updateError || updatedRows.length === 0) return { advanced: false };
     return { advanced: true };
   } catch {
     return { advanced: false };
