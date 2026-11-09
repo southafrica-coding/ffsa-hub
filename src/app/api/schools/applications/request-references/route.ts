@@ -4,9 +4,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getReferenceSlotsByProgram } from "@/services/schools";
 import { sendApplicantReferenceRequest } from "@/lib/email/send-applicant-reference-request";
 import {
-  passesApplicationExpiry,
+  applicationExpiryDenial,
   userCanReadApplication,
-  APPLICATIONS_EXPIRED_MESSAGE,
 } from "@/lib/auth/application-expiry";
 import { userCanManageProgram } from "@/lib/auth/check-schools-access";
 
@@ -138,8 +137,9 @@ export async function POST(request: Request) {
     if (!(await userCanManageProgram(supabase, user.id, programId))) {
       return NextResponse.json({ error: "Not authorized" }, { status: 403 });
     }
-    if (!(await passesApplicationExpiry(supabase, programId))) {
-      return NextResponse.json({ error: APPLICATIONS_EXPIRED_MESSAGE }, { status: 403 });
+    const expiryDenial = await applicationExpiryDenial(supabase, programId);
+    if (expiryDenial) {
+      return NextResponse.json({ error: expiryDenial }, { status: 403 });
     }
 
     const { data: slots } = await getReferenceSlotsByProgram(adminSupabase, programId);

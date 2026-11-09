@@ -1,6 +1,9 @@
 "use client";
 
-import type { ApplicationExpiry } from "@/lib/auth/application-expiry";
+import {
+  APPLICATIONS_STATUS_UNKNOWN_MESSAGE,
+  type ApplicationExpiry,
+} from "@/lib/auth/application-expiry";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { type TreeQuestion } from "@/components/admin/question-tree";
@@ -841,14 +844,18 @@ export function ProgramDetail({
         </TabsContent>
 
         <TabsContent value="applicants" className="mt-0 px-5 py-6 md:px-8">
-          {applicationExpiry.expired && (
+          {applicationExpiry.lookupFailed ? (
+            <p className="mb-4 border border-ink bg-muted px-4 py-3 text-[13px]">
+              {APPLICATIONS_STATUS_UNKNOWN_MESSAGE}
+            </p>
+          ) : applicationExpiry.expired && (
             <p className="mb-4 border border-ink bg-muted px-4 py-3 text-[13px]">
               {applicationExpiry.canAccess
                 ? `Archived on ${formatExpiryDate(applicationExpiry.expiresOn)} — only admins and the Training team can see these applications.`
                 : `Applications for this school were archived on ${formatExpiryDate(applicationExpiry.expiresOn)}. Contact the Training team for access.`}
             </p>
           )}
-          {(!applicationExpiry.expired || applicationExpiry.canAccess) && (
+          {!applicationExpiry.lookupFailed && (!applicationExpiry.expired || applicationExpiry.canAccess) && (
           <ApplicantsTab
             programId={program.id}
             programCode={program.code}
