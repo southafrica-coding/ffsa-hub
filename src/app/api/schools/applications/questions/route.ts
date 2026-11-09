@@ -1,6 +1,24 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { userCanManageProgram } from "@/lib/auth/check-schools-access";
 import { createQuestion, updateQuestion, deleteQuestion } from "@/services/schools";
+
+// Program staff (migration 304) fail userCanManageProgram, so they cannot
+// edit the form even though they can review applicants assigned to them.
+async function denyUnlessManager(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  userId: string,
+  programId: string | null | undefined
+) {
+  if (!programId) {
+    return NextResponse.json({ error: "Application question not found" }, { status: 404 });
+  }
+  if (!(await userCanManageProgram(supabase, userId, programId))) {
+    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  }
+  return null;
+}
 
 function validateFollowUpFields(
   parent_question_id: unknown,
@@ -38,6 +56,9 @@ export async function POST(request: Request) {
   if (followUpValidation) {
     return NextResponse.json({ error: followUpValidation }, { status: 400 });
   }
+
+  const denied = await denyUnlessManager(supabase, user.id, program_id);
+  if (denied) return denied;
 
   const { data, error } = await createQuestion(supabase, {
     program_id,
@@ -97,9 +118,11 @@ export async function PUT(request: Request) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: existing } = await (supabase as any)
     .from("application_questions")
-    .select("is_system")
+    .select("is_system, program_id")
     .eq("id", id)
     .single();
+  const denied = await denyUnlessManager(supabase, user.id, existing?.program_id);
+  if (denied) return denied;
   const isSystem = !!existing?.is_system;
 
   const updateData: Record<string, unknown> = {};
@@ -143,9 +166,11 @@ export async function DELETE(request: Request) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: existing } = await (supabase as any)
     .from("application_questions")
-    .select("is_system")
+    .select("is_system, program_id")
     .eq("id", id)
     .single();
+  const denied = await denyUnlessManager(supabase, user.id, existing?.program_id);
+  if (denied) return denied;
   if (existing?.is_system) {
     return NextResponse.json(
       { error: "This is a required system question and can't be deleted." },

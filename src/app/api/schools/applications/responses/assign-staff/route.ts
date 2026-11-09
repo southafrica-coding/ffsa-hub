@@ -60,8 +60,8 @@ export async function PUT(request: Request) {
   const changed = previousStaffId !== newStaffId;
 
   // Same eligibility as the Applicants dropdown: program-scoped
-  // assignable-contact grants, super admins, and active leaders of this
-  // program. Clearing the assignment stays open.
+  // assignable-contact grants, super admins, active leaders, and active
+  // program staff of this program. Clearing the assignment stays open.
   const rejection = await unassignableContactError(
     adminSupabase,
     responseProgramId,

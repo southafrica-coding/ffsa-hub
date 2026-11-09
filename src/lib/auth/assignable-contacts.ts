@@ -17,6 +17,9 @@
 //      to remove someone — there is no status, pending, or removed column.
 //      A current row is an active leader, and only for that program_id.
 //      A leader of program A is not assignable for program B.
+//   4. The user is active staff of THIS program (program_staff, migration
+//      304). Same shape as leaders: the row is the membership, and it does
+//      not make them assignable for any other program.
 //
 // User must also be active (users.is_active is not false). A deactivated
 // account is dropped on every path, including leaders and super admins.
@@ -97,6 +100,19 @@ export async function fetchAssignableContacts(
     .eq("program_id", programId);
 
   for (const row of (leaderRows ?? []) as Array<{ users: ContactRow | ContactRow[] | null }>) {
+    const user = Array.isArray(row.users) ? row.users[0] ?? null : row.users;
+    add(user);
+  }
+
+  // 4. Active staff of this program only. Same membership rule as leaders.
+  const { data: staffRows } = await adminSupabase
+    .from("program_staff")
+    .select(
+      "user_id, program_id, users:user_id(id, first_name, last_name, preferred_name, email, is_active)"
+    )
+    .eq("program_id", programId);
+
+  for (const row of (staffRows ?? []) as Array<{ users: ContactRow | ContactRow[] | null }>) {
     const user = Array.isArray(row.users) ? row.users[0] ?? null : row.users;
     add(user);
   }

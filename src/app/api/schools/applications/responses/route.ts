@@ -11,7 +11,7 @@ import {
   removeEnrollmentForApplicant,
   ensureEnrollmentForApplicant,
 } from "@/services/schools";
-import { userCanManageApplications } from "@/lib/auth/check-schools-access";
+import { userCanManageApplications, userCanManageProgram } from "@/lib/auth/check-schools-access";
 import { userCanReadApplication, APPLICATIONS_EXPIRED_MESSAGE } from "@/lib/auth/application-expiry";
 import { normaliseGender } from "@/lib/schools/demographics";
 import { ensureStudentRole, deactivateMembershipProfile } from "@/lib/auth/membership-roles";
@@ -364,6 +364,32 @@ function getApplicantDetails(response: any) {
   return { email, firstName: firstName || "there" };
 }
 
+// Status, acceptance, and admin notes stay with people who manage the
+// school. Program staff write application_staff_reviews instead, and
+// userCanManageProgram is false for them.
+async function denyUnlessCanDecide(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  responseIds: string[]
+) {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("application_responses")
+    .select("id, program_id")
+    .in("id", responseIds);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!data || data.length === 0) {
+    return NextResponse.json({ error: "Application not found" }, { status: 404 });
+  }
+  const programIds = [...new Set(data.map((row) => row.program_id as string))];
+  for (const programId of programIds) {
+    if (!(await userCanManageProgram(supabase, userId, programId))) {
+      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+    }
+  }
+  return null;
+}
+
 export async function PUT(request: Request) {
   const supabase = await createClient();
   const {
@@ -379,6 +405,8 @@ export async function PUT(request: Request) {
 
   // ── Bulk status update ──
   if (ids && Array.isArray(ids) && ids.length > 0 && status) {
+    const denied = await denyUnlessCanDecide(supabase, user.id, ids);
+    if (denied) return denied;
     const adminSupabase = createAdminClient();
     let updated = 0;
     // Accepted applicants we could not put on the roster because no account
@@ -455,6 +483,9 @@ export async function PUT(request: Request) {
       { status: 400 }
     );
   }
+
+  const denied = await denyUnlessCanDecide(supabase, user.id, [id]);
+  if (denied) return denied;
 
   // Get the current response to check previous status
   const adminSupabase = createAdminClient();

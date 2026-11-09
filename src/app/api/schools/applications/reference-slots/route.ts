@@ -7,7 +7,23 @@ import {
   getReferenceSlotById,
   countRequiredReferenceSlots,
 } from "@/services/schools";
+import { userCanManageProgram } from "@/lib/auth/check-schools-access";
 import { MIN_REQUIRED_REFERENCE_SLOTS } from "@/lib/references/minimum-slots";
+
+async function denyUnlessManager(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  userId: string,
+  programId: string | null | undefined
+) {
+  if (!programId) {
+    return NextResponse.json({ error: "Reference slot not found" }, { status: 404 });
+  }
+  if (!(await userCanManageProgram(supabase, userId, programId))) {
+    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  }
+  return null;
+}
 
 // A program can't be taken below the floor, by deletion or by demoting a slot
 // to optional — see minimum-slots.ts for why the number matters. Both guards
@@ -48,6 +64,9 @@ export async function POST(request: Request) {
     );
   }
 
+  const denied = await denyUnlessManager(supabase, user.id, program_id);
+  if (denied) return denied;
+
   const { data, error } = await createReferenceSlot(supabase, {
     program_id,
     label,
@@ -79,6 +98,10 @@ export async function PUT(request: Request) {
   if (!id) {
     return NextResponse.json({ error: "id is required" }, { status: 400 });
   }
+
+  const { data: slot } = await getReferenceSlotById(supabase, id);
+  const denied = await denyUnlessManager(supabase, user.id, slot?.program_id);
+  if (denied) return denied;
 
   // Demoting the last required reference is the same loss as deleting it.
   if (is_required === false && (await wouldDropBelowMinimum(supabase, id))) {
@@ -116,6 +139,10 @@ export async function DELETE(request: Request) {
   if (!id) {
     return NextResponse.json({ error: "id is required" }, { status: 400 });
   }
+
+  const { data: slot } = await getReferenceSlotById(supabase, id);
+  const denied = await denyUnlessManager(supabase, user.id, slot?.program_id);
+  if (denied) return denied;
 
   if (await wouldDropBelowMinimum(supabase, id)) {
     return NextResponse.json({ error: MIN_SLOTS_ERROR }, { status: 409 });

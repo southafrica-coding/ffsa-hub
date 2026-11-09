@@ -4,6 +4,14 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getProgramById, getEnrollmentsByProgram, getGradesByProgram, getQuestionsByProgram, getResponsesByProgram, getRemovedResponsesByProgram, getReferenceSlotsByProgram, getReferenceRequestSummaries, getReferenceQuestionsByProgram } from "@/services/schools";
 import { fetchAssignableContacts } from "@/lib/auth/assignable-contacts";
 import { listProgramLeaders } from "@/services/program-leaders";
+import { StaffApplicants, type StaffApplicant } from "./staff-applicants";
+import type { InterviewOutcome } from "@/lib/schools/interview-outcomes";
+import {
+  applicationsForViewer,
+  canOpenSchools,
+  resolveProgramViewer,
+} from "@/lib/schools/program-staff-access";
+import { listProgramStaff } from "@/services/program-staff";
 import { listProgramEmailTemplates } from "@/services/program-email-templates";
 import { getArrivalInsuranceInfo } from "@/lib/schools/arrival-insurance";
 import { ProgramDetail } from "./program-detail";
@@ -12,7 +20,6 @@ import { Masthead } from "@/components/ffsa";
 import { SchoolFeesPanel } from "@/components/finance/school-fees-panel";
 import { getSchoolBalances } from "@/services/school-balances";
 import type { RosterFee } from "./roster-tab";
-import { hasModuleAccess } from "@/lib/require-permission";
 import { canUseStaffDecisions } from "@/lib/auth/check-okr-access";
 import { getLeadershipTrackProgram, loadStaffDecisionRows } from "@/lib/schools/staff-decisions";
 import { listActiveMinistries } from "@/services/ministries";
@@ -102,6 +109,41 @@ function withDeletedPersonIdentity(rows: any[]): any[] {
   });
 }
 
+function staffApplicantFromResponse(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  row: any,
+  review: { notes: string | null; interview_outcome: string } | undefined
+): StaffApplicant {
+  const user = Array.isArray(row.users) ? row.users[0] : row.users;
+  const info = (row.applicant_info ?? {}) as Record<string, string | null>;
+  const name =
+    [user?.preferred_name || user?.first_name || info.first_name, user?.last_name || info.last_name]
+      .filter(Boolean)
+      .join(" ")
+      .trim() || row.applicant_email || "Applicant";
+  const answers = Array.isArray(row.answers)
+    ? row.answers.map((answer: { question_label?: string; answer?: string }) => ({
+        label: answer.question_label || "Answer",
+        answer: answer.answer || "",
+      }))
+    : [];
+  const outcome = review?.interview_outcome;
+  const interviewOutcome: InterviewOutcome =
+    outcome === "recommend" || outcome === "hold" || outcome === "decline" || outcome === "pending"
+      ? outcome
+      : "pending";
+  return {
+    id: row.id,
+    name,
+    email: user?.email ?? row.applicant_email ?? info.email ?? null,
+    status: row.status,
+    submittedAt: row.submitted_at ?? null,
+    answers,
+    notes: review?.notes ?? "",
+    interviewOutcome,
+  };
+}
+
 export default async function ProgramDetailPage({
   params,
   searchParams,
@@ -146,7 +188,8 @@ export default async function ProgramDetailPage({
     );
   }
 
-  if (!(await hasModuleAccess(supabase, session.user.id, "schools"))) {
+  const schoolsAccess = await canOpenSchools(supabase, session.user.id);
+  if (!schoolsAccess.open) {
     if (!ltProgram) redirect("/dashboard");
     return (
       <div className="ffsa-screen">
@@ -168,6 +211,51 @@ export default async function ProgramDetailPage({
         <Masthead context="Training" title="Not found" />
         <p className="px-5 py-6 md:px-8 md:py-7 text-[13px] text-destructive">Program not found.</p>
       </div>
+    );
+  }
+
+  const viewer = await resolveProgramViewer(supabase, session.user.id, programId);
+
+  // Opened Training because they staff a different school. Do not load this
+  // school's fees, emails, or applicants.
+  if (!schoolsAccess.hasModuleAccess && !viewer.isStaff && !viewer.canManage && !viewer.hasSchoolsGrant) {
+    return (
+      <div className="ffsa-screen">
+        <Masthead context="Training" title={program.name} />
+        <p className="px-5 py-6 md:px-8 md:py-7 text-[13px]">You are not on the staff of this school.</p>
+      </div>
+    );
+  }
+
+  // Staff with no leader, schools.*, or finance grant: assigned applicants only.
+  // Fees, the form, and the emails are not loaded.
+  if (viewer.staffScoped) {
+    const { data: responsesRaw } = await getResponsesByProgram(supabase, programId);
+    const visible = applicationsForViewer(responsesRaw ?? [], viewer);
+    const hydrated = await hydrateUserIdentities(admin, visible, [["user_id", "users"]]);
+    const ids = hydrated.map((row: { id: string }) => row.id);
+    let reviewRows: Array<{
+      application_response_id: string;
+      notes: string | null;
+      interview_outcome: string;
+    }> = [];
+    if (ids.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data } = await (supabase as any)
+        .from("application_staff_reviews")
+        .select("application_response_id, notes, interview_outcome")
+        .in("application_response_id", ids)
+        .eq("author_id", session.user.id);
+      reviewRows = data ?? [];
+    }
+    const byResponse = new Map(reviewRows.map((row) => [row.application_response_id, row]));
+    return (
+      <StaffApplicants
+        programName={program.name}
+        applicants={hydrated.map((row: { id: string }) =>
+          staffApplicantFromResponse(row, byResponse.get(row.id))
+        )}
+      />
     );
   }
 
@@ -341,6 +429,7 @@ export default async function ProgramDetailPage({
   // client so the embedded user identities populate for non-admin
   // reviewers, matching how enrollments/responses are hydrated above.
   const { data: leaders } = await listProgramLeaders(admin, programId);
+  const { data: staff } = await listProgramStaff(admin, programId);
 
   // Per-program email overrides (migration 146). Empty until a leader
   // customizes an email; the resolver falls back to defaults meanwhile.
@@ -368,6 +457,7 @@ export default async function ProgramDetailPage({
         trackSummary={trackSummary}
         arrivalInsurance={arrivalInsurance}
         leaders={leaders ?? []}
+        staff={staff ?? []}
         emailTemplates={emailTemplates ?? []}
         grades={grades ?? []}
         feesByEnrollment={feesByEnrollment}

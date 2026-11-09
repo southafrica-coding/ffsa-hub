@@ -104,7 +104,7 @@ export async function getSidebarAccess(
       const roleIds = (roleRows ?? [])
         .map((r) => r.role_id)
         .filter((id): id is string => typeof id === "string");
-      const [permRows, roleDerived] = await Promise.all([
+      const [permRows, roleDerived, staffSeat] = await Promise.all([
         readOrThrow<
           Array<{
             permissions:
@@ -121,6 +121,17 @@ export async function getSidebarAccess(
         // Best-effort, as before: a failed bundle read contributes nothing
         // rather than flagging the whole menu.
         getPermissionRowsForRoles(supabase, roleIds).catch(() => []),
+        // program_staff (migration 304) is not a schools.* grant. A missing
+        // table, before the migration is applied, must not blank the menu.
+        supabase
+          .from("program_staff")
+          .select("id")
+          .eq("user_id", userId)
+          .limit(1)
+          .then((res: { data: { id: string }[] | null; error: unknown }) =>
+            res.error ? [] : res.data ?? []
+          )
+          .catch(() => [] as { id: string }[]),
       ]);
 
       for (const row of permRows ?? []) {
@@ -140,6 +151,8 @@ export async function getSidebarAccess(
         if (perm.key === "schools.manage") result.permittedModules.add("users");
         if (perm.module === "vehicles" || perm.module === "equipment") result.permittedModules.add("bookings");
       }
+
+      if (staffSeat.length > 0) result.permittedModules.add("schools");
     }
   } catch {
     // Authenticated, but we couldn't load access. Don't render a misleading

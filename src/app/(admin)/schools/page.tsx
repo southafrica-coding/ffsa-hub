@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { requireModuleAccess } from "@/lib/require-permission";
+import {
+  canOpenSchools,
+  programsVisibleOnSchoolsHome,
+} from "@/lib/schools/program-staff-access";
 import { getPrograms } from "@/services/schools";
 import { Masthead, NeedsYou, NeedsYouAction, Chip } from "@/components/ffsa";
 import { ProgramsTable, type ProgramStats } from "./programs-table";
@@ -62,18 +65,24 @@ export default async function SchoolsPage({
   const params = await searchParams;
   const statusFilter = params.status || "active";
 
-  // Permission check + programs fetch are independent — run together.
-  const [, programsResult] = await Promise.all([
-    requireModuleAccess(supabase, user.id, "schools"),
+  // Module access, or a program_staff seat (migration 304). Staff with no
+  // other schools grant only see the schools they staff.
+  const [access, programsResult] = await Promise.all([
+    canOpenSchools(supabase, user.id),
     getPrograms(supabase, { status: statusFilter }),
   ]);
+  if (!access.open) redirect("/dashboard");
   const { data: programs, error, count } = programsResult;
 
   if (error) {
     console.error("getPrograms error:", JSON.stringify(error, null, 2));
   }
 
-  const rows = programs ?? [];
+  // getPrograms is untyped (`Client = any`). Passing that array straight into
+  // a `{ id: string }` generic collapses the row and the table stops compiling.
+  const allPrograms = (programs ?? []) as Array<{ id: string }>;
+  const rows = programsVisibleOnSchoolsHome(allPrograms, access) as typeof programs;
+  const shownCount = access.hasModuleAccess ? (count ?? rows.length) : rows.length;
   const ids: string[] = rows.map((p: { id: string }) => p.id);
   const has = ids.length > 0;
 
@@ -186,11 +195,11 @@ export default async function SchoolsPage({
   return (
     <div className="ffsa-screen">
       <Masthead
-        context={`Operations · ${count ?? rows.length} ${
+        context={`Operations · ${shownCount} ${
           statusFilter === "archived" ? "archived " : ""
-        }${(count ?? rows.length) === 1 ? "school" : "schools"}`}
+        }${shownCount === 1 ? "school" : "schools"}`}
         title="Training"
-        actions={<CreateProgramForm />}
+        actions={access.hasModuleAccess ? <CreateProgramForm /> : undefined}
       />
 
       {/* The page's ONE yellow band. Never add a second. */}

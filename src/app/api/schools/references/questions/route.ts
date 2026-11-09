@@ -1,10 +1,26 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { userCanManageProgram } from "@/lib/auth/check-schools-access";
 import {
   createReferenceQuestion,
   updateReferenceQuestion,
   deleteReferenceQuestion,
 } from "@/services/schools";
+
+async function denyUnlessManager(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  userId: string,
+  programId: string | null | undefined
+) {
+  if (!programId) {
+    return NextResponse.json({ error: "Reference question not found" }, { status: 404 });
+  }
+  if (!(await userCanManageProgram(supabase, userId, programId))) {
+    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  }
+  return null;
+}
 
 function validateFollowUpFields(
   parent_question_id: unknown,
@@ -54,6 +70,9 @@ export async function POST(request: Request) {
   if (followUpValidation) {
     return NextResponse.json({ error: followUpValidation }, { status: 400 });
   }
+
+  const denied = await denyUnlessManager(supabase, user.id, program_id);
+  if (denied) return denied;
 
   const { data, error } = await createReferenceQuestion(supabase, {
     program_id,
@@ -116,6 +135,15 @@ export async function PUT(request: Request) {
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: existing } = await (supabase as any)
+    .from("reference_questions")
+    .select("program_id")
+    .eq("id", id)
+    .single();
+  const denied = await denyUnlessManager(supabase, user.id, existing?.program_id);
+  if (denied) return denied;
+
   const updateData: Record<string, unknown> = {};
   if (label !== undefined) updateData.label = label;
   if (description !== undefined) updateData.description = description;
@@ -152,6 +180,15 @@ export async function DELETE(request: Request) {
   if (!id) {
     return NextResponse.json({ error: "id is required" }, { status: 400 });
   }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: existing } = await (supabase as any)
+    .from("reference_questions")
+    .select("program_id")
+    .eq("id", id)
+    .single();
+  const denied = await denyUnlessManager(supabase, user.id, existing?.program_id);
+  if (denied) return denied;
 
   const { error } = await deleteReferenceQuestion(supabase, id);
 

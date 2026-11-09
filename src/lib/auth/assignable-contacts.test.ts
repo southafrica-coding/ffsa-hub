@@ -46,8 +46,11 @@ const hank = user("hank", "Hank"); // schools.manage only
 const ivy = user("ivy", "Ivy"); // unscoped assignable_as_contact
 const jade = user("jade", "Jade"); // assignable_as_contact on B
 const kai = user("kai", "Kai", false); // deactivated permission holder on A
+const lea = user("lea", "Lea"); // active staff of A
+const moe = user("moe", "Moe", false); // deactivated staff of A
+const nia = user("nia", "Nia"); // active staff of B only
 
-const users = [amy, ben, cara, dee, evan, fran, gina, hank, ivy, jade, kai];
+const users = [amy, ben, cara, dee, evan, fran, gina, hank, ivy, jade, kai, lea, moe, nia];
 const byId = new Map(users.map((u) => [u.id, u]));
 
 function permission(
@@ -96,6 +99,12 @@ function client() {
       leader("fran", PROGRAM_A),
       leader("evan", PROGRAM_B),
     ],
+    program_staff: [
+      leader("lea", PROGRAM_A),
+      leader("moe", PROGRAM_A),
+      leader("nia", PROGRAM_B),
+      leader("dee", PROGRAM_A),
+    ],
   };
 
   return {
@@ -128,12 +137,12 @@ const db = client();
 describe("fetchAssignableContacts", () => {
   it("lists an active leader, a permission holder, and a super admin for their program", async () => {
     const listed = await fetchAssignableContacts(db, PROGRAM_A);
-    expect(listed.map((c) => c.id)).toEqual(["amy", "ben", "cara", "dee"]);
+    expect(listed.map((c) => c.id)).toEqual(["amy", "ben", "cara", "dee", "lea"]);
   });
 
   it("does not list that leader for a different program", async () => {
     const listed = await fetchAssignableContacts(db, PROGRAM_B);
-    expect(listed.map((c) => c.id)).toEqual(["cara", "evan", "jade"]);
+    expect(listed.map((c) => c.id)).toEqual(["cara", "evan", "jade", "nia"]);
     expect(listed.map((c) => c.id)).not.toContain("amy");
   });
 
@@ -145,6 +154,8 @@ describe("fetchAssignableContacts", () => {
     // Removed leaders have no program_leaders row. A former leader with no
     // other grant is absent.
     expect(ids).not.toContain("evan");
+    expect(ids).not.toContain("moe");
+    expect(ids).not.toContain("nia");
   });
 
   it("does not treat other schools permissions or an unscoped grant as assignable", async () => {
@@ -170,6 +181,14 @@ describe("userIsAssignableContact", () => {
   it("rejects a deactivated leader and a leader who was removed", async () => {
     expect(await userIsAssignableContact(db, PROGRAM_A, "fran")).toBe(false);
     expect(await userIsAssignableContact(db, PROGRAM_A, "removed-leader")).toBe(false);
+  });
+
+  it("accepts active staff only for the program they staff", async () => {
+    expect(await userIsAssignableContact(db, PROGRAM_A, "lea")).toBe(true);
+    expect(await userIsAssignableContact(db, PROGRAM_B, "lea")).toBe(false);
+    expect(await userIsAssignableContact(db, PROGRAM_A, "nia")).toBe(false);
+    expect(await userIsAssignableContact(db, PROGRAM_B, "nia")).toBe(true);
+    expect(await userIsAssignableContact(db, PROGRAM_A, "moe")).toBe(false);
   });
 
   it("still accepts permission holders and super admins", async () => {

@@ -54,7 +54,8 @@ export async function PUT(request: Request) {
   const changed = previousStaffId !== newStaffId;
 
   // Same eligibility as the roster picker: program-scoped assignable-contact
-  // grants, super admins, and active leaders of this program.
+  // grants, super admins, active leaders, and active program staff of this
+  // program.
   const rejection = await unassignableContactError(
     adminSupabase,
     enrollmentProgramId,

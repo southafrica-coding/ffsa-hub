@@ -94,6 +94,17 @@ describe("getSidebarAccess", () => {
     expect(sorted(access.permittedModules)).toEqual(["events"]);
   });
 
+  it("a program staff seat lights up Training without a schools permission", async () => {
+    const f = createFakeSupabase({
+      user: { id: "u1" },
+      resolve: (q) => {
+        if (q.table === "program_staff") return { data: [{ id: "ps1" }] };
+        return permissionWorldResolver({ roles: [{ id: "r1", name: "staff" }], direct: [] })(q) ?? { data: [] };
+      },
+    });
+    expect(sorted((await getSidebarAccess(f.client)).permittedModules)).toEqual(["schools"]);
+  });
+
   it("takes three round trips: auth, roles, then both grant reads together", async () => {
     const f = client(
       { roles: [{ id: "r1", name: "staff" }], direct: [], bundles: { r1: [{ module: "events", key: "events.view" }] } },
