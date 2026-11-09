@@ -158,7 +158,7 @@ function decideAsOf307(action: TakedownAction, access: TakedownAccess, story: Ta
 }
 
 /**
- * 311 at d8010de9. `can_submit` includes `can_publish`; `can_publish`
+ * 311 at cdb354e6. `can_submit` includes `can_publish`; `can_publish`
  * and `can_moderate` both include is_admin().
  *
  * Someone else — can_moderate_evangelism() only:
