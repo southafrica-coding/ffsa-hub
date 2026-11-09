@@ -25,8 +25,22 @@ export function showWithheldQueue(access: TakedownAccess): boolean {
   return canActOnOthersStory(access);
 }
 
+export const WITHHELD_QUEUE_LIMIT = 100;
+
+/** Set when the withheld query returned a full page, so more may exist. */
+export function withheldCapNote(count: number, limit = WITHHELD_QUEUE_LIMIT): string | null {
+  if (count < limit) return null;
+  return `Showing the first ${limit} withheld stories.`;
+}
+
 export function withoutStory<T extends { id: string }>(stories: T[], id: string): T[] {
   return stories.filter((story) => story.id !== id);
+}
+
+/** Drop the story locally, then refresh server data (section count included). */
+export function afterWithheldSuccess(onDone: (id: string) => void, refresh: () => void, id: string) {
+  onDone(id);
+  refresh();
 }
 
 function QueueItem({
@@ -168,6 +182,7 @@ function WithheldItem({
   const subject = takedownSubject(story);
   const canRepublish = decideTakedown("republish", access, subject).ok;
   const canDelete = decideTakedown("delete", access, subject).ok;
+  const router = useRouter();
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -187,7 +202,7 @@ function WithheldItem({
       return;
     }
     toast.success("Published");
-    onDone(story.id);
+    afterWithheldSuccess(onDone, () => router.refresh(), story.id);
   }
 
   async function remove() {
@@ -201,7 +216,7 @@ function WithheldItem({
     }
     toast.success("Story deleted");
     setConfirming(false);
-    onDone(story.id);
+    afterWithheldSuccess(onDone, () => router.refresh(), story.id);
   }
 
   return (
@@ -280,11 +295,15 @@ export function WithheldQueue({
   }, [sig, stories]);
 
   if (!showWithheldQueue(access)) return null;
+  const cap = withheldCapNote(stories.length);
   if (items.length === 0) {
     return <p className="px-5 py-6 text-sm text-[color:var(--text-secondary)] md:px-8">Nothing withheld.</p>;
   }
   return (
     <>
+      {cap && (
+        <p className="px-5 py-3 text-sm text-[color:var(--text-secondary)] md:px-8">{cap}</p>
+      )}
       {items.map((story) => (
         <WithheldItem
           key={story.id}

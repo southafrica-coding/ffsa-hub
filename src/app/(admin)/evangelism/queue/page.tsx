@@ -5,7 +5,7 @@ import { getEvangelismAccess } from "@/lib/auth/check-evangelism-access";
 import { present } from "@/lib/evangelism/http";
 import { Masthead, MastheadAction, SectionBar } from "@/components/ffsa";
 import { isEvangelismNotReady, listTestimonies } from "@/services/evangelism";
-import { QueueList, WithheldQueue, showWithheldQueue } from "./queue-list";
+import { QueueList, WITHHELD_QUEUE_LIMIT, WithheldQueue, showWithheldQueue } from "./queue-list";
 
 export default async function EvangelismQueuePage() {
   const supabase = await createClient();
@@ -30,7 +30,7 @@ export default async function EvangelismQueuePage() {
   const [{ data, error }, withheld] = await Promise.all([
     listTestimonies(supabase, { status: "submitted", limit: 100 }),
     moderator
-      ? listTestimonies(supabase, { status: "withheld", limit: 100 })
+      ? listTestimonies(supabase, { status: "withheld", limit: WITHHELD_QUEUE_LIMIT })
       : Promise.resolve({ data: [], error: null }),
   ]);
   const stories = error ? [] : await present(data, caller);

@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { PresentedTestimony } from "@/services/evangelism";
-import { WithheldQueue, showWithheldQueue, withoutStory } from "./queue-list";
+import { WithheldQueue, afterWithheldSuccess, showWithheldQueue, withheldCapNote, withoutStory } from "./queue-list";
 
 vi.mock("sonner", () => ({ toast: { error: () => {}, success: () => {} } }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: () => {} }) }));
@@ -49,6 +49,26 @@ describe("withoutStory", () => {
   });
 });
 
+describe("withheldCapNote", () => {
+  it("appears only once the list reaches the fetch limit", () => {
+    expect(withheldCapNote(99)).toBeNull();
+    expect(withheldCapNote(100)).toBe("Showing the first 100 withheld stories.");
+    expect(withheldCapNote(101)).toBe("Showing the first 100 withheld stories.");
+  });
+});
+
+describe("afterWithheldSuccess", () => {
+  it("updates the list and then refreshes server data", () => {
+    const order: string[] = [];
+    afterWithheldSuccess(
+      () => order.push("done"),
+      () => order.push("refresh"),
+      "id",
+    );
+    expect(order).toEqual(["done", "refresh"]);
+  });
+});
+
 describe("WithheldQueue", () => {
   it("shows the reason, Publish again, and Delete for a moderator", () => {
     const html = renderToStaticMarkup(createElement(WithheldQueue, { stories: [story()], access: moderator }));
@@ -71,6 +91,16 @@ describe("WithheldQueue", () => {
   it("renders nothing for a non-moderator", () => {
     const html = renderToStaticMarkup(createElement(WithheldQueue, { stories: [story()], access: publisher }));
     expect(html).toBe("");
+  });
+
+  it("notes when the withheld list is at the 100-story cap", () => {
+    const stories = Array.from({ length: 100 }, (_, i) =>
+      story({ id: `33333333-3333-4333-8333-${String(i).padStart(12, "0")}` }),
+    );
+    const atCap = renderToStaticMarkup(createElement(WithheldQueue, { stories, access: moderator }));
+    expect(atCap).toContain("Showing the first 100 withheld stories.");
+    const under = renderToStaticMarkup(createElement(WithheldQueue, { stories: stories.slice(0, 99), access: moderator }));
+    expect(under).not.toContain("Showing the first 100");
   });
 
   it("hides Publish again when there is no consent, and still offers Delete", () => {
