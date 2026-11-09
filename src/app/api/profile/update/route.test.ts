@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // PUT /api/profile/update — self-edit allowlist and the 315 department rules.
-// The Supabase client is faked; normalizeInsuranceWrite and the household
-// write are the real functions and only run when those fields are sent.
+// The Supabase client is faked. has_children is recorded by a household mock
+// and must not show up on a users update.
 
 type Row = {
   is_active: boolean;
@@ -26,10 +26,13 @@ const state = vi.hoisted(() => ({
   readError: null as { message: string } | null,
   hasStaffRole: false,
   roleError: null as { message: string } | null,
+  roleThrow: false,
+  readThrow: false,
   ministry: null as { slug: string; ministry_type: string } | null,
   updateError: null as { code?: string; message: string } | null,
   updates: [] as Array<{ table: string; payload: unknown }>,
   rpcs: [] as Array<{ name: string; args: unknown }>,
+  household: [] as unknown[],
 }));
 
 function builder(table: string) {
@@ -41,6 +44,7 @@ function builder(table: string) {
   q.in = chain;
   q.limit = chain;
   q.maybeSingle = async () => {
+    if (state.readThrow && table === "users") throw new Error("users read exploded");
     if (table === "staff_ministries") return { data: state.ministry, error: null };
     return { data: state.readError ? null : state.row, error: state.readError };
   };
@@ -59,11 +63,19 @@ function builder(table: string) {
   return q;
 }
 
+vi.mock("@/services/household", () => ({
+  setHouseholdHasChildren: async (_client: unknown, _userId: string, value: unknown) => {
+    state.household.push(value);
+    return { error: null };
+  },
+}));
+
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     auth: { getUser: async () => ({ data: { user: state.user } }) },
     rpc: async (name: string, args: unknown) => {
       state.rpcs.push({ name, args });
+      if (state.roleThrow && name === "has_any_role") throw new Error("role rpc exploded");
       return { data: state.hasStaffRole, error: state.roleError };
     },
     from: (table: string) => builder(table),
@@ -96,10 +108,13 @@ beforeEach(() => {
   state.readError = null;
   state.hasStaffRole = false;
   state.roleError = null;
+  state.roleThrow = false;
+  state.readThrow = false;
   state.ministry = null;
   state.updateError = null;
   state.updates = [];
   state.rpcs = [];
+  state.household = [];
 });
 
 describe("PUT /api/profile/update", () => {
@@ -213,8 +228,55 @@ describe("PUT /api/profile/update", () => {
     expect(cleared.status).toBe(200);
     const blank = await put({ department: "" });
     expect(blank.status).toBe(200);
-    expect(state.updates.map((u) => u.payload)).toEqual([{ department: null }, { department: "" }]);
+    expect(state.updates.map((u) => u.payload)).toEqual([{ department: null }, { department: null }]);
     expect(state.rpcs).toHaveLength(0);
+  });
+
+  it("stores whitespace-only department as null and trims a padded slug", async () => {
+    state.row.department = "media";
+    state.row.signup_type = "student";
+    const blank = await put({ department: " \t\n\u00a0 " });
+    expect(blank.status).toBe(200);
+    expect(state.updates.at(-1)?.payload).toEqual({ department: null });
+
+    state.row.department = null;
+    state.row.signup_type = "staff";
+    state.ministry = { slug: "media", ministry_type: "main" };
+    const padded = await put({ department: "  media  " });
+    expect(padded.status).toBe(200);
+    expect(state.updates.at(-1)?.payload).toEqual({ department: "media" });
+    expect(JSON.stringify(state.updates)).not.toContain("has_children");
+  });
+
+  it("writes has_children on the household, never on users", async () => {
+    const res = await put({ has_children: true, first_name: "Asha" });
+    expect(res.status).toBe(200);
+    expect(state.household).toEqual([true]);
+    expect(state.updates).toEqual([{ table: "users", payload: { first_name: "Asha" } }]);
+    expect(JSON.stringify(state.updates)).not.toContain("has_children");
+  });
+
+  it("has_children alone does not update users", async () => {
+    const res = await put({ has_children: false });
+    expect(res.status).toBe(200);
+    expect(state.household).toEqual([false]);
+    expect(state.updates).toHaveLength(0);
+  });
+
+  it("403 when the self-row lookup throws", async () => {
+    state.readThrow = true;
+    const res = await put({ first_name: "Asha" });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "This account is deactivated." });
+    expect(state.updates).toHaveLength(0);
+  });
+
+  it("403 when has_any_role throws", async () => {
+    state.roleThrow = true;
+    state.row.signup_type = "student";
+    const res = await put({ department: "media" });
+    expect(res.status).toBe(403);
+    expect(state.updates).toHaveLength(0);
   });
 
   it("400 for an unknown slug", async () => {

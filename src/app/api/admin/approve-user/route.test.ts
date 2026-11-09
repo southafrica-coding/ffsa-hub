@@ -6,6 +6,8 @@ const state = vi.hoisted(() => ({
   userUpdates: [] as unknown[],
   adminUpdates: [] as unknown[],
   adminClientCalls: 0,
+  adminUpdateError: null as { message: string } | null,
+  rpcThrow: false,
 }));
 
 function builder(kind: "user" | "admin") {
@@ -22,11 +24,14 @@ function builder(kind: "user" | "admin") {
     else state.adminUpdates.push(payload);
     return q;
   };
-  q.single = async () => ({ data: { id: "target-1", status: "active" }, error: null });
+  q.single = async () => ({
+    data: state.adminUpdateError ? null : { id: "target-1", status: "active" },
+    error: kind === "admin" ? state.adminUpdateError : null,
+  });
   q.then = (onFulfilled: (v: unknown) => unknown, onRejected?: (e: unknown) => unknown) => {
     const result = writing
-      ? { data: null, error: null }
-      : { data: state.isAdmin ? [{ roles: { name: "admin" } }] : [], error: null };
+      ? { data: null, error: kind === "admin" ? state.adminUpdateError : null }
+      : { data: [], error: null };
     return Promise.resolve(result).then(onFulfilled, onRejected);
   };
   return q;
@@ -36,6 +41,11 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     auth: { getUser: async () => ({ data: { user: state.user } }) },
     from: () => builder("user"),
+    rpc: async (name: string) => {
+      if (state.rpcThrow) throw new Error("is_admin exploded");
+      if (name === "is_admin") return { data: state.isAdmin, error: null };
+      return { data: null, error: null };
+    },
   }),
 }));
 
@@ -68,6 +78,8 @@ beforeEach(() => {
   state.userUpdates = [];
   state.adminUpdates = [];
   state.adminClientCalls = 0;
+  state.adminUpdateError = null;
+  state.rpcThrow = false;
 });
 
 describe("POST /api/admin/approve-user", () => {
@@ -81,20 +93,43 @@ describe("POST /api/admin/approve-user", () => {
     expect(state.adminUpdates).toHaveLength(0);
   });
 
-  it("writes status with the service role and job_title with the user client", async () => {
+  it("403 for a scoped admin (is_admin is false) with no writes", async () => {
+    state.isAdmin = false;
     const res = await post({ user_id: "target-1", job_title: "Pastor" });
-    expect(res.status).toBe(200);
-    expect(state.adminUpdates).toEqual([{ status: "active" }]);
-    expect(state.userUpdates).toEqual([{ job_title: "Pastor" }]);
-    expect(state.userUpdates).not.toEqual(
-      expect.arrayContaining([expect.objectContaining({ status: "active" })])
-    );
+    expect(res.status).toBe(403);
+    expect(state.adminClientCalls).toBe(0);
+    expect(state.adminUpdates).toHaveLength(0);
+    expect(state.userUpdates).toHaveLength(0);
   });
 
-  it("omits the user-client write when no job title is sent", async () => {
+  it("403 when is_admin throws, with no writes", async () => {
+    state.rpcThrow = true;
+    const res = await post({ user_id: "target-1", job_title: "Pastor" });
+    expect(res.status).toBe(403);
+    expect(state.adminClientCalls).toBe(0);
+    expect(state.adminUpdates).toHaveLength(0);
+  });
+
+  it("writes status and job_title together on the service role", async () => {
+    const res = await post({ user_id: "target-1", job_title: "Pastor" });
+    expect(res.status).toBe(200);
+    expect(state.adminUpdates).toEqual([{ status: "active", job_title: "Pastor" }]);
+    expect(state.userUpdates).toHaveLength(0);
+  });
+
+  it("writes only status when no job title is sent", async () => {
     const res = await post({ user_id: "target-1" });
     expect(res.status).toBe(200);
     expect(state.adminUpdates).toEqual([{ status: "active" }]);
+    expect(state.userUpdates).toHaveLength(0);
+  });
+
+  it("returns the update error without a second write after approval", async () => {
+    state.adminUpdateError = { message: "update failed" };
+    const res = await post({ user_id: "target-1", job_title: "Pastor" });
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ error: "update failed" });
+    expect(state.adminUpdates).toEqual([{ status: "active", job_title: "Pastor" }]);
     expect(state.userUpdates).toHaveLength(0);
   });
 

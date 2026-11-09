@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAuthedUser, hasAnyRole } from "@/lib/api-auth";
 import { validateDepartment } from "@/lib/users/validate-department";
+import { normalizeDepartment } from "@/lib/users/self-department";
 import { normalizeInsuranceWrite } from "@/lib/users/insurance-write";
 import { callerIsSuperAdmin } from "@/lib/auth/check-role-grant";
 import {
@@ -76,7 +77,10 @@ export async function PATCH(
     return NextResponse.json({ error: insuranceError }, { status: 400 });
   }
 
-  if ("department" in updateData && String(updateData.department ?? "").trim() !== "") {
+  if ("department" in updateData) {
+    updateData.department = normalizeDepartment(updateData.department);
+  }
+  if (updateData.department) {
     const departmentError = await validateDepartment(supabase, String(updateData.department));
     if (departmentError) {
       return NextResponse.json({ error: departmentError }, { status: 400 });

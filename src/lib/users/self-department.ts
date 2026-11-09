@@ -1,5 +1,7 @@
 // Department rules from users_guard_privileged_self_update (migration 315),
-// term for term. A blank value (NULL or whitespace) is always allowed.
+// term for term. The trigger trims department for every caller, and a blank
+// value (NULL, '', or only the btrim edge set) is stored as NULL and is
+// always allowed.
 // A non-blank value requires staff — has_any_role(['staff']) OR
 // signup_type IS NOT DISTINCT FROM 'staff' — and a staff_ministries row
 // whose ministry_type is 'main' and whose slug is not 'leadership_team'.
@@ -28,10 +30,20 @@ export type DepartmentVerdict =
   | { ok: true }
   | { ok: false; status: 400 | 403; error: string };
 
-/** nullif(btrim(value), '') IS NULL — the trigger's blank test. */
+// Same edges as 315's btrim(..., E' \t\n\r\f\x0B\u00a0'): space, tab, LF, CR,
+// form feed, vertical tab, non-breaking space. Not JavaScript's wider trim().
+const DEPARTMENT_EDGE = /^[ \t\n\r\f\v\u00a0]+|[ \t\n\r\f\v\u00a0]+$/g;
+
+/** Trim department the way the trigger does. Blank becomes NULL. */
+export function normalizeDepartment(value: unknown): string | null {
+  if (value == null) return null;
+  const trimmed = String(value).replace(DEPARTMENT_EDGE, "");
+  return trimmed === "" ? null : trimmed;
+}
+
+/** True when normalizeDepartment would store NULL. */
 export function isBlankDepartment(value: unknown): boolean {
-  if (value == null) return true;
-  return String(value).trim() === "";
+  return normalizeDepartment(value) == null;
 }
 
 /**
@@ -61,11 +73,11 @@ export function verdictForDepartment(args: {
   isStaff: boolean;
   ministry: StaffMinistryRef | null;
 }): DepartmentVerdict {
-  if (isBlankDepartment(args.value)) return { ok: true };
+  const slug = normalizeDepartment(args.value);
+  if (slug == null) return { ok: true };
   if (!args.isStaff) {
     return { ok: false, status: 403, error: ONLY_STAFF_DEPARTMENT };
   }
-  const slug = String(args.value);
   const ministry = args.ministry;
   if (!ministry || ministry.slug !== slug) {
     return { ok: false, status: 400, error: UNKNOWN_DEPARTMENT };

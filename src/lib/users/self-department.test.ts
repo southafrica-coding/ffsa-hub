@@ -3,6 +3,7 @@ import {
   callerMayChooseDepartment,
   isBlankDepartment,
   isDistinct,
+  normalizeDepartment,
   onlyAdminDepartmentMessage,
   selfServiceDepartmentOptions,
   verdictForDepartment,
@@ -14,6 +15,10 @@ const partTime = { slug: "sunday_band", ministry_type: "part_time" };
 
 describe("verdictForDepartment", () => {
   it("allows null, empty, and whitespace without a ministry lookup", () => {
+    expect(normalizeDepartment(null)).toBeNull();
+    expect(normalizeDepartment("")).toBeNull();
+    expect(normalizeDepartment(" \t\n\u00a0 ")).toBeNull();
+    expect(normalizeDepartment("  media  ")).toBe("media");
     expect(isBlankDepartment(null)).toBe(true);
     expect(isBlankDepartment("")).toBe(true);
     expect(isBlankDepartment("   ")).toBe(true);

@@ -4,7 +4,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { canUseStaffDecisions } from "@/lib/auth/check-okr-access";
 import { setMembershipRole } from "@/lib/users/set-membership-role";
 import { validateDepartment } from "@/lib/users/validate-department";
-import { LEADERSHIP_TEAM_SLUG, onlyAdminDepartmentMessage } from "@/lib/users/self-department";
+import {
+  LEADERSHIP_TEAM_SLUG,
+  normalizeDepartment,
+  onlyAdminDepartmentMessage,
+} from "@/lib/users/self-department";
 
 // POST /api/schools/staff-decisions/make-staff — after a recorded "yes",
 // switch the student's membership role to Staff and (optionally) set their
@@ -51,7 +55,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const dept = typeof department === "string" ? department.trim() : "";
+  const dept = normalizeDepartment(department) ?? "";
   // leadership_team grants the unscoped leadership_team role. Only an admin
   // sets it, through PATCH /api/users/[id] on the service role. This route
   // is Leadership Team, not is_admin().

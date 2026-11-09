@@ -3,11 +3,13 @@
 // (supabase/migrations/315_users_self_update_lockdown.sql, PR #544).
 // Hub Data owns that migration — do not copy it into this branch.
 //
-// 35 free self-edit columns. The trigger
+// 34 free self-edit columns. The trigger
 // users_guard_privileged_self_update allows these on the caller's own
 // row with no further check (once the caller is signed in and active).
-// has_children is legacy: the app writes households.has_children and does
-// not copy this column onto the users update.
+//
+// users.has_children is NOT granted. It is privileged: a non-admin change
+// is 42501. The profile route still accepts a has_children key and writes
+// households.has_children. It must never appear in a users UPDATE.
 
 export const USER_SELF_EDIT_COLUMNS = [
   "first_name",
@@ -44,7 +46,6 @@ export const USER_SELF_EDIT_COLUMNS = [
   "visa_expiry_date",
   "is_international",
   "essence_statement",
-  "has_children",
 ] as const;
 
 // Granted, but the trigger checks them. department: staff only, and never

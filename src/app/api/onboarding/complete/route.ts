@@ -31,7 +31,7 @@ export async function POST(request: Request) {
   }
 
   // This route writes status and accepted_at itself. It does not take a
-  // profile body — the wizard saves the 35 free columns before calling here.
+  // profile body — the wizard saves the 34 free columns before calling here.
   // Any JSON object with keys is rejected so nothing is dropped quietly.
   const raw = await request.text();
   if (raw.trim()) {

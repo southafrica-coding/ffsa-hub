@@ -7,8 +7,9 @@ import {
   rejectedFieldsMessage,
 } from "./self-edit-columns";
 
-// Copied from the GRANT UPDATE list in migration 315
-// (PR #544, head 3c109c3f). Order matches the SQL.
+// Free columns from migration 315's GRANT, without users.has_children
+// (privileged; the app writes households.has_children). 34 + department,
+// accepted_at, status, job_title = 38.
 const GRANT_FREE = [
   "first_name",
   "last_name",
@@ -44,12 +45,12 @@ const GRANT_FREE = [
   "visa_expiry_date",
   "is_international",
   "essence_statement",
-  "has_children",
 ];
 
 describe("315 column lists", () => {
-  it("matches the 35 free columns, the 3 checked columns, and job_title", () => {
+  it("matches the 34 free columns, the 3 checked columns, and job_title", () => {
     expect([...USER_SELF_EDIT_COLUMNS]).toEqual(GRANT_FREE);
+    expect(USER_SELF_EDIT_COLUMNS).not.toContain("has_children");
     expect([...USER_SELF_EDIT_CHECKED_COLUMNS]).toEqual([
       "department",
       "accepted_at",
@@ -61,7 +62,8 @@ describe("315 column lists", () => {
       ...USER_SELF_EDIT_CHECKED_COLUMNS,
       ...USER_ADMIN_CLIENT_COLUMNS,
     ];
-    expect(new Set(all).size).toBe(39);
+    expect(new Set(all).size).toBe(38);
+    expect(all).not.toContain("has_children");
   });
 });
 
@@ -87,7 +89,7 @@ describe("pickUserColumns", () => {
     );
   });
 
-  it("rejects job_title, status, and licence fields on the profile allowlist", () => {
+  it("rejects job_title, status, licence fields, and has_children", () => {
     const { picked, rejected } = pickUserColumns(
       {
         phone: "082",
@@ -97,6 +99,7 @@ describe("pickUserColumns", () => {
         base_driving_test_status: "passed",
         signup_type: "staff",
         household_id: "h1",
+        has_children: true,
       },
       allowed
     );
@@ -104,6 +107,7 @@ describe("pickUserColumns", () => {
     expect(rejected).toEqual([
       "base_driving_test_status",
       "drivers_licence_number",
+      "has_children",
       "household_id",
       "job_title",
       "signup_type",

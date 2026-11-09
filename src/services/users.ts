@@ -119,26 +119,21 @@ export async function completeOnboarding(supabase: Client, userId: string) {
 }
 
 /**
- * Approve a user: set status to 'active'.
+ * Approve a user on the service-role client: status active, and job_title
+ * when the caller sent one.
  *
- * status is in migration 315's GRANT, and is_admin() may change it on the
- * user client. This app still writes it with the service role so the
- * approval never rides on the caller's JWT. Do not pass the user client.
+ * One UPDATE so a failure cannot commit the approval and then error on the
+ * title (or the other way around). Do not pass the user client. The route
+ * must already have confirmed an unscoped admin via is_admin().
  */
-export async function activateApprovedUser(admin: Client, userId: string) {
-  return admin.from("users").update({ status: "active" }).eq("id", userId).select().single();
-}
-
-/**
- * The one column an admin writes through the user client under 315's GRANT.
- * Pass the admin's own Supabase client (RLS + is_admin()), never the service role.
- */
-export async function setApprovedJobTitle(
-  supabase: Client,
+export async function activateApprovedUser(
+  admin: Client,
   userId: string,
-  jobTitle: string | null
+  jobTitle?: string | null
 ) {
-  return supabase.from("users").update({ job_title: jobTitle }).eq("id", userId).select().single();
+  const update: Record<string, unknown> = { status: "active" };
+  if (jobTitle !== undefined) update.job_title = jobTitle;
+  return admin.from("users").update(update).eq("id", userId).select().single();
 }
 
 /**
