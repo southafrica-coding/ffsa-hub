@@ -853,6 +853,33 @@ export async function updateResponseStatus(
   return result;
 }
 
+/**
+ * Leader scratch note only. Writes application_admin_notes and does not
+ * touch application_responses, so status, reviewed_at, and email stay put.
+ * program_id is stored for the NOT NULL column; the row trigger overwrites
+ * it from the application.
+ */
+export async function saveApplicationAdminNote(
+  supabase: Client,
+  input: {
+    applicationResponseId: string;
+    programId: string;
+    notes: string | null;
+    updatedBy: string;
+  }
+) {
+  return supabase.from("application_admin_notes").upsert(
+    {
+      application_response_id: input.applicationResponseId,
+      program_id: input.programId,
+      notes: input.notes,
+      updated_by: input.updatedBy,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "application_response_id" }
+  );
+}
+
 // ────────────────────────────────────────────────────────────
 // REFERENCE SLOTS
 // ────────────────────────────────────────────────────────────

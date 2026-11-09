@@ -40,7 +40,7 @@ They can:
 { "response_id": "...", "notes": "Spoke on Tuesday.", "interview_outcome": "recommend" }
 ```
 
-The write uses the signed-in user client. A trigger rejects it unless `auth.uid()` is program staff and the assigned contact. This does not change application status, send email, or enroll anyone. Leaders still decide status through the existing responses route.
+The write uses the signed-in user client. A trigger rejects it unless `auth.uid()` is the assigned program staff member, or someone `can_manage_program_applications` accepts (a named leader, a schools manager, or an admin) writing their own row. Migration 306 opens that second path. A leader's row does not replace the staff member's. This does not change application status, send email, or enroll anyone. Leaders still decide status through the existing responses route, and they save an internal note on its own through `PUT /api/schools/applications/notes`.
 
 They cannot:
 

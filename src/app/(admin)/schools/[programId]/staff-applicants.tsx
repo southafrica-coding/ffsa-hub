@@ -4,7 +4,11 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Masthead } from "@/components/ffsa";
-import { INTERVIEW_OUTCOMES, type InterviewOutcome } from "@/lib/schools/interview-outcomes";
+import {
+  INTERVIEW_OUTCOME_LABEL,
+  INTERVIEW_OUTCOMES,
+  type InterviewOutcome,
+} from "@/lib/schools/interview-outcomes";
 
 export type StaffApplicant = {
   id: string;
@@ -15,13 +19,6 @@ export type StaffApplicant = {
   answers: Array<{ label: string; answer: string }>;
   notes: string;
   interviewOutcome: InterviewOutcome;
-};
-
-const OUTCOME_LABEL: Record<InterviewOutcome, string> = {
-  pending: "No decision yet",
-  recommend: "Recommend",
-  hold: "Hold",
-  decline: "Do not recommend",
 };
 
 // The school a staff member actually sees: the applicants assigned to them,
@@ -136,7 +133,7 @@ function ApplicantReview({
           >
             {INTERVIEW_OUTCOMES.map((value) => (
               <option key={value} value={value}>
-                {OUTCOME_LABEL[value]}
+                {INTERVIEW_OUTCOME_LABEL[value]}
               </option>
             ))}
           </select>

@@ -15,6 +15,11 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import {
+  INTERVIEW_OUTCOME_LABEL,
+  INTERVIEW_OUTCOMES,
+  type InterviewOutcome,
+} from "@/lib/schools/interview-outcomes";
 import { cn } from "@/lib/utils/cn";
 
 export type ReviewAnswer = { question_id: string; question_label: string; answer: string };
@@ -31,6 +36,29 @@ export type ReviewCheck = { label: string; value: string; ok: boolean };
 
 export type PipelineStage = { key: string; label: string; count: number };
 
+export type ShownInterviewReview = {
+  id: string;
+  authorName: string;
+  outcome: InterviewOutcome;
+  notes: string | null;
+  /** Already formatted for the row, e.g. "09 NOV 2026". */
+  when: string;
+  mine: boolean;
+};
+
+function saveButton(label: string, saving: boolean, onClick: () => void, disabled: boolean) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="shrink-0 border border-ink bg-ink px-3 py-2 font-mono text-[10px] font-bold tracking-[0.12em] text-white hover:bg-[#262622] disabled:opacity-50"
+    >
+      {saving ? "SAVING…" : label}
+    </button>
+  );
+}
+
 export function ApplicantReview({
   name,
   email,
@@ -44,6 +72,19 @@ export function ApplicantReview({
   checks,
   note,
   noteMeta,
+  noteSaving,
+  noteFeedback,
+  onSaveNote,
+  interviewReviews,
+  interviewLoading,
+  interviewReady,
+  interviewNotes,
+  interviewOutcome,
+  onInterviewNotesChange,
+  onInterviewOutcomeChange,
+  onSaveInterview,
+  interviewSaving,
+  interviewFeedback,
   acceptConsequence,
   busy,
   renderAnswer,
@@ -65,6 +106,21 @@ export function ApplicantReview({
   checks: ReviewCheck[];
   note: string;
   noteMeta: string | null;
+  noteSaving: boolean;
+  /** "Saved" or an error. Null when there is nothing to say. */
+  noteFeedback: { tone: "ok" | "error"; text: string } | null;
+  onSaveNote: () => void;
+  interviewReviews: ShownInterviewReview[];
+  interviewLoading: boolean;
+  /** False until this applicant's reviews have loaded, so a save cannot blank one. */
+  interviewReady: boolean;
+  interviewNotes: string;
+  interviewOutcome: InterviewOutcome;
+  onInterviewNotesChange: (value: string) => void;
+  onInterviewOutcomeChange: (value: InterviewOutcome) => void;
+  onSaveInterview: () => void;
+  interviewSaving: boolean;
+  interviewFeedback: { tone: "ok" | "error"; text: string } | null;
   /** Mono sentence beside the decision buttons, stating what Accept does. */
   acceptConsequence: string;
   busy: boolean;
@@ -104,6 +160,8 @@ export function ApplicantReview({
   }, []);
 
   if (!mounted) return null;
+
+  const locked = busy || noteSaving || interviewSaving;
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex flex-col bg-white">
@@ -244,15 +302,111 @@ export function ApplicantReview({
             </div>
           ))}
 
-          <div className="mt-auto border-t border-rule bg-bone px-5 py-4">
-            <div className="mono-label mb-2">{noteMeta ?? "Internal note"}</div>
+          <div className="section-bar mt-3.5">
+            <span className="section-bar-title">Interview notes</span>
+          </div>
+          {interviewLoading ? (
+            <p className="mono-label px-5 py-4">Loading…</p>
+          ) : interviewReviews.length === 0 ? (
+            <p className="px-5 py-4 text-[13px] text-[color:var(--text-tertiary)]">
+              No interview notes yet.
+            </p>
+          ) : (
+            interviewReviews.map((review) => (
+              <div key={review.id} className="border-b border-rule px-5 py-3">
+                <div className="flex items-baseline justify-between gap-2.5">
+                  <span className="text-[14px] font-bold text-ink">
+                    {review.authorName}
+                    {review.mine ? " · You" : ""}
+                  </span>
+                  <span className="shrink-0 text-right font-mono text-[9px] font-bold tracking-[0.12em] text-[color:var(--text-secondary)]">
+                    {INTERVIEW_OUTCOME_LABEL[review.outcome].toUpperCase()}
+                    {review.when ? ` · ${review.when}` : ""}
+                  </span>
+                </div>
+                <p className="mt-1 whitespace-pre-wrap text-[14px] leading-[1.5] text-ink">
+                  {review.notes?.trim() ? review.notes : "No written notes."}
+                </p>
+              </div>
+            ))
+          )}
+
+          <div className="border-b border-rule px-5 py-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="mono-label">Your interview notes</div>
+              {saveButton(
+                "SAVE INTERVIEW NOTES",
+                interviewSaving,
+                onSaveInterview,
+                locked || interviewLoading || !interviewReady
+              )}
+            </div>
+            <label className="mb-3 block">
+              <span className="mono-label mb-1.5 block">Interview outcome</span>
+              <select
+                value={interviewOutcome}
+                disabled={interviewLoading || !interviewReady}
+                onChange={(e) => onInterviewOutcomeChange(e.target.value as InterviewOutcome)}
+                className="w-full border border-ink bg-white px-2 py-2 text-[14px] text-ink focus:outline-none disabled:opacity-50"
+              >
+                {INTERVIEW_OUTCOMES.map((value) => (
+                  <option key={value} value={value}>
+                    {INTERVIEW_OUTCOME_LABEL[value]}
+                  </option>
+                ))}
+              </select>
+            </label>
             <textarea
+              value={interviewNotes}
+              onChange={(e) => onInterviewNotesChange(e.target.value)}
+              rows={4}
+              disabled={interviewLoading || !interviewReady}
+              placeholder="What you heard in the interview…"
+              aria-label="Your interview notes"
+              className="w-full resize-y border-0 border-l-[3px] border-ink bg-transparent pl-3 text-[14px] leading-[1.5] text-ink placeholder:text-[color:var(--text-tertiary)] focus:outline-none disabled:opacity-50"
+            />
+            {interviewFeedback && (
+              <p
+                className={cn(
+                  "mt-2 text-[13px]",
+                  interviewFeedback.tone === "ok"
+                    ? "text-[color:var(--green-text)]"
+                    : "text-destructive"
+                )}
+              >
+                {interviewFeedback.text}
+              </p>
+            )}
+          </div>
+
+          <div className="mt-auto border-t border-rule bg-bone px-5 py-4">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <label htmlFor="applicant-internal-note" className="mono-label">
+                {noteMeta ?? "Internal note"}
+              </label>
+              {saveButton("SAVE NOTE", noteSaving, onSaveNote, locked)}
+            </div>
+            <textarea
+              id="applicant-internal-note"
               value={note}
               onChange={(e) => onNoteChange(e.target.value)}
               rows={4}
               placeholder="What the team should know before deciding…"
               className="w-full resize-y border-0 border-l-[3px] border-ink bg-transparent pl-3 text-[14px] leading-[1.5] text-ink placeholder:text-[color:var(--text-tertiary)] focus:outline-none"
             />
+            <p className="mt-2 text-[12.5px] text-[color:var(--text-secondary)]">
+              Saves the note only. This applicant&apos;s status stays as it is.
+            </p>
+            {noteFeedback && (
+              <p
+                className={cn(
+                  "mt-2 text-[13px]",
+                  noteFeedback.tone === "ok" ? "text-[color:var(--green-text)]" : "text-destructive"
+                )}
+              >
+                {noteFeedback.text}
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -265,7 +419,7 @@ export function ApplicantReview({
         <div className="flex gap-2">
           <button
             type="button"
-            disabled={busy}
+            disabled={locked}
             onClick={() => onDecision("rejected")}
             className="border border-rule-strong px-4 py-2.5 font-mono text-[10px] font-bold tracking-[0.12em] text-[color:var(--text-secondary)] hover:border-ink hover:text-ink disabled:opacity-50"
           >
@@ -273,7 +427,7 @@ export function ApplicantReview({
           </button>
           <button
             type="button"
-            disabled={busy}
+            disabled={locked}
             onClick={() => onDecision("waitlisted")}
             className="border border-ink px-4 py-2.5 font-mono text-[10px] font-bold tracking-[0.12em] text-ink hover:bg-bone disabled:opacity-50"
           >
@@ -281,7 +435,7 @@ export function ApplicantReview({
           </button>
           <button
             type="button"
-            disabled={busy}
+            disabled={locked}
             onClick={() => onDecision("accepted")}
             className="bg-ink px-5 py-2.5 font-mono text-[10px] font-bold tracking-[0.14em] text-white hover:bg-[#262622] disabled:opacity-50"
           >
