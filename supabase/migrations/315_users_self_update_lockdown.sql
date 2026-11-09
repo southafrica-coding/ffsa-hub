@@ -106,7 +106,6 @@ GRANT UPDATE (
   passport_country, passport_number, passport_expiry_date,
   visa_category, visa_type, visa_expiry_date, is_international,
   essence_statement,
-  has_children,          -- legacy column; the app now writes households.has_children
   -- (a) self-edit, guarded by the trigger below
   department,            -- /api/profile/update
   accepted_at, status,   -- POST /api/onboarding/complete (completeOnboarding)
@@ -139,7 +138,7 @@ DECLARE
     'next_health_insurance_expiry_date', 'next_health_insurance_no_expiry',
     'passport_country', 'passport_number', 'passport_expiry_date',
     'visa_category', 'visa_type', 'visa_expiry_date', 'is_international',
-    'essence_statement', 'has_children'
+    'essence_statement'
   ];
 BEGIN
   -- Department: whitespace-only is stored as NULL, and real values are

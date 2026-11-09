@@ -150,7 +150,7 @@ DECLARE
     'next_health_insurance_expiry_date','next_health_insurance_no_expiry',
     'passport_country','passport_number','passport_expiry_date',
     'visa_category','visa_type','visa_expiry_date','is_international',
-    'essence_statement','has_children'];
+    'essence_statement'];
   c record;
   n_priv int := 0;
   setx text;
@@ -192,7 +192,7 @@ BEGIN
     PERFORM pg_temp.expect('self refused: ' || c.column_name,
       pg_temp.upd('me','me', format('%I = %s', c.column_name, pg_temp.newval(c.column_name, c.data_type))), 'err 42501');
   END LOOP;
-  PERFORM pg_temp.expect('privileged columns checked', n_priv::text, '41');
+  PERFORM pg_temp.expect('privileged columns checked', n_priv::text, '42');
 
   -- Named exploit paths, as the people who would try them.
   PERFORM pg_temp.expect('deactivated user reactivates self',
@@ -481,7 +481,7 @@ BEGIN
   PERFORM pg_temp.expect('authenticated column UPDATE count',
     (SELECT count(*)::text FROM pg_attribute a
       WHERE a.attrelid = 'public.users'::regclass AND a.attnum > 0 AND NOT a.attisdropped
-        AND has_column_privilege('authenticated', a.attrelid, a.attnum, 'UPDATE')), '39');
+        AND has_column_privilege('authenticated', a.attrelid, a.attnum, 'UPDATE')), '38');
   PERFORM pg_temp.expect('guard trigger is search_path-pinned',
     (SELECT proconfig::text FROM pg_proc WHERE proname = 'users_guard_privileged_self_update'), '{"search_path=\"\""}');
   PERFORM pg_temp.expect('guard is SECURITY INVOKER',
