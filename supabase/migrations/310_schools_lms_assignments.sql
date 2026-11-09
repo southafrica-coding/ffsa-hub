@@ -11,10 +11,14 @@
 -- is_program_staff). Does not read or write billing_courses, grades,
 -- grade_marks, the fee tables, or the legacy public.courses table.
 --
+-- 310 also redefines 305's lms_can_edit so a program_leader ROLE only
+-- counts for the program it is scoped to (it used to count for every
+-- program via can_manage_program_applications). See section 2.
+--
 -- Who can do what:
 --   • Editors — lms_can_edit(program) — create / edit / publish /
 --     delete assignments, read every submitted attempt and file in the
---     school, grade and release grades, delete draft-free assignments.
+--     school, grade and release grades, delete assignments nobody has submitted to.
 --   • Program staff — is_program_staff(program) — read published
 --     assignments, read every submitted attempt and file in the school,
 --     write grades and released_at. They cannot edit assignments.
@@ -30,17 +34,24 @@
 --     Client values for those columns are ignored.
 --   • allow_late = false and now() > due_at: submitting raises
 --     'late_not_allowed' (the API returns 409 first).
---   • A submitted attempt is immutable for everyone. Its files cannot
+--   • A submitted attempt is immutable for everyone and is never deleted,
+--     not even by an assignment / course cascade (23503). Its files cannot
 --     be added or removed. Its grade is frozen once a later attempt is
 --     submitted (releasing a still-unreleased grade stays allowed).
+--   • Submitting needs at least one piece of content of an accepted type
+--     ('empty_submission').
+--   • Nobody grades their own attempt.
+--   • created_at (all tables) and created_by (assignments) are stamped by
+--     trigger; client values are ignored.
 --   • The latest submitted attempt (highest attempt_no) is current:
 --     view lms_current_submissions, security_invoker.
 --
 -- Keeping student work:
 --   • lms_submissions.enrollment_id → enrollments ON DELETE RESTRICT.
---   • lms_grades.submission_id → lms_submissions ON DELETE RESTRICT, so
---     deleting a graded assignment (or its course) fails with 23503. The
---     API turns that into a 409.
+--   • lms_grades.submission_id → lms_submissions ON DELETE RESTRICT, and
+--     the delete guard refuses any submitted attempt, so deleting an
+--     assignment (or its course) that has submitted work fails with 23503.
+--     The API checks first and answers 409; 23503 → 409 is the backstop.
 --
 -- Storage: private bucket 'lms-submissions'. Object path
 --   {program_id}/{assignment_id}/{submission_id}/{random_uuid}.{ext}
@@ -168,6 +179,37 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.lms_grades
 -- SECURITY DEFINER so policies can walk assignment → course → program
 -- without recursing through RLS. All of them only answer yes / no (or a
 -- program id) for the caller's own auth.uid().
+
+-- F1: redefine 305's lms_can_edit with the program_leader role scoped to
+-- this program. 305 called can_manage_program_applications, whose last
+-- branch (304) accepts a program_leader role held for ANY program, so a
+-- leader of one school could edit another school's classroom — and with
+-- this migration, grade it. Same branches otherwise. This also closes that
+-- leak for 305's course / module / lesson policies, on purpose.
+-- NOTE: can_manage_program_applications itself still has the unscoped
+-- program_leader branch (applications); fixing it is out of scope here.
+CREATE OR REPLACE FUNCTION public.lms_can_edit(target_program_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+  SELECT public.has_schools_access(target_program_id)
+      OR public.has_permission_for('schools.approve_applications', target_program_id)
+      OR public.has_permission_for('schools.manage_enrollments', target_program_id)
+      OR EXISTS (
+        SELECT 1
+          FROM public.user_roles ur
+          JOIN public.roles r ON r.id = ur.role_id
+         WHERE ur.user_id = auth.uid()
+           AND r.name = 'program_leader'
+           AND (ur.scope_type IS NULL
+                OR (ur.scope_type = 'program' AND ur.scope_id = target_program_id))
+      );
+$$;
+REVOKE ALL ON FUNCTION public.lms_can_edit(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.lms_can_edit(uuid) TO authenticated, service_role;
 
 -- Graders: editors and program staff.
 CREATE OR REPLACE FUNCTION public.lms_can_grade(target_program_id uuid)
@@ -522,9 +564,11 @@ CREATE TRIGGER lms_submissions_guard
   BEFORE INSERT OR UPDATE ON public.lms_submissions
   FOR EACH ROW EXECUTE FUNCTION public.lms_submissions_guard();
 
--- Deleting a submitted attempt is refused (only drafts can go). Cascades
--- from a deleted assignment still run; a graded attempt is held by the
--- lms_grades RESTRICT FK.
+-- F2: a submitted attempt is never deleted, at any depth. Drafts still go
+-- (directly, or by cascade from their assignment / course). A cascade from
+-- a deleted assignment or course that reaches a submitted attempt raises
+-- 23503 so the API's RESTRICT → 409 mapping applies; a direct delete
+-- raises check_violation.
 CREATE OR REPLACE FUNCTION public.lms_submissions_delete_guard()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -532,7 +576,11 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 BEGIN
-  IF OLD.status = 'submitted' AND pg_trigger_depth() = 1 THEN
+  IF OLD.status = 'submitted' THEN
+    IF pg_trigger_depth() > 1 THEN
+      RAISE EXCEPTION 'This assignment has submitted student work and cannot be deleted'
+        USING ERRCODE = 'foreign_key_violation';
+    END IF;
     RAISE EXCEPTION 'A submitted attempt cannot be deleted'
       USING ERRCODE = 'check_violation';
   END IF;
@@ -705,12 +753,97 @@ CREATE TRIGGER lms_grades_guard
   BEFORE INSERT OR UPDATE OR DELETE ON public.lms_grades
   FOR EACH ROW EXECUTE FUNCTION public.lms_grades_guard();
 
+-- F4: created_at (all four tables) and created_by (assignments) are set
+-- here, not by the client. On UPDATE they are frozen. updated_at on UPDATE
+-- stays with handle_updated_at.
+CREATE OR REPLACE FUNCTION public.lms_stamp_created()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    NEW.created_at := now();
+    NEW.updated_at := now();
+    IF TG_TABLE_NAME = 'lms_assignments' AND auth.uid() IS NOT NULL THEN
+      NEW.created_by := auth.uid();
+    END IF;
+  ELSE
+    NEW.created_at := OLD.created_at;
+    IF TG_TABLE_NAME = 'lms_assignments' THEN
+      NEW.created_by := OLD.created_by;
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS lms_stamp_created ON public.lms_assignments;
+CREATE TRIGGER lms_stamp_created
+  BEFORE INSERT OR UPDATE ON public.lms_assignments
+  FOR EACH ROW EXECUTE FUNCTION public.lms_stamp_created();
+DROP TRIGGER IF EXISTS lms_stamp_created ON public.lms_submissions;
+CREATE TRIGGER lms_stamp_created
+  BEFORE INSERT OR UPDATE ON public.lms_submissions
+  FOR EACH ROW EXECUTE FUNCTION public.lms_stamp_created();
+DROP TRIGGER IF EXISTS lms_stamp_created ON public.lms_submission_files;
+CREATE TRIGGER lms_stamp_created
+  BEFORE INSERT OR UPDATE ON public.lms_submission_files
+  FOR EACH ROW EXECUTE FUNCTION public.lms_stamp_created();
+DROP TRIGGER IF EXISTS lms_stamp_created ON public.lms_grades;
+CREATE TRIGGER lms_stamp_created
+  BEFORE INSERT OR UPDATE ON public.lms_grades
+  FOR EACH ROW EXECUTE FUNCTION public.lms_stamp_created();
+
+-- F5: an attempt that becomes submitted must carry at least one piece of
+-- content of a type the assignment accepts (text / link / file). Extra
+-- content of other types is allowed. Files must already be on the draft.
+CREATE OR REPLACE FUNCTION public.lms_submissions_content_guard()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  a_types text[];
+BEGIN
+  IF NEW.status IS DISTINCT FROM 'submitted' THEN
+    RETURN NEW;
+  END IF;
+  IF TG_OP = 'UPDATE' AND OLD.status = 'submitted' THEN
+    RETURN NEW; -- lms_submissions_guard refuses the change
+  END IF;
+
+  SELECT a.submission_types INTO a_types
+    FROM public.lms_assignments a WHERE a.id = NEW.assignment_id;
+
+  IF NOT (
+       ('text' = ANY (a_types) AND NEW.body_text IS NOT NULL AND length(btrim(NEW.body_text)) > 0)
+    OR ('link' = ANY (a_types) AND NEW.link_url IS NOT NULL)
+    OR ('file' = ANY (a_types) AND TG_OP = 'UPDATE' AND EXISTS (
+          SELECT 1 FROM public.lms_submission_files f WHERE f.submission_id = NEW.id))
+  ) THEN
+    RAISE EXCEPTION 'empty_submission: hand in at least one of %', array_to_string(a_types, ', ')
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS lms_submissions_content_guard ON public.lms_submissions;
+CREATE TRIGGER lms_submissions_content_guard
+  BEFORE INSERT OR UPDATE ON public.lms_submissions
+  FOR EACH ROW EXECUTE FUNCTION public.lms_submissions_content_guard();
+
 -- Trigger functions are not callable directly.
 REVOKE ALL ON FUNCTION public.lms_assignments_guard() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.lms_submissions_guard() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.lms_submissions_delete_guard() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.lms_submission_files_guard() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.lms_grades_guard() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.lms_stamp_created() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.lms_submissions_content_guard() FROM PUBLIC, anon, authenticated;
 
 -- ────────────────────────────────────────────────────────────
 -- 4. Current attempt view
@@ -850,23 +983,35 @@ CREATE POLICY "LMS grades: graders read, students read released own"
     OR (released_at IS NOT NULL AND public.lms_submission_is_mine(submission_id))
   );
 
+-- F3: nobody grades their own attempt (a leader or staff member who is
+-- also enrolled in the school).
 DROP POLICY IF EXISTS "LMS grades: graders insert" ON public.lms_grades;
 CREATE POLICY "LMS grades: graders insert"
   ON public.lms_grades FOR INSERT TO authenticated
-  WITH CHECK (public.lms_submission_gradeable(submission_id));
+  WITH CHECK (
+    public.lms_submission_gradeable(submission_id)
+    AND NOT public.lms_submission_is_mine(submission_id)
+  );
 
 DROP POLICY IF EXISTS "LMS grades: graders update" ON public.lms_grades;
 CREATE POLICY "LMS grades: graders update"
   ON public.lms_grades FOR UPDATE TO authenticated
-  USING (public.lms_submission_gradeable(submission_id))
-  WITH CHECK (public.lms_submission_gradeable(submission_id));
+  USING (
+    public.lms_submission_gradeable(submission_id)
+    AND NOT public.lms_submission_is_mine(submission_id)
+  )
+  WITH CHECK (
+    public.lms_submission_gradeable(submission_id)
+    AND NOT public.lms_submission_is_mine(submission_id)
+  );
 
 -- Only editors may remove a grade outright (staff re-grade instead).
 DROP POLICY IF EXISTS "LMS grades: editors delete" ON public.lms_grades;
 CREATE POLICY "LMS grades: editors delete"
   ON public.lms_grades FOR DELETE TO authenticated
   USING (
-    EXISTS (
+    NOT public.lms_submission_is_mine(submission_id)
+    AND EXISTS (
       SELECT 1 FROM public.lms_submissions s
        WHERE s.id = submission_id
          AND public.lms_can_edit(public.lms_assignment_program(s.assignment_id))

@@ -9,8 +9,12 @@
 --
 -- People (program A = 5ca7…, program B = 4444…):
 --   1111 leader of A        2222 staff of A
---   3333 student S1 in A    3334 student S2 in A
+--   3333 student S1 in A    3334 student S2 in A (made staff of A at the end)
 --   7777 leader of B        8888 staff of B
+--   3335 student S3 in B
+--   9999 holds the program_leader ROLE scoped to B only (no program_leaders
+--        row anywhere). Live can_manage_program_applications lets that role
+--        through for every program; 310's lms_can_edit must not (F1).
 --   anon
 --
 -- Every role gets a PASS case and a deliberate FAIL case. A FAIL case that
@@ -99,9 +103,32 @@ RETURNS boolean LANGUAGE sql STABLE AS $$
         WHERE program_id = target_program_id AND user_id = auth.uid()
       );
 $$;
+CREATE TABLE public.roles (id uuid PRIMARY KEY, name text UNIQUE NOT NULL);
+CREATE TABLE public.user_roles (
+  user_id uuid NOT NULL REFERENCES public.users(id),
+  role_id uuid NOT NULL REFERENCES public.roles(id),
+  scope_type text,
+  scope_id uuid
+);
+-- The live shape (migration 304), including its UNSCOPED program_leader
+-- branch, so the test reproduces the production helper chain.
 CREATE OR REPLACE FUNCTION public.can_manage_program_applications(target_program_id uuid)
-RETURNS boolean LANGUAGE sql STABLE AS $$
-  SELECT public.has_schools_access(target_program_id);
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+  SELECT public.has_schools_access(target_program_id)
+      OR public.has_permission_for('schools.approve_applications', target_program_id)
+      OR public.has_permission_for('schools.manage_enrollments', target_program_id)
+      OR EXISTS (
+        SELECT 1
+          FROM public.user_roles ur
+          JOIN public.roles r ON r.id = ur.role_id
+         WHERE ur.user_id = auth.uid()
+           AND r.name = 'program_leader'
+      );
 $$;
 CREATE OR REPLACE FUNCTION public.is_program_staff(target_program_id uuid)
 RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
@@ -170,7 +197,12 @@ INSERT INTO public.users (id, first_name, last_name) VALUES
   ('33333333-3333-3333-3333-333333333333', 'Stu', 'One'),
   ('33343334-3334-3334-3334-333433343334', 'Stu', 'Two'),
   ('77777777-7777-7777-7777-777777777777', 'Bea', 'LeaderB'),
-  ('88888888-8888-8888-8888-888888888888', 'Bob', 'StaffB');
+  ('88888888-8888-8888-8888-888888888888', 'Bob', 'StaffB'),
+  ('33353335-3335-3335-3335-333533353335', 'Stu', 'Three'),
+  ('99999999-9999-9999-9999-999999999999', 'Rae', 'RoleB');
+INSERT INTO public.roles (id, name) VALUES ('70000000-0000-0000-0000-000000000001', 'program_leader');
+INSERT INTO public.user_roles (user_id, role_id, scope_type, scope_id) VALUES
+  ('99999999-9999-9999-9999-999999999999', '70000000-0000-0000-0000-000000000001', 'program', '44444444-0000-0000-0000-444444444444');
 INSERT INTO public.programs (id) VALUES
   ('5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48'),
   ('44444444-0000-0000-0000-444444444444');
@@ -182,7 +214,8 @@ INSERT INTO public.program_staff (program_id, user_id) VALUES
   ('44444444-0000-0000-0000-444444444444', '88888888-8888-8888-8888-888888888888');
 INSERT INTO public.enrollments (id, program_id, user_id) VALUES
   ('e5000000-0000-0000-0000-000000000001', '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48', '33333333-3333-3333-3333-333333333333'),
-  ('e5000000-0000-0000-0000-000000000002', '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48', '33343334-3334-3334-3334-333433343334');
+  ('e5000000-0000-0000-0000-000000000002', '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48', '33343334-3334-3334-3334-333433343334'),
+  ('e5000000-0000-0000-0000-000000000003', '44444444-0000-0000-0000-444444444444', '33353335-3335-3335-3335-333533353335');
 
 INSERT INTO public.lms_courses (id, program_id, title, published) VALUES
   ('c1000000-0000-0000-0000-000000000001', '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48', 'C1', true),
@@ -213,7 +246,7 @@ SELECT public.expect_error($q$INSERT INTO public.lms_assignments (course_id, tit
 SELECT public.expect_error($q$INSERT INTO public.lms_assignments (course_id, lesson_id, title, max_points) VALUES ('c1000000-0000-0000-0000-000000000001', 'eb000000-0000-0000-0000-00000000000b', 'x', 5)$q$, '23514', 'lesson from another course accepted');
 SELECT public.expect_error($q$UPDATE public.lms_assignments SET course_id = 'cb000000-0000-0000-0000-00000000000b' WHERE id = 'a5000000-0000-0000-0000-000000000001'$q$, '23514', 'assignment moved course');
 -- Enrolment of program A against program B's assignment.
-SELECT public.expect_error($q$INSERT INTO public.lms_submissions (assignment_id, enrollment_id, status) VALUES ('a5000000-0000-0000-0000-00000000000b', 'e5000000-0000-0000-0000-000000000001', 'submitted')$q$, '23514', 'cross-school submission accepted');
+SELECT public.expect_error($q$INSERT INTO public.lms_submissions (assignment_id, enrollment_id, status, body_text) VALUES ('a5000000-0000-0000-0000-00000000000b', 'e5000000-0000-0000-0000-000000000001', 'submitted', 'x')$q$, '23514', 'cross-school submission accepted');
 
 -- authenticated cannot TRUNCATE; anon has no table grants at all.
 SET ROLE authenticated;
@@ -471,7 +504,48 @@ SELECT public.expect_error($q$DELETE FROM public.lms_assignments WHERE id = 'a50
 SELECT public.expect_rows($q$UPDATE public.lms_submissions SET body_text = 'x' WHERE id = '5b000000-0000-0000-0000-000000000003'$q$, 0, 'leader edited a submitted attempt');
 -- FAIL: program B content.
 SELECT public.expect_error($q$INSERT INTO public.lms_assignments (course_id, title, max_points) VALUES ('cb000000-0000-0000-0000-00000000000b', 'x', 5)$q$, '42501', 'leader A created in program B');
+-- F4: client created_by / created_at are ignored on insert and frozen on update.
+INSERT INTO public.lms_assignments (id, course_id, title, max_points, created_by, created_at)
+VALUES ('a5000000-0000-0000-0000-00000000000f', 'c1000000-0000-0000-0000-000000000001', 'Spoofed', 5,
+        '77777777-7777-7777-7777-777777777777', '2000-01-01T00:00:00Z');
+UPDATE public.lms_assignments SET created_by = '77777777-7777-7777-7777-777777777777', created_at = '2000-01-01T00:00:00Z'
+ WHERE id = 'a5000000-0000-0000-0000-00000000000f';
+DO $$
+BEGIN
+  IF (SELECT created_by FROM public.lms_assignments WHERE id = 'a5000000-0000-0000-0000-00000000000f') <> '11111111-1111-1111-1111-111111111111' THEN
+    RAISE EXCEPTION 'FAIL: client created_by was kept';
+  END IF;
+  IF (SELECT created_at FROM public.lms_assignments WHERE id = 'a5000000-0000-0000-0000-00000000000f') < '2020-01-01' THEN
+    RAISE EXCEPTION 'FAIL: client created_at was kept';
+  END IF;
+END $$;
 RESET ROLE;
+
+-- ── F2: submitted attempts survive assignment / course deletes ──
+-- AS6 has a submitted, ungraded attempt (S2); AS7 only a draft (S2).
+INSERT INTO public.lms_assignments (id, course_id, title, max_points, published) VALUES
+  ('a5000000-0000-0000-0000-000000000006', 'c1000000-0000-0000-0000-000000000001', 'AS6', 10, true),
+  ('a5000000-0000-0000-0000-000000000007', 'c1000000-0000-0000-0000-000000000001', 'AS7', 10, true);
+INSERT INTO public.lms_submissions (id, assignment_id, enrollment_id, status, body_text) VALUES
+  ('5b000000-0000-0000-0000-000000000006', 'a5000000-0000-0000-0000-000000000006', 'e5000000-0000-0000-0000-000000000002', 'submitted', 'S2 work'),
+  ('5b000000-0000-0000-0000-000000000007', 'a5000000-0000-0000-0000-000000000007', 'e5000000-0000-0000-0000-000000000002', 'draft', 'S2 draft');
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '11111111-1111-1111-1111-111111111111', false);
+-- FAIL: an ungraded submitted attempt blocks the assignment and course delete.
+SELECT public.expect_error($q$DELETE FROM public.lms_assignments WHERE id = 'a5000000-0000-0000-0000-000000000006'$q$, '23503', 'assignment with a submitted ungraded attempt deleted');
+SELECT public.expect_error($q$DELETE FROM public.lms_courses WHERE id = 'c1000000-0000-0000-0000-000000000001'$q$, '23503', 'course with submitted work deleted');
+-- PASS: an assignment with only a draft can go; the draft cascades.
+SELECT public.expect_rows($q$DELETE FROM public.lms_assignments WHERE id = 'a5000000-0000-0000-0000-000000000007'$q$, 1, 'draft-only assignment not deleted');
+RESET ROLE;
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.lms_submissions WHERE id = '5b000000-0000-0000-0000-000000000006') THEN
+    RAISE EXCEPTION 'FAIL: submitted attempt was cascaded away';
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.lms_submissions WHERE id = '5b000000-0000-0000-0000-000000000007') THEN
+    RAISE EXCEPTION 'FAIL: draft did not cascade with its assignment';
+  END IF;
+END $$;
 
 -- ── Leader of B: nothing in A ─────────────────────────────
 SET ROLE authenticated;
@@ -480,6 +554,32 @@ SELECT public.expect_count('SELECT 1 FROM public.lms_assignments', 1, 'leader B 
 SELECT public.expect_count('SELECT 1 FROM public.lms_submissions', 0, 'leader B read A submissions');
 SELECT public.expect_rows($q$UPDATE public.lms_assignments SET title = 'x' WHERE id = 'a5000000-0000-0000-0000-000000000001'$q$, 0, 'leader B edited an A assignment');
 SELECT public.expect_error($q$INSERT INTO public.lms_grades (submission_id, points) VALUES ('5b000000-0000-0000-0000-000000000004', 1)$q$, '42501', 'leader B graded an A attempt');
+RESET ROLE;
+
+-- ── F1: program_leader ROLE scoped to B (9999) ────────────
+-- Fails on the unscoped helper chain; passes once 310 redefines lms_can_edit.
+INSERT INTO public.lms_submissions (id, assignment_id, enrollment_id, status, body_text)
+VALUES ('5b000000-0000-0000-0000-00000000000b', 'a5000000-0000-0000-0000-00000000000b', 'e5000000-0000-0000-0000-000000000003', 'submitted', 'S3 work');
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '99999999-9999-9999-9999-999999999999', false);
+-- FAIL: nothing of school A.
+SELECT public.expect_count($q$SELECT 1 FROM public.lms_assignments WHERE course_id = 'c1000000-0000-0000-0000-000000000001'$q$, 0, 'B-scoped role read A assignments');
+SELECT public.expect_count($q$SELECT 1 FROM public.lms_submissions WHERE enrollment_id IN ('e5000000-0000-0000-0000-000000000001', 'e5000000-0000-0000-0000-000000000002')$q$, 0, 'B-scoped role read A submissions');
+SELECT public.expect_count($q$SELECT 1 FROM public.lms_submission_files$q$, 0, 'B-scoped role read A files');
+SELECT public.expect_count($q$SELECT 1 FROM public.lms_grades$q$, 0, 'B-scoped role read A grades');
+SELECT public.expect_count($q$SELECT 1 FROM storage.objects$q$, 0, 'B-scoped role read A storage objects');
+SELECT public.expect_count($q$SELECT * FROM public.lms_grading_roster('5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48')$q$, 0, 'B-scoped role read A roster');
+SELECT public.expect_rows($q$UPDATE public.lms_assignments SET title = 'hijack' WHERE id = 'a5000000-0000-0000-0000-000000000001'$q$, 0, 'B-scoped role edited an A assignment');
+SELECT public.expect_rows($q$UPDATE public.lms_grades SET points = 0$q$, 0, 'B-scoped role edited an A grade');
+SELECT public.expect_error($q$INSERT INTO public.lms_grades (submission_id, points) VALUES ('5b000000-0000-0000-0000-000000000006', 1)$q$, '42501', 'B-scoped role graded an A attempt');
+SELECT public.expect_rows($q$UPDATE public.lms_courses SET title = 'hijack' WHERE id = 'c1000000-0000-0000-0000-000000000001'$q$, 0, 'B-scoped role edited an A course (305 leak)');
+-- PASS: school B, where the role is scoped.
+SELECT public.expect_count($q$SELECT * FROM public.lms_grading_roster('44444444-0000-0000-0000-444444444444')$q$, 1, 'B-scoped role should see the B roster');
+SELECT public.expect_rows($q$UPDATE public.lms_assignments SET title = 'B work v2' WHERE id = 'a5000000-0000-0000-0000-00000000000b'$q$, 1, 'B-scoped role could not edit a B assignment');
+INSERT INTO public.lms_assignments (course_id, title, max_points) VALUES ('cb000000-0000-0000-0000-00000000000b', 'Role-made', 5);
+INSERT INTO public.lms_grades (submission_id, points, feedback, released_at)
+VALUES ('5b000000-0000-0000-0000-00000000000b', 4, 'B grade', now());
+SELECT public.expect_count($q$SELECT 1 FROM public.lms_grades$q$, 1, 'B-scoped role should see the B grade');
 RESET ROLE;
 
 -- ── Late resubmission with allow_late=false (owner moves the date) ──
@@ -493,6 +593,71 @@ UPDATE public.lms_assignments SET due_at = now() - interval '1 minute' WHERE id 
 SET ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', '33333333-3333-3333-3333-333333333333', false);
 SELECT public.expect_error($q$INSERT INTO public.lms_submissions (assignment_id, enrollment_id, status, body_text) VALUES ('a5000000-0000-0000-0000-000000000002', 'e5000000-0000-0000-0000-000000000001', 'submitted', 'late resubmit')$q$, '23514', 'late resubmission accepted with allow_late=false');
+RESET ROLE;
+
+-- ── F5: submit needs content of an accepted type ──────────
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '33333333-3333-3333-3333-333333333333', false);
+DO $$
+BEGIN
+  BEGIN
+    INSERT INTO public.lms_submissions (assignment_id, enrollment_id, status)
+    VALUES ('a5000000-0000-0000-0000-000000000001', 'e5000000-0000-0000-0000-000000000001', 'submitted');
+    RAISE EXCEPTION 'FAIL: empty submit accepted';
+  EXCEPTION WHEN check_violation THEN
+    IF SQLERRM NOT LIKE 'empty_submission:%' THEN
+      RAISE EXCEPTION 'FAIL: empty submit raised % instead of empty_submission', SQLERRM;
+    END IF;
+  END;
+  BEGIN
+    -- AS4 takes text only; a link alone is not an accepted type.
+    INSERT INTO public.lms_submissions (assignment_id, enrollment_id, status, link_url)
+    VALUES ('a5000000-0000-0000-0000-000000000004', 'e5000000-0000-0000-0000-000000000001', 'submitted', 'https://example.org');
+    RAISE EXCEPTION 'FAIL: link-only submit accepted on a text-only assignment';
+  EXCEPTION WHEN check_violation THEN
+    IF SQLERRM NOT LIKE 'empty_submission:%' THEN
+      RAISE EXCEPTION 'FAIL: link-only submit raised % instead of empty_submission', SQLERRM;
+    END IF;
+  END;
+END $$;
+-- PASS: a file-only attempt on a file assignment (AS9: text, file); F4 on submissions.
+INSERT INTO public.lms_submissions (id, assignment_id, enrollment_id, created_at)
+VALUES ('5b000000-0000-0000-0000-000000000009', 'a5000000-0000-0000-0000-000000000009', 'e5000000-0000-0000-0000-000000000001', '2000-01-01T00:00:00Z');
+INSERT INTO public.lms_submission_files (submission_id, storage_path, file_name, mime, size_bytes) VALUES
+  ('5b000000-0000-0000-0000-000000000009',
+   '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48/a5000000-0000-0000-0000-000000000009/5b000000-0000-0000-0000-000000000009/0f0f0f0f-0000-4000-8000-000000000909.pdf',
+   'only.pdf', 'application/pdf', 100);
+SELECT public.expect_rows($q$UPDATE public.lms_submissions SET status = 'submitted' WHERE id = '5b000000-0000-0000-0000-000000000009'$q$, 1, 'file-only submit refused');
+DO $$
+BEGIN
+  IF (SELECT created_at FROM public.lms_submissions WHERE id = '5b000000-0000-0000-0000-000000000009') < '2020-01-01' THEN
+    RAISE EXCEPTION 'FAIL: client created_at kept on a submission';
+  END IF;
+END $$;
+RESET ROLE;
+
+-- ── F3: no self-grading (S2 becomes staff of A) ───────────
+INSERT INTO public.program_staff (program_id, user_id) VALUES
+  ('5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48', '33343334-3334-3334-3334-333433343334');
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '33343334-3334-3334-3334-333433343334', false);
+-- FAIL: grade own attempt (AS6).
+SELECT public.expect_error($q$INSERT INTO public.lms_grades (submission_id, points) VALUES ('5b000000-0000-0000-0000-000000000006', 10)$q$, '42501', 'staff graded their own attempt');
+-- PASS: grade someone else's (S1's on-time AS2 attempt).
+SELECT public.expect_rows($q$INSERT INTO public.lms_grades (submission_id, points)
+  SELECT id, 5 FROM public.lms_submissions
+   WHERE assignment_id = 'a5000000-0000-0000-0000-000000000002'
+     AND enrollment_id = 'e5000000-0000-0000-0000-000000000001'
+     AND status = 'submitted'$q$, 1, 'staff S2 could not grade S1');
+RESET ROLE;
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '22222222-2222-2222-2222-222222222222', false);
+INSERT INTO public.lms_grades (submission_id, points) VALUES ('5b000000-0000-0000-0000-000000000006', 7);
+RESET ROLE;
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '33343334-3334-3334-3334-333433343334', false);
+-- FAIL: update own grade.
+SELECT public.expect_rows($q$UPDATE public.lms_grades SET points = 10 WHERE submission_id = '5b000000-0000-0000-0000-000000000006'$q$, 0, 'staff edited their own grade');
 RESET ROLE;
 
 -- ── Owner-level backstops ─────────────────────────────────
