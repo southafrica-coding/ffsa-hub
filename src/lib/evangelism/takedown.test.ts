@@ -23,13 +23,13 @@ function story(over: Partial<TakedownStory> = {}): TakedownStory {
 }
 
 describe("OTHERS_STORY_TAKEDOWN", () => {
-  it("ships on migration 307's publish rule", () => {
-    expect(OTHERS_STORY_TAKEDOWN).toBe("publish");
-    expect(canActOnOthersStory(publisher)).toBe(true);
+  it("ships migration 311's moderate rule (do not merge before #537 and #539)", () => {
+    expect(OTHERS_STORY_TAKEDOWN).toBe("moderate");
+    expect(canActOnOthersStory(publisher)).toBe(false);
     expect(canActOnOthersStory(submitter)).toBe(false);
-    // The moderate flag does nothing until the constant is flipped.
-    expect(canActOnOthersStory({ ...submitter, moderate: true })).toBe(false);
-    expect(canActOnOthersStory({ submit: false, publish: false, unscopedAdmin: true })).toBe(false);
+    expect(canActOnOthersStory({ ...submitter, moderate: true })).toBe(true);
+    expect(canActOnOthersStory({ submit: false, publish: false, unscopedAdmin: true })).toBe(true);
+    expect(canActOnOthersStory(publisher, "publish")).toBe(true);
   });
 
   it("moderate variant: ministry leaders and unscoped admins, not plain publishers", () => {
@@ -41,28 +41,30 @@ describe("OTHERS_STORY_TAKEDOWN", () => {
   });
 });
 
-describe("decideTakedown — publish rule (307, active)", () => {
+describe("decideTakedown — publish rule (307, not the default here)", () => {
+  const decide307: typeof decideTakedown = (action, access, story) =>
+    decideTakedown(action, access, story, "publish");
   it("lets a publisher withhold a published story, own or someone else's", () => {
-    expect(decideTakedown("withhold", publisher, story())).toEqual({ ok: true });
-    expect(decideTakedown("withhold", publisher, story({ isMine: true }))).toEqual({ ok: true });
+    expect(decide307("withhold", publisher, story())).toEqual({ ok: true });
+    expect(decide307("withhold", publisher, story({ isMine: true }))).toEqual({ ok: true });
   });
 
   it("lets a publisher withhold submitted and withheld stories, not someone else's draft", () => {
-    expect(decideTakedown("withhold", publisher, story({ status: "submitted" })).ok).toBe(true);
-    expect(decideTakedown("withhold", publisher, story({ status: "withheld" })).ok).toBe(true);
-    const draft = decideTakedown("withhold", publisher, story({ status: "draft" }));
+    expect(decide307("withhold", publisher, story({ status: "submitted" })).ok).toBe(true);
+    expect(decide307("withhold", publisher, story({ status: "withheld" })).ok).toBe(true);
+    const draft = decide307("withhold", publisher, story({ status: "draft" }));
     expect(draft.ok).toBe(false);
     if (!draft.ok) expect(draft.status).toBe(409);
   });
 
   it("lets a publisher withhold their own draft — 307's guard only limits other people's", () => {
-    expect(decideTakedown("withhold", publisher, story({ isMine: true, status: "draft" })).ok).toBe(true);
+    expect(decide307("withhold", publisher, story({ isMine: true, status: "draft" })).ok).toBe(true);
   });
 
   it("refuses a non-publisher, including the author", () => {
     for (const access of [submitter, viewer]) {
       for (const isMine of [true, false]) {
-        const decision = decideTakedown("withhold", access, story({ isMine }));
+        const decision = decide307("withhold", access, story({ isMine }));
         expect(decision.ok).toBe(false);
         if (!decision.ok) expect(decision.status).toBe(403);
       }
@@ -70,12 +72,12 @@ describe("decideTakedown — publish rule (307, active)", () => {
   });
 
   it("republishes only from submitted or withheld, and only with consent", () => {
-    expect(decideTakedown("republish", publisher, story({ status: "withheld" })).ok).toBe(true);
-    expect(decideTakedown("republish", publisher, story({ status: "submitted" })).ok).toBe(true);
-    const published = decideTakedown("republish", publisher, story({ status: "published" }));
+    expect(decide307("republish", publisher, story({ status: "withheld" })).ok).toBe(true);
+    expect(decide307("republish", publisher, story({ status: "submitted" })).ok).toBe(true);
+    const published = decide307("republish", publisher, story({ status: "published" }));
     expect(published.ok).toBe(false);
     if (!published.ok) expect(published.status).toBe(409);
-    const noConsent = decideTakedown("republish", publisher, story({ status: "withheld", consentToShare: false }));
+    const noConsent = decide307("republish", publisher, story({ status: "withheld", consentToShare: false }));
     expect(noConsent.ok).toBe(false);
     if (!noConsent.ok) {
       expect(noConsent.status).toBe(400);
@@ -84,29 +86,29 @@ describe("decideTakedown — publish rule (307, active)", () => {
   });
 
   it("checks permission before consent, so a non-publisher is refused rather than told about consent", () => {
-    const decision = decideTakedown("republish", submitter, story({ status: "submitted", consentToShare: false, isMine: true }));
+    const decision = decide307("republish", submitter, story({ status: "submitted", consentToShare: false, isMine: true }));
     expect(decision.ok).toBe(false);
     if (!decision.ok) expect(decision.status).toBe(403);
   });
 
   it("lets the author delete their own draft, and a publisher delete any story", () => {
-    expect(decideTakedown("delete", submitter, story({ isMine: true, status: "draft" })).ok).toBe(true);
-    expect(decideTakedown("delete", publisher, story({ status: "published" })).ok).toBe(true);
-    expect(decideTakedown("delete", publisher, story({ isMine: true, status: "submitted" })).ok).toBe(true);
-    expect(decideTakedown("delete", publisher, story({ isMine: true, status: "withheld" })).ok).toBe(true);
-    expect(decideTakedown("delete", publisher, story({ isMine: true, status: "draft", consentToShare: false })).ok).toBe(true);
+    expect(decide307("delete", submitter, story({ isMine: true, status: "draft" })).ok).toBe(true);
+    expect(decide307("delete", publisher, story({ status: "published" })).ok).toBe(true);
+    expect(decide307("delete", publisher, story({ isMine: true, status: "submitted" })).ok).toBe(true);
+    expect(decide307("delete", publisher, story({ isMine: true, status: "withheld" })).ok).toBe(true);
+    expect(decide307("delete", publisher, story({ isMine: true, status: "draft", consentToShare: false })).ok).toBe(true);
   });
 
   it("refuses an author delete of submitted, withheld, or published stories", () => {
     for (const status of ["submitted", "withheld", "published"] as const) {
-      const decision = decideTakedown("delete", submitter, story({ isMine: true, status }));
+      const decision = decide307("delete", submitter, story({ isMine: true, status }));
       expect(decision.ok).toBe(false);
       if (!decision.ok) expect(decision.status).toBe(403);
     }
   });
 
   it("refuses a viewer deleting their own draft — submit is required", () => {
-    expect(decideTakedown("delete", viewer, story({ isMine: true, status: "draft" })).ok).toBe(false);
+    expect(decide307("delete", viewer, story({ isMine: true, status: "draft" })).ok).toBe(false);
   });
 });
 
@@ -249,15 +251,18 @@ describe("decideTakedown — moderate variant (311 at 13990826, not active)", ()
   it("keeps a reviewed story's status when 311 allows the author to edit it", () => {
     expect(statusAfterAuthorEdit("published", true, "moderate")).toBe("published");
     expect(statusAfterAuthorEdit("withheld", false, "moderate")).toBe("withheld");
-    expect(statusAfterAuthorEdit("published", true)).toBe("locked");
+    expect(statusAfterAuthorEdit("published", true, "publish")).toBe("locked");
+    expect(statusAfterAuthorEdit("published", true)).toBe("published");
     expect(statusAfterAuthorEdit("draft", true, "moderate")).toBe("submitted");
     expect(statusAfterAuthorEdit("submitted", false, "moderate")).toBe("draft");
   });
 
-  it("ignores withheld_by_other while the active rule is 307", () => {
+  it("hides Publish again on the active rule when a moderator owns the takedown", () => {
     const locked = story({ isMine: true, status: "withheld", withheldByOther: true });
-    expect(decideTakedown("republish", publisher, locked).ok).toBe(true);
-    expect(reviewedContentStaysLocked()).toBe(true);
+    expect(decideTakedown("republish", publisher, locked).ok).toBe(false);
+    expect(decideTakedown("withhold", publisher, locked).ok).toBe(false);
+    expect(decideTakedown("delete", publisher, locked).ok).toBe(true);
+    expect(reviewedContentStaysLocked()).toBe(false);
   });
 
   it("treats an unscoped admin as is_admin(), which implies publish, submit, and moderate", () => {
@@ -268,27 +273,28 @@ describe("decideTakedown — moderate variant (311 at 13990826, not active)", ()
 });
 
 describe("visibleTakedownControls", () => {
-  it("shows Unpublish and Delete on the feed only for a publisher, and only when published", () => {
+  it("shows Unpublish and Delete on the author's own published story, and on others' only for a moderator", () => {
     expect(visibleTakedownControls("feed", publisher, story())).toEqual({
-      withhold: true,
-      delete: true,
-      republish: false,
-    });
-    expect(visibleTakedownControls("feed", submitter, story({ isMine: true }))).toEqual({
       withhold: false,
       delete: false,
       republish: false,
     });
-    expect(visibleTakedownControls("feed", publisher, story({ status: "withheld" })).withhold).toBe(false);
+    expect(visibleTakedownControls("feed", submitter, story({ isMine: true }))).toEqual({
+      withhold: true,
+      delete: true,
+      republish: false,
+    });
+    expect(visibleTakedownControls("feed", moderator, story()).withhold).toBe(true);
+    expect(visibleTakedownControls("feed", moderator, story()).delete).toBe(true);
   });
 
-  it("shows Delete on My stories for the author's draft (submitter) and for a publisher's submitted and withheld", () => {
+  it("shows Delete on My stories for a draft or own withheld story, not a submitted one", () => {
     expect(visibleTakedownControls("mine", submitter, story({ isMine: true, status: "draft" })).delete).toBe(true);
     expect(visibleTakedownControls("mine", submitter, story({ isMine: true, status: "submitted" })).delete).toBe(false);
-    expect(visibleTakedownControls("mine", submitter, story({ isMine: true, status: "withheld" })).delete).toBe(false);
-    expect(visibleTakedownControls("mine", publisher, story({ isMine: true, status: "submitted" })).delete).toBe(true);
+    expect(visibleTakedownControls("mine", submitter, story({ isMine: true, status: "withheld" })).delete).toBe(true);
+    expect(visibleTakedownControls("mine", publisher, story({ isMine: true, status: "submitted" })).delete).toBe(false);
     expect(visibleTakedownControls("mine", publisher, story({ isMine: true, status: "withheld" })).delete).toBe(true);
-    expect(visibleTakedownControls("mine", publisher, story({ isMine: true, status: "draft" })).delete).toBe(true);
+    expect(visibleTakedownControls("mine", moderator, story({ isMine: true, status: "submitted" })).delete).toBe(true);
   });
 
   it("does not show Delete on a published story in My stories — that control lives on the feed", () => {

@@ -19,20 +19,41 @@ type Client = any;
 export const EVANGELISM_VIEW = "evangelism.view";
 export const EVANGELISM_SUBMIT = "evangelism.submit";
 export const EVANGELISM_PUBLISH = "evangelism.publish";
-const ALL_KEYS = [EVANGELISM_VIEW, EVANGELISM_SUBMIT, EVANGELISM_PUBLISH];
+export const EVANGELISM_MODERATE = "evangelism.moderate";
+const ALL_KEYS = [EVANGELISM_VIEW, EVANGELISM_SUBMIT, EVANGELISM_PUBLISH, EVANGELISM_MODERATE];
 
-export type EvangelismAccess = { view: boolean; submit: boolean; publish: boolean };
+export type EvangelismAccess = {
+  view: boolean;
+  submit: boolean;
+  publish: boolean;
+  /** evangelism.moderate, or is_admin(). Does not follow from publish. */
+  moderate: boolean;
+  /** Unscoped admin / super_admin, matching is_admin(). */
+  unscopedAdmin: boolean;
+};
 
-export const NO_EVANGELISM_ACCESS: EvangelismAccess = { view: false, submit: false, publish: false };
-const FULL: EvangelismAccess = { view: true, submit: true, publish: true };
+export const NO_EVANGELISM_ACCESS: EvangelismAccess = {
+  view: false,
+  submit: false,
+  publish: false,
+  moderate: false,
+  unscopedAdmin: false,
+};
+const ADMIN_ACCESS: EvangelismAccess = {
+  view: true,
+  submit: true,
+  publish: true,
+  moderate: true,
+  unscopedAdmin: true,
+};
 
-/** Expand held keys down the hierarchy: publish ⇒ submit ⇒ view. Pure. */
+/** Expand held keys: publish ⇒ submit ⇒ view. moderate is its own key. */
 export function accessFromKeys(keys: Iterable<string>): EvangelismAccess {
   const held = new Set(keys);
   const publish = held.has(EVANGELISM_PUBLISH);
   const submit = publish || held.has(EVANGELISM_SUBMIT);
   const view = submit || held.has(EVANGELISM_VIEW);
-  return { view, submit, publish };
+  return { view, submit, publish, moderate: held.has(EVANGELISM_MODERATE), unscopedAdmin: false };
 }
 
 function keysOf(rows: unknown): string[] {
@@ -65,12 +86,9 @@ export async function getEvangelismAccess(supabase: Client, userId: string): Pro
   const names = roles
     .filter((r) => r.scope_type == null)
     .flatMap((r) => (Array.isArray(r.roles) ? r.roles.map((x) => x.name) : r.roles ? [r.roles.name] : []));
-  if (names.includes("super_admin") || names.includes("admin")) return FULL;
+  if (names.includes("super_admin") || names.includes("admin")) return ADMIN_ACCESS;
 
   const keys = keysOf(direct);
-  // A direct publish grant already answers everything.
-  if (keys.includes(EVANGELISM_PUBLISH)) return FULL;
-
   const roleIds = roles.map((r) => r.role_id).filter((id): id is string => typeof id === "string");
   if (roleIds.length > 0) {
     const { data: bundled } = await supabase

@@ -59,7 +59,12 @@ export default async function EvangelismPage() {
       <EvangelismBoard
         published={publishedOut}
         mine={access.submit ? mineOut : null}
-        access={{ submit: access.submit, publish: access.publish }}
+        access={{
+          submit: access.submit,
+          publish: access.publish,
+          moderate: access.moderate,
+          unscopedAdmin: access.unscopedAdmin,
+        }}
         ministries={ministries}
       />
     </div>

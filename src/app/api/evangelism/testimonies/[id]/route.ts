@@ -86,10 +86,7 @@ export async function GET(_request: Request, { params }: Ctx): Promise<Response>
 }
 
 function takedownAccess(caller: Caller): TakedownAccess {
-  // moderate / unscopedAdmin are unset until getEvangelismAccess learns
-  // them. Reading them here means flipping OTHERS_STORY_TAKEDOWN is enough
-  // for the route once those fields exist.
-  const extra = caller.access as TakedownAccess;
+  const extra = caller.access;
   return {
     submit: caller.access.submit,
     publish: caller.access.publish,

@@ -13,16 +13,13 @@ export type OthersStoryTakedownRule = "publish" | "moderate";
 /**
  * Which takedown matrix is live.
  *
- * "publish" — migration 307, what main enforces today.
- *
- * Flip this one line to "moderate" once migration 311
- * (cdb354e6, `311_evangelism_open_publish_and_moderate.sql`) is applied.
- * That matrix is `decideAsOf311` below: `can_moderate_evangelism()` =
- * is_admin() OR evangelism.moderate. Also pass `moderate` and
- * `unscopedAdmin` through from getEvangelismAccess, or other people's
- * stories stay closed.
+ * "moderate" — migration 311 at cdb354e6. Do not merge this branch
+ * before #537 (the migration) and #539 (the helper and UI). Other
+ * people's stories need evangelism.moderate or an unscoped admin
+ * (`can_moderate_evangelism()` = is_admin() OR evangelism.moderate).
+ * `withheld_by_other` comes from evangelism_attribution.
  */
-export const OTHERS_STORY_TAKEDOWN: OthersStoryTakedownRule = "publish";
+export const OTHERS_STORY_TAKEDOWN: OthersStoryTakedownRule = "moderate";
 
 export type TakedownAccess = {
   submit: boolean;

@@ -38,8 +38,8 @@ function markup(props: Parameters<typeof StoryActions>[0]) {
 const noop = () => {};
 
 describe("StoryActions", () => {
-  it("shows Unpublish and Delete on a published feed story for a publisher", () => {
-    const html = markup({ story: story(), surface: "feed", access: publisher, onResult: noop });
+  it("shows Unpublish and Delete on the author's own published story", () => {
+    const html = markup({ story: story({ is_mine: true }), surface: "feed", access: publisher, onResult: noop });
     expect(html).toContain("Unpublish");
     expect(html).toContain("Delete");
     expect(html).toContain("min-h-11");
@@ -48,13 +48,8 @@ describe("StoryActions", () => {
     expect(html).not.toContain("Publish again");
   });
 
-  it("shows nothing on the feed for someone who cannot publish", () => {
-    const html = markup({
-      story: story({ is_mine: true }),
-      surface: "feed",
-      access: submitter,
-      onResult: noop,
-    });
+  it("shows nothing on someone else's published story without moderate", () => {
+    const html = markup({ story: story({ is_mine: false }), surface: "feed", access: publisher, onResult: noop });
     expect(html).toBe("");
   });
 
@@ -89,14 +84,13 @@ describe("StoryActions", () => {
     expect(html).not.toContain("Unpublish");
   });
 
-  it("shows Delete for a publisher's own submitted story", () => {
+  it("does not show Delete for the author's own submitted story", () => {
     const html = markup({
       story: story({ is_mine: true, status: "submitted" }),
       surface: "mine",
       access: publisher,
       onResult: noop,
     });
-    expect(html).toContain("Delete");
-    expect(html).not.toContain("Unpublish");
+    expect(html).not.toContain("Delete");
   });
 });

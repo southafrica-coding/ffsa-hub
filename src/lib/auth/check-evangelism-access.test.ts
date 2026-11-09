@@ -10,14 +10,22 @@ async function access(world: PermissionWorld) {
   return { result: await getEvangelismAccess(fake.client, "u"), queries: fake.queries };
 }
 
-const ALL = { view: true, submit: true, publish: true };
-const NONE = { view: false, submit: false, publish: false };
+const ALL = { view: true, submit: true, publish: true, moderate: false, unscopedAdmin: false };
+const ADMIN = { view: true, submit: true, publish: true, moderate: true, unscopedAdmin: true };
+const NONE = { view: false, submit: false, publish: false, moderate: false, unscopedAdmin: false };
 
 describe("accessFromKeys", () => {
   it("expands publish ⇒ submit ⇒ view", () => {
     expect(accessFromKeys(["evangelism.publish"])).toEqual(ALL);
-    expect(accessFromKeys(["evangelism.submit"])).toEqual({ view: true, submit: true, publish: false });
-    expect(accessFromKeys(["evangelism.view"])).toEqual({ view: true, submit: false, publish: false });
+    expect(accessFromKeys(["evangelism.submit"])).toEqual({ view: true, submit: true, publish: false, moderate: false, unscopedAdmin: false });
+    expect(accessFromKeys(["evangelism.view"])).toEqual({ view: true, submit: false, publish: false, moderate: false, unscopedAdmin: false });
+    expect(accessFromKeys(["evangelism.moderate"])).toEqual({
+      view: false,
+      submit: false,
+      publish: false,
+      moderate: true,
+      unscopedAdmin: false,
+    });
     expect(accessFromKeys([])).toEqual(NONE);
   });
 
@@ -28,15 +36,15 @@ describe("accessFromKeys", () => {
 
 describe("getEvangelismAccess", () => {
   it("gives super_admin and admin everything without a key", async () => {
-    expect((await access({ roles: [{ id: "a", name: "admin" }], direct: [] })).result).toEqual(ALL);
-    expect((await access({ roles: [{ id: "s", name: "super_admin" }], direct: [] })).result).toEqual(ALL);
+    expect((await access({ roles: [{ id: "a", name: "admin" }], direct: [] })).result).toEqual(ADMIN);
+    expect((await access({ roles: [{ id: "s", name: "super_admin" }], direct: [] })).result).toEqual(ADMIN);
   });
 
   it("expands a direct grant down the hierarchy", async () => {
     expect(
       (await access({ roles: [{ id: "staff", name: "staff" }], direct: [{ module: "evangelism", key: "evangelism.submit" }] }))
         .result
-    ).toEqual({ view: true, submit: true, publish: false });
+    ).toEqual({ view: true, submit: true, publish: false, moderate: false, unscopedAdmin: false });
     expect((await access({ roles: [], direct: [{ module: "evangelism", key: "evangelism.publish" }] })).result).toEqual(ALL);
   });
 
@@ -49,7 +57,7 @@ describe("getEvangelismAccess", () => {
           bundles: { r1: [{ module: "evangelism", key: "evangelism.view" }] },
         })
       ).result
-    ).toEqual({ view: true, submit: false, publish: false });
+    ).toEqual({ view: true, submit: false, publish: false, moderate: false, unscopedAdmin: false });
   });
 
   it("merges a direct key with a higher bundle key", async () => {
@@ -87,7 +95,7 @@ describe("getEvangelismAccess", () => {
           ? { data: [{ role_id: "a", scope_type: null, roles: { name: "admin" } }] }
           : { data: [] },
     });
-    expect(await getEvangelismAccess(unscoped.client, "u")).toEqual(ALL);
+    expect(await getEvangelismAccess(unscoped.client, "u")).toEqual(ADMIN);
   });
 
   it("does not count another module's grant", async () => {
