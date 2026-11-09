@@ -272,6 +272,73 @@ SELECT pg_temp.expect('grade INSERT adm in B', pg_temp.ins_grade('adm', 'pb'), '
 SELECT pg_temp.expect('grade INSERT off in A', pg_temp.ins_grade('off', 'pa'), 'err 42501');
 SELECT pg_temp.expect('grade INSERT anon in A', pg_temp.ins_grade('anon', 'pa'), 'err 42501');
 
+-- ── 3b. grades UPDATE across programs ──
+-- The grade sits on an enrollment whose user is the caller, so the own-row
+-- SELECT policy reveals it and the UPDATE policy is what decides. A passes.
+-- B fails USING and affects 0 rows (a WITH CHECK failure would be err 42501).
+CREATE FUNCTION pg_temp.upd_grade(who text, prog text) RETURNS text LANGUAGE plpgsql AS $$
+DECLARE eid uuid; gid uuid; r text;
+BEGIN
+  INSERT INTO public.enrollments (user_id, program_id)
+  VALUES (
+    (current_setting('t313.ids')::jsonb->>who)::uuid,
+    current_setting('t313.' || prog)::uuid
+  )
+  RETURNING id INTO eid;
+  INSERT INTO public.grades (enrollment_id, course_id, letter_grade)
+  VALUES (eid, current_setting('t313.c' || right(prog, 1))::uuid, 'A')
+  RETURNING id INTO gid;
+  r := pg_temp.try(who, format('UPDATE public.grades SET letter_grade = %L WHERE id = %L', 'P', gid));
+  DELETE FROM public.enrollments WHERE id = eid;
+  RETURN r;
+END $$;
+
+-- No WHERE. Grades on appl's enrollments (mA cannot see them) and on mA's
+-- own enrollments. B's letters must stay A even for the row mA cannot see.
+CREATE FUNCTION pg_temp.upd_grade_unfiltered(who text) RETURNS text LANGUAGE plpgsql AS $$
+DECLARE
+  own_a uuid; own_b uuid;
+  res text;
+BEGIN
+  INSERT INTO public.grades (enrollment_id, course_id, letter_grade) VALUES
+    (current_setting('t313.ea')::uuid, current_setting('t313.ca')::uuid, 'A'),
+    (current_setting('t313.eb')::uuid, current_setting('t313.cb')::uuid, 'A');
+  INSERT INTO public.enrollments (user_id, program_id)
+  VALUES ((current_setting('t313.ids')::jsonb->>who)::uuid, current_setting('t313.pa')::uuid)
+  RETURNING id INTO own_a;
+  INSERT INTO public.enrollments (user_id, program_id)
+  VALUES ((current_setting('t313.ids')::jsonb->>who)::uuid, current_setting('t313.pb')::uuid)
+  RETURNING id INTO own_b;
+  INSERT INTO public.grades (enrollment_id, course_id, letter_grade) VALUES
+    (own_a, current_setting('t313.ca')::uuid, 'A'),
+    (own_b, current_setting('t313.cb')::uuid, 'A');
+  BEGIN
+    PERFORM set_config('request.jwt.claims',
+      json_build_object('sub', current_setting('t313.ids')::jsonb->>who, 'role', 'authenticated')::text, true);
+    EXECUTE 'SET LOCAL ROLE authenticated';
+    UPDATE public.grades SET letter_grade = 'P';
+    RESET ROLE;
+    RAISE EXCEPTION USING ERRCODE = 'P0313', MESSAGE =
+      'A_updated=' || (SELECT count(*) FROM public.grades g
+                       JOIN public.enrollments e ON e.id = g.enrollment_id
+                       WHERE e.program_id = current_setting('t313.pa')::uuid
+                         AND g.letter_grade = 'P')
+      || ',B_updated=' || (SELECT count(*) FROM public.grades g
+                           JOIN public.enrollments e ON e.id = g.enrollment_id
+                           WHERE e.program_id = current_setting('t313.pb')::uuid
+                             AND g.letter_grade IS DISTINCT FROM 'A');
+  EXCEPTION WHEN SQLSTATE 'P0313' THEN res := SQLERRM;
+            WHEN OTHERS THEN res := 'err ' || SQLSTATE;
+  END;
+  DELETE FROM public.grades
+   WHERE enrollment_id IN (current_setting('t313.ea')::uuid, current_setting('t313.eb')::uuid, own_a, own_b);
+  DELETE FROM public.enrollments WHERE id IN (own_a, own_b);
+  RETURN res;
+END $$;
+SELECT pg_temp.expect('grade UPDATE mA  on A', pg_temp.upd_grade('mA', 'pa'), 'rows=1');
+SELECT pg_temp.expect('grade UPDATE mA  on B', pg_temp.upd_grade('mA', 'pb'), 'rows=0');
+SELECT pg_temp.expect('grade unfiltered UPDATE mA leaves B', pg_temp.upd_grade_unfiltered('mA'), 'A_updated=2,B_updated=0');
+
 -- ── 4. helper functions directly ──
 SELECT pg_temp.expect('has_permission_for(manage,A) mA',  pg_temp.fn('mA',  format('public.has_permission_for(''schools.manage'', %L)', current_setting('t313.pa'))), 'true');
 SELECT pg_temp.expect('has_permission_for(manage,B) mA',  pg_temp.fn('mA',  format('public.has_permission_for(''schools.manage'', %L)', current_setting('t313.pb'))), 'false');
@@ -288,6 +355,25 @@ SELECT pg_temp.expect('has_schools_access() off',  pg_temp.fn('off', 'public.has
 SELECT pg_temp.expect('has_schools_access(A) off', pg_temp.fn('off', format('public.has_schools_access(%L)', current_setting('t313.pa'))), 'false');
 SELECT pg_temp.expect('is_admin() adm',            pg_temp.fn('adm', 'public.is_admin()'), 'true');
 SELECT pg_temp.expect('enrollment_program_id(ea)', pg_temp.fn('mA', format('public.enrollment_program_id(%L)', current_setting('t313.ea'))), current_setting('t313.pa'));
+-- NULL and an unknown id both miss, so the helper returns NULL. Feeding
+-- that to the grade policy denies a scoped holder: has_permission_for
+-- compares scope_id, and NULL does not match. An unscoped holder still
+-- gets true, because scope_type IS NULL matches without comparing the
+-- target, and the grade policy allows them. An admin's
+-- has_permission_for(..., NULL) is false (no schools.manage grant) but
+-- is_admin() is true, so the grade policy allows them too.
+SELECT pg_temp.expect('enrollment_program_id(NULL)',
+  pg_temp.fn('mA', 'public.enrollment_program_id(NULL)'), 'null');
+SELECT pg_temp.expect('enrollment_program_id(unknown)',
+  pg_temp.fn('mA', format('public.enrollment_program_id(%L)', gen_random_uuid())), 'null');
+SELECT pg_temp.expect('has_permission_for(manage,NULL) mA',
+  pg_temp.fn('mA', 'public.has_permission_for(''schools.manage'', NULL)'), 'false');
+SELECT pg_temp.expect('grade policy fed NULL program mA',
+  pg_temp.fn('mA', 'public.is_admin() OR public.has_permission_for(''schools.manage'', public.enrollment_program_id(NULL))'),
+  'false');
+SELECT pg_temp.expect('grade policy fed unknown enrollment mA',
+  pg_temp.fn('mA', format('public.is_admin() OR public.has_permission_for(''schools.manage'', public.enrollment_program_id(%L))', gen_random_uuid())),
+  'false');
 SELECT pg_temp.expect('anon cannot call enrollment_program_id',
   pg_temp.try('anon', format('SELECT public.enrollment_program_id(%L)', current_setting('t313.ea'))), 'err 42501');
 SELECT pg_temp.expect('anon has_permission is false (EXECUTE kept)',
