@@ -2030,6 +2030,13 @@ function ApplicantsTab({
               `they have no account yet. Use Accept on each so they get an invite.`
           );
         }
+        const emailWarnings: string[] = data.emailWarnings ?? [];
+        if (emailWarnings.length > 0) {
+          alert(
+            `${emailWarnings.length} acceptance email${emailWarnings.length === 1 ? " was" : "s were"} not sent:\n\n` +
+              emailWarnings.join("\n")
+          );
+        }
         setSelectedIds(new Set());
         setBulkStatus("");
         router.refresh();
@@ -2165,10 +2172,16 @@ function ApplicantsTab({
           }),
         });
 
+        const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          const data = await res.json();
           alert(data.error || "Failed to accept application");
           return;
+        }
+        // Accepted, but the email didn't go out — say so. The route has
+        // returned this for months; nothing showed it, so a failed send
+        // looked exactly like a successful one.
+        if (data.emailWarning) {
+          alert(`Accepted — but the student was not emailed.\n\n${data.emailWarning}`);
         }
 
         setReviewingResponse(null);

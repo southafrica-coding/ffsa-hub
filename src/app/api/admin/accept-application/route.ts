@@ -10,7 +10,10 @@ import {
 import { setupProgramBillingOnAcceptance } from "@/services/billing-generation";
 import { sendTransactional } from "@/lib/email/send-transactional";
 import { applicationAcceptedEmailHtml } from "@/lib/email/templates/application-accepted";
-import { enrollmentConfirmationEmailHtml } from "@/lib/email/templates/enrollment-confirmation";
+import {
+  escapeIlike,
+  sendAcceptanceToLinkedAccount,
+} from "@/lib/schools/acceptance-email";
 import { userCanManageProgram } from "@/lib/auth/check-schools-access";
 import { userCanReadApplication, APPLICATIONS_EXPIRED_MESSAGE } from "@/lib/auth/application-expiry";
 import {
@@ -128,6 +131,21 @@ export async function POST(request: Request) {
     );
   }
 
+  // Remember where we started: if creating the account fails below, the
+  // application goes back to this status so the admin can retry. Leaving it
+  // "accepted" made Accept refuse ("already accepted") and stranded the
+  // applicant with no account, no enrolment and no email.
+  const previousStatus = appResponse.status;
+  const revertStatus = () =>
+    adminSupabase
+      .from("application_responses")
+      .update({ status: previousStatus })
+      .eq("id", response_id);
+  // Applied while signed in (or linked earlier): the account already exists,
+  // so none of the account-creation branches below run — the acceptance email
+  // is sent after enrolment instead.
+  const wasPreLinked = !!appResponse.user_id;
+
   // Update response status to accepted
   await adminSupabase
     .from("application_responses")
@@ -150,11 +168,14 @@ export async function POST(request: Request) {
     const siteUrl =
       process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
-    // Check if a user with this email already exists
+    // Check if a user with this email already exists. Case-insensitive: auth
+    // stores addresses lowercased, so an applicant who typed "Name@Gmail.com"
+    // with an existing account would miss an exact match, then fail in
+    // createUser ("already registered") after the status was set.
     const { data: existingUser } = await adminSupabase
       .from("users")
       .select("id, first_name")
-      .eq("email", applicantEmail)
+      .ilike("email", escapeIlike(applicantEmail.trim()))
       .maybeSingle();
 
     if (existingUser) {
@@ -166,48 +187,12 @@ export async function POST(request: Request) {
         .update({ user_id: userId })
         .eq("id", response_id);
 
-      // Send enrollment confirmation email (no invite link - user already has an account)
-      const firstName =
-        (existingUser as { first_name?: string | null }).first_name ||
-        applicantInfo?.first_name ||
-        "there";
-
-      const placeholders = {
-        first_name: firstName,
-        program_name: appResponse.programs.name,
-      };
-      const customSubject = appResponse.programs.acceptance_email_subject
-        ? substitutePlaceholders(
-            appResponse.programs.acceptance_email_subject,
-            placeholders
-          )
-        : null;
-      const customBodyHtml = appResponse.programs.acceptance_email_body
-        ? plainTextToEmailHtml(
-            substitutePlaceholders(
-              appResponse.programs.acceptance_email_body,
-              placeholders
-            )
-          )
-        : null;
-
-      await sendTransactional({
-        to: applicantEmail,
-        subject: customSubject ?? `You're enrolled in ${appResponse.programs.name}`,
-        html: enrollmentConfirmationEmailHtml({
-          firstName,
-          programName: appResponse.programs.name,
-          siteUrl,
-          customBodyHtml,
-        }),
-        category: "enrollment_confirmation",
-        sourceType: "school_application",
-        sourceId: response_id,
-        programDocuments: {
-          programId: appResponse.program_id,
-          emailType: "application_accepted",
-        },
+      // Send enrollment confirmation email (no invite link - user already
+      // has an account). A failed send used to be ignored here.
+      const sent = await sendAcceptanceToLinkedAccount(adminSupabase, response_id, {
+        siteUrl,
       });
+      emailWarning = sent.warning;
     } else {
       // Create the auth user directly (no password yet). The applicant sets
       // their password via the 30-day onboarding setup link emailed below —
@@ -226,6 +211,7 @@ export async function POST(request: Request) {
         });
 
       if (createError || !created?.user?.id) {
+        await revertStatus();
         return NextResponse.json(
           { error: createError?.message || "Failed to create user account" },
           { status: 500 }
@@ -259,6 +245,7 @@ export async function POST(request: Request) {
       });
 
       if (userError) {
+        await revertStatus();
         return NextResponse.json(
           { error: `Failed to create user record: ${userError.message}` },
           { status: 500 }
@@ -466,6 +453,13 @@ export async function POST(request: Request) {
     console.log("[accept-application] billing setup:", billing);
   }
 
+  // Pre-linked applicants (applied while signed in) never went through either
+  // email branch above, so they were accepted and enrolled in silence.
+  if (wasPreLinked) {
+    const sent = await sendAcceptanceToLinkedAccount(adminSupabase, response_id);
+    emailWarning = sent.warning;
+  }
+
   // Audit log
   await adminSupabase.from("audit_logs").insert({
     user_id: authUser.id,
@@ -476,6 +470,7 @@ export async function POST(request: Request) {
       applicant_email: applicantEmail,
       program_id: appResponse.program_id,
       new_user_id: userId,
+      email_warning: emailWarning,
     },
   });
 
