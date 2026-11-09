@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Paperclip, Reply, Check, Archive, Mail, Send, X } from "lucide-react";
@@ -81,6 +81,7 @@ export function InboxView({
   const [team, setTeam] = useState<string>("");
   const [openId, setOpenId] = useState<string | null>(initialOpenId);
   const [err, setErr] = useState<string | null>(null);
+  const detailRef = useRef<HTMLDivElement>(null);
 
   const visible = useMemo(
     () =>
@@ -119,6 +120,14 @@ export function InboxView({
     if (e.status === "new") void setStatus(e.id, "read");
   }
 
+  // On a phone the list and the reply take turns. After a reply opens,
+  // bring it to the top so it isn't sitting under the page header.
+  useEffect(() => {
+    if (!openId) return;
+    if (!window.matchMedia("(max-width: 1023px)").matches) return;
+    detailRef.current?.scrollIntoView({ block: "start" });
+  }, [openId]);
+
   return (
     <div className="space-y-3">
       {err && <p className="text-sm text-destructive">{err}</p>}
@@ -128,7 +137,7 @@ export function InboxView({
           <button
             key={f.key}
             onClick={() => setFilter(f.key)}
-            className={`chip ${filter === f.key ? "border-ink text-ink" : ""}`}
+            className={`chip min-h-11 ${filter === f.key ? "border-ink text-ink" : ""}`}
           >
             {f.label}
             {f.key === "open" && newCount > 0 ? ` · ${newCount} new` : ""}
@@ -137,7 +146,7 @@ export function InboxView({
         <select
           value={team}
           onChange={(e) => setTeam(e.target.value)}
-          className="ml-auto h-8 border border-rule bg-white px-2 text-xs"
+          className="ml-auto h-11 border border-rule bg-white px-2 text-xs lg:h-8"
           aria-label="Filter by team"
         >
           <option value="">All teams</option>
@@ -150,7 +159,7 @@ export function InboxView({
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-        <div className="border border-ink bg-white">
+        <div className={`border border-ink bg-white ${open ? "hidden lg:block" : ""}`}>
           <SectionBar title="Replies" meta={`${visible.length}`} />
           {visible.length === 0 ? (
             <p className="px-5 py-6 text-sm text-[color:var(--text-tertiary)]">
@@ -159,12 +168,12 @@ export function InboxView({
                 : "Nothing in this view."}
             </p>
           ) : (
-            <ul className="max-h-[70vh] divide-y divide-[color:var(--rule)] overflow-y-auto">
+            <ul className="divide-y divide-[color:var(--rule)] lg:max-h-[70vh] lg:overflow-y-auto">
               {visible.map((e) => (
                 <li key={e.id}>
                   <button
                     onClick={() => openEmail(e)}
-                    className={`block w-full px-4 py-3 text-left hover:bg-[color:var(--surface-2)] ${
+                    className={`block min-h-11 w-full px-4 py-3 text-left hover:bg-[color:var(--surface-2)] ${
                       openId === e.id ? "bg-[color:var(--surface-2)]" : ""
                     }`}
                   >
@@ -197,7 +206,19 @@ export function InboxView({
           )}
         </div>
 
-        <div className="border border-ink bg-white">
+        <div
+          ref={detailRef}
+          className={`scroll-mt-16 border border-ink bg-white ${open ? "" : "hidden lg:block"}`}
+        >
+          {open && (
+            <button
+              type="button"
+              onClick={() => setOpenId(null)}
+              className="flex min-h-11 w-full items-center border-b border-ink px-4 text-left font-mono text-[10px] font-bold uppercase tracking-[0.14em] lg:hidden"
+            >
+              ← Back to replies
+            </button>
+          )}
           {!open ? (
             <p className="px-5 py-10 text-center text-sm text-[color:var(--text-tertiary)]">
               Select a reply to read it.

@@ -137,7 +137,9 @@ export function SendDialog({
               />
             </dl>
             <p className="text-xs text-muted-foreground">
-              This sends immediately and can’t be undone.
+              This sends immediately and can’t be undone. Anyone unsubscribed,
+              suppressed, or with an undeliverable address is already left out
+              of this number.
             </p>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={onClose}>

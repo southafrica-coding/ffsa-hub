@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +39,20 @@ export type LabelRow = {
   is_active: boolean;
 };
 
+function subscribePhone(onStoreChange: () => void) {
+  const mq = window.matchMedia("(max-width: 767px)");
+  mq.addEventListener("change", onStoreChange);
+  return () => mq.removeEventListener("change", onStoreChange);
+}
+
+function usePhoneLayout() {
+  return useSyncExternalStore(
+    subscribePhone,
+    () => window.matchMedia("(max-width: 767px)").matches,
+    () => false
+  );
+}
+
 function sortLabels(list: LabelRow[]): LabelRow[] {
   return [...list].sort((a, b) => {
     if (a.is_active !== b.is_active) return a.is_active ? -1 : 1;
@@ -65,6 +79,19 @@ export function LabelsManager({
   const [deleteTarget, setDeleteTarget] = useState<LabelRow | null>(null);
   const [deleteErr, setDeleteErr] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [creating, setCreating] = useState(false);
+  const phone = usePhoneLayout();
+  // Pick up server fields (the assigned colour, a rename from refresh) once
+  // the in-progress edit is closed.
+  const serverStamp = initialLabels
+    .map((l) => `${l.id}:${l.color ?? ""}:${l.name}:${l.is_active ? 1 : 0}`)
+    .join("|");
+  const [seenStamp, setSeenStamp] = useState(serverStamp);
+  if (seenStamp !== serverStamp && editingId === null && !creating) {
+    setLabels(sortLabels(initialLabels));
+    setSeenStamp(serverStamp);
+  }
 
   const activeCount = labels.filter((l) => l.is_active).length;
 
@@ -131,6 +158,57 @@ export function LabelsManager({
     }
   }
 
+  async function createLabel() {
+    const name = newName.trim();
+    if (!name) {
+      setErr("Give the label a name.");
+      setMsg(null);
+      return;
+    }
+    setErr(null);
+    setMsg(null);
+    setCreating(true);
+    const res = await fetch("/api/labels", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    setCreating(false);
+    const data = (await res.json().catch(() => ({}))) as {
+      id?: string;
+      name?: string;
+      slug?: string;
+      error?: string;
+    };
+    if (!res.ok || !data.id || !data.name || !data.slug) {
+      setErr(data.error ?? "Could not create label");
+      return;
+    }
+    const existed = labels.some((l) => l.id === data.id);
+    if (!existed) {
+      setLabels((list) =>
+        sortLabels([
+          ...list,
+          {
+            id: data.id!,
+            slug: data.slug!,
+            name: data.name!,
+            description: null,
+            category: null,
+            color: null,
+            is_preset: false,
+            is_active: true,
+          },
+        ])
+      );
+    }
+    setNewName("");
+    setMsg(
+      existed ? `“${data.name}” is already a label.` : `“${data.name}” created.`
+    );
+    router.refresh();
+  }
+
   async function doDelete() {
     if (!deleteTarget) return;
     setDeleteErr(null);
@@ -150,6 +228,28 @@ export function LabelsManager({
     router.refresh();
   }
 
+  function labelRowProps(l: LabelRow) {
+    return {
+      label: l,
+      count: counts[l.id] ?? 0,
+      editing: editingId === l.id,
+      editName,
+      busy: busyId === l.id,
+      recolorOpen: recolorId === l.id,
+      onRecolorOpen: (open: boolean) => setRecolorId(open ? l.id : null),
+      onEditName: setEditName,
+      onStartEdit: () => startEdit(l),
+      onCancelEdit: () => setEditingId(null),
+      onSave: () => void saveRename(l.id),
+      onRecolor: (color: string) => void recolor(l.id, color),
+      onToggle: () => void toggleActive(l),
+      onDelete: () => {
+        setDeleteTarget(l);
+        setDeleteErr(null);
+      },
+    };
+  }
+
   return (
     <div className="space-y-4">
       {err && <p className="text-sm text-destructive">{err}</p>}
@@ -164,7 +264,46 @@ export function LabelsManager({
               : ""
           }`}
         />
-        <div className="overflow-x-auto">
+        <form
+          className="flex flex-col gap-2 border-b border-rule bg-bone px-4 py-3 sm:flex-row sm:items-end"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void createLabel();
+          }}
+        >
+          <label className="block min-w-0 flex-1">
+            <span className="mono-label mb-1 block">New label</span>
+            <Input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="Label name"
+              disabled={creating}
+            />
+          </label>
+          <Button
+            type="submit"
+            disabled={creating || !newName.trim()}
+            className="min-h-11"
+          >
+            {creating ? "Creating…" : "Create label"}
+          </Button>
+        </form>
+        {labels.length === 0 ? (
+          <p className="px-4 py-10 text-center text-xs tracking-[0.05em] text-[color:var(--text-tertiary)]">
+            No labels yet. Create one above.
+          </p>
+        ) : phone ? (
+          <div>
+            {labels.map((l) => (
+              <LabelEditorRow
+                key={l.id}
+                {...labelRowProps(l)}
+                variant="card"
+              />
+            ))}
+          </div>
+        ) : (
+        <div className="hidden md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -176,158 +315,13 @@ export function LabelsManager({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {labels.map((l) => {
-                const colors = getLabelColors(l);
-                const isEditing = editingId === l.id;
-                const busy = busyId === l.id;
-                const count = counts[l.id] ?? 0;
-                return (
-                  <TableRow key={l.id} className={l.is_active ? "" : "opacity-50"}>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Popover
-                          open={recolorId === l.id}
-                          onOpenChange={(o) => setRecolorId(o ? l.id : null)}
-                        >
-                          <PopoverTrigger asChild>
-                            <button
-                              type="button"
-                              aria-label="Change colour"
-                              disabled={busy}
-                              className="h-5 w-5 flex-shrink-0 border"
-                              style={{
-                                backgroundColor: colors.bg,
-                                borderColor: colors.border,
-                              }}
-                            />
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-2">
-                            <div className="grid grid-cols-8 gap-1.5">
-                              {LABEL_PALETTE.map((p) => (
-                                <button
-                                  key={p.bg}
-                                  type="button"
-                                  aria-label={`Colour ${p.bg}`}
-                                  onClick={() => recolor(l.id, p.bg)}
-                                  className="h-5 w-5 border"
-                                  style={{
-                                    backgroundColor: p.bg,
-                                    borderColor: p.border,
-                                  }}
-                                />
-                              ))}
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-
-                        {isEditing ? (
-                          <Input
-                            value={editName}
-                            onChange={(e) => setEditName(e.target.value)}
-                            className="h-8 text-sm"
-                            autoFocus
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") saveRename(l.id);
-                              if (e.key === "Escape") setEditingId(null);
-                            }}
-                          />
-                        ) : (
-                          <span className="text-sm font-medium">{l.name}</span>
-                        )}
-                        {l.is_preset && !isEditing && (
-                          <span className="mono-label">preset</span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-sm text-[color:var(--text-secondary)]">
-                      {l.category || "—"}
-                    </TableCell>
-                    <TableCell className="tabular text-right text-sm">
-                      {count}
-                    </TableCell>
-                    <TableCell>
-                      <StatusPill tone={l.is_active ? "good" : "quiet"}>
-                        {l.is_active ? "Active" : "Hidden"}
-                      </StatusPill>
-                    </TableCell>
-                    <TableCell className="text-right whitespace-nowrap">
-                      {isEditing ? (
-                        <>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setEditingId(null)}
-                            disabled={busy}
-                            className="h-7 px-2 text-xs"
-                          >
-                            Cancel
-                          </Button>
-                          <Button
-                            size="sm"
-                            onClick={() => saveRename(l.id)}
-                            disabled={busy}
-                            className="h-7 px-2 text-xs"
-                          >
-                            {busy ? "…" : "Save"}
-                          </Button>
-                        </>
-                      ) : (
-                        <>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => startEdit(l)}
-                            disabled={busy}
-                            className="h-7 px-2 text-xs"
-                          >
-                            Rename
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => toggleActive(l)}
-                            disabled={busy}
-                            className={`h-7 px-2 text-xs ${
-                              l.is_active
-                                ? "text-[color:var(--amber)]"
-                                : "text-[color:var(--green-text)]"
-                            }`}
-                          >
-                            {l.is_active ? "Hide" : "Unhide"}
-                          </Button>
-                          {!l.is_preset && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setDeleteTarget(l);
-                                setDeleteErr(null);
-                              }}
-                              disabled={busy}
-                              className="h-7 px-2 text-xs text-destructive"
-                            >
-                              Delete
-                            </Button>
-                          )}
-                        </>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-              {labels.length === 0 && (
-                <TableRow>
-                  <TableCell
-                    colSpan={5}
-                    className="py-10 text-center text-xs tracking-[0.05em] text-[color:var(--text-tertiary)]"
-                  >
-                    No labels yet.
-                  </TableCell>
-                </TableRow>
-              )}
+              {labels.map((l) => (
+                <LabelEditorRow key={l.id} {...labelRowProps(l)} variant="row" />
+              ))}
             </TableBody>
           </Table>
         </div>
+        )}
       </div>
 
       <Dialog
@@ -376,5 +370,189 @@ export function LabelsManager({
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function LabelEditorRow({
+  label: l,
+  count,
+  variant,
+  editing,
+  editName,
+  busy,
+  recolorOpen,
+  onRecolorOpen,
+  onEditName,
+  onStartEdit,
+  onCancelEdit,
+  onSave,
+  onRecolor,
+  onToggle,
+  onDelete,
+}: {
+  label: LabelRow;
+  count: number;
+  variant: "card" | "row";
+  editing: boolean;
+  editName: string;
+  busy: boolean;
+  recolorOpen: boolean;
+  onRecolorOpen: (open: boolean) => void;
+  onEditName: (name: string) => void;
+  onStartEdit: () => void;
+  onCancelEdit: () => void;
+  onSave: () => void;
+  onRecolor: (color: string) => void;
+  onToggle: () => void;
+  onDelete: () => void;
+}) {
+  const colors = getLabelColors(l);
+  const btn =
+    variant === "card" ? "min-h-11 px-3 text-xs" : "h-7 px-2 text-xs";
+  const identity = (
+    <div className="flex min-w-0 items-center gap-2">
+      <Popover open={recolorOpen} onOpenChange={onRecolorOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            aria-label="Change colour"
+            disabled={busy}
+            className={
+              variant === "card"
+                ? "h-11 w-11 flex-shrink-0 border"
+                : "h-5 w-5 flex-shrink-0 border"
+            }
+            style={{ backgroundColor: colors.bg, borderColor: colors.border }}
+          />
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-2">
+          <div className="grid grid-cols-8 gap-1.5">
+            {LABEL_PALETTE.map((p) => (
+              <button
+                key={p.bg}
+                type="button"
+                aria-label={`Colour ${p.bg}`}
+                onClick={() => onRecolor(p.bg)}
+                className="h-11 w-11 border md:h-5 md:w-5"
+                style={{ backgroundColor: p.bg, borderColor: p.border }}
+              />
+            ))}
+          </div>
+        </PopoverContent>
+      </Popover>
+      {editing ? (
+        <Input
+          value={editName}
+          onChange={(e) => onEditName(e.target.value)}
+          className="h-11 text-sm md:h-8"
+          autoFocus
+          onKeyDown={(e) => {
+            if (e.key === "Enter") onSave();
+            if (e.key === "Escape") onCancelEdit();
+          }}
+        />
+      ) : (
+        <span
+          className={
+            variant === "card"
+              ? "font-display text-[20px] font-black uppercase leading-none"
+              : "text-sm font-medium"
+          }
+        >
+          {l.name}
+        </span>
+      )}
+      {l.is_preset && !editing && <span className="mono-label">preset</span>}
+    </div>
+  );
+  const actions = editing ? (
+    <>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={onCancelEdit}
+        disabled={busy}
+        className={btn}
+      >
+        Cancel
+      </Button>
+      <Button size="sm" onClick={onSave} disabled={busy} className={btn}>
+        {busy ? "…" : "Save"}
+      </Button>
+    </>
+  ) : (
+    <>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={onStartEdit}
+        disabled={busy}
+        className={btn}
+      >
+        Rename
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={onToggle}
+        disabled={busy}
+        className={`${btn} ${
+          l.is_active ? "text-[color:var(--amber)]" : "text-[color:var(--green-text)]"
+        }`}
+      >
+        {l.is_active ? "Hide" : "Unhide"}
+      </Button>
+      {!l.is_preset && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onDelete}
+          disabled={busy}
+          className={`${btn} text-destructive`}
+        >
+          Delete
+        </Button>
+      )}
+    </>
+  );
+
+  if (variant === "card") {
+    return (
+      <div
+        className={`border-b border-rule px-4 py-3.5 last:border-b-0 ${
+          l.is_active ? "" : "opacity-50"
+        }`}
+      >
+        {identity}
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <span className="text-[13px] text-[color:var(--text-secondary)]">
+            {l.category || "—"}
+          </span>
+          <span className="mono-label">
+            {count} {count === 1 ? "contact" : "contacts"}
+          </span>
+          <StatusPill tone={l.is_active ? "good" : "quiet"}>
+            {l.is_active ? "Active" : "Hidden"}
+          </StatusPill>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">{actions}</div>
+      </div>
+    );
+  }
+
+  return (
+    <TableRow className={l.is_active ? "" : "opacity-50"}>
+      <TableCell>{identity}</TableCell>
+      <TableCell className="text-sm text-[color:var(--text-secondary)]">
+        {l.category || "—"}
+      </TableCell>
+      <TableCell className="tabular text-right text-sm">{count}</TableCell>
+      <TableCell>
+        <StatusPill tone={l.is_active ? "good" : "quiet"}>
+          {l.is_active ? "Active" : "Hidden"}
+        </StatusPill>
+      </TableCell>
+      <TableCell className="text-right whitespace-nowrap">{actions}</TableCell>
+    </TableRow>
   );
 }
