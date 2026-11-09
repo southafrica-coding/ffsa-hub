@@ -19,7 +19,7 @@ import {
   type LmsLesson,
   type LmsModule,
 } from "./lms-content";
-import { linkifyLessonText, sanitizeLessonBody } from "./lms-render";
+import { linkifyLessonText, sanitizeLessonBody, splitUrlTrailingPunctuation } from "./lms-render";
 
 const at = "2026-11-09T00:00:00Z";
 const course = (over: Partial<LmsCourse> = {}): LmsCourse => ({
@@ -261,6 +261,20 @@ describe("lesson body rendering", () => {
     expect(hostile).not.toContain("<a ");
     expect(hostile).toContain("javascript:alert(1)");
     expect(hostile).toContain("data:text/html,hi");
+  });
+
+  it("keeps a balanced closing parenthesis inside a wiki URL", () => {
+    const wiki = "https://en.wikipedia.org/wiki/Foo_(bar)";
+    expect(splitUrlTrailingPunctuation(wiki)).toEqual({ core: wiki, suffix: "" });
+    const html = linkifyLessonText(`See ${wiki}.`);
+    expect(html).toContain(`href="${wiki}"`);
+    expect(html.endsWith(".")).toBe(true);
+    const wrapped = linkifyLessonText(`(See ${wiki}).`);
+    expect(wrapped).toContain(`href="${wiki}"`);
+    expect(wrapped.endsWith(").")).toBe(true);
+    const prose = linkifyLessonText("See (https://example.com/notes).");
+    expect(prose).toContain('href="https://example.com/notes"');
+    expect(prose).not.toContain('href="https://example.com/notes)"');
   });
 
   it("keeps plain-text line breaks and escapes markup-looking text", () => {

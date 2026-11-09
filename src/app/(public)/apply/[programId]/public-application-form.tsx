@@ -26,6 +26,10 @@ import {
   isValidApplicantEmail,
   type IdentityQuestion,
 } from "@/lib/applications/applicant-identity";
+import {
+  confirmationSentence,
+  type ConfirmationStatus,
+} from "@/lib/applications/confirmation-notice";
 
 type DbQuestion = {
   id: string;
@@ -48,22 +52,16 @@ type ReferenceSlot = {
 
 type ReferenceLink = { label: string; url: string };
 
-function confirmationSentence(sent: boolean): string {
-  return sent
-    ? "We've sent a confirmation to your email."
-    : "We couldn't send a confirmation email.";
-}
-
 function SuccessScreen({
   programName,
   referenceLinks,
   statusUrl,
-  confirmationEmailed,
+  confirmationStatus,
 }: {
   programName: string;
   referenceLinks: ReferenceLink[];
   statusUrl: string | null;
-  confirmationEmailed: boolean;
+  confirmationStatus: ConfirmationStatus;
 }) {
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const hasReferences = referenceLinks.length > 0;
@@ -84,7 +82,10 @@ function SuccessScreen({
         {hasReferences ? (
           <>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              Thank you for applying to {programName}. {confirmationSentence(confirmationEmailed)}
+              Thank you for applying to {programName}.
+              {confirmationSentence(confirmationStatus)
+                ? ` ${confirmationSentence(confirmationStatus)}`
+                : ""}
             </p>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
               {referenceSubmittedNote(referenceLinks.length)}
@@ -98,7 +99,10 @@ function SuccessScreen({
         ) : (
           <>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              Thank you for applying to {programName}. {confirmationSentence(confirmationEmailed)}{" "}
+              Thank you for applying to {programName}.
+              {confirmationSentence(confirmationStatus)
+                ? ` ${confirmationSentence(confirmationStatus)}`
+                : ""}{" "}
               Our team will review your application and get back to you soon.
             </p>
             <p className="text-xs text-muted-foreground max-w-md mx-auto">
@@ -189,7 +193,7 @@ export function PublicApplicationForm({
   const [applicationId, setApplicationId] = useState("");
   const [referenceLinks, setReferenceLinks] = useState<ReferenceLink[]>([]);
   const [statusUrl, setStatusUrl] = useState<string | null>(null);
-  const [confirmationEmailed, setConfirmationEmailed] = useState(false);
+  const [confirmationStatus, setConfirmationStatus] = useState<ConfirmationStatus>("failed");
   const [serverError, setServerError] = useState<string | null>(null);
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
   const [refNames, setRefNames] = useState<Record<string, string>>({});
@@ -493,7 +497,11 @@ export function PublicApplicationForm({
       setApplicationId(result.id);
       setReferenceLinks(result.referenceLinks ?? []);
       setStatusUrl(result.statusUrl ?? null);
-      setConfirmationEmailed(result.confirmationEmailed === true);
+      setConfirmationStatus(
+        result.confirmationStatus === "sent" || result.confirmationStatus === "skipped"
+          ? result.confirmationStatus
+          : "failed"
+      );
       setSubmitted(true);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch {
@@ -513,7 +521,7 @@ export function PublicApplicationForm({
         programName={programName}
         referenceLinks={referenceLinks}
         statusUrl={statusUrl}
-        confirmationEmailed={confirmationEmailed}
+        confirmationStatus={confirmationStatus}
       />
     );
   }

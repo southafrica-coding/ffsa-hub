@@ -24,6 +24,7 @@ import {
 import { sendReferenceInvite } from "@/lib/email/send-reference-invite";
 import { referenceSendConfirmed } from "@/lib/email/reference-email";
 import {
+  applicantEmailIlikePattern,
   findAnswerByLabel,
   identityGaps,
   resolveApplicantIdentity,
@@ -221,7 +222,7 @@ export async function POST(request: Request) {
     const { data: existingUser } = await supabase
       .from("users")
       .select("id")
-      .eq("email", email)
+      .ilike("email", applicantEmailIlikePattern(email))
       .maybeSingle();
 
     if (existingUser) {
@@ -382,9 +383,10 @@ export async function POST(request: Request) {
     (ref) => ref.slot_id && ref.referee_name?.trim() && ref.referee_email?.trim()
   ).length;
 
-  // Only tell the applicant a confirmation went out when the send
-  // actually succeeded. A skipped template or a failed send leaves this false.
-  let confirmationEmailed = false;
+  // "sent" only when Resend accepted it. A school that turned this
+  // template off is "skipped" — the page stays neutral. "failed" is a
+  // real send error, and that is the only case that says so.
+  let confirmationStatus: "sent" | "skipped" | "failed" = "failed";
   const greetingName = firstName || lastName || "Applicant";
   try {
     const receivedDefaults = {
@@ -420,7 +422,9 @@ export async function POST(request: Request) {
         siteUrl,
       }
     );
-    if (!resolved.skip) {
+    if (resolved.skip) {
+      confirmationStatus = "skipped";
+    } else {
       const sent = await sendTransactional({
         to: email,
         subject: resolved.subject,
@@ -430,10 +434,11 @@ export async function POST(request: Request) {
         sourceId: response.id,
         programDocuments: { programId: program_id, emailType: "application_received" },
       });
-      confirmationEmailed = sent.ok === true;
+      confirmationStatus = sent.ok === true ? "sent" : "failed";
     }
   } catch (err) {
     console.error("[applications] confirmation email failed", err);
+    confirmationStatus = "failed";
   }
   const referenceLinks: Array<{ label: string; url: string }> = [];
 
@@ -486,6 +491,7 @@ export async function POST(request: Request) {
     id: response.id,
     statusUrl: statusTrackerUrl,
     referenceLinks,
-    confirmationEmailed,
+    confirmationEmailed: confirmationStatus === "sent",
+    confirmationStatus,
   });
 }

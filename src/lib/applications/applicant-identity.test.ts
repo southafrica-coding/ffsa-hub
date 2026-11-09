@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   PLACEHOLDER_APPLICANT_EMAIL,
+  applicantEmailIlikePattern,
   identityGaps,
   isValidApplicantEmail,
   resolveApplicantIdentity,
@@ -80,11 +81,28 @@ describe("resolveApplicantIdentity", () => {
       answers: [],
       firstName: " Ada ",
       lastName: "Lovelace",
-      email: "ada@example.com",
+      email: "  Ada@Example.COM ",
     });
     expect(ok).toEqual({
       ok: true,
       identity: { firstName: "Ada", lastName: "Lovelace", email: "ada@example.com" },
+    });
+  });
+
+  it("lowercases an email taken from a question answer", () => {
+    const result = resolveApplicantIdentity({
+      questions: [
+        { label: "Full name", type: "short_answer" },
+        { id: "q-email", label: "Email", type: "email" },
+      ],
+      answers: [
+        { question_label: "Full name", answer: "Grace Hopper" },
+        { question_id: "q-email", question_label: "Email", answer: " Grace@Example.com " },
+      ],
+    });
+    expect(result).toEqual({
+      ok: true,
+      identity: { firstName: "Grace Hopper", lastName: "", email: "grace@example.com" },
     });
   });
 
@@ -138,6 +156,14 @@ describe("resolveApplicantIdentity", () => {
     });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toMatch(/name/i);
+  });
+});
+
+describe("applicantEmailIlikePattern", () => {
+  it("lowercases and escapes LIKE wildcards so a mixed-case stored row still matches literally", () => {
+    expect(applicantEmailIlikePattern(" Ada_Smith@Example.com ")).toBe("ada\\_smith@example.com");
+    expect(applicantEmailIlikePattern("a%b@example.com")).toBe("a\\%b@example.com");
+    expect(applicantEmailIlikePattern("ada@example.com")).toBe("ada@example.com");
   });
 });
 

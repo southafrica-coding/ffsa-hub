@@ -9,10 +9,13 @@ import { NextResponse, type NextRequest } from "next/server";
 //
 // A form POST to this route is a full navigation. signOut writes the
 // cleared cookies onto the redirect itself, and the next GET /login has
-// no session for middleware to bounce.
+// no session for middleware to bounce. A failed sign-out still redirects,
+// with ?error=signout, and any cookies signOut did clear travel with it.
+
+type CookieToSet = { name: string; value: string; options?: Parameters<NextResponse["cookies"]["set"]>[2] };
 
 export async function POST(request: NextRequest) {
-  const response = NextResponse.redirect(new URL("/login", request.url), { status: 303 });
+  const cleared: CookieToSet[] = [];
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -23,20 +26,18 @@ export async function POST(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            response.cookies.set(name, value, options);
-          });
+          cleared.push(...cookiesToSet);
         },
       },
     }
   );
 
   const { error } = await supabase.auth.signOut();
-  if (error) {
-    // Stay off /login while the session is still there. Middleware would
-    // send that request back to /dashboard.
-    return NextResponse.json({ error: "Could not sign out. Please try again." }, { status: 500 });
+  const url = new URL("/login", request.url);
+  if (error) url.searchParams.set("error", "signout");
+  const response = NextResponse.redirect(url, { status: 303 });
+  for (const cookie of cleared) {
+    response.cookies.set(cookie.name, cookie.value, cookie.options);
   }
-
   return response;
 }

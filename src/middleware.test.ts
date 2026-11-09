@@ -162,6 +162,12 @@ describe("middleware", () => {
     expect(location(await middleware(req("/login")))).toBeNull();
   });
 
+  it("a cleared session can open /login?error=signout", async () => {
+    current = makeClient({});
+    const res = await middleware(req("/login?error=signout"));
+    expect(location(res)).toBeNull();
+  });
+
   it("POST /auth/sign-out is not refreshed or sent to the dashboard", async () => {
     current = makeClient({ token: jwtFor("u1"), validUserId: "u1" });
     const res = await middleware(

@@ -18,11 +18,10 @@ vi.mock("@supabase/ssr", () => ({
   ) => ({
     auth: {
       signOut: async () => {
-        if (!state.error) {
-          options.cookies.setAll([
-            { name: "sb-access-token", value: "", options: { path: "/", maxAge: 0 } },
-          ]);
-        }
+        // Local cookies are cleared even when the revoke call then fails.
+        options.cookies.setAll([
+          { name: "sb-access-token", value: "", options: { path: "/", maxAge: 0 } },
+        ]);
         state.cleared.push({ name: "called", value: state.error ? "error" : "ok" });
         return { error: state.error };
       },
@@ -50,11 +49,13 @@ describe("POST /auth/sign-out", () => {
     expect(state.cleared).toEqual([{ name: "called", value: "ok" }]);
   });
 
-  it("does not send a still-signed-in browser to /login when sign-out fails", async () => {
+  it("redirects a failed sign-out to /login?error=signout with the cleared cookie", async () => {
     state.error = { message: "network" };
     const res = await POST(post());
-    expect(res.status).toBe(500);
-    expect(res.headers.get("location")).toBeNull();
-    expect(await res.json()).toEqual({ error: "Could not sign out. Please try again." });
+    expect(res.status).toBe(303);
+    const loc = new URL(res.headers.get("location") ?? "");
+    expect(loc.pathname).toBe("/login");
+    expect(loc.searchParams.get("error")).toBe("signout");
+    expect(res.cookies.get("sb-access-token")?.value).toBe("");
   });
 });

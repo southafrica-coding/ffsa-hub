@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import Image from "next/image";
 import Link from "next/link";
 import { FFSA_TAGLINE } from "@/lib/brand/ffsa";
+import { loginErrorFromParam } from "./login-error";
 
 // The tagline sets as a stacked poster headline on the black panel. Derived from
 // the brand constant rather than retyped, so a wording change follows automatically.
@@ -29,10 +30,13 @@ export default function LoginPage() {
   // the middleware would redirect back to /dashboard on the next navigation.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("error") === "deactivated") {
-      setError(
-        "Your account has been deactivated. Please contact the admin team to restore access."
-      );
+    const code = params.get("error");
+    const message = loginErrorFromParam(code);
+    if (message) setError(message);
+    // A deactivated account still has a session. Clear it here so the next
+    // click is not bounced back to the dashboard. A failed sign-out has
+    // already cleared what it could; signing out again is not useful.
+    if (code === "deactivated") {
       supabase.auth.signOut().catch(() => {});
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps

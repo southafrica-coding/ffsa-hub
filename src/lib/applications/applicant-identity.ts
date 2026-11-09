@@ -17,6 +17,7 @@ export const PLACEHOLDER_APPLICANT_EMAIL = "unknown@applicant.local";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export type IdentityQuestion = {
+  id?: string;
   label?: string | null;
   type?: string | null;
   system_key?: string | null;
@@ -43,6 +44,20 @@ export type IdentityGaps = {
 
 function clean(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+/** Trim and lowercase. New applications are stored in one case. */
+function cleanEmail(value: unknown): string {
+  return clean(value).toLowerCase();
+}
+
+/**
+ * ILIKE pattern for an applicant email. Lowercasing the input is not enough:
+ * production already has mixed-case addresses, and `_` / `%` are LIKE
+ * wildcards. Escaping them makes the match case-insensitive and literal.
+ */
+export function applicantEmailIlikePattern(email: string): string {
+  return cleanEmail(email).replace(/[\\%_]/g, (character) => `\\${character}`);
 }
 
 function labelOf(question: IdentityQuestion): string {
@@ -150,11 +165,12 @@ export function resolveApplicantIdentity(input: {
     clean(input.lastName) ||
     findAnswerByLabel(answers, ["last name", "last_name", "surname"]) ||
     "";
-  const email =
+  const email = cleanEmail(
     clean(input.email) ||
-    findAnswerByType(answers, questions, "email") ||
-    findAnswerByLabel(answers, ["email"]) ||
-    "";
+      findAnswerByType(answers, questions, "email") ||
+      findAnswerByLabel(answers, ["email"]) ||
+      ""
+  );
 
   const gaps = identityGaps(questions);
   if (gaps.firstName && !firstName) {

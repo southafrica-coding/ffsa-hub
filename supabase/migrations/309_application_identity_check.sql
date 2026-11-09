@@ -21,7 +21,12 @@
 --
 -- 307 and 308 are reserved by other work. Apply by hand in the Supabase
 -- SQL editor. Idempotent. Do not run this against production from a script.
+--
+-- lock_timeout so a busy application_responses table fails this script
+-- in a few seconds instead of waiting on a lock held by a live request.
 -- ============================================================
+
+SET lock_timeout = '5s';
 
 ALTER TABLE public.application_responses
   DROP CONSTRAINT IF EXISTS application_responses_applicant_identity_chk;

@@ -23,6 +23,39 @@ function httpUrl(raw: string): string | null {
 }
 
 /**
+ * Drop sentence punctuation that is not part of the URL.
+ * A ")" stays when it closes a "(" inside the URL
+ * (https://en.wikipedia.org/wiki/Foo_(bar)) and comes off when it only
+ * closes the surrounding sentence.
+ */
+export function splitUrlTrailingPunctuation(raw: string): { core: string; suffix: string } {
+  let core = raw;
+  let suffix = "";
+  while (/[.,;:!?\]]$/.test(core)) {
+    suffix = core.slice(-1) + suffix;
+    core = core.slice(0, -1);
+  }
+  while (core.endsWith(")") && unmatchedClosingParens(core) > 0) {
+    suffix = ")" + suffix;
+    core = core.slice(0, -1);
+  }
+  return { core, suffix };
+}
+
+function unmatchedClosingParens(value: string): number {
+  let depth = 0;
+  let extra = 0;
+  for (const character of value) {
+    if (character === "(") depth += 1;
+    else if (character === ")") {
+      if (depth === 0) extra += 1;
+      else depth -= 1;
+    }
+  }
+  return extra;
+}
+
+/**
  * Escape `body` and wrap each plain http(s) URL in an anchor.
  * Trailing sentence punctuation stays outside the link.
  */
@@ -38,8 +71,7 @@ export function linkifyLessonText(body: string | null | undefined): string {
   for (const match of value.matchAll(urls)) {
     const start = match.index ?? 0;
     const raw = match[0];
-    const core = raw.replace(/[.,;:!?)\]]+$/g, "");
-    const suffix = raw.slice(core.length);
+    const { core, suffix } = splitUrlTrailingPunctuation(raw);
     html += escapeHtml(value.slice(last, start));
     const href = httpUrl(core);
     if (href) {

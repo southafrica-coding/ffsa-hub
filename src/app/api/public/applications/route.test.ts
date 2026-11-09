@@ -5,14 +5,21 @@ const h = vi.hoisted(() => ({
   createPublicResponse: vi.fn(),
   sendTransactional: vi.fn(),
   skipEmail: false,
+  lookups: [] as Array<{ table: string; op: string; column: string; value: unknown }>,
 }));
 
-function chain(result: { data: unknown; error?: unknown }) {
+function chain(table: string, result: { data: unknown; error?: unknown }) {
   const builder: Record<string, unknown> = {};
-  const self = () => builder;
-  for (const method of ["select", "eq", "in", "is", "order"]) {
-    builder[method] = self;
-  }
+  const note = (op: string) => (column: string, value?: unknown) => {
+    h.lookups.push({ table, op, column, value });
+    return builder;
+  };
+  builder.select = () => builder;
+  builder.eq = note("eq");
+  builder.ilike = note("ilike");
+  builder.in = () => builder;
+  builder.is = () => builder;
+  builder.order = () => builder;
   builder.maybeSingle = async () => result;
   builder.single = async () => result;
   builder.then = (onFulfilled: (value: unknown) => unknown, onRejected?: (reason: unknown) => unknown) =>
@@ -22,7 +29,7 @@ function chain(result: { data: unknown; error?: unknown }) {
 
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
-    from: () => chain({ data: null }),
+    from: (table: string) => chain(table, { data: null }),
   }),
 }));
 
@@ -93,6 +100,7 @@ describe("POST /api/public/applications identity", () => {
     });
     h.sendTransactional.mockReset();
     h.sendTransactional.mockResolvedValue({ ok: false, error: "resend down", suppressed: false });
+    h.lookups = [];
   });
 
   it("returns 400 and writes nothing when the school form has no name or email", async () => {
@@ -117,6 +125,7 @@ describe("POST /api/public/applications identity", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.confirmationEmailed).toBe(false);
+    expect(body.confirmationStatus).toBe("failed");
     expect(h.sendTransactional).toHaveBeenCalledOnce();
 
     const payload = h.createPublicResponse.mock.calls[0][1] as {
@@ -134,13 +143,30 @@ describe("POST /api/public/applications identity", () => {
   it("reports confirmationEmailed only when the send succeeds", async () => {
     h.sendTransactional.mockResolvedValue({ ok: true, id: "msg1" });
     const res = await submit({ first_name: "Ada", last_name: "Lovelace", email: "ada@example.com" });
-    expect((await res.json()).confirmationEmailed).toBe(true);
+    const body = await res.json();
+    expect(body.confirmationEmailed).toBe(true);
+    expect(body.confirmationStatus).toBe("sent");
+  });
+
+  it("stores a lowercased email and looks up an existing user without LIKE wildcards", async () => {
+    const res = await submit({ first_name: "Ada", last_name: "Lovelace", email: "Ada_Smith@Example.com" });
+    expect(res.status).toBe(200);
+    const payload = h.createPublicResponse.mock.calls[0][1] as { applicant_email: string };
+    expect(payload.applicant_email).toBe("ada_smith@example.com");
+    expect(h.lookups).toContainEqual({
+      table: "users",
+      op: "ilike",
+      column: "email",
+      value: "ada\\_smith@example.com",
+    });
   });
 
   it("does not claim a confirmation when the school template is skipped", async () => {
     h.skipEmail = true;
     const res = await submit({ first_name: "Ada", last_name: "Lovelace", email: "ada@example.com" });
-    expect((await res.json()).confirmationEmailed).toBe(false);
+    const body = await res.json();
+    expect(body.confirmationEmailed).toBe(false);
+    expect(body.confirmationStatus).toBe("skipped");
     expect(h.sendTransactional).not.toHaveBeenCalled();
   });
 
