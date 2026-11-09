@@ -165,30 +165,32 @@ export function ApplicantReview({
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex flex-col bg-white">
-      {/* ── Pipeline strip ── */}
-      <div className="flex shrink-0 items-stretch gap-px overflow-x-auto border-b border-ink bg-[#F7F5EE] px-5 py-3.5 md:px-6">
-        {stages.map((s) => {
-          const hot = s.key === currentStatus;
-          return (
-            <div
-              key={s.key}
-              className={cn(
-                "min-w-[104px] flex-1 border px-3 py-2.5",
-                hot ? "border-ink bg-yellow" : "border-rule bg-white"
-              )}
-            >
-              <div className="numeral text-[26px] leading-none">{s.count}</div>
-              <div className="mt-1 font-mono text-[8.5px] font-bold tracking-[0.14em] text-[color:var(--text-secondary)]">
-                {s.label}
+      {/* ── Pipeline strip. Wraps on a phone so eight stages stay on screen. ── */}
+      <div className="flex shrink-0 items-start gap-2 border-b border-ink bg-[#F7F5EE] px-3 py-3 md:px-6">
+        <div className="flex min-w-0 flex-1 flex-wrap gap-1">
+          {stages.map((s) => {
+            const hot = s.key === currentStatus;
+            return (
+              <div
+                key={s.key}
+                className={cn(
+                  "min-w-0 basis-[calc(50%-0.25rem)] border px-2 py-2 sm:basis-[140px] sm:flex-1",
+                  hot ? "border-ink bg-yellow" : "border-rule bg-white"
+                )}
+              >
+                <div className="numeral text-[22px] leading-none sm:text-[26px]">{s.count}</div>
+                <div className="mt-1 break-words font-mono text-[8px] font-bold leading-tight tracking-[0.08em] text-[color:var(--text-secondary)] sm:text-[8.5px] sm:tracking-[0.12em]">
+                  {s.label}
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
         <button
           type="button"
           onClick={onClose}
           aria-label="Close applicant review"
-          className="ml-3 shrink-0 self-start px-2 py-2 font-mono text-[14px] text-ink hover:text-electric"
+          className="shrink-0 px-2 py-2 font-mono text-[14px] text-ink hover:text-electric"
         >
           ✕
         </button>

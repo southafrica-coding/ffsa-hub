@@ -38,7 +38,21 @@ import {
 import { todayInSouthAfrica } from "@/lib/finance/student-balance";
 import { GradesMatrix } from "./grades-matrix";
 import { ApplicantReview, type PipelineStage, type ReviewCheck, type ShownInterviewReview } from "./applicant-review";
-import { isInterviewOutcome, type InterviewOutcome } from "@/lib/schools/interview-outcomes";
+import {
+  INTERVIEW_OUTCOME_LABEL,
+  isInterviewOutcome,
+  type InterviewOutcome,
+} from "@/lib/schools/interview-outcomes";
+import {
+  PIPELINE_STAGE_LABEL,
+  PIPELINE_STAGE_ORDER,
+  PIPELINE_TABS,
+  derivePipelineStage,
+  interviewOutcomeBadge,
+  type DecisiveInterviewOutcome,
+  type InterviewReviewFact,
+  type ReferenceRequestFact,
+} from "@/lib/schools/applicant-pipeline-stage";
 import { FormBuilder, FormPreview } from "./form-builder";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
@@ -351,9 +365,16 @@ function isStoragePath(value: string): boolean {
 type RefRequestSummary = {
   id: string;
   application_id: string;
+  slot_id: string;
   status: string;
   submitted_at: string | null;
   reminder_sent_at: string | null;
+};
+
+type InterviewReviewSummary = {
+  application_response_id: string;
+  interview_outcome: string | null;
+  updated_at: string | null;
 };
 
 /** Tabs this screen knows. `enrollments` is the pre-14a name for Students and
@@ -424,6 +445,7 @@ export function ProgramDetail({
   referenceSlots,
   referenceQuestions,
   refRequestSummaries,
+  interviewReviews = [],
   applicationExpiry,
   staffDecisionPanel,
   canEditClassroom = false,
@@ -465,6 +487,7 @@ export function ProgramDetail({
   referenceSlots: ReferenceSlot[];
   referenceQuestions: TreeQuestion[];
   refRequestSummaries: RefRequestSummary[];
+  interviewReviews?: InterviewReviewSummary[];
   applicationExpiry: ApplicationExpiry;
   /** Leadership Track only, and only for Leadership Team viewers — the
    *  server-rendered "accepted as staff?" tab. Absent = no tab. */
@@ -819,6 +842,7 @@ export function ProgramDetail({
             removedResponses={removedResponses}
             referenceSlots={referenceSlots}
             refRequestSummaries={refRequestSummaries}
+            pipelineReviews={interviewReviews}
             staffOptions={staffOptions}
           />
           )}
@@ -1589,18 +1613,6 @@ type AnalyticsData = {
   weeklyData: Array<{ week: string; count: number }>;
 };
 
-const ALL_STATUSES = [
-  { key: "all", label: "All" },
-  { key: "submitted", label: "Submitted" },
-  { key: "waiting_for_references", label: "Waiting for Refs" },
-  { key: "references_received", label: "Refs Received" },
-  { key: "interview_scheduled", label: "Interview" },
-  { key: "accepted", label: "Accepted" },
-  { key: "waitlisted", label: "Waitlisted" },
-  { key: "rejected", label: "Rejected" },
-  { key: "cancelled", label: "Cancelled" },
-] as const;
-
 type ApplicantEmailRow = {
   id: string;
   category: string | null;
@@ -1624,6 +1636,44 @@ function prettyCategory(c: string | null): string {
     .join(" ");
 }
 
+function ApplicantStageBadges({
+  stage,
+  outcome,
+  variant,
+}: {
+  stage: string;
+  outcome: DecisiveInterviewOutcome | null;
+  variant: "default" | "secondary" | "destructive";
+}) {
+  const label =
+    stage in PIPELINE_STAGE_LABEL
+      ? PIPELINE_STAGE_LABEL[stage as keyof typeof PIPELINE_STAGE_LABEL]
+      : stage.replace(/_/g, " ");
+  return (
+    <div className="flex max-w-full flex-wrap items-center gap-1">
+      <Badge variant={variant} className="whitespace-nowrap">
+        {label}
+      </Badge>
+      {stage === "interview_complete" && (
+        <Badge
+          variant={
+            outcome === "decline"
+              ? "destructive"
+              : outcome === "recommend"
+                ? "default"
+                : outcome === "hold"
+                  ? "secondary"
+                  : "outline"
+          }
+          className="whitespace-nowrap"
+        >
+          {outcome ? INTERVIEW_OUTCOME_LABEL[outcome] : "No outcome"}
+        </Badge>
+      )}
+    </div>
+  );
+}
+
 function ApplicantEmailStatusBadge({ email }: { email: ApplicantEmailRow }) {
   // Sent and delivered are success. A missing open or click is not a problem.
   const view = presentationForMessage(email);
@@ -1633,18 +1683,6 @@ function ApplicantEmailStatusBadge({ email }: { email: ApplicantEmailRow }) {
     </Badge>
   );
 }
-
-/** The pipeline strip across the top of frame 14c. Seven real stages — the
- *  frame drew six, but dropping one would hide applicants that exist. */
-const PIPELINE_STAGES: Array<[key: string, label: string]> = [
-  ["submitted", "SUBMITTED"],
-  ["waiting_for_references", "WAITING FOR REFS"],
-  ["references_received", "REFS RECEIVED"],
-  ["interview_scheduled", "INTERVIEW"],
-  ["accepted", "ACCEPTED"],
-  ["waitlisted", "WAITLISTED"],
-  ["rejected", "REJECTED"],
-];
 
 /**
  * The four readiness checks. Deliberately only things the Hub actually knows:
@@ -1694,6 +1732,7 @@ function ApplicantsTab({
   removedResponses,
   referenceSlots,
   refRequestSummaries,
+  pipelineReviews,
   staffOptions,
 }: {
   programId: string;
@@ -1702,6 +1741,7 @@ function ApplicantsTab({
   removedResponses: AppResponse[];
   referenceSlots: ReferenceSlot[];
   refRequestSummaries: RefRequestSummary[];
+  pipelineReviews: InterviewReviewSummary[];
   staffOptions: StaffUser[];
 }) {
   const router = useRouter();
@@ -1951,7 +1991,6 @@ function ApplicantsTab({
   // Pipeline filter & search
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [unassignedOnly, setUnassignedOnly] = useState(false);
 
   async function handleAssignStaff(responseId: string, staffId: string | null) {
     const res = await fetch("/api/schools/applications/responses/assign-staff", {
@@ -1985,19 +2024,48 @@ function ApplicantsTab({
 
   const responseStatusColors: Record<string, "default" | "secondary" | "destructive"> = {
     submitted: "secondary",
-    waiting_for_references: "secondary",
     references_received: "secondary",
     interview_scheduled: "secondary",
+    interview_complete: "secondary",
     accepted: "default",
     rejected: "destructive",
     waitlisted: "secondary",
     cancelled: "secondary",
   };
 
-  // Compute status counts for pipeline chips
+  const requiredSlotIds = referenceSlots.filter((slot) => slot.is_required).map((slot) => slot.id);
+  const requestsByApp = new Map<string, ReferenceRequestFact[]>();
+  for (const ref of refRequestSummaries) {
+    const rows = requestsByApp.get(ref.application_id) ?? [];
+    rows.push({ slotId: ref.slot_id, status: ref.status });
+    requestsByApp.set(ref.application_id, rows);
+  }
+  const reviewsByApp = new Map<string, InterviewReviewFact[]>();
+  for (const review of pipelineReviews) {
+    const rows = reviewsByApp.get(review.application_response_id) ?? [];
+    rows.push({ interviewOutcome: review.interview_outcome, updatedAt: review.updated_at });
+    reviewsByApp.set(review.application_response_id, rows);
+  }
+
+  function stageOf(resp: AppResponse) {
+    return derivePipelineStage({
+      storedStatus: resp.status,
+      requiredSlotIds,
+      requests: requestsByApp.get(resp.id) ?? [],
+      reviews: reviewsByApp.get(resp.id) ?? [],
+    });
+  }
+
+  function outcomeOf(resp: AppResponse): DecisiveInterviewOutcome | null {
+    return interviewOutcomeBadge(reviewsByApp.get(resp.id) ?? []);
+  }
+
+  // Counts follow the derived tab, so a stale stored status does not
+  // leave someone under Waiting for refs or Submitted after the refs are in.
   const statusCounts: Record<string, number> = {};
   for (const resp of responses) {
-    statusCounts[resp.status] = (statusCounts[resp.status] ?? 0) + 1;
+    const stage = stageOf(resp);
+    statusCounts[stage] = (statusCounts[stage] ?? 0) + 1;
   }
 
   const unassignedCount = responses.filter((r) => !r.assigned_staff_id).length;
@@ -2008,8 +2076,11 @@ function ApplicantsTab({
 
   // Filter responses by status, search, and unassigned-only toggle.
   const filteredResponses = sourceResponses.filter((resp) => {
-    if (!isRemovedView && statusFilter !== "all" && resp.status !== statusFilter) return false;
-    if (unassignedOnly && resp.assigned_staff_id) return false;
+    if (!isRemovedView && statusFilter === "unassigned") {
+      if (resp.assigned_staff_id) return false;
+    } else if (!isRemovedView && statusFilter !== "all" && stageOf(resp) !== statusFilter) {
+      return false;
+    }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       const name = respName(resp).toLowerCase();
@@ -2406,10 +2477,10 @@ function ApplicantsTab({
     }
   }
 
-  const pipelineStages: PipelineStage[] = PIPELINE_STAGES.map(([key, label]) => ({
+  const pipelineStages: PipelineStage[] = PIPELINE_STAGE_ORDER.map((key) => ({
     key,
-    label,
-    count: responses.filter((r) => r.status === key).length,
+    label: PIPELINE_STAGE_LABEL[key].toUpperCase(),
+    count: responses.filter((r) => stageOf(r) === key).length,
   }));
 
   /** The mono strap above the applicant's name: school · when · who. */
@@ -2428,16 +2499,16 @@ function ApplicantsTab({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6">
       {/* Pipeline Filter Chips & Search */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
+      <div className="min-w-0 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Users className="h-4 w-4 text-muted-foreground" />
             <h3 className="font-medium">Applicant Pipeline</h3>
           </div>
           {responses.length > 0 && (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 size="sm"
                 variant="outline"
@@ -2474,16 +2545,22 @@ function ApplicantsTab({
           )}
         </div>
 
-        {/* Status filter chips */}
-        <div className="flex flex-wrap gap-2">
-          {ALL_STATUSES.map(({ key, label }) => {
-            const count = key === "all" ? responses.length : (statusCounts[key] ?? 0);
+        {/* Status filter chips. They wrap; a chip never grows wider than the screen. */}
+        <div className="flex min-w-0 flex-wrap gap-2">
+          {PIPELINE_TABS.map(({ key, label }) => {
+            const count =
+              key === "all"
+                ? responses.length
+                : key === "unassigned"
+                  ? unassignedCount
+                  : (statusCounts[key] ?? 0);
             const isActive = statusFilter === key;
             return (
               <button
                 key={key}
+                type="button"
                 onClick={() => setStatusFilter(key)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
+                className={`inline-flex max-w-full items-center gap-1.5 whitespace-nowrap px-2.5 py-1.5 text-xs font-medium transition-colors ${
                   isActive
                     ? "bg-primary text-primary-foreground"
                     : "bg-muted text-muted-foreground hover:bg-muted/80"
@@ -2498,22 +2575,6 @@ function ApplicantsTab({
               </button>
             );
           })}
-          <button
-            onClick={() => setUnassignedOnly((v) => !v)}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
-              unassignedOnly
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted text-muted-foreground hover:bg-muted/80"
-            }`}
-            title="Show only applicants with no staff assigned"
-          >
-            Unassigned
-            <span className={`px-1.5 py-0.5 text-[10px] font-bold ${
-              unassignedOnly ? "text-white" : "bg-bone"
-            }`}>
-              {unassignedCount}
-            </span>
-          </button>
           {removedResponses.length > 0 && (
             <button
               onClick={() => setStatusFilter(isRemovedView ? "all" : "removed")}
@@ -2699,7 +2760,7 @@ function ApplicantsTab({
                 <TableHead>Student</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Submitted</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead className="hidden md:table-cell">Status</TableHead>
                 {referenceSlots.length > 0 && <TableHead>References</TableHead>}
                 <TableHead>Assigned</TableHead>
                 <TableHead className="w-[120px]" />
@@ -2732,6 +2793,15 @@ function ApplicantsTab({
                         </Badge>
                       </div>
                     )}
+                    {/* The status column sits past the fold on a phone. Repeat
+                        the stage here so the tab's badge is on screen. */}
+                    <div className="mt-1.5 md:hidden">
+                      <ApplicantStageBadges
+                        stage={stageOf(resp)}
+                        outcome={outcomeOf(resp)}
+                        variant={responseStatusColors[stageOf(resp)] ?? "secondary"}
+                      />
+                    </div>
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {respEmail(resp)}
@@ -2739,27 +2809,12 @@ function ApplicantsTab({
                   <TableCell className="text-muted-foreground">
                     {new Date(resp.submitted_at).toLocaleDateString()}
                   </TableCell>
-                  <TableCell>
-                    {(() => {
-                      const refs = refRequestSummaries.filter((r) => r.application_id === resp.id);
-                      const totalRefs = refs.length;
-                      const submittedRefs = refs.filter((r) => r.status === "submitted").length;
-                      const allRefsIn = totalRefs > 0 && submittedRefs === totalRefs;
-                      const isComplete = allRefsIn && resp.status === "submitted";
-
-                      if (isComplete) {
-                        return (
-                          <Badge style={{ background: "hsl(142 55% 25%)", color: "hsl(142 55% 75%)", border: "1px solid hsl(142 55% 35%)" }}>
-                            Complete
-                          </Badge>
-                        );
-                      }
-                      return (
-                        <Badge variant={responseStatusColors[resp.status] ?? "secondary"}>
-                          {resp.status.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())}
-                        </Badge>
-                      );
-                    })()}
+                  <TableCell className="hidden md:table-cell">
+                    <ApplicantStageBadges
+                      stage={stageOf(resp)}
+                      outcome={outcomeOf(resp)}
+                      variant={responseStatusColors[stageOf(resp)] ?? "secondary"}
+                    />
                   </TableCell>
                   {referenceSlots.length > 0 && (
                     <TableCell>
@@ -2951,7 +3006,7 @@ function ApplicantsTab({
           phone={reviewingResponse.applicant_info?.phone ?? null}
           contextLine={reviewContextLine(reviewingResponse)}
           stages={pipelineStages}
-          currentStatus={reviewingResponse.status}
+          currentStatus={stageOf(reviewingResponse)}
           answers={reviewingResponse.answers ?? []}
           references={reviewReferences.map((ref) => ({
             id: ref.id,

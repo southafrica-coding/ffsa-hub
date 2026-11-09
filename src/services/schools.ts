@@ -982,8 +982,27 @@ export async function getReferenceRequestSummaries(supabase: Client, application
   if (applicationIds.length === 0) return { data: [], error: null };
   return supabase
     .from("reference_requests")
-    .select("id, application_id, status, submitted_at, reminder_sent_at")
+    .select("id, application_id, slot_id, status, submitted_at, reminder_sent_at")
     .in("application_id", applicationIds);
+}
+
+/** Decisive interview outcomes for the applicants tab. Notes stay out of this read. */
+export async function getInterviewReviewSummaries(supabase: Client, applicationIds: string[]) {
+  if (applicationIds.length === 0) return { data: [], error: null };
+  const rows: Array<{
+    application_response_id: string;
+    interview_outcome: string | null;
+    updated_at: string | null;
+  }> = [];
+  for (let i = 0; i < applicationIds.length; i += 150) {
+    const { data, error } = await supabase
+      .from("application_staff_reviews")
+      .select("application_response_id, interview_outcome, updated_at")
+      .in("application_response_id", applicationIds.slice(i, i + 150));
+    if (error) return { data: rows, error };
+    rows.push(...(data ?? []));
+  }
+  return { data: rows, error: null };
 }
 
 export async function getReferenceRequestsByApplication(supabase: Client, applicationId: string) {

@@ -177,8 +177,9 @@ export default async function ApplicationStatusPage({
     email_problem: r.email_problem,
   }));
 
-  // Nothing advances `status` when references arrive (staff set it by hand), so
-  // light up the References step as soon as they're actually all in.
+  // The submit path advances an early status once every required reference
+  // is in. Still read the live requests, so the References step lights up
+  // even when that stored status has not caught up.
   const allReferencesIn = totalRefs > 0 && submittedRefs === totalRefs;
   const currentStep = Math.max(
     STATUS_ORDER[response.status] ?? 0,
