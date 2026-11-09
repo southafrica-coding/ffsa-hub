@@ -83,6 +83,15 @@ VALUES
    now(), 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', NULL),
   ('10000000-0000-0000-0000-00000000000a', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
    'A admin deletes', repeat('a', 50), '2026-11-01', 'Durban', 'prayer', true, 'published',
+   now(), 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', NULL),
+  ('10000000-0000-0000-0000-00000000000b', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+   'A takedown', repeat('a', 50), '2026-11-01', 'Durban', 'prayer', true, 'published',
+   now(), 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', NULL),
+  ('10000000-0000-0000-0000-00000000000c', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+   'A own withhold', repeat('a', 50), '2026-11-01', 'Durban', 'prayer', true, 'published',
+   now(), 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', NULL),
+  ('10000000-0000-0000-0000-00000000000d', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+   'A mod republish', repeat('a', 50), '2026-11-01', 'Durban', 'prayer', true, 'published',
    now(), 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', NULL);
 
 INSERT INTO public.evangelism_media (testimony_id, kind, storage_path, content_type, size_bytes, created_by) VALUES
@@ -109,6 +118,7 @@ INSERT INTO storage.objects (bucket_id, name) VALUES
 DO $$
 DECLARE
   n int;
+  got_text text;
 BEGIN
   SELECT count(*) INTO n
   FROM public.role_permissions rp
@@ -170,6 +180,53 @@ BEGIN
     has_column_privilege('authenticated', 'public.evangelism_testimonies', 'title', 'INSERT')
       AND NOT has_table_privilege('authenticated', 'public.evangelism_testimonies', 'INSERT'),
     'insert grant');
+  PERFORM public.ev_open_moderate_log(
+    'authenticated has no withheld_by grant',
+    NOT has_column_privilege('authenticated', 'public.evangelism_testimonies', 'withheld_by', 'SELECT')
+      AND NOT has_column_privilege('authenticated', 'public.evangelism_testimonies', 'withheld_by', 'INSERT')
+      AND NOT has_column_privilege('authenticated', 'public.evangelism_testimonies', 'withheld_by', 'UPDATE'),
+    'withheld_by grant');
+
+  SELECT qual INTO got_text
+  FROM pg_policies
+  WHERE schemaname = 'storage' AND policyname = 'evangelism_media_objects_select';
+  PERFORM public.ev_open_moderate_log(
+    'storage policy checks the evangelism bucket before the helper',
+    got_text LIKE '%evangelism-media%'
+      AND position('evangelism-media' in got_text) < position('evangelism_storage_visible' in got_text),
+    coalesce(got_text, 'null'));
+
+  INSERT INTO public.users (id, display_name, first_name, last_name, email, is_active) VALUES
+    ('ffffffff-ffff-ffff-ffff-ffffffffffff', 'Inactive F', 'Inactive', 'F', 'inactive@example.org', false),
+    ('99999999-9999-9999-9999-999999999999', 'Late L', 'Late', 'L', 'late@example.org', true);
+  INSERT INTO public.user_roles (user_id, role_id)
+  SELECT u.id, r.id
+  FROM public.users u
+  CROSS JOIN public.roles r
+  WHERE r.name = 'self_service'
+    AND u.is_active
+    AND NOT EXISTS (
+      SELECT 1 FROM public.user_roles ur
+      WHERE ur.user_id = u.id AND ur.role_id = r.id
+    );
+  PERFORM public.ev_open_moderate_log(
+    'backfill skips an inactive user',
+    NOT EXISTS (
+      SELECT 1 FROM public.user_roles ur
+      JOIN public.roles r ON r.id = ur.role_id
+      WHERE ur.user_id = 'ffffffff-ffff-ffff-ffff-ffffffffffff'
+        AND r.name = 'self_service'
+    ),
+    'inactive');
+  PERFORM public.ev_open_moderate_log(
+    'backfill still covers an active user',
+    EXISTS (
+      SELECT 1 FROM public.user_roles ur
+      JOIN public.roles r ON r.id = ur.role_id
+      WHERE ur.user_id = '99999999-9999-9999-9999-999999999999'
+        AND r.name = 'self_service'
+    ),
+    'active');
 END $$;
 
 -- ── author ───────────────────────────────────────────────
@@ -604,6 +661,237 @@ BEGIN
   END;
 END $$;
 RESET ROLE;
+
+-- ── a moderator's takedown sticks ────────────────────────
+SELECT set_config('request.jwt.claim.sub', 'cccccccc-cccc-cccc-cccc-cccccccccccc', false);
+SELECT set_config('request.jwt.claim.role', 'authenticated', false);
+SELECT set_config('request.jwt.claims', '{"sub":"cccccccc-cccc-cccc-cccc-cccccccccccc","role":"authenticated"}', false);
+SET ROLE authenticated;
+DO $$
+DECLARE
+  n int;
+BEGIN
+  UPDATE public.evangelism_testimonies
+     SET status = 'withheld', withheld_reason = 'takedown'
+   WHERE id = '10000000-0000-0000-0000-00000000000b';
+  GET DIAGNOSTICS n = ROW_COUNT;
+  IF n <> 1 THEN
+    PERFORM public.ev_open_moderate_log(
+      'moderator withholds stories for the takedown checks', false, 'takedown rows=' || n);
+  END IF;
+  UPDATE public.evangelism_testimonies
+     SET status = 'withheld', withheld_reason = 'board'
+   WHERE id = '10000000-0000-0000-0000-00000000000d';
+  GET DIAGNOSTICS n = ROW_COUNT;
+  PERFORM public.ev_open_moderate_log(
+    'moderator withholds stories for the takedown checks', n = 1, 'republish-target rows=' || n);
+EXCEPTION WHEN OTHERS THEN
+  PERFORM public.ev_open_moderate_log(
+    'moderator withholds stories for the takedown checks', false, SQLSTATE || ' ' || SQLERRM);
+END $$;
+RESET ROLE;
+DO $$
+DECLARE
+  by_b uuid;
+  by_d uuid;
+BEGIN
+  SELECT withheld_by INTO by_b FROM public.evangelism_testimonies
+   WHERE id = '10000000-0000-0000-0000-00000000000b';
+  SELECT withheld_by INTO by_d FROM public.evangelism_testimonies
+   WHERE id = '10000000-0000-0000-0000-00000000000d';
+  PERFORM public.ev_open_moderate_log(
+    'moderator withhold stamps withheld_by',
+    by_b = 'cccccccc-cccc-cccc-cccc-cccccccccccc'
+      AND by_d = 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+    coalesce(by_b::text, 'null') || ' / ' || coalesce(by_d::text, 'null'));
+END $$;
+
+SELECT set_config('request.jwt.claim.sub', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', false);
+SELECT set_config('request.jwt.claim.role', 'authenticated', false);
+SELECT set_config('request.jwt.claims', '{"sub":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","role":"authenticated"}', false);
+SET ROLE authenticated;
+DO $$
+DECLARE
+  got text;
+  n int;
+BEGIN
+  BEGIN
+    UPDATE public.evangelism_testimonies SET status = 'published'
+     WHERE id = '10000000-0000-0000-0000-00000000000b';
+    PERFORM public.ev_open_moderate_log(
+      'author cannot republish a moderator takedown', false, 'update succeeded');
+  EXCEPTION WHEN insufficient_privilege THEN
+    PERFORM public.ev_open_moderate_log(
+      'author cannot republish a moderator takedown',
+      SQLERRM LIKE '%only a moderator can republish%', SQLERRM);
+  END;
+
+  BEGIN
+    UPDATE public.evangelism_testimonies SET withheld_reason = 'author changed it'
+     WHERE id = '10000000-0000-0000-0000-00000000000b';
+    PERFORM public.ev_open_moderate_log(
+      'author cannot change a moderator withheld_reason', false, 'update succeeded');
+  EXCEPTION WHEN insufficient_privilege THEN
+    PERFORM public.ev_open_moderate_log(
+      'author cannot change a moderator withheld_reason', true, SQLSTATE);
+  END;
+
+  BEGIN
+    UPDATE public.evangelism_testimonies SET withheld_reason = NULL
+     WHERE id = '10000000-0000-0000-0000-00000000000b';
+    PERFORM public.ev_open_moderate_log(
+      'author cannot clear a moderator withheld_reason', false, 'update succeeded');
+  EXCEPTION WHEN insufficient_privilege THEN
+    PERFORM public.ev_open_moderate_log(
+      'author cannot clear a moderator withheld_reason', true, SQLSTATE);
+  END;
+
+  BEGIN
+    UPDATE public.evangelism_testimonies SET title = 'Edited after takedown'
+     WHERE id = '10000000-0000-0000-0000-00000000000b';
+    SELECT title INTO got FROM public.evangelism_testimonies
+     WHERE id = '10000000-0000-0000-0000-00000000000b';
+    PERFORM public.ev_open_moderate_log(
+      'author can still edit the content of a withheld story',
+      got = 'Edited after takedown', coalesce(got, 'null'));
+  EXCEPTION WHEN OTHERS THEN
+    PERFORM public.ev_open_moderate_log(
+      'author can still edit the content of a withheld story', false, SQLSTATE || ' ' || SQLERRM);
+  END;
+
+  BEGIN
+    UPDATE public.evangelism_testimonies SET withheld_by = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+     WHERE id = '10000000-0000-0000-0000-00000000000c';
+    PERFORM public.ev_open_moderate_log(
+      'author cannot set withheld_by directly', false, 'update succeeded');
+  EXCEPTION WHEN insufficient_privilege THEN
+    PERFORM public.ev_open_moderate_log(
+      'author cannot set withheld_by directly', true, SQLSTATE);
+  END;
+
+  BEGIN
+    INSERT INTO public.evangelism_testimonies
+      (title, body, occurred_on, location_label, outcome, consent_to_share, status, withheld_by)
+    VALUES ('Chosen withholder', repeat('w', 50), '2026-11-01', 'Durban', 'prayer',
+            true, 'submitted', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+    PERFORM public.ev_open_moderate_log(
+      'author cannot insert withheld_by', false, 'insert succeeded');
+  EXCEPTION WHEN insufficient_privilege THEN
+    PERFORM public.ev_open_moderate_log(
+      'author cannot insert withheld_by', true, SQLSTATE);
+  END;
+
+  BEGIN
+    UPDATE public.evangelism_testimonies
+       SET status = 'withheld', withheld_reason = 'mine'
+     WHERE id = '10000000-0000-0000-0000-00000000000c';
+    GET DIAGNOSTICS n = ROW_COUNT;
+    PERFORM public.ev_open_moderate_log(
+      'author withholds their own story', n = 1, 'rows=' || n);
+  EXCEPTION WHEN OTHERS THEN
+    PERFORM public.ev_open_moderate_log(
+      'author withholds their own story', false, SQLSTATE || ' ' || SQLERRM);
+  END;
+END $$;
+RESET ROLE;
+
+DO $$
+DECLARE
+  by_b uuid;
+  by_c uuid;
+  st_b text;
+  title_b text;
+BEGIN
+  SELECT withheld_by, status, title INTO by_b, st_b, title_b
+  FROM public.evangelism_testimonies
+  WHERE id = '10000000-0000-0000-0000-00000000000b';
+  SELECT withheld_by INTO by_c FROM public.evangelism_testimonies
+   WHERE id = '10000000-0000-0000-0000-00000000000c';
+  PERFORM public.ev_open_moderate_log(
+    'content edit leaves the moderator on withheld_by',
+    by_b = 'cccccccc-cccc-cccc-cccc-cccccccccccc'
+      AND st_b = 'withheld'
+      AND title_b = 'Edited after takedown',
+    coalesce(by_b::text, 'null') || ' ' || coalesce(st_b, 'null'));
+  PERFORM public.ev_open_moderate_log(
+    'author withhold stamps withheld_by as themselves',
+    by_c = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+    coalesce(by_c::text, 'null'));
+END $$;
+
+SELECT set_config('request.jwt.claim.sub', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', false);
+SELECT set_config('request.jwt.claims', '{"sub":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","role":"authenticated"}', false);
+SET ROLE authenticated;
+DO $$
+DECLARE
+  n int;
+BEGIN
+  BEGIN
+    UPDATE public.evangelism_testimonies SET status = 'published'
+     WHERE id = '10000000-0000-0000-0000-00000000000c';
+    GET DIAGNOSTICS n = ROW_COUNT;
+    PERFORM public.ev_open_moderate_log(
+      'author republishes a story they withheld', n = 1, 'rows=' || n);
+  EXCEPTION WHEN OTHERS THEN
+    PERFORM public.ev_open_moderate_log(
+      'author republishes a story they withheld', false, SQLSTATE || ' ' || SQLERRM);
+  END;
+
+  BEGIN
+    DELETE FROM public.evangelism_testimonies
+     WHERE id = '10000000-0000-0000-0000-00000000000b';
+    GET DIAGNOSTICS n = ROW_COUNT;
+    PERFORM public.ev_open_moderate_log(
+      'author can delete a story a moderator withheld', n = 1, 'rows=' || n);
+  EXCEPTION WHEN OTHERS THEN
+    PERFORM public.ev_open_moderate_log(
+      'author can delete a story a moderator withheld', false, SQLSTATE || ' ' || SQLERRM);
+  END;
+END $$;
+RESET ROLE;
+
+DO $$
+DECLARE
+  by_c uuid;
+  st_c text;
+  n int;
+BEGIN
+  SELECT status, withheld_by INTO st_c, by_c FROM public.evangelism_testimonies
+   WHERE id = '10000000-0000-0000-0000-00000000000c';
+  PERFORM public.ev_open_moderate_log(
+    'author republish clears withheld_by',
+    st_c = 'published' AND by_c IS NULL,
+    coalesce(st_c, 'null') || ' ' || coalesce(by_c::text, 'null'));
+  SELECT count(*) INTO n FROM public.evangelism_testimonies
+   WHERE id = '10000000-0000-0000-0000-00000000000b';
+  PERFORM public.ev_open_moderate_log(
+    'moderator-withheld story is gone after the author deletes it', n = 0, 'rows=' || n);
+END $$;
+
+SELECT set_config('request.jwt.claim.sub', 'cccccccc-cccc-cccc-cccc-cccccccccccc', false);
+SELECT set_config('request.jwt.claims', '{"sub":"cccccccc-cccc-cccc-cccc-cccccccccccc","role":"authenticated"}', false);
+SET ROLE authenticated;
+DO $$
+BEGIN
+  UPDATE public.evangelism_testimonies SET status = 'published'
+   WHERE id = '10000000-0000-0000-0000-00000000000d';
+EXCEPTION WHEN OTHERS THEN
+  PERFORM public.ev_open_moderate_log(
+    'moderator republishes a withheld story', false, SQLSTATE || ' ' || SQLERRM);
+END $$;
+RESET ROLE;
+DO $$
+DECLARE
+  by_d uuid;
+  st_d text;
+BEGIN
+  SELECT status, withheld_by INTO st_d, by_d FROM public.evangelism_testimonies
+   WHERE id = '10000000-0000-0000-0000-00000000000d';
+  PERFORM public.ev_open_moderate_log(
+    'moderator republish clears withheld_by',
+    st_d = 'published' AND by_d IS NULL,
+    coalesce(st_d, 'null') || ' ' || coalesce(by_d::text, 'null'));
+END $$;
 
 -- ── anon ─────────────────────────────────────────────────
 SELECT set_config('request.jwt.claim.sub', '', false);

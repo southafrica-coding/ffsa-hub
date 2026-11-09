@@ -42,11 +42,13 @@ ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 -- Defensive backfill. Mirrors 115: NOT EXISTS, because NULL scope
 -- columns make ON CONFLICT unreliable. Column list matches 115.
+-- Active accounts only: a deactivated user with no roles stays that way.
 INSERT INTO public.user_roles (user_id, role_id)
 SELECT u.id, r.id
 FROM public.users u
 CROSS JOIN public.roles r
 WHERE r.name = 'self_service'
+  AND u.is_active
   AND NOT EXISTS (
     SELECT 1
     FROM public.user_roles ur
@@ -77,6 +79,11 @@ GRANT EXECUTE ON FUNCTION public.can_moderate_evangelism() TO authenticated, ser
 -- stay with the author, even for a moderator. A draft still cannot
 -- be submitted or published by someone else, and cannot go straight
 -- to published. Consent remains the table CHECK.
+-- Who last withheld the story. Not granted to authenticated (no column
+-- grant), stamped only by the guard below.
+ALTER TABLE public.evangelism_testimonies
+  ADD COLUMN IF NOT EXISTS withheld_by uuid REFERENCES public.users(id) ON DELETE SET NULL;
+
 CREATE OR REPLACE FUNCTION public.evangelism_testimonies_guard()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -125,6 +132,17 @@ BEGIN
       END IF;
     END IF;
   ELSE
+    -- A moderator's takedown sticks: the author may still edit content or
+    -- delete the story, but cannot republish, resubmit or change the reason.
+    IF TG_OP = 'UPDATE'
+       AND OLD.status = 'withheld'
+       AND OLD.withheld_by IS NOT NULL
+       AND OLD.withheld_by IS DISTINCT FROM auth.uid()
+       AND (NEW.status, NEW.withheld_reason) IS DISTINCT FROM (OLD.status, OLD.withheld_reason)
+       AND NOT public.can_moderate_evangelism() THEN
+      RAISE EXCEPTION 'A moderator withheld this story; only a moderator can republish it'
+        USING ERRCODE = '42501';
+    END IF;
     -- Author may withhold (unpublish) their own published story.
     IF NEW.status = 'withheld'
        AND old_status IS DISTINCT FROM 'withheld'
@@ -151,16 +169,24 @@ BEGIN
     NEW.published_at := now();
     NEW.published_by := auth.uid();
     NEW.withheld_reason := NULL;
+    NEW.withheld_by := NULL;
   ELSIF NEW.status = 'published' THEN
     IF TG_OP = 'UPDATE' THEN
       NEW.published_at := OLD.published_at;
       NEW.published_by := OLD.published_by;
     END IF;
+    NEW.withheld_by := NULL;
   ELSE
     NEW.published_at := NULL;
     NEW.published_by := NULL;
     IF NEW.status <> 'withheld' THEN
       NEW.withheld_reason := NULL;
+      NEW.withheld_by := NULL;
+    ELSIF old_status IS DISTINCT FROM 'withheld'
+          OR (someone_else AND NEW.withheld_reason IS DISTINCT FROM OLD.withheld_reason) THEN
+      NEW.withheld_by := auth.uid();
+    ELSE
+      NEW.withheld_by := OLD.withheld_by;
     END IF;
   END IF;
 
@@ -363,4 +389,4 @@ GRANT EXECUTE ON FUNCTION public.evangelism_storage_visible(text, text) TO authe
 DROP POLICY IF EXISTS "evangelism_media_objects_select" ON storage.objects;
 CREATE POLICY "evangelism_media_objects_select"
   ON storage.objects FOR SELECT TO authenticated
-  USING (public.evangelism_storage_visible(bucket_id, name));
+  USING (bucket_id = 'evangelism-media' AND public.evangelism_storage_visible(bucket_id, name));
