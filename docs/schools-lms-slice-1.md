@@ -15,6 +15,7 @@ editor, per the usual process).
     `has_schools_access(program)` — the same people `userCanManageProgram` accepts.
   - Read published only: `is_program_staff(program)`, or an enrolled student
     (`removed_at IS NULL`, status not `dismissed` / `decided_to_leave`).
+    Graduated students keep read access to published content.
   - A lesson is visible to readers only when the lesson, its module, and its
     course are all published. `anon` has no grants.
 - **Service** `src/services/lms-content.ts`; pure helpers (validation,
@@ -28,7 +29,8 @@ editor, per the usual process).
   - Publish toggles are `PATCH { published }`.
   - Student: `GET /api/my-schools/[enrollmentId]/lms` — own, active enrolment, published tree.
 - **Leader UI**: new **Classroom** tab on the school page
-  (`classroom-tab.tsx`) — create courses / modules / lessons, reorder with
+  (`classroom-tab.tsx`) — create courses / modules / lessons, rename courses
+  and modules, edit a lesson's title and text or link inline, reorder with
   up/down, publish/unpublish, delete. Shown only to `viewer.canManage`.
   Staff-scoped viewers never reach `ProgramDetail` (they get the assigned
   applicants view), so they have no Classroom tab. The existing **Courses**
@@ -47,7 +49,7 @@ editor, per the usual process).
 - Progress tracking / completion
 - Templates library / AI course agent
 - Mobile app surfaces
-- Editing lesson text in the UI (the PATCH API supports it; the tab only creates, reorders, publishes, deletes)
+- Changing a lesson's type (text ↔ link) in the UI — delete and re-add instead
 
 ## Separate drafts
 
@@ -61,6 +63,8 @@ rebases onto, or copies from them.
   publish filtering, content-type validation, access, sanitising.
 - `src/app/api/schools/programs/[programId]/lms/courses/route.test.ts` and
   `src/app/api/my-schools/[enrollmentId]/lms/route.test.ts` — route gates.
+- `src/app/api/schools/programs/[programId]/lms/lessons/[lessonId]/route.test.ts` —
+  lesson edit path plus course / module rename.
 - `supabase/tests/lms_content_rls.sql` (+ `src/lib/schools/lms-content-rls.test.ts`
   wrapper, which skips without local Postgres):
 

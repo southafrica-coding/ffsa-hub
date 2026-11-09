@@ -6,12 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { StatusPill } from "@/components/ffsa";
-import { ArrowDown, ArrowUp, ChevronLeft, ExternalLink, Loader2, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ChevronLeft, ExternalLink, Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
 import {
+  lessonEditPayload,
   moveId,
   type LmsContentType,
   type LmsCourse,
   type LmsCourseTree,
+  type LmsLesson,
 } from "@/lib/schools/lms-content";
 
 // Classroom (LMS slice 1): courses → modules → lessons for this school.
@@ -96,6 +98,101 @@ function RowControls({
   );
 }
 
+/** Pencil → inline title input → save / cancel. Used for course and module names. */
+function RenameButton({
+  title,
+  busy,
+  label,
+  onSave,
+}: {
+  title: string;
+  busy: boolean;
+  label: string;
+  onSave: (title: string) => Promise<boolean>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(title);
+
+  if (!editing) {
+    return (
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        disabled={busy}
+        onClick={() => {
+          setValue(title);
+          setEditing(true);
+        }}
+      >
+        <Pencil className="h-4 w-4" />
+        <span className="sr-only">Rename {label}</span>
+      </Button>
+    );
+  }
+  return (
+    <form
+      className="flex items-center gap-1"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        if (await onSave(value)) setEditing(false);
+      }}
+    >
+      <Input value={value} onChange={(e) => setValue(e.target.value)} aria-label={`New name for ${label}`} className="h-8 w-48" autoFocus />
+      <Button type="submit" variant="ghost" size="sm" disabled={busy || !value.trim()}>
+        <Check className="h-4 w-4" />
+        <span className="sr-only">Save name</span>
+      </Button>
+      <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(false)}>
+        <X className="h-4 w-4" />
+        <span className="sr-only">Cancel rename</span>
+      </Button>
+    </form>
+  );
+}
+
+/** Inline editor for one lesson: title plus its text or link. Type stays the same. */
+function LessonEditForm({
+  lesson,
+  busy,
+  onSave,
+  onCancel,
+}: {
+  lesson: LmsLesson;
+  busy: boolean;
+  onSave: (payload: Record<string, string>) => Promise<boolean>;
+  onCancel: () => void;
+}) {
+  const [title, setTitle] = useState(lesson.title);
+  const [body, setBody] = useState(lesson.body ?? "");
+  const [url, setUrl] = useState(lesson.link_url ?? "");
+
+  return (
+    <form
+      className="w-full space-y-2 py-1"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        if (await onSave(lessonEditPayload(lesson, { title, body, link_url: url }))) onCancel();
+      }}
+    >
+      <Input value={title} onChange={(e) => setTitle(e.target.value)} aria-label="Lesson title" />
+      {lesson.content_type === "link" ? (
+        <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" aria-label="Lesson link" />
+      ) : (
+        <Textarea value={body} onChange={(e) => setBody(e.target.value)} rows={5} aria-label="Lesson text" />
+      )}
+      <div className="flex gap-2">
+        <Button type="submit" size="sm" disabled={busy || !title.trim()}>
+          Save lesson
+        </Button>
+        <Button type="button" size="sm" variant="outline" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 function AddLessonForm({ onAdd, busy }: { onAdd: (input: Record<string, unknown>) => Promise<boolean>; busy: boolean }) {
   const [title, setTitle] = useState("");
   const [type, setType] = useState<LmsContentType>("rich_text");
@@ -151,6 +248,7 @@ export function ClassroomTab({ programId }: { programId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [newCourse, setNewCourse] = useState("");
   const [newModule, setNewModule] = useState("");
+  const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
 
   const loadCourses = useCallback(async () => {
     const { ok, data } = await call(`${base}/courses`, "GET");
@@ -200,6 +298,8 @@ export function ClassroomTab({ programId }: { programId: string }) {
   const togglePublish = (kind: Kind, id: string, published: boolean) =>
     run(pathFor(kind, id), "PATCH", { published: !published });
 
+  const rename = (kind: Kind, id: string, title: string) => run(pathFor(kind, id), "PATCH", { title });
+
   const remove = (kind: Kind, id: string, title: string) => {
     if (!window.confirm(`Delete "${title}"? This also deletes everything inside it.`)) return;
     if (kind === "course" && id === openId) setOpenId(null);
@@ -224,7 +324,15 @@ export function ClassroomTab({ programId }: { programId: string }) {
             <ChevronLeft className="mr-1 h-4 w-4" /> All classroom courses
           </Button>
           <div className="flex items-center justify-between gap-3">
-            <CardTitle className="text-base">{tree.title}</CardTitle>
+            <div className="flex min-w-0 items-center gap-1">
+              <CardTitle className="truncate text-base">{tree.title}</CardTitle>
+              <RenameButton
+                title={tree.title}
+                busy={busy}
+                label={tree.title}
+                onSave={(title) => rename("course", tree.id, title)}
+              />
+            </div>
             <PublishToggle
               published={tree.published}
               busy={busy}
@@ -247,7 +355,15 @@ export function ClassroomTab({ programId }: { programId: string }) {
             return (
               <section key={m.id} className="border border-ink bg-white">
                 <header className="flex items-center justify-between gap-2 border-b px-3 py-2">
-                  <p className="min-w-0 truncate text-sm font-semibold">{m.title}</p>
+                  <div className="flex min-w-0 items-center gap-1">
+                    <p className="min-w-0 truncate text-sm font-semibold">{m.title}</p>
+                    <RenameButton
+                      title={m.title}
+                      busy={busy}
+                      label={m.title}
+                      onSave={(title) => rename("module", m.id, title)}
+                    />
+                  </div>
                   <div className="flex items-center gap-1">
                     <PublishToggle
                       published={m.published}
@@ -270,7 +386,17 @@ export function ClassroomTab({ programId }: { programId: string }) {
                 <div className="space-y-2 px-3 py-2">
                   {m.lessons.length === 0 && <p className="text-xs italic text-muted-foreground">No lessons yet.</p>}
                   <ul className="divide-y">
-                    {m.lessons.map((l, li) => (
+                    {m.lessons.map((l, li) =>
+                      editingLessonId === l.id ? (
+                        <li key={l.id} className="py-2">
+                          <LessonEditForm
+                            lesson={l}
+                            busy={busy}
+                            onSave={(payload) => run(pathFor("lesson", l.id), "PATCH", payload)}
+                            onCancel={() => setEditingLessonId(null)}
+                          />
+                        </li>
+                      ) : (
                       <li key={l.id} className="flex items-center justify-between gap-2 py-2">
                         <div className="min-w-0">
                           <p className="truncate text-sm">{l.title}</p>
@@ -289,6 +415,16 @@ export function ClassroomTab({ programId }: { programId: string }) {
                           )}
                         </div>
                         <div className="flex items-center gap-1">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            disabled={busy}
+                            onClick={() => setEditingLessonId(l.id)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                            <span className="sr-only">Edit {l.title}</span>
+                          </Button>
                           <PublishToggle
                             published={l.published}
                             busy={busy}
@@ -309,7 +445,8 @@ export function ClassroomTab({ programId }: { programId: string }) {
                           />
                         </div>
                       </li>
-                    ))}
+                      )
+                    )}
                   </ul>
                   <AddLessonForm busy={busy} onAdd={(input) => run(`${base}/modules/${m.id}/lessons`, "POST", input)} />
                 </div>
@@ -357,6 +494,12 @@ export function ClassroomTab({ programId }: { programId: string }) {
                   {c.description && <p className="truncate text-xs text-muted-foreground">{c.description}</p>}
                 </button>
                 <div className="flex items-center gap-1">
+                  <RenameButton
+                    title={c.title}
+                    busy={busy}
+                    label={c.title}
+                    onSave={(title) => rename("course", c.id, title)}
+                  />
                   <PublishToggle
                     published={c.published}
                     busy={busy}

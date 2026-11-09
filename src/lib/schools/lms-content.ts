@@ -310,6 +310,20 @@ export function validateLessonPatch(raw: unknown): Result<LessonPatch> {
   return { ok: true, value: patch };
 }
 
+/**
+ * PATCH body for the Classroom tab's inline lesson editor. The lesson keeps
+ * its content_type; the body carries the full content for that type so it
+ * passes validateLessonPatch and the table CHECK.
+ */
+export function lessonEditPayload(
+  lesson: Pick<LmsLesson, "content_type">,
+  draft: { title: string; body: string; link_url: string }
+): Record<string, string> {
+  return lesson.content_type === "link"
+    ? { title: draft.title, content_type: "link", link_url: draft.link_url }
+    : { title: draft.title, content_type: "rich_text", body: draft.body };
+}
+
 // ── Access ──────────────────────────────────────────────────
 
 export type LmsAccess = {
