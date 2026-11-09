@@ -12,11 +12,18 @@ export const maxDuration = 60;
 // Sends one batch for every campaign that is due (status 'scheduled'
 // with scheduled_at in the past) or already 'sending' (resume). Large
 // campaigns drain over successive cron runs.
+//
+// CRON_SECRET must be set. A missing secret used to skip the check, which
+// let anyone trigger due sends. Fail closed instead.
 export async function GET(request: Request) {
-  const cronSecret = process.env.CRON_SECRET;
+  const cronSecret = process.env.CRON_SECRET?.trim();
   const auth = request.headers.get("authorization");
+  if (!cronSecret) {
+    console.error("[cron/send-scheduled] CRON_SECRET not set — refusing to run");
+    return NextResponse.json({ error: "cron secret not configured" }, { status: 503 });
+  }
   // Vercel Cron sends `Authorization: Bearer <CRON_SECRET>`.
-  if (cronSecret && auth !== `Bearer ${cronSecret}`) {
+  if (auth !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
