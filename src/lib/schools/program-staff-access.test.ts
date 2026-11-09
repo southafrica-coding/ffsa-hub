@@ -22,11 +22,16 @@ describe("deriveProgramViewer", () => {
     expect(deriveProgramViewer(base).staffScoped).toBe(true);
   });
 
-  it("leaves a leader, a schools grant, and a finance manager on their current access", () => {
+  it("leaves a leader and a schools grant on the full school, and finance only adds fees", () => {
     expect(deriveProgramViewer({ ...base, canManage: true }).staffScoped).toBe(false);
     expect(deriveProgramViewer({ ...base, hasSchoolsGrant: true }).staffScoped).toBe(false);
-    expect(deriveProgramViewer({ ...base, canManageFinance: true }).staffScoped).toBe(false);
     expect(deriveProgramViewer({ ...base, isStaff: false }).staffScoped).toBe(false);
+
+    const financeStaff = deriveProgramViewer({ ...base, canManageFinance: true });
+    expect(financeStaff.staffScoped).toBe(true);
+    expect(financeStaff.showFees).toBe(true);
+    expect(deriveProgramViewer(base).showFees).toBe(false);
+    expect(deriveProgramViewer({ ...base, canManage: true }).showFees).toBe(true);
   });
 });
 

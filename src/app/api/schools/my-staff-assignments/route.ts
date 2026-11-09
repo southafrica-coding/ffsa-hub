@@ -39,13 +39,19 @@ export async function GET() {
   // Drop applications the user can no longer read — RLS on the user client
   // applies the 6-month expiry lock (migration 223). Identities still come
   // from the admin read above (users-table RLS nulls embedded joins).
-  const { data: readable } = await supabase
-    .from("application_responses")
-    .select("id")
-    .eq("assigned_staff_id", authUser.id);
+  // RLS (migration 304) only returns rows the caller can still open: a
+  // current program_staff or program_leaders link, or a schools grant.
+  // A stale assigned_staff_id is not enough.
+  const [{ data: readable }, { data: readableEnrollments }] = await Promise.all([
+    supabase.from("application_responses").select("id").eq("assigned_staff_id", authUser.id),
+    supabase.from("enrollments").select("id").eq("assigned_staff_id", authUser.id),
+  ]);
   const readableIds = new Set((readable ?? []).map((r) => r.id));
+  const readableEnrollmentIds = new Set((readableEnrollments ?? []).map((r) => r.id));
   const apps = (appsResult.data ?? []).filter((a) => readableIds.has(a.id));
-  const enrollments = enrollmentsResult.data ?? [];
+  const enrollments = (enrollmentsResult.data ?? []).filter((row) =>
+    readableEnrollmentIds.has(row.id)
+  );
 
   const unreadApps = apps.filter(
     (a) => (a as unknown as { staff_viewed_at: string | null }).staff_viewed_at === null

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const h = vi.hoisted(() => ({
   canManage: true,
   calls: [] as string[],
+  person: { id: "u1", is_active: true } as { id: string; is_active: boolean } | null,
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -10,7 +11,17 @@ vi.mock("@/lib/supabase/server", () => ({
     auth: { getUser: async () => ({ data: { user: { id: "me" } } }) },
   }),
 }));
-vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({}) }));
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: () => ({
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: async () => ({ data: h.person, error: null }),
+        }),
+      }),
+    }),
+  }),
+}));
 vi.mock("@/lib/schools/program-staff-access", () => ({
   userCanManageProgramStaff: async () => h.canManage,
 }));
@@ -37,6 +48,7 @@ const req = (method: string, body?: unknown) =>
 beforeEach(() => {
   h.canManage = true;
   h.calls = [];
+  h.person = { id: "u1", is_active: true };
 });
 
 describe("program staff API", () => {
@@ -56,6 +68,19 @@ describe("program staff API", () => {
 
   it("requires a userId", async () => {
     expect((await route.POST(req("POST", {}), ctx)).status).toBe(400);
+    expect(h.calls).toEqual([]);
+  });
+
+  it("refuses a missing or deactivated person", async () => {
+    h.person = null;
+    const missing = await route.POST(req("POST", { userId: "u1" }), ctx);
+    expect(missing.status).toBe(400);
+    expect((await missing.json()).error).toMatch(/Hub account/);
+
+    h.person = { id: "u1", is_active: false };
+    const inactive = await route.POST(req("POST", { userId: "u1" }), ctx);
+    expect(inactive.status).toBe(400);
+    expect((await inactive.json()).error).toMatch(/deactivated/);
     expect(h.calls).toEqual([]);
   });
 });

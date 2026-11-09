@@ -18,6 +18,7 @@ import { ProgramDetail } from "./program-detail";
 import { loadTrackPipeline, summariseTrack } from "@/lib/schools/track-pipeline";
 import { Masthead } from "@/components/ffsa";
 import { SchoolFeesPanel } from "@/components/finance/school-fees-panel";
+import { adminNotesByResponse } from "@/lib/schools/admin-notes";
 import { getSchoolBalances } from "@/services/school-balances";
 import type { RosterFee } from "./roster-tab";
 import { canUseStaffDecisions } from "@/lib/auth/check-okr-access";
@@ -222,13 +223,13 @@ export default async function ProgramDetailPage({
     return (
       <div className="ffsa-screen">
         <Masthead context="Training" title={program.name} />
-        <p className="px-5 py-6 md:px-8 md:py-7 text-[13px]">You are not on the staff of this school.</p>
+        <p className="px-5 py-6 md:px-8 md:py-7 text-[13px]">This school isn&apos;t open to you.</p>
       </div>
     );
   }
 
-  // Staff with no leader, schools.*, or finance grant: assigned applicants only.
-  // Fees, the form, and the emails are not loaded.
+  // Staff without a manage or schools.* grant: assigned applicants only.
+  // Finance access adds the fees panel and nothing else.
   if (viewer.staffScoped) {
     const { data: responsesRaw } = await getResponsesByProgram(supabase, programId);
     const visible = applicationsForViewer(responsesRaw ?? [], viewer);
@@ -250,12 +251,19 @@ export default async function ProgramDetailPage({
     }
     const byResponse = new Map(reviewRows.map((row) => [row.application_response_id, row]));
     return (
-      <StaffApplicants
-        programName={program.name}
-        applicants={hydrated.map((row: { id: string }) =>
-          staffApplicantFromResponse(row, byResponse.get(row.id))
-        )}
-      />
+      <>
+        <StaffApplicants
+          programName={program.name}
+          applicants={hydrated.map((row: { id: string }) =>
+            staffApplicantFromResponse(row, byResponse.get(row.id))
+          )}
+        />
+        {viewer.showFees ? (
+          <div className="px-5 py-6 md:px-8">
+            <SchoolFeesPanel programId={programId} />
+          </div>
+        ) : null}
+      </>
     );
   }
 
@@ -398,14 +406,20 @@ export default async function ProgramDetailPage({
   const { data: questions } = await getQuestionsByProgram(supabase, programId);
   const { data: responsesRaw } = await getResponsesByProgram(supabase, programId);
   const { data: removedResponsesRaw } = await getRemovedResponsesByProgram(supabase, programId);
-  const responses = await hydrateUserIdentities(admin, responsesRaw ?? [], [
+  const responsesHydrated = await hydrateUserIdentities(admin, responsesRaw ?? [], [
     ["user_id", "users"],
     ["assigned_staff_id", "assigned_staff"],
   ]);
-  const removedResponses = await hydrateUserIdentities(admin, removedResponsesRaw ?? [], [
+  const removedHydrated = await hydrateUserIdentities(admin, removedResponsesRaw ?? [], [
     ["user_id", "users"],
     ["assigned_staff_id", "assigned_staff"],
   ]);
+  const noteIds = [...responsesHydrated, ...removedHydrated].map((row: { id: string }) => row.id);
+  const leaderNotes = await adminNotesByResponse(supabase, noteIds);
+  const withNotes = <T extends { id: string }>(rows: T[]) =>
+    rows.map((row) => ({ ...row, admin_notes: leaderNotes.get(row.id) ?? null }));
+  const responses = withNotes(responsesHydrated);
+  const removedResponses = withNotes(removedHydrated);
   const { data: referenceSlots } = await getReferenceSlotsByProgram(supabase, programId);
   const { data: referenceQuestions } = await getReferenceQuestionsByProgram(supabase, programId);
 

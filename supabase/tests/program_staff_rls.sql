@@ -71,7 +71,42 @@ CREATE TABLE public.application_responses (
   program_id uuid NOT NULL REFERENCES public.programs(id),
   user_id uuid REFERENCES public.users(id),
   assigned_staff_id uuid REFERENCES public.users(id),
+  staff_assigned_at timestamptz,
+  staff_assigned_by uuid,
+  staff_viewed_at timestamptz,
+  admin_notes text,
+  reviewed_by uuid,
   status text NOT NULL DEFAULT 'submitted'
+);
+CREATE TABLE public.enrollments (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  program_id uuid NOT NULL REFERENCES public.programs(id),
+  user_id uuid REFERENCES public.users(id),
+  assigned_staff_id uuid REFERENCES public.users(id),
+  staff_assigned_at timestamptz,
+  staff_assigned_by uuid,
+  staff_viewed_at timestamptz
+);
+CREATE TABLE public.roles (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text NOT NULL
+);
+CREATE TABLE public.user_roles (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  role_id uuid NOT NULL REFERENCES public.roles(id),
+  scope_type text
+);
+CREATE TABLE public.permissions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  key text NOT NULL
+);
+CREATE TABLE public.user_permissions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  permission_id uuid NOT NULL REFERENCES public.permissions(id),
+  scope_type text,
+  scope_id uuid
 );
 CREATE TABLE public.application_questions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -149,6 +184,10 @@ CREATE TABLE public.student_billing_schedule (
 );
 
 ALTER TABLE public.application_responses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.enrollments ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Assigned staff can read their enrollments"
+  ON public.enrollments FOR SELECT
+  USING (assigned_staff_id = auth.uid());
 ALTER TABLE public.application_questions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reference_slots ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reference_questions ENABLE ROW LEVEL SECURITY;
@@ -181,8 +220,12 @@ CREATE POLICY open_read_emails ON public.program_email_templates FOR SELECT USIN
 CREATE POLICY leaders_update_responses ON public.application_responses FOR UPDATE
   USING (public.has_schools_access(program_id))
   WITH CHECK (public.has_schools_access(program_id));
-CREATE POLICY assigned_or_leader_read_responses ON public.application_responses FOR SELECT
-  USING (assigned_staff_id = auth.uid() OR public.has_schools_access(program_id));
+CREATE POLICY "Schools managers can read all application responses"
+  ON public.application_responses FOR SELECT
+  USING (public.has_schools_access(program_id));
+CREATE POLICY "Assigned staff can read their application_responses"
+  ON public.application_responses FOR SELECT
+  USING (assigned_staff_id = auth.uid());
 
 \ir ../migrations/304_program_staff.sql
 
@@ -202,9 +245,11 @@ INSERT INTO public.program_leaders (program_id, user_id) VALUES
 INSERT INTO public.program_staff (program_id, user_id) VALUES
   ('5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48', '11111111-1111-1111-1111-111111111111'),
   ('5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48', '22222222-2222-2222-2222-222222222222');
-INSERT INTO public.application_responses (id, program_id, assigned_staff_id) VALUES
-  ('55555555-5555-5555-5555-555555555555', '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48', '11111111-1111-1111-1111-111111111111'),
-  ('66666666-6666-6666-6666-666666666666', '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48', '33333333-3333-3333-3333-333333333333');
+INSERT INTO public.application_responses (id, program_id, assigned_staff_id, admin_notes) VALUES
+  ('55555555-5555-5555-5555-555555555555', '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48', '11111111-1111-1111-1111-111111111111', 'Leader only'),
+  ('66666666-6666-6666-6666-666666666666', '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48', '33333333-3333-3333-3333-333333333333', NULL);
+INSERT INTO public.enrollments (id, program_id, assigned_staff_id) VALUES
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48', '11111111-1111-1111-1111-111111111111');
 INSERT INTO public.school_fee_structures (program_id, tuition_zar) VALUES
   ('5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48', 12000),
   ('44444444-4444-4444-4444-444444444444', 8000);
@@ -230,6 +275,9 @@ INSERT INTO public.billing_schedules (program_id, tier_prices) VALUES
   ('5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48', '{"A": 12000}'::jsonb);
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO authenticated;
+-- The blanket grant above hands admin_notes back. Take it away again.
+REVOKE SELECT (admin_notes), UPDATE (admin_notes), INSERT (admin_notes)
+  ON public.application_responses FROM authenticated;
 
 -- Applying the file twice must not fail or duplicate policies.
 \ir ../migrations/304_program_staff.sql
@@ -359,6 +407,220 @@ DO $$
 BEGIN
   IF (SELECT count(*) FROM public.school_fee_structures WHERE program_id = '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48') <> 1 THEN
     RAISE EXCEPTION 'a staff member who still holds schools.* lost fee visibility';
+  END IF;
+END $$;
+
+-- Staff cannot read the notes column or the notes table. A leader can
+-- read and write the notes table, and that write lands on the column.
+DO $$
+BEGIN
+  PERFORM admin_notes FROM public.application_responses;
+  RAISE EXCEPTION 'staff selected admin_notes';
+EXCEPTION WHEN insufficient_privilege THEN
+  NULL;
+END $$;
+
+DO $$
+BEGIN
+  IF (SELECT count(*) FROM public.application_admin_notes) <> 0 THEN
+    RAISE EXCEPTION 'staff read leader notes';
+  END IF;
+END $$;
+
+SELECT set_config('request.jwt.claim.sub', '22222222-2222-2222-2222-222222222222', false);
+
+DO $$
+BEGIN
+  IF (SELECT notes FROM public.application_admin_notes
+       WHERE application_response_id = '55555555-5555-5555-5555-555555555555')
+     IS DISTINCT FROM 'Leader only' THEN
+    RAISE EXCEPTION 'leader could not read admin notes';
+  END IF;
+END $$;
+
+UPDATE public.application_admin_notes
+   SET notes = 'Updated by leader'
+ WHERE application_response_id = '55555555-5555-5555-5555-555555555555';
+
+RESET ROLE;
+
+DO $$
+BEGIN
+  IF (SELECT admin_notes FROM public.application_responses
+       WHERE id = '55555555-5555-5555-5555-555555555555')
+     IS DISTINCT FROM 'Updated by leader' THEN
+    RAISE EXCEPTION 'leader note did not sync back to the column';
+  END IF;
+END $$;
+
+-- Removing the staff row drops access even if assigned_staff_id remains.
+RESET ROLE;
+DELETE FROM public.program_staff
+ WHERE user_id = '11111111-1111-1111-1111-111111111111';
+
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '11111111-1111-1111-1111-111111111111', false);
+SELECT set_config('test.perms', '', false);
+SELECT set_config('test.admin', '', false);
+
+DO $$
+BEGIN
+  IF (SELECT count(*) FROM public.application_responses) <> 0 THEN
+    RAISE EXCEPTION 'removed staff still read an application';
+  END IF;
+  IF (SELECT count(*) FROM public.enrollments) <> 0 THEN
+    RAISE EXCEPTION 'removed staff still read an enrollment';
+  END IF;
+END $$;
+
+RESET ROLE;
+
+-- Switch: a leader cannot strip other schools.* grants. An admin can
+-- switch without deleting those grants. A failure mid-function rolls back.
+INSERT INTO public.roles (id, name) VALUES
+  ('cccccccc-cccc-cccc-cccc-cccccccccccc', 'super_admin');
+INSERT INTO public.permissions (id, key) VALUES
+  ('dddddddd-dddd-dddd-dddd-dddddddddddd', 'schools.assignable_as_contact'),
+  ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', 'schools.manage');
+INSERT INTO public.user_permissions (user_id, permission_id, scope_type, scope_id) VALUES
+  ('33333333-3333-3333-3333-333333333333', 'dddddddd-dddd-dddd-dddd-dddddddddddd', 'program', '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48'),
+  ('33333333-3333-3333-3333-333333333333', 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', 'program', '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48');
+INSERT INTO public.program_leaders (program_id, user_id) VALUES
+  ('5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48', '33333333-3333-3333-3333-333333333333');
+UPDATE public.application_responses
+   SET assigned_staff_id = '33333333-3333-3333-3333-333333333333'
+ WHERE id = '66666666-6666-6666-6666-666666666666';
+
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '22222222-2222-2222-2222-222222222222', false);
+SELECT set_config('test.admin', '', false);
+SELECT set_config('test.perms', '', false);
+
+DO $$
+BEGIN
+  PERFORM public.switch_person_to_program_staff(
+    '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48',
+    '33333333-3333-3333-3333-333333333333'
+  );
+  RAISE EXCEPTION 'leader switched someone who holds schools.manage';
+EXCEPTION WHEN insufficient_privilege THEN
+  IF SQLERRM NOT LIKE 'An admin is needed%' THEN
+    RAISE;
+  END IF;
+END $$;
+
+RESET ROLE;
+
+DO $$
+BEGIN
+  IF (SELECT count(*) FROM public.program_staff
+       WHERE user_id = '33333333-3333-3333-3333-333333333333') <> 0 THEN
+    RAISE EXCEPTION 'refused switch still inserted program_staff';
+  END IF;
+  IF (SELECT count(*) FROM public.program_leaders
+       WHERE user_id = '33333333-3333-3333-3333-333333333333') <> 1 THEN
+    RAISE EXCEPTION 'refused switch dropped the leader row';
+  END IF;
+END $$;
+
+-- Admin proceeds, and leaves schools.manage in place.
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '22222222-2222-2222-2222-222222222222', false);
+SELECT set_config('test.admin', 'true', false);
+
+SELECT public.switch_person_to_program_staff(
+  '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48',
+  '33333333-3333-3333-3333-333333333333'
+);
+
+RESET ROLE;
+
+DO $$
+BEGIN
+  IF (SELECT count(*) FROM public.program_staff
+       WHERE user_id = '33333333-3333-3333-3333-333333333333') <> 1 THEN
+    RAISE EXCEPTION 'admin switch did not add staff';
+  END IF;
+  IF (SELECT count(*) FROM public.program_leaders
+       WHERE user_id = '33333333-3333-3333-3333-333333333333') <> 0 THEN
+    RAISE EXCEPTION 'admin switch left the leader row';
+  END IF;
+  IF (SELECT count(*) FROM public.user_permissions up
+        JOIN public.permissions p ON p.id = up.permission_id
+       WHERE up.user_id = '33333333-3333-3333-3333-333333333333'
+         AND p.key = 'schools.assignable_as_contact') <> 0 THEN
+    RAISE EXCEPTION 'assignable contact grant was not removed';
+  END IF;
+  IF (SELECT count(*) FROM public.user_permissions up
+        JOIN public.permissions p ON p.id = up.permission_id
+       WHERE up.user_id = '33333333-3333-3333-3333-333333333333'
+         AND p.key = 'schools.manage') <> 1 THEN
+    RAISE EXCEPTION 'admin switch stripped schools.manage';
+  END IF;
+  IF (SELECT assigned_staff_id FROM public.application_responses
+       WHERE id = '66666666-6666-6666-6666-666666666666') IS NOT NULL THEN
+    RAISE EXCEPTION 'switch left the contact assignment';
+  END IF;
+END $$;
+
+-- Partial failure rolls the whole switch back.
+INSERT INTO public.program_leaders (program_id, user_id) VALUES
+  ('5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48', '11111111-1111-1111-1111-111111111111');
+UPDATE public.application_responses
+   SET assigned_staff_id = '11111111-1111-1111-1111-111111111111'
+ WHERE id = '55555555-5555-5555-5555-555555555555';
+DELETE FROM public.program_staff
+ WHERE user_id = '11111111-1111-1111-1111-111111111111';
+
+CREATE OR REPLACE FUNCTION public.fail_contact_clear()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RAISE EXCEPTION 'forced failure';
+END;
+$$;
+
+CREATE TRIGGER fail_contact_clear
+  BEFORE UPDATE ON public.application_responses
+  FOR EACH ROW
+  WHEN (OLD.assigned_staff_id IS NOT NULL AND NEW.assigned_staff_id IS NULL)
+  EXECUTE FUNCTION public.fail_contact_clear();
+
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '22222222-2222-2222-2222-222222222222', false);
+SELECT set_config('test.admin', 'true', false);
+
+DO $$
+BEGIN
+  PERFORM public.switch_person_to_program_staff(
+    '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48',
+    '11111111-1111-1111-1111-111111111111'
+  );
+  RAISE EXCEPTION 'switch succeeded despite a forced failure';
+EXCEPTION WHEN OTHERS THEN
+  IF SQLERRM NOT LIKE '%forced failure%' THEN
+    RAISE;
+  END IF;
+END $$;
+
+RESET ROLE;
+DROP TRIGGER fail_contact_clear ON public.application_responses;
+
+DO $$
+BEGIN
+  IF (SELECT count(*) FROM public.program_staff
+       WHERE user_id = '11111111-1111-1111-1111-111111111111') <> 0 THEN
+    RAISE EXCEPTION 'rolled-back switch left a staff row';
+  END IF;
+  IF (SELECT count(*) FROM public.program_leaders
+       WHERE user_id = '11111111-1111-1111-1111-111111111111') <> 1 THEN
+    RAISE EXCEPTION 'rolled-back switch dropped the leader row';
+  END IF;
+  IF (SELECT assigned_staff_id FROM public.application_responses
+       WHERE id = '55555555-5555-5555-5555-555555555555')
+     IS DISTINCT FROM '11111111-1111-1111-1111-111111111111' THEN
+    RAISE EXCEPTION 'rolled-back switch cleared the assignment';
   END IF;
 END $$;
 

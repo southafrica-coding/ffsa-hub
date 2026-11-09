@@ -20,9 +20,9 @@ import {
 // can grow or prune the team (a school led by a team can add its own
 // members). RLS enforces the same rule as defense-in-depth.
 //
-// Each add / remove also syncs the school_leader role (migration 292), which
-// is what lets school leaders request space bookings: granted on add if
-// missing, revoked on remove only when they lead no other program.
+// Each add grants the school_leader role (migration 292) if it is missing,
+// which is what lets school leaders request space bookings. Remove does not
+// take the role away: assigned_by cannot tell a system grant from a hand grant.
 
 async function authorize(programId: string) {
   const supabase = await createClient();

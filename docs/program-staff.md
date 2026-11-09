@@ -31,7 +31,7 @@ Staff do not receive `has_schools_access` or `userCanManageProgram`.
 They can:
 
 - be chosen as the point of contact for their own program (assignable contacts)
-- read applications where `assigned_staff_id` is themselves (existing policy, plus the page only sends those rows when they have no broader grant)
+- read applications where `assigned_staff_id` is themselves, and only while they are still staff, a leader, or hold a schools grant for that program. Removing them clears the assignment. A leftover `assigned_staff_id` is not enough.
 - write one review per application on `application_staff_reviews`: `notes` and `interview_outcome` of `pending`, `recommend`, `hold`, or `decline`
 
 `PUT /api/schools/applications/reviews`
@@ -47,15 +47,17 @@ They cannot:
 - edit application questions, reference slots, reference questions, program email templates, email documents, or program settings (acceptance email included)
 - read fee structures, student fees, payments, charge items, billing schedules, or billing plans for that school, except a fee row that is their own as a student
 
-Leaders, `schools.*` holders, admins, and finance grants keep the access they already have. A person who is both a leader and staff is still a leader.
+Leaders, `schools.*` holders, and admins keep the school page they already have. A person who is both a leader and staff is still a leader. Finance access does not open the rest of the school: it only adds the fees panel on the staff view.
+
+Leader notes are in `application_admin_notes`. Signed-in users cannot select `application_responses.admin_notes`. Staff do not receive the notes in the application PDF.
 
 ## SBI
 
 Program `5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48`. Six people were given `schools.*` rows by hand, including `schools.assignable_as_contact`, and some may also be on Leaders. Leave them there until someone switches them. Until then their current access keeps working, and they stay assignable.
 
-### Admin action
+### Move to staff
 
-Someone who can manage that school (a leader, `schools.manage`, or an admin) calls:
+A leader of that school, someone with `schools.manage`, or an admin calls:
 
 `POST /api/schools/programs/5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48/staff/switch`
 
@@ -65,61 +67,38 @@ Someone who can manage that school (a leader, `schools.manage`, or an admin) cal
 
 The Leaders tab has the same action: “Move to staff”.
 
-What it does, in order, and only for this program:
+The call is one database function, `switch_person_to_program_staff`. It:
 
 1. Inserts `program_staff` if missing.
 2. Deletes that person’s `program_leaders` row for this program.
-3. Revokes the `school_leader` role only when they lead no school at all.
-4. Deletes `user_permissions` whose key starts with `schools.` and whose scope is this program.
+3. Deletes a program-scoped `schools.assignable_as_contact` grant for this program.
+4. Clears `assigned_staff_id` on this program’s applications and enrolments for that person.
 
-It does not delete unscoped (global) permissions. It does not remove a `program_leader` role. An unscoped `program_leader` role is an all-schools manager; take that off by hand if it was granted. It refuses to switch a super admin. Running it twice is a no-op once they are already staff.
+It does not remove the `school_leader` role. `assigned_by` is either null (the migration 292 backfill) or the person who clicked Add, and a hand grant can look like either, so the role is left in place.
+
+It does not delete any other program-scoped `schools.*` grant (`schools.manage`, `schools.approve_applications`, `schools.manage_enrollments`, and the rest). If the person holds one, a leader gets 403: an admin is needed. An admin (`is_admin()`: super admin or General Admin) can still run the switch, and those other grants stay. Take them off by hand on Users & Roles if the person should become staff only. Unscoped grants and a global `program_leader` role are also left alone. A super admin cannot be switched. Running it twice is a no-op once they are already staff and not a leader.
 
 ### Reviewed SQL
 
-Same steps, for the SQL editor. Replace both uuids. Run one person at a time and read the `SELECT`s before the `COMMIT`.
+The same function. In the SQL editor, set yourself as the caller first so `auth.uid()` and `is_admin()` see you. Replace the two uuids. Read the `SELECT`s after it returns.
 
 ```sql
 -- docs/program-staff.md — switch one person to program staff.
--- Does not run from migration 304. Idempotent.
--- Keeps unscoped grants and every other program.
+-- Does not run from applying migration 304. Idempotent.
+-- Caller must be an admin if the person holds any program-scoped
+-- schools.* grant other than schools.assignable_as_contact.
 
-BEGIN;
+SELECT set_config('request.jwt.claim.sub', '<your admin user uuid>', true);
 
--- SBI: '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48'
--- person: '<user uuid>'
+SELECT public.switch_person_to_program_staff(
+  '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48',
+  '<user uuid>'
+);
 
-INSERT INTO public.program_staff (program_id, user_id)
-VALUES ('5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48', '<user uuid>')
-ON CONFLICT (program_id, user_id) DO NOTHING;
-
-DELETE FROM public.program_leaders
- WHERE program_id = '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48'
-   AND user_id = '<user uuid>';
-
-DELETE FROM public.user_roles ur
- USING public.roles r
- WHERE ur.role_id = r.id
-   AND r.name = 'school_leader'
-   AND ur.user_id = '<user uuid>'
-   AND ur.scope_type IS NULL
-   AND NOT EXISTS (
-     SELECT 1 FROM public.program_leaders pl WHERE pl.user_id = '<user uuid>'
-   );
-
-DELETE FROM public.user_permissions up
- USING public.permissions p
- WHERE up.permission_id = p.id
-   AND up.user_id = '<user uuid>'
-   AND up.scope_type = 'program'
-   AND up.scope_id = '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48'
-   AND p.key LIKE 'schools.%';
-
--- Expect: one program_staff row, no program_leaders row for this school,
--- no program-scoped schools.* grants for this school.
-SELECT 'staff' AS kind, id FROM public.program_staff
+SELECT 'staff' AS kind, id::text FROM public.program_staff
  WHERE program_id = '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48' AND user_id = '<user uuid>'
 UNION ALL
-SELECT 'leader', id FROM public.program_leaders
+SELECT 'leader', id::text FROM public.program_leaders
  WHERE program_id = '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48' AND user_id = '<user uuid>';
 
 SELECT p.key, up.scope_type, up.scope_id
@@ -127,8 +106,6 @@ SELECT p.key, up.scope_type, up.scope_id
   JOIN public.permissions p ON p.id = up.permission_id
  WHERE up.user_id = '<user uuid>'
    AND p.key LIKE 'schools.%';
-
-COMMIT;
 ```
 
 ## UI ownership

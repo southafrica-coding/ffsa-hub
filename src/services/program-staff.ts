@@ -4,7 +4,6 @@
 // These helpers back the Staff tab and the switch action. Callers pass
 // an admin client for identity joins; authorization happens in the route.
 
-import { revokeSchoolLeaderRoleIfOrphaned } from "@/lib/schools/school-leader-role";
 import {
   INTERVIEW_OUTCOMES,
   isInterviewOutcome,
@@ -52,104 +51,59 @@ export async function addProgramStaff(
   );
 }
 
+/** Drop the staff row and clear this program's contact assignments. Atomic in the database. */
 export async function removeProgramStaff(
-  admin: Client,
+  supabase: Client,
   programId: string,
   userId: string
 ) {
-  return admin
-    .from("program_staff")
-    .delete()
-    .eq("program_id", programId)
-    .eq("user_id", userId);
+  const { error } = await supabase.rpc("remove_program_staff", {
+    target_program_id: programId,
+    target_user_id: userId,
+  });
+  return { error };
 }
 
 export type StaffSwitchResult = {
-  removedLeader: boolean;
-  removedPermissionKeys: string[];
+  removed_leader: boolean;
+  removed_assignable: boolean;
 };
 
+export const SWITCH_NEEDS_ADMIN =
+  "An admin is needed to move this person to staff.";
+
+/** Map the database exception to an HTTP status. The message is the database's. */
+export function switchFailure(message: string): { status: number; error: string } {
+  if (message.includes("super admin")) {
+    return { status: 400, error: "Refusing to switch a super admin" };
+  }
+  if (message.includes(SWITCH_NEEDS_ADMIN)) {
+    return { status: 403, error: message };
+  }
+  if (message.includes("Not authorized") || message.includes("Not authenticated")) {
+    return { status: 403, error: "Not authorized" };
+  }
+  return { status: 500, error: message };
+}
+
 /**
- * Move one person to staff of this program.
- *
- * Idempotent. Adds the program_staff row first, then drops the leader
- * row for this program only, revokes school_leader if they lead nothing
- * else, and deletes schools.* user_permissions scoped to this program.
- * Unscoped grants and every other program are left as they are. Refuses
- * super admins. Does not remove a global program_leader role — that role
- * is an all-schools manager and has to be taken off by hand.
+ * One database function. Adds staff, drops this program's leader row and
+ * a program-scoped schools.assignable_as_contact, and clears contact
+ * assignments. Other program-scoped schools.* grants are left in place
+ * and block the call unless the caller is an admin.
  */
 export async function switchPersonToProgramStaff(
-  admin: Client,
+  supabase: Client,
   programId: string,
-  userId: string,
-  actorId: string
-): Promise<{ data: StaffSwitchResult | null; error: { message: string } | null }> {
-  const { data: superRows, error: superError } = await admin
-    .from("user_roles")
-    .select("user_id, roles!inner(name)")
-    .eq("user_id", userId)
-    .eq("roles.name", "super_admin")
-    .limit(1);
-  if (superError) return { data: null, error: superError };
-  if (superRows && superRows.length > 0) {
-    return { data: null, error: { message: "Refusing to switch a super admin" } };
+  userId: string
+): Promise<{ data: StaffSwitchResult | null; error: { message: string; status: number } | null }> {
+  const { data, error } = await supabase.rpc("switch_person_to_program_staff", {
+    target_program_id: programId,
+    target_user_id: userId,
+  });
+  if (error) {
+    const failure = switchFailure(error.message ?? "Could not move this person to staff");
+    return { data: null, error: { message: failure.error, status: failure.status } };
   }
-
-  const { error: addError } = await addProgramStaff(admin, programId, userId, actorId);
-  if (addError) return { data: null, error: addError };
-
-  const { data: leaderRows, error: leaderReadError } = await admin
-    .from("program_leaders")
-    .select("id")
-    .eq("program_id", programId)
-    .eq("user_id", userId)
-    .limit(1);
-  if (leaderReadError) return { data: null, error: leaderReadError };
-
-  const removedLeader = !!leaderRows && leaderRows.length > 0;
-  if (removedLeader) {
-    const { error: leaderDeleteError } = await admin
-      .from("program_leaders")
-      .delete()
-      .eq("program_id", programId)
-      .eq("user_id", userId);
-    if (leaderDeleteError) return { data: null, error: leaderDeleteError };
-  }
-
-  await revokeSchoolLeaderRoleIfOrphaned(admin, userId);
-
-  const { data: grants, error: grantError } = await admin
-    .from("user_permissions")
-    .select("id, permissions!inner(key)")
-    .eq("user_id", userId)
-    .eq("scope_type", "program")
-    .eq("scope_id", programId);
-  if (grantError) return { data: null, error: grantError };
-
-  const removedPermissionKeys: string[] = [];
-  const grantIds: string[] = [];
-  for (const row of (grants ?? []) as Array<{
-    id: string;
-    permissions: { key: string } | { key: string }[];
-  }>) {
-    const perm = Array.isArray(row.permissions) ? row.permissions[0] : row.permissions;
-    if (perm?.key?.startsWith("schools.")) {
-      grantIds.push(row.id);
-      removedPermissionKeys.push(perm.key);
-    }
-  }
-
-  if (grantIds.length > 0) {
-    const { error: deleteGrantsError } = await admin
-      .from("user_permissions")
-      .delete()
-      .in("id", grantIds);
-    if (deleteGrantsError) return { data: null, error: deleteGrantsError };
-  }
-
-  return {
-    data: { removedLeader, removedPermissionKeys },
-    error: null,
-  };
+  return { data: data as StaffSwitchResult, error: null };
 }

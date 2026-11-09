@@ -5,11 +5,9 @@ import { hasModuleAccess } from "@/lib/require-permission";
 
 // How a person stands on one school once program_staff exists (migration 304).
 //
-// staffScoped is the only mode that narrows the school: assigned applicants,
-// no form, no emails, no finance. It is false whenever they already manage
-// the school, hold any schools.* grant for it, or can manage finance — those
-// people keep the access they have today, including the SBI grants that the
-// migration does not touch.
+// staffScoped is the assigned-applicants view: no form, no emails, no
+// roster. Only canManage or a schools.* grant lifts it. Finance access
+// does not. It only adds the fees panel (showFees).
 
 export type ProgramViewer = {
   userId: string;
@@ -18,6 +16,7 @@ export type ProgramViewer = {
   canManageFinance: boolean;
   hasSchoolsGrant: boolean;
   staffScoped: boolean;
+  showFees: boolean;
 };
 
 export function deriveProgramViewer(input: {
@@ -27,12 +26,9 @@ export function deriveProgramViewer(input: {
   canManageFinance: boolean;
   hasSchoolsGrant: boolean;
 }): ProgramViewer {
-  const staffScoped =
-    input.isStaff &&
-    !input.canManage &&
-    !input.canManageFinance &&
-    !input.hasSchoolsGrant;
-  return { ...input, staffScoped };
+  const staffScoped = input.isStaff && !input.canManage && !input.hasSchoolsGrant;
+  const showFees = !staffScoped || input.canManageFinance;
+  return { ...input, staffScoped, showFees };
 }
 
 /** Applicants a viewer may be handed. Staff-scoped viewers get their own assignments. */

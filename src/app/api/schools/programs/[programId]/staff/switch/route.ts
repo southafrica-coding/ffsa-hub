@@ -9,9 +9,9 @@ import {
 
 // POST /api/schools/programs/[programId]/staff/switch  { userId }
 //
-// Idempotent. Makes this person staff of this program, then removes their
-// leader row and their schools.* permissions scoped to this program.
-// Global grants and other programs stay. See docs/program-staff.md.
+// One database function. Leaders may move someone who is only a leader
+// and/or an assignable contact. Other program-scoped schools.* grants
+// need an admin. See docs/program-staff.md.
 
 export async function POST(
   request: Request,
@@ -34,17 +34,12 @@ export async function POST(
     return NextResponse.json({ error: "userId is required" }, { status: 400 });
   }
 
-  const admin = createAdminClient();
-  const { data, error } = await switchPersonToProgramStaff(
-    admin,
-    programId,
-    userId,
-    user.id
-  );
+  const { data, error } = await switchPersonToProgramStaff(supabase, programId, userId);
   if (error) {
-    const status = error.message === "Refusing to switch a super admin" ? 400 : 500;
-    return NextResponse.json({ error: error.message }, { status });
+    return NextResponse.json({ error: error.message }, { status: error.status });
   }
+
+  const admin = createAdminClient();
 
   const { data: staff } = await listProgramStaff(admin, programId);
   return NextResponse.json({ staff: staff ?? [], switch: data });

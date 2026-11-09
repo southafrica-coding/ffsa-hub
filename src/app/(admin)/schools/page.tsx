@@ -5,6 +5,7 @@ import {
   canOpenSchools,
   programsVisibleOnSchoolsHome,
 } from "@/lib/schools/program-staff-access";
+import { adminNotesByResponse } from "@/lib/schools/admin-notes";
 import { getPrograms } from "@/services/schools";
 import { Masthead, NeedsYou, NeedsYouAction, Chip } from "@/components/ffsa";
 import { ProgramsTable, type ProgramStats } from "./programs-table";
@@ -120,7 +121,7 @@ export default async function SchoolsPage({
         ? db
             .from("application_responses")
             .select(
-              "id, program_id, status, submitted_at, admin_notes, applicant_email, applicant_info, " +
+              "id, program_id, status, submitted_at, applicant_email, applicant_info, " +
                 "users!application_responses_user_id_fkey(first_name, last_name, preferred_name)",
               { count: "exact" }
             )
@@ -160,28 +161,28 @@ export default async function SchoolsPage({
   }
 
   const awaiting = applicationsResult?.count ?? 0;
-  const pipeline: PipelineRow[] = (applicationsResult?.data ?? []).map(
-    (r: {
-      id: string;
-      program_id: string;
-      status: string;
-      submitted_at: string | null;
-      admin_notes: string | null;
-      applicant_email: string | null;
-      applicant_info: ApplicantInfo;
-      // The embedded join is nulled by RLS for viewers who can't read other
-      // users' rows; applicant_info/applicant_email carry public applicants.
-      users: UserIdentity | UserIdentity[] | null;
-    }) => ({
-      id: r.id,
-      programId: r.program_id,
-      programName: programNames.get(r.program_id) ?? "—",
-      name: applicantName(r),
-      status: r.status,
-      note: r.admin_notes,
-      submittedAt: r.submitted_at,
-    })
+  const applicationRows = (applicationsResult?.data ?? []) as Array<{
+    id: string;
+    program_id: string;
+    status: string;
+    submitted_at: string | null;
+    applicant_email: string | null;
+    applicant_info: ApplicantInfo;
+    users: UserIdentity | UserIdentity[] | null;
+  }>;
+  const leaderNotes = await adminNotesByResponse(
+    db,
+    applicationRows.map((row) => row.id)
   );
+  const pipeline: PipelineRow[] = applicationRows.map((r) => ({
+    id: r.id,
+    programId: r.program_id,
+    programName: programNames.get(r.program_id) ?? "—",
+    name: applicantName(r),
+    status: r.status,
+    note: leaderNotes.get(r.id) ?? null,
+    submittedAt: r.submitted_at,
+  }));
 
   // Only offer a "review" destination when the band and the column are looking
   // at exactly the same, single school — with more schools in play (or more

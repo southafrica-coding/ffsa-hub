@@ -697,6 +697,9 @@ export async function PATCH(request: Request) {
     if (!app?.id || !(await userCanReadApplication(supabase, app.id))) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
+    if (!(await userCanManageProgram(supabase, user.id, app.program_id))) {
+      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+    }
     const applicantName = app?.users
       ? [app.users.first_name, app.users.last_name].filter(Boolean).join(" ")
       : [app?.applicant_info?.first_name, app?.applicant_info?.last_name].filter(Boolean).join(" ") || "An applicant";

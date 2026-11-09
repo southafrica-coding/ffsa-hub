@@ -58,6 +58,19 @@ export async function POST(
   }
 
   const admin = createAdminClient();
+  const { data: person, error: personError } = await admin
+    .from("users")
+    .select("id, is_active")
+    .eq("id", userId)
+    .maybeSingle();
+  if (personError) return NextResponse.json({ error: personError.message }, { status: 500 });
+  if (!person) {
+    return NextResponse.json({ error: "That person does not have a Hub account." }, { status: 400 });
+  }
+  if (person.is_active === false) {
+    return NextResponse.json({ error: "That person is deactivated." }, { status: 400 });
+  }
+
   const { error } = await addProgramStaff(admin, programId, userId, auth.user.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -80,9 +93,10 @@ export async function DELETE(
     return NextResponse.json({ error: "userId is required" }, { status: 400 });
   }
 
-  const admin = createAdminClient();
-  const { error } = await removeProgramStaff(admin, programId, userId);
+  const supabase = await createClient();
+  const { error } = await removeProgramStaff(supabase, programId, userId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  const admin = createAdminClient();
 
   const { data: staff } = await listProgramStaff(admin, programId);
   return NextResponse.json({ staff: staff ?? [] });

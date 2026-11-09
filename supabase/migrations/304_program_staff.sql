@@ -81,6 +81,11 @@ $$;
 -- True when staff-only eyes must not see this program's finance.
 -- Anyone who already has leader, schools.*, admin, or finance access
 -- is left alone — including the SBI grants this migration does not touch.
+--
+-- CASE stops at the first match, so someone with no program_staff row
+-- (the common case) does one indexed lookup on program_staff(user_id)
+-- and never touches the permission tables. STABLE so the planner can
+-- reuse the result within a statement.
 CREATE OR REPLACE FUNCTION public.program_staff_blocked_from_finance(target_program_id uuid)
 RETURNS boolean
 LANGUAGE sql
@@ -88,20 +93,26 @@ STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
-  SELECT public.is_program_staff(target_program_id)
-     AND NOT public.has_schools_access(target_program_id)
-     AND NOT public.has_role('finance_admin')
-     AND NOT public.has_permission('finance.view')
-     AND NOT public.has_permission('finance.manage')
-     AND NOT public.has_permission('finance.write')
-     AND NOT public.has_permission('finance.edit')
-     AND NOT public.has_permission('budget.view_all')
-     AND NOT public.has_permission_for('schools.manage', target_program_id)
-     AND NOT public.has_permission_for('schools.view_applications', target_program_id)
-     AND NOT public.has_permission_for('schools.approve_applications', target_program_id)
-     AND NOT public.has_permission_for('schools.manage_enrollments', target_program_id)
-     AND NOT public.has_permission_for('schools.manage_attendance', target_program_id)
-     AND NOT public.has_permission_for('schools.assignable_as_contact', target_program_id);
+  SELECT CASE
+    WHEN NOT EXISTS (
+      SELECT 1 FROM public.program_staff WHERE user_id = auth.uid()
+    ) THEN false
+    WHEN NOT public.is_program_staff(target_program_id) THEN false
+    WHEN public.has_schools_access(target_program_id) THEN false
+    WHEN public.has_role('finance_admin') THEN false
+    WHEN public.has_permission('finance.view') THEN false
+    WHEN public.has_permission('finance.manage') THEN false
+    WHEN public.has_permission('finance.write') THEN false
+    WHEN public.has_permission('finance.edit') THEN false
+    WHEN public.has_permission('budget.view_all') THEN false
+    WHEN public.has_permission_for('schools.manage', target_program_id) THEN false
+    WHEN public.has_permission_for('schools.view_applications', target_program_id) THEN false
+    WHEN public.has_permission_for('schools.approve_applications', target_program_id) THEN false
+    WHEN public.has_permission_for('schools.manage_enrollments', target_program_id) THEN false
+    WHEN public.has_permission_for('schools.manage_attendance', target_program_id) THEN false
+    WHEN public.has_permission_for('schools.assignable_as_contact', target_program_id) THEN false
+    ELSE true
+  END;
 $$;
 
 REVOKE ALL ON FUNCTION public.is_program_staff(uuid) FROM PUBLIC, anon;
@@ -260,7 +271,7 @@ CREATE POLICY "Assigned program staff can insert their review"
       SELECT 1
       FROM public.application_responses ar
       WHERE ar.id = application_response_id
-        AND ar.program_id = program_id
+        AND ar.program_id = application_staff_reviews.program_id
         AND ar.assigned_staff_id = auth.uid()
         AND public.application_gate(ar.program_id, true)
     )
@@ -287,7 +298,7 @@ CREATE POLICY "Assigned program staff can update their review"
       SELECT 1
       FROM public.application_responses ar
       WHERE ar.id = application_response_id
-        AND ar.program_id = program_id
+        AND ar.program_id = application_staff_reviews.program_id
         AND ar.assigned_staff_id = auth.uid()
         AND public.application_gate(ar.program_id, true)
     )
@@ -510,16 +521,351 @@ CREATE POLICY "Program staff cannot read billing schedule rows"
     )
   );
 
+-- ────────────────────────────────────────────────────────────
+-- 5. Assigned-contact reads need a current link, not a stale
+--    assigned_staff_id. program_staff, program_leaders (via
+--    has_schools_access), or another schools.* grant.
+-- ────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.can_access_assigned_school_record(target_program_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT public.is_program_staff(target_program_id)
+      OR public.has_schools_access(target_program_id)
+      OR public.has_permission_for('schools.view_applications', target_program_id)
+      OR public.has_permission_for('schools.approve_applications', target_program_id)
+      OR public.has_permission_for('schools.manage_enrollments', target_program_id)
+      OR public.has_permission_for('schools.manage_attendance', target_program_id)
+      OR public.has_permission_for('schools.assignable_as_contact', target_program_id);
+$$;
+
+REVOKE ALL ON FUNCTION public.can_access_assigned_school_record(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.can_access_assigned_school_record(uuid) TO authenticated, service_role;
+
+DROP POLICY IF EXISTS "Assigned staff can read their application_responses" ON public.application_responses;
+CREATE POLICY "Assigned staff can read their application_responses"
+  ON public.application_responses FOR SELECT
+  USING (
+    public.application_gate(
+      program_id,
+      assigned_staff_id = auth.uid()
+      AND public.can_access_assigned_school_record(program_id)
+    )
+  );
+
+DROP POLICY IF EXISTS "Assigned staff can read their enrollments" ON public.enrollments;
+CREATE POLICY "Assigned staff can read their enrollments"
+  ON public.enrollments FOR SELECT
+  USING (
+    assigned_staff_id = auth.uid()
+    AND public.can_access_assigned_school_record(program_id)
+  );
+
+-- ────────────────────────────────────────────────────────────
+-- 6. Leader notes. The column stays so service-role reads and
+--    writes keep working, but authenticated cannot select or
+--    update it. Leaders read and write application_admin_notes.
+--    Triggers keep the two copies the same.
+-- ────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.application_admin_notes (
+  application_response_id uuid PRIMARY KEY REFERENCES public.application_responses(id) ON DELETE CASCADE,
+  program_id              uuid NOT NULL REFERENCES public.programs(id) ON DELETE CASCADE,
+  notes                   text,
+  updated_by              uuid REFERENCES public.users(id),
+  updated_at              timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS application_admin_notes_program_idx
+  ON public.application_admin_notes (program_id);
+
+COMMENT ON TABLE public.application_admin_notes IS
+  'Leader notes for an application. Not visible to program staff. The application_responses.admin_notes column is kept in sync for service-role readers and is not selectable by authenticated.';
+
+INSERT INTO public.application_admin_notes (application_response_id, program_id, notes)
+SELECT id, program_id, admin_notes
+  FROM public.application_responses
+ WHERE admin_notes IS NOT NULL
+   AND btrim(admin_notes) <> ''
+ON CONFLICT (application_response_id) DO NOTHING;
+
+CREATE OR REPLACE FUNCTION public.sync_admin_notes_from_response()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF pg_trigger_depth() > 1 THEN
+    RETURN NEW;
+  END IF;
+  IF TG_OP = 'UPDATE' AND NEW.admin_notes IS NOT DISTINCT FROM OLD.admin_notes THEN
+    RETURN NEW;
+  END IF;
+  INSERT INTO public.application_admin_notes (application_response_id, program_id, notes, updated_by)
+  VALUES (NEW.id, NEW.program_id, NEW.admin_notes, NEW.reviewed_by)
+  ON CONFLICT (application_response_id) DO UPDATE
+    SET notes = EXCLUDED.notes,
+        program_id = EXCLUDED.program_id,
+        updated_by = EXCLUDED.updated_by,
+        updated_at = now();
+  RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.sync_admin_notes_from_table()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF pg_trigger_depth() > 1 THEN
+    RETURN NEW;
+  END IF;
+  UPDATE public.application_responses
+     SET admin_notes = NEW.notes
+   WHERE id = NEW.application_response_id
+     AND admin_notes IS DISTINCT FROM NEW.notes;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_sync_admin_notes_from_response ON public.application_responses;
+CREATE TRIGGER trg_sync_admin_notes_from_response
+  AFTER INSERT OR UPDATE OF admin_notes ON public.application_responses
+  FOR EACH ROW EXECUTE FUNCTION public.sync_admin_notes_from_response();
+
+DROP TRIGGER IF EXISTS trg_sync_admin_notes_from_table ON public.application_admin_notes;
+CREATE TRIGGER trg_sync_admin_notes_from_table
+  AFTER INSERT OR UPDATE OF notes ON public.application_admin_notes
+  FOR EACH ROW EXECUTE FUNCTION public.sync_admin_notes_from_table();
+
+ALTER TABLE public.application_admin_notes ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Managers read application admin notes" ON public.application_admin_notes;
+CREATE POLICY "Managers read application admin notes"
+  ON public.application_admin_notes FOR SELECT
+  USING (
+    public.application_gate(
+      program_id,
+      public.has_schools_access(program_id)
+      OR public.has_permission_for('schools.view_applications', program_id)
+      OR public.has_permission_for('schools.approve_applications', program_id)
+    )
+  );
+
+DROP POLICY IF EXISTS "Managers write application admin notes" ON public.application_admin_notes;
+CREATE POLICY "Managers write application admin notes"
+  ON public.application_admin_notes FOR INSERT
+  WITH CHECK (
+    public.application_gate(
+      program_id,
+      public.has_schools_access(program_id)
+      OR public.has_permission_for('schools.approve_applications', program_id)
+    )
+  );
+
+DROP POLICY IF EXISTS "Managers update application admin notes" ON public.application_admin_notes;
+CREATE POLICY "Managers update application admin notes"
+  ON public.application_admin_notes FOR UPDATE
+  USING (
+    public.application_gate(
+      program_id,
+      public.has_schools_access(program_id)
+      OR public.has_permission_for('schools.approve_applications', program_id)
+    )
+  )
+  WITH CHECK (
+    public.application_gate(
+      program_id,
+      public.has_schools_access(program_id)
+      OR public.has_permission_for('schools.approve_applications', program_id)
+    )
+  );
+
+-- A table-level SELECT includes every column, and a column REVOKE does
+-- not punch a hole in it. Take the table grant away from signed-in
+-- roles and give back every column except admin_notes. service_role
+-- keeps the whole table, which is how the admin client still reads notes.
+REVOKE ALL ON TABLE public.application_responses FROM PUBLIC, anon, authenticated;
+
+DO $$
+DECLARE
+  cols text;
+BEGIN
+  SELECT string_agg(quote_ident(column_name), ', ' ORDER BY ordinal_position)
+    INTO cols
+    FROM information_schema.columns
+   WHERE table_schema = 'public'
+     AND table_name = 'application_responses'
+     AND column_name <> 'admin_notes';
+
+  EXECUTE format(
+    'GRANT SELECT (%s), INSERT (%s), UPDATE (%s) ON public.application_responses TO authenticated',
+    cols, cols, cols
+  );
+END $$;
+
+GRANT DELETE ON TABLE public.application_responses TO authenticated;
+GRANT ALL ON TABLE public.application_responses TO service_role;
+
+-- ────────────────────────────────────────────────────────────
+-- 7. Switch and remove. One function, one transaction. A leader
+--    may add staff, drop this program's leader row, and drop a
+--    program-scoped schools.assignable_as_contact. Any other
+--    program-scoped schools.* grant needs is_admin(). Super
+--    admins are refused. school_leader is not revoked here:
+--    assigned_by cannot tell a system grant from a hand grant.
+-- ────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.clear_program_contact_assignments(
+  target_program_id uuid,
+  target_user_id uuid
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  UPDATE public.application_responses
+     SET assigned_staff_id = NULL,
+         staff_assigned_at = NULL,
+         staff_assigned_by = NULL,
+         staff_viewed_at = NULL
+   WHERE program_id = target_program_id
+     AND assigned_staff_id = target_user_id;
+
+  UPDATE public.enrollments
+     SET assigned_staff_id = NULL,
+         staff_assigned_at = NULL,
+         staff_assigned_by = NULL,
+         staff_viewed_at = NULL
+   WHERE program_id = target_program_id
+     AND assigned_staff_id = target_user_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.switch_person_to_program_staff(
+  target_program_id uuid,
+  target_user_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  caller uuid := auth.uid();
+  caller_is_admin boolean;
+  extra_grants text;
+  removed_leader boolean := false;
+  removed_assignable boolean := false;
+  n integer;
+BEGIN
+  IF caller IS NULL THEN
+    RAISE EXCEPTION 'Not authenticated' USING ERRCODE = '42501';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+      FROM public.user_roles ur
+      JOIN public.roles r ON r.id = ur.role_id
+     WHERE ur.user_id = target_user_id
+       AND r.name = 'super_admin'
+  ) THEN
+    RAISE EXCEPTION 'Refusing to switch a super admin' USING ERRCODE = '22023';
+  END IF;
+
+  caller_is_admin := public.is_admin();
+
+  IF NOT public.has_schools_access(target_program_id) THEN
+    RAISE EXCEPTION 'Not authorized' USING ERRCODE = '42501';
+  END IF;
+
+  SELECT pg_catalog.string_agg(p.key, ', ' ORDER BY p.key)
+    INTO extra_grants
+    FROM public.user_permissions up
+    JOIN public.permissions p ON p.id = up.permission_id
+   WHERE up.user_id = target_user_id
+     AND up.scope_type = 'program'
+     AND up.scope_id = target_program_id
+     AND p.key LIKE 'schools.%'
+     AND p.key <> 'schools.assignable_as_contact';
+
+  IF extra_grants IS NOT NULL AND NOT caller_is_admin THEN
+    RAISE EXCEPTION
+      'An admin is needed to move this person to staff. They have other school permissions on this program (%).',
+      extra_grants
+      USING ERRCODE = '42501';
+  END IF;
+
+  INSERT INTO public.program_staff (program_id, user_id, added_by)
+  VALUES (target_program_id, target_user_id, caller)
+  ON CONFLICT (program_id, user_id) DO NOTHING;
+
+  DELETE FROM public.program_leaders
+   WHERE program_id = target_program_id
+     AND user_id = target_user_id;
+  GET DIAGNOSTICS n = ROW_COUNT;
+  removed_leader := n > 0;
+
+  DELETE FROM public.user_permissions up
+   USING public.permissions p
+   WHERE up.permission_id = p.id
+     AND up.user_id = target_user_id
+     AND up.scope_type = 'program'
+     AND up.scope_id = target_program_id
+     AND p.key = 'schools.assignable_as_contact';
+  GET DIAGNOSTICS n = ROW_COUNT;
+  removed_assignable := n > 0;
+
+  PERFORM public.clear_program_contact_assignments(target_program_id, target_user_id);
+
+  RETURN pg_catalog.jsonb_build_object(
+    'removed_leader', removed_leader,
+    'removed_assignable', removed_assignable
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.remove_program_staff(
+  target_program_id uuid,
+  target_user_id uuid
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'Not authenticated' USING ERRCODE = '42501';
+  END IF;
+  IF NOT public.has_schools_access(target_program_id) THEN
+    RAISE EXCEPTION 'Not authorized' USING ERRCODE = '42501';
+  END IF;
+
+  DELETE FROM public.program_staff
+   WHERE program_id = target_program_id
+     AND user_id = target_user_id;
+
+  PERFORM public.clear_program_contact_assignments(target_program_id, target_user_id);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.clear_program_contact_assignments(uuid, uuid) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.switch_person_to_program_staff(uuid, uuid) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.remove_program_staff(uuid, uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.clear_program_contact_assignments(uuid, uuid) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.switch_person_to_program_staff(uuid, uuid) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.remove_program_staff(uuid, uuid) TO authenticated, service_role;
+
 -- ============================================================
--- Validation (do not run the switch here)
+-- Validation (do not call the switch as part of applying this)
 -- ------------------------------------------------------------
 --   SELECT public.is_program_staff('<program uuid>');
---   SELECT policyname, cmd, permissive
---     FROM pg_policies
---    WHERE tablename IN (
---      'program_staff', 'application_staff_reviews',
---      'school_fee_structures', 'student_fees', 'student_payments'
---    );
--- Switching a person off leader / schools.* grants is a separate,
--- reviewed step. See docs/program-staff.md. This file does not do it.
+-- Switching one person: docs/program-staff.md
 -- ============================================================

@@ -103,6 +103,9 @@ export async function POST(request: Request) {
     if (!application) {
       return NextResponse.json({ error: "Application not found" }, { status: 404 });
     }
+    if (!(await userCanManageProgram(supabase, user.id, application.program_id))) {
+      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+    }
 
     const { data: slots } = await getReferenceSlotsByProgram(
       adminSupabase,

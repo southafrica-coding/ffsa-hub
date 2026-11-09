@@ -822,14 +822,36 @@ export async function updateResponseStatus(
     reviewed_by: reviewedBy,
     reviewed_at: new Date().toISOString(),
   };
-  if (adminNotes !== undefined) updateData.admin_notes = adminNotes;
-
-  return supabase
+  const result = await supabase
     .from("application_responses")
     .update(updateData)
     .eq("id", id)
     .select()
     .single();
+
+  if (!result.error && adminNotes !== undefined) {
+    const programId = (result.data as { program_id?: string } | null)?.program_id;
+    if (programId) {
+      const notesWrite = await supabase.from("application_admin_notes").upsert(
+        {
+          application_response_id: id,
+          program_id: programId,
+          notes: adminNotes,
+          updated_by: reviewedBy,
+        },
+        { onConflict: "application_response_id" }
+      );
+      // Before migration 304 the notes column is still writable.
+      if (notesWrite.error) {
+        await supabase
+          .from("application_responses")
+          .update({ admin_notes: adminNotes })
+          .eq("id", id);
+      }
+    }
+  }
+
+  return result;
 }
 
 // ────────────────────────────────────────────────────────────
