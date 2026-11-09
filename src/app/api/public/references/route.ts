@@ -6,6 +6,7 @@ import {
   REFERENCE_EDIT_SELECT,
 } from "@/lib/references/edit-reference-contact";
 import { maybeNotifyReferencesComplete } from "@/lib/references/notify-references-complete";
+import { advanceApplicationWhenReferencesComplete } from "@/lib/references/advance-reference-stage";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -126,11 +127,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // If this was the last required reference, email the assigned staff member.
-  // Self-contained (own try/catch) so a notification issue can't change the
-  // 200 the referee receives. Unassigned applications send nothing.
+  // If this was the last required reference, move an early-stage application
+  // to references_received. That write does not email anyone. The staff
+  // notification below is the one that already existed; it stays
+  // self-contained so neither step can change the 200 the referee receives.
   const applicationId = (existing.application_responses as any)?.id;
   if (applicationId) {
+    await advanceApplicationWhenReferencesComplete(supabase, applicationId);
     await maybeNotifyReferencesComplete(supabase, applicationId);
   }
 

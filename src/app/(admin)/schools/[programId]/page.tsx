@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getProgramById, getEnrollmentsByProgram, getGradesByProgram, getQuestionsByProgram, getResponsesByProgram, getRemovedResponsesByProgram, getReferenceSlotsByProgram, getReferenceRequestSummaries, getReferenceQuestionsByProgram } from "@/services/schools";
+import { getProgramById, getEnrollmentsByProgram, getGradesByProgram, getQuestionsByProgram, getResponsesByProgram, getRemovedResponsesByProgram, getReferenceSlotsByProgram, getReferenceRequestSummaries, getInterviewReviewSummaries, getReferenceQuestionsByProgram } from "@/services/schools";
 import { fetchAssignableContacts } from "@/lib/auth/assignable-contacts";
 import { listProgramLeaders } from "@/services/program-leaders";
 import { StaffApplicants, type StaffApplicant } from "./staff-applicants";
@@ -424,7 +424,13 @@ export default async function ProgramDetailPage({
   const { data: referenceQuestions } = await getReferenceQuestionsByProgram(supabase, programId);
 
   const applicationIds = (responses ?? []).map((r: any) => r.id);
-  const { data: refRequests } = await getReferenceRequestSummaries(supabase, applicationIds);
+  const [{ data: refRequests }, interviewReviewResult] = await Promise.all([
+    getReferenceRequestSummaries(supabase, applicationIds),
+    getInterviewReviewSummaries(supabase, applicationIds),
+  ]);
+  if (interviewReviewResult.error) {
+    console.error("interview reviews for pipeline:", interviewReviewResult.error);
+  }
 
   // Fetch all users for the enrollment selector (identity fields only, via the
   // service-role client so non-admin reviewers get a populated list too).
@@ -489,6 +495,7 @@ export default async function ProgramDetailPage({
         referenceSlots={referenceSlots ?? []}
         referenceQuestions={referenceQuestions ?? []}
         refRequestSummaries={refRequests ?? []}
+        interviewReviews={interviewReviewResult.data ?? []}
         applicationExpiry={applicationExpiry}
         staffDecisionPanel={staffDecisionPanel ?? undefined}
         canEditClassroom={viewer.canManage}

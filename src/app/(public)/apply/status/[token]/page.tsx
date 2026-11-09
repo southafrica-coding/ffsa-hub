@@ -25,6 +25,7 @@ import {
 import { ReferenceEditor, type EditableReference } from "./reference-editor";
 import { ReferenceStatusBanner } from "./reference-status-banner";
 import { annotateReferenceDelivery } from "@/lib/references/reference-delivery";
+import { requiredReferenceProgress } from "@/lib/schools/applicant-pipeline-stage";
 
 const T = PUBLIC_SHELL_TOKENS;
 
@@ -162,7 +163,10 @@ export default async function ApplicationStatusPage({
   }>;
 
   const totalRefs = refs.length;
-  const submittedRefs = refs.filter((r) => r.status === "submitted").length;
+  const referenceProgress = requiredReferenceProgress(
+    slots,
+    refs.map((r) => ({ slotId: r.slot_id, status: r.status }))
+  );
 
   const filledSlotIds = new Set(refs.map((r) => r.slot_id));
   const missingRequiredSlots: { id: string; label: string }[] = slots
@@ -177,9 +181,10 @@ export default async function ApplicationStatusPage({
     email_problem: r.email_problem,
   }));
 
-  // Nothing advances `status` when references arrive (staff set it by hand), so
-  // light up the References step as soon as they're actually all in.
-  const allReferencesIn = totalRefs > 0 && submittedRefs === totalRefs;
+  // Same required-slot rule as the pipeline and the staff "refs complete"
+  // email. An optional request does not count, and a required slot with
+  // no request row does not count as in.
+  const allReferencesIn = referenceProgress.complete;
   const currentStep = Math.max(
     STATUS_ORDER[response.status] ?? 0,
     allReferencesIn ? 1 : 0
@@ -239,8 +244,8 @@ export default async function ApplicationStatusPage({
 
       {!SUPPRESS_REFERENCE_BANNER.has(response.status) && (
         <ReferenceStatusBanner
-          total={totalRefs}
-          submitted={submittedRefs}
+          total={referenceProgress.required}
+          submitted={referenceProgress.received}
           missingLabels={missingRequiredSlots.map((s) => s.label)}
         />
       )}
@@ -331,7 +336,7 @@ export default async function ApplicationStatusPage({
             })}
           </span>
         </div>
-        {totalRefs > 0 && (
+        {referenceProgress.required > 0 && (
           <div
             className="flex justify-between items-center py-2.5"
             style={{ borderBottom: `1px solid ${T.border}`, fontSize: 14 }}
@@ -339,13 +344,10 @@ export default async function ApplicationStatusPage({
             <span style={{ color: T.textDim }}>References</span>
             <span
               style={{
-                color:
-                  submittedRefs === totalRefs
-                    ? T.green
-                    : "hsl(42 95% 65%)",
+                color: allReferencesIn ? T.green : "hsl(42 95% 65%)",
               }}
             >
-              {submittedRefs} of {totalRefs} received
+              {referenceProgress.received} of {referenceProgress.required} received
             </span>
           </div>
         )}
