@@ -284,6 +284,10 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO authentic
 -- Applying the file twice must not fail or duplicate policies.
 \ir ../migrations/304_program_staff.sql
 
+-- 306 replaces the review guard after 304, including a second apply of 304.
+\ir ../migrations/306_leader_interview_notes.sql
+\ir ../migrations/306_leader_interview_notes.sql
+
 -- ── staff only ────────────────────────────────────────────
 SET ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', '11111111-1111-1111-1111-111111111111', false);
@@ -395,6 +399,53 @@ BEGIN
   END IF;
 END $$;
 
+-- A named leader writes their own interview note on an application assigned
+-- to someone else. The wrong program_id is corrected by the trigger. Status stays.
+INSERT INTO public.application_staff_reviews
+  (application_response_id, program_id, author_id, notes, interview_outcome)
+VALUES
+  ('66666666-6666-6666-6666-666666666666', '44444444-4444-4444-4444-444444444444',
+   '22222222-2222-2222-2222-222222222222', 'Leader interview', 'hold');
+
+DO $$
+BEGIN
+  IF (SELECT status FROM public.application_responses
+       WHERE id = '66666666-6666-6666-6666-666666666666')
+     IS DISTINCT FROM 'submitted' THEN
+    RAISE EXCEPTION 'a manager interview note changed the application status';
+  END IF;
+  IF (SELECT notes FROM public.application_staff_reviews
+       WHERE application_response_id = '66666666-6666-6666-6666-666666666666'
+         AND author_id = '22222222-2222-2222-2222-222222222222')
+     IS DISTINCT FROM 'Leader interview' THEN
+    RAISE EXCEPTION 'manager interview note was not stored';
+  END IF;
+  IF (SELECT program_id FROM public.application_staff_reviews
+       WHERE author_id = '22222222-2222-2222-2222-222222222222')
+     IS DISTINCT FROM '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48' THEN
+    RAISE EXCEPTION 'trigger did not keep the manager review on the application school';
+  END IF;
+END $$;
+
+-- Assigned on the row, but not program staff and not a manager.
+SELECT set_config('request.jwt.claim.sub', '33333333-3333-3333-3333-333333333333', false);
+
+DO $$
+BEGIN
+  INSERT INTO public.application_staff_reviews
+    (application_response_id, program_id, author_id, notes, interview_outcome)
+  VALUES
+    ('66666666-6666-6666-6666-666666666666', '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48',
+     '33333333-3333-3333-3333-333333333333', 'Not allowed', 'decline');
+  RAISE EXCEPTION 'non-manager non-staff wrote an interview review';
+EXCEPTION WHEN OTHERS THEN
+  IF SQLERRM = 'non-manager non-staff wrote an interview review' THEN
+    RAISE;
+  END IF;
+END $$;
+
+SELECT set_config('request.jwt.claim.sub', '22222222-2222-2222-2222-222222222222', false);
+
 INSERT INTO public.application_questions (program_id, label)
 VALUES ('5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48', 'From a leader');
 
@@ -472,6 +523,11 @@ BEGIN
        WHERE application_response_id = '55555555-5555-5555-5555-555555555555')
      IS DISTINCT FROM '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48' THEN
     RAISE EXCEPTION 'trigger did not keep the note on the application school';
+  END IF;
+  IF (SELECT status FROM public.application_responses
+       WHERE id = '55555555-5555-5555-5555-555555555555')
+     IS DISTINCT FROM 'submitted' THEN
+    RAISE EXCEPTION 'saving a leader note changed the application status';
   END IF;
 END $$;
 
@@ -950,6 +1006,18 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege THEN
     NULL;
   END;
+  BEGIN
+    INSERT INTO public.application_staff_reviews
+      (application_response_id, program_id, author_id, notes, interview_outcome)
+    VALUES
+      ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48',
+       'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'No review', 'recommend');
+    RAISE EXCEPTION 'view_applications wrote an interview review';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM = 'view_applications wrote an interview review' THEN
+      RAISE;
+    END IF;
+  END;
 END $$;
 
 SELECT set_config('test.perms', 'schools.manage_enrollments', false);
@@ -1008,7 +1076,34 @@ BEGIN
     RAISE EXCEPTION 'program_leader role could not read or write notes';
   END IF;
 END $$;
+
+INSERT INTO public.application_staff_reviews
+  (application_response_id, program_id, author_id, notes, interview_outcome)
+VALUES
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48',
+   'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Role interview', 'recommend');
+
+DO $$
+BEGIN
+  IF (SELECT notes FROM public.application_staff_reviews
+       WHERE application_response_id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'
+         AND author_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa')
+     IS DISTINCT FROM 'Role interview' THEN
+    RAISE EXCEPTION 'program_leader role could not write an interview review';
+  END IF;
+END $$;
 RESET ROLE;
+
+-- This role can manage reviews without the harness's has_schools_access,
+-- so the status read has to happen as the table owner.
+DO $$
+BEGIN
+  IF (SELECT status FROM public.application_responses
+       WHERE id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb')
+     IS DISTINCT FROM 'submitted' THEN
+    RAISE EXCEPTION 'program_leader interview note changed the application status';
+  END IF;
+END $$;
 
 -- Follow-up SQL. A straggler is copied. A column that was edited after
 -- the copy is not overwritten; the script stops and leaves the column.

@@ -1,7 +1,7 @@
 "use client";
 
 import type { ApplicationExpiry } from "@/lib/auth/application-expiry";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { type TreeQuestion } from "@/components/admin/question-tree";
 import { ReferenceQuestionsBuilder } from "./reference-questions-builder";
@@ -36,7 +36,8 @@ import {
 } from "@/lib/schools/course-arrival";
 import { todayInSouthAfrica } from "@/lib/finance/student-balance";
 import { GradesMatrix } from "./grades-matrix";
-import { ApplicantReview, type PipelineStage, type ReviewCheck } from "./applicant-review";
+import { ApplicantReview, type PipelineStage, type ReviewCheck, type ShownInterviewReview } from "./applicant-review";
+import { isInterviewOutcome, type InterviewOutcome } from "@/lib/schools/interview-outcomes";
 import { FormBuilder, FormPreview } from "./form-builder";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
@@ -1663,6 +1664,14 @@ function reviewChecks(resp: AppResponse, refs: ReferenceRequest[]): ReviewCheck[
   ];
 }
 
+function formatInterviewWhen(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return date
+    .toLocaleDateString("en-ZA", { day: "2-digit", month: "short", year: "numeric" })
+    .toUpperCase();
+}
+
 function ApplicantsTab({
   programId,
   programCode,
@@ -1909,6 +1918,19 @@ function ApplicantsTab({
   // Review state
   const [reviewStatus, setReviewStatus] = useState("");
   const [reviewNotes, setReviewNotes] = useState("");
+  const [savedNotes, setSavedNotes] = useState("");
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [noteFeedback, setNoteFeedback] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+  const [interviewReviews, setInterviewReviews] = useState<ShownInterviewReview[]>([]);
+  const [interviewLoading, setInterviewLoading] = useState(false);
+  const [interviewReady, setInterviewReady] = useState(false);
+  const [interviewNotes, setInterviewNotes] = useState("");
+  const [savedInterviewNotes, setSavedInterviewNotes] = useState("");
+  const [interviewOutcome, setInterviewOutcome] = useState<InterviewOutcome>("pending");
+  const [savedInterviewOutcome, setSavedInterviewOutcome] = useState<InterviewOutcome>("pending");
+  const [interviewSaving, setInterviewSaving] = useState(false);
+  const [interviewFeedback, setInterviewFeedback] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+  const interviewRequest = useRef(0);
   const [reviewLoading, setReviewLoading] = useState(false);
 
   // Pipeline filter & search
@@ -1992,6 +2014,146 @@ function ApplicantsTab({
       // ignore
     } finally {
       setRefsLoading(false);
+    }
+  }
+
+  function applyInterviewRows(
+    rows: Array<{
+      id: string;
+      author_name?: string;
+      notes: string | null;
+      interview_outcome: string;
+      updated_at: string;
+      mine?: boolean;
+    }>
+  ) {
+    const shown: ShownInterviewReview[] = rows.map((row) => ({
+      id: row.id,
+      authorName: row.author_name?.trim() || "Someone",
+      outcome: isInterviewOutcome(row.interview_outcome) ? row.interview_outcome : "pending",
+      notes: row.notes,
+      when: formatInterviewWhen(row.updated_at),
+      mine: !!row.mine,
+    }));
+    setInterviewReviews(shown);
+    const mine = shown.find((row) => row.mine);
+    const notes = mine?.notes ?? "";
+    const outcome = mine?.outcome ?? "pending";
+    setInterviewNotes(notes);
+    setSavedInterviewNotes(notes);
+    setInterviewOutcome(outcome);
+    setSavedInterviewOutcome(outcome);
+  }
+
+  async function fetchInterviewReviews(applicationId: string, background = false) {
+    const ticket = ++interviewRequest.current;
+    if (!background) setInterviewLoading(true);
+    try {
+      const res = await fetch(`/api/schools/applications/reviews?response_id=${applicationId}`);
+      const data = await res.json().catch(() => ({}));
+      if (ticket !== interviewRequest.current) return;
+      if (!res.ok) {
+        if (!background) {
+          setInterviewReviews([]);
+          setInterviewReady(false);
+          setInterviewFeedback({
+            tone: "error",
+            text: data.error || "Could not load interview notes",
+          });
+        }
+        return;
+      }
+      applyInterviewRows(data.reviews ?? []);
+      setInterviewReady(true);
+    } catch {
+      if (ticket !== interviewRequest.current || background) return;
+      setInterviewReady(false);
+      setInterviewFeedback({ tone: "error", text: "Could not load interview notes" });
+    } finally {
+      if (ticket === interviewRequest.current) setInterviewLoading(false);
+    }
+  }
+
+  function closeReview() {
+    const noteDirty = reviewNotes.trim() !== savedNotes.trim();
+    const interviewDirty =
+      interviewNotes.trim() !== savedInterviewNotes.trim() ||
+      interviewOutcome !== savedInterviewOutcome;
+    if (noteDirty || interviewDirty) {
+      const what =
+        noteDirty && interviewDirty
+          ? "The internal note and the interview notes are not saved."
+          : noteDirty
+            ? "This internal note is not saved."
+            : "These interview notes are not saved.";
+      if (!window.confirm(`${what} Close without saving?`)) return;
+    }
+    setReviewingResponse(null);
+  }
+
+  async function handleSaveNote() {
+    if (!reviewingResponse) return;
+    setNoteSaving(true);
+    setNoteFeedback(null);
+    const stored = reviewNotes.trim();
+    try {
+      const res = await fetch("/api/schools/applications/notes", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: reviewingResponse.id,
+          admin_notes: stored || null,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setNoteFeedback({ tone: "error", text: data.error || "Could not save the note" });
+        return;
+      }
+      setSavedNotes(stored);
+      setReviewNotes(stored);
+      setReviewingResponse((prev) => (prev ? { ...prev, admin_notes: stored || null } : prev));
+      setNoteFeedback({ tone: "ok", text: "Saved" });
+      router.refresh();
+    } catch {
+      setNoteFeedback({ tone: "error", text: "Could not save the note" });
+    } finally {
+      setNoteSaving(false);
+    }
+  }
+
+  async function handleSaveInterview() {
+    if (!reviewingResponse) return;
+    setInterviewSaving(true);
+    setInterviewFeedback(null);
+    const stored = interviewNotes.trim();
+    try {
+      const res = await fetch("/api/schools/applications/reviews", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          response_id: reviewingResponse.id,
+          notes: stored,
+          interview_outcome: interviewOutcome,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setInterviewFeedback({
+          tone: "error",
+          text: data.error || "Could not save the interview notes",
+        });
+        return;
+      }
+      setSavedInterviewNotes(stored);
+      setInterviewNotes(stored);
+      setSavedInterviewOutcome(interviewOutcome);
+      setInterviewFeedback({ tone: "ok", text: "Saved" });
+      await fetchInterviewReviews(reviewingResponse.id, true);
+    } catch {
+      setInterviewFeedback({ tone: "error", text: "Could not save the interview notes" });
+    } finally {
+      setInterviewSaving(false);
     }
   }
 
@@ -2164,6 +2326,15 @@ function ApplicantsTab({
   async function handleReviewSave(statusOverride?: string) {
     const nextStatus = statusOverride ?? reviewStatus;
     if (!reviewingResponse || !nextStatus) return;
+    const interviewDirty =
+      interviewNotes.trim() !== savedInterviewNotes.trim() ||
+      interviewOutcome !== savedInterviewOutcome;
+    if (interviewDirty) {
+      const proceed = window.confirm(
+        "These interview notes are not saved. Continue with the decision without them?"
+      );
+      if (!proceed) return;
+    }
     setReviewLoading(true);
 
     try {
@@ -2664,11 +2835,22 @@ function ApplicantsTab({
                           variant="outline"
                           size="sm"
                           onClick={() => {
+                            const note = resp.admin_notes ?? "";
                             setReviewingResponse(resp);
                             setReviewStatus(resp.status);
-                            setReviewNotes(resp.admin_notes ?? "");
+                            setReviewNotes(note);
+                            setSavedNotes(note);
+                            setNoteFeedback(null);
+                            setInterviewReviews([]);
+                            setInterviewReady(false);
+                            setInterviewNotes("");
+                            setSavedInterviewNotes("");
+                            setInterviewOutcome("pending");
+                            setSavedInterviewOutcome("pending");
+                            setInterviewFeedback(null);
                             fetchReferences(resp.id);
                             fetchApplicantEmails(resp.id);
+                            fetchInterviewReviews(resp.id);
                           }}
                         >
                           Review
@@ -2773,6 +2955,25 @@ function ApplicantsTab({
                   .toUpperCase()}`
               : "INTERNAL NOTE"
           }
+          noteSaving={noteSaving}
+          noteFeedback={noteFeedback}
+          onSaveNote={handleSaveNote}
+          interviewReviews={interviewReviews}
+          interviewLoading={interviewLoading}
+          interviewReady={interviewReady}
+          interviewNotes={interviewNotes}
+          interviewOutcome={interviewOutcome}
+          onInterviewNotesChange={(value) => {
+            setInterviewNotes(value);
+            setInterviewFeedback(null);
+          }}
+          onInterviewOutcomeChange={(value) => {
+            setInterviewOutcome(value);
+            setInterviewFeedback(null);
+          }}
+          onSaveInterview={handleSaveInterview}
+          interviewSaving={interviewSaving}
+          interviewFeedback={interviewFeedback}
           acceptConsequence={
             reviewingResponse.status === "accepted"
               ? "ALREADY ACCEPTED — SAVING AGAIN ONLY UPDATES THE NOTE."
@@ -2789,9 +2990,12 @@ function ApplicantsTab({
               answer
             )
           }
-          onNoteChange={setReviewNotes}
+          onNoteChange={(value) => {
+            setReviewNotes(value);
+            setNoteFeedback(null);
+          }}
           onDecision={(status) => handleReviewSave(status)}
-          onClose={() => setReviewingResponse(null)}
+          onClose={closeReview}
           extras={
             <div className="space-y-6">
           {/* Email, phone and the submitted date are NOT repeated here — the

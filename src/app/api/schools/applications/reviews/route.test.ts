@@ -6,7 +6,7 @@ const h = vi.hoisted(() => ({
   isStaff: true,
   canManage: false,
   canRead: true,
-  wrote: [] as string[],
+  wrote: [] as Array<Record<string, unknown>>,
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -21,6 +21,17 @@ vi.mock("@/lib/supabase/server", () => ({
           order: () => Promise.resolve({ data: [], error: null }),
         }),
         order: () => Promise.resolve({ data: [], error: null }),
+      }),
+      upsert: (row: Record<string, unknown>) => ({
+        select: () => ({
+          single: async () => {
+            h.wrote.push(row);
+            return {
+              data: { id: "rev1", updated_at: "2026-11-09T12:00:00.000Z", ...row },
+              error: null,
+            };
+          },
+        }),
       }),
     }),
   }),
@@ -71,20 +82,49 @@ function put(body: unknown) {
 }
 
 describe("staff reviews", () => {
+  it("lets the assigned staff member write their review", async () => {
+    const res = await put({ response_id: "a1", notes: "Solid", interview_outcome: "hold" });
+    expect(res.status).toBe(200);
+    expect(h.wrote[0]).toMatchObject({
+      author_id: "staff",
+      notes: "Solid",
+      interview_outcome: "hold",
+    });
+  });
+
   it("rejects an outcome from someone who is not the assigned staff member", async () => {
     h.assignedTo = "someone-else";
     const res = await put({ response_id: "a1", notes: "Hi", interview_outcome: "recommend" });
     expect(res.status).toBe(403);
+    expect(h.wrote).toEqual([]);
   });
 
-  it("rejects a leader writing the staff review for an applicant they are not assigned", async () => {
+  it("lets a manager write their own interview review without being the assigned staff", async () => {
     h.userId = "leader";
     h.assignedTo = "staff";
     h.isStaff = false;
     h.canManage = true;
+    const res = await put({ response_id: "a1", notes: "Strong interview", interview_outcome: "recommend" });
+    expect(res.status).toBe(200);
+    expect(h.wrote).toEqual([
+      expect.objectContaining({
+        application_response_id: "a1",
+        author_id: "leader",
+        notes: "Strong interview",
+        interview_outcome: "recommend",
+      }),
+    ]);
+    expect(h.wrote[0]).not.toHaveProperty("status");
+  });
+
+  it("rejects someone who is neither a manager nor assigned staff", async () => {
+    h.userId = "stranger";
+    h.assignedTo = "staff";
+    h.isStaff = false;
+    h.canManage = false;
     const res = await put({ response_id: "a1", notes: "Hi", interview_outcome: "decline" });
     expect(res.status).toBe(403);
-    expect((await res.json()).error).toMatch(/assigned staff/);
+    expect(h.wrote).toEqual([]);
   });
 
   it("rejects a bad outcome", async () => {

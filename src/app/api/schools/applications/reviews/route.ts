@@ -17,10 +17,11 @@ import { isInterviewOutcome } from "@/lib/schools/interview-outcomes";
 // PUT  /api/schools/applications/reviews
 //      { response_id, notes, interview_outcome }
 //
-// Staff read and write a review only on an application assigned to them.
-// Leaders and other managers can read the program's reviews. The write
-// goes through the user client so the review trigger and RLS apply.
-// Status changes stay on the responses route, which staff cannot call.
+// Assigned program staff write a review on the application assigned to them.
+// Leaders and other managers (userCanManageProgram / can_manage_program_applications)
+// read every review and write their own row. The write goes through the user
+// client so the review trigger and RLS apply. Status changes stay on the
+// responses route.
 
 const NOTES_MAX = 8000;
 
@@ -64,7 +65,48 @@ export async function GET(request: Request) {
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ reviews: data ?? [] });
+
+  const rows = (data ?? []) as Array<{
+    id: string;
+    application_response_id: string;
+    program_id: string;
+    author_id: string;
+    notes: string | null;
+    interview_outcome: string;
+    updated_at: string;
+  }>;
+  const reviews = await withAuthorNames(rows, user.id);
+  return NextResponse.json({ reviews });
+}
+
+function displayName(person: {
+  preferred_name?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+}): string {
+  const first = (person.preferred_name || person.first_name || "").trim();
+  const last = (person.last_name || "").trim();
+  return [first, last].filter(Boolean).join(" ") || "Someone";
+}
+
+async function withAuthorNames<T extends { author_id: string }>(rows: T[], viewerId: string) {
+  const ids = [...new Set(rows.map((row) => row.author_id))];
+  const names = new Map<string, string>();
+  if (ids.length > 0) {
+    const admin = createAdminClient();
+    const { data } = await admin
+      .from("users")
+      .select("id, first_name, last_name, preferred_name")
+      .in("id", ids);
+    for (const person of data ?? []) {
+      names.set(person.id, displayName(person));
+    }
+  }
+  return rows.map((row) => ({
+    ...row,
+    author_name: names.get(row.author_id) ?? "Someone",
+    mine: row.author_id === viewerId,
+  }));
 }
 
 export async function PUT(request: Request) {
@@ -113,14 +155,12 @@ export async function PUT(request: Request) {
   const programId = application.program_id as string;
   const assigned = (application.assigned_staff_id as string | null) === user.id;
   const isStaff = await userIsProgramStaff(supabase, user.id, programId);
-  if (!isStaff || !assigned) {
-    // Managers keep the status route. This one is the assigned staff review.
-    if (await userCanManageProgram(supabase, user.id, programId)) {
-      return NextResponse.json(
-        { error: "Only the assigned staff member writes this review" },
-        { status: 403 }
-      );
-    }
+  const assignedWriter = isStaff && assigned;
+  // A manager writes their own row. They do not take over the staff member's.
+  const canManage = assignedWriter
+    ? false
+    : await userCanManageProgram(supabase, user.id, programId);
+  if (!assignedWriter && !canManage) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
