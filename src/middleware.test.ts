@@ -168,6 +168,12 @@ describe("middleware", () => {
     expect(location(res)).toBeNull();
   });
 
+  it("a still-signed-in visit to /login?error=signout is not sent to the dashboard", async () => {
+    current = makeClient({ token: jwtFor("u1"), validUserId: "u1" });
+    const res = await middleware(req("/login?error=signout"));
+    expect(location(res)).toBeNull();
+  });
+
   it("POST /auth/sign-out is not refreshed or sent to the dashboard", async () => {
     current = makeClient({ token: jwtFor("u1"), validUserId: "u1" });
     const res = await middleware(

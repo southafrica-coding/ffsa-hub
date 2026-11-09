@@ -207,6 +207,12 @@ export async function middleware(request: NextRequest) {
   }
 
   if (user && !isDeactivated && pathname === "/login") {
+    // A failed sign-out often leaves the session cookie in place. Let that
+    // one URL through so the login page can show the error instead of
+    // bouncing straight back to the dashboard.
+    if (request.nextUrl.searchParams.get("error") === "signout") {
+      return supabaseResponse;
+    }
     // Redirect authenticated (active) users away from login
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";

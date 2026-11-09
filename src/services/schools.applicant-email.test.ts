@@ -13,4 +13,12 @@ describe("getResponseByEmailAndProgram", () => {
     expect(filterValue(query!, "ilike", "applicant_email")).toBe("ada\\_smith@example.com");
     expect(query!.filters.some((f) => f.op === "eq" && f.args[0] === "applicant_email")).toBe(false);
   });
+
+  it("does not query when the address contains a PostgREST * wildcard", async () => {
+    const fake = createFakeSupabase({
+      resolve: () => ({ data: { id: "should-not-run", status: "submitted" } }),
+    });
+    await expect(getResponseByEmailAndProgram(fake.client, "a*@gmail.com", "p1")).rejects.toThrow(/wildcard/i);
+    expect(fake.queries).toHaveLength(0);
+  });
 });

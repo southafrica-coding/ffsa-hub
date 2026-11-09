@@ -6,6 +6,7 @@ const h = vi.hoisted(() => ({
   sendTransactional: vi.fn(),
   skipEmail: false,
   lookups: [] as Array<{ table: string; op: string; column: string; value: unknown }>,
+  byEmail: vi.fn(),
 }));
 
 function chain(table: string, result: { data: unknown; error?: unknown }) {
@@ -38,7 +39,7 @@ vi.mock("@/services/schools", () => ({
     data: { id: "p1", name: "Test school", code: "TEST", status: "active", application_open: true },
   }),
   getQuestionsByProgram: async () => ({ data: h.questions }),
-  getResponseByEmailAndProgram: async () => ({ data: null }),
+  getResponseByEmailAndProgram: (email: string, programId: string) => h.byEmail(email, programId),
   getReferenceSlotsByProgram: async () => ({ data: [] }),
   createPublicResponse: (...args: unknown[]) => h.createPublicResponse(...args),
   createReferenceRequest: async () => ({ data: null }),
@@ -101,6 +102,8 @@ describe("POST /api/public/applications identity", () => {
     h.sendTransactional.mockReset();
     h.sendTransactional.mockResolvedValue({ ok: false, error: "resend down", suppressed: false });
     h.lookups = [];
+    h.byEmail.mockClear();
+    h.byEmail.mockResolvedValue({ data: null });
   });
 
   it("returns 400 and writes nothing when the school form has no name or email", async () => {
@@ -146,6 +149,14 @@ describe("POST /api/public/applications identity", () => {
     const body = await res.json();
     expect(body.confirmationEmailed).toBe(true);
     expect(body.confirmationStatus).toBe("sent");
+  });
+
+  it("rejects * before either duplicate lookup, so the address cannot probe other rows", async () => {
+    const res = await submit({ first_name: "Ada", last_name: "Lovelace", email: "a*@gmail.com" });
+    expect(res.status).toBe(400);
+    expect(h.createPublicResponse).not.toHaveBeenCalled();
+    expect(h.byEmail).not.toHaveBeenCalled();
+    expect(h.lookups.filter((lookup) => lookup.op === "ilike")).toEqual([]);
   });
 
   it("stores a lowercased email and looks up an existing user without LIKE wildcards", async () => {

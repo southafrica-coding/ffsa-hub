@@ -55,9 +55,17 @@ function cleanEmail(value: unknown): string {
  * ILIKE pattern for an applicant email. Lowercasing the input is not enough:
  * production already has mixed-case addresses, and `_` / `%` are LIKE
  * wildcards. Escaping them makes the match case-insensitive and literal.
+ *
+ * PostgREST treats `*` as a wildcard too, and a backslash does not escape
+ * it. An address like `a*@gmail.com` would match every a…@gmail.com. Refuse
+ * it here so a lookup cannot turn into a probe.
  */
 export function applicantEmailIlikePattern(email: string): string {
-  return cleanEmail(email).replace(/[\\%_]/g, (character) => `\\${character}`);
+  const normalised = cleanEmail(email);
+  if (normalised.includes("*")) {
+    throw new Error("Email contains a wildcard and cannot be looked up");
+  }
+  return normalised.replace(/[\\%_]/g, (character) => `\\${character}`);
 }
 
 function labelOf(question: IdentityQuestion): string {
@@ -133,7 +141,10 @@ export function isPlaceholderApplicantEmail(value: string): boolean {
 
 export function isValidApplicantEmail(value: string): boolean {
   const email = value.trim();
-  return email.length > 0 && !isPlaceholderApplicantEmail(email) && EMAIL_RE.test(email);
+  // `*` is a PostgREST ILIKE wildcard. EMAIL_RE allows it, so reject it
+  // before any duplicate lookup.
+  if (!email || email.includes("*") || isPlaceholderApplicantEmail(email)) return false;
+  return EMAIL_RE.test(email);
 }
 
 export type IdentityResult =

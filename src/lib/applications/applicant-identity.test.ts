@@ -165,12 +165,19 @@ describe("applicantEmailIlikePattern", () => {
     expect(applicantEmailIlikePattern("a%b@example.com")).toBe("a\\%b@example.com");
     expect(applicantEmailIlikePattern("ada@example.com")).toBe("ada@example.com");
   });
+
+  it("refuses * because PostgREST will not treat a backslash as an escape", () => {
+    expect(() => applicantEmailIlikePattern("a*@gmail.com")).toThrow(/wildcard/i);
+    expect(() => applicantEmailIlikePattern("A*@Gmail.com")).toThrow(/wildcard/i);
+  });
 });
 
 describe("isValidApplicantEmail", () => {
-  it("refuses the placeholder and anything that is not an address", () => {
+  it("refuses the placeholder, a wildcard, and anything that is not an address", () => {
     expect(isValidApplicantEmail(PLACEHOLDER_APPLICANT_EMAIL)).toBe(false);
     expect(isValidApplicantEmail("ada@example.com")).toBe(true);
     expect(isValidApplicantEmail("ada")).toBe(false);
+    expect(isValidApplicantEmail("a*@gmail.com")).toBe(false);
+    expect(isValidApplicantEmail("a*b@gmail.com")).toBe(false);
   });
 });
