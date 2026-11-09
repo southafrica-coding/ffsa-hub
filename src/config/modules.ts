@@ -181,7 +181,7 @@ export const ADMIN_MODULES: ModuleDefinition[] = [
     href: "/evangelism",
     icon: Megaphone,
     description:
-      "Staff share testimonies; publishers approve or withhold them. Admins, or any evangelism.* permission",
+      "Every signed-in user (via self_service) can view, submit and publish. Consent is still required; anon has no access",
     requiredRoles: ["super_admin", "admin"],
   },
 ];

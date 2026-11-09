@@ -15,9 +15,10 @@ Branch `feat/evangelism-testimonies-slice-1`, rebased onto `origin/main` at 1301
 - **Read** (`/evangelism`): a list of published stories for anyone with
   view access. Pure viewers do not see who wrote a story; the author and
   publishers do.
-- **Review** (`/evangelism/queue`, publishers only): submitted stories,
-  each with **Approve & publish** or **Withhold** (an optional reason that
-  publishers and the story's author see). Anyone else is sent back to `/evangelism`.
+- **Review** (`/evangelism/queue`): every signed-in user (via self_service)
+  can view, submit and publish. Consent is still required; anon has no access.
+  Submitted stories, each with **Approve & publish** or **Withhold** (an
+  optional reason that publishers and the story's author see).
 - **Nav**: `evangelism` removed from `HIDDEN_FROM_NAV`. Admins see it. Anyone
   holding an `evangelism.*` key sees it through the usual module-permission
   path.
@@ -47,9 +48,11 @@ removes the row first and the objects only after exactly one row went.
 307 was free on 9 Nov 2026: `origin/main` tops out at 304, 305 is the local
 LMS slice, and no open PR or local branch uses 306 or 307.
 
-- **Permission keys** are seeded but not granted to anyone:
-  `evangelism.view`, `evangelism.submit`, `evangelism.publish`. publish ⊃
-  submit ⊃ view. `super_admin` and `admin` get everything through `is_admin()`.
+- **Permission keys** `evangelism.view`, `evangelism.submit` and
+  `evangelism.publish` are granted to `self_service` by migration 311, so
+  every signed-in user can view, submit and publish. Consent is still
+  required. Anon has no access. publish ⊃ submit ⊃ view. `super_admin` and
+  `admin` still get everything through `is_admin()`.
 - **`evangelism_testimonies`** has the CHECKs from the brief: consent is
   required for submitted/published, published needs both stamps, and
   decisions ≤ people reached. A guard trigger stops anyone changing the
@@ -79,8 +82,10 @@ LMS slice, and no open PR or local branch uses 306 or 307.
   It has **no** `storage.objects` policies.
 - A withheld story is visible to publishers, admins and its author (with
   the reason); never to viewers or other submitters.
-- Every new table and function starts with an explicit REVOKE from
-  PUBLIC/anon. No TRUNCATE/REFERENCES/TRIGGER for `authenticated`.
+- Every signed-in user (via `self_service`, migration 311) can view, submit
+  and publish. Consent is still required. Anon has no access: every new
+  table and function starts with an explicit REVOKE from PUBLIC/anon. No
+  TRUNCATE/REFERENCES/TRIGGER for `authenticated`.
 
 ## Tests
 
