@@ -9,6 +9,13 @@ import {
   INTERVIEW_OUTCOMES,
   type InterviewOutcome,
 } from "@/lib/schools/interview-outcomes";
+import {
+  draftFromSaved,
+  interviewClearFlags,
+  interviewFormFromReview,
+  reconcileInterviewDraft,
+  type InterviewDraft,
+} from "@/lib/schools/interview-review-form";
 
 export type StaffApplicant = {
   id: string;
@@ -24,6 +31,10 @@ export type StaffApplicant = {
 // The school a staff member actually sees: the applicants assigned to them,
 // and a place to leave notes and an interview outcome. No fees, no form
 // editor, no email editor.
+function serverStamp(rows: StaffApplicant[]) {
+  return JSON.stringify(rows.map((row) => [row.id, row.interviewOutcome, row.notes]));
+}
+
 export function StaffApplicants({
   programName,
   applicants: initialApplicants,
@@ -32,6 +43,14 @@ export function StaffApplicants({
   applicants: StaffApplicant[];
 }) {
   const [applicants, setApplicants] = useState(initialApplicants);
+  const stamp = serverStamp(initialApplicants);
+  const [seenStamp, setSeenStamp] = useState(stamp);
+  // Navigation and refresh pass a new server payload into the same client
+  // instance. The first useState value would otherwise keep the empty form.
+  if (stamp !== seenStamp) {
+    setSeenStamp(stamp);
+    setApplicants(initialApplicants);
+  }
 
   return (
     <div className="ffsa-screen">
@@ -69,23 +88,32 @@ function ApplicantReview({
   applicant: StaffApplicant;
   onSaved: (next: StaffApplicant) => void;
 }) {
-  const [notes, setNotes] = useState(applicant.notes);
-  const [outcome, setOutcome] = useState<InterviewOutcome>(applicant.interviewOutcome);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const savedForm = interviewFormFromReview({
+    notes: applicant.notes,
+    interview_outcome: applicant.interviewOutcome,
+  });
+  const [draft, setDraft] = useState<InterviewDraft>(() => draftFromSaved(savedForm, applicant.id));
+  const view = reconcileInterviewDraft(draft, savedForm, applicant.id);
+  if (view !== draft) setDraft(view);
 
   async function save() {
     setBusy(true);
     setError(null);
     setSaved(false);
+    const stored = view.notes.trim();
+    const flags = interviewClearFlags(view);
     const res = await fetch("/api/schools/applications/reviews", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         response_id: applicant.id,
-        notes,
-        interview_outcome: outcome,
+        notes: stored,
+        interview_outcome: view.outcome,
+        clear_outcome: flags.clear_outcome,
+        clear_notes: flags.clear_notes,
       }),
     });
     setBusy(false);
@@ -94,7 +122,12 @@ function ApplicantReview({
       setError(data.error ?? "Could not save the review");
       return;
     }
-    onSaved({ ...applicant, notes, interviewOutcome: outcome });
+    const data = (await res.json().catch(() => ({}))) as { review?: unknown };
+    const storedForm = interviewFormFromReview(
+      data.review ?? { notes: stored, interview_outcome: view.outcome }
+    );
+    setDraft(draftFromSaved(storedForm, applicant.id));
+    onSaved({ ...applicant, notes: storedForm.notes, interviewOutcome: storedForm.outcome });
     setSaved(true);
   }
 
@@ -128,8 +161,10 @@ function ApplicantReview({
           </span>
           <select
             className="h-10 w-full border border-input bg-background px-3 text-sm"
-            value={outcome}
-            onChange={(event) => setOutcome(event.target.value as InterviewOutcome)}
+            value={view.outcome}
+            onChange={(event) =>
+              setDraft({ ...view, outcome: event.target.value as InterviewOutcome })
+            }
           >
             {INTERVIEW_OUTCOMES.map((value) => (
               <option key={value} value={value}>
@@ -143,8 +178,8 @@ function ApplicantReview({
             Notes
           </span>
           <Textarea
-            value={notes}
-            onChange={(event) => setNotes(event.target.value)}
+            value={view.notes}
+            onChange={(event) => setDraft({ ...view, notes: event.target.value })}
             rows={4}
             placeholder="What you want the leaders to know"
           />

@@ -40,9 +40,18 @@ import { GradesMatrix } from "./grades-matrix";
 import { ApplicantReview, type PipelineStage, type ReviewCheck, type ShownInterviewReview } from "./applicant-review";
 import {
   INTERVIEW_OUTCOME_LABEL,
-  isInterviewOutcome,
   type InterviewOutcome,
 } from "@/lib/schools/interview-outcomes";
+import {
+  draftFromSaved,
+  emptyInterviewDraft,
+  interviewClearFlags,
+  interviewFormFromReview,
+  nextDraftAfterLoad,
+  reconcileInterviewDraft,
+  savedInterviewFor,
+  type InterviewDraft,
+} from "@/lib/schools/interview-review-form";
 import {
   PIPELINE_STAGE_LABEL,
   PIPELINE_STAGE_ORDER,
@@ -373,6 +382,8 @@ type RefRequestSummary = {
 
 type InterviewReviewSummary = {
   application_response_id: string;
+  author_id?: string | null;
+  notes?: string | null;
   interview_outcome: string | null;
   updated_at: string | null;
 };
@@ -446,6 +457,7 @@ export function ProgramDetail({
   referenceQuestions,
   refRequestSummaries,
   interviewReviews = [],
+  viewerId,
   applicationExpiry,
   staffDecisionPanel,
   canEditClassroom = false,
@@ -488,6 +500,8 @@ export function ProgramDetail({
   referenceQuestions: TreeQuestion[];
   refRequestSummaries: RefRequestSummary[];
   interviewReviews?: InterviewReviewSummary[];
+  /** Signed-in reviewer. Used to prefill their own interview row. */
+  viewerId: string;
   applicationExpiry: ApplicationExpiry;
   /** Leadership Track only, and only for Leadership Team viewers — the
    *  server-rendered "accepted as staff?" tab. Absent = no tab. */
@@ -843,6 +857,7 @@ export function ProgramDetail({
             referenceSlots={referenceSlots}
             refRequestSummaries={refRequestSummaries}
             pipelineReviews={interviewReviews}
+            viewerId={viewerId}
             staffOptions={staffOptions}
           />
           )}
@@ -1733,6 +1748,7 @@ function ApplicantsTab({
   referenceSlots,
   refRequestSummaries,
   pipelineReviews,
+  viewerId,
   staffOptions,
 }: {
   programId: string;
@@ -1742,6 +1758,7 @@ function ApplicantsTab({
   referenceSlots: ReferenceSlot[];
   refRequestSummaries: RefRequestSummary[];
   pipelineReviews: InterviewReviewSummary[];
+  viewerId: string;
   staffOptions: StaffUser[];
 }) {
   const router = useRouter();
@@ -1986,7 +2003,19 @@ function ApplicantsTab({
   const [interviewSaving, setInterviewSaving] = useState(false);
   const [interviewFeedback, setInterviewFeedback] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const interviewRequest = useRef(0);
+  const interviewDraft = useRef<InterviewDraft>(emptyInterviewDraft());
+  // False until this open's fetch returns. Pipeline props can prefill before
+  // that; they must not overwrite the fetch afterwards.
+  const interviewAuthoritative = useRef(false);
   const [reviewLoading, setReviewLoading] = useState(false);
+
+  function commitInterviewDraft(next: InterviewDraft) {
+    interviewDraft.current = next;
+    setInterviewNotes(next.notes);
+    setSavedInterviewNotes(next.baselineNotes);
+    setInterviewOutcome(next.outcome);
+    setSavedInterviewOutcome(next.baselineOutcome);
+  }
 
   // Pipeline filter & search
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -2047,6 +2076,15 @@ function ApplicantsTab({
     reviewsByApp.set(review.application_response_id, rows);
   }
 
+  // Saved outcome and note can arrive with a later server payload (refresh,
+  // or the panel opened before this list was ready). Copy them in while the
+  // reviewer has not typed, and before the fetch has become the source of truth.
+  if (reviewingResponse && !interviewAuthoritative.current) {
+    const saved = savedInterviewFor(pipelineReviews, reviewingResponse.id, viewerId);
+    const next = reconcileInterviewDraft(interviewDraft.current, saved, reviewingResponse.id);
+    if (next !== interviewDraft.current) commitInterviewDraft(next);
+  }
+
   function stageOf(resp: AppResponse) {
     return derivePipelineStage({
       storedStatus: resp.status,
@@ -2104,31 +2142,37 @@ function ApplicantsTab({
   }
 
   function applyInterviewRows(
+    applicationId: string,
     rows: Array<{
       id: string;
       author_name?: string;
-      notes: string | null;
-      interview_outcome: string;
+      author_id?: string | null;
+      notes?: string | null;
+      note?: string | null;
+      interview_notes?: string | null;
+      interview_outcome?: string | null;
+      outcome?: string | null;
+      interviewOutcome?: string | null;
       updated_at: string;
       mine?: boolean;
     }>
   ) {
-    const shown: ShownInterviewReview[] = rows.map((row) => ({
-      id: row.id,
-      authorName: row.author_name?.trim() || "Someone",
-      outcome: isInterviewOutcome(row.interview_outcome) ? row.interview_outcome : "pending",
-      notes: row.notes,
-      when: formatInterviewWhen(row.updated_at),
-      mine: !!row.mine,
-    }));
+    if (interviewDraft.current.applicationId !== applicationId) return;
+    const shown: ShownInterviewReview[] = rows.map((row) => {
+      const form = interviewFormFromReview(row);
+      return {
+        id: row.id,
+        authorName: row.author_name?.trim() || "Someone",
+        outcome: form.outcome,
+        notes: form.notes || null,
+        when: formatInterviewWhen(row.updated_at),
+        mine: !!row.mine || (!!viewerId && row.author_id === viewerId),
+      };
+    });
     setInterviewReviews(shown);
-    const mine = shown.find((row) => row.mine);
-    const notes = mine?.notes ?? "";
-    const outcome = mine?.outcome ?? "pending";
-    setInterviewNotes(notes);
-    setSavedInterviewNotes(notes);
-    setInterviewOutcome(outcome);
-    setSavedInterviewOutcome(outcome);
+    interviewAuthoritative.current = true;
+    const next = nextDraftAfterLoad(interviewDraft.current, rows, viewerId);
+    if (next !== interviewDraft.current) commitInterviewDraft(next);
   }
 
   async function fetchInterviewReviews(applicationId: string, background = false) {
@@ -2149,7 +2193,7 @@ function ApplicantsTab({
         }
         return;
       }
-      applyInterviewRows(data.reviews ?? []);
+      applyInterviewRows(applicationId, data.reviews ?? []);
       setInterviewReady(true);
     } catch {
       if (ticket !== interviewRequest.current || background) return;
@@ -2162,9 +2206,10 @@ function ApplicantsTab({
 
   function closeReview() {
     const noteDirty = reviewNotes.trim() !== savedNotes.trim();
+    const draft = interviewDraft.current;
     const interviewDirty =
-      interviewNotes.trim() !== savedInterviewNotes.trim() ||
-      interviewOutcome !== savedInterviewOutcome;
+      draft.notes.trim() !== draft.baselineNotes.trim() ||
+      draft.outcome !== draft.baselineOutcome;
     if (noteDirty || interviewDirty) {
       const what =
         noteDirty && interviewDirty
@@ -2210,17 +2255,22 @@ function ApplicantsTab({
 
   async function handleSaveInterview() {
     if (!reviewingResponse) return;
+    const applicationId = reviewingResponse.id;
     setInterviewSaving(true);
     setInterviewFeedback(null);
-    const stored = interviewNotes.trim();
+    const draft = interviewDraft.current;
+    const stored = draft.notes.trim();
+    const flags = interviewClearFlags(draft);
     try {
       const res = await fetch("/api/schools/applications/reviews", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          response_id: reviewingResponse.id,
+          response_id: applicationId,
           notes: stored,
-          interview_outcome: interviewOutcome,
+          interview_outcome: draft.outcome,
+          clear_outcome: flags.clear_outcome,
+          clear_notes: flags.clear_notes,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -2231,11 +2281,14 @@ function ApplicantsTab({
         });
         return;
       }
-      setSavedInterviewNotes(stored);
-      setInterviewNotes(stored);
-      setSavedInterviewOutcome(interviewOutcome);
+      if (interviewDraft.current.applicationId !== applicationId) return;
+      const storedForm = interviewFormFromReview(
+        data.review ?? { notes: stored, interview_outcome: draft.outcome }
+      );
+      interviewAuthoritative.current = true;
+      commitInterviewDraft(draftFromSaved(storedForm, applicationId));
       setInterviewFeedback({ tone: "ok", text: "Saved" });
-      await fetchInterviewReviews(reviewingResponse.id, true);
+      await fetchInterviewReviews(applicationId, true);
     } catch {
       setInterviewFeedback({ tone: "error", text: "Could not save the interview notes" });
     } finally {
@@ -2412,9 +2465,10 @@ function ApplicantsTab({
   async function handleReviewSave(statusOverride?: string) {
     const nextStatus = statusOverride ?? reviewStatus;
     if (!reviewingResponse || !nextStatus) return;
+    const draft = interviewDraft.current;
     const interviewDirty =
-      interviewNotes.trim() !== savedInterviewNotes.trim() ||
-      interviewOutcome !== savedInterviewOutcome;
+      draft.notes.trim() !== draft.baselineNotes.trim() ||
+      draft.outcome !== draft.baselineOutcome;
     if (interviewDirty) {
       const proceed = window.confirm(
         "These interview notes are not saved. Continue with the decision without them?"
@@ -2913,11 +2967,14 @@ function ApplicantsTab({
                             setNoteFeedback(null);
                             setInterviewReviews([]);
                             setInterviewReady(false);
-                            setInterviewNotes("");
-                            setSavedInterviewNotes("");
-                            setInterviewOutcome("pending");
-                            setSavedInterviewOutcome("pending");
                             setInterviewFeedback(null);
+                            interviewAuthoritative.current = false;
+                            commitInterviewDraft(
+                              draftFromSaved(
+                                savedInterviewFor(pipelineReviews, resp.id, viewerId),
+                                resp.id
+                              )
+                            );
                             fetchReferences(resp.id);
                             fetchApplicantEmails(resp.id);
                             fetchInterviewReviews(resp.id);
@@ -3034,11 +3091,11 @@ function ApplicantsTab({
           interviewNotes={interviewNotes}
           interviewOutcome={interviewOutcome}
           onInterviewNotesChange={(value) => {
-            setInterviewNotes(value);
+            commitInterviewDraft({ ...interviewDraft.current, notes: value });
             setInterviewFeedback(null);
           }}
           onInterviewOutcomeChange={(value) => {
-            setInterviewOutcome(value);
+            commitInterviewDraft({ ...interviewDraft.current, outcome: value });
             setInterviewFeedback(null);
           }}
           onSaveInterview={handleSaveInterview}

@@ -986,18 +986,20 @@ export async function getReferenceRequestSummaries(supabase: Client, application
     .in("application_id", applicationIds);
 }
 
-/** Decisive interview outcomes for the applicants tab. Notes stay out of this read. */
+/** Interview rows for the applicants tab: the badge, and the review form's own note. */
 export async function getInterviewReviewSummaries(supabase: Client, applicationIds: string[]) {
   if (applicationIds.length === 0) return { data: [], error: null };
   const rows: Array<{
     application_response_id: string;
+    author_id: string | null;
+    notes: string | null;
     interview_outcome: string | null;
     updated_at: string | null;
   }> = [];
   for (let i = 0; i < applicationIds.length; i += 150) {
     const { data, error } = await supabase
       .from("application_staff_reviews")
-      .select("application_response_id, interview_outcome, updated_at")
+      .select("application_response_id, author_id, notes, interview_outcome, updated_at")
       .in("application_response_id", applicationIds.slice(i, i + 150));
     if (error) return { data: rows, error };
     rows.push(...(data ?? []));
