@@ -156,7 +156,7 @@ export const ADMIN_MODULES: ModuleDefinition[] = [
     href: "/staff-decisions",
     icon: UserCheck,
     description: "Leadership Track: who is accepted onto staff",
-    requiredRoles: ["leadership_team"], // role-only — see ROLE_ONLY_MODULES
+    requiredRoles: ["leadership_team"], // role-only (+ super_admin) — see ROLE_ONLY_MODULES
   },
   {
     id: "brand-kit",
@@ -285,7 +285,7 @@ export const SUPER_ADMIN_ONLY_MODULES = new Set(["records-library"]);
 /**
  * Modules shown by role alone — admins don't get them for free and no
  * permission grant unlocks them. Staff decisions (migration 247) are for the
- * Leadership Team only, admin or not.
+ * Leadership Team, plus super_admin — a plain `admin` does not get them.
  */
 export const ROLE_ONLY_MODULES: Record<string, string> = {
   "staff-decisions": "leadership_team",
@@ -330,7 +330,7 @@ export function getAccessibleModules(
     // Unbuilt placeholders are hidden from everyone, super_admin included.
     if (HIDDEN_FROM_NAV.has(mod.id)) return false;
     const onlyRole = ROLE_ONLY_MODULES[mod.id];
-    if (onlyRole) return userRoles.includes(onlyRole);
+    if (onlyRole) return isSuperAdmin || userRoles.includes(onlyRole);
     // Always open (dashboard, prayer room)
     if (mod.requiredRoles.length === 0) return true;
     // Admins see everything — except the super-admin-only carve-outs

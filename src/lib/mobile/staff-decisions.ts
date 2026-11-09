@@ -4,11 +4,12 @@
 // The phone app's mirror of the website's Leadership Track staff decisions
 // (src/app/(admin)/staff-decisions/page.tsx and the staff_decision tab of
 // src/app/(admin)/schools/[programId]/page.tsx). Those pages read with the
-// service-role client after isLeadershipTeam(); the phone must never hold
+// service-role client after canUseStaffDecisions(); the phone must never hold
 // that key, so the mobile endpoints run the same check on the server and
 // only then read with the admin client, through the same lib functions.
 //
-// Role-only, like ROLE_ONLY_MODULES on the web: being admin is NOT enough.
+// Role-only, like ROLE_ONLY_MODULES on the web: Leadership Team or
+// super_admin. Being a plain admin is NOT enough.
 //
 // Writes are not here: the phone calls the website's own
 // POST /api/schools/staff-decisions and /make-staff, which check again.

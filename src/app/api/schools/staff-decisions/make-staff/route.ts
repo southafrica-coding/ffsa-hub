@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isLeadershipTeam } from "@/lib/auth/check-okr-access";
+import { canUseStaffDecisions } from "@/lib/auth/check-okr-access";
 import { setMembershipRole } from "@/lib/users/set-membership-role";
 import { validateDepartment } from "@/lib/users/validate-department";
 
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
   if (!user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
-  if (!(await isLeadershipTeam(supabase, user.id))) {
+  if (!(await canUseStaffDecisions(supabase, user.id))) {
     return NextResponse.json({ error: "Only the Leadership Team can do this." }, { status: 403 });
   }
 

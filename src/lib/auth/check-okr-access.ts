@@ -34,6 +34,25 @@ export async function isLeadershipTeam(
   return ((data as unknown[] | null)?.length ?? 0) > 0;
 }
 
+/**
+ * Who may see and record Leadership Track staff decisions (migration 247):
+ * the Leadership Team, plus super_admin. A plain `admin` (General Admin) is
+ * still NOT enough — this stays a role-only area. Writes go through the
+ * service-role client after this check, so RLS on the table is not involved.
+ */
+export async function canUseStaffDecisions(
+  supabase: Client,
+  userId: string
+): Promise<boolean> {
+  const { data } = await supabase
+    .from("user_roles")
+    .select("roles!inner(name)")
+    .eq("user_id", userId)
+    .in("roles.name", ["leadership_team", "super_admin"])
+    .limit(1);
+  return ((data as unknown[] | null)?.length ?? 0) > 0;
+}
+
 // ────────────────────────────────────────────────────────────
 // The rule
 // ────────────────────────────────────────────────────────────

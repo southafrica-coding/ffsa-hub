@@ -9,8 +9,8 @@ import {
 } from "@/lib/testing/fake-supabase";
 
 // GET /api/mobile/staff-decisions and /api/mobile/staff-decisions/[programId]:
-// the web /staff-decisions gate (Leadership Team only — role-only, admin
-// alone is not enough), service-role reads only after the check.
+// the web /staff-decisions gate (Leadership Team or super_admin — role-only,
+// a plain admin is not enough), service-role reads only after the check.
 
 const state = vi.hoisted(() => ({
   user: null as unknown as { client: unknown; queries: FakeQuery[] },
@@ -113,7 +113,6 @@ describe("GET /api/mobile/staff-decisions", () => {
 
   it.each([
     ["plain admin", ADMIN],
-    ["super admin", SUPER],
     ["staff", STAFF],
   ])("403 for %s without leadership_team, never touching the service-role client", async (_l, world) => {
     as(world);
@@ -127,7 +126,14 @@ describe("GET /api/mobile/staff-decisions", () => {
     await GET();
     const q = state.user.queries.find((x) => x.table === "user_roles")!;
     expect(filterValue(q, "eq", "user_id")).toBe("u1");
-    expect(filterValue(q, "eq", "roles.name")).toBe("leadership_team");
+    expect(filterValue(q, "in", "roles.name")).toEqual(["leadership_team", "super_admin"]);
+  });
+
+  it("200 for a super admin without leadership_team", async () => {
+    as(SUPER);
+    const res = await GET();
+    expect(res.status).toBe(200);
+    expect((await res.json()).schools).toHaveLength(2);
   });
 
   it("200 for Leadership Team: Leadership Track schools only, newest first, with counts", async () => {

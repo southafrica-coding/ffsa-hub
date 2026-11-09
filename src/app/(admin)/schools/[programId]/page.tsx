@@ -13,7 +13,7 @@ import { SchoolFeesPanel } from "@/components/finance/school-fees-panel";
 import { getSchoolBalances } from "@/services/school-balances";
 import type { RosterFee } from "./roster-tab";
 import { hasModuleAccess } from "@/lib/require-permission";
-import { isLeadershipTeam } from "@/lib/auth/check-okr-access";
+import { canUseStaffDecisions } from "@/lib/auth/check-okr-access";
 import { getLeadershipTrackProgram, loadStaffDecisionRows } from "@/lib/schools/staff-decisions";
 import { listActiveMinistries } from "@/services/ministries";
 import { StaffDecisionTab } from "./staff-decision-tab";
@@ -128,7 +128,7 @@ export default async function ProgramDetailPage({
   // with the service-role client so it keeps working after the school ends
   // or is archived. A Leadership Team member without Training access gets a
   // page holding just this tab instead of the usual redirect.
-  const viewerIsLeadership = await isLeadershipTeam(supabase, session.user.id);
+  const viewerIsLeadership = await canUseStaffDecisions(supabase, session.user.id);
   const ltProgram = viewerIsLeadership ? await getLeadershipTrackProgram(admin, programId) : null;
   let staffDecisionPanel: React.ReactNode = null;
   if (ltProgram) {

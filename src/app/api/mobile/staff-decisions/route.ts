@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAuthedUser } from "@/lib/api-auth";
-import { isLeadershipTeam } from "@/lib/auth/check-okr-access";
+import { canUseStaffDecisions } from "@/lib/auth/check-okr-access";
 import {
   listLeadershipTrackPrograms,
   loadStaffDecisionRows,
@@ -25,7 +25,7 @@ export async function GET() {
       { status: 401, headers: NO_STORE }
     );
   }
-  if (!(await isLeadershipTeam(supabase, user.id))) {
+  if (!(await canUseStaffDecisions(supabase, user.id))) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403, headers: NO_STORE });
   }
 

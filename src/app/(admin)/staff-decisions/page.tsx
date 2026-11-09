@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isLeadershipTeam } from "@/lib/auth/check-okr-access";
+import { canUseStaffDecisions } from "@/lib/auth/check-okr-access";
 import {
   listLeadershipTrackPrograms,
   loadStaffDecisionRows,
@@ -19,7 +19,7 @@ export default async function StaffDecisionsPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
-  if (!(await isLeadershipTeam(supabase, user.id))) redirect("/dashboard");
+  if (!(await canUseStaffDecisions(supabase, user.id))) redirect("/dashboard");
 
   const admin = createAdminClient();
   const programs = await listLeadershipTrackPrograms(admin);

@@ -47,11 +47,18 @@ describe("placeholder pages are hidden from navigation", () => {
 
   it("keeps every working module for a Super Admin", () => {
     const visible = ids(getAccessibleModules(ADMIN_MODULES, ["super_admin"]));
-    const working = ids(ADMIN_MODULES).filter(
-      (id) => !PLACEHOLDERS.includes(id) && id !== "staff-decisions" // role-only
-    );
+    const working = ids(ADMIN_MODULES).filter((id) => !PLACEHOLDERS.includes(id));
     expect(visible).toEqual(working);
     expect(ids(getAccessibleModules(SYSTEM_MODULES, ["super_admin"]))).toEqual(ids(SYSTEM_MODULES));
+  });
+
+  it("shows Staff decisions to Leadership Team and Super Admin, never to a plain admin", () => {
+    const has = (roles: string[]) =>
+      ids(getAccessibleModules(ADMIN_MODULES, roles, new Set())).includes("staff-decisions");
+    expect(has(["leadership_team"])).toBe(true);
+    expect(has(["super_admin"])).toBe(true);
+    expect(has(["admin"])).toBe(false);
+    expect(has(["staff"])).toBe(false);
   });
 
   it("still gives everyone the always-open modules", () => {
