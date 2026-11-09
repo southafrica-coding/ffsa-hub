@@ -467,6 +467,978 @@ export type Database = {
           },
         ]
       }
+      budget_categories: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          created_by: string | null
+          group_name: string | null
+          help_text: string | null
+          icon: string | null
+          id: string
+          is_active: boolean
+          key: string | null
+          name: string
+          sort: number
+          updated_at: string
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          group_name?: string | null
+          help_text?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean
+          key?: string | null
+          name: string
+          sort?: number
+          updated_at?: string
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          group_name?: string | null
+          help_text?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean
+          key?: string | null
+          name?: string
+          sort?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_categories_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_category_coding: {
+        Row: {
+          account_id: string | null
+          category_id: string
+          id: string
+          org_region: string
+          tracking_option_1_id: string | null
+          tracking_option_2_id: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          account_id?: string | null
+          category_id: string
+          id?: string
+          org_region: string
+          tracking_option_1_id?: string | null
+          tracking_option_2_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          account_id?: string | null
+          category_id?: string
+          id?: string
+          org_region?: string
+          tracking_option_1_id?: string | null
+          tracking_option_2_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_category_coding_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "xero_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_category_coding_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "budget_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_category_coding_tracking_option_1_id_fkey"
+            columns: ["tracking_option_1_id"]
+            isOneToOne: false
+            referencedRelation: "xero_tracking_options"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_category_coding_tracking_option_2_id_fkey"
+            columns: ["tracking_option_2_id"]
+            isOneToOne: false
+            referencedRelation: "xero_tracking_options"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_category_coding_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_expenses: {
+        Row: {
+          amount_cents: number
+          archived_at: string | null
+          budget_id: string
+          created_at: string
+          created_by: string | null
+          description: string
+          expense_date: string
+          id: string
+          line_id: string | null
+          notes: string | null
+          reference: string | null
+          updated_at: string
+          vendor: string | null
+        }
+        Insert: {
+          amount_cents: number
+          archived_at?: string | null
+          budget_id: string
+          created_at?: string
+          created_by?: string | null
+          description: string
+          expense_date: string
+          id?: string
+          line_id?: string | null
+          notes?: string | null
+          reference?: string | null
+          updated_at?: string
+          vendor?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          archived_at?: string | null
+          budget_id?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          expense_date?: string
+          id?: string
+          line_id?: string | null
+          notes?: string | null
+          reference?: string | null
+          updated_at?: string
+          vendor?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_expenses_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "budgets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_expenses_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_expenses_line_budget_fkey"
+            columns: ["line_id", "budget_id"]
+            isOneToOne: false
+            referencedRelation: "budget_lines"
+            referencedColumns: ["id", "budget_id"]
+          },
+        ]
+      }
+      budget_line_coding: {
+        Row: {
+          account_id: string | null
+          id: string
+          line_id: string
+          org_region: string
+          source: string
+          tracking_option_1_id: string | null
+          tracking_option_2_id: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          account_id?: string | null
+          id?: string
+          line_id: string
+          org_region: string
+          source?: string
+          tracking_option_1_id?: string | null
+          tracking_option_2_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          account_id?: string | null
+          id?: string
+          line_id?: string
+          org_region?: string
+          source?: string
+          tracking_option_1_id?: string | null
+          tracking_option_2_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_line_coding_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "xero_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_line_coding_line_id_fkey"
+            columns: ["line_id"]
+            isOneToOne: false
+            referencedRelation: "budget_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_line_coding_tracking_option_1_id_fkey"
+            columns: ["tracking_option_1_id"]
+            isOneToOne: false
+            referencedRelation: "xero_tracking_options"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_line_coding_tracking_option_2_id_fkey"
+            columns: ["tracking_option_2_id"]
+            isOneToOne: false
+            referencedRelation: "xero_tracking_options"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_line_coding_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_lines: {
+        Row: {
+          amount_cents: number
+          archived_at: string | null
+          budget_id: string
+          category_id: string
+          coding_status: string
+          created_at: string
+          created_by: string | null
+          frequency: number
+          id: string
+          kind: string
+          line_total_cents: number
+          multiplier: number
+          name: string
+          notes: string | null
+          section_id: string
+          sort: number
+          source_line_id: string | null
+          source_template_line_id: string | null
+          updated_at: string
+          uses_driver: boolean
+        }
+        Insert: {
+          amount_cents?: number
+          archived_at?: string | null
+          budget_id: string
+          category_id: string
+          coding_status?: string
+          created_at?: string
+          created_by?: string | null
+          frequency?: number
+          id?: string
+          kind: string
+          line_total_cents?: number
+          multiplier?: number
+          name: string
+          notes?: string | null
+          section_id: string
+          sort?: number
+          source_line_id?: string | null
+          source_template_line_id?: string | null
+          updated_at?: string
+          uses_driver?: boolean
+        }
+        Update: {
+          amount_cents?: number
+          archived_at?: string | null
+          budget_id?: string
+          category_id?: string
+          coding_status?: string
+          created_at?: string
+          created_by?: string | null
+          frequency?: number
+          id?: string
+          kind?: string
+          line_total_cents?: number
+          multiplier?: number
+          name?: string
+          notes?: string | null
+          section_id?: string
+          sort?: number
+          source_line_id?: string | null
+          source_template_line_id?: string | null
+          updated_at?: string
+          uses_driver?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_lines_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "budgets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_lines_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "budget_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_lines_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_lines_section_fkey"
+            columns: ["section_id", "budget_id", "kind"]
+            isOneToOne: false
+            referencedRelation: "budget_sections"
+            referencedColumns: ["id", "budget_id", "key"]
+          },
+          {
+            foreignKeyName: "budget_lines_source_line_id_fkey"
+            columns: ["source_line_id"]
+            isOneToOne: false
+            referencedRelation: "budget_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_lines_source_template_line_id_fkey"
+            columns: ["source_template_line_id"]
+            isOneToOne: false
+            referencedRelation: "budget_template_lines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_members: {
+        Row: {
+          added_by: string | null
+          budget_id: string
+          created_at: string
+          id: string
+          role: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          added_by?: string | null
+          budget_id: string
+          created_at?: string
+          id?: string
+          role: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          added_by?: string | null
+          budget_id?: string
+          created_at?: string
+          id?: string
+          role?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_members_added_by_fkey"
+            columns: ["added_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_members_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "budgets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_sections: {
+        Row: {
+          budget_id: string
+          created_at: string
+          holds_lines: boolean | null
+          id: string
+          key: string
+          label: string
+          sort: number
+        }
+        Insert: {
+          budget_id: string
+          created_at?: string
+          holds_lines?: never
+          id?: string
+          key: string
+          label: string
+          sort?: number
+        }
+        Update: {
+          budget_id?: string
+          created_at?: string
+          holds_lines?: never
+          id?: string
+          key?: string
+          label?: string
+          sort?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_sections_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "budgets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_template_line_coding: {
+        Row: {
+          account_id: string | null
+          id: string
+          org_region: string
+          source: string
+          template_line_id: string
+          tracking_option_1_id: string | null
+          tracking_option_2_id: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          account_id?: string | null
+          id?: string
+          org_region: string
+          source?: string
+          template_line_id: string
+          tracking_option_1_id?: string | null
+          tracking_option_2_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          account_id?: string | null
+          id?: string
+          org_region?: string
+          source?: string
+          template_line_id?: string
+          tracking_option_1_id?: string | null
+          tracking_option_2_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_template_line_coding_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "xero_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_template_line_coding_template_line_id_fkey"
+            columns: ["template_line_id"]
+            isOneToOne: false
+            referencedRelation: "budget_template_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_template_line_coding_tracking_option_1_id_fkey"
+            columns: ["tracking_option_1_id"]
+            isOneToOne: false
+            referencedRelation: "xero_tracking_options"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_template_line_coding_tracking_option_2_id_fkey"
+            columns: ["tracking_option_2_id"]
+            isOneToOne: false
+            referencedRelation: "xero_tracking_options"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_template_line_coding_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_template_lines: {
+        Row: {
+          amount_cents: number
+          archived_at: string | null
+          category_id: string
+          coding_status: string
+          created_at: string
+          frequency: number
+          id: string
+          kind: string
+          multiplier: number
+          name: string
+          notes: string | null
+          sort: number
+          source_line_id: string | null
+          template_id: string
+          uses_driver: boolean
+        }
+        Insert: {
+          amount_cents?: number
+          archived_at?: string | null
+          category_id: string
+          coding_status?: string
+          created_at?: string
+          frequency?: number
+          id?: string
+          kind: string
+          multiplier?: number
+          name: string
+          notes?: string | null
+          sort?: number
+          source_line_id?: string | null
+          template_id: string
+          uses_driver?: boolean
+        }
+        Update: {
+          amount_cents?: number
+          archived_at?: string | null
+          category_id?: string
+          coding_status?: string
+          created_at?: string
+          frequency?: number
+          id?: string
+          kind?: string
+          multiplier?: number
+          name?: string
+          notes?: string | null
+          sort?: number
+          source_line_id?: string | null
+          template_id?: string
+          uses_driver?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_template_lines_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "budget_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_template_lines_section_fkey"
+            columns: ["template_id", "kind"]
+            isOneToOne: false
+            referencedRelation: "budget_template_sections"
+            referencedColumns: ["template_id", "key"]
+          },
+          {
+            foreignKeyName: "budget_template_lines_source_line_id_fkey"
+            columns: ["source_line_id"]
+            isOneToOne: false
+            referencedRelation: "budget_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_template_lines_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "budget_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_template_sections: {
+        Row: {
+          help_text: string | null
+          holds_lines: boolean | null
+          id: string
+          key: string
+          label: string
+          sort: number
+          template_id: string
+        }
+        Insert: {
+          help_text?: string | null
+          holds_lines?: never
+          id?: string
+          key: string
+          label: string
+          sort?: number
+          template_id: string
+        }
+        Update: {
+          help_text?: string | null
+          holds_lines?: never
+          id?: string
+          key?: string
+          label?: string
+          sort?: number
+          template_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_template_sections_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "budget_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_templates: {
+        Row: {
+          applies_to: string[]
+          archived_at: string | null
+          created_at: string
+          created_by: string | null
+          default_currency: string
+          driver_label: string | null
+          driver_value: number | null
+          event_id: string | null
+          funding_fields: Json
+          id: string
+          is_active: boolean
+          key: string | null
+          name: string
+          org_id: string | null
+          outreach_team_id: string | null
+          owner_kind: string | null
+          program_id: string | null
+          source_budget_id: string | null
+          staff_ministry_id: string | null
+          subcategory_id: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          applies_to?: string[]
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          default_currency?: string
+          driver_label?: string | null
+          driver_value?: number | null
+          event_id?: string | null
+          funding_fields?: Json
+          id?: string
+          is_active?: boolean
+          key?: string | null
+          name: string
+          org_id?: string | null
+          outreach_team_id?: string | null
+          owner_kind?: string | null
+          program_id?: string | null
+          source_budget_id?: string | null
+          staff_ministry_id?: string | null
+          subcategory_id?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          applies_to?: string[]
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          default_currency?: string
+          driver_label?: string | null
+          driver_value?: number | null
+          event_id?: string | null
+          funding_fields?: Json
+          id?: string
+          is_active?: boolean
+          key?: string | null
+          name?: string
+          org_id?: string | null
+          outreach_team_id?: string | null
+          owner_kind?: string | null
+          program_id?: string | null
+          source_budget_id?: string | null
+          staff_ministry_id?: string | null
+          subcategory_id?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_templates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_templates_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_templates_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "finance_orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_templates_outreach_team_id_fkey"
+            columns: ["outreach_team_id"]
+            isOneToOne: false
+            referencedRelation: "outreach_teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_templates_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_templates_source_budget_id_fkey"
+            columns: ["source_budget_id"]
+            isOneToOne: false
+            referencedRelation: "budgets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_templates_staff_ministry_id_fkey"
+            columns: ["staff_ministry_id"]
+            isOneToOne: false
+            referencedRelation: "staff_ministries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_templates_subcategory_id_fkey"
+            columns: ["subcategory_id"]
+            isOneToOne: false
+            referencedRelation: "staff_ministry_subcategories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budgets: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          archived_at: string | null
+          created_at: string
+          created_by: string | null
+          currency: string
+          driver_label: string | null
+          driver_value: number | null
+          event_id: string | null
+          funding_goal_cents: number | null
+          fundraising_goal_cents: number | null
+          funds_in_hand_cents: number | null
+          id: string
+          income_goal_cents: number | null
+          name: string
+          notes: string | null
+          org_id: string
+          outreach_team_id: string | null
+          owner_kind: string
+          period_id: string
+          program_id: string | null
+          source_budget_id: string | null
+          source_template_id: string | null
+          staff_ministry_id: string | null
+          status: string
+          subcategory_id: string | null
+          template_id: string
+          template_version: number
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          driver_label?: string | null
+          driver_value?: number | null
+          event_id?: string | null
+          funding_goal_cents?: number | null
+          fundraising_goal_cents?: number | null
+          funds_in_hand_cents?: number | null
+          id?: string
+          income_goal_cents?: number | null
+          name: string
+          notes?: string | null
+          org_id: string
+          outreach_team_id?: string | null
+          owner_kind: string
+          period_id: string
+          program_id?: string | null
+          source_budget_id?: string | null
+          source_template_id?: string | null
+          staff_ministry_id?: string | null
+          status?: string
+          subcategory_id?: string | null
+          template_id: string
+          template_version: number
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          driver_label?: string | null
+          driver_value?: number | null
+          event_id?: string | null
+          funding_goal_cents?: number | null
+          fundraising_goal_cents?: number | null
+          funds_in_hand_cents?: number | null
+          id?: string
+          income_goal_cents?: number | null
+          name?: string
+          notes?: string | null
+          org_id?: string
+          outreach_team_id?: string | null
+          owner_kind?: string
+          period_id?: string
+          program_id?: string | null
+          source_budget_id?: string | null
+          source_template_id?: string | null
+          staff_ministry_id?: string | null
+          status?: string
+          subcategory_id?: string | null
+          template_id?: string
+          template_version?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budgets_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budgets_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budgets_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budgets_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "finance_orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budgets_outreach_team_id_fkey"
+            columns: ["outreach_team_id"]
+            isOneToOne: false
+            referencedRelation: "outreach_teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budgets_period_org_fkey"
+            columns: ["period_id", "org_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_periods"
+            referencedColumns: ["id", "org_id"]
+          },
+          {
+            foreignKeyName: "budgets_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budgets_source_budget_id_fkey"
+            columns: ["source_budget_id"]
+            isOneToOne: false
+            referencedRelation: "budgets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budgets_source_template_id_fkey"
+            columns: ["source_template_id"]
+            isOneToOne: false
+            referencedRelation: "budget_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budgets_staff_ministry_id_fkey"
+            columns: ["staff_ministry_id"]
+            isOneToOne: false
+            referencedRelation: "staff_ministries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budgets_subcategory_id_fkey"
+            columns: ["subcategory_id"]
+            isOneToOne: false
+            referencedRelation: "staff_ministry_subcategories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budgets_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "budget_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       campaign_labels: {
         Row: {
           added_at: string
@@ -1370,6 +2342,102 @@ export type Database = {
             columns: ["form_id"]
             isOneToOne: false
             referencedRelation: "forms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      finance_audit_log: {
+        Row: {
+          action: string
+          actor_kind: string
+          actor_user_id: string | null
+          after: Json | null
+          at: string
+          before: Json | null
+          budget_id: string | null
+          entity_id: string | null
+          entity_type: string
+          id: number
+        }
+        Insert: {
+          action: string
+          actor_kind: string
+          actor_user_id?: string | null
+          after?: Json | null
+          at?: string
+          before?: Json | null
+          budget_id?: string | null
+          entity_id?: string | null
+          entity_type: string
+          id?: never
+        }
+        Update: {
+          action?: string
+          actor_kind?: string
+          actor_user_id?: string | null
+          after?: Json | null
+          at?: string
+          before?: Json | null
+          budget_id?: string | null
+          entity_id?: string | null
+          entity_type?: string
+          id?: never
+        }
+        Relationships: []
+      }
+      fiscal_periods: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          created_by: string | null
+          end_date: string
+          id: string
+          is_current: boolean
+          kind: string
+          label: string
+          org_id: string
+          start_date: string
+          updated_at: string
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          end_date: string
+          id?: string
+          is_current?: boolean
+          kind: string
+          label: string
+          org_id: string
+          start_date: string
+          updated_at?: string
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          end_date?: string
+          id?: string
+          is_current?: boolean
+          kind?: string
+          label?: string
+          org_id?: string
+          start_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fiscal_periods_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fiscal_periods_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "finance_orgs"
             referencedColumns: ["id"]
           },
         ]
@@ -5602,6 +6670,176 @@ export type Database = {
       }
     }
     Views: {
+      v_budget_coding_queue: {
+        Row: {
+          budget_id: string | null
+          currency: string | null
+          coding_status: string | null
+          invalid_account: boolean | null
+          invalid_tracking: boolean | null
+          line_id: string | null
+          missing_account: boolean | null
+          name: string | null
+          org_id: string | null
+          org_region: string | null
+        }
+        Relationships: []
+      }
+      v_budget_expense_tracker: {
+        Row: {
+          amount_cents: number | null
+          budget_id: string | null
+          category_id: string | null
+          created_at: string | null
+          created_by: string | null
+          currency: string | null
+          description: string | null
+          expense_date: string | null
+          expense_id: string | null
+          kind: string | null
+          line_id: string | null
+          line_name: string | null
+          notes: string | null
+          org_id: string | null
+          reference: string | null
+          updated_at: string | null
+          vendor: string | null
+        }
+        Relationships: []
+      }
+      v_budget_line_actuals: {
+        Row: {
+          archived_at: string | null
+          budget_id: string | null
+          category_id: string | null
+          currency: string | null
+          kind: string | null
+          line_id: string | null
+          name: string | null
+          org_id: string | null
+          planned_cents: number | null
+          remaining_cents: number | null
+          spent_cents: number | null
+        }
+        Relationships: []
+      }
+      v_budget_lines_flat: {
+        Row: {
+          amount_cents: number | null
+          budget_id: string | null
+          budget_name: string | null
+          budget_status: string | null
+          category_group: string | null
+          category_id: string | null
+          category_name: string | null
+          coding_status: string | null
+          created_at: string | null
+          currency: string | null
+          frequency: number | null
+          kind: string | null
+          line_id: string | null
+          line_name: string | null
+          line_total_cents: number | null
+          multiplier: number | null
+          org_id: string | null
+          owner_id: string | null
+          owner_kind: string | null
+          owner_name: string | null
+          period_end: string | null
+          period_id: string | null
+          period_kind: string | null
+          period_label: string | null
+          period_start: string | null
+          section_key: string | null
+          section_label: string | null
+          sort: number | null
+          source_line_id: string | null
+          updated_at: string | null
+          us_account_code: string | null
+          us_account_id: string | null
+          us_account_name: string | null
+          us_tracking_1_name: string | null
+          us_tracking_2_name: string | null
+          uses_driver: boolean | null
+          za_account_code: string | null
+          za_account_id: string | null
+          za_account_name: string | null
+          za_tracking_1_name: string | null
+          za_tracking_2_name: string | null
+        }
+        Relationships: []
+      }
+      v_budget_overview: {
+        Row: {
+          budget_id: string | null
+          currency: string | null
+          end_date: string | null
+          fixed_cents: number | null
+          funding_goal_cents: number | null
+          fundraising_goal_cents: number | null
+          funds_in_hand_cents: number | null
+          income_goal_cents: number | null
+          line_count: number | null
+          name: string | null
+          notes: string | null
+          org_id: string | null
+          owner_id: string | null
+          owner_kind: string | null
+          period_id: string | null
+          period_label: string | null
+          planned_cents: number | null
+          remaining_cents: number | null
+          spent_cents: number | null
+          start_date: string | null
+          status: string | null
+          unallocated_cents: number | null
+          variable_cents: number | null
+        }
+        Relationships: []
+      }
+      v_budget_summary: {
+        Row: {
+          budget_id: string | null
+          budget_name: string | null
+          budget_status: string | null
+          category_id: string | null
+          category_name: string | null
+          currency: string | null
+          line_count: number | null
+          needs_coding_count: number | null
+          org_id: string | null
+          owner_id: string | null
+          owner_kind: string | null
+          period_id: string | null
+          section_key: string | null
+          total_cents: number | null
+        }
+        Relationships: []
+      }
+      v_budget_yoy: {
+        Row: {
+          budget_id: string | null
+          budget_name: string | null
+          category_id: string | null
+          category_name: string | null
+          change_cents: number | null
+          currency: string | null
+          org_id: string | null
+          owner_id: string | null
+          owner_kind: string | null
+          period_id: string | null
+          period_label: string | null
+          source_budget_id: string | null
+          source_budget_name: string | null
+          source_currency: string | null
+          source_period_id: string | null
+          source_period_label: string | null
+          source_template_id: string | null
+          source_total_cents: number | null
+          total_cents: number | null
+        }
+        Relationships: []
+      }
       v_campaign_audience: {
         Row: {
           campaign_id: string | null
@@ -5680,6 +6918,40 @@ export type Database = {
           auto_linked: number
           queued: number
         }[]
+      }
+      budget_owner_id: {
+        Args: {
+          p_event_id: string | null
+          p_outreach_team_id: string | null
+          p_program_id: string | null
+          p_staff_ministry_id: string | null
+          p_subcategory_id: string | null
+        }
+        Returns: string | null
+      }
+      copy_budget_to_period: {
+        Args: {
+          p_name?: string | null
+          p_period_id: string
+          p_source_budget_id: string
+          p_submit?: boolean | null
+        }
+        Returns: string
+      }
+      create_budget_from_template: {
+        Args: {
+          p_currency?: string | null
+          p_driver_label?: string | null
+          p_driver_value?: number | null
+          p_name: string
+          p_org_id?: string | null
+          p_owner_id: string
+          p_owner_kind: string
+          p_period_id: string
+          p_submit?: boolean
+          p_template_id: string
+        }
+        Returns: string
       }
       find_library_matches_for_user: {
         Args: { p_user_id: string }
@@ -5816,6 +7088,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      save_budget_as_template: {
+        Args: { p_budget_id: string; p_name: string }
+        Returns: string
       }
       seed_default_reference_questions: {
         Args: { p_program_id: string }
