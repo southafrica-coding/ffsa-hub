@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
@@ -121,8 +122,8 @@ export function ProgramCoursesManager({
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          The courses (phases) that make up this program. Charges &amp; billing
-          for each live in Finance.
+          The courses that make up this school. Charges and billing for each stay in Finance.
+          Pages, assignments, and grading are on the Classroom tab.
         </p>
         <div className="flex items-center gap-2">
           {sorted.length === 0 && (
@@ -186,9 +187,17 @@ export function ProgramCoursesManager({
                     )}
                   </p>
                 </div>
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDialog(c)}>
-                  <Pencil className="h-3 w-3" />
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Link
+                    href={`/schools/${programId}/classroom/${c.id}`}
+                    className="font-mono text-[9px] font-bold uppercase tracking-[0.14em] underline"
+                  >
+                    Design
+                  </Link>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDialog(c)}>
+                    <Pencil className="h-3 w-3" />
+                  </Button>
+                </div>
               </div>
             );
           })}

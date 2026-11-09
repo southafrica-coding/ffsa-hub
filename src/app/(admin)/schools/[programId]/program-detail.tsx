@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { type TreeQuestion } from "@/components/admin/question-tree";
 import { ReferenceQuestionsBuilder } from "./reference-questions-builder";
 import { ProgramCoursesManager, type PhaseCourse } from "./program-courses-manager";
+import { ClassroomIndex } from "@/components/schools/lms/classroom-index";
 import { LeadersTab, type ProgramLeaderRow } from "./leaders-tab";
 import { EmailsTab } from "./emails-tab";
 import { StudentsExportPanel } from "./students-export-panel";
@@ -347,7 +348,7 @@ type RefRequestSummary = {
 /** Tabs this screen knows. `enrollments` is the pre-14a name for Students and
  *  is still in the wild as ?tab=enrollments, so it maps rather than 404s. */
 const TAB_KEYS = [
-  "overview", "students", "courses", "track", "grades", "applicants", "application", "arrival", "leaders", "emails", "fees",
+  "overview", "students", "courses", "classroom", "track", "grades", "applicants", "application", "arrival", "leaders", "emails", "fees",
   "staff_decision",
 ];
 function normaliseTab(tab: string): string {
@@ -542,6 +543,21 @@ export function ProgramDetail({
       arrivals: Object.fromEntries(arrivals),
     };
   });
+  const postedLetters = new Set(
+    grades.filter((grade) => grade.letter_grade).map((grade) => `${grade.enrollment_id}:${grade.course_id}`)
+  );
+  // A missing graded column is not graded. Only an explicit true opens a letter.
+  const gradedCourseIds = new Set(
+    billingCourses.filter((course) => (course as { graded?: boolean }).graded === true).map((course) => course.id)
+  );
+  // A school that is not split into segments has an empty track list, so each
+  // student's course ids are empty. Count every graded course for them.
+  const wholeSchool = segmentCourses.length === 0;
+  const lettersOpen = overviewRows.reduce((sum, row) => {
+    if (row.removed) return sum;
+    const ids = wholeSchool ? schoolCourses.map((course) => course.id) : row.courseIds;
+    return sum + ids.filter((id) => gradedCourseIds.has(id) && !postedLetters.has(`${row.enrollmentId}:${id}`)).length;
+  }, 0);
   const [tab, setTab] = useState(
     initialTab && TAB_KEYS.includes(normaliseTab(initialTab)) ? normaliseTab(initialTab) : "overview"
   );
@@ -680,6 +696,7 @@ export function ProgramDetail({
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="students">Students ({activeEnrollments.length})</TabsTrigger>
             <TabsTrigger value="courses">Courses ({billingCourses.length})</TabsTrigger>
+            <TabsTrigger value="classroom">Classroom</TabsTrigger>
             {trackSegments.length > 0 && (
               <TabsTrigger value="track">Track ({trackSummary.confirmed}/{trackSummary.total})</TabsTrigger>
             )}
@@ -735,6 +752,10 @@ export function ProgramDetail({
             courses={billingCourses}
             staff={courseStaff}
           />
+        </TabsContent>
+
+        <TabsContent value="classroom" className="mt-0">
+          <ClassroomIndex programId={program.id} courses={billingCourses} lettersOpen={lettersOpen} />
         </TabsContent>
 
         {/* Frame 14b */}

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import {
   getEnrollmentById,
@@ -204,7 +205,14 @@ export default async function EnrollmentDetailPage({
                     <TableCell className="font-mono text-sm">
                       {course.code}
                     </TableCell>
-                    <TableCell className="font-medium">{course.name}</TableCell>
+                    <TableCell className="font-medium">
+                      <Link
+                        href={`/my-schools/${enrollmentId}/courses/${course.id}`}
+                        className="underline decoration-[#DEDACE] underline-offset-2"
+                      >
+                        {course.name}
+                      </Link>
+                    </TableCell>
                     <TableCell className="text-center">
                       {course.credit_hours}
                     </TableCell>
