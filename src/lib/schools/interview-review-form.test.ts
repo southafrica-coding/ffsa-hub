@@ -8,8 +8,43 @@ import {
   ownInterviewReview,
   preserveInterviewWrite,
   reconcileInterviewDraft,
+  redactInterviewNotesForViewer,
   savedInterviewFor,
 } from "./interview-review-form";
+
+describe("interview notes on the applicants page", () => {
+  const rows = [
+    {
+      application_response_id: "app-1",
+      author_id: "staff",
+      notes: "Staff private note",
+      interview_outcome: "hold",
+      updated_at: "2026-11-01T00:00:00.000Z",
+    },
+    {
+      application_response_id: "app-1",
+      author_id: "leader",
+      notes: "Leader note",
+      interview_outcome: "recommend",
+      updated_at: "2026-11-02T00:00:00.000Z",
+    },
+  ];
+
+  it("keeps every reviewer's outcome and only the viewer's note", () => {
+    const visible = redactInterviewNotesForViewer(rows, "leader");
+    expect(visible.map((row) => row.interview_outcome)).toEqual(["hold", "recommend"]);
+    expect(visible.map((row) => row.notes)).toEqual([null, "Leader note"]);
+    expect(JSON.stringify(visible)).not.toContain("Staff private note");
+  });
+
+  it("removes every note when the viewer is unknown", () => {
+    const visible = redactInterviewNotesForViewer(rows, null);
+    expect(visible.map((row) => row.notes)).toEqual([null, null]);
+    expect(visible.map((row) => row.interview_outcome)).toEqual(["hold", "recommend"]);
+    expect(JSON.stringify(visible)).not.toContain("Staff private note");
+    expect(JSON.stringify(visible)).not.toContain("Leader note");
+  });
+});
 
 describe("interview form prefill", () => {
   it("prefills the saved outcome and note", () => {

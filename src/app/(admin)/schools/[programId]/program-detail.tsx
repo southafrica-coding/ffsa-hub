@@ -1,7 +1,7 @@
 "use client";
 
 import type { ApplicationExpiry } from "@/lib/auth/application-expiry";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { type TreeQuestion } from "@/components/admin/question-tree";
 import { ReferenceQuestionsBuilder } from "./reference-questions-builder";
@@ -2009,13 +2009,24 @@ function ApplicantsTab({
   const interviewAuthoritative = useRef(false);
   const [reviewLoading, setReviewLoading] = useState(false);
 
-  function commitInterviewDraft(next: InterviewDraft) {
+  const commitInterviewDraft = useCallback((next: InterviewDraft) => {
     interviewDraft.current = next;
     setInterviewNotes(next.notes);
     setSavedInterviewNotes(next.baselineNotes);
     setInterviewOutcome(next.outcome);
     setSavedInterviewOutcome(next.baselineOutcome);
-  }
+  }, []);
+
+  // Pipeline props can arrive after the panel is open (refresh, or a late
+  // server payload). Copy the viewer's saved row in until the reviews
+  // request has become the source of truth. The open click also prefills
+  // immediately; this covers the payload that lands afterwards.
+  useEffect(() => {
+    if (!reviewingResponse || interviewAuthoritative.current) return;
+    const saved = savedInterviewFor(pipelineReviews, reviewingResponse.id, viewerId);
+    const next = reconcileInterviewDraft(interviewDraft.current, saved, reviewingResponse.id);
+    if (next !== interviewDraft.current) commitInterviewDraft(next);
+  }, [reviewingResponse, pipelineReviews, viewerId, commitInterviewDraft]);
 
   // Pipeline filter & search
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -2074,15 +2085,6 @@ function ApplicantsTab({
     const rows = reviewsByApp.get(review.application_response_id) ?? [];
     rows.push({ interviewOutcome: review.interview_outcome, updatedAt: review.updated_at });
     reviewsByApp.set(review.application_response_id, rows);
-  }
-
-  // Saved outcome and note can arrive with a later server payload (refresh,
-  // or the panel opened before this list was ready). Copy them in while the
-  // reviewer has not typed, and before the fetch has become the source of truth.
-  if (reviewingResponse && !interviewAuthoritative.current) {
-    const saved = savedInterviewFor(pipelineReviews, reviewingResponse.id, viewerId);
-    const next = reconcileInterviewDraft(interviewDraft.current, saved, reviewingResponse.id);
-    if (next !== interviewDraft.current) commitInterviewDraft(next);
   }
 
   function stageOf(resp: AppResponse) {

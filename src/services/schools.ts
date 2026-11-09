@@ -1,3 +1,5 @@
+import { redactInterviewNotesForViewer } from "@/lib/schools/interview-review-form";
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
 
@@ -986,8 +988,16 @@ export async function getReferenceRequestSummaries(supabase: Client, application
     .in("application_id", applicationIds);
 }
 
-/** Interview rows for the applicants tab: the badge, and the review form's own note. */
-export async function getInterviewReviewSummaries(supabase: Client, applicationIds: string[]) {
+/**
+ * Interview rows for the applicants tab. Every reviewer's outcome is included
+ * for the pipeline badge. Notes are limited to `viewerId`; other authors'
+ * notes are nulled before the rows leave this function.
+ */
+export async function getInterviewReviewSummaries(
+  supabase: Client,
+  applicationIds: string[],
+  viewerId?: string | null
+) {
   if (applicationIds.length === 0) return { data: [], error: null };
   const rows: Array<{
     application_response_id: string;
@@ -1001,10 +1011,10 @@ export async function getInterviewReviewSummaries(supabase: Client, applicationI
       .from("application_staff_reviews")
       .select("application_response_id, author_id, notes, interview_outcome, updated_at")
       .in("application_response_id", applicationIds.slice(i, i + 150));
-    if (error) return { data: rows, error };
+    if (error) return { data: redactInterviewNotesForViewer(rows, viewerId), error };
     rows.push(...(data ?? []));
   }
-  return { data: rows, error: null };
+  return { data: redactInterviewNotesForViewer(rows, viewerId), error: null };
 }
 
 export async function getReferenceRequestsByApplication(supabase: Client, applicationId: string) {

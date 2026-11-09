@@ -169,6 +169,21 @@ describe("staff reviews", () => {
     });
   });
 
+  it("clears a saved note on its own without changing the outcome", async () => {
+    h.existing = { notes: "Heard a clear call", interview_outcome: "hold" };
+    const res = await put({
+      response_id: "a1",
+      notes: "",
+      interview_outcome: "hold",
+      clear_notes: true,
+    });
+    expect(res.status).toBe(200);
+    expect(h.wrote[0]).toMatchObject({
+      notes: null,
+      interview_outcome: "hold",
+    });
+  });
+
   it("clears the outcome only when the reviewer explicitly chooses no decision", async () => {
     h.existing = { notes: "Heard a clear call", interview_outcome: "hold" };
     const res = await put({

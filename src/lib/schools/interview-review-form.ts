@@ -70,6 +70,21 @@ export type InterviewReviewRow = {
   interviewOutcome?: string | null;
 };
 
+/**
+ * Page data may carry every reviewer's outcome (the pipeline badge) and the
+ * signed-in reviewer's own note. Everyone else's note is removed. With no
+ * viewer id, every note is removed.
+ */
+export function redactInterviewNotesForViewer<
+  T extends { author_id?: string | null; notes?: string | null },
+>(rows: T[], viewerId: string | null | undefined): T[] {
+  return rows.map((row) => {
+    if (viewerId && row.author_id === viewerId) return row;
+    if (row.notes == null) return row;
+    return { ...row, notes: null };
+  });
+}
+
 /** The viewer's own row. `mine` is the API flag; `author_id` covers server-rendered rows. */
 export function ownInterviewReview<T extends InterviewReviewRow>(
   rows: T[],

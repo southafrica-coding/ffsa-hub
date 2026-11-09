@@ -16,7 +16,17 @@ import { preserveInterviewWrite } from "@/lib/schools/interview-review-form";
 // GET  /api/schools/applications/reviews?response_id=
 //      /api/schools/applications/reviews?program_id=
 // PUT  /api/schools/applications/reviews
-//      { response_id, notes, interview_outcome }
+//      { response_id, notes, interview_outcome, clear_outcome?, clear_notes? }
+//
+// clear_outcome and clear_notes must be boolean true to count. Anything else
+// is ignored. Without clear_outcome, an incoming "pending" does not replace a
+// stored recommend, hold, or decline — that is the form's empty default, not
+// a decision. Without clear_notes, an empty note does not replace a stored
+// note. The form sends clear_outcome only after the reviewer changes the
+// outcome select to "No decision yet", and clear_notes only after they clear
+// a note that was on screen. The two flags are independent: clearing the note
+// does not change the outcome, and clearing the outcome does not require
+// clearing the note.
 //
 // Assigned program staff write a review on the application assigned to them.
 // Leaders and other managers (userCanManageProgram / can_manage_program_applications)

@@ -422,7 +422,7 @@ export default async function ProgramDetailPage({
   const applicationIds = (responses ?? []).map((r: any) => r.id);
   const [{ data: refRequests }, interviewReviewResult] = await Promise.all([
     getReferenceRequestSummaries(supabase, applicationIds),
-    getInterviewReviewSummaries(supabase, applicationIds),
+    getInterviewReviewSummaries(supabase, applicationIds, session.user.id),
   ]);
   if (interviewReviewResult.error) {
     console.error("interview reviews for pipeline:", interviewReviewResult.error);
