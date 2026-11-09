@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getApplicationExpiry } from "@/lib/auth/application-expiry";
 
 // The schools permission keys that confer management access. Kept in one place
 // so the global and program-scoped checks below can never drift apart.
@@ -126,4 +127,103 @@ export async function userCanManageProgram(
     .limit(1);
 
   return !!data && data.length > 0;
+}
+
+// DELETE on application_responses (migration 223, unchanged by 312):
+//   application_gate(program_id,
+//     has_schools_access() OR has_permission('schools.approve_applications'))
+// has_schools_access() with no argument is is_admin() OR
+// has_permission('schools.manage'). is_admin() counts only an unscoped
+// admin or super_admin. has_permission(key) ignores scope: any direct
+// grant, and any role whose bundle includes the key.
+const DELETE_PERMISSION_KEYS = ["schools.manage", "schools.approve_applications"] as const;
+
+function permissionKey(
+  value: { key: string } | { key: string }[] | null | undefined
+): string | null {
+  if (!value) return null;
+  const row = Array.isArray(value) ? value[0] : value;
+  return row?.key ?? null;
+}
+
+function isDeletePermission(key: string | null): boolean {
+  return key === "schools.manage" || key === "schools.approve_applications";
+}
+
+/** is_admin(): super_admin or admin with scope_type IS NULL. */
+async function hasUnscopedAdminRole(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<boolean> {
+  const { data } = await supabase
+    .from("user_roles")
+    .select("scope_type, roles!inner(name)")
+    .eq("user_id", userId)
+    .in("roles.name", ["super_admin", "admin"]);
+
+  for (const row of data ?? []) {
+    const name = embeddedName(row.roles);
+    if ((name === "super_admin" || name === "admin") && row.scope_type === null) return true;
+  }
+  return false;
+}
+
+/**
+ * has_permission(key) for the two DELETE keys. Scope is not consulted.
+ * A direct row of any scope_type counts, as does a role bundle on any
+ * user_roles row (a team-scoped program_leader still carries schools.manage).
+ */
+async function hasDeletePermissionIgnoringScope(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<boolean> {
+  const { data: direct } = await supabase
+    .from("user_permissions")
+    .select("scope_type, permissions!inner(key)")
+    .eq("user_id", userId)
+    .in("permissions.key", [...DELETE_PERMISSION_KEYS]);
+
+  for (const row of direct ?? []) {
+    if (isDeletePermission(permissionKey(row.permissions))) return true;
+  }
+
+  const { data: roles } = await supabase
+    .from("user_roles")
+    .select("role_id")
+    .eq("user_id", userId);
+  const roleIds = (roles ?? [])
+    .map((row) => row.role_id)
+    .filter((id): id is string => typeof id === "string" && id.length > 0);
+  if (roleIds.length === 0) return false;
+
+  const { data: bundle } = await supabase
+    .from("role_permissions")
+    .select("permissions!inner(key)")
+    .in("role_id", roleIds)
+    .in("permissions.key", [...DELETE_PERMISSION_KEYS]);
+
+  for (const row of bundle ?? []) {
+    if (isDeletePermission(permissionKey(row.permissions))) return true;
+  }
+  return false;
+}
+
+/**
+ * May this user permanently delete an application in this program?
+ * Mirrors migration 223's DELETE policy, including the expiry gate.
+ * A program_leaders row does not qualify. schools.manage_enrollments
+ * does not qualify. When the school's applications are expired, only
+ * can_access_expired_applications() (unscoped super_admin or the
+ * Training Team) passes.
+ */
+export async function userCanDeleteApplication(
+  supabase: SupabaseClient,
+  userId: string,
+  programId: string
+): Promise<boolean> {
+  const expiry = await getApplicationExpiry(supabase, programId);
+  if (expiry.expired) return expiry.canAccess;
+
+  if (await hasUnscopedAdminRole(supabase, userId)) return true;
+  return hasDeletePermissionIgnoringScope(supabase, userId);
 }

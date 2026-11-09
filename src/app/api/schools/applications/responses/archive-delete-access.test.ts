@@ -62,6 +62,12 @@ vi.mock("@/services/schools", () => ({
 vi.mock("@/lib/auth/application-expiry", () => ({
   userCanReadApplication: async () => true,
   APPLICATIONS_EXPIRED_MESSAGE: "archived",
+  getApplicationExpiry: async () => ({
+    endDate: null,
+    expiresOn: null,
+    expired: false,
+    canAccess: false,
+  }),
 }));
 vi.mock("@/lib/schools/demographics", () => ({ normaliseGender: () => null }));
 vi.mock("@/lib/auth/membership-roles", () => ({
@@ -80,20 +86,32 @@ vi.mock("@/lib/email/templates/interview-scheduled", () => ({ interviewScheduled
 
 const route = await import("./route");
 
-type RoleSeed = { name: string; scope_type: string | null; scope_id: string | null };
+type RoleSeed = {
+  id?: string;
+  name: string;
+  scope_type: string | null;
+  scope_id: string | null;
+};
 type PermSeed = { key: string; scope_type: string | null; scope_id: string | null };
+type BundleSeed = { role_id: string; key: string };
 
 function filterArg(q: FakeQuery, op: string, column: string): unknown {
   return q.filters.find((f) => f.op === op && f.args[0] === column)?.args[1];
 }
 
-function signIn(seed: { roles?: RoleSeed[]; perms?: PermSeed[]; leaderOf?: string[] }) {
+function signIn(seed: {
+  roles?: RoleSeed[];
+  perms?: PermSeed[];
+  leaderOf?: string[];
+  bundles?: BundleSeed[];
+}) {
   h.userClient = createFakeSupabase({
     user: { id: USER },
     resolve: (q) => {
       if (q.table === "user_roles") {
         return {
           data: (seed.roles ?? []).map((role) => ({
+            role_id: role.id ?? "role",
             scope_type: role.scope_type,
             scope_id: role.scope_id,
             roles: { name: role.name },
@@ -112,6 +130,14 @@ function signIn(seed: { roles?: RoleSeed[]; perms?: PermSeed[]; leaderOf?: strin
         const keys = filterArg(q, "in", "permissions.key");
         if (Array.isArray(keys)) rows = rows.filter((perm) => keys.includes(perm.key));
         return { data: rows.map((perm) => ({ permissions: { key: perm.key } })) };
+      }
+      if (q.table === "role_permissions") {
+        let rows = seed.bundles ?? [];
+        const roleIds = filterArg(q, "in", "role_id");
+        const keys = filterArg(q, "in", "permissions.key");
+        if (Array.isArray(roleIds)) rows = rows.filter((row) => roleIds.includes(row.role_id));
+        if (Array.isArray(keys)) rows = rows.filter((row) => keys.includes(row.key));
+        return { data: rows.map((row) => ({ permissions: { key: row.key } })) };
       }
       if (q.table === "program_leaders") {
         const programId = filterArg(q, "eq", "program_id");
@@ -145,33 +171,96 @@ function remove() {
   );
 }
 
-describe("archive and delete follow the whole program check", () => {
-  it("lets a program_leaders row archive and delete that school's application", async () => {
+const leaderBundle = [{ role_id: "r-pl", key: "schools.manage" }];
+
+function programLeader(scopeType: string | null, scopeId: string | null): RoleSeed {
+  return { id: "r-pl", name: "program_leader", scope_type: scopeType, scope_id: scopeId };
+}
+
+describe("archive stays on the program check; delete follows the DELETE policy", () => {
+  it("lets a program_leaders row archive, and refuses the permanent delete", async () => {
     signIn({ leaderOf: [PROGRAM_A] });
     expect((await archive()).status).toBe(200);
     expect(h.removed).toBe(1);
-    expect((await remove()).status).toBe(200);
-    expect(h.deleted).toBe(1);
+    expect((await remove()).status).toBe(403);
+    expect(h.deleted).toBe(0);
   });
 
-  it("lets a program-scoped schools.* grant archive and delete", async () => {
-    for (const key of ["schools.manage", "schools.approve_applications", "schools.manage_enrollments"]) {
+  it("lets each DELETE-policy grant permanently delete", async () => {
+    const grants: PermSeed[] = [
+      { key: "schools.manage", scope_type: null, scope_id: null },
+      { key: "schools.approve_applications", scope_type: null, scope_id: null },
+      { key: "schools.manage", scope_type: "program", scope_id: PROGRAM_A },
+      { key: "schools.approve_applications", scope_type: "program", scope_id: PROGRAM_A },
+      { key: "schools.manage", scope_type: "team", scope_id: "team-1" },
+      { key: "schools.approve_applications", scope_type: "event", scope_id: "event-1" },
+    ];
+    for (const perm of grants) {
       h.removed = 0;
       h.deleted = 0;
-      signIn({ perms: [{ key, scope_type: "program", scope_id: PROGRAM_A }] });
-      expect((await archive()).status, key).toBe(200);
-      expect(h.removed, key).toBe(1);
-      expect((await remove()).status, key).toBe(200);
-      expect(h.deleted, key).toBe(1);
+      signIn({ perms: [perm] });
+      const label = `${perm.key} ${perm.scope_type ?? "null"}`;
+      const archives = perm.scope_type == null || perm.scope_type === "program";
+      expect((await archive()).status, label).toBe(archives ? 200 : 403);
+      expect((await remove()).status, label).toBe(200);
+      expect(h.deleted, label).toBe(1);
     }
   });
 
-  it("refuses a program_leader scoped to another school", async () => {
+  it("lets an unscoped admin or super_admin delete", async () => {
+    for (const name of ["admin", "super_admin"]) {
+      h.deleted = 0;
+      signIn({ roles: [{ name, scope_type: null, scope_id: null }] });
+      expect((await remove()).status, name).toBe(200);
+      expect(h.deleted, name).toBe(1);
+    }
+  });
+
+  it("lets a program_leader delete when the role bundle includes schools.manage, at any scope", async () => {
+    const scopes: Array<[string | null, string | null]> = [
+      [null, null],
+      ["program", PROGRAM_A],
+      ["program", PROGRAM_B],
+      ["team", "team-1"],
+      ["event", "event-1"],
+    ];
+    for (const [scopeType, scopeId] of scopes) {
+      h.removed = 0;
+      h.deleted = 0;
+      signIn({ roles: [programLeader(scopeType, scopeId)], bundles: leaderBundle });
+      const label = `${scopeType ?? "null"}`;
+      if (scopeType === "program" && scopeId === PROGRAM_A) {
+        expect((await archive()).status, label).toBe(200);
+      } else if (scopeType === null) {
+        expect((await archive()).status, label).toBe(200);
+      } else {
+        expect((await archive()).status, label).toBe(403);
+      }
+      expect((await remove()).status, label).toBe(200);
+      expect(h.deleted, label).toBe(1);
+    }
+  });
+
+  it("refuses delete for grants and roles the DELETE policy does not name", async () => {
+    signIn({ perms: [{ key: "schools.manage_enrollments", scope_type: null, scope_id: null }] });
+    expect((await archive()).status).toBe(200);
+    expect((await remove()).status).toBe(403);
+    expect(h.deleted).toBe(0);
+
+    h.removed = 0;
     signIn({
-      roles: [{ name: "program_leader", scope_type: "program", scope_id: PROGRAM_B }],
+      perms: [{ key: "schools.manage_enrollments", scope_type: "program", scope_id: PROGRAM_A }],
     });
+    expect((await archive()).status).toBe(200);
+    expect((await remove()).status).toBe(403);
+
+    h.deleted = 0;
+    signIn({ roles: [{ name: "admin", scope_type: "program", scope_id: PROGRAM_A }] });
+    expect((await remove()).status).toBe(403);
+    expect(h.deleted).toBe(0);
+
+    signIn({ roles: [programLeader("program", PROGRAM_B)] });
     expect((await archive()).status).toBe(403);
-    expect(h.removed).toBe(0);
     expect((await remove()).status).toBe(403);
     expect(h.deleted).toBe(0);
   });

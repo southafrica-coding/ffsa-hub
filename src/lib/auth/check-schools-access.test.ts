@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  userCanDeleteApplication,
   userCanManageApplications,
   userCanManageProgram,
 } from "@/lib/auth/check-schools-access";
@@ -263,5 +264,43 @@ describe("sources migration 312 leaves unchanged", () => {
     expect(await userCanManageApplications(f.client, USER)).toBe(false);
     expect(await userCanManageProgram(f.client, USER, PROGRAM_A)).toBe(false);
     expect(f.queries.map((q) => q.table)).not.toContain("program_staff");
+  });
+});
+
+describe("userCanDeleteApplication expiry gate", () => {
+  function client(expired: boolean, canAccess: boolean) {
+    return createFakeSupabase({
+      resolve: (q) => {
+        if (q.table === "rpc:program_end_date") return { data: expired ? "2020-01-01" : null };
+        if (q.table === "rpc:program_applications_expired") return { data: expired };
+        if (q.table === "rpc:can_access_expired_applications") return { data: canAccess };
+        if (q.table === "user_permissions") {
+          return {
+            data: [{ scope_type: null, permissions: { key: "schools.manage" } }],
+          };
+        }
+        return { data: [] };
+      },
+    }).client;
+  }
+
+  it("ignores a schools.manage grant once the school has expired", async () => {
+    expect(await userCanDeleteApplication(client(true, false), USER, PROGRAM_A)).toBe(false);
+  });
+
+  it("allows the expired-access set through even without a schools grant", async () => {
+    const bare = createFakeSupabase({
+      resolve: (q) => {
+        if (q.table === "rpc:program_end_date") return { data: "2020-01-01" };
+        if (q.table === "rpc:program_applications_expired") return { data: true };
+        if (q.table === "rpc:can_access_expired_applications") return { data: true };
+        return { data: [] };
+      },
+    }).client;
+    expect(await userCanDeleteApplication(bare, USER, PROGRAM_A)).toBe(true);
+  });
+
+  it("uses the normal rule while the school is live", async () => {
+    expect(await userCanDeleteApplication(client(false, false), USER, PROGRAM_A)).toBe(true);
   });
 });

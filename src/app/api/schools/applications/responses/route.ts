@@ -11,7 +11,11 @@ import {
   removeEnrollmentForApplicant,
   ensureEnrollmentForApplicant,
 } from "@/services/schools";
-import { userCanManageApplications, userCanManageProgram } from "@/lib/auth/check-schools-access";
+import {
+  userCanDeleteApplication,
+  userCanManageApplications,
+  userCanManageProgram,
+} from "@/lib/auth/check-schools-access";
 import { userCanReadApplication, APPLICATIONS_EXPIRED_MESSAGE } from "@/lib/auth/application-expiry";
 import { normaliseGender } from "@/lib/schools/demographics";
 import { ensureStudentRole, deactivateMembershipProfile } from "@/lib/auth/membership-roles";
@@ -776,17 +780,15 @@ export async function DELETE(request: Request) {
     .eq("id", id)
     .single();
 
-  // Same gate as archive. Someone who fails it gets 403, including when
-  // the row was not found (no program id → global check).
+  // Migration 223 DELETE policy, not the archive gate. userCanManageProgram
+  // would let a program_leaders row through, and the service role would
+  // bypass the policy that refuses them. A missing row has no program, so
+  // it stays on the global check.
   const allowed = existing?.program_id
-    ? await userCanManageProgram(supabase, user.id, existing.program_id)
+    ? await userCanDeleteApplication(supabase, user.id, existing.program_id)
     : await userCanManageApplications(supabase, user.id);
   if (!allowed) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  if (!(await userCanReadApplication(supabase, id))) {
-    return NextResponse.json({ error: APPLICATIONS_EXPIRED_MESSAGE }, { status: 403 });
   }
 
   if (fetchError || !existing) {
