@@ -123,7 +123,9 @@ export async function GET(request: Request) {
     answersMap.set(a.question_id, a.answer);
   }
 
-  // Leader notes are not part of the application a staff member reviews.
+  // select("*") above still returns admin_notes. After migration 304 that
+  // column is always null, so it is not the notes. Leaders' notes are loaded
+  // below, and only for someone who can manage the program.
   let adminNotes = "";
   if (await userCanManageProgram(supabase, user.id, response.program_id)) {
     const notes = await adminNotesByResponse(supabase, [responseId]);

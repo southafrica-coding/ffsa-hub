@@ -829,28 +829,27 @@ export async function updateResponseStatus(
     .select()
     .single();
 
-  if (!result.error && adminNotes !== undefined) {
-    const programId = (result.data as { program_id?: string } | null)?.program_id;
-    if (programId) {
-      const notesWrite = await supabase.from("application_admin_notes").upsert(
-        {
-          application_response_id: id,
-          program_id: programId,
-          notes: adminNotes,
-          updated_by: reviewedBy,
-        },
-        { onConflict: "application_response_id" }
-      );
-      // Before migration 304 the notes column is still writable.
-      if (notesWrite.error) {
-        await supabase
-          .from("application_responses")
-          .update({ admin_notes: adminNotes })
-          .eq("id", id);
-      }
-    }
-  }
+  if (result.error || adminNotes === undefined) return result;
 
+  const programId = (result.data as { program_id?: string } | null)?.program_id;
+  if (!programId) {
+    return {
+      data: result.data,
+      error: { message: "Could not save the note: the application has no school." },
+    };
+  }
+  const notesWrite = await supabase.from("application_admin_notes").upsert(
+    {
+      application_response_id: id,
+      program_id: programId,
+      notes: adminNotes,
+      updated_by: reviewedBy,
+    },
+    { onConflict: "application_response_id" }
+  );
+  if (notesWrite.error) {
+    return { data: result.data, error: notesWrite.error };
+  }
   return result;
 }
 

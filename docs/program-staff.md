@@ -31,7 +31,7 @@ Staff do not receive `has_schools_access` or `userCanManageProgram`.
 They can:
 
 - be chosen as the point of contact for their own program (assignable contacts)
-- read applications where `assigned_staff_id` is themselves, and only while they are still staff, a leader, or hold a schools grant for that program. Removing them clears the assignment. A leftover `assigned_staff_id` is not enough.
+- read applications where `assigned_staff_id` is themselves, and only while they are still staff, a leader, or hold a schools grant for that program. A leftover `assigned_staff_id` is not enough on its own.
 - write one review per application on `application_staff_reviews`: `notes` and `interview_outcome` of `pending`, `recommend`, `hold`, or `decline`
 
 `PUT /api/schools/applications/reviews`
@@ -49,7 +49,9 @@ They cannot:
 
 Leaders, `schools.*` holders, and admins keep the school page they already have. A person who is both a leader and staff is still a leader. Finance access does not open the rest of the school: it only adds the fees panel on the staff view.
 
-Leader notes are in `application_admin_notes`. Signed-in users cannot select `application_responses.admin_notes`. Staff do not receive the notes in the application PDF.
+Leader notes are in `application_admin_notes`. `application_responses.admin_notes` is copied across, set to null, and left in place as a deprecated column. Do not write it. Staff do not receive the notes in the application PDF.
+
+Removing someone from staff clears their assignments only when they can no longer be a contact for that school (not a leader, no `schools.assignable_as_contact` for this program or globally, and not a super admin).
 
 ## SBI
 
@@ -72,7 +74,7 @@ The call is one database function, `switch_person_to_program_staff`. It:
 1. Inserts `program_staff` if missing.
 2. Deletes that person’s `program_leaders` row for this program.
 3. Deletes a program-scoped `schools.assignable_as_contact` grant for this program.
-4. Clears `assigned_staff_id` on this program’s applications and enrolments for that person.
+4. Leaves their assigned applicants in place. They are staff now, so they keep those assignments.
 
 It does not remove the `school_leader` role. `assigned_by` is either null (the migration 292 backfill) or the person who clicked Add, and a hand grant can look like either, so the role is left in place.
 

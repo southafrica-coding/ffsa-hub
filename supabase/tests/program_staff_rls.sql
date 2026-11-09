@@ -34,7 +34,9 @@ $$;
 
 CREATE OR REPLACE FUNCTION public.has_permission(required_permission text)
 RETURNS boolean LANGUAGE sql STABLE AS $$
-  SELECT position(required_permission in coalesce(current_setting('test.perms', true), '')) > 0;
+  SELECT required_permission = ANY (
+    string_to_array(coalesce(current_setting('test.perms', true), ''), ',')
+  );
 $$;
 
 CREATE OR REPLACE FUNCTION public.has_permission_for(required_permission text, target_program_id uuid)
@@ -226,6 +228,9 @@ CREATE POLICY "Schools managers can read all application responses"
 CREATE POLICY "Assigned staff can read their application_responses"
   ON public.application_responses FOR SELECT
   USING (assigned_staff_id = auth.uid());
+CREATE POLICY "Authenticated users can submit own applications"
+  ON public.application_responses FOR INSERT
+  WITH CHECK (user_id = auth.uid());
 
 \ir ../migrations/304_program_staff.sql
 
@@ -275,9 +280,6 @@ INSERT INTO public.billing_schedules (program_id, tier_prices) VALUES
   ('5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48', '{"A": 12000}'::jsonb);
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO authenticated;
--- The blanket grant above hands admin_notes back. Take it away again.
-REVOKE SELECT (admin_notes), UPDATE (admin_notes), INSERT (admin_notes)
-  ON public.application_responses FROM authenticated;
 
 -- Applying the file twice must not fail or duplicate policies.
 \ir ../migrations/304_program_staff.sql
@@ -410,20 +412,36 @@ BEGIN
   END IF;
 END $$;
 
--- Staff cannot read the notes column or the notes table. A leader can
--- read and write the notes table, and that write lands on the column.
+-- The copy ran on the second apply (after the seed wrote the column).
+-- It is idempotent: the note is stored once and the column is null.
+RESET ROLE;
 DO $$
 BEGIN
-  PERFORM admin_notes FROM public.application_responses;
-  RAISE EXCEPTION 'staff selected admin_notes';
-EXCEPTION WHEN insufficient_privilege THEN
-  NULL;
+  IF (SELECT count(*) FROM public.application_admin_notes
+       WHERE application_response_id = '55555555-5555-5555-5555-555555555555'
+         AND notes = 'Leader only') <> 1 THEN
+    RAISE EXCEPTION 'notes were not copied once';
+  END IF;
+  IF (SELECT admin_notes FROM public.application_responses
+       WHERE id = '55555555-5555-5555-5555-555555555555') IS NOT NULL THEN
+    RAISE EXCEPTION 'deprecated admin_notes column was not cleared';
+  END IF;
 END $$;
 
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '11111111-1111-1111-1111-111111111111', false);
+SELECT set_config('test.perms', '', false);
+SELECT set_config('test.admin', '', false);
+
+-- Staff cannot read the notes table. The column itself is null.
 DO $$
 BEGIN
   IF (SELECT count(*) FROM public.application_admin_notes) <> 0 THEN
     RAISE EXCEPTION 'staff read leader notes';
+  END IF;
+  IF (SELECT admin_notes FROM public.application_responses
+       WHERE id = '55555555-5555-5555-5555-555555555555') IS NOT NULL THEN
+    RAISE EXCEPTION 'staff saw a note on the deprecated column';
   END IF;
 END $$;
 
@@ -439,7 +457,8 @@ BEGIN
 END $$;
 
 UPDATE public.application_admin_notes
-   SET notes = 'Updated by leader'
+   SET notes = 'Updated by leader',
+       program_id = '44444444-4444-4444-4444-444444444444'
  WHERE application_response_id = '55555555-5555-5555-5555-555555555555';
 
 RESET ROLE;
@@ -447,9 +466,13 @@ RESET ROLE;
 DO $$
 BEGIN
   IF (SELECT admin_notes FROM public.application_responses
-       WHERE id = '55555555-5555-5555-5555-555555555555')
-     IS DISTINCT FROM 'Updated by leader' THEN
-    RAISE EXCEPTION 'leader note did not sync back to the column';
+       WHERE id = '55555555-5555-5555-5555-555555555555') IS NOT NULL THEN
+    RAISE EXCEPTION 'writing the notes table wrote the deprecated column';
+  END IF;
+  IF (SELECT program_id FROM public.application_admin_notes
+       WHERE application_response_id = '55555555-5555-5555-5555-555555555555')
+     IS DISTINCT FROM '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48' THEN
+    RAISE EXCEPTION 'trigger did not keep the note on the application school';
   END IF;
 END $$;
 
@@ -558,8 +581,9 @@ BEGIN
     RAISE EXCEPTION 'admin switch stripped schools.manage';
   END IF;
   IF (SELECT assigned_staff_id FROM public.application_responses
-       WHERE id = '66666666-6666-6666-6666-666666666666') IS NOT NULL THEN
-    RAISE EXCEPTION 'switch left the contact assignment';
+       WHERE id = '66666666-6666-6666-6666-666666666666')
+     IS DISTINCT FROM '33333333-3333-3333-3333-333333333333' THEN
+    RAISE EXCEPTION 'switch cleared the contact assignment';
   END IF;
 END $$;
 
@@ -582,9 +606,8 @@ END;
 $$;
 
 CREATE TRIGGER fail_contact_clear
-  BEFORE UPDATE ON public.application_responses
+  BEFORE DELETE ON public.program_leaders
   FOR EACH ROW
-  WHEN (OLD.assigned_staff_id IS NOT NULL AND NEW.assigned_staff_id IS NULL)
   EXECUTE FUNCTION public.fail_contact_clear();
 
 SET ROLE authenticated;
@@ -605,7 +628,7 @@ EXCEPTION WHEN OTHERS THEN
 END $$;
 
 RESET ROLE;
-DROP TRIGGER fail_contact_clear ON public.application_responses;
+DROP TRIGGER fail_contact_clear ON public.program_leaders;
 
 DO $$
 BEGIN
@@ -623,6 +646,370 @@ BEGIN
     RAISE EXCEPTION 'rolled-back switch cleared the assignment';
   END IF;
 END $$;
+
+-- authenticated cannot call the assignment clearer directly.
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '22222222-2222-2222-2222-222222222222', false);
+DO $$
+BEGIN
+  PERFORM public.clear_program_contact_assignments(
+    '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48',
+    '11111111-1111-1111-1111-111111111111'
+  );
+  RAISE EXCEPTION 'authenticated called clear_program_contact_assignments';
+EXCEPTION WHEN insufficient_privilege THEN
+  NULL;
+END $$;
+RESET ROLE;
+
+-- A leader of school A cannot write notes on a school B application,
+-- even if they claim program_id = A.
+INSERT INTO public.application_responses (id, program_id, status) VALUES
+  ('cdcdcdcd-cdcd-cdcd-cdcd-cdcdcdcdcdcd', '44444444-4444-4444-4444-444444444444', 'submitted');
+
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '22222222-2222-2222-2222-222222222222', false);
+SELECT set_config('test.admin', '', false);
+SELECT set_config('test.perms', '', false);
+
+DO $$
+BEGIN
+  INSERT INTO public.application_admin_notes (application_response_id, program_id, notes)
+  VALUES ('cdcdcdcd-cdcd-cdcd-cdcd-cdcdcdcdcdcd', '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48', 'wrong school');
+  RAISE EXCEPTION 'leader of A inserted a note on a B application';
+EXCEPTION WHEN insufficient_privilege THEN
+  NULL;
+END $$;
+RESET ROLE;
+
+INSERT INTO public.application_admin_notes (application_response_id, program_id, notes)
+VALUES ('cdcdcdcd-cdcd-cdcd-cdcd-cdcdcdcdcdcd', '44444444-4444-4444-4444-444444444444', 'B note');
+
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '22222222-2222-2222-2222-222222222222', false);
+DO $$
+BEGIN
+  UPDATE public.application_admin_notes
+     SET notes = 'stolen',
+         program_id = '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48'
+   WHERE application_response_id = 'cdcdcdcd-cdcd-cdcd-cdcd-cdcdcdcdcdcd';
+  IF FOUND THEN
+    RAISE EXCEPTION 'leader of A updated a note on a B application';
+  END IF;
+END $$;
+RESET ROLE;
+
+DO $$
+BEGIN
+  IF (SELECT notes FROM public.application_admin_notes
+       WHERE application_response_id = 'cdcdcdcd-cdcd-cdcd-cdcd-cdcdcdcdcdcd')
+     IS DISTINCT FROM 'B note' THEN
+    RAISE EXCEPTION 'cross-school update changed the note';
+  END IF;
+END $$;
+
+-- An applicant can still submit their own application.
+INSERT INTO public.users (id) VALUES ('99999999-9999-9999-9999-999999999991');
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '99999999-9999-9999-9999-999999999991', false);
+INSERT INTO public.application_responses (program_id, user_id, status)
+VALUES ('5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48', '99999999-9999-9999-9999-999999999991', 'submitted');
+RESET ROLE;
+
+-- A leader can still change status and list applicants.
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '22222222-2222-2222-2222-222222222222', false);
+SELECT set_config('test.admin', '', false);
+UPDATE public.application_responses
+   SET status = 'references_received'
+ WHERE id = '55555555-5555-5555-5555-555555555555';
+DO $$
+BEGIN
+  IF (SELECT count(*) FROM public.application_responses
+       WHERE program_id = '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48') < 2 THEN
+    RAISE EXCEPTION 'leader could not list applicants';
+  END IF;
+END $$;
+RESET ROLE;
+
+-- After the admin switch, the new staff member still sees the applicant
+-- they were already assigned.
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '33333333-3333-3333-3333-333333333333', false);
+SELECT set_config('test.admin', '', false);
+SELECT set_config('test.perms', '', false);
+DO $$
+BEGIN
+  IF (SELECT count(*) FROM public.application_responses
+       WHERE id = '66666666-6666-6666-6666-666666666666') <> 1 THEN
+    RAISE EXCEPTION 'switched staff lost their assigned applicant';
+  END IF;
+END $$;
+RESET ROLE;
+
+-- Removing pure staff clears the assignment. Removing staff who are still
+-- a leader does not.
+UPDATE public.application_responses
+   SET assigned_staff_id = '11111111-1111-1111-1111-111111111111'
+ WHERE id = '55555555-5555-5555-5555-555555555555';
+INSERT INTO public.program_staff (program_id, user_id)
+VALUES ('5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48', '11111111-1111-1111-1111-111111111111')
+ON CONFLICT DO NOTHING;
+DELETE FROM public.program_leaders
+ WHERE user_id = '11111111-1111-1111-1111-111111111111';
+
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '22222222-2222-2222-2222-222222222222', false);
+SELECT public.remove_program_staff(
+  '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48',
+  '11111111-1111-1111-1111-111111111111'
+);
+RESET ROLE;
+
+DO $$
+BEGIN
+  IF (SELECT assigned_staff_id FROM public.application_responses
+       WHERE id = '55555555-5555-5555-5555-555555555555') IS NOT NULL THEN
+    RAISE EXCEPTION 'removing pure staff left the assignment';
+  END IF;
+END $$;
+
+-- Staff who are also a leader keep the assignment.
+INSERT INTO public.program_leaders (program_id, user_id) VALUES
+  ('5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48', '11111111-1111-1111-1111-111111111111');
+INSERT INTO public.program_staff (program_id, user_id)
+VALUES ('5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48', '11111111-1111-1111-1111-111111111111');
+UPDATE public.application_responses
+   SET assigned_staff_id = '11111111-1111-1111-1111-111111111111'
+ WHERE id = '55555555-5555-5555-5555-555555555555';
+
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '22222222-2222-2222-2222-222222222222', false);
+SELECT public.remove_program_staff(
+  '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48',
+  '11111111-1111-1111-1111-111111111111'
+);
+RESET ROLE;
+
+DO $$
+BEGIN
+  IF (SELECT assigned_staff_id FROM public.application_responses
+       WHERE id = '55555555-5555-5555-5555-555555555555')
+     IS DISTINCT FROM '11111111-1111-1111-1111-111111111111' THEN
+    RAISE EXCEPTION 'removing staff who are still a leader cleared the assignment';
+  END IF;
+  IF (SELECT count(*) FROM public.program_staff
+       WHERE user_id = '11111111-1111-1111-1111-111111111111') <> 0 THEN
+    RAISE EXCEPTION 'staff row was not removed';
+  END IF;
+END $$;
+
+-- An unauthorized caller gets the same refusal for a super admin as for
+-- anyone else. The super-admin check runs only after has_schools_access.
+INSERT INTO public.users (id) VALUES ('77777777-7777-7777-7777-777777777777');
+INSERT INTO public.user_roles (user_id, role_id) VALUES
+  ('77777777-7777-7777-7777-777777777777', 'cccccccc-cccc-cccc-cccc-cccccccccccc');
+
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '99999999-9999-9999-9999-999999999991', false);
+SELECT set_config('test.admin', '', false);
+SELECT set_config('test.perms', '', false);
+DO $$
+BEGIN
+  PERFORM public.switch_person_to_program_staff(
+    '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48',
+    '77777777-7777-7777-7777-777777777777'
+  );
+  RAISE EXCEPTION 'unauthorized caller switched a super admin';
+EXCEPTION WHEN insufficient_privilege THEN
+  IF SQLERRM NOT LIKE '%Not authorized%' THEN
+    RAISE;
+  END IF;
+END $$;
+
+SELECT set_config('request.jwt.claim.sub', '22222222-2222-2222-2222-222222222222', false);
+DO $$
+BEGIN
+  PERFORM public.switch_person_to_program_staff(
+    '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48',
+    '77777777-7777-7777-7777-777777777777'
+  );
+  RAISE EXCEPTION 'leader switched a super admin';
+EXCEPTION WHEN invalid_parameter_value THEN
+  IF SQLERRM NOT LIKE '%super admin%' THEN
+    RAISE;
+  END IF;
+END $$;
+RESET ROLE;
+
+-- A global assignable_as_contact grant, and a super admin, stay assignable
+-- after the staff row is removed, so their assignments stay.
+INSERT INTO public.users (id) VALUES ('88888888-8888-8888-8888-888888888888');
+INSERT INTO public.program_staff (program_id, user_id) VALUES
+  ('5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48', '88888888-8888-8888-8888-888888888888'),
+  ('5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48', '77777777-7777-7777-7777-777777777777');
+INSERT INTO public.application_responses (id, program_id, assigned_staff_id, status) VALUES
+  ('abababab-abab-abab-abab-abababababab', '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48', '88888888-8888-8888-8888-888888888888', 'submitted'),
+  ('bcbcbcbc-bcbc-bcbc-bcbc-bcbcbcbcbcbc', '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48', '77777777-7777-7777-7777-777777777777', 'submitted');
+INSERT INTO public.user_permissions (user_id, permission_id, scope_type, scope_id) VALUES
+  ('88888888-8888-8888-8888-888888888888', 'dddddddd-dddd-dddd-dddd-dddddddddddd', NULL, NULL);
+
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '22222222-2222-2222-2222-222222222222', false);
+SELECT public.remove_program_staff(
+  '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48',
+  '88888888-8888-8888-8888-888888888888'
+);
+SELECT public.remove_program_staff(
+  '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48',
+  '77777777-7777-7777-7777-777777777777'
+);
+RESET ROLE;
+
+DO $$
+BEGIN
+  IF (SELECT assigned_staff_id FROM public.application_responses
+       WHERE id = 'abababab-abab-abab-abab-abababababab')
+     IS DISTINCT FROM '88888888-8888-8888-8888-888888888888' THEN
+    RAISE EXCEPTION 'removing staff who hold a global assignable grant cleared the assignment';
+  END IF;
+  IF (SELECT assigned_staff_id FROM public.application_responses
+       WHERE id = 'bcbcbcbc-bcbc-bcbc-bcbc-bcbcbcbcbcbc')
+     IS DISTINCT FROM '77777777-7777-7777-7777-777777777777' THEN
+    RAISE EXCEPTION 'removing a super admin from staff cleared the assignment';
+  END IF;
+END $$;
+
+-- Once that global grant is gone, and they are not a leader, removal clears it.
+DELETE FROM public.user_permissions
+ WHERE user_id = '88888888-8888-8888-8888-888888888888';
+INSERT INTO public.program_staff (program_id, user_id)
+VALUES ('5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48', '88888888-8888-8888-8888-888888888888');
+
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '22222222-2222-2222-2222-222222222222', false);
+SELECT public.remove_program_staff(
+  '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48',
+  '88888888-8888-8888-8888-888888888888'
+);
+RESET ROLE;
+
+DO $$
+BEGIN
+  IF (SELECT assigned_staff_id FROM public.application_responses
+       WHERE id = 'abababab-abab-abab-abab-abababababab') IS NOT NULL THEN
+    RAISE EXCEPTION 'removing staff with no remaining assignable path left the assignment';
+  END IF;
+END $$;
+
+-- A program-scoped assignable_as_contact grant also keeps the assignment.
+UPDATE public.application_responses
+   SET assigned_staff_id = '88888888-8888-8888-8888-888888888888'
+ WHERE id = 'abababab-abab-abab-abab-abababababab';
+INSERT INTO public.program_staff (program_id, user_id)
+VALUES ('5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48', '88888888-8888-8888-8888-888888888888');
+INSERT INTO public.user_permissions (user_id, permission_id, scope_type, scope_id) VALUES
+  ('88888888-8888-8888-8888-888888888888', 'dddddddd-dddd-dddd-dddd-dddddddddddd', 'program', '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48');
+
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '22222222-2222-2222-2222-222222222222', false);
+SELECT public.remove_program_staff(
+  '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48',
+  '88888888-8888-8888-8888-888888888888'
+);
+RESET ROLE;
+
+DO $$
+BEGIN
+  IF (SELECT assigned_staff_id FROM public.application_responses
+       WHERE id = 'abababab-abab-abab-abab-abababababab')
+     IS DISTINCT FROM '88888888-8888-8888-8888-888888888888' THEN
+    RAISE EXCEPTION 'removing staff who hold a program-scoped assignable grant cleared the assignment';
+  END IF;
+END $$;
+
+-- Notes follow userCanManageProgram: manage_enrollments and approve_applications
+-- and the program_leader role can read and write. view_applications cannot.
+-- The harness permission is unscoped, matching an unscoped grant.
+INSERT INTO public.users (id) VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+INSERT INTO public.application_responses (id, program_id, status) VALUES
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48', 'submitted');
+
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', false);
+SELECT set_config('test.admin', '', false);
+SELECT set_config('test.perms', 'schools.view_applications', false);
+DO $$
+BEGIN
+  IF (SELECT count(*) FROM public.application_admin_notes) <> 0 THEN
+    RAISE EXCEPTION 'view_applications read leader notes';
+  END IF;
+  BEGIN
+    INSERT INTO public.application_admin_notes (application_response_id, program_id, notes)
+    VALUES ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '44444444-4444-4444-4444-444444444444', 'nope');
+    RAISE EXCEPTION 'view_applications wrote a note';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;
+  END;
+END $$;
+
+SELECT set_config('test.perms', 'schools.manage_enrollments', false);
+DO $$
+BEGIN
+  IF (SELECT notes FROM public.application_admin_notes
+       WHERE application_response_id = '55555555-5555-5555-5555-555555555555')
+     IS DISTINCT FROM 'Updated by leader' THEN
+    RAISE EXCEPTION 'manage_enrollments could not read notes';
+  END IF;
+END $$;
+INSERT INTO public.application_admin_notes (application_response_id, program_id, notes)
+VALUES (
+  'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+  '44444444-4444-4444-4444-444444444444',
+  'enrollment note'
+);
+
+SELECT set_config('test.perms', 'schools.approve_applications', false);
+UPDATE public.application_admin_notes
+   SET notes = 'approved note',
+       program_id = '44444444-4444-4444-4444-444444444444'
+ WHERE application_response_id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+RESET ROLE;
+
+DO $$
+BEGIN
+  IF (SELECT program_id FROM public.application_admin_notes
+       WHERE application_response_id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb')
+     IS DISTINCT FROM '5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48' THEN
+    RAISE EXCEPTION 'enrollment note was not forced onto the application school';
+  END IF;
+  IF (SELECT notes FROM public.application_admin_notes
+       WHERE application_response_id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb')
+     IS DISTINCT FROM 'approved note' THEN
+    RAISE EXCEPTION 'approve_applications could not update the note';
+  END IF;
+END $$;
+
+INSERT INTO public.roles (id, name) VALUES
+  ('ffffffff-ffff-ffff-ffff-ffffffffffff', 'program_leader');
+INSERT INTO public.user_roles (user_id, role_id) VALUES
+  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'ffffffff-ffff-ffff-ffff-ffffffffffff');
+
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', false);
+SELECT set_config('test.perms', '', false);
+UPDATE public.application_admin_notes
+   SET notes = 'role note'
+ WHERE application_response_id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+DO $$
+BEGIN
+  IF (SELECT notes FROM public.application_admin_notes
+       WHERE application_response_id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb')
+     IS DISTINCT FROM 'role note' THEN
+    RAISE EXCEPTION 'program_leader role could not read or write notes';
+  END IF;
+END $$;
+RESET ROLE;
 
 RESET ROLE;
 \echo 'program staff RLS checks passed'

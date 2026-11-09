@@ -422,7 +422,10 @@ export async function PUT(request: Request) {
         user.id,
         admin_notes
       );
-      if (!error && resp) {
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      if (resp) {
         updated++;
 
         // Leaving a school (rejected/cancelled) deactivates a student-level

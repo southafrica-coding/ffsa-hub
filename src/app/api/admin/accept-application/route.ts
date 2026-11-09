@@ -129,15 +129,34 @@ export async function POST(request: Request) {
   }
 
   // Update response status to accepted
-  await adminSupabase
+  const { error: statusError } = await adminSupabase
     .from("application_responses")
     .update({
       status: "accepted",
       reviewed_by: authUser.id,
       reviewed_at: new Date().toISOString(),
-      ...(admin_notes !== undefined ? { admin_notes } : {}),
     })
     .eq("id", response_id);
+  if (statusError) {
+    return NextResponse.json({ error: statusError.message }, { status: 500 });
+  }
+
+  if (admin_notes !== undefined) {
+    // Table is newer than the generated Database types.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: notesError } = await (adminSupabase as any).from("application_admin_notes").upsert(
+      {
+        application_response_id: response_id,
+        program_id: appResponse.programs.id,
+        notes: admin_notes,
+        updated_by: authUser.id,
+      },
+      { onConflict: "application_response_id" }
+    );
+    if (notesError) {
+      return NextResponse.json({ error: notesError.message }, { status: 500 });
+    }
+  }
 
   let userId = appResponse.user_id;
 

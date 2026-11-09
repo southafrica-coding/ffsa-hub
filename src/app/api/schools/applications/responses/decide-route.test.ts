@@ -3,7 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // Status changes stay with program managers. Program staff are not managers,
 // so this route refuses them before it updates the application or sends mail.
 
-const h = vi.hoisted(() => ({ canManage: true, updates: 0 }));
+const h = vi.hoisted(() => ({
+  canManage: true,
+  updates: 0,
+  notesError: null as string | null,
+}));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
@@ -29,6 +33,12 @@ vi.mock("@/lib/auth/check-schools-access", () => ({
 vi.mock("@/services/schools", () => ({
   updateResponseStatus: async () => {
     h.updates += 1;
+    if (h.notesError) {
+      return {
+        data: { id: "app1", program_id: "p1", user_id: null },
+        error: { message: h.notesError },
+      };
+    }
     return { data: { id: "app1", program_id: "p1", user_id: null }, error: null };
   },
   createResponse: async () => ({ data: null, error: null }),
@@ -63,6 +73,7 @@ const route = await import("./route");
 beforeEach(() => {
   h.canManage = true;
   h.updates = 0;
+  h.notesError = null;
 });
 
 function put(body: unknown) {
@@ -79,5 +90,25 @@ describe("application status changes", () => {
     h.canManage = false;
     expect((await put({ id: "app1", status: "accepted", admin_notes: "no" })).status).toBe(403);
     expect(h.updates).toBe(0);
+  });
+
+  it("returns a failed notes write instead of success", async () => {
+    h.notesError = "new row violates row-level security policy";
+    const res = await put({ id: "app1", status: "interview_scheduled", admin_notes: "kept" });
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({
+      error: "new row violates row-level security policy",
+    });
+  });
+
+  it("returns a failed notes write on a bulk update", async () => {
+    h.notesError = "new row violates row-level security policy";
+    const res = await put({
+      ids: ["app1"],
+      status: "interview_scheduled",
+      admin_notes: "kept",
+    });
+    expect(res.status).toBe(500);
+    expect((await res.json()).error).toBe("new row violates row-level security policy");
   });
 });

@@ -88,9 +88,9 @@ export function switchFailure(message: string): { status: number; error: string 
 
 /**
  * One database function. Adds staff, drops this program's leader row and
- * a program-scoped schools.assignable_as_contact, and clears contact
- * assignments. Other program-scoped schools.* grants are left in place
- * and block the call unless the caller is an admin.
+ * a program-scoped schools.assignable_as_contact. Assigned applicants
+ * stay. Other program-scoped schools.* grants are left in place and
+ * block the call unless the caller is an admin.
  */
 export async function switchPersonToProgramStaff(
   supabase: Client,

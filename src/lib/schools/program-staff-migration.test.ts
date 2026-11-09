@@ -47,4 +47,17 @@ describe("migration 304", () => {
     expect(executable).toMatch(/SET search_path = ''/);
     expect(executable).toMatch(/WHEN NOT EXISTS/);
   });
+
+  it("does not change application_responses grants or sync notes back onto the column", () => {
+    expect(executable).not.toMatch(/CREATE OR REPLACE FUNCTION public\.sync_admin_notes/);
+    expect(executable).toMatch(/DROP FUNCTION IF EXISTS public\.sync_admin_notes_from_response/);
+    expect(executable).not.toMatch(/GRANT[^;]*application_responses/);
+    expect(executable).not.toMatch(/REVOKE[^;]*application_responses/);
+    expect(executable).toMatch(
+      /REVOKE ALL ON FUNCTION public\.clear_program_contact_assignments\(uuid, uuid\) FROM PUBLIC, anon, authenticated/
+    );
+    expect(executable).not.toMatch(
+      /GRANT EXECUTE ON FUNCTION public\.clear_program_contact_assignments/
+    );
+  });
 });
