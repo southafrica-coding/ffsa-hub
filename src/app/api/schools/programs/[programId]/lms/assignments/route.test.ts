@@ -222,11 +222,71 @@ describe("submit → grade → release → resubmit", () => {
     expect(g1?.points).toBe(6);
   });
 
+  it("re-grading needs the updated_at you edited; a stale edit is a 409 and changes nothing", async () => {
+    const { attempt } = await (await submitAsS1({ body_text: "Answer" })).json();
+    as(ids.staffA);
+    const first = await putGrade(
+      jsonRequest("PUT", { points: 5, expected_updated_at: null }),
+      p({ programId: ids.progA, submissionId: attempt.id })
+    );
+    expect(first.status).toBe(200);
+    const g1 = (await first.json()).grade;
+
+    // A leader re-grades from the same starting point.
+    as(ids.leaderA);
+    const leader = await putGrade(
+      jsonRequest("PUT", { points: 6, expected_updated_at: g1.updated_at }),
+      p({ programId: ids.progA, submissionId: attempt.id })
+    );
+    expect(leader.status).toBe(200);
+
+    // Staff saves an edit based on the old version → 409, leader's 6 stays.
+    as(ids.staffA);
+    const stale = await putGrade(
+      jsonRequest("PUT", { points: 9, expected_updated_at: g1.updated_at }),
+      p({ programId: ids.progA, submissionId: attempt.id })
+    );
+    expect(stale.status).toBe(409);
+    expect((await stale.json()).error).toBe("grade_changed");
+    // Someone graded while this grader still saw no grade → 409 too.
+    const blind = await putGrade(
+      jsonRequest("PUT", { points: 9, expected_updated_at: null }),
+      p({ programId: ids.progA, submissionId: attempt.id })
+    );
+    expect(blind.status).toBe(409);
+    expect(lmsTestState.world.grades.find((g) => g.submission_id === attempt.id)?.points).toBe(6);
+  });
+
+  it("a grader enrolled in the school cannot grade their own attempt", async () => {
+    // Staff A is also a student of A here.
+    lmsTestState.world.enrollments.push({
+      id: "e5000000-0000-0000-0000-0000000000aa",
+      program_id: ids.progA,
+      user_id: ids.staffA,
+      status: "arrived",
+      removed_at: null,
+    });
+    as(ids.staffA);
+    const own = await (
+      await studentSubmit(
+        jsonRequest("POST", { body_text: "mine" }),
+        p({ enrollmentId: "e5000000-0000-0000-0000-0000000000aa", assignmentId: ids.onTime })
+      )
+    ).json();
+    const res = await putGrade(jsonRequest("PUT", { points: 10 }), p({ programId: ids.progA, submissionId: own.attempt.id }));
+    expect([403, 404]).toContain(res.status);
+    expect(lmsTestState.world.grades).toHaveLength(0);
+  });
+
   it("deleting an assignment with student work is a 409", async () => {
     await submitAsS1({ body_text: "Answer" });
     as(ids.leaderA);
     const res = await deleteAssignment(jsonRequest("DELETE"), p({ programId: ids.progA, assignmentId: ids.onTime }));
     expect(res.status).toBe(409);
-    expect((await res.json()).error).toBe("has_student_work");
+    const body = await res.json();
+    expect(body.error).toBe("has_student_work");
+    expect(body.message).toMatch(/this assignment/);
+    // The submitted attempt is still there.
+    expect(lmsTestState.world.submissions.some((s) => s.assignment_id === ids.onTime)).toBe(true);
   });
 });

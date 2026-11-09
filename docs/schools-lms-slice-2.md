@@ -10,6 +10,28 @@ Goal: replace Google Classroom around live lectures. Staff set assignments,
 students hand in text, a link or files (and may resubmit), staff grade with
 points and feedback, students see released grades. Live lectures are unchanged.
 
+## Review fixes folded into 310 (Hub Data F1–F5)
+
+310 is unapplied, so these live in 310 itself (no follow-up migrations):
+
+- **F1 (high)** — 310 redefines 305's `lms_can_edit` with the
+  `program_leader` *role* scoped to the program (`scope_type IS NULL` or
+  `program` + this id). 305 went through `can_manage_program_applications`,
+  whose last branch accepts that role for every program, so a leader of one
+  school could edit another school's classroom and, with 310, grade it.
+  This also closes that leak for 305's course / module / lesson policies, on
+  purpose. `can_manage_program_applications` itself (applications) is
+  unchanged and out of scope.
+- **F2** — a submitted attempt is never deleted at any depth. An
+  assignment or course delete that would cascade into one raises 23503; a
+  direct delete raises 23514. Drafts still cascade.
+- **F3** — grade insert / update / delete refuse the grader's own attempt.
+- **F4** — `lms_stamp_created` sets `created_at` on all four tables and
+  `created_by` on assignments, and freezes them on update.
+- **F5** — `lms_submissions_content_guard`: an attempt becoming submitted
+  needs at least one piece of content of an accepted type
+  (`empty_submission:`); extra content is allowed.
+
 ## Decisions (Jack, 9 Nov 2026) and how they are enforced
 
 | Decision | App | Database |
@@ -99,12 +121,34 @@ Student, `/api/my-schools/[enrollmentId]/lms/assignments` (own active enrolment)
 - `[assignmentId]/files` POST `{ file_name, mime, size_bytes }` → signed upload
 - `[assignmentId]/files/[fileId]` GET (5-min URL) / DELETE (draft only)
 
-DB errors are mapped in `dbError()`: RESTRICT → 409 `has_student_work` with a
-plain sentence (adapted from #501's `gradeMarksRestrictMessage`), late → 409,
-frozen / immutable → 409, check → 400, RLS → 403, missing tables → 503
-`lms_schema_not_applied`. The permanent enrolment delete and the slice-1
-course delete now return that 409 sentence instead of a 500 when student work
-holds the row.
+DB errors are mapped in `dbError()`: RESTRICT / the F2 guard → 409
+`has_student_work` with a sentence that names what was being deleted
+(assignment, course, enrolment, school — adapted from #501's
+`gradeMarksRestrictMessage`), late → 409, any unique clash (23505) → 409,
+frozen / immutable → 409, `empty_submission` → 400, other checks → 400, RLS →
+403, missing tables → 503 `lms_schema_not_applied`.
+
+Deletes that touch student work:
+
+- Assignment DELETE and the slice-1 **course DELETE** check for submitted
+  attempts first and answer 409 (the course check is skipped only while the
+  310 tables do not exist yet). The DB's 23503 is the backstop.
+- The permanent enrolment delete and the school (program) delete map a
+  23503 from 310 to a 409 sentence instead of a 500.
+
+Re-grading is optimistic: the grade drawer sends `expected_updated_at` (the
+grade's `updated_at` it showed, or null if it showed none). A mismatch, or an
+update that matches no row, is 409 `grade_changed` and nothing is written.
+
+### Preview deployments
+
+Previews share the prod database and the `lms-submissions` bucket, and a
+submitted attempt or a frozen grade can't be deleted afterwards. Every write
+route calls `previewWritesDisabled()` (`src/lib/schools/lms-http.ts`, ported
+from #501) first and returns 403 `preview_writes_disabled` when
+`VERCEL_ENV=preview`: draft PUT / DELETE, files POST, file DELETE, submit
+POST, assignments POST, assignment PATCH / DELETE, release POST, grade PUT.
+Reads stay open.
 
 ## UI
 
@@ -116,7 +160,13 @@ holds the row.
   attempts and their grades; points / max; feedback; Save draft / Release),
   "Release N held grades".
 - **Program staff** (staff-scoped school page): the same Assignments card
-  without create/edit, below their assigned applicants.
+  without create/edit, below their assigned applicants. Staff who reach the
+  full school page (for example because they also hold a schools.* grant)
+  get a Classroom tab that shows only Assignments, grade-only
+  (`canGradeAssignments = canManage || isStaff`).
+- Downloads use `location.assign` on the signed URL (mobile browsers block
+  `window.open` after an `await`). When a phone gives a file no type (HEIC,
+  Office), the mime comes from the extension.
 - **Students**: `/my-schools/[enrollmentId]` gains an *Assignments* section
   grouped To do / Submitted / Graded with due badges (Late / Closed in red).
   `/my-schools/[enrollmentId]/assignments/[assignmentId]` has instructions, the
@@ -143,6 +193,8 @@ All tap targets are ≥ 44 px; layouts are single-column at 375 px.
 - Per-student grader assignment (staff grade everyone in their school)
 - The mobile app
 - Unreleasing a grade from the UI (the API keeps released grades released)
+- Fixing the unscoped `program_leader` branch in `can_manage_program_applications`
+  (applications); 310 only scopes it for the LMS
 
 ## Reused from / rejected from #501 / #506 / #509
 
@@ -154,6 +206,8 @@ Reused (ideas only, no files copied):
   → `lmsRestrictMessage`); 503 when the LMS tables are missing; `no-store`
   on JSON responses.
 - #501: draft-then-post grading → `released_at` on `lms_grades`.
+- #501: `previewWritesDisabled` (with `json` / `NO_STORE`) in
+  `src/lib/schools/lms-http.ts`.
 - #509: one grader queue per assignment with a side drawer, cards on phones.
 
 Rejected:
@@ -164,9 +218,6 @@ Rejected:
 - `course_graders` / per-student grader assignment — Jack decided staff grade
   every student in their school.
 - `can_post_official` / a separate "official" poster role — any grader releases.
-- #501's `previewWritesDisabled` guard — not added; it would block testing on
-  previews, and the migration is not applied anywhere yet. Worth revisiting
-  before 310 goes live, since previews share the prod database.
 - #509's template library, course builder and AI course agent.
 
 ## Tests
@@ -181,11 +232,19 @@ Rejected:
   attempt 2 with attempt 1 and its grade intact, late blocked with
   `allow_late=false` (incl. resubmits). Services are an in-memory fake that
   mirrors 310 (`src/lib/testing/fake-lms-assignments.ts`).
+- `src/lib/schools/lms-http.test.ts` — every write route returns 403
+  `preview_writes_disabled` on a preview and is not blocked otherwise; the
+  error mapping.
+- `src/app/api/schools/programs/[programId]/lms/courses/[courseId]/route.test.ts`
+  — course DELETE 409s on submitted work (pre-check and 23503 backstop).
 - `supabase/tests/lms_assignments_rls.sql` + `src/lib/schools/lms-assignments-rls.test.ts`
   — every role (student, other student, staff of this school, staff of another
-  school, leader, other leader, anon) with PASS and deliberate FAIL cases on all
-  four tables, the view, the roster RPC and storage objects. Only ever run it
-  on a throwaway local database:
+  school, leader, other leader, a `program_leader` role scoped to the other
+  school, anon) with PASS and deliberate FAIL cases on all four tables, the
+  view, the roster RPC and storage objects, plus F2–F5. The harness uses the
+  live shape of `can_manage_program_applications` (unscoped role branch), so
+  the scoped-role case fails if 310's `lms_can_edit` redefine is removed.
+  Only ever run it on a throwaway local database:
 
   ```bash
   dropdb --if-exists lms_assignments_rls && createdb lms_assignments_rls
