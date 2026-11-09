@@ -26,8 +26,8 @@ type AccountRow = {
 };
 
 // Each org's chart of accounts exactly as Xero has it (migration 275),
-// kept in step automatically. Read-only: the Hub never writes to Xero, and
-// nothing here asks for an account code yet (that stays on hold).
+// kept in step automatically. This page only reads that copy. A confirmed
+// receipt can post one spend to Xero; nothing on this page writes.
 export default async function FinanceAccountsPage() {
   const supabase = await createClient();
   const {

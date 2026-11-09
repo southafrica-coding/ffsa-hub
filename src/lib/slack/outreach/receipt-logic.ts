@@ -205,6 +205,23 @@ export type Proposal = {
   bank_fee_zar?: number;
   /** The notification screenshot sent with the receipt. */
   bank_proof?: { path: string; name: string; mime: string | null; size: number | null } | null;
+  /** Plain-language budget line shown on the card. Account codes stay off it. */
+  budget_id?: string | null;
+  budget_line_id?: string | null;
+  budget_line_label?: string | null;
+  /** Which finance org that budget belongs to. NPC records ZAR, USA records USD. */
+  budget_org_key?: "npc" | "usa" | null;
+  /** The chosen budget's period and status. A spend is posted only when the date is inside an approved period. */
+  budget_period_start?: string | null;
+  budget_period_end?: string | null;
+  budget_status?: string | null;
+  /** Set after confirm, once a Xero spend has been attempted. */
+  xero_write?: {
+    status: string;
+    bank_transaction_id?: string | null;
+    error?: string | null;
+    at?: string;
+  } | null;
 };
 
 export const KNOWN_CURRENCIES = new Set<string>(SUPPORTED_CURRENCIES.map((c) => c.code));
@@ -358,10 +375,10 @@ export function parseTeamOption(value: string | undefined): { draftId: string; t
   return draftId && teamId ? { draftId, teamId } : null;
 }
 
-/** Slack caps a button's text at 75 characters. */
+/** Slack caps a button's text at 75 characters. Confirm is the Xero gate. */
 export function logButtonText(teamName: string | null): string {
-  if (!teamName) return "✅ Log it";
-  const label = `✅ Log to ${teamName}`;
+  if (!teamName) return "✅ Confirm";
+  const label = `✅ Confirm ${teamName}`;
   return label.length <= 75 ? label : `${label.slice(0, 74)}…`;
 }
 
@@ -407,11 +424,12 @@ export function receiptCardBlocks(args: {
 }): unknown[] {
   const p = args.proposal;
   const choices = args.teamChoices ?? [];
+  const budgetLine = p.budget_line_label?.trim() || args.categoryName || "_not set_";
   const fields = [
     `*Shop*\n${p.vendor ?? "—"}`,
     `*Date*\n${p.expense_date}`,
     `*Amount*\n${amountLine(p)}`,
-    `*Category*\n${args.categoryName ?? "_not set_"}`,
+    `*Budget line*\n${budgetLine}`,
     `*Paid by*\n${PAY_LABEL[p.payment_method]}`,
     `*For*\n${p.description}${p.receipt_code ? ` · #${p.receipt_code}` : ""}`,
   ];
@@ -421,8 +439,8 @@ export function receiptCardBlocks(args: {
       text: {
         type: "mrkdwn",
         text: args.team
-          ? `🧾 *Receipt from ${args.senderName}* for *${args.team.name}* — check the team and the details, then tap *Log to ${args.team.name}*.`
-          : `🧾 *Receipt from ${args.senderName}* — *which team is this for?* Pick it below, then check the details.`,
+          ? `🧾 *Receipt from ${args.senderName}* for *${args.team.name}* — check the budget line, then tap *Confirm*.`
+          : `🧾 *Receipt from ${args.senderName}* — *which team is this for?* Pick it below, then check the budget line.`,
       },
     },
     { type: "section", fields: fields.map((t) => ({ type: "mrkdwn", text: t })) },
@@ -431,6 +449,9 @@ export function receiptCardBlocks(args: {
   if ((p.bank_fee_zar ?? 0) > 0) notes.push(`The bank's ${zarFmt(p.bank_fee_zar!)} fee will be logged in *Bank Costs*.`);
   if (p.payment_method === "card" && p.local_currency !== "ZAR" && !p.zar_confirmed) {
     notes.push("💳 Card payment: send the bank notification screenshot when you get it, so I can record the real rand.");
+  }
+  if (p.payment_method === "cash" && p.local_currency !== "ZAR" && (p.zar_amount == null || !p.exchange_rate)) {
+    notes.push("Cash needs the rand amount. It does not wait on a bank notification.");
   }
   if (notes.length) {
     blocks.push({
@@ -534,12 +555,15 @@ export function changeModal(args: {
   draftId: string;
   proposal: Proposal;
   categories: BudgetCategory[];
+  /** Lines on the approved (or only) budget for this org and period. */
+  budgetLines?: { id: string; name: string }[];
 }): unknown {
   const p = args.proposal;
   const cats = [...args.categories].sort((a, b) => a.name.localeCompare(b.name)).slice(0, 100);
   const catOpts = cats.map((c) => opt(c.name, c.id));
   const curOpts = currencyMenu(p.local_currency).map((c) => opt(`${c.code} — ${c.name}`, c.code));
   const payOpts = (Object.keys(PAY_LABEL) as PaymentMethod[]).map((k) => opt(PAY_LABEL[k], k));
+  const lineOpts = (args.budgetLines ?? []).slice(0, 100).map((line) => opt(line.name, line.id));
   const initial = <T extends { value: string }>(opts: T[], v: string | null) => opts.find((o) => o.value === v);
 
   const select = (blockId: string, label: string, opts: ReturnType<typeof opt>[], value: string | null) => ({
@@ -567,7 +591,7 @@ export function changeModal(args: {
     callback_id: VIEW_CHANGE,
     private_metadata: args.draftId,
     title: { type: "plain_text", text: "Check the receipt" },
-    submit: { type: "plain_text", text: "Log it" },
+    submit: { type: "plain_text", text: "Confirm" },
     close: { type: "plain_text", text: "Back" },
     blocks: [
       text("vendor", "Shop", p.vendor),
@@ -587,6 +611,14 @@ export function changeModal(args: {
         "Leave empty to convert with the team's cash rate. Fill in to set it yourself."
       ),
       select("category", "Category", catOpts, p.category_id),
+      ...(lineOpts.length
+        ? [
+            {
+              ...select("budget_line", "Budget line", lineOpts, p.budget_line_id ?? null),
+              optional: true,
+            },
+          ]
+        : []),
       select("payment", "Paid by", payOpts, p.payment_method),
       text("description", "What was it for?", p.description),
     ],
@@ -602,6 +634,8 @@ export type ChangeInput = {
   local_currency: string;
   zar_override: number | null;
   category_id: string;
+  /** Set when the person picked a line. Null when the field was left empty or wasn't shown. */
+  budget_line_id: string | null;
   payment_method: PaymentMethod;
   description: string;
 };
@@ -638,6 +672,7 @@ export function parseChange(values: ViewValues): { ok: true; input: ChangeInput 
   if (!date) errors.date = "Pick the date";
   const category = v("category")?.selected_option?.value ?? null;
   if (!category) errors.category = "Pick a category";
+  const budgetLine = v("budget_line")?.selected_option?.value ?? null;
   const currency = v("currency")?.selected_option?.value ?? "ZAR";
   const pay = (v("payment")?.selected_option?.value ?? "cash") as PaymentMethod;
   const description = (v("description")?.value ?? "").trim();
@@ -653,6 +688,7 @@ export function parseChange(values: ViewValues): { ok: true; input: ChangeInput 
       local_currency: currency,
       zar_override: zar,
       category_id: category!,
+      budget_line_id: budgetLine,
       payment_method: pay,
       description: description.slice(0, 200),
     },

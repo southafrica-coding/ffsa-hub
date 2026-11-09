@@ -46,6 +46,7 @@ const FORM_ENCODED_METHODS = new Set([
   "users.info",
   "users.list",
   "conversations.history",
+  "conversations.info",
 ]);
 
 async function callSlack<T = Record<string, unknown>>(
@@ -197,6 +198,30 @@ export function openConversation(slackUserId: string, bot?: SlackBotId) {
     { users: slackUserId },
     bot
   );
+}
+
+// ────────────────────────────────────────────────────────────
+// conversations.info
+// ------------------------------------------------------------
+// Whether a channel is a DM, a private channel, or public. Receipts are
+// only read in a DM or a private channel the bot belongs to.
+// ────────────────────────────────────────────────────────────
+
+export type SlackConversationInfo = {
+  id: string;
+  is_im?: boolean;
+  is_mpim?: boolean;
+  is_private?: boolean;
+  is_member?: boolean;
+  is_channel?: boolean;
+  is_group?: boolean;
+  is_shared?: boolean;
+  is_ext_shared?: boolean;
+  is_org_shared?: boolean;
+};
+
+export function conversationInfo(channel: string, bot?: SlackBotId) {
+  return callSlack<{ channel?: SlackConversationInfo }>("conversations.info", { channel }, bot);
 }
 
 // ────────────────────────────────────────────────────────────
