@@ -35,6 +35,7 @@ import {
   type InsuranceConfirmation,
 } from "@/lib/users/profile-fields";
 import { listActiveMinistries } from "@/services/ministries";
+import { adminDepartmentOptions } from "@/lib/users/department-options";
 import { UserHeader } from "./user-header";
 import { UserTabs } from "./user-tabs";
 import { EditProfileDialog } from "./edit-profile-dialog";
@@ -150,9 +151,11 @@ export default async function UserProfilePage({
     }
   }
 
-  const departmentSelectOptions = (
+  // Full list, including Leadership Team. Admins set that slug here, through
+  // PATCH /api/users/[id]. The staff-decision and phone pickers omit it.
+  const departmentSelectOptions = adminDepartmentOptions(
     (ministries ?? []) as Array<{ slug: string; name: string }>
-  ).map((m) => ({ value: m.slug, label: m.name }));
+  );
 
   // Only staff (or other elevated roles) may carry a department — students and
   // community members are department-less, so hide the field for them.

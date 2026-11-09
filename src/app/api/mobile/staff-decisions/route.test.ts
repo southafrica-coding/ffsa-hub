@@ -55,6 +55,7 @@ const USERS = [
 ];
 
 const MINISTRIES = [
+  { name: "Leadership Team", slug: "leadership_team" },
   { name: "Media", slug: "media" },
   { name: "Worship", slug: "worship" },
 ];
@@ -203,6 +204,7 @@ describe("GET /api/mobile/staff-decisions/[programId]", () => {
     });
     expect(body.rows[1]).toMatchObject({ isStaff: true, department: "media", decision: { accepted: false, note: "Not this year" } });
     expect(body.rows[2]).toMatchObject({ userId: null, email: "c@x.test", decision: null });
+    // leadership_team is a real ministry in the fixture and is not offered.
     expect(body.departmentOptions).toEqual([
       { value: "media", label: "Media" },
       { value: "worship", label: "Worship" },

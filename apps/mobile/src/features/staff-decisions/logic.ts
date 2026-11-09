@@ -51,7 +51,22 @@ export function needsDecisionCount(detail: Pick<SchoolDetail, "school" | "rows">
 
 export function departmentLabel(options: DepartmentOption[], value: string | null): string | null {
   if (!value) return null;
-  return options.find((o) => o.value === value)?.label ?? value;
+  const known = options.find((o) => o.value === value)?.label;
+  if (known) return known;
+  // leadership_team is not a choice on this picker. A stored value still reads
+  // as Leadership Team wherever the department is shown.
+  if (value === "leadership_team") return "Leadership Team";
+  return value;
+}
+
+/** A stored slug is preselected only when the picker still offers it. */
+export function initialDepartmentSelection(
+  current: string | null,
+  options: DepartmentOption[],
+  empty: string,
+): string {
+  if (current && options.some((option) => option.value === current)) return current;
+  return empty;
 }
 
 export function schoolA11yLabel(s: School): string {
