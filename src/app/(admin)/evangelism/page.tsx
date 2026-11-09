@@ -1,37 +1,66 @@
-import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
 import { requireModuleAccess } from "@/lib/require-permission";
-import { Masthead } from "@/components/ffsa";
-import { isHiddenFromNav } from "@/config/modules";
+import { getEvangelismAccess } from "@/lib/auth/check-evangelism-access";
+import { present } from "@/lib/evangelism/http";
+import { Masthead, MastheadAction } from "@/components/ffsa";
+import { isEvangelismNotReady, listActiveMinistries, listTestimonies } from "@/services/evangelism";
+import { MyStories } from "./my-stories";
+import { PublishedList } from "./published-list";
 
 export default async function EvangelismPage() {
-  // Unbuilt placeholder — out of the menu, so send direct visits home.
-  if (isHiddenFromNav("evangelism")) redirect("/dashboard");
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) redirect("/login");
   await requireModuleAccess(supabase, user.id, "evangelism");
 
-  return (
-    <div className="ffsa-screen">
-      <Masthead context="Sharing the gospel" title="Evangelism" />
+  const access = await getEvangelismAccess(supabase, user.id);
+  if (!access.view) redirect("/dashboard");
+  const caller = { supabase, userId: user.id, access };
 
-      {/* See mission/page.tsx and teams/page.tsx — same not-built-yet panel. */}
-      <div className="border-b border-rule px-5 py-12 md:px-8 md:py-16">
-        <div className="max-w-xl">
-          <div className="mono-label mb-3">Not built yet</div>
-          <h2 className="font-display text-[34px] font-black uppercase leading-[0.95] text-ink md:text-[44px]">
-            A new module,
-            <br />
-            still empty
-          </h2>
-          <p className="mt-5 text-[15px] leading-relaxed text-[color:var(--text-secondary)]">
-            This is a placeholder for the Evangelism module. Nothing is built
-            here yet, and only admins can see it while it&apos;s in
-            progress.
+  const [published, mine, ministries] = await Promise.all([
+    listTestimonies(supabase, { status: "published", limit: 100 }),
+    access.submit ? listTestimonies(supabase, { authorId: user.id, limit: 100 }) : Promise.resolve(null),
+    access.submit ? listActiveMinistries(supabase) : Promise.resolve([]),
+  ]);
+
+  const masthead = (
+    <Masthead
+      context="Sharing the gospel"
+      title="Evangelism"
+      actions={access.publish ? <MastheadAction href="/evangelism/queue">Review queue</MastheadAction> : undefined}
+    />
+  );
+
+  if (isEvangelismNotReady(published.error) || isEvangelismNotReady(mine?.error)) {
+    return (
+      <div className="ffsa-screen">
+        {masthead}
+        <div className="px-5 py-12 md:px-8">
+          <div className="mono-label mb-3">Not switched on yet</div>
+          <p className="max-w-xl text-[15px] leading-relaxed text-[color:var(--text-secondary)]">
+            The testimonies database hasn&apos;t been set up yet (migration 307). Stories will appear here once it
+            has.
           </p>
         </div>
       </div>
+    );
+  }
+
+  const [publishedOut, mineOut] = await Promise.all([
+    present(published.data, caller),
+    mine ? present(mine.data, caller) : Promise.resolve([]),
+  ]);
+
+  return (
+    <div className="ffsa-screen">
+      {masthead}
+      {access.submit && (
+        <MyStories ministries={ministries} mine={mineOut} />
+      )}
+      <PublishedList stories={publishedOut} />
     </div>
   );
 }

@@ -180,7 +180,8 @@ export const ADMIN_MODULES: ModuleDefinition[] = [
     label: "Evangelism",
     href: "/evangelism",
     icon: Megaphone,
-    description: "In progress — super admins and admins for now",
+    description:
+      "Staff share testimonies; publishers approve or withhold them. Admins, or any evangelism.* permission",
     requiredRoles: ["super_admin", "admin"],
   },
 ];
@@ -297,7 +298,7 @@ export const ROLE_ONLY_MODULES: Record<string, string> = {
  * empty page; a direct visit redirects to the dashboard. The pages and their
  * permissions are kept — delete an id here once its page is real.
  */
-export const HIDDEN_FROM_NAV = new Set(["teams", "mission", "evangelism", "my-mission"]);
+export const HIDDEN_FROM_NAV = new Set(["teams", "mission", "my-mission"]);
 
 /** True for a placeholder page that should not be reachable yet. */
 export function isHiddenFromNav(id: string): boolean {
