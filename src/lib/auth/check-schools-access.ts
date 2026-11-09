@@ -129,14 +129,26 @@ export async function userCanManageProgram(
   return !!data && data.length > 0;
 }
 
-// DELETE on application_responses (migration 223, unchanged by 312):
+// DELETE on application_responses (migration 313):
 //   application_gate(program_id,
-//     has_schools_access() OR has_permission('schools.approve_applications'))
-// has_schools_access() with no argument is is_admin() OR
-// has_permission('schools.manage'). is_admin() counts only an unscoped
-// admin or super_admin. has_permission(key) ignores scope: any direct
-// grant, and any role whose bundle includes the key.
+//     is_admin()
+//       OR has_permission_for('schools.manage', program_id)
+//       OR has_permission_for('schools.approve_applications', program_id))
+// is_admin() is an unscoped admin or super_admin (has_any_role). It does
+// not read users.is_active. has_permission_for requires
+// users.is_active IS NOT FALSE, then a direct grant or a role bundle whose
+// scope_type is null, or program-scoped to this program. Team and event
+// scopes do not count.
 const DELETE_PERMISSION_KEYS = ["schools.manage", "schools.approve_applications"] as const;
+
+function scopeCoversProgram(
+  scopeType: string | null | undefined,
+  scopeId: string | null | undefined,
+  programId: string
+): boolean {
+  if (scopeType === null) return true;
+  return scopeType === "program" && scopeId === programId;
+}
 
 function permissionKey(
   value: { key: string } | { key: string }[] | null | undefined
@@ -155,11 +167,12 @@ async function hasUnscopedAdminRole(
   supabase: SupabaseClient,
   userId: string
 ): Promise<boolean> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("user_roles")
     .select("scope_type, roles!inner(name)")
     .eq("user_id", userId)
     .in("roles.name", ["super_admin", "admin"]);
+  if (error) return false;
 
   for (const row of data ?? []) {
     const name = embeddedName(row.roles);
@@ -168,39 +181,60 @@ async function hasUnscopedAdminRole(
   return false;
 }
 
-/**
- * has_permission(key) for the two DELETE keys. Scope is not consulted.
- * A direct row of any scope_type counts, as does a role bundle on any
- * user_roles row (a team-scoped program_leader still carries schools.manage).
- */
-async function hasDeletePermissionIgnoringScope(
+/** users.is_active IS NOT FALSE. A missing row or a lookup error is not active. */
+async function userAccountIsActive(
   supabase: SupabaseClient,
   userId: string
 ): Promise<boolean> {
-  const { data: direct } = await supabase
+  const { data, error } = await supabase
+    .from("users")
+    .select("is_active")
+    .eq("id", userId)
+    .maybeSingle();
+  if (error || !data) return false;
+  return data.is_active !== false;
+}
+
+/**
+ * has_permission_for for the two DELETE keys. Scope is the grant's or the
+ * role assignment's: null is global, program must match, team and event do not.
+ */
+async function hasDeletePermissionForProgram(
+  supabase: SupabaseClient,
+  userId: string,
+  programId: string
+): Promise<boolean> {
+  if (!(await userAccountIsActive(supabase, userId))) return false;
+
+  const { data: direct, error: directError } = await supabase
     .from("user_permissions")
-    .select("scope_type, permissions!inner(key)")
+    .select("scope_type, scope_id, permissions!inner(key)")
     .eq("user_id", userId)
     .in("permissions.key", [...DELETE_PERMISSION_KEYS]);
+  if (directError) return false;
 
   for (const row of direct ?? []) {
-    if (isDeletePermission(permissionKey(row.permissions))) return true;
+    if (!isDeletePermission(permissionKey(row.permissions))) continue;
+    if (scopeCoversProgram(row.scope_type, row.scope_id, programId)) return true;
   }
 
-  const { data: roles } = await supabase
+  const { data: roles, error: rolesError } = await supabase
     .from("user_roles")
-    .select("role_id")
+    .select("role_id, scope_type, scope_id")
     .eq("user_id", userId);
+  if (rolesError) return false;
   const roleIds = (roles ?? [])
+    .filter((row) => scopeCoversProgram(row.scope_type, row.scope_id, programId))
     .map((row) => row.role_id)
     .filter((id): id is string => typeof id === "string" && id.length > 0);
   if (roleIds.length === 0) return false;
 
-  const { data: bundle } = await supabase
+  const { data: bundle, error: bundleError } = await supabase
     .from("role_permissions")
     .select("permissions!inner(key)")
     .in("role_id", roleIds)
     .in("permissions.key", [...DELETE_PERMISSION_KEYS]);
+  if (bundleError) return false;
 
   for (const row of bundle ?? []) {
     if (isDeletePermission(permissionKey(row.permissions))) return true;
@@ -210,11 +244,10 @@ async function hasDeletePermissionIgnoringScope(
 
 /**
  * May this user permanently delete an application in this program?
- * Mirrors migration 223's DELETE policy, including the expiry gate.
- * A program_leaders row does not qualify. schools.manage_enrollments
- * does not qualify. When the school's applications are expired, only
- * can_access_expired_applications() (unscoped super_admin or the
- * Training Team) passes.
+ * Mirrors migration 313, including application_gate. A program_leaders
+ * row does not qualify. schools.manage_enrollments does not qualify.
+ * When the school's applications are expired, only
+ * can_access_expired_applications() passes.
  */
 export async function userCanDeleteApplication(
   supabase: SupabaseClient,
@@ -232,5 +265,5 @@ export async function userCanDeleteApplication(
   if (expiry.expired) return expiry.canAccess;
 
   if (await hasUnscopedAdminRole(supabase, userId)) return true;
-  return hasDeletePermissionIgnoringScope(supabase, userId);
+  return hasDeletePermissionForProgram(supabase, userId, programId);
 }

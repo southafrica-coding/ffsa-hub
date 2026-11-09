@@ -274,9 +274,10 @@ describe("userCanDeleteApplication expiry gate", () => {
         if (q.table === "rpc:program_end_date") return { data: expired ? "2020-01-01" : null };
         if (q.table === "rpc:program_applications_expired") return { data: expired };
         if (q.table === "rpc:can_access_expired_applications") return { data: canAccess };
+        if (q.table === "users") return { data: [{ is_active: true }] };
         if (q.table === "user_permissions") {
           return {
-            data: [{ scope_type: null, permissions: { key: "schools.manage" } }],
+            data: [{ scope_type: null, scope_id: null, permissions: { key: "schools.manage" } }],
           };
         }
         return { data: [] };
@@ -314,6 +315,20 @@ describe("userCanDeleteApplication expiry gate", () => {
         if (q.table === "rpc:can_access_expired_applications") return { data: false };
         if (q.table === "user_permissions") {
           return { data: [{ scope_type: null, permissions: { key: "schools.manage" } }] };
+        }
+        return { data: [] };
+      },
+    });
+    expect(await userCanDeleteApplication(f.client, USER, PROGRAM_A)).toBe(false);
+  });
+
+  it("denies a permission lookup error even with an unscoped grant", async () => {
+    const f = createFakeSupabase({
+      resolve: (q) => {
+        if (q.table.startsWith("rpc:")) return { data: false };
+        if (q.table === "users") return { data: null, error: { message: "down" } };
+        if (q.table === "user_permissions") {
+          return { data: [{ scope_type: null, scope_id: null, permissions: { key: "schools.manage" } }] };
         }
         return { data: [] };
       },

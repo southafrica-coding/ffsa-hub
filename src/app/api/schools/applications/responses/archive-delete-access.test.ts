@@ -112,6 +112,8 @@ function signIn(seed: {
   perms?: PermSeed[];
   leaderOf?: string[];
   bundles?: BundleSeed[];
+  /** undefined counts as active (is_active IS NOT FALSE). */
+  active?: boolean | null;
 }) {
   h.userClient = createFakeSupabase({
     user: { id: USER },
@@ -137,7 +139,13 @@ function signIn(seed: {
         if (typeof scopeId === "string") rows = rows.filter((perm) => perm.scope_id === scopeId);
         const keys = filterArg(q, "in", "permissions.key");
         if (Array.isArray(keys)) rows = rows.filter((perm) => keys.includes(perm.key));
-        return { data: rows.map((perm) => ({ permissions: { key: perm.key } })) };
+        return {
+          data: rows.map((perm) => ({
+            scope_type: perm.scope_type,
+            scope_id: perm.scope_id,
+            permissions: { key: perm.key },
+          })),
+        };
       }
       if (q.table === "role_permissions") {
         let rows = seed.bundles ?? [];
@@ -146,6 +154,9 @@ function signIn(seed: {
         if (Array.isArray(roleIds)) rows = rows.filter((row) => roleIds.includes(row.role_id));
         if (Array.isArray(keys)) rows = rows.filter((row) => keys.includes(row.key));
         return { data: rows.map((row) => ({ permissions: { key: row.key } })) };
+      }
+      if (q.table === "users") {
+        return { data: [{ id: USER, is_active: seed.active === undefined ? true : seed.active }] };
       }
       if (q.table === "program_leaders") {
         const programId = filterArg(q, "eq", "program_id");
@@ -217,7 +228,7 @@ describe("archive stays on the program check; delete follows the DELETE policy",
       signIn({ perms: [perm] });
       const label = `${perm.key} ${perm.scope_type ?? "null"}`;
       const inThisSchool = perm.scope_type == null || perm.scope_id === PROGRAM_A;
-      h.canRead = inThisSchool;
+      h.canRead = true;
       expect((await archive()).status, label).toBe(inThisSchool ? 200 : 403);
       const deleted = await remove();
       expect(deleted.status, label).toBe(inThisSchool ? 200 : 403);
@@ -249,7 +260,7 @@ describe("archive stays on the program check; delete follows the DELETE policy",
       h.removed = 0;
       h.deleted = 0;
       const inThisSchool = scopeType == null || scopeId === PROGRAM_A;
-      h.canRead = inThisSchool;
+      h.canRead = true;
       signIn({ roles: [programLeader(scopeType, scopeId)], bundles: leaderBundle });
       const label = `${scopeType ?? "null"}:${scopeId ?? "null"}`;
       expect((await archive()).status, label).toBe(inThisSchool ? 200 : 403);
@@ -288,6 +299,59 @@ describe("archive stays on the program check; delete follows the DELETE policy",
       expect(await res.json(), key).toEqual({ error: "Forbidden" });
       expect(h.deleted, key).toBe(0);
     }
+  });
+
+  it("denies a school-A grant on a school-B application even when the caller is the applicant", async () => {
+    h.programId = PROGRAM_B;
+    h.canRead = true;
+    for (const key of ["schools.manage", "schools.approve_applications"] as const) {
+      h.deleted = 0;
+      signIn({ perms: [{ key, scope_type: "program", scope_id: PROGRAM_A }] });
+      const direct = await remove();
+      expect(direct.status, key).toBe(403);
+      expect(await direct.json(), key).toEqual({ error: "Forbidden" });
+      expect(h.deleted, key).toBe(0);
+
+      h.deleted = 0;
+      signIn({
+        roles: [{ id: "r-a", name: "staff", scope_type: "program", scope_id: PROGRAM_A }],
+        bundles: [{ role_id: "r-a", key }],
+      });
+      const viaRole = await remove();
+      expect(viaRole.status, `role ${key}`).toBe(403);
+      expect(h.deleted, `role ${key}`).toBe(0);
+    }
+  });
+
+  it("lets a school-B grant delete a school-B application", async () => {
+    h.programId = PROGRAM_B;
+    h.canRead = true;
+    for (const key of ["schools.manage", "schools.approve_applications"] as const) {
+      h.deleted = 0;
+      signIn({ perms: [{ key, scope_type: "program", scope_id: PROGRAM_B }] });
+      expect((await remove()).status, key).toBe(200);
+      expect(h.deleted, key).toBe(1);
+
+      h.deleted = 0;
+      signIn({
+        roles: [{ id: "r-b", name: "staff", scope_type: "program", scope_id: PROGRAM_B }],
+        bundles: [{ role_id: "r-b", key }],
+      });
+      expect((await remove()).status, `role ${key}`).toBe(200);
+      expect(h.deleted, `role ${key}`).toBe(1);
+    }
+  });
+
+  it("denies a deactivated user even with an unscoped schools.manage grant", async () => {
+    h.canRead = true;
+    signIn({
+      active: false,
+      perms: [{ key: "schools.manage", scope_type: null, scope_id: null }],
+    });
+    const res = await remove();
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "Forbidden" });
+    expect(h.deleted).toBe(0);
   });
 
   it("denies with Forbidden when the expiry lookup fails", async () => {
