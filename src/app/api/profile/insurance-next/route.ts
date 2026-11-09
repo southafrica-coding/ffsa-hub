@@ -6,6 +6,8 @@ import {
   NO_EXPIRY_NOT_ALLOWED_ERROR,
 } from "@/lib/users/insurance-write";
 import { providerAllowsNoExpiry } from "@/lib/profile/options";
+import { rejectIfDeactivated } from "@/lib/users/self-edit-guard";
+import { usersUpdateDeniedResponse } from "@/lib/users/users-update-error";
 
 // Manage the caller's QUEUED (next) health-insurance policy — the successor that
 // auto-takes-over the day after their current policy expires (promoted by
@@ -22,6 +24,9 @@ export async function PUT(request: Request) {
   if (!user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
+
+  const blocked = await rejectIfDeactivated(supabase, user.id);
+  if (blocked) return blocked;
 
   const body = await request.json().catch(() => ({}));
   const provider = String(body.provider ?? "").trim();
@@ -107,6 +112,8 @@ export async function PUT(request: Request) {
   };
   const { error } = await supabase.from("users").update(updateData).eq("id", user.id);
   if (error) {
+    const denied = usersUpdateDeniedResponse(error);
+    if (denied) return denied;
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   return NextResponse.json({ success: true });
@@ -122,6 +129,9 @@ export async function DELETE() {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
+  const blocked = await rejectIfDeactivated(supabase, user.id);
+  if (blocked) return blocked;
+
   const updateData: Record<string, unknown> = {
     next_health_insurance_provider: null,
     next_health_insurance_policy_number: null,
@@ -130,6 +140,8 @@ export async function DELETE() {
   };
   const { error } = await supabase.from("users").update(updateData).eq("id", user.id);
   if (error) {
+    const denied = usersUpdateDeniedResponse(error);
+    if (denied) return denied;
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   return NextResponse.json({ success: true });

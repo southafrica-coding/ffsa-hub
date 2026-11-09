@@ -111,8 +111,12 @@ vi.mock("@/lib/users/set-membership-role", async (orig) => ({
   }),
 }));
 vi.mock("@/services/users", () => ({
-  approveUser: vi.fn(async () => {
-    state.writes.push("approveUser");
+  activateApprovedUser: vi.fn(async () => {
+    state.writes.push("activateApprovedUser");
+    return { data: {}, error: null };
+  }),
+  setApprovedJobTitle: vi.fn(async () => {
+    state.writes.push("setApprovedJobTitle");
     return { data: {}, error: null };
   }),
 }));

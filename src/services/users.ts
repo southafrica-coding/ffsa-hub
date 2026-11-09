@@ -69,6 +69,8 @@ export async function getUserById(supabase: Client, id: string) {
     .single();
 }
 
+// avatar_url, display_name and is_active are outside migration 315's GRANT.
+// Callers must pass the service-role client (the avatar route does).
 export async function updateUser(
   supabase: Client,
   id: string,
@@ -89,6 +91,10 @@ export async function updateUserProfile(
   return supabase.from("users").update(data).eq("id", id).select().single();
 }
 
+// Not wired (see src/lib/users/auth-signins.ts). last_sign_in_at is outside
+// migration 315's GRANT, so this must not be called with the user client —
+// authenticated UPDATE of that column is 42501. Keep it on the service role
+// if it is ever connected.
 export async function updateLastSignIn(supabase: Client, userId: string) {
   return supabase
     .from("users")
@@ -112,16 +118,27 @@ export async function completeOnboarding(supabase: Client, userId: string) {
     .single();
 }
 
-/** Approve a user and activate their account (super_admin only). */
-export async function approveUser(
+/**
+ * Approve a user: set status to 'active'.
+ *
+ * status is in migration 315's GRANT, and is_admin() may change it on the
+ * user client. This app still writes it with the service role so the
+ * approval never rides on the caller's JWT. Do not pass the user client.
+ */
+export async function activateApprovedUser(admin: Client, userId: string) {
+  return admin.from("users").update({ status: "active" }).eq("id", userId).select().single();
+}
+
+/**
+ * The one column an admin writes through the user client under 315's GRANT.
+ * Pass the admin's own Supabase client (RLS + is_admin()), never the service role.
+ */
+export async function setApprovedJobTitle(
   supabase: Client,
   userId: string,
-  approvedBy: string,
-  jobTitle?: string
+  jobTitle: string | null
 ) {
-  const update: Record<string, unknown> = { status: "active" };
-  if (jobTitle !== undefined) update.job_title = jobTitle;
-  return supabase.from("users").update(update).eq("id", userId).select().single();
+  return supabase.from("users").update({ job_title: jobTitle }).eq("id", userId).select().single();
 }
 
 /**

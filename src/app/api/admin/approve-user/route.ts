@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { refuseSuperAdminTarget } from "@/lib/auth/super-admin-target";
-import { approveUser } from "@/services/users";
+import { activateApprovedUser, setApprovedJobTitle } from "@/services/users";
+import { usersUpdateDeniedResponse } from "@/lib/users/users-update-error";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -33,19 +34,26 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "user_id is required" }, { status: 400 });
   }
 
+  // status goes through the service role. job_title, when the body sends
+  // one, is the only users column written with the admin's own client —
+  // the single admin column in migration 315's GRANT (USER_ADMIN_CLIENT_COLUMNS).
+  const admin = createAdminClient();
+
   // This also sets the job title, which on a super admin is theirs to change.
-  const refused = await refuseSuperAdminTarget(
-    supabase,
-    authUser.id,
-    createAdminClient(),
-    user_id
-  );
+  const refused = await refuseSuperAdminTarget(supabase, authUser.id, admin, user_id);
   if (refused) return refused;
-
-  const { data, error } = await approveUser(supabase, user_id, authUser.id, job_title);
-
+  const { data, error } = await activateApprovedUser(admin, user_id);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  if (job_title !== undefined) {
+    const { error: titleError } = await setApprovedJobTitle(supabase, user_id, job_title);
+    if (titleError) {
+      const denied = usersUpdateDeniedResponse(titleError);
+      if (denied) return denied;
+      return NextResponse.json({ error: titleError.message }, { status: 500 });
+    }
   }
 
   return NextResponse.json({ success: true, user: data });

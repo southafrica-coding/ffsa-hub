@@ -17,6 +17,7 @@ import {
 } from "@/lib/users/profile-fields";
 import { getAllListOptions, activeSets } from "@/services/list-options";
 import { listActiveMinistries } from "@/services/ministries";
+import { selfServiceDepartmentOptions } from "@/lib/users/self-department";
 import { getHouseholdMembers, getHousehold } from "@/services/household";
 import { getHouseholdLinkState } from "@/services/household-link";
 import { getOutstandingConsents } from "@/services/consent";
@@ -124,8 +125,9 @@ export async function ProfileCompletionGate({
     const sets = activeSets(lists);
     const { data: mins } = await listActiveMinistries(supabase);
     if (mins?.length) {
-      sets.department = mins.map(
-        (m: { slug: string; name: string }) => ({ value: m.slug, label: m.name })
+      sets.department = selfServiceDepartmentOptions(
+        mins as { slug: string; name: string }[],
+        row.department
       );
     }
     const fields = applyListOptions(block.fields, sets);

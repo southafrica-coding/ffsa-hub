@@ -6,6 +6,12 @@ import { deleteOwnUnlinkedSpouses } from "@/services/household";
 import { canHaveSpouse } from "@/lib/users/marital-status";
 import { sendNewStaffOnboardedNotice } from "@/lib/email/send-new-staff-notice";
 import { addUserToBaseCalendar } from "@/lib/google/calendar";
+import {
+  pickUserColumns,
+  rejectedFieldsMessage,
+} from "@/lib/users/self-edit-columns";
+import { readSelfActor } from "@/lib/users/self-edit-guard";
+import { usersUpdateDeniedResponse } from "@/lib/users/users-update-error";
 
 // Finishes the onboarding wizard for the CALLER (never a body-supplied id) and,
 // for staff, notifies the people on STAFF_SIGNUP_NOTIFY_EMAIL.
@@ -15,7 +21,7 @@ import { addUserToBaseCalendar } from "@/lib/google/calendar";
 // Idempotent: a second POST after accepted_at is set changes nothing and
 // re-sends nothing.
 
-export async function POST() {
+export async function POST(request: Request) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -24,14 +30,43 @@ export async function POST() {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const { data: existing } = await supabase
-    .from("users")
-    .select("id, accepted_at, marital_status")
-    .eq("id", user.id)
-    .maybeSingle();
+  // This route writes status and accepted_at itself. It does not take a
+  // profile body — the wizard saves the 35 free columns before calling here.
+  // Any JSON object with keys is rejected so nothing is dropped quietly.
+  const raw = await request.text();
+  if (raw.trim()) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return NextResponse.json({ error: "Expected a JSON object" }, { status: 400 });
+    }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return NextResponse.json({ error: "Expected a JSON object" }, { status: 400 });
+    }
+    const { rejected } = pickUserColumns(parsed as Record<string, unknown>, []);
+    if (rejected.length > 0) {
+      return NextResponse.json(
+        { error: rejectedFieldsMessage(rejected) },
+        { status: 400 }
+      );
+    }
+  }
 
-  if (existing?.accepted_at) {
+  const actor = await readSelfActor(supabase, user.id);
+  if (!actor.ok) return actor.response;
+
+  if (actor.row.accepted_at) {
     return NextResponse.json({ success: true, alreadyComplete: true });
+  }
+
+  // Trigger: status may change to 'active' only when it isn't already
+  // pending_approval (IS NOT DISTINCT FROM). Null is not pending_approval.
+  if (actor.row.status === "pending_approval") {
+    return NextResponse.json(
+      { error: "Only an admin can change the account status." },
+      { status: 403 }
+    );
   }
 
   // Someone who added a spouse in the Family step and then went back and
@@ -39,7 +74,7 @@ export async function POST() {
   // details aren't kept. Only rows they added during this setup, never a
   // linked spouse's own account, and only before accepted_at is set — an
   // existing member's records are never touched here.
-  if (!canHaveSpouse(existing?.marital_status)) {
+  if (!canHaveSpouse(actor.row.marital_status)) {
     const { error: spouseError } = await deleteOwnUnlinkedSpouses(
       supabase,
       user.id
@@ -51,6 +86,8 @@ export async function POST() {
 
   const { error } = await completeOnboarding(supabase, user.id);
   if (error) {
+    const denied = usersUpdateDeniedResponse(error);
+    if (denied) return denied;
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
