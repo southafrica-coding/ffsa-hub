@@ -171,8 +171,63 @@ EXCEPTION WHEN check_violation THEN
   NULL;
 END $$;
 
+DO $$
+BEGIN
+  INSERT INTO public.lms_lessons (module_id, title, content_type, link_url)
+  VALUES ('a1000000-0000-0000-0000-000000000001', 'XSS', 'link', 'javascript:alert(1)');
+  RAISE EXCEPTION 'a javascript: link_url was accepted';
+EXCEPTION WHEN check_violation THEN
+  NULL;
+END $$;
+DO $$
+BEGIN
+  INSERT INTO public.lms_lessons (module_id, title, content_type, body)
+  VALUES ('a1000000-0000-0000-0000-000000000001', 'Empty', 'rich_text', '');
+  RAISE EXCEPTION 'an empty-body rich_text lesson was accepted';
+EXCEPTION WHEN check_violation THEN
+  NULL;
+END $$;
+DO $$
+BEGIN
+  INSERT INTO public.lms_lessons (module_id, title, content_type, body)
+  VALUES ('a1000000-0000-0000-0000-000000000001', 'Blank', 'rich_text', '   ');
+  RAISE EXCEPTION 'a spaces-only rich_text lesson was accepted';
+EXCEPTION WHEN check_violation THEN
+  NULL;
+END $$;
+DO $$
+BEGIN
+  INSERT INTO public.lms_lessons (module_id, title, content_type, body, link_url)
+  VALUES ('a1000000-0000-0000-0000-000000000001', 'Both', 'rich_text', 'x', 'https://a.test');
+  RAISE EXCEPTION 'a rich_text lesson with a link_url was accepted';
+EXCEPTION WHEN check_violation THEN
+  NULL;
+END $$;
+-- Switching type without clearing the other field fails; clearing it works.
+DO $$
+BEGIN
+  UPDATE public.lms_lessons SET content_type = 'link', link_url = 'https://a.test'
+   WHERE id = 'e1000000-0000-0000-0000-000000000001';
+  RAISE EXCEPTION 'a type switch that kept body was accepted';
+EXCEPTION WHEN check_violation THEN
+  NULL;
+END $$;
+
 SELECT set_config('test.admin', '', false);
 SELECT set_config('test.perms', '', false);
+
+-- authenticated cannot TRUNCATE (revoked from Supabase's default grants).
+GRANT TRUNCATE ON public.lms_lessons TO authenticated;
+\ir ../migrations/305_schools_lms_content.sql
+SET ROLE authenticated;
+DO $$
+BEGIN
+  TRUNCATE public.lms_lessons;
+  RAISE EXCEPTION 'authenticated truncated lms_lessons';
+EXCEPTION WHEN insufficient_privilege THEN
+  NULL;
+END $$;
+RESET ROLE;
 
 -- ── anon: no grants at all ────────────────────────────────
 SET ROLE anon;

@@ -63,14 +63,19 @@ CREATE TABLE IF NOT EXISTS public.lms_lessons (
   published     boolean NOT NULL DEFAULT false,
   created_at    timestamptz NOT NULL DEFAULT now(),
   updated_at    timestamptz NOT NULL DEFAULT now(),
+  -- Exactly one content field, matching the type. Text must not be blank;
+  -- links must be http(s), so a javascript: or data: URL cannot be stored.
   CONSTRAINT lms_lessons_content_check CHECK (
-    (content_type = 'rich_text' AND body IS NOT NULL)
-    OR (content_type = 'link' AND link_url IS NOT NULL)
+    (content_type = 'rich_text'
+       AND body IS NOT NULL AND length(btrim(body)) > 0
+       AND link_url IS NULL)
+    OR (content_type = 'link'
+       AND link_url IS NOT NULL AND link_url ~* '^https?://'
+       AND body IS NULL)
   )
 );
 
-CREATE INDEX IF NOT EXISTS lms_courses_program_idx
-  ON public.lms_courses (program_id);
+-- (program_id, sort_order) also serves program_id lookups and the FK.
 CREATE INDEX IF NOT EXISTS lms_courses_program_sort_idx
   ON public.lms_courses (program_id, sort_order);
 CREATE INDEX IF NOT EXISTS lms_courses_created_by_idx
@@ -237,6 +242,9 @@ REVOKE ALL ON public.lms_lessons FROM anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.lms_courses TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.lms_modules TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.lms_lessons TO authenticated;
+-- Supabase's default privileges hand authenticated everything on new
+-- tables; take back what no policy needs.
+REVOKE TRUNCATE, REFERENCES, TRIGGER ON public.lms_courses, public.lms_modules, public.lms_lessons FROM authenticated;
 GRANT ALL ON public.lms_courses TO service_role;
 GRANT ALL ON public.lms_modules TO service_role;
 GRANT ALL ON public.lms_lessons TO service_role;
