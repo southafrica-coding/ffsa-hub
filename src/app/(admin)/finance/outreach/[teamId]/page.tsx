@@ -20,6 +20,8 @@ import {
   getOutreachTeamDeleteBlockers,
 } from "@/services/outreach-finance";
 import { describeDeleteBlockers } from "@/lib/finance/outreach-team-admin";
+import { canEditFinanceProjects } from "@/lib/finance/orgs";
+import { confirmedReceiptDraft, type ConfirmedReceiptDraft } from "@/lib/finance/receipt-xero-retry";
 import { NO_ACCESS, accessLabel, resolveTeamAccess } from "@/lib/finance/outreach-access";
 import { loadOutreachViewer } from "@/lib/finance/outreach-viewer";
 import { TeamDetail } from "./team-detail";
@@ -155,6 +157,11 @@ export default async function OutreachTeamDetailPage({
       (receiptCounts[row.expense_id] || 0) + 1;
   }
 
+  // Confirmed Slack receipts (status logged). The retry button posts the
+  // same draft again; it does not read or write a spend log here.
+  const canRetryXero = user ? await canEditFinanceProjects(supabase, user.id) : false;
+  const confirmedReceipts = await loadConfirmedReceipts(supabase, teamId);
+
   // No wrapper: TeamDetail's root is this screen's root.
   return (
     <TeamDetail
@@ -175,6 +182,33 @@ export default async function OutreachTeamDetailPage({
       deleteBlockers={deleteBlockers ? describeDeleteBlockers(deleteBlockers) : ["linked records"]}
       // Generated types predate users.slack_user_id.
       alertRecipient={(alertRecipient ?? null) as Parameters<typeof TeamDetail>[0]["alertRecipient"]}
+      confirmedReceipts={confirmedReceipts}
+      canRetryXero={canRetryXero}
     />
   );
+}
+
+async function loadConfirmedReceipts(supabase: unknown, teamId: string): Promise<ConfirmedReceiptDraft[]> {
+  // The generated types don't include this table yet.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db = supabase as any;
+  const withKind = await db
+    .from("outreach_receipt_drafts")
+    .select("id, expense_id, file_name, proposal, kind, status")
+    .eq("team_id", teamId)
+    .eq("status", "logged")
+    .order("decided_at", { ascending: false });
+  const result = withKind.error
+    ? await db
+        .from("outreach_receipt_drafts")
+        .select("id, expense_id, file_name, proposal, status")
+        .eq("team_id", teamId)
+        .eq("status", "logged")
+    : withKind;
+  if (result.error || !Array.isArray(result.data)) return [];
+  return result.data
+    .map((row: { id?: unknown; expense_id?: unknown; file_name?: unknown; proposal?: unknown; kind?: unknown }) =>
+      confirmedReceiptDraft(row)
+    )
+    .filter((row: ConfirmedReceiptDraft | null): row is ConfirmedReceiptDraft => row !== null);
 }

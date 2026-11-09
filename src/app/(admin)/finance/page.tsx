@@ -3,7 +3,8 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getFinanceHubAccess } from "@/lib/finance-access";
-import { Globe, Wallet, CreditCard, Home, HeartHandshake, FolderKanban, BookOpen } from "lucide-react";
+import { loadBudgetGate } from "@/lib/finance/budget-access";
+import { Globe, Wallet, CreditCard, Home, HeartHandshake, FolderKanban, BookOpen, Sheet } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Masthead, SectionBar, StatusPill } from "@/components/ffsa";
 import { XeroConnection } from "./xero-connection";
@@ -22,6 +23,14 @@ const FINANCE_MODULES = [
     description: "Track budgets, expenses, receipts, cash batches, and closeouts for international outreach teams.",
     href: "/finance/outreach",
     icon: Globe,
+    ready: true,
+  },
+  {
+    title: "Budgets",
+    description:
+      "A team budget sheet for South Africa, in rand: overview, dashboard, variable and fixed costs, an expense tracker and notes. One owner and a real period. Separate from outreach cash.",
+    href: "/finance/budgets",
+    icon: Sheet,
     ready: true,
   },
   {
@@ -75,11 +84,17 @@ export default async function FinancePage() {
   // Anyone can run an outreach budget, so Outreach Finance is open to all.
   // The Finance Office role (migration 248) also runs donor statements;
   // finance staff see every module and the Xero card.
-  const { fullFinance, financeOffice } = await getFinanceHubAccess(supabase, user.id);
+  const [{ fullFinance, financeOffice }, budgetGate] = await Promise.all([
+    getFinanceHubAccess(supabase, user.id),
+    loadBudgetGate(supabase),
+  ]);
   const modules = fullFinance
     ? FINANCE_MODULES
     : FINANCE_MODULES.filter(
-        (m) => m.href === "/finance/outreach" || (financeOffice && m.href === "/finance/donor-statements")
+        (m) =>
+          m.href === "/finance/outreach" ||
+          (m.href === "/finance/budgets" && budgetGate.canOpen) ||
+          (financeOffice && m.href === "/finance/donor-statements")
       );
   const liveCount = modules.filter((m) => m.ready).length;
 
