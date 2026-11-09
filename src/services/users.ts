@@ -133,7 +133,15 @@ export async function activateApprovedUser(
 ) {
   const update: Record<string, unknown> = { status: "active" };
   if (jobTitle !== undefined) update.job_title = jobTitle;
-  return admin.from("users").update(update).eq("id", userId).select().single();
+  // Only a pending_approval row changes. Zero rows means it was already
+  // approved or holds another status — the caller returns 409.
+  return admin
+    .from("users")
+    .update(update)
+    .eq("id", userId)
+    .eq("status", "pending_approval")
+    .select()
+    .maybeSingle();
 }
 
 /**

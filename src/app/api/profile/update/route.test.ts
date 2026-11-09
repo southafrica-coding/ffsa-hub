@@ -196,7 +196,7 @@ describe("PUT /api/profile/update", () => {
     state.ministry = { slug: "media", ministry_type: "main" };
     const res = await put({ department: "media" });
     expect(res.status).toBe(403);
-    expect(await res.json()).toEqual({ error: "Only staff choose a department." });
+    expect(await res.json()).toEqual({ error: "You don't have permission to do this." });
     expect(state.updates).toHaveLength(0);
     expect(state.rpcs).toEqual([
       { name: "has_any_role", args: { required_roles: ["staff"] } },
@@ -271,11 +271,21 @@ describe("PUT /api/profile/update", () => {
     expect(state.updates).toHaveLength(0);
   });
 
-  it("403 when has_any_role throws", async () => {
+  it("403 when has_any_role throws, with the permission message", async () => {
     state.roleThrow = true;
     state.row.signup_type = "student";
     const res = await put({ department: "media" });
     expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "You don't have permission to do this." });
+    expect(state.updates).toHaveLength(0);
+  });
+
+  it("403 when has_any_role returns an error, not the deactivated message", async () => {
+    state.roleError = { message: "rpc down" };
+    state.row.signup_type = "student";
+    const res = await put({ department: "media" });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "You don't have permission to do this." });
     expect(state.updates).toHaveLength(0);
   });
 

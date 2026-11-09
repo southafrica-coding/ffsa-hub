@@ -132,13 +132,12 @@ export async function PUT(request: Request) {
     // signup_type = 'staff' is enough on its own (IS NOT DISTINCT FROM).
     // Only ask has_any_role when that isn't already true, and fail closed
     // if the check itself errors.
-    let hasStaffRole = false;
-    if (actor.row.signup_type !== "staff") {
+    let isStaff = callerMayChooseDepartment(actor.row.signup_type, false);
+    if (!isStaff) {
       const role = await readUnscopedStaffRole(supabase);
       if (!role.ok) return role.response;
-      hasStaffRole = role.hasRole;
+      isStaff = true;
     }
-    const isStaff = callerMayChooseDepartment(actor.row.signup_type, hasStaffRole);
     let ministry: { slug: string; ministry_type?: string | null } | null = null;
     if (isStaff) {
       const { data } = await getMinistryBySlug(supabase, String(updateData.department));

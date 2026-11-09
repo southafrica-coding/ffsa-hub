@@ -8,6 +8,9 @@ const state = vi.hoisted(() => ({
   adminClientCalls: 0,
   adminUpdateError: null as { message: string } | null,
   rpcThrow: false,
+  callerActive: true,
+  pendingMatch: true,
+  adminEqs: [] as Array<[string, unknown]>,
 }));
 
 function builder(kind: "user" | "admin") {
@@ -15,19 +18,48 @@ function builder(kind: "user" | "admin") {
   const q: Record<string, unknown> = {};
   const chain = () => q;
   q.select = chain;
-  q.eq = chain;
+  q.eq = (col: string, val: unknown) => {
+    if (kind === "admin") state.adminEqs.push([col, val]);
+    return q;
+  };
   q.in = chain;
   q.limit = chain;
   q.update = (payload: unknown) => {
     writing = true;
     if (kind === "user") state.userUpdates.push(payload);
-    else state.adminUpdates.push(payload);
+    else if (state.pendingMatch) state.adminUpdates.push(payload);
     return q;
   };
-  q.single = async () => ({
-    data: state.adminUpdateError ? null : { id: "target-1", status: "active" },
-    error: kind === "admin" ? state.adminUpdateError : null,
-  });
+  q.maybeSingle = async () => {
+    if (!writing) {
+      return {
+        data: state.callerActive
+          ? {
+              is_active: true,
+              signup_type: null,
+              department: null,
+              status: "active",
+              accepted_at: null,
+              marital_status: null,
+            }
+          : {
+              is_active: false,
+              signup_type: null,
+              department: null,
+              status: "active",
+              accepted_at: null,
+              marital_status: null,
+            },
+        error: null,
+      };
+    }
+    if (kind === "admin" && !state.pendingMatch) return { data: null, error: null };
+    return {
+      data: state.adminUpdateError ? null : { id: "target-1", status: "active" },
+      error: kind === "admin" ? state.adminUpdateError : null,
+    };
+  };
+  q.single = q.maybeSingle;
   q.then = (onFulfilled: (v: unknown) => unknown, onRejected?: (e: unknown) => unknown) => {
     const result = writing
       ? { data: null, error: kind === "admin" ? state.adminUpdateError : null }
@@ -61,6 +93,7 @@ vi.mock("@/lib/auth/super-admin-target", () => ({
 }));
 
 import { POST } from "./route";
+import { PERMISSION_DENIED_MESSAGE } from "@/lib/users/users-update-error";
 
 function post(body: unknown) {
   return POST(
@@ -80,6 +113,9 @@ beforeEach(() => {
   state.adminClientCalls = 0;
   state.adminUpdateError = null;
   state.rpcThrow = false;
+  state.callerActive = true;
+  state.pendingMatch = true;
+  state.adminEqs = [];
 });
 
 describe("POST /api/admin/approve-user", () => {
@@ -87,7 +123,7 @@ describe("POST /api/admin/approve-user", () => {
     state.isAdmin = false;
     const res = await post({ user_id: "target-1", job_title: "Pastor" });
     expect(res.status).toBe(403);
-    expect(await res.json()).toEqual({ error: "Not authorized" });
+    expect(await res.json()).toEqual({ error: PERMISSION_DENIED_MESSAGE });
     expect(state.adminClientCalls).toBe(0);
     expect(state.userUpdates).toHaveLength(0);
     expect(state.adminUpdates).toHaveLength(0);
@@ -102,12 +138,58 @@ describe("POST /api/admin/approve-user", () => {
     expect(state.userUpdates).toHaveLength(0);
   });
 
-  it("403 when is_admin throws, with no writes", async () => {
+  it("403 when is_admin throws, with the permission message and no writes", async () => {
     state.rpcThrow = true;
     const res = await post({ user_id: "target-1", job_title: "Pastor" });
     expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: PERMISSION_DENIED_MESSAGE });
     expect(state.adminClientCalls).toBe(0);
     expect(state.adminUpdates).toHaveLength(0);
+  });
+
+  it("403 for a deactivated admin before any write", async () => {
+    state.callerActive = false;
+    const res = await post({ user_id: "target-1", job_title: "Pastor" });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "This account is deactivated." });
+    expect(state.adminClientCalls).toBe(0);
+    expect(state.adminUpdates).toHaveLength(0);
+  });
+
+  it("400 when job_title is not text", async () => {
+    const res = await post({ user_id: "target-1", job_title: 12 });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "Job title must be text." });
+    expect(state.adminClientCalls).toBe(0);
+    expect(state.adminUpdates).toHaveLength(0);
+  });
+
+  it("400 when job_title is longer than 120 characters", async () => {
+    const res = await post({ user_id: "target-1", job_title: "x".repeat(121) });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/120/);
+    expect(state.adminUpdates).toHaveLength(0);
+  });
+
+  it("trims job_title before saving", async () => {
+    const res = await post({ user_id: "target-1", job_title: "  Pastor  " });
+    expect(res.status).toBe(200);
+    expect(state.adminUpdates).toEqual([{ status: "active", job_title: "Pastor" }]);
+  });
+
+  it("409 when the target is not pending approval and changes no row", async () => {
+    state.pendingMatch = false;
+    const res = await post({ user_id: "target-1", job_title: "Pastor" });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: "This user is not pending approval." });
+    expect(state.adminUpdates).toHaveLength(0);
+    expect(state.adminEqs).toEqual(
+      expect.arrayContaining([
+        ["id", "target-1"],
+        ["status", "pending_approval"],
+      ])
+    );
+    expect(state.userUpdates).toHaveLength(0);
   });
 
   it("writes status and job_title together on the service role", async () => {

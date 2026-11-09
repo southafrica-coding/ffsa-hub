@@ -21,6 +21,14 @@ const SAFE_TRIGGER_MESSAGE = [
 
 export const DEACTIVATED_ACCOUNT_MESSAGE = "This account is deactivated.";
 
+// Role checks (is_admin / has_any_role false, error, or throw). Not used
+// when the caller's own account is inactive.
+export const PERMISSION_DENIED_MESSAGE = "You don't have permission to do this.";
+
+export function permissionDeniedResponse(): NextResponse {
+  return NextResponse.json({ error: PERMISSION_DENIED_MESSAGE }, { status: 403 });
+}
+
 type UsersWriteError = {
   code?: string | null;
   message?: string | null;

@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { DEACTIVATED_ACCOUNT_MESSAGE } from "@/lib/users/users-update-error";
+import {
+  DEACTIVATED_ACCOUNT_MESSAGE,
+  permissionDeniedResponse,
+} from "@/lib/users/users-update-error";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
@@ -45,19 +48,20 @@ export async function readSelfActor(
 
 /**
  * has_any_role(['staff']) — unscoped only, matching the 315 trigger.
- * A throw or a PostgREST error fails closed (the caller must 403).
+ * False, a PostgREST error, or a throw is a permission failure, not a
+ * deactivated account.
  */
 export async function readUnscopedStaffRole(
   supabase: Client
-): Promise<{ ok: true; hasRole: boolean } | { ok: false; response: NextResponse }> {
+): Promise<{ ok: true } | { ok: false; response: NextResponse }> {
   try {
     const { data, error } = await supabase.rpc("has_any_role", {
       required_roles: ["staff"],
     });
-    if (error) return { ok: false, response: deactivatedResponse() };
-    return { ok: true, hasRole: data === true };
+    if (error || data !== true) return { ok: false, response: permissionDeniedResponse() };
+    return { ok: true };
   } catch {
-    return { ok: false, response: deactivatedResponse() };
+    return { ok: false, response: permissionDeniedResponse() };
   }
 }
 
