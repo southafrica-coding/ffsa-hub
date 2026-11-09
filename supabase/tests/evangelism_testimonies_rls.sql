@@ -72,8 +72,14 @@ CREATE TABLE storage.buckets (
   allowed_mime_types text[]
 );
 
+-- Supabase's default ACL grants service_role ALL on new tables. 307 must
+-- revoke that on the upload ledger; otherwise the GRANT below it is a no-op
+-- and service_role keeps UPDATE, TRUNCATE and created_at.
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO service_role;
+
 \ir ../migrations/307_evangelism_testimonies.sql
--- Re-running must not fail or duplicate anything.
+-- Re-running must not fail or duplicate anything, and must not put a
+-- table-wide INSERT back.
 \ir ../migrations/307_evangelism_testimonies.sql
 
 GRANT USAGE ON SCHEMA public TO authenticated, service_role;
@@ -193,6 +199,44 @@ BEGIN
      OR has_function_privilege('anon', 'public.evangelism_attribution(uuid[])', 'EXECUTE')
      OR has_function_privilege('anon', 'public.evangelism_upload_is_mine(text)', 'EXECUTE') THEN
     RAISE EXCEPTION 'anon has access to an evangelism object';
+  END IF;
+  -- INSERT is column-level. Table-wide INSERT, and INSERT on id / stamps, are denied.
+  -- has_table_privilege ignores column grants, so a leftover table INSERT shows up here.
+  IF has_table_privilege('authenticated', 'public.evangelism_testimonies', 'INSERT')
+     OR has_table_privilege('authenticated', 'public.evangelism_media', 'INSERT')
+     OR has_column_privilege('authenticated', 'public.evangelism_testimonies', 'id', 'INSERT')
+     OR has_column_privilege('authenticated', 'public.evangelism_testimonies', 'created_at', 'INSERT')
+     OR has_column_privilege('authenticated', 'public.evangelism_testimonies', 'updated_at', 'INSERT')
+     OR has_column_privilege('authenticated', 'public.evangelism_testimonies', 'published_at', 'INSERT')
+     OR has_column_privilege('authenticated', 'public.evangelism_media', 'id', 'INSERT')
+     OR has_column_privilege('authenticated', 'public.evangelism_media', 'created_at', 'INSERT') THEN
+    RAISE EXCEPTION 'authenticated can backdate or choose an id on insert';
+  END IF;
+  IF NOT has_column_privilege('authenticated', 'public.evangelism_testimonies', 'title', 'INSERT')
+     OR NOT has_column_privilege('authenticated', 'public.evangelism_testimonies', 'status', 'INSERT')
+     OR NOT has_column_privilege('authenticated', 'public.evangelism_testimonies', 'author_user_id', 'INSERT')
+     OR NOT has_table_privilege('authenticated', 'public.evangelism_testimonies', 'DELETE')
+     OR NOT has_column_privilege('authenticated', 'public.evangelism_media', 'storage_path', 'INSERT')
+     OR NOT has_column_privilege('authenticated', 'public.evangelism_media', 'created_by', 'INSERT')
+     OR NOT has_table_privilege('authenticated', 'public.evangelism_media', 'DELETE') THEN
+    RAISE EXCEPTION 'authenticated is missing an INSERT column or its DELETE grant';
+  END IF;
+  -- Ledger: service_role gets only the columns the API writes, plus DELETE.
+  IF has_table_privilege('service_role', 'public.evangelism_uploads', 'INSERT')
+     OR has_table_privilege('service_role', 'public.evangelism_uploads', 'SELECT')
+     OR has_table_privilege('service_role', 'public.evangelism_uploads', 'UPDATE')
+     OR has_table_privilege('service_role', 'public.evangelism_uploads', 'TRUNCATE')
+     OR has_column_privilege('service_role', 'public.evangelism_uploads', 'created_at', 'INSERT')
+     OR has_column_privilege('service_role', 'public.evangelism_uploads', 'created_at', 'SELECT')
+     OR has_column_privilege('service_role', 'public.evangelism_uploads', 'created_at', 'UPDATE') THEN
+    RAISE EXCEPTION 'service_role kept a privilege on evangelism_uploads it does not need';
+  END IF;
+  IF NOT has_column_privilege('service_role', 'public.evangelism_uploads', 'storage_path', 'SELECT')
+     OR NOT has_column_privilege('service_role', 'public.evangelism_uploads', 'user_id', 'SELECT')
+     OR NOT has_column_privilege('service_role', 'public.evangelism_uploads', 'storage_path', 'INSERT')
+     OR NOT has_column_privilege('service_role', 'public.evangelism_uploads', 'user_id', 'INSERT')
+     OR NOT has_table_privilege('service_role', 'public.evangelism_uploads', 'DELETE') THEN
+    RAISE EXCEPTION 'service_role is missing a ledger privilege the API uses';
   END IF;
 END $$;
 
@@ -338,6 +382,9 @@ SET ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', 'cccccccc-cccc-cccc-cccc-cccccccccccc', false);
 SELECT set_config('test.perms', 'evangelism.submit', false);
 DO $$
+DECLARE
+  v_id uuid;
+  v_throw uuid;
 BEGIN
   -- Sees the published story only; not d's draft, submitted or withheld.
   IF (SELECT count(*) FROM public.evangelism_testimonies) <> 1 THEN
@@ -363,21 +410,66 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
 
-  -- Own draft (author_user_id from the DEFAULT), then a photo from the ledger.
+  -- id, created_at and updated_at are not insertable. Each one is its own attempt.
+  BEGIN
+    INSERT INTO public.evangelism_testimonies
+      (title, body, occurred_on, location_label, outcome, created_at)
+    VALUES ('Backdated', repeat('b', 50), '2026-11-02', 'Cape Town', 'conversation', '2001-01-01');
+    RAISE EXCEPTION 'submitter inserted a testimony with created_at';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  BEGIN
+    INSERT INTO public.evangelism_testimonies
+      (id, title, body, occurred_on, location_label, outcome)
+    VALUES ('30000000-0000-0000-0000-000000000099',
+            'Chosen id', repeat('b', 50), '2026-11-02', 'Cape Town', 'conversation');
+    RAISE EXCEPTION 'submitter inserted a testimony with an explicit id';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  BEGIN
+    INSERT INTO public.evangelism_testimonies
+      (title, body, occurred_on, location_label, outcome, updated_at)
+    VALUES ('Chosen stamp', repeat('b', 50), '2026-11-02', 'Cape Town', 'conversation', '2001-01-01');
+    RAISE EXCEPTION 'submitter inserted a testimony with updated_at';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+
+  -- A normal insert (no id, created_at or updated_at) still works.
+  -- author_user_id comes from the DEFAULT. The database stamps created_at.
   INSERT INTO public.evangelism_testimonies
-    (id, title, body, occurred_on, location_label, outcome, staff_ministry_id)
-  VALUES ('30000000-0000-0000-0000-000000000001',
-          'C draft', repeat('c', 50), '2026-11-02', 'Cape Town', 'conversation',
-          '99999999-9999-9999-9999-999999999999');
+    (title, body, occurred_on, location_label, outcome, staff_ministry_id)
+  VALUES ('C draft', repeat('c', 50), '2026-11-02', 'Cape Town', 'conversation',
+          '99999999-9999-9999-9999-999999999999')
+  RETURNING id INTO v_id;
+  PERFORM set_config('test.c_story', v_id::text, false);
+  IF (SELECT created_at FROM public.evangelism_testimonies WHERE id = v_id)
+     < now() - interval '1 minute' THEN
+    RAISE EXCEPTION 'testimony created_at was not set by the database';
+  END IF;
+
+  -- A photo with an explicit created_at is refused; one without it is kept.
+  BEGIN
+    INSERT INTO public.evangelism_media
+      (testimony_id, kind, storage_path, content_type, size_bytes, created_at)
+    VALUES (v_id, 'photo',
+            'testimonies/40000000-0000-0000-0000-000000000001/41000000-0000-0000-0000-000000000001.png',
+            'image/png', 2048, '2001-01-01');
+    RAISE EXCEPTION 'submitter inserted media with created_at';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
   INSERT INTO public.evangelism_media (testimony_id, kind, storage_path, content_type, size_bytes)
-  VALUES ('30000000-0000-0000-0000-000000000001', 'photo',
+  VALUES (v_id, 'photo',
           'testimonies/40000000-0000-0000-0000-000000000001/41000000-0000-0000-0000-000000000001.png',
           'image/png', 2048);
+  IF (SELECT created_at FROM public.evangelism_media WHERE testimony_id = v_id)
+     < now() - interval '1 minute' THEN
+    RAISE EXCEPTION 'media created_at was not set by the database';
+  END IF;
 
   -- A path minted for someone else (d) is refused.
   BEGIN
     INSERT INTO public.evangelism_media (testimony_id, kind, storage_path, content_type, size_bytes)
-    VALUES ('30000000-0000-0000-0000-000000000001', 'photo',
+    VALUES (v_id, 'photo',
             'testimonies/40000000-0000-0000-0000-000000000009/41000000-0000-0000-0000-000000000009.png',
             'image/png', 2048);
     RAISE EXCEPTION 'submitter attached a photo at another user''s upload path';
@@ -387,7 +479,7 @@ BEGIN
   -- A well-formed path nobody minted is refused.
   BEGIN
     INSERT INTO public.evangelism_media (testimony_id, kind, storage_path, content_type, size_bytes)
-    VALUES ('30000000-0000-0000-0000-000000000001', 'photo',
+    VALUES (current_setting('test.c_story')::uuid, 'photo',
             'testimonies/cccccccc-cccc-cccc-cccc-cccccccccccc/41000000-0000-0000-0000-000000000077.png',
             'image/png', 2048);
     RAISE EXCEPTION 'submitter attached an unminted path';
@@ -428,18 +520,18 @@ BEGIN
   -- Submit without consent fails (DB CHECK).
   BEGIN
     UPDATE public.evangelism_testimonies SET status = 'submitted'
-     WHERE id = '30000000-0000-0000-0000-000000000001';
+     WHERE id = current_setting('test.c_story')::uuid;
     RAISE EXCEPTION 'submitted without consent';
   EXCEPTION WHEN check_violation THEN NULL;
   END;
 
   UPDATE public.evangelism_testimonies SET status = 'submitted', consent_to_share = true
-   WHERE id = '30000000-0000-0000-0000-000000000001';
+   WHERE id = current_setting('test.c_story')::uuid;
 
   -- Self-publish is refused.
   BEGIN
     UPDATE public.evangelism_testimonies SET status = 'published'
-     WHERE id = '30000000-0000-0000-0000-000000000001';
+     WHERE id = current_setting('test.c_story')::uuid;
     RAISE EXCEPTION 'submitter published their own story';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
@@ -447,7 +539,7 @@ BEGIN
   -- Stamps are refused too.
   BEGIN
     UPDATE public.evangelism_testimonies SET withheld_reason = 'x'
-     WHERE id = '30000000-0000-0000-0000-000000000001';
+     WHERE id = current_setting('test.c_story')::uuid;
     RAISE EXCEPTION 'submitter set withheld_reason';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
@@ -458,9 +550,9 @@ BEGIN
   DELETE FROM public.evangelism_testimonies WHERE id = '10000000-0000-0000-0000-000000000001';
 
   -- Cannot delete own story once submitted.
-  DELETE FROM public.evangelism_testimonies WHERE id = '30000000-0000-0000-0000-000000000001';
+  DELETE FROM public.evangelism_testimonies WHERE id = current_setting('test.c_story')::uuid;
   IF (SELECT count(*) FROM public.evangelism_testimonies
-       WHERE id = '30000000-0000-0000-0000-000000000001') <> 1 THEN
+       WHERE id = current_setting('test.c_story')::uuid) <> 1 THEN
     RAISE EXCEPTION 'submitter deleted a submitted story';
   END IF;
 
@@ -472,22 +564,21 @@ BEGIN
     RAISE EXCEPTION 'submitter should see own photo and the published photo';
   END IF;
   IF (SELECT array_agg(x) FROM public.evangelism_my_testimony_ids() x)
-     <> ARRAY['30000000-0000-0000-0000-000000000001'::uuid] THEN
+     <> ARRAY[current_setting('test.c_story')::uuid] THEN
     RAISE EXCEPTION 'evangelism_my_testimony_ids returned the wrong set';
   END IF;
-  IF (SELECT author_name FROM public.evangelism_attribution(ARRAY['30000000-0000-0000-0000-000000000001'::uuid]))
+  IF (SELECT author_name FROM public.evangelism_attribution(ARRAY[current_setting('test.c_story')::uuid]))
      IS DISTINCT FROM 'Carol Cee' THEN
     RAISE EXCEPTION 'author should see their own name';
   END IF;
 
-  -- Own draft can be deleted.
+  -- Own draft can be deleted. No client-chosen id.
   INSERT INTO public.evangelism_testimonies
-    (id, title, body, occurred_on, location_label, outcome)
-  VALUES ('30000000-0000-0000-0000-000000000002',
-          'C throwaway', repeat('c', 50), '2026-11-02', 'Cape Town', 'other');
-  DELETE FROM public.evangelism_testimonies WHERE id = '30000000-0000-0000-0000-000000000002';
-  IF (SELECT count(*) FROM public.evangelism_testimonies
-       WHERE id = '30000000-0000-0000-0000-000000000002') <> 0 THEN
+    (title, body, occurred_on, location_label, outcome)
+  VALUES ('C throwaway', repeat('c', 50), '2026-11-02', 'Cape Town', 'other')
+  RETURNING id INTO v_throw;
+  DELETE FROM public.evangelism_testimonies WHERE id = v_throw;
+  IF (SELECT count(*) FROM public.evangelism_testimonies WHERE id = v_throw) <> 0 THEN
     RAISE EXCEPTION 'submitter could not delete their own draft';
   END IF;
 END $$;
@@ -496,7 +587,7 @@ END $$;
 DO $$
 BEGIN
   UPDATE public.evangelism_testimonies SET author_user_id = 'dddddddd-dddd-dddd-dddd-dddddddddddd'
-   WHERE id = '30000000-0000-0000-0000-000000000001';
+   WHERE id = current_setting('test.c_story')::uuid;
   RAISE EXCEPTION 'submitter reassigned author_user_id';
 EXCEPTION WHEN insufficient_privilege THEN NULL;
 END $$;
@@ -577,13 +668,13 @@ BEGIN
      SET status = 'published',
          published_by = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
          published_at = '2000-01-01'
-   WHERE id = '30000000-0000-0000-0000-000000000001';
-  IF (SELECT published_by FROM public.evangelism_attribution(ARRAY['30000000-0000-0000-0000-000000000001'::uuid]))
+   WHERE id = current_setting('test.c_story')::uuid;
+  IF (SELECT published_by FROM public.evangelism_attribution(ARRAY[current_setting('test.c_story')::uuid]))
      <> 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb' THEN
     RAISE EXCEPTION 'published_by was not stamped as the publisher';
   END IF;
   IF (SELECT published_at FROM public.evangelism_testimonies
-       WHERE id = '30000000-0000-0000-0000-000000000001') < now() - interval '1 minute' THEN
+       WHERE id = current_setting('test.c_story')::uuid) < now() - interval '1 minute' THEN
     RAISE EXCEPTION 'published_at was backdated';
   END IF;
 
@@ -620,9 +711,9 @@ DO $$
 BEGIN
   -- c's story is published now: readable, no longer editable by c.
   UPDATE public.evangelism_testimonies SET title = 'Edited after publish'
-   WHERE id = '30000000-0000-0000-0000-000000000001';
+   WHERE id = current_setting('test.c_story')::uuid;
   IF (SELECT title FROM public.evangelism_testimonies
-       WHERE id = '30000000-0000-0000-0000-000000000001') <> 'C draft' THEN
+       WHERE id = current_setting('test.c_story')::uuid) <> 'C draft' THEN
     RAISE EXCEPTION 'author edited a published story';
   END IF;
 END $$;
@@ -666,17 +757,19 @@ SELECT set_config('request.jwt.claim.sub', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
 SELECT set_config('test.perms', '', false);
 SELECT set_config('test.admin', 'true', false);
 DO $$
+DECLARE
+  v_id uuid;
 BEGIN
   IF (SELECT count(*) FROM public.evangelism_testimonies) <> 5 THEN
     RAISE EXCEPTION 'admin should see every remaining story';
   END IF;
   INSERT INTO public.evangelism_testimonies
-    (id, title, body, occurred_on, location_label, outcome, consent_to_share, status)
-  VALUES ('50000000-0000-0000-0000-000000000001',
-          'Admin story', repeat('a', 50), '2026-11-03', 'Joburg', 'decision', true, 'submitted');
+    (title, body, occurred_on, location_label, outcome, consent_to_share, status)
+  VALUES ('Admin story', repeat('a', 50), '2026-11-03', 'Joburg', 'decision', true, 'submitted')
+  RETURNING id INTO v_id;
   UPDATE public.evangelism_testimonies SET status = 'published'
-   WHERE id = '50000000-0000-0000-0000-000000000001';
-  IF (SELECT published_by FROM public.evangelism_attribution(ARRAY['50000000-0000-0000-0000-000000000001'::uuid]))
+   WHERE id = v_id;
+  IF (SELECT published_by FROM public.evangelism_attribution(ARRAY[v_id]))
      <> 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' THEN
     RAISE EXCEPTION 'admin publish was not stamped';
   END IF;

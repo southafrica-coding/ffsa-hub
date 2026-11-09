@@ -332,15 +332,22 @@ CREATE POLICY "evangelism_testimonies_delete_publisher"
 -- REVOKE ALL also drops any column grants, so re-running is clean.
 -- SELECT is column-level: author_user_id, published_by and
 -- withheld_reason are NOT readable through PostgREST (use
--- evangelism_attribution()). UPDATE leaves out id, author_user_id,
--- created_at and updated_at. No TRUNCATE / REFERENCES / TRIGGER.
+-- evangelism_attribution()). INSERT is column-level too, so a client
+-- cannot set id, created_at, updated_at, published_at, published_by
+-- or withheld_reason (defaults and the guard stamp those). UPDATE
+-- leaves out id, author_user_id, created_at and updated_at. DELETE
+-- stays its own grant. No TRUNCATE / REFERENCES / TRIGGER.
 REVOKE ALL ON TABLE public.evangelism_testimonies FROM PUBLIC, anon, authenticated;
 GRANT SELECT (
   id, title, body, occurred_on, location_label, staff_ministry_id,
   people_reached, decisions, outcome, consent_to_share,
   status, published_at, created_at, updated_at
 ) ON TABLE public.evangelism_testimonies TO authenticated;
-GRANT INSERT, DELETE ON TABLE public.evangelism_testimonies TO authenticated;
+GRANT INSERT (
+  author_user_id, title, body, occurred_on, location_label, staff_ministry_id,
+  people_reached, decisions, outcome, consent_to_share, status
+) ON TABLE public.evangelism_testimonies TO authenticated;
+GRANT DELETE ON TABLE public.evangelism_testimonies TO authenticated;
 GRANT UPDATE (
   title, body, occurred_on, location_label, staff_ministry_id,
   people_reached, decisions, outcome, consent_to_share,
@@ -427,14 +434,24 @@ $$;
 -- (no user id in the path, so a signed read URL can't leak the author)
 -- and records it here with the service role. authenticated has no
 -- access at all; it can only ask evangelism_upload_is_mine().
+--
+-- service_role is named in the REVOKE on purpose. Supabase's default
+-- ACL grants it ALL, and a REVOKE that skips it leaves that ALL in
+-- place no matter what the GRANT below says. The API (service-role
+-- client) only inserts {storage_path, user_id}, selects those two
+-- columns, and deletes by storage_path. created_at stays the default.
+-- No UPDATE, no TRUNCATE. service_role bypasses RLS; these grants are
+-- the limit.
 CREATE TABLE IF NOT EXISTS public.evangelism_uploads (
   storage_path text PRIMARY KEY,
   user_id      uuid NOT NULL REFERENCES public.users (id) ON DELETE CASCADE,
   created_at   timestamptz NOT NULL DEFAULT now()
 );
 ALTER TABLE public.evangelism_uploads ENABLE ROW LEVEL SECURITY;
-REVOKE ALL ON TABLE public.evangelism_uploads FROM PUBLIC, anon, authenticated;
-GRANT SELECT, INSERT, DELETE ON TABLE public.evangelism_uploads TO service_role;
+REVOKE ALL ON TABLE public.evangelism_uploads FROM PUBLIC, anon, authenticated, service_role;
+GRANT SELECT (storage_path, user_id) ON TABLE public.evangelism_uploads TO service_role;
+GRANT INSERT (storage_path, user_id) ON TABLE public.evangelism_uploads TO service_role;
+GRANT DELETE ON TABLE public.evangelism_uploads TO service_role;
 
 CREATE OR REPLACE FUNCTION public.evangelism_upload_is_mine(p_path text)
 RETURNS boolean
@@ -514,12 +531,16 @@ CREATE POLICY "evangelism_media_delete"
   );
 
 -- storage_path and created_by are not readable by authenticated: the
--- API signs reads with the service role, keyed by media id. No UPDATE:
--- replace a photo by deleting and re-adding it.
+-- API signs reads with the service role, keyed by media id. INSERT
+-- leaves out id and created_at (both default). No UPDATE: replace a
+-- photo by deleting and re-adding it. DELETE stays its own grant.
 REVOKE ALL ON TABLE public.evangelism_media FROM PUBLIC, anon, authenticated;
 GRANT SELECT (id, testimony_id, kind, content_type, size_bytes, sort_order, created_at)
   ON TABLE public.evangelism_media TO authenticated;
-GRANT INSERT, DELETE ON TABLE public.evangelism_media TO authenticated;
+GRANT INSERT (
+  testimony_id, kind, storage_path, content_type, size_bytes, sort_order, created_by
+) ON TABLE public.evangelism_media TO authenticated;
+GRANT DELETE ON TABLE public.evangelism_media TO authenticated;
 GRANT ALL ON TABLE public.evangelism_media TO service_role;
 
 -- ────────────────────────────────────────────────────────────
