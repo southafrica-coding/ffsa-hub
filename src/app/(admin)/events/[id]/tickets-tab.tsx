@@ -31,6 +31,7 @@ export function TicketsTab({
   currency,
   currencyLocked,
   startDate,
+  canEdit = false,
 }: {
   eventId: string;
   ticketingEnabled: boolean;
@@ -44,7 +45,25 @@ export function TicketsTab({
   currency: string;
   currencyLocked: boolean;
   startDate?: string | null;
+  /** Ticket setup, promos, and checkout questions. Viewers see the tier list. */
+  canEdit?: boolean;
 }) {
+  if (!canEdit) {
+    return (
+      <div className="border border-ink">
+        <p className="mono-label px-4 py-3">Ticket setup is limited to events you can edit.</p>
+        <ul className="divide-y divide-rule">
+          {ticketTypes.length === 0 ? (
+            <li className="px-4 py-3 text-sm text-muted-foreground">No ticket types.</li>
+          ) : (
+            ticketTypes.map((t: { id: string; name: string }) => (
+              <li key={t.id} className="px-4 py-3 text-sm">{t.name}</li>
+            ))
+          )}
+        </ul>
+      </div>
+    );
+  }
   return (
     <div className="space-y-6">
       <TicketingSettings

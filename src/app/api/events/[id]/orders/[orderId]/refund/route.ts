@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getAuthedUser, canManageEvents } from "@/lib/api-auth";
+import { getAuthedUser } from "@/lib/api-auth";
+import { gateOrder } from "@/lib/auth/event-route";
 import { refundOrder, syncPendingRefunds } from "@/services/order-refunds";
 
 // POST /api/events/[id]/orders/[orderId]/refund
@@ -22,15 +23,15 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ id: string; orderId: string }> }
 ) {
-  const { orderId } = await context.params;
+  const { id: eventId, orderId } = await context.params;
   const supabase = await createClient();
   const user = await getAuthedUser(supabase);
   if (!user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
-  if (!(await canManageEvents(supabase, user.id, ["events.manage_registrations"]))) {
-    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
-  }
+  // The order's event_id is read from the database before any provider call.
+  const orderGate = await gateOrder(supabase, user.id, eventId, orderId);
+  if ("response" in orderGate) return orderGate.response;
 
   const body = (await request.json().catch(() => ({}))) as {
     amount_cents?: unknown;
@@ -75,15 +76,14 @@ export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string; orderId: string }> }
 ) {
-  const { orderId } = await context.params;
+  const { id: eventId, orderId } = await context.params;
   const supabase = await createClient();
   const user = await getAuthedUser(supabase);
   if (!user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
-  if (!(await canManageEvents(supabase, user.id, ["events.manage_registrations"]))) {
-    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
-  }
+  const orderGate = await gateOrder(supabase, user.id, eventId, orderId);
+  if ("response" in orderGate) return orderGate.response;
 
   const result = await syncPendingRefunds(supabase, orderId);
   return NextResponse.json(result);

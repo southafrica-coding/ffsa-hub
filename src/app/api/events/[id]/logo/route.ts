@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { updateEvent } from "@/services/events";
-import { getAuthedUser, canManageEvents } from "@/lib/api-auth";
+import { getAuthedUser } from "@/lib/api-auth";
+import { canManageEvent, EVENT_UPDATE_GATE, writeBlocked } from "@/lib/auth/event-access";
 
 const ALLOWED = ["image/png", "image/jpeg", "image/webp", "image/svg+xml"];
 const MAX_BYTES = 2 * 1024 * 1024; // 2 MB
@@ -23,7 +24,7 @@ export async function POST(
   const supabase = await createClient();
   const user = await getAuthedUser(supabase);
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  if (!(await canManageEvents(supabase, user.id))) {
+  if (!(await canManageEvent(supabase, user.id, EVENT_UPDATE_GATE.keys, eventId, EVENT_UPDATE_GATE))) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
@@ -62,6 +63,7 @@ export async function POST(
   const logoUrl = pub.publicUrl;
 
   const { error } = await updateEvent(supabase, eventId, { logo_url: logoUrl });
+  if (writeBlocked(error)) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ logoUrl });
@@ -76,11 +78,12 @@ export async function DELETE(
   const supabase = await createClient();
   const user = await getAuthedUser(supabase);
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  if (!(await canManageEvents(supabase, user.id))) {
+  if (!(await canManageEvent(supabase, user.id, EVENT_UPDATE_GATE.keys, eventId, EVENT_UPDATE_GATE))) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
-  const { error } = await updateEvent(supabase, eventId, { logo_url: null });
+  const { data, error } = await updateEvent(supabase, eventId, { logo_url: null });
+  if (writeBlocked(error, data)) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }

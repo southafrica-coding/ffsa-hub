@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { requireModuleAccess } from "@/lib/require-permission";
+import { userCanInsertEvent } from "@/lib/auth/event-access";
 import {
   getEventAttendanceCounts,
   getEvents,
@@ -70,9 +71,10 @@ export default async function EventsPage({
         : { status: view };
 
   // Permission check + data fetch don't depend on each other — run together.
-  const [, eventsResult] = await Promise.all([
+  const [, eventsResult, canCreate] = await Promise.all([
     requireModuleAccess(supabase, user.id, "events"),
     getEvents(supabase, filter),
+    userCanInsertEvent(supabase, user.id),
   ]);
   const { data: events, count } = eventsResult;
   const rows = (events ?? []) as Event[];
@@ -103,7 +105,7 @@ export default async function EventsPage({
       <Masthead
         context={`Operations · ${count ?? 0} ${view === "active" ? "active " : ""}${count === 1 ? "event" : "events"}`}
         title="Events"
-        actions={<MastheadAction href="/events/new">+ Create event</MastheadAction>}
+        actions={canCreate ? <MastheadAction href="/events/new">+ Create event</MastheadAction> : undefined}
       />
 
       {/* The page's ONE yellow band. Never add a second. */}

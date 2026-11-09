@@ -10,7 +10,8 @@ import {
 } from "@/services/event-feedback";
 import { sendTransactional } from "@/lib/email/send-transactional";
 import { eventFeedbackRequestEmailHtml } from "@/lib/email/templates/event-feedback-request";
-import { getAuthedUser, canManageEvents } from "@/lib/api-auth";
+import { getAuthedUser } from "@/lib/api-auth";
+import { canManageEvent, EVENT_CREATE_GATE } from "@/lib/auth/event-access";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // A debrief goes to a team, not a mailing list. The cap is a guard against
@@ -41,7 +42,7 @@ export async function POST(
   const supabase = await createClient();
   const user = await getAuthedUser(supabase);
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  if (!(await canManageEvents(supabase, user.id))) {
+  if (!(await canManageEvent(supabase, user.id, EVENT_CREATE_GATE.keys, eventId, EVENT_CREATE_GATE))) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 

@@ -7,7 +7,8 @@ import {
   type FeedbackFormUpdate,
 } from "@/services/event-feedback";
 import { isFeedbackSchema } from "@/lib/feedback/schema";
-import { getAuthedUser, canManageEvents } from "@/lib/api-auth";
+import { getAuthedUser } from "@/lib/api-auth";
+import { canManageEvent, EVENT_CREATE_GATE, writeBlocked } from "@/lib/auth/event-access";
 
 type Body = {
   title?: string;
@@ -29,7 +30,7 @@ export async function PATCH(
   const supabase = await createClient();
   const user = await getAuthedUser(supabase);
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  if (!(await canManageEvents(supabase, user.id))) {
+  if (!(await canManageEvent(supabase, user.id, EVENT_CREATE_GATE.keys, eventId, EVENT_CREATE_GATE))) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
@@ -73,6 +74,7 @@ export async function PATCH(
     patch.thank_you_message = body.thankYouMessage?.trim() || null;
 
   const { data, error } = await updateFeedbackForm(supabase, formId, patch);
+  if (writeBlocked(error)) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ form: data });
 }
@@ -87,7 +89,7 @@ export async function DELETE(
   const supabase = await createClient();
   const user = await getAuthedUser(supabase);
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  if (!(await canManageEvents(supabase, user.id))) {
+  if (!(await canManageEvent(supabase, user.id, EVENT_CREATE_GATE.keys, eventId, EVENT_CREATE_GATE))) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
@@ -96,7 +98,8 @@ export async function DELETE(
     return NextResponse.json({ error: "Feedback form not found" }, { status: 404 });
   }
 
-  const { error } = await deleteFeedbackForm(supabase, formId);
+  const { data, error } = await deleteFeedbackForm(supabase, formId);
+  if (writeBlocked(error, data)) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }

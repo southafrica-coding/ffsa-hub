@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getAuthedUser, canManageEvents } from "@/lib/api-auth";
+import { getAuthedUser } from "@/lib/api-auth";
+import { canManageEvent, ORDERS_GATE } from "@/lib/auth/event-access";
 import { refundEventOrders } from "@/services/order-refunds";
 import { getEventById } from "@/services/events";
 
@@ -24,7 +25,7 @@ export async function POST(
   if (!user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
-  if (!(await canManageEvents(supabase, user.id, ["events.manage_registrations"]))) {
+  if (!(await canManageEvent(supabase, user.id, ORDERS_GATE.keys, id, ORDERS_GATE))) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 

@@ -94,7 +94,7 @@ export async function updateTicketType(
 }
 
 export async function deleteTicketType(supabase: Client, id: string) {
-  return supabase.from("ticket_types").delete().eq("id", id);
+  return supabase.from("ticket_types").delete().eq("id", id).select("id");
 }
 
 // ────────────────────────────────────────────────────────────
@@ -173,7 +173,7 @@ export async function updatePromoCode(
 }
 
 export async function deletePromoCode(supabase: Client, eventId: string, id: string) {
-  return supabase.from("promo_codes").delete().eq("id", id).eq("event_id", eventId);
+  return supabase.from("promo_codes").delete().eq("id", id).eq("event_id", eventId).select("id");
 }
 
 // ────────────────────────────────────────────────────────────

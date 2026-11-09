@@ -31,6 +31,7 @@ import { RolesRoster } from "./roles-roster";
 import { BaseLabelPicker } from "./base-label-picker";
 import { getEventLabelIds } from "@/services/event-labels";
 import { getEventFinanceOrgPicker } from "@/lib/finance/orgs";
+import { loadEventCapabilities } from "@/lib/auth/event-access";
 import { FormsTab } from "./forms-tab";
 import { WorkflowsManager } from "./workflows-manager";
 import { OutcomeFormLink } from "./outcome-form-link";
@@ -84,9 +85,16 @@ export default async function EventDetailPage({
   const tab = TABS.some((t) => t.key === tabParam) ? tabParam! : "details";
 
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const { data: event, error } = await getEventById(supabase, id);
   if (error || !event) notFound();
+
+  const access = user
+    ? await loadEventCapabilities(supabase, user.id, id, event.created_by ?? null)
+    : { edit: false, refund: false, checkIn: false, scanLink: false, outcomes: false, forms: false };
 
   const [
     { data: registrations },
@@ -225,6 +233,7 @@ export default async function EventDetailPage({
             eventId={id}
             status={event.status}
             cancellationMessage={event.cancellation_message ?? null}
+            canEdit={access.edit}
           />
         }
       />
@@ -252,6 +261,7 @@ export default async function EventDetailPage({
             coming={coming}
             baseLabelIds={baseLabelIds}
             financeOrgPicker={financeOrgPicker}
+            canEdit={access.edit}
           />
         )}
 
@@ -263,6 +273,7 @@ export default async function EventDetailPage({
             forms={forms ?? []}
             identities={identities ?? []}
             workflows={workflows ?? []}
+            canEdit={access.outcomes}
           />
         )}
 
@@ -290,6 +301,7 @@ export default async function EventDetailPage({
             }
             buyerFields={event.buyer_fields ?? []}
             startDate={event.start_date ?? null}
+            canEdit={access.edit}
           />
         )}
 
@@ -302,22 +314,36 @@ export default async function EventDetailPage({
             currency={event.currency}
             eventStatus={event.status}
             hasCancellationMessage={!!event.cancellation_message?.trim()}
+            canManageOrders={access.refund}
           />
         )}
 
         {tab === "check-in" && (
-          <CheckInTab eventId={id} tickets={attendanceTickets ?? []} />
+          <CheckInTab
+            eventId={id}
+            tickets={attendanceTickets ?? []}
+            canCheckIn={access.checkIn}
+            canScanLink={access.scanLink}
+          />
         )}
 
-        {tab === "forms" && <FormsTab eventId={id} forms={forms ?? []} />}
+        {tab === "forms" && <FormsTab eventId={id} forms={forms ?? []} canEdit={access.forms} />}
 
-        {tab === "emails" && <EmailsTab eventId={id} />}
+        {tab === "emails" &&
+          (access.edit ? (
+            <EmailsTab eventId={id} />
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Email wording is limited to events you can edit.
+            </p>
+          ))}
 
         {tab === "feedback" && (
           <FeedbackTab
             eventId={id}
             forms={feedbackRows}
             responseCounts={feedbackCounts}
+            canEdit={access.edit}
           />
         )}
       </div>
@@ -340,7 +366,7 @@ function formatDayRange(start: string, end: string | null) {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function DetailsTab(props: any) {
-  const { event, eventId, roles, labels, users, registrations, attendance, coming, baseLabelIds, financeOrgPicker } =
+  const { event, eventId, roles, labels, users, registrations, attendance, coming, baseLabelIds, financeOrgPicker, canEdit } =
     props;
 
   // "1 140 / 2 000" won't fit at the strip's 54px, so a ratio drops to
@@ -367,12 +393,18 @@ function DetailsTab(props: any) {
 
   return (
     <div className="space-y-6">
+      {canEdit ? (
       <EventDetailsForm
         eventId={eventId}
         status={event.status}
         event={event}
         financeOrgs={financeOrgPicker.canPick ? financeOrgPicker.orgs : null}
       />
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          You can view this event. Editing, refunds and deletes are limited to events you are assigned to.
+        </p>
+      )}
 
       <div className="border-x border-t border-ink">
         <KpiStrip>
@@ -394,15 +426,17 @@ function DetailsTab(props: any) {
         </KpiStrip>
       </div>
 
-      <EventLogo eventId={eventId} logoUrl={event.logo_url} />
+      {canEdit && <EventLogo eventId={eventId} logoUrl={event.logo_url} />}
 
+      {canEdit && (
       <BaseLabelPicker
         eventId={eventId}
         currentLabelIds={baseLabelIds}
         labels={labels}
       />
+      )}
 
-      <RolesRoster eventId={eventId} roles={roles} users={users} />
+      {canEdit && <RolesRoster eventId={eventId} roles={roles} users={users} />}
 
       <div className="border border-ink">
         <SectionBar
@@ -472,7 +506,7 @@ function DetailsTab(props: any) {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function OutcomesTab(props: any) {
-  const { eventId, outcomes, labels, forms, identities, workflows } = props;
+  const { eventId, outcomes, labels, forms, identities, workflows, canEdit } = props;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const formById = new Map<string, any>(
@@ -497,7 +531,7 @@ function OutcomesTab(props: any) {
 
   return (
     <div className="space-y-6">
-      <OutcomesManager eventId={eventId} outcomes={outcomes} labels={labels} />
+      {canEdit && <OutcomesManager eventId={eventId} outcomes={outcomes} labels={labels} />}
 
       <div className="space-y-4">
         <div>
@@ -530,6 +564,8 @@ function OutcomesTab(props: any) {
                   <CardTitle className="text-base">{o.name}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {canEdit && (
+                  <>
                   <OutcomeFormLink
                     eventId={eventId}
                     outcomeId={o.id}
@@ -548,6 +584,8 @@ function OutcomesTab(props: any) {
                     triggerFields={triggerFields}
                     initialWorkflows={wfByOutcome.get(o.id) ?? []}
                   />
+                  </>
+                  )}
                 </CardContent>
               </Card>
             );

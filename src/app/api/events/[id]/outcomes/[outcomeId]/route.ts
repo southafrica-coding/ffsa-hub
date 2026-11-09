@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { updateEventOutcome, deleteEventOutcome } from "@/services/event-outcomes";
 import { findOrCreateLabel } from "@/services/labels";
-import { getAuthedUser, canManageEvents } from "@/lib/api-auth";
+import { getAuthedUser } from "@/lib/api-auth";
+import { OUTCOMES_GATE, writeBlocked } from "@/lib/auth/event-access";
+import { gateChildRow } from "@/lib/auth/event-route";
 
 function slugify(input: string): string {
   return input
@@ -17,13 +19,19 @@ export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string; outcomeId: string }> }
 ) {
-  const { outcomeId } = await context.params;
+  const { id: eventId, outcomeId } = await context.params;
   const supabase = await createClient();
   const user = await getAuthedUser(supabase);
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  if (!(await canManageEvents(supabase, user.id))) {
-    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
-  }
+  const denied = await gateChildRow(
+    supabase,
+    user.id,
+    eventId,
+    "event_outcomes",
+    outcomeId,
+    OUTCOMES_GATE
+  );
+  if (denied) return denied;
 
   let body: {
     name?: string;
@@ -67,6 +75,7 @@ export async function PATCH(
   }
 
   const { data, error } = await updateEventOutcome(supabase, outcomeId, patch);
+  if (writeBlocked(error)) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ outcome: data });
 }
@@ -75,15 +84,22 @@ export async function DELETE(
   request: Request,
   context: { params: Promise<{ id: string; outcomeId: string }> }
 ) {
-  const { outcomeId } = await context.params;
+  const { id: eventId, outcomeId } = await context.params;
   const supabase = await createClient();
   const user = await getAuthedUser(supabase);
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  if (!(await canManageEvents(supabase, user.id))) {
-    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
-  }
+  const denied = await gateChildRow(
+    supabase,
+    user.id,
+    eventId,
+    "event_outcomes",
+    outcomeId,
+    OUTCOMES_GATE
+  );
+  if (denied) return denied;
 
-  const { error } = await deleteEventOutcome(supabase, outcomeId);
+  const { data, error } = await deleteEventOutcome(supabase, outcomeId);
+  if (writeBlocked(error, data)) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ deleted: true });
 }

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createPromoCode, listTicketTypesByEvent } from "@/services/ticketing";
-import { getAuthedUser, canManageEvents } from "@/lib/api-auth";
+import { getAuthedUser } from "@/lib/api-auth";
+import { canManageEvent, EVENT_CREATE_GATE } from "@/lib/auth/event-access";
 import { validatePromoConfig, type PromoConfigInput } from "@/lib/ticketing/promo-config";
 import type { FormField } from "@/lib/forms/schema";
 
@@ -20,7 +21,7 @@ export async function POST(
   if (!user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
-  if (!(await canManageEvents(supabase, user.id))) {
+  if (!(await canManageEvent(supabase, user.id, EVENT_CREATE_GATE.keys, eventId, EVENT_CREATE_GATE))) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
