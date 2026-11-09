@@ -22,7 +22,7 @@ export default async function EvangelismPage() {
 
   const [published, mine, ministries] = await Promise.all([
     listTestimonies(supabase, { status: "published", limit: 100 }),
-    access.submit ? listTestimonies(supabase, { authorId: user.id, limit: 100 }) : Promise.resolve(null),
+    access.submit ? listTestimonies(supabase, { mine: true, limit: 100 }) : Promise.resolve(null),
     access.submit ? listActiveMinistries(supabase) : Promise.resolve([]),
   ]);
 

@@ -138,25 +138,33 @@ export function checkPhoto(contentType: unknown, size: unknown): Result<{ conten
   return { ok: true, value: { contentType: type, ext } };
 }
 
-/** The path the sign route mints for this user: testimonies/{user}/{uuid}.{ext} */
-export function photoPathFor(userId: string, fileId: string, ext: string): string {
-  return `testimonies/${userId}/${fileId}.${ext}`;
+/**
+ * The path the sign route mints: testimonies/{uuid}/{uuid}.{ext}. Both parts
+ * are random — the author's id must NOT appear, because signed read URLs
+ * carry the path and are shown to view-only users.
+ */
+export function photoPathFor(folderId: string, fileId: string, ext: string): string {
+  return `testimonies/${folderId}/${fileId}.${ext}`;
 }
 
-/** True when `path` is a photo path this user could have been given. */
-export function isOwnPhotoPath(path: unknown, userId: string): boolean {
-  if (typeof path !== "string" || !UUID.test(userId)) return false;
-  const re = new RegExp(`^testimonies/${userId.toLowerCase()}/${UUID_SRC}\\.(jpg|png|webp|heic|heif)$`);
-  return re.test(path);
+const PHOTO_PATH = new RegExp(`^testimonies/${UUID_SRC}/${UUID_SRC}\\.(jpg|png|webp|heic|heif)$`);
+
+/**
+ * Shape check only. Who minted the path is recorded in evangelism_uploads
+ * and enforced by the database (evangelism_upload_is_mine in the media
+ * insert policy).
+ */
+export function isPhotoPath(path: unknown): path is string {
+  return typeof path === "string" && PHOTO_PATH.test(path);
 }
 
 /** Validate a `photo` object sent with a create/edit. */
-export function parsePhoto(raw: unknown, userId: string): Result<PhotoInput | null> {
+export function parsePhoto(raw: unknown): Result<PhotoInput | null> {
   if (raw === undefined || raw === null) return { ok: true, value: null };
   const p = raw as Record<string, unknown>;
   const checked = checkPhoto(p.content_type, p.size);
   if (!checked.ok) return checked;
-  if (!isOwnPhotoPath(p.path, userId)) return { ok: false, error: "That photo upload isn't yours." };
+  if (!isPhotoPath(p.path)) return { ok: false, error: "That isn't a photo upload from this page." };
   const path = p.path as string;
   if (!path.endsWith(`.${checked.value.ext}`)) return { ok: false, error: "Photo type doesn't match the file." };
   return { ok: true, value: { path, content_type: checked.value.contentType, size: p.size as number } };

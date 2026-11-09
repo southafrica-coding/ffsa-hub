@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   PHOTO_MAX_BYTES,
   checkPhoto,
-  isOwnPhotoPath,
+  isPhotoPath,
+  photoPathFor,
   parsePhoto,
   parseReview,
   parseTestimonyFields,
@@ -114,25 +115,30 @@ describe("checkPhoto", () => {
 });
 
 describe("photo paths", () => {
-  it("accepts only the caller's own minted path", () => {
-    expect(isOwnPhotoPath(`testimonies/${USER}/${FILE}.jpg`, USER)).toBe(true);
-    expect(isOwnPhotoPath(`testimonies/${OTHER}/${FILE}.jpg`, USER)).toBe(false);
-    expect(isOwnPhotoPath(`testimonies/${USER}/../${OTHER}/${FILE}.jpg`, USER)).toBe(false);
-    expect(isOwnPhotoPath(`testimonies/${USER}/${FILE}.mp4`, USER)).toBe(false);
+  it("mints random/random paths with no user id in them", () => {
+    const path = photoPathFor(FILE, OTHER, "jpg");
+    expect(path).toBe(`testimonies/${FILE}/${OTHER}.jpg`);
+    expect(isPhotoPath(path)).toBe(true);
   });
 
-  it("parsePhoto checks path, type and size together", () => {
-    expect(parsePhoto(undefined, USER)).toEqual({ ok: true, value: null });
-    expect(
-      parsePhoto({ path: `testimonies/${USER}/${FILE}.png`, content_type: "image/png", size: 100 }, USER).ok
-    ).toBe(true);
+  it("checks the shape only — ownership is the database's job", () => {
+    expect(isPhotoPath(`testimonies/${USER}/${FILE}.jpg`)).toBe(true);
+    expect(isPhotoPath(`testimonies/${USER}/../${OTHER}/${FILE}.jpg`)).toBe(false);
+    expect(isPhotoPath(`testimonies/${USER}/${FILE}.mp4`)).toBe(false);
+    expect(isPhotoPath(`other/${USER}/${FILE}.jpg`)).toBe(false);
+    expect(isPhotoPath(42)).toBe(false);
+  });
+
+  it("parsePhoto checks path shape, type and size together", () => {
+    expect(parsePhoto(undefined)).toEqual({ ok: true, value: null });
+    expect(parsePhoto({ path: `testimonies/${OTHER}/${FILE}.png`, content_type: "image/png", size: 100 }).ok).toBe(
+      true
+    );
     // Type says PNG but the path is .jpg
-    expect(
-      parsePhoto({ path: `testimonies/${USER}/${FILE}.jpg`, content_type: "image/png", size: 100 }, USER).ok
-    ).toBe(false);
-    expect(
-      parsePhoto({ path: `testimonies/${OTHER}/${FILE}.png`, content_type: "image/png", size: 100 }, USER).ok
-    ).toBe(false);
+    expect(parsePhoto({ path: `testimonies/${OTHER}/${FILE}.jpg`, content_type: "image/png", size: 100 }).ok).toBe(
+      false
+    );
+    expect(parsePhoto({ path: "testimonies/not-a-uuid/x.png", content_type: "image/png", size: 100 }).ok).toBe(false);
   });
 });
 

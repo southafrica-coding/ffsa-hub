@@ -7,9 +7,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getEvangelismAccess, type EvangelismAccess } from "@/lib/auth/check-evangelism-access";
 import {
-  canSeeAttribution,
+  getAttribution,
   isEvangelismNotReady,
-  loadAuthorNames,
   presentTestimony,
   signPhotoUrls,
   type PresentedTestimony,
@@ -49,20 +48,23 @@ export function dbError(error: unknown, context: string) {
 }
 
 /**
- * Turn rows the caller already passed RLS for into API shapes: signed photo
- * URLs, and author names only where the caller may see attribution.
+ * Turn rows the caller already passed RLS for into API shapes. Attribution
+ * comes from the RPC on the caller's OWN client (the database decides who
+ * may see names). Photo URLs are signed with the service role, keyed by
+ * media ids taken from those same RLS rows.
  */
 export async function present(rows: TestimonyRow[], caller: Caller): Promise<PresentedTestimony[]> {
-  const viewer = { userId: caller.userId, access: caller.access };
+  const { data: attribution, error } = await getAttribution(
+    caller.supabase,
+    rows.map((r) => r.id)
+  );
+  if (error) console.error("[evangelism] attribution failed", error);
   let signed = new Map<string, string>();
-  let names = new Map<string, string>();
   try {
-    const admin = createAdminClient();
-    const attributable = rows.filter((r) => canSeeAttribution(r, viewer)).map((r) => r.author_user_id);
-    [signed, names] = await Promise.all([signPhotoUrls(admin, rows), loadAuthorNames(admin, attributable)]);
+    signed = await signPhotoUrls(createAdminClient(), rows);
   } catch (e) {
     // Missing service-role env or a Storage hiccup: still return the text.
-    console.error("[evangelism] signing/names failed", e);
+    console.error("[evangelism] signing failed", e);
   }
-  return rows.map((r) => presentTestimony(r, viewer, { signed, names }));
+  return rows.map((r) => presentTestimony(r, attribution.get(r.id), signed));
 }

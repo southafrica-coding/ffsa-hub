@@ -46,7 +46,7 @@ function keysOf(rows: unknown): string[] {
 
 export async function getEvangelismAccess(supabase: Client, userId: string): Promise<EvangelismAccess> {
   const [{ data: roleRows }, { data: direct }] = await Promise.all([
-    supabase.from("user_roles").select("role_id, roles(name)").eq("user_id", userId),
+    supabase.from("user_roles").select("role_id, scope_type, roles(name)").eq("user_id", userId),
     supabase
       .from("user_permissions")
       .select("permissions!inner(key)")
@@ -56,11 +56,15 @@ export async function getEvangelismAccess(supabase: Client, userId: string): Pro
 
   const roles = (Array.isArray(roleRows) ? roleRows : []) as Array<{
     role_id?: string;
+    scope_type?: string | null;
     roles?: { name: string } | { name: string }[] | null;
   }>;
-  const names = roles.flatMap((r) =>
-    Array.isArray(r.roles) ? r.roles.map((x) => x.name) : r.roles ? [r.roles.name] : []
-  );
+  // Only an UNSCOPED admin / super_admin counts, matching is_admin() in the
+  // database. A program-scoped admin role must not unlock more here than
+  // RLS will allow.
+  const names = roles
+    .filter((r) => r.scope_type == null)
+    .flatMap((r) => (Array.isArray(r.roles) ? r.roles.map((x) => x.name) : r.roles ? [r.roles.name] : []));
   if (names.includes("super_admin") || names.includes("admin")) return FULL;
 
   const keys = keysOf(direct);

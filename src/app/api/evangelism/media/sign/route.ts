@@ -3,15 +3,15 @@ import { NextResponse } from "next/server";
 import { getCaller, jsonError } from "@/lib/evangelism/http";
 import { checkPhoto, photoPathFor } from "@/lib/evangelism/validation";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { EVANGELISM_BUCKET, isEvangelismNotReady } from "@/services/evangelism";
+import { EVANGELISM_BUCKET, isEvangelismNotReady, recordUpload } from "@/services/evangelism";
 
 // POST /api/evangelism/media/sign   { content_type, size }
-//   → { path, token, signed_url }
+//   → { path, token, signed_url, content_type }
 // Mints a one-off signed upload into the PRIVATE evangelism-media bucket at
-// testimonies/{caller}/{uuid}.{ext}. The bucket has no storage.objects
-// policies; this route (service role) is the only way in. The client then
-// sends { path, content_type, size } as `photo` on the testimony create/edit,
-// where RLS checks the path belongs to the caller.
+// testimonies/{uuid}/{uuid}.{ext} — no user id in the path, because signed
+// read URLs carry it to view-only users. The path is recorded against the
+// caller in evangelism_uploads (service role); the media insert policy only
+// accepts a path the ledger says the caller minted.
 export async function POST(request: Request) {
   const caller = await getCaller();
   if (caller instanceof NextResponse) return caller;
@@ -21,8 +21,19 @@ export async function POST(request: Request) {
   const checked = checkPhoto(body?.content_type, body?.size);
   if (!checked.ok) return jsonError(400, checked.error);
 
-  const path = photoPathFor(caller.userId, randomUUID(), checked.value.ext);
-  const { data, error } = await createAdminClient().storage.from(EVANGELISM_BUCKET).createSignedUploadUrl(path);
+  const admin = createAdminClient();
+  const path = photoPathFor(randomUUID(), randomUUID(), checked.value.ext);
+
+  const { error: ledgerError } = await recordUpload(admin, path, caller.userId);
+  if (ledgerError) {
+    if (isEvangelismNotReady(ledgerError)) {
+      return jsonError(503, "Evangelism isn't switched on yet.", "evangelism_not_enabled");
+    }
+    console.error("[evangelism] record upload", ledgerError);
+    return jsonError(500, "Couldn't prepare the photo upload.");
+  }
+
+  const { data, error } = await admin.storage.from(EVANGELISM_BUCKET).createSignedUploadUrl(path);
   if (error || !data) {
     if (isEvangelismNotReady(error)) {
       return jsonError(503, "Evangelism isn't switched on yet.", "evangelism_not_enabled");

@@ -1,14 +1,18 @@
 // Evangelism testimonies — data access (slice 1: submit, review, list).
 //
 // Every read and write here takes the CALLER's client, so migration 307's
-// RLS decides what they can see and change. The service-role client is only
-// used for Storage (signing photo uploads/reads, removing objects) and for
-// author display names, which plain users cannot read from public.users.
+// RLS decides what they can see and change. Who wrote a story is hidden in
+// the database itself: author_user_id / published_by / withheld_reason are
+// not column-readable by `authenticated`, so names and review fields come
+// from the evangelism_attribution() RPC, again on the caller's client.
+//
+// The service-role client is only used for Storage: minting/recording
+// upload paths, signing photo reads (paths are not readable by users), and
+// removing objects.
 //
 // Tables are not in the generated database.ts yet, so this uses the
 // project's `Client = any` pattern with hand-written row types.
 
-import type { EvangelismAccess } from "@/lib/auth/check-evangelism-access";
 import type { Outcome, PhotoInput, TestimonyFields } from "@/lib/evangelism/validation";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -20,17 +24,17 @@ export const SIGNED_READ_SECONDS = 60 * 30;
 
 export type TestimonyStatus = "draft" | "submitted" | "published" | "withheld";
 
+/** What `authenticated` can read of a photo — no path, no uploader. */
 export type TestimonyMediaRow = {
   id: string;
-  storage_path: string;
   content_type: string;
   size_bytes: number;
   sort_order: number;
 };
 
+/** The column-granted shape of a story (no author or review fields). */
 export type TestimonyRow = {
   id: string;
-  author_user_id: string;
   title: string;
   body: string;
   occurred_on: string;
@@ -42,15 +46,22 @@ export type TestimonyRow = {
   consent_to_share: boolean;
   status: TestimonyStatus;
   published_at: string | null;
-  published_by: string | null;
-  withheld_reason: string | null;
   created_at: string;
   updated_at: string;
   staff_ministries?: { name: string } | null;
   evangelism_media?: TestimonyMediaRow[] | null;
 };
 
-/** What the API returns. Author/review fields only for publishers and the author. */
+/** One row of evangelism_attribution(). Name/review fields are null unless allowed. */
+export type Attribution = {
+  id: string;
+  is_mine: boolean;
+  author_name: string | null;
+  published_by: string | null;
+  withheld_reason: string | null;
+};
+
+/** What the API returns. Author/review fields only appear when the DB released them. */
 export type PresentedTestimony = {
   id: string;
   title: string;
@@ -74,13 +85,13 @@ export type PresentedTestimony = {
 };
 
 const COLUMNS =
-  "id, author_user_id, title, body, occurred_on, location_label, staff_ministry_id, people_reached, decisions, outcome, consent_to_share, status, published_at, published_by, withheld_reason, created_at, updated_at, staff_ministries(name), evangelism_media(id, storage_path, content_type, size_bytes, sort_order)";
+  "id, title, body, occurred_on, location_label, staff_ministry_id, people_reached, decisions, outcome, consent_to_share, status, published_at, created_at, updated_at, staff_ministries(name), evangelism_media(id, content_type, size_bytes, sort_order)";
 
 // ── Missing schema → 503 ──────────────────────────────────
 
-const MISSING_CODES = new Set(["42P01", "PGRST205", "PGRST200"]);
+const MISSING_CODES = new Set(["42P01", "42883", "PGRST205", "PGRST200", "PGRST202"]);
 
-/** True when migration 307 has not been applied (table or bucket missing). */
+/** True when migration 307 has not been applied (table, RPC or bucket missing). */
 export function isEvangelismNotReady(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const { code, message } = error as { code?: unknown; message?: unknown };
@@ -93,11 +104,18 @@ export function isEvangelismNotReady(error: unknown): boolean {
 
 export async function listTestimonies(
   supabase: Client,
-  opts: { status?: TestimonyStatus; authorId?: string; limit?: number }
+  opts: { status?: TestimonyStatus; mine?: boolean; limit?: number }
 ): Promise<{ data: TestimonyRow[]; error: unknown }> {
   let q = supabase.from("evangelism_testimonies").select(COLUMNS);
+  if (opts.mine) {
+    // author_user_id isn't readable, so "mine" comes from a definer RPC.
+    const { data: ids, error } = await supabase.rpc("evangelism_my_testimony_ids");
+    if (error) return { data: [], error };
+    const list = (Array.isArray(ids) ? ids : []) as string[];
+    if (list.length === 0) return { data: [], error: null };
+    q = q.in("id", list);
+  }
   if (opts.status) q = q.eq("status", opts.status);
-  if (opts.authorId) q = q.eq("author_user_id", opts.authorId);
   q =
     opts.status === "published"
       ? q.order("published_at", { ascending: false })
@@ -114,6 +132,18 @@ export async function getTestimony(
   return { data: (data ?? null) as TestimonyRow | null, error };
 }
 
+/** Attribution for rows the caller can already see, keyed by story id. */
+export async function getAttribution(
+  supabase: Client,
+  ids: string[]
+): Promise<{ data: Map<string, Attribution>; error: unknown }> {
+  const out = new Map<string, Attribution>();
+  if (ids.length === 0) return { data: out, error: null };
+  const { data, error } = await supabase.rpc("evangelism_attribution", { p_ids: ids });
+  for (const a of (Array.isArray(data) ? data : []) as Attribution[]) out.set(a.id, a);
+  return { data: out, error };
+}
+
 /** Active ministries for the optional tag on the submit form. */
 export async function listActiveMinistries(supabase: Client): Promise<Array<{ id: string; name: string }>> {
   const { data } = await supabase
@@ -125,16 +155,16 @@ export async function listActiveMinistries(supabase: Client): Promise<Array<{ id
 }
 
 // ── Author writes ─────────────────────────────────────────
+// author_user_id defaults to auth.uid() in the database.
 
 export async function createTestimony(
   supabase: Client,
-  authorId: string,
   fields: TestimonyFields,
   status: "draft" | "submitted"
 ): Promise<{ data: TestimonyRow | null; error: unknown }> {
   const { data, error } = await supabase
     .from("evangelism_testimonies")
-    .insert({ ...fields, author_user_id: authorId, status })
+    .insert({ ...fields, status })
     .select(COLUMNS)
     .single();
   return { data: (data ?? null) as TestimonyRow | null, error };
@@ -156,8 +186,9 @@ export async function updateTestimony(
 }
 
 // ── Publisher writes ──────────────────────────────────────
-// The guard trigger stamps published_at / published_by from auth.uid();
-// nothing here sends them.
+// The guard trigger stamps published_at / published_by from auth.uid(),
+// allows publishing only from submitted/withheld, and refuses any change
+// to someone else's content or consent.
 
 export async function publishTestimony(supabase: Client, id: string) {
   const { data, error } = await supabase
@@ -187,14 +218,14 @@ export async function deleteTestimony(supabase: Client, id: string) {
 
 // ── Photos ────────────────────────────────────────────────
 
-export async function attachPhoto(supabase: Client, testimonyId: string, userId: string, photo: PhotoInput) {
+/** created_by defaults to auth.uid(); RLS checks the path is in the caller's ledger. */
+export async function attachPhoto(supabase: Client, testimonyId: string, photo: PhotoInput) {
   return supabase.from("evangelism_media").insert({
     testimony_id: testimonyId,
     kind: "photo",
     storage_path: photo.path,
     content_type: photo.content_type,
     size_bytes: photo.size,
-    created_by: userId,
   });
 }
 
@@ -203,57 +234,71 @@ export async function deletePhotoRows(supabase: Client, ids: string[]) {
   return supabase.from("evangelism_media").delete().in("id", ids);
 }
 
-/** Remove objects from the private bucket (service role). Best effort. */
+/** Record a freshly minted upload path against its user (service role). */
+export async function recordUpload(admin: Client, path: string, userId: string) {
+  return admin.from("evangelism_uploads").insert({ storage_path: path, user_id: userId });
+}
+
+/** Of these paths, the ones the ledger says this user minted (service role). */
+export async function ownedUploadPaths(admin: Client, paths: string[], userId: string): Promise<string[]> {
+  if (paths.length === 0) return [];
+  const { data } = await admin.from("evangelism_uploads").select("storage_path, user_id").in("storage_path", paths);
+  return ((data ?? []) as Array<{ storage_path: string; user_id: string }>)
+    .filter((r) => r.user_id === userId)
+    .map((r) => r.storage_path);
+}
+
+/** Storage paths for media ids the caller already saw through RLS (service role). */
+export async function mediaPaths(admin: Client, mediaIds: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (mediaIds.length === 0) return out;
+  const { data } = await admin.from("evangelism_media").select("id, storage_path").in("id", mediaIds);
+  for (const m of (data ?? []) as Array<{ id: string; storage_path: string }>) out.set(m.id, m.storage_path);
+  return out;
+}
+
+/** Remove objects from the private bucket and their ledger rows (service role). */
 export async function removePhotoObjects(admin: Client, paths: string[]) {
   if (paths.length === 0) return;
   await admin.storage.from(EVANGELISM_BUCKET).remove(paths);
+  await admin.from("evangelism_uploads").delete().in("storage_path", paths);
 }
 
-/** Short-lived signed read URLs, keyed by storage path. */
+/**
+ * Short-lived signed read URLs keyed by MEDIA ID. Only call with media ids
+ * from rows the caller's own client returned, so RLS already decided they
+ * may see the photo. Paths are random/random — they don't name the author.
+ */
 export async function signPhotoUrls(admin: Client, rows: TestimonyRow[]): Promise<Map<string, string>> {
-  const paths = rows.flatMap((r) => (r.evangelism_media ?? []).map((m) => m.storage_path));
+  const ids = rows.flatMap((r) => (r.evangelism_media ?? []).map((m) => m.id));
   const out = new Map<string, string>();
-  if (paths.length === 0) return out;
-  const { data } = await admin.storage.from(EVANGELISM_BUCKET).createSignedUrls(paths, SIGNED_READ_SECONDS);
+  const paths = await mediaPaths(admin, ids);
+  if (paths.size === 0) return out;
+  const { data } = await admin.storage
+    .from(EVANGELISM_BUCKET)
+    .createSignedUrls([...paths.values()], SIGNED_READ_SECONDS);
+  const byPath = new Map<string, string>();
   for (const item of (data ?? []) as Array<{ path: string | null; signedUrl: string | null }>) {
-    if (item.path && item.signedUrl) out.set(item.path, item.signedUrl);
+    if (item.path && item.signedUrl) byPath.set(item.path, item.signedUrl);
+  }
+  for (const [id, path] of paths) {
+    const url = byPath.get(path);
+    if (url) out.set(id, url);
   }
   return out;
 }
 
-/** Display names for authors — only fetched for rows the caller may attribute. */
-export async function loadAuthorNames(admin: Client, ids: string[]): Promise<Map<string, string>> {
-  const out = new Map<string, string>();
-  const unique = [...new Set(ids)];
-  if (unique.length === 0) return out;
-  const { data } = await admin
-    .from("users")
-    .select("id, display_name, first_name, last_name, email")
-    .in("id", unique);
-  for (const u of (data ?? []) as Array<{
-    id: string;
-    display_name: string | null;
-    first_name: string | null;
-    last_name: string | null;
-    email: string | null;
-  }>) {
-    const full = [u.first_name, u.last_name].filter(Boolean).join(" ").trim();
-    out.set(u.id, u.display_name?.trim() || full || u.email || "Staff member");
-  }
-  return out;
-}
+// ── Presentation ──────────────────────────────────────────
 
-// ── Presentation (privacy) ────────────────────────────────
-
-/** Whether the caller may see who wrote it and the review fields. */
-export function canSeeAttribution(row: Pick<TestimonyRow, "author_user_id">, viewer: { userId: string; access: EvangelismAccess }) {
-  return viewer.access.publish || row.author_user_id === viewer.userId;
-}
-
+/**
+ * API shape. Author/review fields come only from the attribution RPC, which
+ * already nulls them for callers who may not see them; nulls are dropped so
+ * a viewer's response doesn't even carry the keys.
+ */
 export function presentTestimony(
   row: TestimonyRow,
-  viewer: { userId: string; access: EvangelismAccess },
-  extras: { signed?: Map<string, string>; names?: Map<string, string> } = {}
+  attribution: Attribution | undefined,
+  signed: Map<string, string> = new Map()
 ): PresentedTestimony {
   const media = [...(row.evangelism_media ?? [])].sort((a, b) => a.sort_order - b.sort_order)[0];
   const out: PresentedTestimony = {
@@ -271,15 +316,11 @@ export function presentTestimony(
     status: row.status,
     published_at: row.published_at,
     updated_at: row.updated_at,
-    is_mine: row.author_user_id === viewer.userId,
-    photo: media
-      ? { id: media.id, url: extras.signed?.get(media.storage_path) ?? null, content_type: media.content_type }
-      : null,
+    is_mine: attribution?.is_mine ?? false,
+    photo: media ? { id: media.id, url: signed.get(media.id) ?? null, content_type: media.content_type } : null,
   };
-  if (canSeeAttribution(row, viewer)) {
-    out.author_name = extras.names?.get(row.author_user_id) ?? null;
-    out.published_by = row.published_by;
-    out.withheld_reason = row.withheld_reason;
-  }
+  if (attribution?.author_name) out.author_name = attribution.author_name;
+  if (attribution?.published_by) out.published_by = attribution.published_by;
+  if (attribution?.withheld_reason) out.withheld_reason = attribution.withheld_reason;
   return out;
 }

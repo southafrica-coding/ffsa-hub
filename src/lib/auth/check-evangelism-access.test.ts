@@ -70,6 +70,26 @@ describe("getEvangelismAccess", () => {
     expect(queries.some((q) => q.table === "role_permissions")).toBe(false);
   });
 
+  it("ignores a program-scoped admin role, like is_admin()", async () => {
+    const fake = createFakeSupabase({
+      user: { id: "u" },
+      resolve: (q) =>
+        q.table === "user_roles"
+          ? { data: [{ role_id: "a", scope_type: "program", roles: { name: "admin" } }] }
+          : { data: [] },
+    });
+    expect(await getEvangelismAccess(fake.client, "u")).toEqual(NONE);
+
+    const unscoped = createFakeSupabase({
+      user: { id: "u" },
+      resolve: (q) =>
+        q.table === "user_roles"
+          ? { data: [{ role_id: "a", scope_type: null, roles: { name: "admin" } }] }
+          : { data: [] },
+    });
+    expect(await getEvangelismAccess(unscoped.client, "u")).toEqual(ALL);
+  });
+
   it("does not count another module's grant", async () => {
     expect(
       (await access({ roles: [{ id: "r", name: "staff" }], direct: [{ module: "finance", key: "finance.view" }] })).result

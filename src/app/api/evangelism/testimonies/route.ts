@@ -7,6 +7,7 @@ import {
   createTestimony,
   getTestimony,
   listTestimonies,
+  ownedUploadPaths,
   removePhotoObjects,
   type TestimonyStatus,
 } from "@/services/evangelism";
@@ -15,7 +16,7 @@ const TEAM_STATUSES: TestimonyStatus[] = ["draft", "submitted", "withheld"];
 
 // GET /api/evangelism/testimonies
 //   (default)          published stories — any view access
-//   ?mine=1            the caller's own stories — submit access
+//   ?mine=1            the caller's own stories (incl. withheld) — submit access
 //   ?status=submitted  team review list (also draft / withheld) — publish only
 export async function GET(request: Request) {
   const caller = await getCaller();
@@ -37,7 +38,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await listTestimonies(caller.supabase, {
     status: status || undefined,
-    authorId: mine ? caller.userId : undefined,
+    mine,
     limit,
   });
   if (error) return dbError(error, "list");
@@ -58,25 +59,23 @@ export async function POST(request: Request) {
 
   const fields = parseTestimonyFields(body, { submit });
   if (!fields.ok) return jsonError(400, fields.error, fields.code);
-  const photo = parsePhoto(body.photo, caller.userId);
+  const photo = parsePhoto(body.photo);
   if (!photo.ok) return jsonError(400, photo.error);
 
-  const { data: created, error } = await createTestimony(
-    caller.supabase,
-    caller.userId,
-    fields.value,
-    submit ? "submitted" : "draft"
-  );
+  const { data: created, error } = await createTestimony(caller.supabase, fields.value, submit ? "submitted" : "draft");
   if (error || !created) return dbError(error, "create");
 
   let photoError: string | undefined;
   if (photo.value) {
-    const { error: mediaError } = await attachPhoto(caller.supabase, created.id, caller.userId, photo.value);
+    const { error: mediaError } = await attachPhoto(caller.supabase, created.id, photo.value);
     if (mediaError) {
       console.error("[evangelism] attach photo", mediaError);
       photoError = "The story saved, but the photo didn't attach. Edit the story to try again.";
+      // The path came from the client: only clean it up if the ledger says
+      // this caller minted it, so nobody can delete another user's photo.
       try {
-        await removePhotoObjects(createAdminClient(), [photo.value.path]);
+        const admin = createAdminClient();
+        await removePhotoObjects(admin, await ownedUploadPaths(admin, [photo.value.path], caller.userId));
       } catch {
         /* orphan object; harmless in a private bucket */
       }

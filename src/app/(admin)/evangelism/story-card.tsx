@@ -56,8 +56,10 @@ export function StoryCard({
         {OUTCOME_LABELS[story.outcome]} · {story.people_reached} reached · {story.decisions} decision
         {story.decisions === 1 ? "" : "s"}
       </p>
-      {story.status === "withheld" && story.withheld_reason && (
-        <p className="mt-2 text-sm text-red-700">Withheld: {story.withheld_reason}</p>
+      {story.status === "withheld" && (
+        <p className="mt-2 text-sm text-red-700">
+          {story.withheld_reason ? `Withheld: ${story.withheld_reason}` : "Withheld by a reviewer."}
+        </p>
       )}
       {children}
     </article>
