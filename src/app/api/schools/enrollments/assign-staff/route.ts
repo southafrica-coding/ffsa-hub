@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { userCanManageProgram } from "@/lib/auth/check-schools-access";
+import { unassignableContactError } from "@/lib/auth/assignable-contacts";
 import { sendStaffAssignmentEmails } from "@/lib/email/send-staff-assignment";
 
 // Assigns (or clears) the point-of-contact staff member for an enrollment.
@@ -51,6 +52,17 @@ export async function PUT(request: Request) {
   const previousStaffId = (existing as unknown as { assigned_staff_id: string | null }).assigned_staff_id;
   const newStaffId = assigned_staff_id ?? null;
   const changed = previousStaffId !== newStaffId;
+
+  // Same eligibility as the roster picker: program-scoped assignable-contact
+  // grants, super admins, and active leaders of this program.
+  const rejection = await unassignableContactError(
+    adminSupabase,
+    enrollmentProgramId,
+    newStaffId
+  );
+  if (rejection) {
+    return NextResponse.json({ error: rejection }, { status: 400 });
+  }
 
   const updates: Record<string, unknown> = {
     assigned_staff_id: newStaffId,

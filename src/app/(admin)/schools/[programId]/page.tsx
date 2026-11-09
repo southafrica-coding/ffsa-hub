@@ -332,11 +332,9 @@ export default async function ProgramDetailPage({
     .eq("is_active", true)
     .order("last_name", { ascending: true });
 
-  // Fetch staff pool — anyone with a schools.* permission for this
-  // specific program (or any schools.* permission granted globally).
-  // Includes the dedicated schools.assignable_as_contact key plus the
-  // broader admin/manage permissions, which already imply the user is
-  // trusted with this program.
+  // Staff who can be the point of contact: program-scoped
+  // schools.assignable_as_contact, super admins, and active leaders of
+  // this program. See fetchAssignableContacts.
   const staffOptions = await fetchAssignableContacts(admin, programId);
 
   // Leader team for this school (migration 145). Read via the admin

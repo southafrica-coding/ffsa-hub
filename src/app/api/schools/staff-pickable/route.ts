@@ -5,11 +5,9 @@ import { userCanManageApplications } from "@/lib/auth/check-schools-access";
 import { fetchAssignableContacts } from "@/lib/auth/assignable-contacts";
 
 // Returns users eligible to be the point-of-contact for the given
-// program. Eligibility = any schools.* permission (global OR scoped
-// to this program). The new schools.assignable_as_contact key is the
-// minimal grant for this purpose; broader schools permissions also
-// confer eligibility because those users are already trusted with
-// the program.
+// program. Eligibility lives in fetchAssignableContacts: a program-scoped
+// schools.assignable_as_contact grant, a super admin, or an active leader
+// of this program. Other schools permissions do not confer it.
 export async function GET(request: Request) {
   const supabase = await createClient();
   const {
