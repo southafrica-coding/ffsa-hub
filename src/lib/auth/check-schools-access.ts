@@ -221,7 +221,14 @@ export async function userCanDeleteApplication(
   userId: string,
   programId: string
 ): Promise<boolean> {
-  const expiry = await getApplicationExpiry(supabase, programId);
+  let expiry;
+  try {
+    expiry = await getApplicationExpiry(supabase, programId);
+  } catch {
+    return false;
+  }
+  // An RPC error is not "the school is still open".
+  if (expiry.lookupFailed) return false;
   if (expiry.expired) return expiry.canAccess;
 
   if (await hasUnscopedAdminRole(supabase, userId)) return true;

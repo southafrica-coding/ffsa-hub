@@ -11,6 +11,8 @@ export type ApplicationExpiry = {
   expired: boolean;
   /** Whether the viewer may still see an expired school's applications. */
   canAccess: boolean;
+  /** An expiry RPC failed. Callers that bypass RLS must deny. */
+  lookupFailed: boolean;
 };
 
 /**
@@ -47,6 +49,7 @@ export async function getApplicationExpiry(
     expiresOn,
     expired: expiredRes.data === true,
     canAccess: accessRes.data === true,
+    lookupFailed: Boolean(expiredRes.error || accessRes.error),
   };
 }
 
@@ -71,10 +74,15 @@ export async function userCanReadApplication(
   supabase: SupabaseClient,
   applicationId: string
 ): Promise<boolean> {
-  const { data } = await supabase
-    .from("application_responses")
-    .select("id")
-    .eq("id", applicationId)
-    .maybeSingle();
-  return !!data;
+  try {
+    const { data, error } = await supabase
+      .from("application_responses")
+      .select("id")
+      .eq("id", applicationId)
+      .maybeSingle();
+    if (error || !data) return false;
+    return true;
+  } catch {
+    return false;
+  }
 }

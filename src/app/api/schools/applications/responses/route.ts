@@ -16,7 +16,11 @@ import {
   userCanManageApplications,
   userCanManageProgram,
 } from "@/lib/auth/check-schools-access";
-import { userCanReadApplication, APPLICATIONS_EXPIRED_MESSAGE } from "@/lib/auth/application-expiry";
+import {
+  userCanReadApplication,
+  APPLICATIONS_EXPIRED_MESSAGE,
+  getApplicationExpiry,
+} from "@/lib/auth/application-expiry";
 import { normaliseGender } from "@/lib/schools/demographics";
 import { ensureStudentRole, deactivateMembershipProfile } from "@/lib/auth/membership-roles";
 import { sendTransactional } from "@/lib/email/send-transactional";
@@ -753,6 +757,19 @@ export async function PATCH(request: Request) {
   return NextResponse.json({ error: "Invalid action" }, { status: 400 });
 }
 
+async function expiredWithoutAccess(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  programId: string
+): Promise<boolean> {
+  try {
+    const expiry = await getApplicationExpiry(supabase, programId);
+    if (expiry.lookupFailed) return false;
+    return expiry.expired && !expiry.canAccess;
+  } catch {
+    return false;
+  }
+}
+
 // ── DELETE: permanently remove an application ──
 // Guarded: accepted applications own an enrollment / billing / user account,
 // so they can never be hard-deleted here — they must be archived instead.
@@ -780,15 +797,30 @@ export async function DELETE(request: Request) {
     .eq("id", id)
     .single();
 
-  // Migration 223 DELETE policy, not the archive gate. userCanManageProgram
-  // would let a program_leaders row through, and the service role would
-  // bypass the policy that refuses them. A missing row has no program, so
-  // it stays on the global check.
+  // Both gates are required. userCanDeleteApplication is migration 223's
+  // DELETE policy (a program_leaders row is not enough). The user-client
+  // read is RLS, and it is what keeps a school-scoped grant inside that
+  // school — the service role below would otherwise ignore it. A missing
+  // row has no program, so the policy check stays global.
   const allowed = existing?.program_id
     ? await userCanDeleteApplication(supabase, user.id, existing.program_id)
     : await userCanManageApplications(supabase, user.id);
   if (!allowed) {
+    if (existing?.program_id && (await expiredWithoutAccess(supabase, existing.program_id))) {
+      return NextResponse.json({ error: APPLICATIONS_EXPIRED_MESSAGE }, { status: 403 });
+    }
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // Fail closed: a throw, an error, or no row is not permission to delete.
+  let canRead = false;
+  try {
+    canRead = (await userCanReadApplication(supabase, id)) === true;
+  } catch {
+    canRead = false;
+  }
+  if (!canRead) {
+    return NextResponse.json({ error: APPLICATIONS_EXPIRED_MESSAGE }, { status: 403 });
   }
 
   if (fetchError || !existing) {

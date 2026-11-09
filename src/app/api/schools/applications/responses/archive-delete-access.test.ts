@@ -14,6 +14,16 @@ const h = vi.hoisted(() => ({
   programId: "11111111-1111-4111-8111-111111111111",
   removed: 0,
   deleted: 0,
+  canRead: true as boolean | "throw",
+  expiry: {
+    endDate: null as string | null,
+    expiresOn: null as string | null,
+    expired: false,
+    canAccess: false,
+    lookupFailed: false,
+  },
+  archived:
+    "Applications for this school have been archived. Contact the Training team for access.",
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -60,14 +70,12 @@ vi.mock("@/services/schools", () => ({
   ensureEnrollmentForApplicant: async () => ({ outcome: "enrolled" }),
 }));
 vi.mock("@/lib/auth/application-expiry", () => ({
-  userCanReadApplication: async () => true,
-  APPLICATIONS_EXPIRED_MESSAGE: "archived",
-  getApplicationExpiry: async () => ({
-    endDate: null,
-    expiresOn: null,
-    expired: false,
-    canAccess: false,
-  }),
+  userCanReadApplication: async () => {
+    if (h.canRead === "throw") throw new Error("read failed");
+    return h.canRead;
+  },
+  APPLICATIONS_EXPIRED_MESSAGE: h.archived,
+  getApplicationExpiry: async () => h.expiry,
 }));
 vi.mock("@/lib/schools/demographics", () => ({ normaliseGender: () => null }));
 vi.mock("@/lib/auth/membership-roles", () => ({
@@ -154,6 +162,14 @@ beforeEach(() => {
   h.removed = 0;
   h.deleted = 0;
   h.userClient = null;
+  h.canRead = true;
+  h.expiry = {
+    endDate: null,
+    expiresOn: null,
+    expired: false,
+    canAccess: false,
+    lookupFailed: false,
+  };
 });
 
 function archive() {
@@ -186,7 +202,7 @@ describe("archive stays on the program check; delete follows the DELETE policy",
     expect(h.deleted).toBe(0);
   });
 
-  it("lets each DELETE-policy grant permanently delete", async () => {
+  it("lets a grant delete only when the read check says this application is in reach", async () => {
     const grants: PermSeed[] = [
       { key: "schools.manage", scope_type: null, scope_id: null },
       { key: "schools.approve_applications", scope_type: null, scope_id: null },
@@ -200,10 +216,11 @@ describe("archive stays on the program check; delete follows the DELETE policy",
       h.deleted = 0;
       signIn({ perms: [perm] });
       const label = `${perm.key} ${perm.scope_type ?? "null"}`;
-      const archives = perm.scope_type == null || perm.scope_type === "program";
-      expect((await archive()).status, label).toBe(archives ? 200 : 403);
-      expect((await remove()).status, label).toBe(200);
-      expect(h.deleted, label).toBe(1);
+      const inThisSchool = perm.scope_type == null || perm.scope_id === PROGRAM_A;
+      h.canRead = inThisSchool;
+      expect((await archive()).status, label).toBe(inThisSchool ? 200 : 403);
+      expect((await remove()).status, label).toBe(inThisSchool ? 200 : 403);
+      expect(h.deleted, label).toBe(inThisSchool ? 1 : 0);
     }
   });
 
@@ -216,7 +233,7 @@ describe("archive stays on the program check; delete follows the DELETE policy",
     }
   });
 
-  it("lets a program_leader delete when the role bundle includes schools.manage, at any scope", async () => {
+  it("lets a program_leader delete only the school the read check can see", async () => {
     const scopes: Array<[string | null, string | null]> = [
       [null, null],
       ["program", PROGRAM_A],
@@ -227,18 +244,54 @@ describe("archive stays on the program check; delete follows the DELETE policy",
     for (const [scopeType, scopeId] of scopes) {
       h.removed = 0;
       h.deleted = 0;
+      const inThisSchool = scopeType == null || scopeId === PROGRAM_A;
+      h.canRead = inThisSchool;
       signIn({ roles: [programLeader(scopeType, scopeId)], bundles: leaderBundle });
-      const label = `${scopeType ?? "null"}`;
-      if (scopeType === "program" && scopeId === PROGRAM_A) {
-        expect((await archive()).status, label).toBe(200);
-      } else if (scopeType === null) {
-        expect((await archive()).status, label).toBe(200);
-      } else {
-        expect((await archive()).status, label).toBe(403);
-      }
-      expect((await remove()).status, label).toBe(200);
-      expect(h.deleted, label).toBe(1);
+      const label = `${scopeType ?? "null"}:${scopeId ?? "null"}`;
+      expect((await archive()).status, label).toBe(inThisSchool ? 200 : 403);
+      expect((await remove()).status, label).toBe(inThisSchool ? 200 : 403);
+      expect(h.deleted, label).toBe(inThisSchool ? 1 : 0);
     }
+  });
+
+  it("does not delete when the read check is false or throws", async () => {
+    signIn({ roles: [{ name: "admin", scope_type: null, scope_id: null }] });
+    h.canRead = false;
+    expect((await remove()).status).toBe(403);
+    expect(h.deleted).toBe(0);
+
+    h.canRead = "throw";
+    const thrown = await remove();
+    expect(thrown.status).toBe(403);
+    expect(h.deleted).toBe(0);
+  });
+
+  it("refuses a school-A grant deleting a school-B application when the read check fails", async () => {
+    h.programId = PROGRAM_B;
+    h.canRead = false;
+    for (const key of ["schools.manage", "schools.approve_applications"] as const) {
+      h.deleted = 0;
+      signIn({ perms: [{ key, scope_type: "program", scope_id: PROGRAM_A }] });
+      const res = await remove();
+      expect(res.status, key).toBe(403);
+      expect(h.deleted, key).toBe(0);
+    }
+  });
+
+  it("returns the archived-applications message when the school is expired", async () => {
+    signIn({ perms: [{ key: "schools.manage", scope_type: null, scope_id: null }] });
+    h.canRead = true;
+    h.expiry = {
+      endDate: "2020-01-01",
+      expiresOn: "2020-07-01",
+      expired: true,
+      canAccess: false,
+      lookupFailed: false,
+    };
+    const res = await remove();
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: h.archived });
+    expect(h.deleted).toBe(0);
   });
 
   it("refuses delete for grants and roles the DELETE policy does not name", async () => {

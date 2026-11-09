@@ -303,4 +303,34 @@ describe("userCanDeleteApplication expiry gate", () => {
   it("uses the normal rule while the school is live", async () => {
     expect(await userCanDeleteApplication(client(false, false), USER, PROGRAM_A)).toBe(true);
   });
+
+  it("denies when an expiry RPC errors, even with schools.manage", async () => {
+    const f = createFakeSupabase({
+      resolve: (q) => {
+        if (q.table === "rpc:program_end_date") return { data: null };
+        if (q.table === "rpc:program_applications_expired") {
+          return { data: null, error: { message: "down" } };
+        }
+        if (q.table === "rpc:can_access_expired_applications") return { data: false };
+        if (q.table === "user_permissions") {
+          return { data: [{ scope_type: null, permissions: { key: "schools.manage" } }] };
+        }
+        return { data: [] };
+      },
+    });
+    expect(await userCanDeleteApplication(f.client, USER, PROGRAM_A)).toBe(false);
+  });
+
+  it("denies when the expiry lookup throws", async () => {
+    const f = createFakeSupabase({
+      resolve: (q) => {
+        if (q.table.startsWith("rpc:")) throw new Error("down");
+        if (q.table === "user_permissions") {
+          return { data: [{ scope_type: null, permissions: { key: "schools.manage" } }] };
+        }
+        return { data: [] };
+      },
+    });
+    expect(await userCanDeleteApplication(f.client, USER, PROGRAM_A)).toBe(false);
+  });
 });
