@@ -358,7 +358,7 @@ export function ProgramFeesDetail({
             </p>
           ) : (
             <div className="overflow-x-auto border border-ink">
-              <Table>
+              <Table className="phone-stack">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-8" />
@@ -436,7 +436,7 @@ export function ProgramFeesDetail({
             </p>
           ) : (
             <div className="overflow-x-auto border border-ink">
-              <Table>
+              <Table className="phone-stack">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Date</TableHead>
@@ -581,23 +581,23 @@ function StudentFeeRow({
   return (
     <>
       <TableRow className="cursor-pointer" onClick={onToggle}>
-        <TableCell>
+        <TableCell className="hidden md:table-cell">
           {isExpanded ? (
             <ChevronDown className="h-3 w-3" />
           ) : (
             <ChevronRight className="h-3 w-3" />
           )}
         </TableCell>
-        <TableCell className="font-medium">
+        <TableCell data-label="Student" className="font-medium">
           {studentName(fee.users)}
         </TableCell>
-        <TableCell onClick={(e) => e.stopPropagation()}>
+        <TableCell data-label="Tier" onClick={(e) => e.stopPropagation()}>
           <Select
             value={fee.tier}
             onValueChange={handleTierChange}
             disabled={changingTier}
           >
-            <SelectTrigger className="w-[110px] h-8 text-xs">
+            <SelectTrigger className="h-11 w-full text-sm md:h-8 md:w-[110px] md:text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -607,25 +607,26 @@ function StudentFeeRow({
             </SelectContent>
           </Select>
         </TableCell>
-        <TableCell className="text-right font-mono text-sm">
+        <TableCell data-label="Total due" className="text-right font-mono text-sm">
           {formatCurrency(Number(fee.final_amount_zar))}
         </TableCell>
-        <TableCell className="text-right tabular font-mono text-sm text-[color:var(--green-text)]">
+        <TableCell data-label="Paid" className="text-right tabular font-mono text-sm text-[color:var(--green-text)]">
           {formatCurrency(Number(fee.amount_paid_zar))}
         </TableCell>
         <TableCell
+          data-label="Balance"
           className={`text-right font-mono text-sm ${
             balance > 0 ? "text-destructive" : ""
           }`}
         >
           {formatCurrency(balance)}
         </TableCell>
-        <TableCell>
+        <TableCell data-label="Status">
           <StatusPill tone={STATUS_TONES[fee.status] ?? "quiet"}>
             {fee.status.replace(/_/g, " ")}
           </StatusPill>
         </TableCell>
-        <TableCell onClick={(e) => e.stopPropagation()}>
+        <TableCell data-label="Payment" onClick={(e) => e.stopPropagation()}>
           <RecordPaymentDialog
             studentFeeId={fee.id}
             studentName={studentName(fee.users)}
@@ -636,36 +637,29 @@ function StudentFeeRow({
       {isExpanded && (
         <TableRow>
           <TableCell colSpan={8} className="bg-bone">
-            <div className="p-3 space-y-2">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
-                <div>
-                  <span className="text-muted-foreground">Tuition:</span>{" "}
-                  <span className="tabular font-mono">
-                    {formatCurrency(Number(fee.tuition_zar))}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Accommodation:</span>{" "}
-                  <span className="tabular font-mono">
-                    {formatCurrency(Number(fee.accommodation_zar))}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Meals:</span>{" "}
-                  <span className="tabular font-mono">
-                    {formatCurrency(Number(fee.meals_zar))}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Materials:</span>{" "}
-                  <span className="tabular font-mono">
-                    {formatCurrency(Number(fee.materials_zar))}
-                  </span>
-                </div>
-              </div>
+            <div className="space-y-4 px-1 py-3 sm:p-3">
+              <dl className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 sm:grid-cols-4">
+                {(
+                  [
+                    ["Tuition", fee.tuition_zar],
+                    ["Accommodation", fee.accommodation_zar],
+                    ["Meals", fee.meals_zar],
+                    ["Materials", fee.materials_zar],
+                  ] as const
+                ).map(([label, amount]) => (
+                  <div key={label} className="min-w-0">
+                    <dt className="font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-[color:var(--text-tertiary)]">
+                      {label}
+                    </dt>
+                    <dd className="mt-1 font-mono text-sm tabular-nums">
+                      {formatCurrency(Number(amount))}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
               {(Number(fee.discount_zar) > 0 ||
                 Number(fee.scholarship_zar) > 0) && (
-                <div className="flex gap-4 text-sm">
+                <div className="flex flex-col gap-2 text-sm sm:flex-row sm:gap-4">
                   {Number(fee.discount_zar) > 0 && (
                     <span className="text-[color:var(--green-text)]">
                       Discount: -{formatCurrency(Number(fee.discount_zar))}
@@ -682,17 +676,17 @@ function StudentFeeRow({
 
               {/* Inline payment history */}
               {paymentHistory.length > 0 && (
-                <div className="mt-3 pt-3 border-t">
-                  <p className="text-xs font-medium text-muted-foreground mb-2">
-                    Payment History
+                <div className="border-t border-rule pt-3">
+                  <p className="mb-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-[color:var(--text-tertiary)]">
+                    Payment history
                   </p>
-                  <div className="space-y-1">
+                  <div className="space-y-2">
                     {paymentHistory.map((p) => (
                       <div
                         key={p.id}
-                        className="flex items-center justify-between text-xs py-1 border-b border-muted last:border-0"
+                        className="flex flex-col gap-1 border-b border-rule py-2 text-sm last:border-0 sm:flex-row sm:items-center sm:justify-between"
                       >
-                        <div className="flex items-center gap-2">
+                        <div className="flex min-w-0 flex-wrap items-center gap-2">
                           <span>
                             {new Date(p.payment_date).toLocaleDateString()}
                           </span>
@@ -700,13 +694,13 @@ function StudentFeeRow({
                             {p.payment_method.toUpperCase()}
                           </StatusPill>
                           {p.reference && (
-                            <span className="text-muted-foreground">
+                            <span className="min-w-0 break-words text-[color:var(--text-secondary)]">
                               {p.reference}
                             </span>
                           )}
                           {p.currency_paid &&
                             p.currency_paid !== "ZAR" && (
-                              <span className="text-muted-foreground">
+                              <span className="text-[color:var(--text-secondary)]">
                                 ({p.currency_paid}{" "}
                                 {Number(p.currency_amount).toFixed(2)})
                               </span>
@@ -796,16 +790,16 @@ function UnassignedStudentRow({
 
   return (
     <TableRow className="bg-bone">
-      <TableCell />
-      <TableCell className="font-medium">
+      <TableCell className="hidden md:table-cell" />
+      <TableCell data-label="Student" className="font-medium">
         {name}
       </TableCell>
-      <TableCell>
+      <TableCell data-label="Tier">
         {loading ? (
           <Loader2 className="h-4 w-4 animate-spin" />
         ) : (
           <Select onValueChange={handleTierSelect}>
-            <SelectTrigger className="w-[130px] h-8 text-xs border-dashed">
+            <SelectTrigger className="h-11 w-full border-dashed text-sm md:h-8 md:w-[130px] md:text-xs">
               <SelectValue placeholder="Assign tier..." />
             </SelectTrigger>
             <SelectContent>
@@ -816,13 +810,13 @@ function UnassignedStudentRow({
           </Select>
         )}
       </TableCell>
-      <TableCell className="text-right text-sm text-muted-foreground">—</TableCell>
-      <TableCell className="text-right text-sm text-muted-foreground">—</TableCell>
-      <TableCell className="text-right text-sm text-muted-foreground">—</TableCell>
-      <TableCell>
+      <TableCell data-label="Total due" className="text-right text-sm text-muted-foreground">—</TableCell>
+      <TableCell data-label="Paid" className="text-right text-sm text-muted-foreground">—</TableCell>
+      <TableCell data-label="Balance" className="text-right text-sm text-muted-foreground">—</TableCell>
+      <TableCell data-label="Status">
         <StatusPill tone="warn">No fee</StatusPill>
       </TableCell>
-      <TableCell />
+      <TableCell className="hidden md:table-cell" />
     </TableRow>
   );
 }

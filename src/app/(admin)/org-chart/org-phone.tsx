@@ -5,7 +5,7 @@
 // names to a few pixels and turns every row into a miss. Below xl this list
 // is the chart — same model, readable type, 44px targets, one team at a time.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Search } from "lucide-react";
 import {
@@ -18,7 +18,17 @@ import {
   type OrgState,
   type OrgTeam,
 } from "@/lib/org-chart/model";
-import { phoneAttention } from "@/lib/org-chart/phone";
+import {
+  DIRECTORY_HOME,
+  directoryOpenPerson,
+  directoryOpenTeam,
+  emptyRosterCopy,
+  personLabel,
+  personRoles,
+  phoneAttention,
+  type DirectoryScreen,
+} from "@/lib/org-chart/phone";
+import { applyDirectoryEdit, publishOrgEdit, subscribeOrgEdit } from "@/lib/org-chart/edit-share";
 import { OrgEditPanel } from "./org-edit-panel";
 import { ORG_CSS, ORG_VARS, T } from "./org-theme";
 
@@ -65,16 +75,99 @@ function Bar({ pct, state, measured = true }: { pct: number | null; state: OrgSt
 
 export function OrgPhone({ model, canManage }: { model: OrgModel; canManage: boolean }) {
   const teamById = useMemo(() => new Map(model.teams.map((t) => [t.id, t])), [model]);
-  const [query, setQuery] = useState("");
-  const [teamId, setTeamId] = useState<string | null>(null);
-  const [personId, setPersonId] = useState<string | null>(null);
-  const [editMode, setEditMode] = useState(false);
+  const [screen, setScreen] = useState<DirectoryScreen>(DIRECTORY_HOME);
+  const screenRef = useRef(screen);
+  screenRef.current = screen;
   const attention = phoneAttention(model);
+  const place = screen.screen === "home" ? "home" : `${screen.screen}:${screen.id}`;
+  const sawPlace = useRef(false);
+
+  // The first history entry is the list. Each team or person pushes another,
+  // so the browser Back button steps through the directory before leaving it.
+  // Next restores this page from its router cache on popstate, which resets
+  // useState to the list. The history entry is the source of truth after that.
+  const readDir = () =>
+    (history.state as { orgDir?: DirectoryScreen } | null)?.orgDir ?? null;
+  useEffect(() => {
+    const existing = readDir();
+    if (existing) {
+      screenRef.current = existing;
+      setScreen(existing);
+    } else {
+      history.replaceState({ orgDir: DIRECTORY_HOME }, "");
+    }
+    const onPop = () => {
+      const next = readDir() ?? DIRECTORY_HOME;
+      screenRef.current = next;
+      setScreen(next);
+    };
+    window.addEventListener("popstate", onPop);
+    const unsub = subscribeOrgEdit((share) => {
+      const next = applyDirectoryEdit(screenRef.current, share);
+      if (next === screenRef.current) return;
+      screenRef.current = next;
+      setScreen(next);
+      history.replaceState({ orgDir: next }, "");
+    });
+    return () => {
+      window.removeEventListener("popstate", onPop);
+      unsub();
+    };
+  }, []);
+  useLayoutEffect(() => {
+    const saved = readDir();
+    if (!saved) return;
+    if (saved.screen === screen.screen && saved.id === screen.id && saved.edit === screen.edit && saved.q === screen.q) return;
+    if (screen.screen === "home" && saved.screen !== "home") {
+      screenRef.current = saved;
+      setScreen(saved);
+    }
+  }, [screen]);
 
   useEffect(() => {
-    // The shell scrolls inside <main>, not the window.
     document.querySelector("[data-shell-main]")?.scrollTo({ top: 0 });
-  }, [teamId, personId, editMode]);
+    if (!sawPlace.current) {
+      sawPlace.current = true;
+      return;
+    }
+    const target =
+      (screen.focusId && document.getElementById(screen.focusId)) ||
+      document.getElementById("org-dir-back") ||
+      document.getElementById("org-dir-heading");
+    target?.focus();
+    // Focus only when the step changes, not on each search keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [place]);
+
+  const query = screen.q;
+  const editMode = screen.edit;
+  const teamId = screen.screen === "team" ? screen.id : null;
+  const personId = screen.screen === "person" ? screen.id : null;
+
+  const commit = (next: DirectoryScreen) => {
+    screenRef.current = next;
+    setScreen(next);
+  };
+
+  const setQuery = (q: string) => {
+    const next = { ...screenRef.current, q, focusId: undefined };
+    commit(next);
+    history.replaceState({ orgDir: next }, "");
+  };
+
+  const setEditMode = (edit: boolean) => {
+    const next = { ...screenRef.current, edit, focusId: undefined };
+    commit(next);
+    history.replaceState({ orgDir: next }, "");
+  };
+
+  const push = (next: DirectoryScreen) => {
+    const trigger = document.activeElement instanceof HTMLElement ? document.activeElement.id : "";
+    const prev = { ...screenRef.current, focusId: trigger || screenRef.current.focusId };
+    history.replaceState({ orgDir: prev }, "");
+    history.pushState({ orgDir: next }, "");
+    commit(next);
+  };
 
   const q = query.trim().toLowerCase();
   const searching = q.length >= 2;
@@ -98,18 +191,17 @@ export function OrgPhone({ model, canManage }: { model: OrgModel; canManage: boo
     return [...seen.entries()].map(([id, e]) => ({ id, name: e.name, teams: e.teams }));
   }, [model.teams, q, searching]);
 
-  const openTeam = (id: string) => {
-    setPersonId(null);
-    setTeamId(id);
-    setQuery("");
-  };
-  const openPerson = (id: string) => {
-    setTeamId(null);
-    setPersonId(id);
-    setQuery("");
-  };
+  const openTeam = (id: string) => push(directoryOpenTeam(screenRef.current, id));
+  const openPerson = (id: string) => push(directoryOpenPerson(screenRef.current, id));
+  const goBack = () => history.back();
 
   const editing = editMode && teamId ? teamById.get(teamId) : undefined;
+
+  // The desktop canvas is mounted beside this list. Publish the open edit
+  // panel so crossing 1280px keeps the same team.
+  useEffect(() => {
+    publishOrgEdit({ edit: editMode, teamId: editing?.id ?? null });
+  }, [editMode, editing?.id]);
   const open = !editMode && teamId ? teamById.get(teamId) : undefined;
 
   const kicker = editMode
@@ -122,14 +214,15 @@ export function OrgPhone({ model, canManage }: { model: OrgModel; canManage: boo
 
       {editing ? (
         <div className="relative min-h-[calc(100dvh-7.5rem)]">
-          <OrgEditPanel key={editing.id} t={editing} model={model} team={teamById} onClose={() => setTeamId(null)} variant="page" />
+          <OrgEditPanel key={editing.id} t={editing} model={model} team={teamById} onClose={goBack} variant="page" />
         </div>
       ) : open ? (
         <TeamDetail
           t={open}
           model={model}
           teamById={teamById}
-          onBack={() => setTeamId(null)}
+          canManage={canManage}
+          onBack={goBack}
           onPerson={openPerson}
           onTeam={openTeam}
         />
@@ -138,7 +231,7 @@ export function OrgPhone({ model, canManage }: { model: OrgModel; canManage: boo
           userId={personId}
           model={model}
           teamById={teamById}
-          onBack={() => setPersonId(null)}
+          onBack={goBack}
           onTeam={openTeam}
         />
       ) : (
@@ -150,28 +243,37 @@ export function OrgPhone({ model, canManage }: { model: OrgModel; canManage: boo
                 {kicker}
               </span>
             </div>
-            <h1 className={`${COND} m-0 text-[34px] uppercase leading-[0.9]`}>{editMode ? "Editing the chart" : "Rooted & Sent"}</h1>
+            <h1 id="org-dir-heading" tabIndex={-1} className={`${COND} m-0 text-[34px] uppercase leading-[0.9] outline-none`}>
+              {editMode ? "Editing the chart" : "Rooted & Sent"}
+            </h1>
             <p className="mt-2 text-[13px] leading-[1.45]" style={{ color: T.sub }}>
               {editMode
                 ? "Tap a team to edit what it is for, its direction, shepherd and people. Moving a table stays on a larger screen."
                 : "Teams, who leads them, and who they report to. Open a team for its people and OKRs."}
             </p>
             <div className="mt-4 flex flex-col gap-2.5">
-              <label className="flex h-11 items-center gap-2.5 border bg-[color:var(--org-surface)] px-3" style={{ borderColor: T.btnBorder }}>
+              <label
+                className="flex h-11 items-center gap-2.5 border bg-[color:var(--org-surface)] px-3 focus-within:border-[color:var(--org-yellow)] focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[color:var(--org-yellow)]"
+                style={{ borderColor: T.btnBorder }}
+              >
                 <Search size={16} color={T.mono} />
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Find a person or team"
                   aria-label="Find a person or team"
+                  aria-describedby="org-dir-search-hint"
                   className="h-full min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-[color:var(--org-mono)]"
                 />
               </label>
+              <p id="org-dir-search-hint" className="text-[12px] leading-snug" style={{ color: T.sub }}>
+                Type at least two letters. One letter is not enough to search.
+              </p>
               {canManage && (
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={() => setEditMode((v) => !v)}
+                    onClick={() => setEditMode(!editMode)}
                     className={`${MONO} flex h-11 flex-1 items-center justify-center border px-3 text-[10px] uppercase tracking-[0.14em]`}
                     style={editMode ? { background: T.yellow, borderColor: T.yellow, color: T.onYellow } : { background: "transparent", borderColor: T.border, color: T.ink }}
                   >
@@ -250,6 +352,7 @@ function SearchResults({
           <SectionHead title={`PEOPLE · ${people.length}`} />
           {people.map((p) => (
             <button
+              id={`org-person-${p.id}`}
               key={p.id}
               type="button"
               onClick={() => onPerson(p.id)}
@@ -344,6 +447,7 @@ function TeamRow({ t, parentName, onClick }: { t: OrgTeam; parentName?: string; 
     .join(" · ");
   return (
     <button
+      id={`org-team-${t.id}`}
       type="button"
       onClick={onClick}
       className="flex min-h-[56px] w-full items-center gap-3 border-b px-5 py-3 text-left"
@@ -381,7 +485,7 @@ function SectionHead({ title, right }: { title: string; right?: string }) {
 function BackBar({ label, onBack }: { label: string; onBack: () => void }) {
   return (
     <div className="sticky top-14 z-[2] flex items-center border-b border-[color:var(--org-border)] bg-[color:var(--org-surface)] px-4 py-2 md:top-0">
-      <button type="button" onClick={onBack} className={`${MONO} flex h-11 items-center bg-[color:var(--org-ink)] px-4 text-[10px] tracking-[0.12em] text-[color:var(--org-on-ink)]`}>
+      <button id="org-dir-back" type="button" onClick={onBack} className={`${MONO} flex h-11 items-center bg-[color:var(--org-ink)] px-4 text-[10px] tracking-[0.12em] text-[color:var(--org-on-ink)]`}>
         ← {label}
       </button>
     </div>
@@ -392,6 +496,7 @@ function TeamDetail({
   t,
   model,
   teamById,
+  canManage,
   onBack,
   onPerson,
   onTeam,
@@ -399,6 +504,7 @@ function TeamDetail({
   t: OrgTeam;
   model: OrgModel;
   teamById: Map<string, OrgTeam>;
+  canManage: boolean;
   onBack: () => void;
   onPerson: (id: string) => void;
   onTeam: (id: string) => void;
@@ -523,11 +629,12 @@ function TeamDetail({
       <SectionHead title={`PEOPLE · ${t.members.length}`} />
       {t.members.length === 0 ? (
         <p className="px-5 py-4 text-[14px]" style={{ color: T.open, background: T.surface }}>
-          Nobody is on this roster yet. Add people on the Ministry tab, or from Who is who.
+          {emptyRosterCopy(canManage)}
         </p>
       ) : (
         t.members.map((m) => (
-          <button
+            <button
+            id={`org-person-${m.userId}`}
             key={m.userId}
             type="button"
             onClick={() => onPerson(m.userId)}
@@ -566,12 +673,11 @@ function PersonDetail({
   onBack: () => void;
   onTeam: (id: string) => void;
 }) {
-  const seats = model.teams.flatMap((t) => t.members.filter((m) => m.userId === userId).map((m) => ({ team: t, member: m })));
-  const person = seats[0]?.member;
+  const roles = personRoles(model, userId);
   const owned = model.teams.flatMap((t) =>
     t.objectives.flatMap((o) => o.krs.filter((k) => k.ownerId === userId).map((k) => ({ team: t, kr: k })))
   );
-  const name = person?.name ?? model.leaders.find((l) => l.userId === userId)?.name ?? "Person";
+  const name = personLabel(model, userId);
 
   return (
     <div>
@@ -580,30 +686,35 @@ function PersonDetail({
         <span className={`${COND} flex h-14 w-14 items-center justify-center text-[22px]`} style={{ background: T.yellow, color: T.onYellow }}>
           {initials(name)}
         </span>
-        <h2 className={`${COND} mb-0 mt-3 text-[34px] uppercase leading-[0.95]`}>{name}</h2>
-        <p className="mt-1.5 text-[14px] font-bold" style={{ color: person?.title ? T.sub : T.open }}>
-          {person?.title ?? "No role title written down yet."}
+        <h2 id="org-dir-heading" tabIndex={-1} className={`${COND} mb-0 mt-3 text-[34px] uppercase leading-[0.95] outline-none`}>{name}</h2>
+        <p className="mt-1.5 text-[14px] font-bold" style={{ color: roles[0]?.title ? T.sub : T.open }}>
+          {roles.length === 0
+            ? "No role title written down yet."
+            : roles.length === 1
+              ? roles[0].title
+              : roles.map((r) => `${r.title} · ${r.teamName}`).join("  ·  ")}
         </p>
       </div>
 
-      <SectionHead title="SERVES ON" right={String(seats.length)} />
-      {seats.length === 0 ? (
+      <SectionHead title="SERVES ON" right={String(roles.length)} />
+      {roles.length === 0 ? (
         <p className="px-5 py-4 text-[14px]" style={{ color: T.sub, background: T.surface }}>
           Not on a roster the chart can see.
         </p>
       ) : (
-        seats.map(({ team, member }) => (
+        roles.map((role) => (
           <button
-            key={team.id}
+            id={`org-team-${role.teamId}`}
+            key={role.teamId}
             type="button"
-            onClick={() => onTeam(team.id)}
+            onClick={() => onTeam(role.teamId)}
             className="flex min-h-[52px] w-full items-center justify-between gap-3 border-b px-5 py-3 text-left"
             style={{ borderColor: T.row, background: T.surface }}
           >
             <span className="min-w-0">
-              <span className="block truncate text-[15px] font-bold">{team.name}</span>
+              <span className="block truncate text-[15px] font-bold">{role.teamName}</span>
               <span className="mt-0.5 block text-[13px]" style={{ color: T.sub }}>
-                {member.title ?? (member.isLead ? "Leader" : "Member")}
+                {role.title}
               </span>
             </span>
             <span style={{ color: T.mono }}>›</span>
@@ -611,16 +722,22 @@ function PersonDetail({
         ))
       )}
 
-      {person && person.responsibilities.length > 0 && (
-        <>
-          <SectionHead title="WHAT THIS ROLE CARRIES" />
-          {person.responsibilities.map((r) => (
-            <div key={r} className="border-b px-5 py-3 text-[14px] leading-[1.45]" style={{ borderColor: T.row, background: T.surface }}>
-              {r}
-            </div>
-          ))}
-        </>
-      )}
+      {roles.map((role) => (
+        <div key={role.teamId}>
+          <SectionHead title={`WHAT THIS ROLE CARRIES · ${role.teamName.toUpperCase()}`} />
+          {role.responsibilities.length ? (
+            role.responsibilities.map((r) => (
+              <div key={r} className="border-b px-5 py-3 text-[14px] leading-[1.45]" style={{ borderColor: T.row, background: T.surface }}>
+                {r}
+              </div>
+            ))
+          ) : (
+            <p className="border-b px-5 py-3 text-[14px] leading-[1.45]" style={{ borderColor: T.row, color: T.sub, background: T.surface }}>
+              Nothing more than the title is written down for {role.teamName}.
+            </p>
+          )}
+        </div>
+      ))}
 
       <SectionHead title="KEY RESULTS OWNED" right={String(owned.length)} />
       {owned.length === 0 ? (

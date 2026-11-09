@@ -223,7 +223,7 @@ export function ContactsList({
       )}
 
       <div className="rounded-lg border bg-card overflow-x-auto">
-        <Table>
+        <Table className="phone-stack">
           <TableHeader>
             <TableRow>
               <TableHead className="w-10">
@@ -270,7 +270,7 @@ export function ContactsList({
                       className="align-middle"
                     />
                   </TableCell>
-                  <TableCell className="whitespace-nowrap">
+                  <TableCell data-label="Name" className="whitespace-nowrap">
                     <button
                       type="button"
                       onClick={() =>
@@ -293,14 +293,14 @@ export function ContactsList({
                       </span>
                     )}
                   </TableCell>
-                  <TableCell className="text-muted-foreground whitespace-nowrap">
+                  <TableCell data-label="Email" className="text-muted-foreground whitespace-nowrap">
                     {contact.email ?? "—"}
                   </TableCell>
-                  <TableCell className="text-muted-foreground whitespace-nowrap">
+                  <TableCell data-label="Phone" className="text-muted-foreground whitespace-nowrap">
                     {contact.phone ?? "—"}
                   </TableCell>
-                  <TableCell>
-                    <div className="flex gap-1 flex-wrap min-w-[140px]">
+                  <TableCell data-label="Labels">
+                    <div className="flex gap-1 flex-wrap">
                       {contact.contact_labels?.slice(0, 4).map((cl) => {
                         if (!cl.labels) return null;
                         const colors = getLabelColors(cl.labels);
@@ -325,27 +325,27 @@ export function ContactsList({
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="text-muted-foreground whitespace-nowrap">
+                  <TableCell data-label="Date of birth" className="hidden text-muted-foreground whitespace-nowrap md:table-cell">
                     {contact.date_of_birth
                       ? new Date(contact.date_of_birth).toLocaleDateString()
                       : "—"}
                   </TableCell>
-                  <TableCell className="text-muted-foreground capitalize whitespace-nowrap">
+                  <TableCell data-label="Marital" className="hidden text-muted-foreground capitalize whitespace-nowrap md:table-cell">
                     {contact.marital_status ?? "—"}
                   </TableCell>
-                  <TableCell className="text-muted-foreground whitespace-nowrap">
+                  <TableCell data-label="City" className="text-muted-foreground whitespace-nowrap">
                     {contact.city ?? "—"}
                   </TableCell>
-                  <TableCell className="text-muted-foreground whitespace-nowrap">
+                  <TableCell data-label="Country" className="hidden text-muted-foreground whitespace-nowrap md:table-cell">
                     {contact.country ?? "—"}
                   </TableCell>
-                  <TableCell className="text-muted-foreground whitespace-nowrap">
+                  <TableCell data-label="Nationality" className="hidden text-muted-foreground whitespace-nowrap md:table-cell">
                     {contact.nationality ?? "—"}
                   </TableCell>
-                  <TableCell className="whitespace-nowrap">
+                  <TableCell data-label="Marketing" className="whitespace-nowrap">
                     <MarketingChip status={contact.marketing_status} />
                   </TableCell>
-                  <TableCell className="whitespace-nowrap">
+                  <TableCell data-label="Status" className="whitespace-nowrap">
                     <Badge
                       variant={contact.status === "active" ? "default" : "outline"}
                       className="capitalize"

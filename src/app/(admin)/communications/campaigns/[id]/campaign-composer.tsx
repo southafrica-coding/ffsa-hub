@@ -228,6 +228,8 @@ export function CampaignComposer({
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [paletteTab, setPaletteTab] = useState<"modules" | "sections">("modules");
   const [designOpen, setDesignOpen] = useState(false);
+  // Phone shows one builder pane at a time. Desktop keeps all three.
+  const [phonePane, setPhonePane] = useState<"blocks" | "email" | "edit">("email");
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [customTemplates, setCustomTemplates] = useState<CustomTemplate[]>([]);
 
@@ -496,17 +498,22 @@ export function CampaignComposer({
   // Select a block and leave the global Design panel.
   function selectBlock(id: string | null) {
     setSelectedBlockId(id);
-    if (id) setDesignOpen(false);
+    if (id) {
+      setDesignOpen(false);
+      setPhonePane("edit");
+    }
   }
   function addBlock(type: CampaignBlockType, preset?: PalettePreset) {
     const blk = newBlock(type, preset);
     setBody((b) => insertAt(b, "root", b.blocks.length, blk));
     selectBlock(blk.id);
+    setPhonePane("email");
   }
   function addSection(layout: SectionLayout) {
     const sec = newSection(layout);
     setBody((b) => insertAt(b, "root", b.blocks.length, sec));
     selectBlock(sec.id);
+    setPhonePane("email");
   }
   // Change a section's layout, reconciling the column count (keep existing
   // column content where possible; add empty / drop extra columns).
@@ -1143,11 +1150,35 @@ export function CampaignComposer({
         }}
         onDragEnd={handleDragEnd}
       >
-        <div className="grid gap-3 -mx-4 md:-mx-6 lg:grid-cols-[200px_minmax(0,1fr)_330px] lg:items-start">
+        <div className="grid min-w-0 gap-3 lg:grid-cols-[200px_minmax(0,1fr)_330px] lg:items-start">
+          <div className="sticky top-14 z-10 grid grid-cols-3 border border-ink bg-white lg:hidden" role="tablist" aria-label="Email builder">
+            {(
+              [
+                ["blocks", "Blocks"],
+                ["email", "Email"],
+                ["edit", "Edit"],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={phonePane === key}
+                onClick={() => setPhonePane(key)}
+                className={`h-11 font-mono text-[10px] font-bold uppercase tracking-[0.12em] ${
+                  phonePane === key ? "bg-ink text-white" : "bg-white text-ink"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           {/* Palette */}
           <Card
             data-dnd-no-autoscroll
-            className="self-start lg:sticky lg:top-4 lg:max-h-[calc(100vh-1.5rem)] lg:overflow-y-auto"
+            className={`self-start lg:sticky lg:top-4 lg:max-h-[calc(100vh-1.5rem)] lg:overflow-y-auto ${
+              phonePane === "blocks" || activeDrag ? "" : "hidden lg:block"
+            }`}
           >
             <CardHeader className="pb-2 space-y-2">
               <div className="flex items-center justify-between gap-1">
@@ -1166,8 +1197,9 @@ export function CampaignComposer({
                 onClick={() => {
                   setDesignOpen(true);
                   setSelectedBlockId(null);
+                  setPhonePane("edit");
                 }}
-                className="h-7 w-full gap-1 text-xs"
+                className="h-11 w-full gap-1 text-xs lg:h-7"
                 title="Edit the whole email's background, fonts and colors"
               >
                 🎨 Design
@@ -1206,7 +1238,8 @@ export function CampaignComposer({
                     </div>
                   ))}
                   <p className="pt-1 text-[10px] text-muted-foreground">
-                    Click to add, or drag onto the email.
+                    <span className="lg:hidden">Tap to add it to the email.</span>
+                    <span className="hidden lg:inline">Click to add, or drag onto the email.</span>
                   </p>
                 </>
               ) : (
@@ -1233,7 +1266,7 @@ export function CampaignComposer({
           </Card>
 
           {/* Live canvas */}
-          <Card className="self-start">
+          <Card className={`self-start ${phonePane === "email" || activeDrag ? "" : "hidden lg:block"}`}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm">Canvas</CardTitle>
               <SegmentedPicker
@@ -1263,7 +1296,9 @@ export function CampaignComposer({
           {/* Inspector */}
           <Card
             data-dnd-no-autoscroll
-            className="self-start lg:sticky lg:top-4 lg:max-h-[calc(100vh-1.5rem)] lg:overflow-y-auto"
+            className={`self-start lg:sticky lg:top-4 lg:max-h-[calc(100vh-1.5rem)] lg:overflow-y-auto ${
+              phonePane === "edit" ? "" : "hidden lg:block"
+            }`}
           >
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">
@@ -1359,7 +1394,7 @@ export function CampaignComposer({
                   value={testEmail}
                   onChange={(e) => setTestEmail(e.target.value)}
                   placeholder="you@example.com"
-                  className="w-56"
+                  className="w-full min-w-0 sm:w-56"
                 />
               </label>
               <Button
@@ -1672,7 +1707,7 @@ function PaletteItem({
       title={title}
       {...attributes}
       {...listeners}
-      className={`flex h-7 items-center gap-1 rounded border px-2 text-left text-xs hover:bg-muted cursor-grab active:cursor-grabbing ${
+      className={`flex h-11 items-center gap-1 rounded border px-2 text-left text-xs hover:bg-muted cursor-grab active:cursor-grabbing lg:h-7 ${
         isDragging ? "opacity-50" : ""
       }`}
     >
@@ -1705,7 +1740,7 @@ function SectionPaletteItem({
       onClick={onClick}
       {...attributes}
       {...listeners}
-      className={`flex h-9 items-center gap-2 rounded border px-2 text-left text-xs hover:bg-muted cursor-grab active:cursor-grabbing ${
+      className={`flex h-11 items-center gap-2 rounded border px-2 text-left text-xs hover:bg-muted cursor-grab active:cursor-grabbing lg:h-9 ${
         isDragging ? "opacity-50" : ""
       }`}
     >

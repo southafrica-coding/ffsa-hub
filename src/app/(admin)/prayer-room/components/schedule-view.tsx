@@ -239,17 +239,17 @@ export default function ScheduleView({ userId, isStaff, isMember, inCatalogue, t
       />
 
       <div className="flex flex-wrap items-center gap-2 border-b border-rule bg-bone px-5 py-3 md:px-8">
-        <div className="flex items-center gap-1">
-          <Button variant="outline" size="icon" className="h-11 w-11 md:h-8 md:w-8" onClick={() => step(-1)} aria-label="Previous">
+        <div className="flex w-full min-w-0 items-center gap-1 sm:w-auto">
+          <Button variant="outline" size="icon" className="h-11 w-11 shrink-0 md:h-8 md:w-8" onClick={() => step(-1)} aria-label="Previous">
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <div className="min-w-[10rem] px-1 text-center font-mono text-[10px] font-bold uppercase tracking-[0.12em]">
+          <div className="min-w-0 flex-1 break-words px-1 text-center font-mono text-[10px] font-bold uppercase leading-snug tracking-[0.06em] sm:min-w-[10rem] sm:flex-none sm:tracking-[0.12em]">
             {headerLabel}
           </div>
-          <Button variant="outline" size="icon" className="h-11 w-11 md:h-8 md:w-8" onClick={() => step(1)} aria-label="Next">
+          <Button variant="outline" size="icon" className="h-11 w-11 shrink-0 md:h-8 md:w-8" onClick={() => step(1)} aria-label="Next">
             <ChevronRight className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="sm" className="ml-1" onClick={() => setAnchor(todayISO())}>
+          <Button variant="ghost" size="sm" className="ml-1 h-11 shrink-0 px-3 md:h-8" onClick={() => setAnchor(todayISO())}>
             Today
           </Button>
         </div>
@@ -268,7 +268,7 @@ export default function ScheduleView({ userId, isStaff, isMember, inCatalogue, t
                 type="button"
                 onClick={() => setWeekView(opt.key)}
                 className={cn(
-                  "px-2.5 py-1.5 font-mono text-[9.5px] font-bold uppercase tracking-[0.1em]",
+                  "min-h-11 px-2.5 py-1.5 font-mono text-[9.5px] font-bold uppercase tracking-[0.1em] md:min-h-0",
                   weekView === opt.key
                     ? "bg-ink text-white"
                     : "border border-rule-strong text-[color:var(--text-secondary)]"

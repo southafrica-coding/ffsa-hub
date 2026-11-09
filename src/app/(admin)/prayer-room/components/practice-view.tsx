@@ -598,17 +598,17 @@ export default function PracticeView({
       <PrayerRoomChrome context={context} tabs={tabs} active={active} onChange={onTabChange} />
 
       <div className="flex flex-wrap items-center gap-2 border-b border-rule bg-bone px-5 py-3 md:px-8">
-        <div className="flex items-center gap-1">
-          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setAnchor(shiftDays(anchor, -7))} aria-label="Previous week">
+        <div className="flex w-full min-w-0 items-center gap-1 sm:w-auto">
+          <Button variant="outline" size="icon" className="h-11 w-11 shrink-0 md:h-8 md:w-8" onClick={() => setAnchor(shiftDays(anchor, -7))} aria-label="Previous week">
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <div className="min-w-[10rem] px-1 text-center font-mono text-[10px] font-bold uppercase tracking-[0.12em]">
+          <div className="min-w-0 flex-1 break-words px-1 text-center font-mono text-[10px] font-bold uppercase leading-snug tracking-[0.06em] sm:min-w-[10rem] sm:flex-none sm:tracking-[0.12em]">
             {label}
           </div>
-          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setAnchor(shiftDays(anchor, 7))} aria-label="Next week">
+          <Button variant="outline" size="icon" className="h-11 w-11 shrink-0 md:h-8 md:w-8" onClick={() => setAnchor(shiftDays(anchor, 7))} aria-label="Next week">
             <ChevronRight className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="sm" className="ml-1" onClick={() => setAnchor(sastNow().slice(0, 10))}>
+          <Button variant="ghost" size="sm" className="ml-1 h-11 shrink-0 px-2 md:h-8" onClick={() => setAnchor(sastNow().slice(0, 10))}>
             This week
           </Button>
         </div>

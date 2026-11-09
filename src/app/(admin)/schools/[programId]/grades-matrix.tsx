@@ -186,9 +186,48 @@ export function GradesMatrix({
         meta={`${totalCredits} CREDIT HOURS · ${courses.length} ${courses.length === 1 ? "COURSE" : "COURSES"}`}
       />
 
-      {/* The matrix is wide by nature — it scrolls inside its own box rather
-          than pushing the page sideways. */}
-      <div className="overflow-x-auto">
+      <div className="md:hidden">
+        {students.map((s) => {
+          const letters = courses.map((c) => gradeFor(s.enrollmentId, c.id) || null);
+          return (
+            <div key={s.enrollmentId} className="border-b border-rule px-4 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <span className="min-w-0 truncate text-[15px] font-bold">{s.name}</span>
+                <span className="numeral shrink-0 text-[22px] leading-none">{averageLetter(letters)}</span>
+              </div>
+              <div className="mt-2 space-y-2">
+                {courses.map((c) => {
+                  const letter = gradeFor(s.enrollmentId, c.id);
+                  const k = key(s.enrollmentId, c.id);
+                  return (
+                    <label key={c.id} className="flex min-h-11 items-center justify-between gap-3">
+                      <span className="min-w-0">
+                        <span className="block font-display text-[16px] font-black leading-none">{c.code}</span>
+                        <span className="block truncate text-[12px] text-[color:var(--text-secondary)]">{c.name}</span>
+                      </span>
+                      <select
+                        value={letter}
+                        disabled={saving === k}
+                        aria-label={`${c.code} grade for ${s.name}`}
+                        onChange={(e) => save(s.enrollmentId, c.id, e.target.value)}
+                        className="h-11 w-20 shrink-0 border border-ink bg-white text-center font-display text-[18px] font-black"
+                      >
+                        <option value="">—</option>
+                        {LETTER_GRADES.map((g) => (
+                          <option key={g} value={g}>{g}</option>
+                        ))}
+                      </select>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {/* The matrix is wide by nature — on a large screen it scrolls inside
+          its own box rather than pushing the page sideways. */}
+      <div className="hidden overflow-x-auto md:block">
         <div className="min-w-[820px]">
           <div className="grid border-b border-ink bg-bone" style={{ gridTemplateColumns: cols }}>
             <span className="mono-label px-5 py-3">Student</span>

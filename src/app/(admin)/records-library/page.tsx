@@ -99,7 +99,7 @@ export default async function RecordsLibraryPage() {
           <p className="text-sm text-muted-foreground">No imports yet. Upload your first CSV to begin.</p>
         ) : (
           <div className="overflow-x-auto border rounded-md">
-            <table className="min-w-full text-sm">
+            <table className="phone-stack min-w-full text-sm">
               <thead className="bg-muted/50 text-foreground">
                 <tr>
                   <th className="text-left px-3 py-2 font-medium">File</th>
@@ -119,7 +119,7 @@ export default async function RecordsLibraryPage() {
               <tbody>
                 {recentImports.map((row: ImportRow) => (
                   <tr key={row.id} className="border-t">
-                    <td className="px-3 py-2">
+                    <td data-label="File" className="px-3 py-2">
                       <Link
                         href={`/records-library/imports/${row.id}`}
                         className="text-foreground hover:underline"
@@ -127,17 +127,17 @@ export default async function RecordsLibraryPage() {
                         {row.filename}
                       </Link>
                     </td>
-                    <td className="px-3 py-2 capitalize">{row.record_type}</td>
-                    <td className="px-3 py-2"><StatusBadge status={row.status} /></td>
-                    <td className="px-3 py-2 text-right">{row.row_count}</td>
-                    <td className="px-3 py-2 text-right">{row.persons_created}</td>
-                    <td className="px-3 py-2 text-right">{row.records_created}</td>
-                    <td className="px-3 py-2 text-right">{row.merged_count ?? 0}</td>
-                    <td className="px-3 py-2 text-right">{row.skipped_count ?? 0}</td>
-                    <td className="px-3 py-2 text-right">{row.auto_linked_count}</td>
-                    <td className="px-3 py-2 text-right">{row.queued_count}</td>
-                    <td className="px-3 py-2 text-right">{row.error_count}</td>
-                    <td className="px-3 py-2 text-muted-foreground">
+                    <td data-label="Type" className="px-3 py-2 capitalize">{row.record_type}</td>
+                    <td data-label="Status" className="px-3 py-2"><StatusBadge status={row.status} /></td>
+                    <td data-label="Rows" className="px-3 py-2 text-right">{row.row_count}</td>
+                    <td data-label="Persons" className="px-3 py-2 text-right">{row.persons_created}</td>
+                    <td data-label="Records" className="px-3 py-2 text-right">{row.records_created}</td>
+                    <td data-label="Merged" className="px-3 py-2 text-right">{row.merged_count ?? 0}</td>
+                    <td data-label="Skipped" className="px-3 py-2 text-right">{row.skipped_count ?? 0}</td>
+                    <td data-label="Auto-linked" className="px-3 py-2 text-right">{row.auto_linked_count}</td>
+                    <td data-label="Queued" className="px-3 py-2 text-right">{row.queued_count}</td>
+                    <td data-label="Errors" className="px-3 py-2 text-right">{row.error_count}</td>
+                    <td data-label="When" className="px-3 py-2 text-muted-foreground">
                       {new Date(row.created_at).toLocaleString()}
                     </td>
                   </tr>
@@ -154,7 +154,7 @@ export default async function RecordsLibraryPage() {
           <p className="text-sm text-muted-foreground">No library persons yet.</p>
         ) : (
           <div className="overflow-x-auto border rounded-md">
-            <table className="min-w-full text-sm">
+            <table className="phone-stack min-w-full text-sm">
               <thead className="bg-muted/50 text-foreground">
                 <tr>
                   <th className="text-left px-3 py-2 font-medium">Name</th>
@@ -166,7 +166,7 @@ export default async function RecordsLibraryPage() {
               <tbody>
                 {recentPersons.map((row: PersonRow) => (
                   <tr key={row.id} className="border-t">
-                    <td className="px-3 py-2">
+                    <td data-label="Name" className="px-3 py-2">
                       <Link
                         href={`/records-library/persons/${row.id}`}
                         className="text-foreground hover:underline"
@@ -174,9 +174,9 @@ export default async function RecordsLibraryPage() {
                         {bestPersonName(row)}
                       </Link>
                     </td>
-                    <td className="px-3 py-2">{row.email ?? "—"}</td>
-                    <td className="px-3 py-2">{row.date_of_birth ?? "—"}</td>
-                    <td className="px-3 py-2">
+                    <td data-label="Email" className="px-3 py-2">{row.email ?? "—"}</td>
+                    <td data-label="DOB" className="px-3 py-2">{row.date_of_birth ?? "—"}</td>
+                    <td data-label="Linked user" className="px-3 py-2">
                       {row.users
                         ? `${row.users.first_name ?? ""} ${row.users.last_name ?? ""}`.trim() ||
                           row.users.email
