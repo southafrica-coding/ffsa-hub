@@ -1,16 +1,43 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { patchStory } from "@/lib/evangelism/story-client";
-import { decideTakedown, takedownSubject, type TakedownAccess } from "@/lib/evangelism/takedown";
+import { deleteStory, patchStory, storyListSignature } from "@/lib/evangelism/story-client";
+import { canActOnOthersStory, decideTakedown, takedownSubject, type TakedownAccess } from "@/lib/evangelism/takedown";
 import type { PresentedTestimony } from "@/services/evangelism";
 import { StoryCard } from "../story-card";
 
-function QueueItem({ story, access }: { story: PresentedTestimony; access: TakedownAccess }) {
+const control = "min-h-11 w-full sm:w-auto";
+
+/** Moderators only. Authors do not get this section of the queue. */
+export function showWithheldQueue(access: TakedownAccess): boolean {
+  return canActOnOthersStory(access);
+}
+
+export function withoutStory<T extends { id: string }>(stories: T[], id: string): T[] {
+  return stories.filter((story) => story.id !== id);
+}
+
+function QueueItem({
+  story,
+  access,
+  onReviewed,
+}: {
+  story: PresentedTestimony;
+  access: TakedownAccess;
+  onReviewed?: (id: string) => void;
+}) {
   const router = useRouter();
   const [withholding, setWithholding] = useState(false);
   const [reason, setReason] = useState("");
@@ -33,6 +60,7 @@ function QueueItem({ story, access }: { story: PresentedTestimony; access: Taked
       return;
     }
     toast.success(done);
+    onReviewed?.(story.id);
     router.refresh();
   }
 
@@ -107,14 +135,163 @@ function QueueItem({ story, access }: { story: PresentedTestimony; access: Taked
   );
 }
 
-export function QueueList({ stories, access }: { stories: PresentedTestimony[]; access: TakedownAccess }) {
+export function QueueList({
+  stories,
+  access,
+  onReviewed,
+}: {
+  stories: PresentedTestimony[];
+  access: TakedownAccess;
+  onReviewed?: (id: string) => void;
+}) {
   if (stories.length === 0) {
     return <p className="px-5 py-6 text-sm text-[color:var(--text-secondary)] md:px-8">Nothing waiting for review.</p>;
   }
   return (
     <>
       {stories.map((s) => (
-        <QueueItem key={s.id} story={s} access={access} />
+        <QueueItem key={s.id} story={s} access={access} onReviewed={onReviewed} />
+      ))}
+    </>
+  );
+}
+
+function WithheldItem({
+  story,
+  access,
+  onDone,
+}: {
+  story: PresentedTestimony;
+  access: TakedownAccess;
+  onDone: (id: string) => void;
+}) {
+  const subject = takedownSubject(story);
+  const canRepublish = decideTakedown("republish", access, subject).ok;
+  const canDelete = decideTakedown("delete", access, subject).ok;
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function fail(message: string) {
+    setError(message);
+    toast.error(message);
+  }
+
+  async function republish() {
+    setBusy(true);
+    setError(null);
+    const result = await patchStory(story.id, { status: "published" });
+    setBusy(false);
+    if (!result.ok) {
+      fail(result.message);
+      return;
+    }
+    toast.success("Published");
+    onDone(story.id);
+  }
+
+  async function remove() {
+    setBusy(true);
+    setError(null);
+    const result = await deleteStory(story.id);
+    setBusy(false);
+    if (!result.ok) {
+      fail(result.message);
+      return;
+    }
+    toast.success("Story deleted");
+    setConfirming(false);
+    onDone(story.id);
+  }
+
+  return (
+    <StoryCard story={story} showStatus>
+      {!story.consent_to_share && (
+        <p className="mt-3 break-words text-sm text-red-700">No consent to share — this story can&apos;t be published.</p>
+      )}
+      {(canRepublish || canDelete) && (
+        <div className="mt-4 flex min-w-0 max-w-full flex-col gap-2 break-words sm:flex-row sm:flex-wrap">
+          {canRepublish && (
+            <Button type="button" className={control} disabled={busy} onClick={() => void republish()}>
+              Publish again
+            </Button>
+          )}
+          {canDelete && (
+            <Button
+              type="button"
+              variant="outline"
+              className={`${control} text-red-700`}
+              disabled={busy}
+              onClick={() => {
+                setError(null);
+                setConfirming(true);
+              }}
+            >
+              Delete
+            </Button>
+          )}
+        </div>
+      )}
+      {error && (
+        <p role="alert" className="mt-3 break-words text-sm text-red-700">
+          {error}
+        </p>
+      )}
+      <Dialog open={confirming} onOpenChange={(open) => { if (!busy) setConfirming(open); }}>
+        <DialogContent>
+          <DialogHeader className="text-left">
+            <DialogTitle className="break-words pr-6 font-display text-xl font-black uppercase leading-tight">
+              Delete this story?
+            </DialogTitle>
+            <DialogDescription className="break-words text-left text-sm">
+              “{story.title}” will be removed. This can&apos;t be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" className={control} disabled={busy} onClick={() => setConfirming(false)}>
+              Cancel
+            </Button>
+            <Button type="button" variant="destructive" className={control} disabled={busy} onClick={() => void remove()}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </StoryCard>
+  );
+}
+
+/** Withheld stories a moderator can put back or delete. Hidden from everyone else. */
+export function WithheldQueue({
+  stories,
+  access,
+}: {
+  stories: PresentedTestimony[];
+  access: TakedownAccess;
+}) {
+  const sig = storyListSignature(stories);
+  const applied = useRef(sig);
+  const [items, setItems] = useState(stories);
+
+  useEffect(() => {
+    if (applied.current === sig) return;
+    applied.current = sig;
+    setItems(stories);
+  }, [sig, stories]);
+
+  if (!showWithheldQueue(access)) return null;
+  if (items.length === 0) {
+    return <p className="px-5 py-6 text-sm text-[color:var(--text-secondary)] md:px-8">Nothing withheld.</p>;
+  }
+  return (
+    <>
+      {items.map((story) => (
+        <WithheldItem
+          key={story.id}
+          story={story}
+          access={access}
+          onDone={(id) => setItems((current) => withoutStory(current, id))}
+        />
       ))}
     </>
   );
