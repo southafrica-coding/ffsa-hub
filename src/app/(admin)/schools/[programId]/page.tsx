@@ -491,6 +491,7 @@ export default async function ProgramDetailPage({
         refRequestSummaries={refRequests ?? []}
         applicationExpiry={applicationExpiry}
         staffDecisionPanel={staffDecisionPanel ?? undefined}
+        canEditClassroom={viewer.canManage}
       />
     </>
   );

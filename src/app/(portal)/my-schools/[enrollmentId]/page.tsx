@@ -16,6 +16,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { TranscriptButton } from "./transcript-button";
+import { ClassroomSection } from "./classroom-section";
+import { getProgramClassroom } from "@/services/lms-content";
+import { isClassroomEnrollment, publishedOnly, type LmsCourseTree } from "@/lib/schools/lms-content";
 import { Masthead, KpiStrip, Kpi, StatusPill, type Tone } from "@/components/ffsa";
 
 const ENROLLMENT_TONE: Record<string, Tone> = {
@@ -68,6 +71,17 @@ export default async function EnrollmentDetailPage({
   );
 
   const program = enrollment.programs;
+
+  // Classroom (LMS slice 1): the student's own, still-active enrolment only,
+  // published content only. RLS (migration 305) applies the same rule. If
+  // the lms_* tables are not there yet, the section is simply left out.
+  let classroom: LmsCourseTree[] | null = null;
+  if (enrollment.user_id === user.id && isClassroomEnrollment(enrollment)) {
+    const { data, error: classroomError } = await getProgramClassroom(supabase, program.id, {
+      includeUnpublished: false,
+    });
+    if (!classroomError) classroom = publishedOnly(data ?? []);
+  }
   const courses = program.courses ?? [];
   const grades = gradesData ?? [];
 
@@ -228,6 +242,8 @@ export default async function EnrollmentDetailPage({
         </Table>
       </div>
       </div>
+
+      {classroom && <ClassroomSection courses={classroom} />}
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { ReferenceQuestionsBuilder } from "./reference-questions-builder";
 import { ProgramCoursesManager, type PhaseCourse } from "./program-courses-manager";
 import { LeadersTab, type ProgramLeaderRow } from "./leaders-tab";
 import { StaffTab, type ProgramStaffRow } from "./staff-tab";
+import { ClassroomTab } from "./classroom-tab";
 import { EmailsTab } from "./emails-tab";
 import { StudentsExportPanel } from "./students-export-panel";
 import { ENROLLMENT_STATUS_LABELS } from "@/lib/schools/student-export-columns";
@@ -358,7 +359,7 @@ type RefRequestSummary = {
  *  is still in the wild as ?tab=enrollments, so it maps rather than 404s. */
 const TAB_KEYS = [
   "overview", "students", "courses", "track", "grades", "applicants", "application", "arrival", "leaders", "staff", "emails", "fees",
-  "staff_decision",
+  "staff_decision", "classroom",
 ];
 function normaliseTab(tab: string): string {
   return tab === "enrollments" ? "students" : tab;
@@ -424,6 +425,7 @@ export function ProgramDetail({
   refRequestSummaries,
   applicationExpiry,
   staffDecisionPanel,
+  canEditClassroom = false,
 }: {
   program: Program;
   initialTab?: string;
@@ -466,6 +468,9 @@ export function ProgramDetail({
   /** Leadership Track only, and only for Leadership Team viewers — the
    *  server-rendered "accepted as staff?" tab. Absent = no tab. */
   staffDecisionPanel?: React.ReactNode;
+  /** LMS slice 1: leaders / managers (userCanManageProgram) get the Classroom
+   *  editor. Everyone else who reaches this page sees no Classroom tab. */
+  canEditClassroom?: boolean;
 }) {
   const router = useRouter();
   const [editingProgram, setEditingProgram] = useState(false);
@@ -554,9 +559,12 @@ export function ProgramDetail({
       arrivals: Object.fromEntries(arrivals),
     };
   });
-  const [tab, setTab] = useState(
-    initialTab && TAB_KEYS.includes(normaliseTab(initialTab)) ? normaliseTab(initialTab) : "overview"
-  );
+  const [tab, setTab] = useState(() => {
+    const wanted = initialTab ? normaliseTab(initialTab) : "overview";
+    if (!TAB_KEYS.includes(wanted)) return "overview";
+    if (wanted === "classroom" && !canEditClassroom) return "overview";
+    return wanted;
+  });
   const [rosterFilter, setRosterFilter] = useState<RosterFilter>("all");
   const rosterStaffOptions = staffOptions
     .map((s) => ({ id: s.id, name: displayName(s) }))
@@ -692,6 +700,7 @@ export function ProgramDetail({
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="students">Students ({activeEnrollments.length})</TabsTrigger>
             <TabsTrigger value="courses">Courses ({billingCourses.length})</TabsTrigger>
+            {canEditClassroom && <TabsTrigger value="classroom">Classroom</TabsTrigger>}
             {trackSegments.length > 0 && (
               <TabsTrigger value="track">Track ({trackSummary.confirmed}/{trackSummary.total})</TabsTrigger>
             )}
@@ -749,6 +758,12 @@ export function ProgramDetail({
             staff={courseStaff}
           />
         </TabsContent>
+
+        {canEditClassroom && (
+          <TabsContent value="classroom" className="mt-0 px-5 py-6 md:px-8">
+            <ClassroomTab programId={program.id} />
+          </TabsContent>
+        )}
 
         {/* Frame 14b */}
         {trackSegments.length > 0 && (
