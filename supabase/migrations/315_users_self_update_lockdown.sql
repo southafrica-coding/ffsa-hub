@@ -29,9 +29,14 @@
 --
 -- Design
 --   1. anon: no write privileges at all (SELECT stays; RLS returns nothing).
---   2. authenticated: no DELETE/TRUNCATE/REFERENCES/TRIGGER, no table-wide
---      UPDATE. INSERT is kept: no user-client flow inserts users today, and
---      the only INSERT policy is is_admin().
+--   2. authenticated: no INSERT/DELETE/TRUNCATE/REFERENCES/TRIGGER, no
+--      table-wide UPDATE. Every users row is created by the service role
+--      (api/public/signup, api/admin/invite-user, api/admin/accept-application;
+--      pg_stat_statements on prod shows only service_role inserting) and there
+--      is no trigger on auth.users. The admin-only INSERT policy "Admins can
+--      insert users" is dropped: with no INSERT grant it is dead, and dropping
+--      it keeps the table fail-closed (RLS denies inserts) if a grant is ever
+--      restored by mistake.
 --   3. authenticated gets column UPDATE on the union of
 --        (a) columns users edit about themselves through the user client
 --            (profile, onboarding, insurance, CV essence, onboarding finish),
@@ -47,7 +52,7 @@
 --        - a deactivated caller may not change any users row;
 --        - an active admin (is_admin()) may change anything the grant allows;
 --        - anyone else may only change the self-edit columns on their own
---          row, plus: department -> NULL/'' or a main staff ministry other
+--          row, plus: department -> NULL or a main staff ministry other
 --          than leadership_team, and only if they are staff;
 --          status -> 'active' unless it was 'pending_approval';
 --          accepted_at only while it is still NULL.
@@ -62,9 +67,12 @@
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
   ON TABLE public.users FROM anon;
 
--- 2. authenticated: no table-wide writes except the admin-only INSERT -----
-REVOKE UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
+-- 2. authenticated: no table-wide writes ----------------------------------
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
   ON TABLE public.users FROM authenticated;
+
+-- Dead without the INSERT grant; dropped so a stray re-grant stays denied.
+DROP POLICY IF EXISTS "Admins can insert users" ON public.users;
 
 -- Clear any column-level UPDATE left from an earlier run or a hand grant,
 -- so the allowlist below is the whole story.
@@ -134,6 +142,13 @@ DECLARE
     'essence_statement', 'has_children'
   ];
 BEGIN
+  -- Department: whitespace-only is stored as NULL, and real values are
+  -- trimmed, for every caller (admins, self-edits, the service role), before
+  -- the change set and the slug check below.
+  IF NEW.department IS NOT NULL THEN
+    NEW.department := nullif(btrim(NEW.department, E' \t\n\r\f\x0B\u00a0'), '');
+  END IF;
+
   -- Only API sessions are checked. The service role, the SQL editor, cron
   -- and SECURITY DEFINER functions owned by postgres run as another role.
   IF current_user NOT IN ('authenticated', 'anon') THEN
@@ -182,7 +197,7 @@ BEGIN
   -- Department: the same rule as /api/profile/update (a main ministry, never
   -- a part-time one), plus: staff only, and never leadership_team, whose
   -- membership grants the leadership_team role.
-  IF 'department' = ANY (v_changed) AND nullif(btrim(NEW.department), '') IS NOT NULL THEN
+  IF 'department' = ANY (v_changed) AND NEW.department IS NOT NULL THEN
     IF NOT (public.has_any_role(ARRAY['staff']) OR OLD.signup_type IS NOT DISTINCT FROM 'staff') THEN
       RAISE EXCEPTION 'Only staff choose a department.' USING ERRCODE = '42501';
     END IF;
@@ -221,4 +236,4 @@ CREATE TRIGGER users_guard_privileged_self_update
   EXECUTE FUNCTION public.users_guard_privileged_self_update();
 
 COMMENT ON FUNCTION public.users_guard_privileged_self_update() IS
-  '315: API sessions may only change their own self-edit columns; admins (active) may change any granted column; deactivated callers change nothing. Service role and SECURITY DEFINER functions are not checked.';
+  '315: trims department (blank -> NULL) for every caller. API sessions may only change their own self-edit columns; admins (active) may change any granted column; deactivated callers change nothing. Service role and SECURITY DEFINER functions are not otherwise checked.';

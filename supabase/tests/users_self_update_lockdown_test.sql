@@ -237,8 +237,10 @@ BEGIN
     pg_temp.try('me', format('DELETE FROM public.users WHERE id = %L', pg_temp.id('me'))), 'err 42501');
   PERFORM pg_temp.expect('authenticated truncates users',
     pg_temp.try('me', 'TRUNCATE public.users CASCADE'), 'err 42501');
-  PERFORM pg_temp.expect('non-admin inserts a user (policy)',
+  PERFORM pg_temp.expect('non-admin inserts a user (no INSERT grant)',
     pg_temp.try('me', format($s$INSERT INTO public.users (id, email) VALUES (%L, 'x@t315.test')$s$, gen_random_uuid())), 'err 42501');
+  PERFORM pg_temp.expect('non-admin upserts own row (no INSERT grant)',
+    pg_temp.try('me', format($s$INSERT INTO public.users (id, email) VALUES (%L, 'me@t315.test') ON CONFLICT (id) DO UPDATE SET phone = '1'$s$, pg_temp.id('me'))), 'err 42501');
 
   ---------------------------------------------------------------- 3. anon
   PERFORM pg_temp.expect('anon updates a user', pg_temp.upd('anon','me', $s$phone = '1'$s$), 'err 42501');
@@ -257,6 +259,10 @@ BEGIN
     pg_temp.upd('adm','other', $s$department = 'media_t315'$s$), 'rows=1');
   PERFORM pg_temp.expect('admin edits another user''s profile fields',
     pg_temp.upd('adm','other', $s$phone = '0840000000', first_name = 'Othe'$s$), 'rows=1');
+  PERFORM pg_temp.expect('admin inserts a user via user client (no INSERT grant)',
+    pg_temp.try('adm', format($s$INSERT INTO public.users (id, email) VALUES (%L, 'new@t315.test')$s$, gen_random_uuid())), 'err 42501');
+  PERFORM pg_temp.expect('super admin inserts a user via user client (no INSERT grant)',
+    pg_temp.try('sa', format($s$INSERT INTO public.users (id, email) VALUES (%L, 'new2@t315.test')$s$, gen_random_uuid())), 'err 42501');
   PERFORM pg_temp.expect('admin sets is_active via user client (grant; app uses service role)',
     pg_temp.upd('adm','off','is_active = true'), 'err 42501');
   UPDATE public.users SET status = 'pending_approval' WHERE id = pg_temp.id('stu');
@@ -275,6 +281,12 @@ BEGIN
     pg_temp.upd('service','off','is_active = true'), 'rows=1');
   PERFORM pg_temp.expect('service role sets the driving test',
     pg_temp.upd('service','me', $s$base_driving_test_status = 'passed', base_driving_test_passed_at = now()$s$), 'rows=1');
+  PERFORM pg_temp.expect('service role creates a user (signup / invite / accept-application shape)',
+    pg_temp.try('service', format($s$INSERT INTO public.users (id, email, first_name, last_name, invited_at, signup_type, accepted_at)
+      VALUES (%L, 'svc@t315.test', 'Svc', 'T315', now(), 'staff', now())$s$, gen_random_uuid())), 'rows=1');
+  PERFORM pg_temp.expect('service role creates a user (accept-application shape)',
+    pg_temp.try('service', format($s$INSERT INTO public.users (id, email, first_name, last_name, city, country, date_of_birth, gender, nationality, phone, invited_at, status, setup_invite_due_on)
+      VALUES (%L, 'svc2@t315.test', 'Svc', 'T315', 'CT', 'ZA', '2000-01-01', 'female', 'ZA', '1', now(), 'invited', current_date)$s$, gen_random_uuid())), 'rows=1');
   PERFORM pg_temp.expect('service role sets contact_id',
     pg_temp.upd('service','me', format('contact_id = %L', current_setting('t315.c_other'))), 'rows=1');
 END $$;
@@ -366,6 +378,89 @@ BEGIN
       WHERE m.user_id = pg_temp.id('off') AND s.slug = 'media_t315'), '1');
 END $$;
 
+---------------------------------------------------------------- 8b. department whitespace / trim (should-fix a)
+DO $$
+DECLARE dep text;
+BEGIN
+  -- self-edits
+  PERFORM pg_temp.keep('me', format($s$UPDATE public.users SET department = '   ' WHERE id = %L RETURNING coalesce(department, '<null>')$s$, pg_temp.id('me')));
+  PERFORM pg_temp.expect('self: spaces-only department stored as NULL',
+    (SELECT coalesce(department, '<null>') FROM public.users WHERE id = pg_temp.id('me')), '<null>');
+  PERFORM pg_temp.keep('me', format($s$UPDATE public.users SET department = 'media_t315' WHERE id = %L RETURNING id::text$s$, pg_temp.id('me')));
+  PERFORM pg_temp.keep('me', format($s$UPDATE public.users SET department = E'\t\n \u00a0' WHERE id = %L RETURNING id::text$s$, pg_temp.id('me')));
+  PERFORM pg_temp.expect('self: tab/newline/nbsp-only department stored as NULL',
+    (SELECT coalesce(department, '<null>') FROM public.users WHERE id = pg_temp.id('me')), '<null>');
+  PERFORM pg_temp.expect('self: empty string department stored as NULL',
+    pg_temp.keep('me', format($s$UPDATE public.users SET department = '' WHERE id = %L RETURNING coalesce(department, '<null>')$s$, pg_temp.id('me'))), '<null>');
+  PERFORM pg_temp.expect('self: padded valid slug accepted and trimmed',
+    pg_temp.keep('me', format($s$UPDATE public.users SET department = '  media_t315  ' WHERE id = %L RETURNING department$s$, pg_temp.id('me'))), 'media_t315');
+  PERFORM pg_temp.expect('self: padded valid slug still makes the roster row',
+    (SELECT count(*)::text FROM public.staff_ministry_members m JOIN public.staff_ministries s ON s.id = m.staff_ministry_id
+      WHERE m.user_id = pg_temp.id('me') AND s.slug = 'media_t315' AND m.status = 'active'), '1');
+  PERFORM pg_temp.expect('self: padded resend of the same slug is a no-op',
+    pg_temp.keep('me', format($s$UPDATE public.users SET department = ' media_t315', phone = '0825555555' WHERE id = %L RETURNING department$s$, pg_temp.id('me'))), 'media_t315');
+  PERFORM pg_temp.expect('self: padded leadership_team still refused',
+    pg_temp.upd('me','me', $s$department = '  leadership_team '$s$), 'err 42501');
+  PERFORM pg_temp.expect('self: tab-padded leadership_team still refused',
+    pg_temp.upd('me','me', $s$department = E'\tleadership_team\n'$s$), 'err 42501');
+  PERFORM pg_temp.expect('self: padded part-time slug still refused',
+    pg_temp.upd('me','me', $s$department = ' hope_t315 '$s$), 'err 42501');
+  PERFORM pg_temp.expect('self: padded unknown slug still refused',
+    pg_temp.upd('me','me', $s$department = ' nope_t315 '$s$), 'err 42501');
+  PERFORM pg_temp.expect('student: padded main slug still refused',
+    pg_temp.upd('stu','stu', $s$department = ' media_t315 '$s$), 'err 42501');
+  PERFORM pg_temp.expect('student: blank department is allowed (stays NULL, no roster row)',
+    pg_temp.keep('stu', format($s$UPDATE public.users SET department = '  ' WHERE id = %L RETURNING coalesce(department, '<null>')$s$, pg_temp.id('stu'))), '<null>');
+  PERFORM pg_temp.expect('student: still no staff roster rows',
+    (SELECT count(*)::text FROM public.staff_ministry_members WHERE user_id = pg_temp.id('stu')), '0');
+  -- admins through the user client
+  PERFORM pg_temp.expect('admin: padded leadership_team stored trimmed',
+    pg_temp.keep('adm', format($s$UPDATE public.users SET department = ' leadership_team  ' WHERE id = %L RETURNING department$s$, pg_temp.id('spouse'))), 'leadership_team');
+  PERFORM pg_temp.expect('admin: padded leadership_team still grants the role (slug matched)',
+    (SELECT count(*)::text FROM public.user_roles ur JOIN public.roles r ON r.id = ur.role_id
+      WHERE ur.user_id = pg_temp.id('spouse') AND r.name = 'leadership_team'), '1');
+  PERFORM pg_temp.expect('admin: blank department stored as NULL',
+    pg_temp.keep('adm', format($s$UPDATE public.users SET department = E' \t ' WHERE id = %L RETURNING coalesce(department, '<null>')$s$, pg_temp.id('other'))), '<null>');
+  -- service role (not otherwise checked) is normalised too
+  UPDATE public.users SET department = '   ' WHERE id = pg_temp.id('sa');
+  PERFORM pg_temp.expect('owner/service: blank department stored as NULL',
+    (SELECT coalesce(department, '<null>') FROM public.users WHERE id = pg_temp.id('sa')), '<null>');
+  PERFORM pg_temp.expect('service role: padded slug stored trimmed',
+    pg_temp.try('service', format($s$UPDATE public.users SET department = ' media_t315 ' WHERE id = %L AND department IS NULL$s$, pg_temp.id('sa'))), 'rows=1');
+  UPDATE public.users SET department = ' media_t315 ' WHERE id = pg_temp.id('sa');
+  PERFORM pg_temp.expect('owner/service: padded slug stored trimmed',
+    (SELECT department FROM public.users WHERE id = pg_temp.id('sa')), 'media_t315');
+  PERFORM pg_temp.expect('no stored department has surrounding whitespace',
+    (SELECT count(*)::text FROM public.users WHERE department IS NOT NULL AND (department <> btrim(department) OR department = '')), '0');
+END $$;
+
+---------------------------------------------------------------- 8c. definer path still creates users (should-fix b)
+-- No SECURITY DEFINER function on prod inserts into public.users and there is
+-- no trigger on auth.users; this models one (owned by the migration owner) so
+-- the revoke is proven not to block that path if one is added.
+CREATE FUNCTION public.t315_definer_create_user(p_id uuid, p_email text) RETURNS text
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $f$
+BEGIN
+  INSERT INTO public.users (id, email, first_name, last_name) VALUES (p_id, p_email, 'Def', 'T315');
+  RETURN p_id::text;
+END $f$;
+GRANT EXECUTE ON FUNCTION public.t315_definer_create_user(uuid, text) TO authenticated;
+DO $$
+DECLARE nid uuid := gen_random_uuid(); r text;
+BEGIN
+  INSERT INTO auth.users (id, email) VALUES (nid, 'def@t315.test');
+  r := pg_temp.keep('me', format($s$SELECT public.t315_definer_create_user(%L, 'def@t315.test')$s$, nid));
+  PERFORM pg_temp.expect('definer function called by authenticated creates a user', r, nid::text);
+  PERFORM pg_temp.expect('definer-created row exists',
+    (SELECT count(*)::text FROM public.users WHERE id = nid), '1');
+  nid := gen_random_uuid();
+  INSERT INTO auth.users (id, email) VALUES (nid, 'own@t315.test');
+  INSERT INTO public.users (id, email) VALUES (nid, 'own@t315.test');
+  PERFORM pg_temp.expect('owner (migrations / SQL editor) still inserts a user',
+    (SELECT count(*)::text FROM public.users WHERE id = nid), '1');
+END $$;
+DROP FUNCTION public.t315_definer_create_user(uuid, text);
+
 ---------------------------------------------------------------- 9. grants as shipped
 DO $$
 BEGIN
@@ -373,6 +468,12 @@ BEGIN
     (SELECT has_table_privilege('anon','public.users','INSERT') OR has_table_privilege('anon','public.users','UPDATE')
          OR has_table_privilege('anon','public.users','DELETE') OR has_table_privilege('anon','public.users','TRUNCATE')
          OR has_any_column_privilege('anon','public.users','UPDATE'))::text, 'false');
+  PERFORM pg_temp.expect('authenticated: no INSERT privilege',
+    has_table_privilege('authenticated','public.users','INSERT')::text, 'false');
+  PERFORM pg_temp.expect('dead admin INSERT policy dropped',
+    (SELECT count(*)::text FROM pg_policies WHERE schemaname = 'public' AND tablename = 'users' AND cmd IN ('INSERT','ALL')), '0');
+  PERFORM pg_temp.expect('service_role keeps INSERT',
+    has_table_privilege('service_role','public.users','INSERT')::text, 'true');
   PERFORM pg_temp.expect('authenticated: no table-wide UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER',
     (SELECT has_table_privilege('authenticated','public.users','UPDATE') OR has_table_privilege('authenticated','public.users','DELETE')
          OR has_table_privilege('authenticated','public.users','TRUNCATE') OR has_table_privilege('authenticated','public.users','REFERENCES')
