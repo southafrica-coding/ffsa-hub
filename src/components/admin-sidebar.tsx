@@ -17,7 +17,6 @@ import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils/cn";
 import { LogOut, Menu, KeyRound, RefreshCw, Briefcase, User, Settings } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
@@ -46,16 +45,24 @@ interface AdminSidebarProps {
 }
 
 /* ── 74px black rail ── */
+function SignOutForm({ className, children }: { className?: string; children: React.ReactNode }) {
+  return (
+    <form action="/auth/sign-out" method="post">
+      <button type="submit" title="Sign out" className={className}>
+        {children}
+      </button>
+    </form>
+  );
+}
+
 function Rail({
   area,
   setArea,
   initials,
-  onSignOut,
 }: {
   area: AreaId;
   setArea: (a: AreaId) => void;
   initials: string;
-  onSignOut: () => void;
 }) {
   return (
     <div className="hidden md:flex w-[74px] shrink-0 flex-col items-center bg-ink py-[18px] gap-1.5">
@@ -87,10 +94,9 @@ function Rail({
             className="flex h-[34px] w-[34px] items-center justify-center bg-bone-2 font-display text-[13px] font-black text-ink">
         {initials}
       </Link>
-      <button onClick={onSignOut} title="Sign out"
-              className="mt-2 flex h-[34px] w-[34px] items-center justify-center hover:bg-[#1C1C1A]">
+      <SignOutForm className="mt-2 flex h-[34px] w-[34px] items-center justify-center hover:bg-[#1C1C1A]">
         <LogOut className="h-[17px] w-[17px] text-[#8E8A7C]" />
-      </button>
+      </SignOutForm>
     </div>
   );
 }
@@ -105,7 +111,6 @@ function ModulePanel({
   onRefresh,
   inDrawer = false,
   initials,
-  onSignOut,
 }: {
   area: AreaId;
   modules: { id: string; label: string; href: string; icon: React.ComponentType<{ className?: string }> }[];
@@ -116,7 +121,6 @@ function ModulePanel({
   /** In the phone drawer the panel is the whole sheet, not a 212px column. */
   inDrawer?: boolean;
   initials?: string;
-  onSignOut?: () => void;
 }) {
   const title = AREAS.find((a) => a.id === area)?.label ?? "";
 
@@ -177,7 +181,7 @@ function ModulePanel({
         </Link>
       )}
 
-      {inDrawer && onSignOut && (
+      {inDrawer && (
         <div className="mt-auto border-t border-ink">
           <Link
             href="/profile"
@@ -189,15 +193,9 @@ function ModulePanel({
             </span>
             My profile
           </Link>
-          <button
-            onClick={() => {
-              onNavClick?.();
-              onSignOut();
-            }}
-            className="flex w-full items-center gap-2.5 border-t border-rule px-[18px] py-3.5 text-[13px] font-semibold text-[#2A2822] hover:bg-bone-3"
-          >
+          <SignOutForm className="flex w-full items-center gap-2.5 border-t border-rule px-[18px] py-3.5 text-[13px] font-semibold text-[#2A2822] hover:bg-bone-3">
             <LogOut className="h-[15px] w-[15px]" /> Sign out
-          </button>
+          </SignOutForm>
         </div>
       )}
     </aside>
@@ -207,7 +205,6 @@ function ModulePanel({
 export function AdminSidebar({ userRoles, permittedModules, menuLoadFailed, initials }: AdminSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const supabase = createClient();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const visibleModules = getAccessibleModules(ADMIN_MODULES, userRoles, permittedModules);
@@ -220,12 +217,6 @@ export function AdminSidebar({ userRoles, permittedModules, menuLoadFailed, init
     : "operations";
   const [area, setArea] = useState<AreaId>(initialArea);
 
-  async function handleSignOut() {
-    await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
-  }
-
   const modules =
     area === "operations" ? visibleModules
     : area === "system" ? visibleSystem
@@ -233,7 +224,7 @@ export function AdminSidebar({ userRoles, permittedModules, menuLoadFailed, init
 
   return (
     <>
-      <Rail area={area} setArea={setArea} initials={initials || "·"} onSignOut={handleSignOut} />
+      <Rail area={area} setArea={setArea} initials={initials || "·"} />
       <div className="hidden md:flex">
         <ModulePanel
           area={area}
@@ -278,7 +269,6 @@ export function AdminSidebar({ userRoles, permittedModules, menuLoadFailed, init
               onRefresh={() => router.refresh()}
               inDrawer
               initials={initials}
-              onSignOut={handleSignOut}
             />
           </div>
         </SheetContent>

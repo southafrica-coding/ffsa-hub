@@ -1,3 +1,4 @@
+import { applicantEmailIlikePattern } from "@/lib/applications/applicant-identity";
 import { redactInterviewNotesForViewer } from "@/lib/schools/interview-review-form";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -795,10 +796,12 @@ export async function getResponseByEmailAndProgram(
   email: string,
   programId: string
 ) {
+  // ILIKE, not eq: stored applicant emails are mixed-case, and a lowercased
+  // new value would miss them. Wildcards in the address are escaped.
   return supabase
     .from("application_responses")
     .select("id, status")
-    .eq("applicant_email", email)
+    .ilike("applicant_email", applicantEmailIlikePattern(email))
     .eq("program_id", programId)
     .is("user_id", null)
     .maybeSingle();
