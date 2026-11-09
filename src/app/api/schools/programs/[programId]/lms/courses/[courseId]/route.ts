@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { authorizeLms, badRequest, notFound, readJson, serverError } from "@/lib/schools/lms-route-auth";
 import { validateCoursePatch } from "@/lib/schools/lms-content";
+import { lmsRestrictMessage } from "@/lib/schools/lms-assignments-auth";
 import { deleteCourse, getCourseTree, programIdForCourse, updateCourse } from "@/services/lms-content";
 
 // GET    …/lms/courses/[courseId]   course → modules → lessons
@@ -40,6 +41,11 @@ export async function DELETE(_request: Request, context: Ctx) {
   if ("response" in auth) return auth.response;
   if ((await programIdForCourse(auth.supabase, courseId)) !== programId) return notFound("Course");
   const { error } = await deleteCourse(auth.supabase, courseId);
-  if (error) return serverError(error);
+  if (error) {
+    // Graded assignment work holds the course (migration 310, RESTRICT).
+    const restrict = lmsRestrictMessage(error);
+    if (restrict) return NextResponse.json({ error: restrict }, { status: 409 });
+    return serverError(error);
+  }
   return NextResponse.json({ ok: true });
 }

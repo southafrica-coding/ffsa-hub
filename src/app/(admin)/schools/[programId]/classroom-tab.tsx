@@ -15,6 +15,7 @@ import {
   type LmsCourseTree,
   type LmsLesson,
 } from "@/lib/schools/lms-content";
+import { AssignmentsSection } from "@/components/schools/lms/assignments-section";
 
 // Classroom (LMS slice 1): courses → modules → lessons for this school.
 // Leaders and managers only — ProgramDetail hides the tab for everyone else,
@@ -473,6 +474,7 @@ export function ClassroomTab({ programId }: { programId: string }) {
   // ── Course list ──
   const courseIds = courses.map((c) => c.id);
   return (
+    <div className="space-y-6">
     <Card>
       <CardHeader>
         <CardTitle className="text-base">Classroom</CardTitle>
@@ -533,5 +535,8 @@ export function ClassroomTab({ programId }: { programId: string }) {
         </form>
       </CardContent>
     </Card>
+    {/* LMS slice 2: assignments, submissions and grading. */}
+    <AssignmentsSection programId={programId} canEdit />
+    </div>
   );
 }

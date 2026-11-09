@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { userCanManageApplications } from "@/lib/auth/check-schools-access";
 import { deactivateMembershipProfile } from "@/lib/auth/membership-roles";
+import { lmsRestrictMessage } from "@/lib/schools/lms-assignments-auth";
 import {
   createEnrollment,
   updateEnrollmentStatus,
@@ -186,6 +187,9 @@ export async function DELETE(request: Request) {
   const { error } = await deleteEnrollment(admin, id);
 
   if (error) {
+    // Classroom submissions hold the enrolment (migration 310, RESTRICT).
+    const restrict = lmsRestrictMessage(error);
+    if (restrict) return NextResponse.json({ error: restrict }, { status: 409 });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
