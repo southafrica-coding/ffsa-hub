@@ -30,12 +30,26 @@ export async function getApplicationExpiry(
 ): Promise<ApplicationExpiry> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generated types predate migration 223
   const db = supabase as any;
-  const [endRes, expiredRes, accessRes] = await Promise.all([
-    db.rpc("program_end_date", { pid: programId }),
-    db.rpc("program_applications_expired", { pid: programId }),
-    db.rpc("can_access_expired_applications"),
-  ]);
+  let endRes: { data?: string | null; error?: unknown };
+  let expiredRes: { data?: boolean | null; error?: unknown };
+  let accessRes: { data?: boolean | null; error?: unknown };
+  try {
+    [endRes, expiredRes, accessRes] = await Promise.all([
+      db.rpc("program_end_date", { pid: programId }),
+      db.rpc("program_applications_expired", { pid: programId }),
+      db.rpc("can_access_expired_applications"),
+    ]);
+  } catch {
+    return {
+      endDate: null,
+      expiresOn: null,
+      expired: true,
+      canAccess: false,
+      lookupFailed: true,
+    };
+  }
 
+  const lookupFailed = Boolean(expiredRes.error || accessRes.error);
   const endDate: string | null = endRes.data ?? null;
   let expiresOn: string | null = null;
   if (endDate) {
@@ -44,12 +58,15 @@ export async function getApplicationExpiry(
     expiresOn = d.toISOString().slice(0, 10);
   }
 
+  // An RPC error is treated as expired with no access, so the schools page
+  // (which keys off these two fields) hides the applicant list instead of
+  // showing it as open.
   return {
     endDate,
     expiresOn,
-    expired: expiredRes.data === true,
-    canAccess: accessRes.data === true,
-    lookupFailed: Boolean(expiredRes.error || accessRes.error),
+    expired: lookupFailed || expiredRes.data === true,
+    canAccess: lookupFailed ? false : accessRes.data === true,
+    lookupFailed,
   };
 }
 
@@ -58,8 +75,13 @@ export async function passesApplicationExpiry(
   supabase: SupabaseClient,
   programId: string
 ): Promise<boolean> {
-  const { expired, canAccess } = await getApplicationExpiry(supabase, programId);
-  return !expired || canAccess;
+  try {
+    const expiry = await getApplicationExpiry(supabase, programId);
+    if (expiry.lookupFailed) return false;
+    return !expiry.expired || expiry.canAccess;
+  } catch {
+    return false;
+  }
 }
 
 export const APPLICATIONS_EXPIRED_MESSAGE =
