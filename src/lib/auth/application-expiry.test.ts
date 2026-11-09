@@ -106,6 +106,14 @@ describe("userCanReadApplication", () => {
     expect(await userCanReadApplication(supabase, "app")).toBe(false);
   });
 
+  it("returns false when the query returns no row", async () => {
+    const supabase = client((q) => {
+      if (q.table === "application_responses") return { data: null };
+      return { data: null };
+    });
+    expect(await userCanReadApplication(supabase, "app")).toBe(false);
+  });
+
   it("returns false when the query throws", async () => {
     const supabase = client((q) => {
       if (q.table === "application_responses") throw new Error("boom");
