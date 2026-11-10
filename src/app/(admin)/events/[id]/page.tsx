@@ -8,7 +8,7 @@ import { getAttendanceForEvent } from "@/services/attendance";
 import { getEventOutcomes } from "@/services/event-outcomes";
 import { getEventRoles } from "@/services/event-roles";
 import { getCachedActiveLabels } from "@/lib/cached-reads";
-import { formatSaDate } from "@/lib/format/sa-time";
+import { formatDayRange, formatSaDate } from "@/lib/format/sa-time";
 import { notFound } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -359,15 +359,6 @@ export default async function EventDetailPage({
       </div>
     </div>
   );
-}
-
-// "12 – 14 SEP 2026", or a single day when there's no distinct end date.
-function formatDayRange(start: string, end: string | null) {
-  const fmt = (iso: string) =>
-    new Date(`${iso}T00:00:00`)
-      .toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
-      .replace(/,/g, "");
-  return end && end !== start ? `${fmt(start)} – ${fmt(end)}` : fmt(start);
 }
 
 // ────────────────────────────────────────────────────────────

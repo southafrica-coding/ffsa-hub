@@ -32,7 +32,7 @@ vi.mock("next/link", () => ({
 
 // 22:15:30 UTC is 00:15:30 the next day in Johannesburg, 17:15:30 in New York.
 const PAID_AT = "2026-11-10T22:15:30.000Z";
-const SAST = "2026/11/11, 00:15:30";
+const SAST = "11 Nov 2026, 00:15:30";
 
 const checkedInTicket = {
   id: "ticket-1",
