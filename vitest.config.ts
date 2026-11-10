@@ -10,7 +10,10 @@ export default defineConfig({
   // the automatic runtime here.
   oxc: { jsx: { runtime: "automatic" } },
   resolve: {
-    alias: { "@": path.resolve(__dirname, "src") },
+    alias: {
+      "@": path.resolve(__dirname, "src"),
+      "server-only": path.resolve(__dirname, "src/lib/testing/server-only.ts"),
+    },
   },
   test: {
     // apps/mobile is a separate Expo app with its own Jest setup.
