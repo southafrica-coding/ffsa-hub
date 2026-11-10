@@ -34,7 +34,8 @@ export function addIsoDays(iso: string, days: number): string {
 function mySlugs(viewer: DepartmentViewer): Set<string> {
   const slugs = new Set<string>();
   for (const membership of viewer.memberships) {
-    const home = resolveDepartment(membership.departmentSlug);
+    if (!membership.active) continue;
+    const home = resolveDepartment(membership.slug);
     if (home) slugs.add(home.slug);
   }
   return slugs;
@@ -74,6 +75,7 @@ export function selectRocksDue(
       (rock) =>
         departmentSlugs.has(rock.departmentSlug) &&
         rock.status !== "done" &&
+        rock.dueOn != null &&
         rock.dueOn <= horizon
     )
     .sort((a, b) => a.dueOn.localeCompare(b.dueOn) || a.title.localeCompare(b.title));

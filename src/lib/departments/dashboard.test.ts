@@ -13,12 +13,19 @@ import { getDepartmentViewer } from "./data";
 import { OKR_CHECK_INS, ROCKS } from "./mocks";
 
 const nobody: DepartmentViewer = {
-  name: "Nobody",
+  name: "Test viewer",
+  isAdmin: false,
   roles: ["staff"],
   permittedModules: [],
+  permissions: [],
   memberships: [],
   usedServiceIds: [],
 };
+
+const row = (
+  slug: string,
+  flags: Partial<Pick<DepartmentViewer["memberships"][number], "active" | "isLeader" | "isPointLeader">> = {}
+) => ({ slug, active: true, isLeader: false, isPointLeader: false, ...flags });
 
 describe("home dashboard selectors", () => {
   it("reads today in Africa/Johannesburg", () => {
@@ -39,17 +46,18 @@ describe("home dashboard selectors", () => {
     const viewer: DepartmentViewer = {
       ...nobody,
       memberships: [
-        { departmentSlug: "woven", capacity: "member" },
-        { departmentSlug: "brave_love", capacity: "leader" },
-        { departmentSlug: "no_ministry", capacity: "member" },
-        { departmentSlug: "prayer_and_worship", capacity: "leader" },
+        row("woven"),
+        row("brave_love", { isLeader: true }),
+        row("no_ministry"),
+        row("prayer_and_worship", { isLeader: true }),
+        row("media", { active: false, isLeader: true }),
       ],
     };
     expect(selectMyDepartments(viewer).map((home) => home.slug)).toEqual(["prayer_and_worship"]);
     expect(
       selectMyDepartments({
         ...viewer,
-        memberships: [{ departmentSlug: "donors_dev", capacity: "member" }],
+        memberships: [row("donors_dev")],
       })
     ).toEqual([]);
   });
@@ -95,11 +103,13 @@ describe("home dashboard selectors", () => {
   it("builds a fixture viewer's home from the mocks on 10 Nov 2026", () => {
     const viewer: DepartmentViewer = {
       name: "Test viewer",
+      isAdmin: false,
       roles: ["staff"],
       permittedModules: ["bookings"],
+      permissions: [],
       memberships: [
-        { departmentSlug: "prayer_and_worship", capacity: "leader" },
-        { departmentSlug: "missio_ministry", capacity: "member" },
+        row("prayer_and_worship", { isLeader: true }),
+        row("missio_ministry"),
       ],
       usedServiceIds: ["prayer_room", "vehicles", "gear_hire"],
     };
