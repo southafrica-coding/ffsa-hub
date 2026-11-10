@@ -37,6 +37,26 @@
     --warning:        #8A6400;
     --danger:         #D92D20;
 
+    /* Space-separated channels so Tailwind opacity utilities
+       (bg-primary/90, bg-ink/40, bg-brand-black/40) compile. */
+    --brand-black-rgb: 0 0 0;
+    --bg-rgb: 255 255 255;
+    --bg-subtle-rgb: 251 250 247;
+    --bone-rgb: 197 194 174;
+    --border-rgb: 231 228 217;
+    --border-strong-rgb: 142 138 124;
+    --text-rgb: 17 17 17;
+    --text-secondary-rgb: 85 82 74;
+    --text-tertiary-rgb: 107 103 93;
+    --accent-rgb: 255 184 1;
+    --accent-hover-rgb: 255 203 61;
+    --link-rgb: 0 13 229;
+    --success-rgb: 76 159 55;
+    --success-text-rgb: 62 127 43;
+    --warning-rgb: 138 100 0;
+    --danger-rgb: 217 45 32;
+    --yellow-dim-rgb: 255 244 217;
+
     /* Page and hero titles. Flip this one number to change the weight. */
     --title-weight: 900;
 
@@ -96,7 +116,7 @@
     /* Legacy names, pointed at the semantic tokens. */
     --ink:            var(--brand-black);
     --yellow:         var(--accent);
-    --yellow-dim:     #FFF6D6;
+    --yellow-dim:     #FFF4D9;
     --yellow-border:  var(--brand-black);
     --green:          var(--success);
     --green-text:     var(--success-text);
@@ -173,9 +193,18 @@
   /* Every number in the app lines up */
   .tabular, td, th { font-variant-numeric: tabular-nums; }
 
-  a { color: var(--link); text-decoration: none; }
-  a:hover { text-decoration: underline; }
-  /* Dark islands keep their own link colour. */
+  /* Prose links inside the signed-in shell only. Public pages (/e, /f, /hire)
+     and display titles keep the colour they set themselves. */
+  [data-shell-main] a {
+    color: var(--link);
+    text-decoration: none;
+  }
+  [data-shell-main] a:hover { text-decoration: underline; }
+  [data-shell-main] a.font-display,
+  [data-shell-main] a .font-display,
+  [data-shell-main] :is(h1, h2, h3, h4, h5, h6, .page-title, .masthead-title, .hero-title) {
+    color: var(--text);
+  }
   .theme-hire a, .org-theme a { color: inherit; text-decoration: none; }
 }
 
@@ -712,7 +741,9 @@
    ───────────────────────────────────────────────────── */
 @layer utilities {
   .animate-fade-up { animation: fadeUp 0.25s ease forwards; }
-  @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  /* Opacity only. A transform on an ancestor becomes the containing block
+     for position:fixed, which pins drawers and tab bars to the page. */
+  @keyframes fadeUp { from { opacity: 0; } to { opacity: 1; } }
   .animate-fade-in { animation: fadeIn 0.2s ease forwards; }
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
