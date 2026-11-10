@@ -160,7 +160,7 @@ export function GradesMatrix({
         <SectionBar title={`${programCode} · grades`} />
         <div className="space-y-3 px-6 py-12 text-center">
           <p className="mono-label">
-            Add billing courses on the Courses tab before grading
+            Add billing courses on the Courses tab first
           </p>
           <p className="mono-label">
             Classroom courses don&apos;t create grade columns

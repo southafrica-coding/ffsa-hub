@@ -486,7 +486,7 @@ export function ClassroomTab({ programId }: { programId: string }) {
         <CardTitle className="text-base">Classroom</CardTitle>
         <p className="text-sm text-muted-foreground">
           Learning content for enrolled students: courses, modules, and lessons (text or a link).
-          Classroom courses are lesson content, separate from the school&apos;s billing and grading courses on the Courses tab.
+          Classroom courses hold lesson content. Billing and grading courses are on the Courses tab.
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
