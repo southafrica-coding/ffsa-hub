@@ -160,6 +160,18 @@ CREATE TABLE public.staff_ministry_members (
 CREATE UNIQUE INDEX one_point_leader_per_staff_ministry
   ON public.staff_ministry_members (staff_ministry_id) WHERE is_point_leader;
 
+-- 205: a subcategory assignment cascades when its membership is deleted.
+CREATE TABLE public.staff_ministry_subcategories (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  staff_ministry_id uuid NOT NULL REFERENCES public.staff_ministries (id) ON DELETE CASCADE,
+  name text NOT NULL
+);
+CREATE TABLE public.staff_ministry_member_subcategories (
+  membership_id uuid NOT NULL REFERENCES public.staff_ministry_members (id) ON DELETE CASCADE,
+  subcategory_id uuid NOT NULL REFERENCES public.staff_ministry_subcategories (id) ON DELETE CASCADE,
+  PRIMARY KEY (membership_id, subcategory_id)
+);
+
 CREATE TABLE public.ministries (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name text NOT NULL,
@@ -688,6 +700,14 @@ BEGIN
   SELECT count(*) INTO n FROM public.service_owners
    WHERE open_to_all AND capability <> 'use';
   PERFORM public._t('open_to_all never grants manage', n = 0, 'n=' || n);
+  BEGIN
+    INSERT INTO public.service_owners (
+      service_key, staff_ministry_id, capability, member_role, any_point_leader, open_to_all
+    ) VALUES ('gear_hire', NULL, 'manage', NULL, false, true);
+    PERFORM public._t('open_to_all manage row is rejected', false, 'inserted');
+  EXCEPTION WHEN check_violation THEN
+    PERFORM public._t('open_to_all manage row is rejected', true, 'check');
+  END;
   SELECT count(*) INTO n FROM public.service_owners so
     JOIN public.staff_ministries sm ON sm.id = so.staff_ministry_id
    WHERE so.service_key = 'brand_kit'
@@ -1224,6 +1244,65 @@ $do$;
 
 DELETE FROM public.okr_objectives WHERE title = 'do not cascade be_free';
 
+-- The subcategory lives on Prayer & Worship, so it is not a dependent of
+-- the be_free ministry. The join row hangs off Philip's tracked be_free
+-- membership, which the rollback would delete.
+INSERT INTO public.staff_ministry_subcategories (staff_ministry_id, name)
+SELECT id, 'Be Free seat'
+  FROM public.staff_ministries WHERE slug = 'prayer_and_worship';
+INSERT INTO public.staff_ministry_member_subcategories (membership_id, subcategory_id)
+SELECT mm.id, sc.id
+  FROM public.staff_ministry_members mm
+  JOIN public.staff_ministries sm ON sm.id = mm.staff_ministry_id AND sm.slug = 'be_free'
+  JOIN public.staff_ministry_subcategories sc ON sc.name = 'Be Free seat'
+ WHERE mm.user_id = 'ac7d1c5e-4300-422f-9fad-d50c29a15ca6';
+
+\set ON_ERROR_STOP off
+\ir ../rollbacks/318_321_departments_rollback.sql
+\set ON_ERROR_STOP on
+
+DO $do$
+BEGIN
+  IF to_regclass('public.rocks') IS NULL
+     OR NOT EXISTS (SELECT 1 FROM public.staff_ministries WHERE slug = 'be_free')
+     OR NOT EXISTS (
+       SELECT 1 FROM public.staff_ministry_member_subcategories sc
+         JOIN public.staff_ministry_members mm ON mm.id = sc.membership_id
+         JOIN public.staff_ministries sm ON sm.id = mm.staff_ministry_id
+        WHERE sm.slug = 'be_free'
+          AND mm.user_id = 'ac7d1c5e-4300-422f-9fad-d50c29a15ca6'
+     ) THEN
+    RAISE EXCEPTION 'be_free membership subcategory did not stop the rollback';
+  END IF;
+  PERFORM public._t(
+    'be_free membership subcategory stops the rollback',
+    EXISTS (SELECT 1 FROM public.staff_ministries WHERE slug = 'be_free'),
+    'be_free'
+  );
+END
+$do$;
+
+DELETE FROM public.staff_ministry_member_subcategories sc
+ USING public.staff_ministry_members mm, public.staff_ministries sm
+ WHERE sc.membership_id = mm.id
+   AND mm.staff_ministry_id = sm.id
+   AND sm.slug = 'be_free'
+   AND mm.user_id = 'ac7d1c5e-4300-422f-9fad-d50c29a15ca6';
+
+-- Prod shape: version is the apply timestamp, name is the file stem.
+CREATE SCHEMA IF NOT EXISTS supabase_migrations;
+CREATE TABLE supabase_migrations.schema_migrations (
+  version text PRIMARY KEY,
+  name text
+);
+INSERT INTO supabase_migrations.schema_migrations (version, name) VALUES
+  ('20261110094706', '311_evangelism_open_publish_and_moderate'),
+  ('20261110180001', '318_department_homes'),
+  ('20261110180002', '319_department_services'),
+  ('20261110180003', '320_ministry_rocks'),
+  ('20261110180004', '321_department_budgets'),
+  ('318', '318_short_version');
+
 \ir ../rollbacks/318_321_departments_rollback.sql
 
 DO $do$
@@ -1278,6 +1357,21 @@ BEGIN
   PERFORM public._t('rocks table is gone', to_regclass('public.rocks') IS NULL, 'reg');
   PERFORM public._t('budget links table is gone', to_regclass('public.department_budget_links') IS NULL, 'reg');
   PERFORM public._t('service owners table is gone', to_regclass('public.service_owners') IS NULL, 'reg');
+  SELECT count(*) INTO n
+    FROM supabase_migrations.schema_migrations
+   WHERE name IN (
+     '318_department_homes',
+     '319_department_services',
+     '320_ministry_rocks',
+     '321_department_budgets'
+   )
+      OR version IN ('318', '319', '320', '321');
+  PERFORM public._t('rollback removes timestamp-style migration rows', n = 0, 'n=' || n);
+  SELECT count(*) INTO n
+    FROM supabase_migrations.schema_migrations
+   WHERE version = '20261110094706'
+     AND name = '311_evangelism_open_publish_and_moderate';
+  PERFORM public._t('rollback keeps the 311 migration row', n = 1, 'n=' || n);
 END
 $do$;
 

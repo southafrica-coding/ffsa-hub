@@ -75,7 +75,8 @@ CREATE TABLE IF NOT EXISTS public.service_owners (
     (staff_ministry_id IS NOT NULL AND NOT any_point_leader AND NOT open_to_all)
     OR (staff_ministry_id IS NULL AND any_point_leader AND NOT open_to_all)
     OR (staff_ministry_id IS NULL AND NOT any_point_leader AND open_to_all)
-  )
+  ),
+  CONSTRAINT service_owners_open_to_all_use_ck CHECK (NOT open_to_all OR capability = 'use')
 );
 
 -- NULL staff_ministry_id does not participate in a plain UNIQUE, so the

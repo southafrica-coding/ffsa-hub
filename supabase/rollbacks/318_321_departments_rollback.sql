@@ -30,11 +30,15 @@ BEGIN;
 
 -- Refuse to delete the be_free ministry 318 inserted while anything other
 -- than that tracked membership still points at it through a cascading or
--- restricting foreign key. SET NULL links (the palette, parent_id) are
--- not data loss and are not checked. Tables that do not exist on a
--- throwaway database are skipped because the catalog only lists what is
--- there. Own tables (rocks, department_budget_links, service_owners,
--- aliases) are included: a row on be_free would be destroyed with it.
+-- restricting foreign key. The same check covers foreign keys that point
+-- at staff_ministry_members: a subcategory on Philip's tracked be_free
+-- membership (staff_ministry_member_subcategories.membership_id, ON
+-- DELETE CASCADE) refuses the rollback. SET NULL links (the palette,
+-- parent_id) are not data loss and are not checked. Tables that do not
+-- exist on a throwaway database are skipped because the catalog only
+-- lists what is there. Own tables (rocks, department_budget_links,
+-- service_owners, aliases) are included: a row on be_free would be
+-- destroyed with it.
 DO $guard$
 DECLARE
   v_be uuid;
@@ -103,6 +107,43 @@ BEGIN
       EXECUTE format('SELECT count(*) FROM %s WHERE %I = $1', r.rel, r.col)
         INTO v_n USING v_be;
     END IF;
+
+    IF v_n > 0 THEN
+      RAISE EXCEPTION
+        'rollback refused: be_free (%) still has % row(s) in % (%)',
+        v_be, v_n, r.rel, r.col;
+    END IF;
+  END LOOP;
+
+  IF to_regclass('public.staff_ministry_members') IS NULL THEN
+    RETURN;
+  END IF;
+
+  FOR r IN
+    SELECT c.conrelid::regclass AS rel,
+           a.attname AS col
+      FROM pg_constraint c
+      JOIN pg_attribute a
+        ON a.attrelid = c.conrelid
+       AND a.attnum = c.conkey[1]
+     WHERE c.confrelid = 'public.staff_ministry_members'::regclass
+       AND c.contype = 'f'
+       AND c.confdeltype IN ('c', 'r')
+       AND cardinality(c.conkey) = 1
+  LOOP
+    EXECUTE format(
+      'SELECT count(*) FROM %s x
+        WHERE x.%I IN (
+          SELECT mm.id
+            FROM public.staff_ministry_members mm
+            JOIN public.migration_318_changes ch
+              ON ch.kind = ''insert''
+             AND ch.table_name = ''staff_ministry_members''
+             AND ch.row_id = mm.id
+           WHERE mm.staff_ministry_id = $1
+        )',
+      r.rel, r.col
+    ) INTO v_n USING v_be;
 
     IF v_n > 0 THEN
       RAISE EXCEPTION
@@ -229,20 +270,23 @@ DROP FUNCTION IF EXISTS public.dept_can_write_org_structure();
 DROP FUNCTION IF EXISTS public.dept_caller_is_active();
 DROP TABLE IF EXISTS public.migration_318_changes;
 
--- The apply tool records the filename stem. A throwaway database has no
--- supabase_migrations schema; leave it alone.
+-- Prod stores the apply timestamp in version and the file stem in name
+-- (311 is version 20261110094706, name 311_evangelism_open_publish_and_moderate).
+-- The short version list covers a row recorded as 318–321. A throwaway
+-- database has no supabase_migrations schema; leave it alone.
 DO $mig$
 BEGIN
   IF to_regclass('supabase_migrations.schema_migrations') IS NULL THEN
     RETURN;
   END IF;
   DELETE FROM supabase_migrations.schema_migrations
-   WHERE version IN (
+   WHERE name IN (
      '318_department_homes',
      '319_department_services',
      '320_ministry_rocks',
      '321_department_budgets'
-   );
+   )
+      OR version IN ('318', '319', '320', '321');
 END
 $mig$;
 
