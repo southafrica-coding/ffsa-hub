@@ -107,8 +107,7 @@ function isListedHome(row: DepartmentRecord, foldedSources: Set<string>): boolea
 }
 
 export async function listVisibleDepartments(
-  reader: Client,
-  userId: string
+  reader: Client
 ): Promise<{ data: DepartmentSummary[] | null; error: { message: string } | null; accessError?: boolean }> {
   const [rows, aliases] = await Promise.all([listDepartmentRows(reader), listAliases(reader)]);
   if (rows.error || aliases.error) {
@@ -119,7 +118,7 @@ export async function listVisibleDepartments(
   const homes = rows.data
     .filter((row) => isListedHome(row, foldedSources))
     .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
-  const decisions = await Promise.all(homes.map((home) => loadMinistryAccess(reader, userId, home.id)));
+  const decisions = await Promise.all(homes.map((home) => loadMinistryAccess(reader, home.id)));
   if (decisions.some((decision) => !decision.ok)) {
     return { data: null, error: { message: "access lookup failed" }, accessError: true };
   }

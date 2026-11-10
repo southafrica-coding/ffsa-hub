@@ -68,10 +68,6 @@ export function isPointLeader(gate: DepartmentGate): boolean {
   return gate.memberships.some((membership) => membership.is_point_leader);
 }
 
-function runsMinistry(gate: DepartmentGate, ministryId: string): boolean {
-  return isLeaderOf(gate, ministryId) || isPointLeaderOf(gate, ministryId);
-}
-
 /** Active member of the Leadership Team ministry. The role alone is not enough. */
 export function isLeadershipMember(gate: DepartmentGate): boolean {
   if (!gate.leadershipMinistryId) return false;
@@ -90,25 +86,26 @@ export function canSeeDepartmentDetail(gate: DepartmentGate, ministryId: string)
 export const viewDepartment = canSeeDepartmentDetail;
 
 /**
- * Matches department budget RLS: ministry leader, Finances & Legal member,
- * unscoped admin / super_admin, unscoped finance_admin, or unscoped
- * finance.view / finance.edit. Leadership Team membership alone does not.
+ * Matches dept_can_read_budget: ministry leader (member_role = leader),
+ * Finances & Legal member, unscoped admin / super_admin, unscoped
+ * finance_admin, or unscoped finance.view / finance.edit.
+ * is_point_leader alone does not count. Leadership Team membership alone does not.
  */
 export function canSeeBudget(gate: DepartmentGate, ministryId: string): boolean {
-  if (gate.isAdmin || gate.isFinanceAdmin || gate.hasFinanceRead || runsMinistry(gate, ministryId)) return true;
+  if (gate.isAdmin || gate.isFinanceAdmin || gate.hasFinanceRead || isLeaderOf(gate, ministryId)) return true;
   return !!gate.financeMinistryId && isMemberOf(gate, gate.financeMinistryId);
 }
 
 export const readDepartmentBudget = canSeeBudget;
 
-/** That ministry's leader or point leader, or unscoped admin. */
+/** Matches dept_can_write_budget: member_role = leader, or unscoped admin. */
 export function editDepartmentBudget(gate: DepartmentGate, ministryId: string): boolean {
-  return gate.isAdmin || runsMinistry(gate, ministryId);
+  return gate.isAdmin || isLeaderOf(gate, ministryId);
 }
 
-/** That ministry's leader or point leader, or unscoped admin. */
+/** Matches dept_can_write_rock: member_role = leader, or unscoped admin. */
 export function editDepartmentRocks(gate: DepartmentGate, ministryId: string): boolean {
-  return gate.isAdmin || runsMinistry(gate, ministryId);
+  return gate.isAdmin || isLeaderOf(gate, ministryId);
 }
 
 /** Leadership Team members and unscoped admins. */
@@ -116,8 +113,9 @@ export function viewLeadershipRocks(gate: DepartmentGate): boolean {
   return gate.isAdmin || isLeadershipMember(gate);
 }
 
+/** member_role = leader, or unscoped admin. is_point_leader alone does not count. */
 export function canSeePeopleEmails(gate: DepartmentGate, ministryId: string): boolean {
-  return gate.isAdmin || runsMinistry(gate, ministryId);
+  return gate.isAdmin || isLeaderOf(gate, ministryId);
 }
 
 export const revealPeopleEmails = canSeePeopleEmails;
@@ -308,14 +306,15 @@ async function seesFoldedHome(
 }
 
 /**
- * Flags for one home. Budget read/write and rock read/write come from the
- * database functions. Point-leader edit and the donors_dev fold are not
- * in those functions, so they stay here.
+ * Flags for one home. Budget and rock writes come from the database
+ * functions. canSeePeopleEmails matches dept_can_write_rock: a leader
+ * (member_role = leader) or an unscoped admin. is_point_leader does not
+ * grant any of these. The donors_dev fold is not in dept_can_read_rock,
+ * so detail adds that membership check.
  * ok false means the access lookup failed (403). denied means 404.
  */
 export async function loadMinistryAccess(
   supabase: Client,
-  userId: string,
   ministryId: string
 ): Promise<{ ok: true; access: DepartmentAccessFlags; denied: boolean } | { ok: false }> {
   const [readRock, readBudget, writeBudget, writeRock] = await Promise.all([
@@ -333,26 +332,12 @@ export async function loadMinistryAccess(
     detail = folded.value;
   }
 
-  let pointLeader = false;
-  if (detail) {
-    const own = await supabase
-      .from("staff_ministry_members")
-      .select("is_point_leader")
-      .eq("user_id", userId)
-      .eq("staff_ministry_id", ministryId)
-      .eq("status", "active")
-      .limit(1);
-    if (own.error) return { ok: false };
-    const row = Array.isArray(own.data) ? own.data[0] : null;
-    pointLeader = (row as { is_point_leader?: boolean } | null)?.is_point_leader === true;
-  }
-
   const access: DepartmentAccessFlags = {
     canSeeDepartmentDetail: detail,
-    canSeeBudget: readBudget.value || pointLeader,
-    canEditBudget: writeBudget.value || pointLeader,
-    canEditRocks: writeRock.value || pointLeader,
-    canSeePeopleEmails: writeRock.value || pointLeader,
+    canSeeBudget: readBudget.value,
+    canEditBudget: writeBudget.value,
+    canEditRocks: writeRock.value,
+    canSeePeopleEmails: writeRock.value,
   };
   return { ok: true, access, denied: !access.canSeeDepartmentDetail && !access.canSeeBudget };
 }

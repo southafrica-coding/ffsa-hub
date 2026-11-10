@@ -9,6 +9,7 @@ import {
   LEADERSHIP_MEMBER,
   LINK_ID,
   MEDIA,
+  ROCK_ID,
   MEMBER,
   OUTSIDER,
   PROJECT_ID,
@@ -50,8 +51,9 @@ const { GET: listDepartments } = await import("./route");
 const { GET: getHome } = await import("./[slug]/route");
 const { GET: getPeople } = await import("./[slug]/people/route");
 const { GET: getOkrs } = await import("./[slug]/okrs/route");
-const { GET: getRocks } = await import("./[slug]/rocks/route");
-const { GET: getBudget } = await import("./[slug]/budget/route");
+const { GET: getRocks, POST: postRock } = await import("./[slug]/rocks/route");
+const { PATCH: patchRock } = await import("./[slug]/rocks/[rockId]/route");
+const { GET: getBudget, POST: postBudget } = await import("./[slug]/budget/route");
 const { GET: getOverview } = await import("./[slug]/overview/route");
 const { GET: getRollup } = await import("./rocks/route");
 const { GET: getServices } = await import("../services/route");
@@ -140,6 +142,40 @@ describe("department visibility", () => {
     expect(home.rocks[0].dueOn).toBe("2026-12-01");
     expect(home.budget).not.toBeNull();
     expect(home.budget.links[0].id === LINK_ID || home.budget.links[0].projectId === PROJECT_ID).toBe(true);
+  });
+
+  it("denies budget and rock writes to a point leader who is not a leader", async () => {
+    h.userId = MEMBER;
+    const membership = h.world!.memberships.find((row) => row.user_id === MEMBER && row.staff_ministry_id === MEDIA);
+    if (membership) {
+      membership.member_role = "member";
+      membership.is_point_leader = true;
+    }
+    const home = await getHome(new Request("http://localhost/x"), slug("media"));
+    expect(home.status).toBe(200);
+    const body = await home.json();
+    expect(body.access).toMatchObject({
+      canSeeDepartmentDetail: true,
+      canSeeBudget: false,
+      canEditBudget: false,
+      canEditRocks: false,
+      canSeePeopleEmails: false,
+    });
+    expect(body.budget).toBeNull();
+    expect(body.viewerMemberships).toEqual(
+      expect.arrayContaining([expect.objectContaining({ departmentSlug: "media", isPointLeader: true })])
+    );
+    const people = await (await getPeople(new Request("http://localhost/x"), slug("media"))).json();
+    expect(people.people.every((person: { email: string | null }) => person.email == null)).toBe(true);
+
+    const write = { method: "POST", body: "{}", headers: { "content-type": "application/json" } };
+    expect((await postBudget(new Request("http://localhost/x", write), slug("media"))).status).toBe(404);
+    expect((await postRock(new Request("http://localhost/x", write), slug("media"))).status).toBe(404);
+    expect(
+      (await patchRock(new Request("http://localhost/x", { ...write, method: "PATCH" }), {
+        params: Promise.resolve({ slug: "media", rockId: ROCK_ID }),
+      })).status
+    ).toBe(404);
   });
 
   it("returns 403 when the account is inactive or a membership lookup fails", async () => {

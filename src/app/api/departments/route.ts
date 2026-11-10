@@ -16,7 +16,7 @@ export async function GET() {
   const user = await getAuthedUser(supabase);
   if (!user) return notAuthenticated();
   if (!(await accountIsActive(supabase, user.id))) return notAuthorized();
-  const list = await listVisibleDepartments(supabase, user.id);
+  const list = await listVisibleDepartments(supabase);
   if (list.accessError) return notAuthorized();
   if (list.error) return serverError(list.error);
   return NextResponse.json(list.data);

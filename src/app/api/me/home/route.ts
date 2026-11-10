@@ -21,7 +21,7 @@ export async function GET() {
   if (!(await accountIsActive(supabase, user.id))) return notAuthorized();
 
   const [departments, services, grants, memberships] = await Promise.all([
-    listVisibleDepartments(supabase, user.id),
+    listVisibleDepartments(supabase),
     listServices(supabase),
     listServiceOwnerRows(supabase),
     listActiveMemberships(supabase, user.id),

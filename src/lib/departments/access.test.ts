@@ -54,12 +54,17 @@ describe("department access flags", () => {
     expect(flags.canSeePeopleEmails).toBe(false);
   });
 
-  it("lets a leader and a point leader edit", () => {
+  it("lets a leader edit and withholds those rights from a point leader who is not a leader", () => {
     const leader = gate({ memberships: [{ staff_ministry_id: MEDIA, member_role: "leader", is_point_leader: false }] });
     const point = gate({ memberships: [{ staff_ministry_id: MEDIA, member_role: "member", is_point_leader: true }] });
     expect(accessFlags(leader, MEDIA).canEditBudget).toBe(true);
-    expect(accessFlags(point, MEDIA).canEditRocks).toBe(true);
-    expect(accessFlags(point, MEDIA).canSeePeopleEmails).toBe(true);
+    expect(accessFlags(leader, MEDIA).canSeePeopleEmails).toBe(true);
+    const pointFlags = accessFlags(point, MEDIA);
+    expect(pointFlags.canSeeDepartmentDetail).toBe(true);
+    expect(pointFlags.canSeeBudget).toBe(false);
+    expect(pointFlags.canEditBudget).toBe(false);
+    expect(pointFlags.canEditRocks).toBe(false);
+    expect(pointFlags.canSeePeopleEmails).toBe(false);
     expect(accessFlags(leader, FINANCE).canEditBudget).toBe(false);
   });
 

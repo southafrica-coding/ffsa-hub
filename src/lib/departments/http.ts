@@ -122,7 +122,7 @@ export async function openDepartment(
 ): Promise<{ response: NextResponse } | OpenedDepartment> {
   const ctx = await loadDepartment(slug);
   if (!isDepartmentContext(ctx)) return ctx;
-  const decision = await loadMinistryAccess(ctx.supabase, ctx.userId, ctx.department.id);
+  const decision = await loadMinistryAccess(ctx.supabase, ctx.department.id);
   if (!decision.ok) return { response: notAuthorized() };
   const allowed =
     need === "detail"
