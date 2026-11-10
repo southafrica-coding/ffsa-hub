@@ -53,7 +53,7 @@ export default async function HomePage() {
               key={service.id}
               href={service.href}
               title={service.name}
-              meta={service.ownerLabel}
+              meta={service.managingLabel}
             />
           ))}
           <p className="px-5 py-3 text-sm md:px-8">
