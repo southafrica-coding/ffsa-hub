@@ -103,8 +103,9 @@ export async function userCanManageApplications(
 
 /**
  * Program-scoped variant: can this user manage THIS specific program?
- * True for global schools managers/admins (see above), for a `schools.*`
- * grant scoped to this program, and for anyone named a leader of the program
+ * True for global schools managers/admins (see above), for a program_leader
+ * role scoped to this program (migration 312), for a `schools.*` grant
+ * scoped to this program, and for anyone named a leader of the program
  * (program_leaders, migration 145). Mirrors the DB
  * has_schools_access(program_id) check for the app layer.
  */
