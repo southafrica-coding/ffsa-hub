@@ -193,17 +193,15 @@
   /* Every number in the app lines up */
   .tabular, td, th { font-variant-numeric: tabular-nums; }
 
-  /* Prose links inside the signed-in shell only. Public pages (/e, /f, /hire)
-     and display titles keep the colour they set themselves. */
-  [data-shell-main] a {
+  /* Zero specificity, and only anchors with no class. A classed link
+     (MastheadAction, NeedsYouAction, LocalTabs, Finance titles) keeps the
+     colour its class set. Public pages are outside [data-shell-main]. */
+  :where([data-shell-main]) a:not([class]) {
     color: var(--link);
     text-decoration: none;
   }
-  [data-shell-main] a:hover { text-decoration: underline; }
-  [data-shell-main] a.font-display,
-  [data-shell-main] a .font-display,
-  [data-shell-main] :is(h1, h2, h3, h4, h5, h6, .page-title, .masthead-title, .hero-title) {
-    color: var(--text);
+  :where([data-shell-main]) a:not([class]):hover {
+    text-decoration: underline;
   }
   .theme-hire a, .org-theme a { color: inherit; text-decoration: none; }
 }
