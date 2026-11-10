@@ -1,8 +1,4 @@
-import { NextResponse } from "next/server";
-import { getAuthedUser } from "@/lib/api-auth";
-import { accountIsActive } from "@/lib/auth/grant-scope";
-import { notAuthenticated, notAuthorized, serverError } from "@/lib/departments/http";
-import { listVisibleDepartments } from "@/lib/departments/page";
+import { loadDepartmentsIndexForViewer, viewerResponse } from "@/lib/departments/viewer";
 import { createClient } from "@/lib/supabase/server";
 
 // GET /api/departments — homes the caller can open, including budget-only.
@@ -13,11 +9,5 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const supabase = await createClient();
-  const user = await getAuthedUser(supabase);
-  if (!user) return notAuthenticated();
-  if (!(await accountIsActive(supabase, user.id))) return notAuthorized();
-  const list = await listVisibleDepartments(supabase);
-  if (list.accessError) return notAuthorized();
-  if (list.error) return serverError(list.error);
-  return NextResponse.json(list.data);
+  return viewerResponse(await loadDepartmentsIndexForViewer(supabase));
 }
