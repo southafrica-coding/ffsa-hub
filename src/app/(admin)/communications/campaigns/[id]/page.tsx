@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
+import { requireModuleAccess } from "@/lib/require-permission";
 import {
   getCampaignById,
   getCampaignAudienceCount,
@@ -38,6 +39,7 @@ export default async function CampaignComposerPage({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+  await requireModuleAccess(supabase, user.id, "communications");
 
   const { data: campaign, error } = await getCampaignById(supabase, id);
   if (error || !campaign) notFound();

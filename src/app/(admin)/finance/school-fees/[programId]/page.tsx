@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
+import { requireSchoolFeesAccess } from "@/lib/finance/school-fees-links";
 import { getProgramById } from "@/services/schools";
 import {
   getFeeStructuresByProgram,
@@ -15,6 +17,11 @@ export default async function ProgramFeesPage({
 }) {
   const { programId } = await params;
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+  await requireSchoolFeesAccess(supabase, user.id);
 
   const { data: program, error: programError } = await getProgramById(
     supabase,

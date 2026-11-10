@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { canManageFinance } from "@/lib/api-auth";
 import { deleteTokens } from "@/services/xero";
 import type { XeroRegion } from "@/services/xero";
 
@@ -11,6 +12,9 @@ export async function POST(request: Request) {
 
   if (!user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+  if (!(await canManageFinance(supabase, user.id))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const body = await request.json().catch(() => ({}));

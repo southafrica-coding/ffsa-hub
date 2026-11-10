@@ -34,6 +34,7 @@ export default async function OutreachTeamDetailPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
 
   // Your role on this team. Plain members can't read the team row (it
   // carries the budget), so they go to the money-free view instead.

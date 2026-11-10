@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isFinanceStaff } from "@/lib/slack/assistant/outreach";
 import {
@@ -31,6 +32,7 @@ export default async function OutreachFinancePage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
   // Open to everyone: RLS hands finance staff every team and everyone else
   // the outreaches they own or co-lead, the teams in groups they manage, and
   // (read-only) the other teams in their own team's groups. School-fee

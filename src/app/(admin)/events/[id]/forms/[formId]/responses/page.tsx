@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { requireModuleAccess } from "@/lib/require-permission";
 import { redirect, notFound } from "next/navigation";
 import { getFormById, listFormSubmissions } from "@/services/forms";
 import { fieldKey, type FormSchema, type FormField } from "@/lib/forms/schema";
@@ -17,6 +18,7 @@ export default async function FormResponsesPage({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+  await requireModuleAccess(supabase, user.id, "events");
 
   const { data: form, error } = await getFormById(supabase, formId);
   if (error || !form) notFound();

@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
+import { requireSchoolFeesAccess } from "@/lib/finance/school-fees-links";
 import { getProgramById } from "@/services/schools";
 import {
   getBillingCoursesByProgram,
@@ -27,6 +29,11 @@ export default async function StudentBillingPage({
 }) {
   const { programId, enrollmentId } = await params;
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+  await requireSchoolFeesAccess(supabase, user.id);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: enrollment } = await (supabase as any)
@@ -61,10 +68,7 @@ export default async function StudentBillingPage({
   const hasWholeProgram = (wholeProgramCharges ?? 0) > 0;
 
   const balances = await getSchoolBalances(createAdminClient(), programId, { enrollmentId });
-  const {
-    data: { user: viewer },
-  } = await supabase.auth.getUser();
-  const canInvoice = viewer ? await canManageFinance(supabase, viewer.id) : false;
+  const canInvoice = await canManageFinance(supabase, user.id);
   const mine = balances.byEnrollment.get(enrollmentId);
 
   return (

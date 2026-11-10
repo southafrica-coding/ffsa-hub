@@ -29,7 +29,12 @@ export async function hasAnyRole(
 export const EVENTS_MANAGE_ROLES = ["super_admin", "admin", "events_admin"];
 export const COMMS_MANAGE_ROLES = ["super_admin", "admin", "comms_admin"];
 
-/** True if the user holds at least one of the given granular permission keys. */
+/**
+ * True if the user holds at least one of the given granular permission keys,
+ * either granted directly or through an assigned role's bundle
+ * (user_roles -> role_permissions). Mirrors SQL has_permission() (migration
+ * 089) and requireModuleAccess: role scope is not considered.
+ */
 export async function hasAnyPermission(
   supabase: Client,
   userId: string,
@@ -41,7 +46,22 @@ export async function hasAnyPermission(
     .eq("user_id", userId)
     .in("permissions.key", permissionKeys)
     .limit(1);
-  return !!data && data.length > 0;
+  if (data && data.length > 0) return true;
+
+  const { data: roleRows } = await supabase
+    .from("user_roles")
+    .select("role_id")
+    .eq("user_id", userId);
+  const roleIds = ((roleRows ?? []) as { role_id: string }[]).map((r) => r.role_id);
+  if (roleIds.length === 0) return false;
+
+  const { data: viaRole } = await supabase
+    .from("role_permissions")
+    .select("permissions!inner(key)")
+    .in("role_id", roleIds)
+    .in("permissions.key", permissionKeys)
+    .limit(1);
+  return !!viaRole && viaRole.length > 0;
 }
 
 // Roles or granular permissions that allow writing contact data.
@@ -184,4 +204,27 @@ export async function canManageSchools(
 ): Promise<boolean> {
   if (await hasAnyRole(supabase, userId, SCHOOLS_MANAGE_ROLES)) return true;
   return hasAnyPermission(supabase, userId, perms);
+}
+
+/**
+ * canManageSchools for one program. canManageSchools counts a grant wherever
+ * it is scoped, so a leader scoped to program A passes it for program B too;
+ * call this once the target program is known. super_admin / admin pass;
+ * everyone else needs one of the keys for THIS program through SQL
+ * has_permission_for (migration 089): direct or via a role bundle, global or
+ * scoped to the program. Pass the USER client — it reads auth.uid().
+ */
+export async function canManageSchoolsForProgram(
+  supabase: Client,
+  userId: string,
+  programId: string,
+  perms: string[] = SCHOOLS_MANAGE_PERMS
+): Promise<boolean> {
+  if (await hasAnyRole(supabase, userId, ["super_admin", "admin"])) return true;
+  const results = await Promise.all(
+    perms.map((key) =>
+      supabase.rpc("has_permission_for", { required_permission: key, target_program_id: programId })
+    )
+  );
+  return results.some((r: { data: unknown }) => r.data === true);
 }

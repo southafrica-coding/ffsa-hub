@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { canAccessRecordsLibrary } from "@/lib/auth/records-library-access";
 
 export async function POST(
   request: Request,
@@ -23,6 +24,12 @@ export async function POST(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const adminSupabase: any = createAdminClient();
+
+  // Authz — same gate as the create and rows endpoints.
+  const allowed = await canAccessRecordsLibrary(adminSupabase, user.id);
+  if (!allowed) {
+    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  }
 
   // Run matching: every newly-imported person may match an
   // existing user. We loop over users with linkable matches via

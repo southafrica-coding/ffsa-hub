@@ -1,9 +1,22 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { canManageFinance } from "@/lib/api-auth";
 import { xeroRedirectUri } from "@/services/xero";
 import crypto from "crypto";
 
 export async function GET(request: Request) {
   try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.redirect(`${process.env.NEXT_PUBLIC_SITE_URL}/login`);
+    }
+    if (!(await canManageFinance(supabase, user.id))) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const url = new URL(request.url);
     const region = url.searchParams.get("region") ?? "za";
 

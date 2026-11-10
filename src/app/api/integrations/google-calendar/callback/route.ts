@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { callerIsAdmin } from "@/lib/auth/check-ministry-access";
 import { saveCalendarTokens, googleCalendarRedirectUri } from "@/lib/google/calendar";
 
 const SETTINGS_URL = `${process.env.NEXT_PUBLIC_SITE_URL}/settings`;
@@ -16,6 +17,9 @@ export async function GET(request: Request) {
   } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.redirect(`${process.env.NEXT_PUBLIC_SITE_URL}/login`);
+  }
+  if (!(await callerIsAdmin(supabase, user.id))) {
+    return NextResponse.redirect(`${SETTINGS_URL}?gcal=error&message=forbidden`);
   }
 
   if (error || !code) {

@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
+import { requireSchoolFeesAccess } from "@/lib/finance/school-fees-links";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { canManageFinance } from "@/lib/api-auth";
 import { Masthead } from "@/components/ffsa";
@@ -11,7 +13,9 @@ export default async function InvoiceEmailTemplatesPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const canEdit = user ? await canManageFinance(supabase, user.id) : false;
+  if (!user) redirect("/login");
+  await requireSchoolFeesAccess(supabase, user.id);
+  const canEdit = await canManageFinance(supabase, user.id);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
