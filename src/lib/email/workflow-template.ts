@@ -6,12 +6,12 @@
 //
 // IMPORTANT: this is the *Fire & Fragrance* brand (the hub's parent),
 // NOT "The Send". The two are distinct identities and must never be
-// designed using each other. F&F = Roboto / Space Mono, black + yellow
+// designed using each other. F&F = Roboto / Roboto Mono, black + yellow
 // + white, black pill buttons (source: the FFSA brand deck, encoded in
 // src/lib/brand/ffsa.ts). The Send's navy/red/blue ticket aesthetic
 // lives only in its own template.
 //
-// Email-safe: inline CSS, single 600px table. Roboto / Space Mono are
+// Email-safe: inline CSS, single 600px table. Roboto / Roboto Mono are
 // loaded via Google Fonts for clients that support webfonts (Apple Mail,
 // iOS); everything falls back to Arial / Courier elsewhere.
 // ============================================================

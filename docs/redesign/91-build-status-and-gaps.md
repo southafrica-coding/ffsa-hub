@@ -482,7 +482,7 @@ Contacts and users are the highest-traffic of these.
   that was built and then reversed by product decision on 2026-08-18. A space is
   a timetable, a vehicle is a rental process. Do not "fix" this back.
 - **Event brand kits are out of scope** — storefronts, email templates, brand
-  editors keep their own fonts and colours. Bebas/Anton/Space Mono stay loaded
+  editors keep their own fonts and colours. Bebas/Anton stay loaded
   for them.
 - **Prayer room**: instrument labels stay as labels; qualifications govern seats.
   Legacy evaluation notes are private. The wall replaces the week/day views.

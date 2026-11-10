@@ -1,12 +1,19 @@
 // The public storefront: dark, no login needed to browse (spec, Routes).
 // Only listed products ever reach these pages — RLS sees to that.
 
+import { Bebas_Neue } from "next/font/google";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { HIRE_CSS } from "@/lib/equipment/hire-theme";
 import { listCategories, type EquipmentCategory } from "@/services/equipment";
 import { StoreHeader, StoreTabBar } from "./_components/store-chrome";
+
+const hireDisplay = Bebas_Neue({
+  weight: "400",
+  subsets: ["latin"],
+  variable: "--font-bebas",
+});
 
 export const metadata: Metadata = {
   title: "Hire · Fire & Fragrance",
@@ -24,7 +31,7 @@ export default async function HireLayout({ children }: { children: React.ReactNo
     .map((c) => ({ slug: c.slug, name: c.name }));
 
   return (
-    <div className="theme-hire min-h-[100dvh] pb-[76px] md:pb-0">
+    <div className={`theme-hire min-h-[100dvh] pb-[76px] md:pb-0 ${hireDisplay.variable}`}>
       <style dangerouslySetInnerHTML={{ __html: HIRE_CSS }} />
       <Suspense fallback={<div className="h-[52px] border-b border-[color:var(--hire-line)] md:h-[68px]" />}>
         <StoreHeader categories={top} signedIn={!!auth.user} />

@@ -105,26 +105,88 @@ export const FFSA_CSS_VARS: Record<string, string> = {
 
 // ── Typography ──────────────────────────────────────────────
 // Deck: "HEADERS IN ROBOTO BLACK" · "Roboto for body paragraph" ·
-// "Accent in Mono" · "Notes: Condensed".
+// "Notes: Condensed". One mono for the whole system: Roboto Mono
+// (tabular figures and codes). Eyebrows are Roboto 700, not mono.
 
 export const FFSA_FONTS = {
-  /** Headers — Roboto at weight 900, uppercase. */
+  /** Headers — Roboto. Weight comes from FFSA_TITLE_WEIGHT. */
   DISPLAY: "'Roboto','Helvetica Neue',Arial,sans-serif",
   /** Body paragraphs — Roboto regular. */
   BODY: "'Roboto','Helvetica Neue',Arial,sans-serif",
-  /** Accents, eyebrows, labels, data — mono. */
-  MONO: "'Space Mono','Roboto Mono','Courier New',Courier,monospace",
+  /** Tabular figures and codes. Roboto Mono is the only mono. */
+  MONO: "'Roboto Mono',ui-monospace,'Courier New',Courier,monospace",
   /** Notes / dense secondary copy — condensed. */
   CONDENSED: "'Roboto Condensed','Arial Narrow',Arial,sans-serif",
 } as const;
 
-/** Display type is only ever Roboto *Black*, uppercase. */
-export const FFSA_DISPLAY_WEIGHT = 900;
+/**
+ * Page and hero titles. One token so the weight can flip to 700 later
+ * without hunting through components. Uppercase stays on the title class.
+ */
+export const FFSA_TITLE_WEIGHT = 900;
+
+/** @deprecated Use FFSA_TITLE_WEIGHT. Kept so existing imports keep compiling. */
+export const FFSA_DISPLAY_WEIGHT = FFSA_TITLE_WEIGHT;
 
 /** Google Fonts <link> for email chrome — Apple Mail honours it, Gmail
  *  strips it and falls back to the stacks above. */
 export const FFSA_FONT_LINK =
-  '<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Roboto+Condensed:wght@400;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />';
+  '<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Roboto+Condensed:wght@400;700&family=Roboto+Mono:wght@400;500;700&display=swap" rel="stylesheet" />';
+
+// ── Hub UI tokens ───────────────────────────────────────────
+// The in-app semantic palette. Deck colours are referenced from
+// FFSA_COLORS / FFSA_TINTS. Values that are not in the six-colour deck
+// (hairlines, secondary text, warning) live here so the admin UI still
+// has one source of truth. globals.css must mirror FFSA_HUB_CSS.
+
+export const FFSA_HUB = {
+  brandBlack: FFSA_COLORS.BLACK,
+  bg: FFSA_COLORS.WHITE,
+  bgSubtle: FFSA_TINTS.PAPER,
+  /** On solid black only. Never text on white. */
+  bone: FFSA_COLORS.BONE,
+  /** Hairline on white. Not a deck swatch. */
+  border: "#E7E4D9",
+  /** Inputs and strong hairlines on white. Not a deck swatch. */
+  borderStrong: "#8E8A7C",
+  text: FFSA_TINTS.INK,
+  /** Secondary text on white. Not a deck swatch. */
+  textSecondary: "#55524A",
+  /** Captions and placeholders on white. Not a deck swatch. */
+  textTertiary: "#6B675D",
+  /** Fill only. Text on it is black. */
+  accent: FFSA_COLORS.YELLOW,
+  accentHover: FFSA_TINTS.YELLOW_HOVER,
+  /** Links, and the focus ring on white. */
+  link: FFSA_COLORS.BLUE,
+  /** Success fills. Too light for small text on white. */
+  success: FFSA_COLORS.GREEN,
+  /** Success text on white. */
+  successText: "#3E7F2B",
+  /** Warning text on white. Not a deck swatch. */
+  warning: "#8A6400",
+  danger: FFSA_TINTS.RED,
+} as const;
+
+/** CSS custom properties for FFSA_HUB. globals.css :root must match. */
+export const FFSA_HUB_CSS = {
+  "--brand-black": FFSA_HUB.brandBlack,
+  "--bg": FFSA_HUB.bg,
+  "--bg-subtle": FFSA_HUB.bgSubtle,
+  "--bone": FFSA_HUB.bone,
+  "--border": FFSA_HUB.border,
+  "--border-strong": FFSA_HUB.borderStrong,
+  "--text": FFSA_HUB.text,
+  "--text-secondary": FFSA_HUB.textSecondary,
+  "--text-tertiary": FFSA_HUB.textTertiary,
+  "--accent": FFSA_HUB.accent,
+  "--accent-hover": FFSA_HUB.accentHover,
+  "--link": FFSA_HUB.link,
+  "--success": FFSA_HUB.success,
+  "--success-text": FFSA_HUB.successText,
+  "--warning": FFSA_HUB.warning,
+  "--danger": FFSA_HUB.danger,
+} as const;
 
 // ── Logos & graphics ────────────────────────────────────────
 // Files already shipped in /public/brand. `@email` variants are the
