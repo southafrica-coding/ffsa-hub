@@ -76,26 +76,36 @@ describe("getAccessibleSchoolsProgramIds", () => {
     expect(await canOpenSchools(client(unscoped), "u")).toMatchObject({ open: false, hasModuleAccess: false });
   });
 
-  it("keeps main's program page for a contact grant scoped to one program", async () => {
+  it("opens only the program a scoped contact grant names", async () => {
     const db = client({
       roles: [],
       direct: [
         { module: "schools", key: "schools.assignable_as_contact", scopeType: "program", scopeId: A },
       ],
     });
-    // Main's hasModuleAccess ignored scope, so the page opened for every program.
-    // The grant itself still covers only program A, which is what staff-scoping uses.
-    expect(await canOpenSchools(db, "u", { programId: A })).toMatchObject({
-      open: true,
-      hasModuleAccess: true,
-    });
-    expect(await canOpenSchools(db, "u", { programId: B })).toMatchObject({
-      open: true,
-      hasModuleAccess: true,
-    });
+    expect(await canOpenSchools(db, "u", { programId: A })).toMatchObject({ open: true });
+    expect(await canOpenSchools(db, "u", { programId: B })).toMatchObject({ open: false });
     expect(await userHasSchoolsGrant(db, "u", A)).toBe(true);
     expect(await userHasSchoolsGrant(db, "u", B)).toBe(false);
     expect(await canOpenSchools(db, "u")).toMatchObject({ open: false, hasModuleAccess: false });
+  });
+
+  it("denies a deactivated contact-only user and a failed lookup", async () => {
+    const inactive = client({
+      active: false,
+      roles: [],
+      direct: [
+        { module: "schools", key: "schools.assignable_as_contact", scopeType: "program", scopeId: A },
+      ],
+    });
+    expect(await canOpenSchools(inactive, "u", { programId: A })).toMatchObject({ open: false });
+    expect(await userHasSchoolsGrant(inactive, "u", A)).toBe(false);
+
+    const broken = createFakeSupabase({
+      resolve: () => ({ data: null, error: { message: "boom" } }),
+    });
+    expect(await canOpenSchools(broken.client, "u", { programId: A })).toMatchObject({ open: false });
+    expect(await userHasSchoolsGrant(broken.client, "u", A)).toBe(false);
   });
 
   it("lets an unscoped contact grant cover every program page without opening Training home", async () => {

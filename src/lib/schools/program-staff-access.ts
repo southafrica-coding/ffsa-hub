@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { canManageFinance } from "@/lib/api-auth";
 import { ASSIGNABLE_CONTACT_PERMISSION_KEY } from "@/lib/auth/assignable-contacts";
 import { userCanManageProgram } from "@/lib/auth/check-schools-access";
-import { permissionOf, type GrantScope } from "@/lib/auth/grant-scope";
+import { accountIsActive, permissionOf, type GrantScope } from "@/lib/auth/grant-scope";
 import {
   getAccessibleSchoolsProgramIds,
   type SchoolsProgramAccess,
@@ -71,14 +71,15 @@ function assignableCovers(grant: AssignableGrant, programId: string): boolean {
 }
 
 /**
- * schools.assignable_as_contact, the way main counted it. No is_active check:
- * main's module access and userHasSchoolsGrant did not read that flag.
- * A lookup error on a leg contributes nothing from that leg.
+ * schools.assignable_as_contact grants. A deactivated account or any lookup
+ * error yields none. An unscoped grant still covers every program; a program
+ * scope covers only that program.
  */
 async function assignableContactGrants(
   supabase: SupabaseClient,
   userId: string
 ): Promise<AssignableGrant[]> {
+  if (!(await accountIsActive(supabase, userId))) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = supabase as any;
   const direct = await db
@@ -86,23 +87,23 @@ async function assignableContactGrants(
     .select("scope_type, scope_id, permissions!inner(key)")
     .eq("user_id", userId)
     .eq("permissions.key", ASSIGNABLE_CONTACT_PERMISSION_KEY);
+  if (direct.error) return [];
   const grants: AssignableGrant[] = [];
-  if (!direct.error) {
-    for (const row of (direct.data ?? []) as Array<{
-      scope_type?: string | null;
-      scope_id?: string | null;
-      permissions?: { key?: string } | { key?: string }[] | null;
-    }>) {
-      if (permissionOf(row)?.key !== ASSIGNABLE_CONTACT_PERMISSION_KEY) continue;
-      grants.push({ scope_type: row.scope_type ?? null, scope_id: row.scope_id ?? null });
-    }
+  for (const row of (direct.data ?? []) as Array<{
+    scope_type?: string | null;
+    scope_id?: string | null;
+    permissions?: { key?: string } | { key?: string }[] | null;
+  }>) {
+    if (permissionOf(row)?.key !== ASSIGNABLE_CONTACT_PERMISSION_KEY) continue;
+    grants.push({ scope_type: row.scope_type ?? null, scope_id: row.scope_id ?? null });
   }
 
   const roles = await db
     .from("user_roles")
     .select("role_id, scope_type, scope_id")
     .eq("user_id", userId);
-  if (roles.error || !Array.isArray(roles.data) || roles.data.length === 0) return grants;
+  if (roles.error) return [];
+  if (!Array.isArray(roles.data) || roles.data.length === 0) return grants;
 
   const roleRows = roles.data as Array<{
     role_id?: string;
@@ -119,7 +120,7 @@ async function assignableContactGrants(
     .select("role_id, permissions!inner(key)")
     .in("role_id", roleIds)
     .eq("permissions.key", ASSIGNABLE_CONTACT_PERMISSION_KEY);
-  if (bundled.error) return grants;
+  if (bundled.error) return [];
 
   const carrying = new Set(
     ((bundled.data ?? []) as Array<{ role_id?: string; permissions?: { key?: string } | { key?: string }[] | null }>)
@@ -177,9 +178,9 @@ export async function canOpenSchools(
 ): Promise<{
   open: boolean;
   /**
-   * Unscoped Training access on the home. On a program page (a programId was
-   * passed) this is also true when the user holds schools.assignable_as_contact
-   * at any scope, which is what opened every program page on main.
+   * Unscoped Training access on the home. On a program page this is also true
+   * for an unscoped schools.assignable_as_contact grant, which still opens
+   * every program. A program-scoped contact grant does not set this flag.
    */
   hasModuleAccess: boolean;
   staffProgramIds: string[];
@@ -194,17 +195,19 @@ export async function canOpenSchools(
   ]);
   const seesAll = schools === "all";
   const grantProgramIds = seesAll ? [] : schools;
-  // Main's hasModuleAccess ignored scope, so any assignable_as_contact grant
-  // opened every program page. It does not open Training home.
-  const assignableOpensProgramPage = !!scope?.programId && assignable.length > 0;
+  // An unscoped contact grant still opens every program page (main). A
+  // program-scoped one opens only that program. Neither opens Training home.
+  const unscopedContact = assignable.some((grant) => !grant.scope_type || !grant.scope_id);
+  const contactOpens = (programId: string) =>
+    assignable.some((grant) => assignableCovers(grant, programId));
   const covers = (programId: string) =>
     seesAll || grantProgramIds.includes(programId) || staffProgramIds.includes(programId);
   const open = scope?.programId
-    ? covers(scope.programId) || assignableOpensProgramPage
+    ? covers(scope.programId) || contactOpens(scope.programId)
     : seesAll || grantProgramIds.length > 0 || staffProgramIds.length > 0;
   return {
     open,
-    hasModuleAccess: seesAll || assignableOpensProgramPage,
+    hasModuleAccess: seesAll || (!!scope?.programId && unscopedContact),
     staffProgramIds,
     grantProgramIds,
     schools,
