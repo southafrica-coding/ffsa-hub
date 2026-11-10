@@ -10,6 +10,7 @@
 // finances_legal home and does not gain its budget.
 
 import { accountIsActive, grantCounts, namesOf, permissionOf } from "@/lib/auth/grant-scope";
+import { rpcFlag } from "./rpc";
 import { FINANCES_LEGAL_SLUG, FOLDED_DEPARTMENTS, LEADERSHIP_TEAM_SLUG } from "./homes";
 import {
   listActiveMemberships,
@@ -283,6 +284,77 @@ export async function canEditDepartmentRocks(
   ministryId: string
 ): Promise<boolean> {
   return withGate(supabase, userId, (gate) => editDepartmentRocks(gate, ministryId));
+}
+
+async function seesFoldedHome(
+  supabase: Client,
+  homeId: string
+): Promise<{ ok: true; value: boolean } | { ok: false }> {
+  const home = await supabase.from("staff_ministries").select("slug").eq("id", homeId).maybeSingle();
+  if (home.error) return { ok: false };
+  const slug = (home.data as { slug?: string } | null)?.slug;
+  const sources = Object.entries(FOLDED_DEPARTMENTS)
+    .filter(([, target]) => target === slug)
+    .map(([source]) => source);
+  if (sources.length === 0) return { ok: true, value: false };
+  const rows = await supabase.from("staff_ministries").select("id, slug").in("slug", sources);
+  if (rows.error) return { ok: false };
+  const ids = (Array.isArray(rows.data) ? rows.data : []).map((row: { id: string }) => row.id);
+  const checks = await Promise.all(
+    ids.map((id: string) => rpcFlag(supabase, "dept_is_ministry_member", { p_ministry_id: id, p_leaders_only: false }))
+  );
+  if (checks.some((check) => !check.ok)) return { ok: false };
+  return { ok: true, value: checks.some((check) => check.value) };
+}
+
+/**
+ * Flags for one home. Budget read/write and rock read/write come from the
+ * database functions. Point-leader edit and the donors_dev fold are not
+ * in those functions, so they stay here.
+ * ok false means the access lookup failed (403). denied means 404.
+ */
+export async function loadMinistryAccess(
+  supabase: Client,
+  userId: string,
+  ministryId: string
+): Promise<{ ok: true; access: DepartmentAccessFlags; denied: boolean } | { ok: false }> {
+  const [readRock, readBudget, writeBudget, writeRock] = await Promise.all([
+    rpcFlag(supabase, "dept_can_read_rock", { p_ministry_id: ministryId }),
+    rpcFlag(supabase, "dept_can_read_budget", { p_ministry_id: ministryId }),
+    rpcFlag(supabase, "dept_can_write_budget", { p_ministry_id: ministryId }),
+    rpcFlag(supabase, "dept_can_write_rock", { p_ministry_id: ministryId }),
+  ]);
+  if (!readRock.ok || !readBudget.ok || !writeBudget.ok || !writeRock.ok) return { ok: false };
+
+  let detail = readRock.value;
+  if (!detail) {
+    const folded = await seesFoldedHome(supabase, ministryId);
+    if (!folded.ok) return { ok: false };
+    detail = folded.value;
+  }
+
+  let pointLeader = false;
+  if (detail) {
+    const own = await supabase
+      .from("staff_ministry_members")
+      .select("is_point_leader")
+      .eq("user_id", userId)
+      .eq("staff_ministry_id", ministryId)
+      .eq("status", "active")
+      .limit(1);
+    if (own.error) return { ok: false };
+    const row = Array.isArray(own.data) ? own.data[0] : null;
+    pointLeader = (row as { is_point_leader?: boolean } | null)?.is_point_leader === true;
+  }
+
+  const access: DepartmentAccessFlags = {
+    canSeeDepartmentDetail: detail,
+    canSeeBudget: readBudget.value || pointLeader,
+    canEditBudget: writeBudget.value || pointLeader,
+    canEditRocks: writeRock.value || pointLeader,
+    canSeePeopleEmails: writeRock.value || pointLeader,
+  };
+  return { ok: true, access, denied: !access.canSeeDepartmentDetail && !access.canSeeBudget };
 }
 
 export async function canViewLeadershipRocks(supabase: Client, userId: string): Promise<boolean> {

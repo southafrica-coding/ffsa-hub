@@ -4,6 +4,7 @@ import { createFakeSupabase } from "@/lib/testing/fake-supabase";
 import {
   ADMIN,
   FINANCE_USER,
+  INACTIVE_ADMIN,
   LEADER,
   LEADERSHIP_MEMBER,
   LINK_ID,
@@ -25,7 +26,11 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: async () =>
     createFakeSupabase({
       user: h.userId ? { id: h.userId } : null,
-      resolve: (query: FakeQuery) => resolveDepartmentWorld(h.world as DepartmentWorld, query),
+      resolve: (query: FakeQuery) => {
+        const world = h.world as DepartmentWorld;
+        world.callerId = h.userId;
+        return resolveDepartmentWorld(world, query);
+      },
     }).client,
 }));
 
@@ -33,7 +38,11 @@ vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () =>
     createFakeSupabase({
       user: h.userId ? { id: h.userId } : null,
-      resolve: (query: FakeQuery) => resolveDepartmentWorld(h.world as DepartmentWorld, query),
+      resolve: (query: FakeQuery) => {
+        const world = h.world as DepartmentWorld;
+        world.callerId = h.userId;
+        return resolveDepartmentWorld(world, query);
+      },
     }).client,
 }));
 
@@ -43,6 +52,8 @@ const { GET: getPeople } = await import("./[slug]/people/route");
 const { GET: getOkrs } = await import("./[slug]/okrs/route");
 const { GET: getRocks } = await import("./[slug]/rocks/route");
 const { GET: getBudget } = await import("./[slug]/budget/route");
+const { GET: getOverview } = await import("./[slug]/overview/route");
+const { GET: getRollup } = await import("./rocks/route");
 const { GET: getServices } = await import("../services/route");
 
 const slug = (value: string) => ({ params: Promise.resolve({ slug: value }) });
@@ -66,6 +77,7 @@ describe("department visibility", () => {
       canSeePeopleEmails: false,
     });
     expect(body.department.budgetOnly).toBe(true);
+    expect(body.department.memberCount).toBeNull();
     expect(body.department.purpose).toBe("Cameras and stories");
     expect(body.department.cluster).toBeNull();
     expect(body.people).toBeNull();
@@ -89,6 +101,7 @@ describe("department visibility", () => {
     const list = await listDepartments();
     const media = (await list.json()).find((row: { slug: string }) => row.slug === "media");
     expect(media.budgetOnly).toBe(true);
+    expect(media.memberCount).toBeNull();
     expect(media.access.canSeeBudget).toBe(true);
   });
 
@@ -120,13 +133,38 @@ describe("department visibility", () => {
   it("shows emails to a leader and keeps a missing rock due date null", async () => {
     h.userId = LEADER;
     const people = await getPeople(new Request("http://localhost/x"), slug("media"));
-    const roster = (await people.json()).roster as Array<{ email: string | null; user_id: string }>;
-    expect(roster.find((row) => row.user_id === LEADER)?.email).toBe("hanno@example.com");
+    const roster = (await people.json()).people as Array<{ email: string | null; name: string }>;
+    expect(roster.find((row) => row.name === "Hanno Leader")?.email).toBe("hanno@example.com");
     const home = await (await getHome(new Request("http://localhost/x"), slug("media"))).json();
     expect(home.access.canEditRocks).toBe(true);
     expect(home.rocks[0].dueOn).toBe("2026-12-01");
     expect(home.budget).not.toBeNull();
     expect(home.budget.links[0].id === LINK_ID || home.budget.links[0].projectId === PROJECT_ID).toBe(true);
+  });
+
+  it("returns 403 when the account is inactive or a membership lookup fails", async () => {
+    const call = () =>
+      Promise.all([
+        listDepartments(),
+        getHome(new Request("http://localhost/x"), slug("media")),
+        getOverview(new Request("http://localhost/x"), slug("media")),
+        getPeople(new Request("http://localhost/x"), slug("media")),
+        getOkrs(new Request("http://localhost/x"), slug("media")),
+        getRocks(new Request("http://localhost/x"), slug("media")),
+        getBudget(new Request("http://localhost/x"), slug("media")),
+        getRollup(new Request("http://localhost/api/departments/rocks")),
+      ]);
+
+    h.userId = INACTIVE_ADMIN;
+    for (const response of await call()) expect(response.status).toBe(403);
+
+    h.userId = MEMBER;
+    h.world!.errors = { users: true };
+    for (const response of await call()) expect(response.status).toBe(403);
+
+    h.world = makeDepartmentWorld();
+    h.world.errors = { staff_ministry_members: true };
+    for (const response of await call()) expect(response.status).toBe(403);
   });
 
   it("returns a bare services array whose gear_hire audience follows the open_to_all row", async () => {

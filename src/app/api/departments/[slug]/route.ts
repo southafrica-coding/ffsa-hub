@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 export async function GET(_request: Request, { params }: { params: Promise<{ slug: string }> }) {
   const opened = await openDepartment((await params).slug, "any");
   if (!isOpened(opened)) return opened.response;
-  const home = await buildDepartmentHome(opened.admin, opened.gate, opened.department);
+  const home = await buildDepartmentHome(opened.admin, opened.supabase, opened.userId, opened.access, opened.department);
   if (home.error) return serverError(home.error);
   if (!home.data) return notFound("Department not found");
   return NextResponse.json(home.data);

@@ -41,6 +41,7 @@ function grants(key: string) {
 }
 
 function client(world: DepartmentWorld, userId = MEMBER) {
+  world.callerId = userId;
   return createFakeSupabase({ user: { id: userId }, resolve: (q) => resolveDepartmentWorld(world, q) }).client;
 }
 
@@ -82,6 +83,23 @@ describe("mayUseService", () => {
     expect(mayUseService(grants("contacts"), [{ staff_ministry_id: MEDIA, member_role: "member", is_point_leader: false }], false)).toBe(true);
   });
 
+  it("treats an open_to_all row as use only", () => {
+    const open = {
+      capability: "use" as const,
+      staff_ministry_id: null,
+      member_role: null,
+      any_point_leader: false,
+      open_to_all: true,
+    };
+    expect(memberMatchesGrant(open, [], "use")).toBe(true);
+    expect(memberMatchesGrant(open, [], "manage")).toBe(false);
+    expect(memberMatchesGrant(open, [], "moderate")).toBe(false);
+    const notUse = { ...open, capability: "manage" as const };
+    expect(memberMatchesGrant(notUse, [], "use")).toBe(false);
+    expect(memberMatchesGrant(notUse, [], "manage")).toBe(false);
+    expect(SERVICE_OWNER_SEED.filter((row) => row.open_to_all).every((row) => row.capability === "use")).toBe(true);
+  });
+
   it("honours member_role, with null meaning any active member", () => {
     const member = [{ staff_ministry_id: MEDIA, member_role: "member" as const, is_point_leader: false }];
     const leader = [{ staff_ministry_id: MEDIA, member_role: "leader" as const, is_point_leader: false }];
@@ -106,6 +124,25 @@ describe("canUseService and canManageService", () => {
     expect(await canManageService(client(world, OPS_MEMBER), OPS_MEMBER, "gear_hire")).toBe(true);
     expect(await canUseService(client(world, WORSHIP_LEADER), WORSHIP_LEADER, "contacts")).toBe(true);
     expect(await canUseService(client(world, WORSHIP_MEMBER), WORSHIP_MEMBER, "contacts")).toBe(false);
+  });
+
+  it("refuses evangelism moderation for an inactive Media or HULC member", async () => {
+    const world = makeDepartmentWorld();
+    const media = world.people.find((person) => person.id === MEMBER);
+    const hulk = world.people.find((person) => person.id === HULK_MEMBER);
+    if (media) media.is_active = false;
+    if (hulk) hulk.is_active = false;
+    expect(await canModerateService(client(world, MEMBER), MEMBER, "evangelism")).toBe(false);
+    const hulkClient = client(world, HULK_MEMBER);
+    expect(await canModerateService(hulkClient, HULK_MEMBER, "evangelism")).toBe(false);
+    const { data } = await hulkClient.rpc("can_moderate_evangelism");
+    expect(data).toBe(false);
+    world.people.forEach((person) => {
+      if (person.id === MEMBER) person.is_active = true;
+    });
+    world.callerId = MEMBER;
+    const active = await client(world, MEMBER).rpc("can_moderate_evangelism");
+    expect(active.data).toBe(true);
   });
 
   it("moderates evangelism only through can_moderate_evangelism", async () => {

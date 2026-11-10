@@ -67,6 +67,8 @@ export type DepartmentWorld = {
   permissions?: Row[];
   rolePermissions?: Row[];
   rpcModerate?: boolean | "error";
+  /** Signed-in user for RPC checks. Route tests set this from the session. */
+  callerId?: string | null;
   errors?: Partial<Record<string, boolean>>;
 };
 
@@ -382,12 +384,165 @@ function applyFilters(rows: Row[], query: FakeQuery): Row[] {
   });
 }
 
+function callerState(world: DepartmentWorld): { id: string; active: boolean } | "error" | "none" {
+  if (world.errors?.users) return "error";
+  const id = world.callerId;
+  if (!id) return "none";
+  const person = world.people.find((row) => row.id === id);
+  if (!person) return "none";
+  return { id, active: person.is_active !== false };
+}
+
+function unscopedAdmin(world: DepartmentWorld, userId: string): boolean {
+  return world.roles.some(
+    (role) =>
+      role.user_id === userId &&
+      (role.name === "admin" || role.name === "super_admin") &&
+      (role.scope_type == null)
+  );
+}
+
+function activeMembership(world: DepartmentWorld, userId: string, ministryId: string) {
+  const ministry = world.ministries.find((row) => row.id === ministryId);
+  if (!ministry || ministry.is_active === false) return null;
+  return (
+    world.memberships.find(
+      (row) => row.user_id === userId && row.staff_ministry_id === ministryId && row.status === "active"
+    ) ?? null
+  );
+}
+
+function rpcResult(world: DepartmentWorld, query: FakeQuery): FakeResult | null {
+  if (!query.table.startsWith("rpc:")) return null;
+  const name = query.table.slice(4);
+  const args = (query.rpc?.args ?? {}) as Record<string, unknown>;
+  if (name === "can_moderate_evangelism") {
+    if (world.rpcModerate === "error") return { error: { message: "rpc down" } };
+    if (world.rpcModerate === true) return { data: true };
+    if (world.rpcModerate === false) return { data: false };
+    const caller = callerState(world);
+    if (caller === "error") return { error: { message: "users down" } };
+    const id = caller === "none" ? null : caller.id;
+    if (id && unscopedAdmin(world, id)) return { data: true };
+    if (
+      id &&
+      (world.permissions ?? []).some((row) => row.user_id === id && row.key === "evangelism.moderate")
+    ) {
+      return { data: true };
+    }
+    if (caller === "none" || !caller.active) return { data: false };
+    if (world.errors?.staff_ministry_members) return { error: { message: "members down" } };
+    const homes = world.ministries.filter(
+      (row) => (row.slug === "media" || row.slug === "hulk") && row.is_active !== false
+    );
+    const allowed = world.memberships.some(
+      (row) =>
+        row.user_id === caller.id &&
+        row.status === "active" &&
+        homes.some((home) => home.id === row.staff_ministry_id)
+    );
+    return { data: allowed };
+  }
+
+  const caller = callerState(world);
+  if (caller === "error") return { error: { message: "users down" } };
+  const active = caller !== "none" && caller.active;
+  const userId = caller === "none" ? "" : caller.id;
+  const ministryId = typeof args.p_ministry_id === "string" ? args.p_ministry_id : "";
+  const needsMembers = name !== "user_can_use_service";
+
+  if (name === "dept_is_leadership_reader") {
+    if (!active) return { data: false };
+    if (world.errors?.staff_ministry_members) return { error: { message: "members down" } };
+    const leadership = world.ministries.find((row) => row.slug === "leadership_team" && row.is_active !== false);
+    return {
+      data: Boolean(
+        leadership &&
+          world.memberships.some(
+            (row) => row.user_id === userId && row.staff_ministry_id === leadership.id && row.status === "active"
+          )
+      ),
+    };
+  }
+
+  if (name === "dept_is_ministry_member" || name === "dept_is_ministry_leader") {
+    if (!active) return { data: false };
+    if (world.errors?.staff_ministry_members) return { error: { message: "members down" } };
+    const leadersOnly = name === "dept_is_ministry_leader" || args.p_leaders_only === true;
+    const membership = activeMembership(world, userId, ministryId);
+    return { data: Boolean(membership && (!leadersOnly || membership.member_role === "leader")) };
+  }
+
+  if (name === "dept_can_read_rock" || name === "dept_can_write_rock" || name === "dept_can_read_budget" || name === "dept_can_write_budget") {
+    if (!active) return { data: false };
+    if (unscopedAdmin(world, userId)) return { data: true };
+    if (world.errors?.staff_ministry_members) return { error: { message: "members down" } };
+    const leader = activeMembership(world, userId, ministryId);
+    const isLeader = leader?.member_role === "leader";
+    if (name === "dept_can_write_rock" || name === "dept_can_write_budget") return { data: Boolean(isLeader) };
+    if (name === "dept_can_read_rock") {
+      const leadership = world.ministries.find((row) => row.slug === "leadership_team" && row.is_active !== false);
+      const leads =
+        leadership != null &&
+        world.memberships.some(
+          (row) => row.user_id === userId && row.staff_ministry_id === leadership.id && row.status === "active"
+        );
+      return { data: Boolean(leads || leader) };
+    }
+    const finance = world.ministries.find((row) => row.slug === "finances_legal" && row.is_active !== false);
+    const financeMember =
+      finance != null &&
+      world.memberships.some(
+        (row) => row.user_id === userId && row.staff_ministry_id === finance.id && row.status === "active"
+      );
+    const financeRole = world.roles.some((row) => row.user_id === userId && row.name === "finance_admin");
+    const financeGrant = (world.permissions ?? []).some(
+      (row) =>
+        row.user_id === userId &&
+        (row.key === "finance.view" || row.key === "finance.edit") &&
+        row.scope_type == null
+    );
+    return { data: Boolean(financeMember || financeRole || financeGrant || isLeader) };
+  }
+
+  if (name === "user_can_use_service") {
+    if (!active) return { data: false };
+    if (world.errors?.service_owners) return { error: { message: "service_owners down" } };
+    const key = typeof args.p_service_key === "string" ? args.p_service_key : "";
+    const grants = world.serviceOwners.filter((row) => row.service_key === key);
+    if (grants.some((row) => row.open_to_all === true && row.capability === "use")) return { data: true };
+    if (grants.length === 0) return { data: false };
+    if (unscopedAdmin(world, userId)) return { data: true };
+    if (world.errors?.staff_ministry_members) return { error: { message: "members down" } };
+    const allowed = grants.some((grant) => {
+      if (grant.open_to_all === true) return false;
+      if (grant.capability !== "use" && grant.capability !== "manage") return false;
+      if (grant.any_point_leader === true) {
+        return world.memberships.some(
+          (row) =>
+            row.user_id === userId &&
+            row.status === "active" &&
+            row.member_role === "leader" &&
+            row.is_point_leader === true
+        );
+      }
+      if (typeof grant.staff_ministry_id !== "string") return false;
+      const membership = activeMembership(world, userId, grant.staff_ministry_id);
+      if (!membership) return false;
+      if (grant.member_role == null || grant.member_role === "member") return true;
+      return membership.member_role === "leader";
+    });
+    return { data: allowed };
+  }
+
+  if (needsMembers) return { error: { message: `unexpected rpc ${name}` } };
+  return { error: { message: `unexpected rpc ${name}` } };
+}
+
 export function resolveDepartmentWorld(world: DepartmentWorld, query: FakeQuery): FakeResult {
   if (query.table === "audit_logs") return { data: null };
-  if (query.table === "rpc:can_moderate_evangelism") {
-    if (world.rpcModerate === "error") return { error: { message: "rpc down" } };
-    return { data: world.rpcModerate === true };
-  }
+  const rpc = rpcResult(world, query);
+  if (rpc) return rpc;
   if (world.errors?.[query.table]) return { error: { message: `${query.table} down` } };
 
   const rows = rowsFor(world, query.table);

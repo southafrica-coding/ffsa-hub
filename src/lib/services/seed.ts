@@ -1,6 +1,6 @@
-// Fixture matching the service_owners seed in migration 318.
-// Runtime reads the table. This is used when that relation is missing,
-// and by tests. own does not imply manage: owners are seeded with both.
+// Test fixture matching the service_owners seed. Runtime reads the table.
+// open_to_all rows are capability use only (service_owners_open_to_all_use_ck).
+// own does not imply manage: owners are seeded with both.
 
 import type { ServiceCapability, ServiceOwner } from "@/lib/departments/db.types";
 
@@ -34,13 +34,17 @@ function row(
   memberRole: "member" | "leader" | null,
   flags: { any_point_leader?: boolean; open_to_all?: boolean } = {}
 ): ServiceSeedRow {
+  const openToAll = flags.open_to_all === true;
+  if (openToAll && capability !== "use") {
+    throw new Error("open_to_all rows are use-only");
+  }
   return {
     service_key: serviceKey,
     ministry_slug: ministrySlug,
     capability,
     member_role: memberRole,
     any_point_leader: flags.any_point_leader === true,
-    open_to_all: flags.open_to_all === true,
+    open_to_all: openToAll,
     admin_href: href[serviceKey] ?? "",
   };
 }

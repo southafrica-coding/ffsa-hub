@@ -3,15 +3,7 @@ import { getAuthedUser } from "@/lib/api-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { accountIsActive } from "@/lib/auth/grant-scope";
-import {
-  accessFlags,
-  canOpenDepartment,
-  canSeeBudget,
-  canSeeDepartmentDetail,
-  loadDepartmentGate,
-  type DepartmentAccessFlags,
-  type DepartmentGate,
-} from "./access";
+import { loadMinistryAccess, type DepartmentAccessFlags } from "./access";
 import { foldedTargetSlug, isBlockedHomeSlug } from "./homes";
 import {
   getDepartmentById,
@@ -93,7 +85,7 @@ export async function resolveHome(
 
 export type DepartmentContext = {
   supabase: Client;
-  admin: Client;
+  admin: Client | null;
   userId: string;
   department: DepartmentRecord;
 };
@@ -104,12 +96,12 @@ export async function loadDepartment(
   const supabase = await createClient();
   const user = await getAuthedUser(supabase);
   if (!user) return { response: notAuthenticated() };
+  if (!(await accountIsActive(supabase, user.id))) return { response: notAuthorized() };
 
-  const admin = createAdminClient();
-  const found = await resolveHome(admin, slug);
-  if (found.error) return { response: serverError(found.error) };
+  const found = await resolveHome(supabase, slug);
+  if (found.error) return { response: notAuthorized() };
   if (!found.data) return { response: notFound("Department not found") };
-  return { supabase, admin, userId: user.id, department: found.data };
+  return { supabase, admin: null, userId: user.id, department: found.data };
 }
 
 export function isDepartmentContext(
@@ -118,8 +110,8 @@ export function isDepartmentContext(
   return !("response" in result);
 }
 
-export type OpenedDepartment = DepartmentContext & {
-  gate: DepartmentGate;
+export type OpenedDepartment = Omit<DepartmentContext, "admin"> & {
+  admin: Client;
   access: DepartmentAccessFlags;
 };
 
@@ -130,16 +122,16 @@ export async function openDepartment(
 ): Promise<{ response: NextResponse } | OpenedDepartment> {
   const ctx = await loadDepartment(slug);
   if (!isDepartmentContext(ctx)) return ctx;
-  const gate = await loadDepartmentGate(ctx.supabase, ctx.userId);
-  if (!gate) {
-    if (await accountIsActive(ctx.supabase, ctx.userId)) return { response: serverError("access lookup failed") };
-    return { response: notFound("Department not found") };
-  }
-  const detail = canSeeDepartmentDetail(gate, ctx.department.id);
-  const budget = canSeeBudget(gate, ctx.department.id);
-  const allowed = need === "detail" ? detail : need === "budget" ? budget : detail || budget || canOpenDepartment(gate, ctx.department.id);
+  const decision = await loadMinistryAccess(ctx.supabase, ctx.userId, ctx.department.id);
+  if (!decision.ok) return { response: notAuthorized() };
+  const allowed =
+    need === "detail"
+      ? decision.access.canSeeDepartmentDetail
+      : need === "budget"
+        ? decision.access.canSeeBudget
+        : !decision.denied;
   if (!allowed) return { response: notFound("Department not found") };
-  return { ...ctx, gate, access: accessFlags(gate, ctx.department.id) };
+  return { ...ctx, admin: createAdminClient(), access: decision.access };
 }
 
 export function isOpened(result: { response: NextResponse } | OpenedDepartment): result is OpenedDepartment {

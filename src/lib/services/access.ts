@@ -30,9 +30,10 @@ export function memberMatchesGrant(
   memberships: readonly ActiveMembership[],
   wanted: LiveCapability
 ): boolean {
+  // Same rule as user_can_use_service: an open_to_all row is use, and only use.
+  if (grant.open_to_all === true) return wanted === "use" && grant.capability === "use";
   const capabilityOk = grant.capability === wanted || (wanted === "use" && grant.capability === "manage");
   if (!capabilityOk) return false;
-  if (grant.open_to_all === true) return true;
   if (grant.any_point_leader) return memberships.some((membership) => membership.is_point_leader);
   if (!grant.staff_ministry_id) return false;
   const membership = memberships.find((row) => row.staff_ministry_id === grant.staff_ministry_id);
@@ -89,13 +90,24 @@ async function load(
 export async function canUseService(supabase: Client, userId: string, serviceKey: string): Promise<boolean> {
   const active = await accountIsActive(supabase, userId);
   if (!active) return false;
-  const loaded = await load(supabase, userId);
-  if (loaded.failed || !loaded.grants || !loaded.memberships) return false;
-  return mayUseService(
-    loaded.grants.filter((grant) => grant.service_key === serviceKey),
-    loaded.memberships,
-    loaded.isAdmin
+  const { data, error } = await supabase.rpc("user_can_use_service", { p_service_key: serviceKey });
+  if (error) return false;
+  return data === true;
+}
+
+/** One round of user_can_use_service calls. A single RPC error fails the batch. */
+export async function usableServiceKeys(
+  supabase: Client,
+  serviceKeys: readonly string[]
+): Promise<{ ok: true; keys: Set<string> } | { ok: false }> {
+  const checks = await Promise.all(
+    serviceKeys.map(async (serviceKey) => {
+      const { data, error } = await supabase.rpc("user_can_use_service", { p_service_key: serviceKey });
+      return { serviceKey, error: Boolean(error), allowed: data === true };
+    })
   );
+  if (checks.some((check) => check.error)) return { ok: false };
+  return { ok: true, keys: new Set(checks.filter((check) => check.allowed).map((check) => check.serviceKey)) };
 }
 
 export async function canManageService(supabase: Client, userId: string, serviceKey: string): Promise<boolean> {

@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { createAuditLog } from "@/services/audit";
 import { badRequest, isOpened, notFound, openDepartment, readJson, serverError } from "@/lib/departments/http";
-import { personName } from "@/lib/departments/names";
 import { currentQuarter, parseQuarter } from "@/lib/departments/quarter";
-import { createRock, isActiveMinistryMember, listRocks, loadPeopleById } from "@/lib/departments/repository";
+import { loadQuarterRocks } from "@/lib/departments/page";
+import { createRock, isActiveMinistryMember } from "@/lib/departments/repository";
 import { parseRockCreate } from "@/lib/departments/validate";
 
 export const dynamic = "force-dynamic";
@@ -13,18 +13,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
   if (!isOpened(opened)) return opened.response;
   const quarter = parseQuarter(new URL(request.url).searchParams.get("quarter"));
   if (!quarter.ok) return badRequest(quarter.error);
-  const rocks = await listRocks(opened.admin, opened.department.id, quarter.quarter);
+  const rocks = await loadQuarterRocks(opened.admin, opened.department, quarter.quarter);
   if (rocks.error) return serverError(rocks.error);
-  const people = await loadPeopleById(opened.admin, rocks.data.flatMap((rock) => (rock.owner_user_id ? [rock.owner_user_id] : [])));
-  if (people.error) return serverError(people.error);
   return NextResponse.json({
     quarter: quarter.quarter,
-    can_edit: opened.access.canEditRocks,
-    rocks: rocks.data.map((rock) => ({
-      ...rock,
-      owner_name: rock.owner_user_id ? personName(people.data.get(rock.owner_user_id)) : null,
-      dueOn: rock.due_on,
-    })),
+    canEditRocks: opened.access.canEditRocks,
+    rocks: rocks.data,
   });
 }
 

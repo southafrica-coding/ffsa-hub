@@ -1,7 +1,7 @@
 // Assembles department payloads. Finance-only viewers get the header and
 // the budget; people, OKRs, rocks, services and sub-ministries are not read.
 
-import { accessFlags, canOpenDepartment, canSeeBudget, canSeeDepartmentDetail, loadDepartmentGate, type DepartmentGate } from "./access";
+import { loadMinistryAccess, type DepartmentAccessFlags } from "./access";
 import { FOLDED_DEPARTMENTS, isBlockedHomeSlug } from "./homes";
 import { personName } from "./names";
 import { addIsoDays, currentQuarter, saTodayIso } from "./quarter";
@@ -9,6 +9,7 @@ import {
   countActiveMembers,
   getDepartmentBySlug,
   listActiveMembers,
+  listActiveMemberships,
   listAliases,
   listBudgetLinks,
   listDepartmentRows,
@@ -35,6 +36,7 @@ import type {
 import { okrStatus } from "./ui-contract";
 import { listServiceOwnerRows } from "@/lib/services/repository";
 import type { ServiceOwnerRow } from "@/lib/services/seed";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
@@ -60,9 +62,12 @@ function personOf(member: MembershipRecord, people: Map<string, PersonRecord>, e
   };
 }
 
-export function viewerMemberships(gate: DepartmentGate, ministries: readonly { id: string; slug: string }[]): ViewerMembership[] {
+export function viewerMemberships(
+  memberships: readonly { staff_ministry_id: string; member_role: string | null; is_point_leader: boolean }[],
+  ministries: readonly { id: string; slug: string }[]
+): ViewerMembership[] {
   const slugOf = new Map(ministries.map((ministry) => [ministry.id, ministry.slug]));
-  return gate.memberships.flatMap((membership) => {
+  return memberships.flatMap((membership) => {
     const slug = slugOf.get(membership.staff_ministry_id);
     if (!slug) return [];
     return [{
@@ -75,11 +80,10 @@ export function viewerMemberships(gate: DepartmentGate, ministries: readonly { i
 
 async function summaryFor(
   row: DepartmentRecord,
-  gate: DepartmentGate,
+  access: DepartmentAccessFlags,
   counts: Map<string, number>,
   parents: Map<string, string>
 ): Promise<DepartmentSummary> {
-  const access = accessFlags(gate, row.id);
   const parentSlug = row.parent_id ? (parents.get(row.parent_id) ?? null) : null;
   const foldedChild = Object.prototype.hasOwnProperty.call(FOLDED_DEPARTMENTS, row.slug);
   return {
@@ -88,7 +92,7 @@ async function summaryFor(
     cluster: clusterOf(row.cluster),
     parentSlug: foldedChild ? null : parentSlug,
     purpose: purposeOf(row),
-    memberCount: counts.get(row.id) ?? 0,
+    memberCount: access.canSeeDepartmentDetail ? (counts.get(row.id) ?? 0) : null,
     active: row.is_active,
     budgetOnly: access.canSeeBudget && !access.canSeeDepartmentDetail,
     access,
@@ -103,24 +107,36 @@ function isListedHome(row: DepartmentRecord, foldedSources: Set<string>): boolea
 }
 
 export async function listVisibleDepartments(
-  admin: Client,
-  gate: DepartmentGate
-): Promise<{ data: DepartmentSummary[] | null; error: { message: string } | null }> {
-  const [rows, aliases, counts] = await Promise.all([
-    listDepartmentRows(admin),
-    listAliases(admin),
-    countActiveMembers(admin),
-  ]);
-  if (rows.error || aliases.error || counts.error) {
-    return { data: null, error: rows.error ?? aliases.error ?? counts.error };
+  reader: Client,
+  userId: string
+): Promise<{ data: DepartmentSummary[] | null; error: { message: string } | null; accessError?: boolean }> {
+  const [rows, aliases] = await Promise.all([listDepartmentRows(reader), listAliases(reader)]);
+  if (rows.error || aliases.error) {
+    return { data: null, error: rows.error ?? aliases.error, accessError: true };
   }
   const foldedSources = new Set(aliases.data.map((alias) => alias.staff_ministry_id));
   const parents = new Map(rows.data.map((row) => [row.id, row.slug]));
   const homes = rows.data
-    .filter((row) => isListedHome(row, foldedSources) && canOpenDepartment(gate, row.id))
+    .filter((row) => isListedHome(row, foldedSources))
     .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
+  const decisions = await Promise.all(homes.map((home) => loadMinistryAccess(reader, userId, home.id)));
+  if (decisions.some((decision) => !decision.ok)) {
+    return { data: null, error: { message: "access lookup failed" }, accessError: true };
+  }
+  const visible = homes.flatMap((home, index) => {
+    const decision = decisions[index];
+    if (!decision.ok || decision.denied) return [];
+    return [{ home, access: decision.access }];
+  });
+  const detailIds = visible.filter((row) => row.access.canSeeDepartmentDetail).map((row) => row.home.id);
+  const counts = detailIds.length === 0
+    ? { data: new Map<string, number>(), error: null }
+    : await countActiveMembers(createAdminClient());
+  if (counts.error) return { data: null, error: counts.error };
   const summaries: DepartmentSummary[] = [];
-  for (const home of homes) summaries.push(await summaryFor(home, gate, counts.data, parents));
+  for (const row of visible) {
+    summaries.push(await summaryFor(row.home, row.access, counts.data, parents));
+  }
   return { data: summaries, error: null };
 }
 
@@ -138,7 +154,7 @@ async function loadBudget(admin: Client, department: DepartmentRecord) {
   };
 }
 
-async function loadPeople(admin: Client, departmentId: string, emails: boolean) {
+export async function loadPeople(admin: Client, departmentId: string, emails: boolean) {
   const members = await listActiveMembers(admin, departmentId);
   if (members.error) return { data: null, error: members.error };
   const people = await loadPeopleById(admin, members.data.map((member) => member.user_id));
@@ -151,7 +167,7 @@ async function loadPeople(admin: Client, departmentId: string, emails: boolean) 
   };
 }
 
-async function loadOkrs(admin: Client, department: DepartmentRecord): Promise<{ data: DepartmentOkrs | null; error: { message: string } | null }> {
+export async function loadOkrs(admin: Client, department: DepartmentRecord): Promise<{ data: DepartmentOkrs | null; error: { message: string } | null }> {
   const cycle = await admin.from("okr_cycles").select("id, name, slug, is_current").eq("is_current", true).maybeSingle();
   if (cycle.error) return { data: null, error: { message: String(cycle.error.message ?? "Request failed") } };
   const current = cycle.data as { id: string; name: string; slug: string } | null;
@@ -200,7 +216,7 @@ async function loadOkrs(admin: Client, department: DepartmentRecord): Promise<{ 
   };
 }
 
-async function loadQuarterRocks(admin: Client, department: DepartmentRecord, quarter: string): Promise<{ data: Rock[] | null; error: { message: string } | null }> {
+export async function loadQuarterRocks(admin: Client, department: DepartmentRecord, quarter: string): Promise<{ data: Rock[] | null; error: { message: string } | null }> {
   const rocks = await listRocks(admin, department.id, quarter);
   if (rocks.error) return { data: null, error: rocks.error };
   const named = await loadPeopleById(admin, rocks.data.flatMap((rock) => (rock.owner_user_id ? [rock.owner_user_id] : [])));
@@ -263,28 +279,32 @@ async function subMinistries(admin: Client, department: DepartmentRecord, emails
 
 export async function buildDepartmentHome(
   admin: Client,
-  gate: DepartmentGate,
+  userClient: Client,
+  userId: string,
+  access: DepartmentAccessFlags,
   department: DepartmentRecord
 ): Promise<{ data: DepartmentHome | null; error: { message: string } | null }> {
-  const detail = canSeeDepartmentDetail(gate, department.id);
-  const seeBudget = canSeeBudget(gate, department.id);
+  const detail = access.canSeeDepartmentDetail;
+  const seeBudget = access.canSeeBudget;
   if (!detail && !seeBudget) return { data: null, error: null };
-  const counts = await countActiveMembers(admin);
+  const counts = detail ? await countActiveMembers(admin) : { data: new Map<string, number>(), error: null };
   if (counts.error) return { data: null, error: counts.error };
   const all = await listDepartmentRows(admin);
   if (all.error) return { data: null, error: all.error };
   const parentMap = new Map(all.data.map((row) => [row.id, row.slug]));
-  const summary = await summaryFor(department, gate, counts.data, parentMap);
-  const access = accessFlags(gate, department.id);
+  const summary = await summaryFor(department, access, counts.data, parentMap);
   const budget = seeBudget ? await loadBudget(admin, department) : { data: null, error: null };
   if (budget.error) return { data: null, error: budget.error };
+  const mine = detail ? await listActiveMemberships(userClient, userId) : { data: [], error: null };
+  if (mine.error) return { data: null, error: mine.error };
+  const viewer = viewerMemberships(mine.data, all.data);
 
   if (!detail) {
     return {
       data: {
         department: summary,
         access,
-        viewerMemberships: viewerMemberships(gate, all.data),
+        viewerMemberships: [],
         people: null,
         okrs: null,
         rocks: null,
@@ -309,7 +329,7 @@ export async function buildDepartmentHome(
     data: {
       department: summary,
       access,
-      viewerMemberships: viewerMemberships(gate, all.data),
+      viewerMemberships: viewer,
       people: people.data,
       okrs: okrs.data,
       rocks: rocks.data,
@@ -323,10 +343,10 @@ export async function buildDepartmentHome(
 
 export async function rocksDueFor(
   admin: Client,
-  gate: DepartmentGate,
-  homes: readonly DepartmentRecord[]
+  homes: readonly DepartmentRecord[],
+  detailIds: ReadonlySet<string>
 ): Promise<{ data: Rock[] | null; error: { message: string } | null }> {
-  const visible = homes.filter((home) => canSeeDepartmentDetail(gate, home.id));
+  const visible = homes.filter((home) => detailIds.has(home.id));
   if (visible.length === 0) return { data: [], error: null };
   const quarter = currentQuarter();
   const rocks = await listRocksForQuarter(admin, quarter);

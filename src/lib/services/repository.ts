@@ -1,11 +1,9 @@
-// Reads public.services and public.service_owners (migration 318).
-// Column names come from src/lib/departments/db.types.ts.
-// If the relation is not there yet, the seed fixture is the fallback.
-// Any other lookup error stays an error so callers fail closed.
+// Reads public.services and public.service_owners. Rows come from the
+// database only. SERVICE_OWNER_SEED is a test fixture, not a runtime fallback.
 
 import type { Service, ServiceCapability } from "@/lib/departments/db.types";
-import { dbError, relationMissing, type DbError, type DbResult } from "@/lib/departments/repository";
-import { seedGrants, SERVICE_CATALOG, SERVICE_OWNER_SEED, type ServiceOwnerRow } from "./seed";
+import { dbError, type DbError, type DbResult } from "@/lib/departments/repository";
+import type { ServiceOwnerRow } from "./seed";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
@@ -39,41 +37,19 @@ export function serviceOwnerRows(data: unknown): ServiceOwnerRow[] {
   return rows;
 }
 
-function seedOwners(): ServiceOwnerRow[] {
-  const ids: Record<string, string> = {};
-  for (const row of SERVICE_OWNER_SEED) {
-    if (row.ministry_slug) ids[row.ministry_slug] = `slug:${row.ministry_slug}`;
-  }
-  return seedGrants(ids);
-}
-
 export async function listServiceOwnerRows(supabase: Client, serviceKey?: string): Promise<DbResult<ServiceOwnerRow[]>> {
   let query = supabase.from("service_owners").select(OWNER_COLUMNS);
   if (serviceKey) query = query.eq("service_key", serviceKey);
   const { data, error } = await query;
   const parsed = dbError(error);
-  if (parsed) {
-    if (relationMissing(parsed)) {
-      const rows = seedOwners().filter((row) => !serviceKey || row.service_key === serviceKey);
-      return { data: rows, error: null };
-    }
-    return { data: [], error: parsed };
-  }
+  if (parsed) return { data: [], error: parsed };
   return { data: serviceOwnerRows(data), error: null };
 }
 
 export async function listServices(supabase: Client): Promise<DbResult<Service[]>> {
   const { data, error } = await supabase.from("services").select("service_key, label, admin_href, created_at");
   const parsed = dbError(error);
-  if (parsed) {
-    if (relationMissing(parsed)) {
-      return {
-        data: SERVICE_CATALOG.map((row) => ({ ...row, created_at: "" })),
-        error: null,
-      };
-    }
-    return { data: [], error: parsed };
-  }
+  if (parsed) return { data: [], error: parsed };
   const rows = (Array.isArray(data) ? data : []) as Service[];
   return { data: rows.filter((row) => typeof row.service_key === "string"), error: null };
 }

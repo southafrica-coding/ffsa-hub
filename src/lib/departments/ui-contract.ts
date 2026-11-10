@@ -1,12 +1,27 @@
 /**
- * Provisional API shapes for Departments & Services.
+ * Response contract for the Departments & Services API.
+ * Hub UI imports this file. Serializers live in shape.ts and
+ * src/lib/services/present.ts.
  *
- * Serializer shapes are provisional pending Hub UI's final diff (#565 / #566).
- * All response types live here. Serializers stay in src/lib/departments/shape.ts
- * and src/lib/services/present.ts so the final swap stays small.
- *
- * Not checked against Hub UI's file until they send the final head.
  * Slug is staff_ministries.slug. Money is integer cents. Currency is ZAR.
+ *
+ * OKR key-result status is one of complete, in_progress, moving_forward,
+ * not_started, stuck. A missing database value becomes not_started.
+ *
+ * budget is links[] or null. Each link is
+ * { projectId: string|null, name, budgetCents, spentCents, currency: 'ZAR' }.
+ * budget is null when canSeeBudget is false.
+ *
+ * access flags: canSeeDepartmentDetail, canSeeBudget, canEditBudget,
+ * canEditRocks, canSeePeopleEmails. budgetOnly is true for a finance-only
+ * view (budget without detail). Those sections are null, and memberCount
+ * is null because the roster is not read.
+ *
+ * Viewer memberships include isPointLeader. People include email, null
+ * unless canSeePeopleEmails. purpose, cluster and dueOn are nullable.
+ *
+ * ServiceAudience is all_signed_in | point_leaders | owners_only.
+ * HubService is the one service card type.
  */
 
 export type DepartmentCluster = "leadership" | "inward" | "outward" | "backbone" | "alongside";
@@ -34,7 +49,8 @@ export interface DepartmentSummary {
   cluster: DepartmentCluster | null;
   parentSlug: string | null;
   purpose: string | null;
-  memberCount: number;
+  /** Null in finance-only mode: the roster is not read. */
+  memberCount: number | null;
   active: boolean;
   /** True when the viewer gets the header and budget only. */
   budgetOnly: boolean;

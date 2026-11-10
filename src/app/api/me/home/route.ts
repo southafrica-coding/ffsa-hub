@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 import { getAuthedUser } from "@/lib/api-auth";
 import { accountIsActive } from "@/lib/auth/grant-scope";
-import { holdsUnscopedRole, loadDepartmentGate } from "@/lib/departments/access";
 import { notAuthenticated, notAuthorized, serverError } from "@/lib/departments/http";
 import { listVisibleDepartments, rocksDueFor, viewerMemberships } from "@/lib/departments/page";
-import { listDepartmentRows, listMinistriesById, listUserRoleGrants } from "@/lib/departments/repository";
-import { canUseService } from "@/lib/services/access";
+import { listActiveMemberships, listDepartmentRows, listMinistriesById } from "@/lib/departments/repository";
+import { usableServiceKeys } from "@/lib/services/access";
 import { toHubService } from "@/lib/services/present";
 import { listServiceOwnerRows, listServices } from "@/lib/services/repository";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -20,31 +19,40 @@ export async function GET() {
   const user = await getAuthedUser(supabase);
   if (!user) return notAuthenticated();
   if (!(await accountIsActive(supabase, user.id))) return notAuthorized();
-  const gate = await loadDepartmentGate(supabase, user.id);
-  if (!gate) return serverError("access lookup failed");
-  const admin = createAdminClient();
-  const [departments, rows, services, grants, roles] = await Promise.all([
-    listVisibleDepartments(admin, gate),
-    listDepartmentRows(admin),
-    listServices(admin),
-    listServiceOwnerRows(admin),
-    listUserRoleGrants(supabase, user.id),
+
+  const [departments, services, grants, memberships] = await Promise.all([
+    listVisibleDepartments(supabase, user.id),
+    listServices(supabase),
+    listServiceOwnerRows(supabase),
+    listActiveMemberships(supabase, user.id),
   ]);
-  if (departments.error || rows.error || services.error || grants.error || roles.error) {
-    return serverError(departments.error ?? rows.error ?? services.error ?? grants.error ?? roles.error);
+  if (departments.accessError || memberships.error) return notAuthorized();
+  if (departments.error || services.error || grants.error) {
+    return serverError(departments.error ?? services.error ?? grants.error);
   }
-  const due = await rocksDueFor(admin, gate, rows.data);
+  const usable = await usableServiceKeys(
+    supabase,
+    services.data.map((service) => service.service_key)
+  );
+  if (!usable.ok) return notAuthorized();
+
+  const admin = createAdminClient();
+  const rows = await listDepartmentRows(admin);
+  if (rows.error) return serverError(rows.error);
+  const openSlugs = new Set(
+    (departments.data ?? []).filter((home) => home.access.canSeeDepartmentDetail).map((home) => home.slug)
+  );
+  const homes = rows.data.filter((row) => openSlugs.has(row.slug));
+  const due = await rocksDueFor(admin, homes, new Set(homes.map((home) => home.id)));
   if (due.error) return serverError(due.error);
-  const adminUser = holdsUnscopedRole(roles.data, ["super_admin", "admin"]);
-  const visible = [];
-  for (const service of services.data) {
-    if (adminUser || (await canUseService(supabase, user.id, service.service_key))) visible.push(service);
-  }
+
+  const visible = services.data.filter((service) => usable.keys.has(service.service_key));
   const ministries = await listMinistriesById(
-    admin,
+    supabase,
     grants.data.flatMap((grant) => (grant.staff_ministry_id ? [grant.staff_ministry_id] : []))
   );
   if (ministries.error) return serverError(ministries.error);
+
   return NextResponse.json({
     departments: departments.data,
     services: visible
@@ -58,6 +66,6 @@ export async function GET() {
       ),
     rocksDue: due.data,
     okrCheckInsDue: [],
-    viewerMemberships: viewerMemberships(gate, rows.data),
+    viewerMemberships: viewerMemberships(memberships.data, rows.data),
   });
 }
