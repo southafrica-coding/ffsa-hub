@@ -63,7 +63,7 @@ export function SwatchGrid() {
               className="text-[11px] mt-0.5"
               style={{
                 fontFamily: "var(--font-roboto-mono, ui-monospace, monospace)",
-                color: isCopied ? "var(--yellow)" : "var(--text-secondary)",
+                color: isCopied ? "var(--success-text)" : "var(--text-secondary)",
               }}
             >
               {isCopied ? "Copied" : s.hex}

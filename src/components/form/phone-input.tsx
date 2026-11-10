@@ -32,7 +32,9 @@ export function PhoneInput({
         onChange={field.onChange}
         onBlur={field.onBlur}
         required={question.required}
-        separator=""
+        storage="e164"
+        aria-invalid={!!fieldState.error}
+        aria-describedby={fieldState.error ? `${question.id}-error` : undefined}
       />
     </FieldWrapper>
   );
