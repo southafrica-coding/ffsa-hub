@@ -52,23 +52,34 @@ describe("DataTable", () => {
     expect(headers).toEqual(["Line", "Amount"]);
     expect(view.querySelector("td")?.textContent).toBe("Travel");
     expect(view.textContent).toContain(formatZarFromCents(1_245_000));
-    expect(view.textContent).toContain("R 12 450,00");
+    expect(view.textContent).toContain("R 12 450");
+    expect(view.textContent).not.toContain("R 12 450,00");
   });
 });
 
 describe("MoneyCell", () => {
-  it("right-aligns a positive rand amount", () => {
+  it("right-aligns a positive whole-rand amount", () => {
     const view = render(<MoneyCell cents={1_245_000} />);
     const cell = view.querySelector("span");
-    expect(cell?.textContent).toBe("R 12 450,00");
+    expect(cell?.textContent).toBe("R 12 450");
     expect(cell?.className).toContain("text-right");
     expect(cell?.className).not.toContain("text-danger");
   });
 
+  it("shows cents when showCents is set", () => {
+    const view = render(<MoneyCell cents={1_245_050} showCents />);
+    expect(view.querySelector("span")?.textContent).toBe("R 12 450,50");
+  });
+
   it("shows a negative amount in danger colour with a minus sign", () => {
-    const view = render(<MoneyCell cents={-1_250} />);
+    const view = render(<MoneyCell cents={-1_200} />);
     const cell = view.querySelector("span");
-    expect(cell?.textContent).toBe("-R 12,50");
+    expect(cell?.textContent).toBe("-R 12");
     expect(cell?.className).toContain("text-danger");
+  });
+
+  it("formats zero as a whole rand", () => {
+    const view = render(<MoneyCell cents={0} />);
+    expect(view.querySelector("span")?.textContent).toBe("R 0");
   });
 });
