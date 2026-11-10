@@ -2,7 +2,7 @@
 
 import { PayLaterCountry } from "./pay-later-country";
 import { useMemo, useState } from "react";
-import { PhoneInputNative } from "@/components/ui/phone-input-native";
+import { PhoneInput } from "@/components/ui/phone-input";
 import type { FormField } from "@/lib/forms/schema";
 import { validateCheckoutAnswers } from "@/lib/ticketing/checkout-questions";
 import {
@@ -732,7 +732,7 @@ export function TheSendStorefront({
               <label className="tss-label" htmlFor="tss-ph">
                 [ PHONE{bf.phone.required ? " *" : " — OPTIONAL"} ]
               </label>
-              <PhoneInputNative
+              <PhoneInput
                 id="tss-ph"
                 value={phone}
                 onChange={setPhone}

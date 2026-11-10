@@ -1,7 +1,7 @@
 "use client";
 
 import { useController, type Control } from "react-hook-form";
-import { DateInput } from "@/components/ui/date-input";
+import { DateField as UiDateField } from "@/components/ui/date-field";
 import { FieldWrapper } from "./field-wrapper";
 import type { FormQuestion } from "@/lib/form-types";
 
@@ -25,7 +25,7 @@ export function DateField({
       helpText={question.helpText}
       error={fieldState.error?.message}
     >
-      <DateInput
+      <UiDateField
         id={question.id}
         value={field.value ?? ""}
         onChange={field.onChange}

@@ -346,6 +346,31 @@ export function Initials({ name, size = 32 }: { name: string; size?: number }) {
 }
 
 /* ── Date block (event rows) ──────────────────────── */
+export {
+  PageHeading,
+  SectionHeading,
+  EmptyNote,
+  LocalTabs,
+  StackLink,
+  DataTable,
+  ServiceCard,
+} from "./department-ui";
+export { MoneyCell } from "./money-cell";
+export {
+  Breadcrumbs,
+  Toolbar,
+  PropertyList,
+  KpiTile,
+  Skeleton,
+  SideSheet,
+  EmptyState,
+  ListPage,
+  DetailPage,
+  DashboardPage,
+  MoneyTablePage,
+  ServicePage,
+} from "./templates";
+
 export function DateBlock({ day, mon, invert }: { day: string; mon: string; invert?: boolean }) {
   return (
     <div className={cn("w-12 shrink-0 border py-1.5 text-center",
