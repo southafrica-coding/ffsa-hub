@@ -10,11 +10,15 @@ const MONTHS = [
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ] as const;
 
-type Instant = Date | string | number;
+type Instant = Date | string | number | null | undefined;
 type Clock = "none" | "seconds";
 
-function asDate(value: Instant): Date {
-  return value instanceof Date ? value : new Date(value);
+const EM_DASH = "—";
+
+function asDate(value: Instant): Date | null {
+  if (value == null || value === "") return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function part(
@@ -55,38 +59,65 @@ function zonedParts(date: Date, timeZone: string, clock: Clock): Intl.DateTimeFo
   }).formatToParts(date);
 }
 
-/** "11 Nov 2026", or "11 Nov 2026, 00:15:30" when the clock is included. */
-function formatZoned(date: Date, timeZone: string, clock: Clock): string {
-  const parts = zonedParts(date, timeZone, clock);
-  const text = `${digits(part(parts, "day"), 2)} ${monthName(part(parts, "month"))} ${digits(part(parts, "year"), 4)}`;
-  if (clock === "none") return text;
-  return `${text}, ${hour23(part(parts, "hour"))}:${digits(part(parts, "minute"), 2)}:${digits(part(parts, "second"), 2)}`;
+function readParts(
+  date: Date | null,
+  timeZone: string,
+  clock: Clock
+): Intl.DateTimeFormatPart[] | null {
+  if (!date) return null;
+  try {
+    return zonedParts(date, timeZone, clock);
+  } catch (error) {
+    if (error instanceof RangeError) return null;
+    throw error;
+  }
+}
+
+function dateText(parts: Intl.DateTimeFormatPart[]): string {
+  return `${digits(part(parts, "day"), 2)} ${monthName(part(parts, "month"))} ${digits(part(parts, "year"), 4)}`;
+}
+
+function timeText(parts: Intl.DateTimeFormatPart[]): string {
+  return `${hour23(part(parts, "hour"))}:${digits(part(parts, "minute"), 2)}:${digits(part(parts, "second"), 2)}`;
 }
 
 /** Date and time. Seconds stay, because these rows already showed them. */
 export function formatSaDateTime(value: Instant): string {
-  return formatZoned(asDate(value), TIME_ZONE, "seconds");
+  const parts = readParts(asDate(value), TIME_ZONE, "seconds");
+  return parts ? `${dateText(parts)}, ${timeText(parts)}` : EM_DASH;
 }
 
 /** Time of day, including seconds (the check-in "Updated" clock). */
 export function formatSaTime(value: Instant): string {
-  const parts = zonedParts(asDate(value), TIME_ZONE, "seconds");
-  return `${hour23(part(parts, "hour"))}:${digits(part(parts, "minute"), 2)}:${digits(part(parts, "second"), 2)}`;
+  const parts = readParts(asDate(value), TIME_ZONE, "seconds");
+  return parts ? timeText(parts) : EM_DASH;
 }
 
 /** Calendar date of an instant in South Africa. */
 export function formatSaDate(value: Instant): string {
-  return formatZoned(asDate(value), TIME_ZONE, "none");
+  const parts = readParts(asDate(value), TIME_ZONE, "none");
+  return parts ? dateText(parts) : EM_DASH;
 }
 
 /**
  * "12 Sep 2026" or "12 Sep 2026 – 14 Sep 2026".
  * start/end are calendar dates (YYYY-MM-DD), read in UTC so the day never
- * shifts when the server is not in South Africa.
+ * shifts when the server is not in South Africa. An invalid start is "—".
+ * An invalid end falls back to the start alone.
  */
-export function formatDayRange(start: string, end: string | null): string {
-  const fmt = (iso: string) => formatZoned(new Date(`${iso}T00:00:00Z`), "UTC", "none");
-  const startLabel = fmt(start);
-  if (!end || end === start) return startLabel;
-  return `${startLabel} – ${fmt(end)}`;
+export function formatDayRange(
+  start: string | null | undefined,
+  end?: string | null
+): string {
+  const day = (iso: string | null | undefined) => {
+    if (iso == null || iso === "") return null;
+    const parts = readParts(asDate(`${iso}T00:00:00Z`), "UTC", "none");
+    return parts ? dateText(parts) : null;
+  };
+  const startLabel = day(start);
+  if (!startLabel) return EM_DASH;
+  if (end == null || end === "" || end === start) return startLabel;
+  const endLabel = day(end);
+  if (!endLabel) return startLabel;
+  return `${startLabel} – ${endLabel}`;
 }

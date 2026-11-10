@@ -67,4 +67,29 @@ describe("formatDayRange", () => {
       "12 Sep 2026 – 14 Sep 2026"
     );
   });
+
+  it("returns an em dash when the start is invalid, and the start alone when only the end is", () => {
+    expect(formatDayRange(null, "2026-09-14")).toBe("—");
+    expect(formatDayRange(undefined, "2026-09-14")).toBe("—");
+    expect(formatDayRange("", "2026-09-14")).toBe("—");
+    expect(formatDayRange("not-a-date", "2026-09-14")).toBe("—");
+    expect(formatDayRange("2026-09-12", "not-a-date")).toBe("12 Sep 2026");
+    expect(formatDayRange("2026-09-12", "")).toBe("12 Sep 2026");
+  });
+});
+
+describe("invalid instants", () => {
+  const invalid = [null, undefined, "", "not-a-date", new Date(NaN)] as const;
+
+  it("formatSaDateTime returns an em dash instead of throwing", () => {
+    for (const value of invalid) expect(formatSaDateTime(value)).toBe("—");
+  });
+
+  it("formatSaTime returns an em dash instead of throwing", () => {
+    for (const value of invalid) expect(formatSaTime(value)).toBe("—");
+  });
+
+  it("formatSaDate returns an em dash instead of throwing", () => {
+    for (const value of invalid) expect(formatSaDate(value)).toBe("—");
+  });
 });
