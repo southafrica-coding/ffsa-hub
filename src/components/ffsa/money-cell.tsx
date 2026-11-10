@@ -1,15 +1,19 @@
 import { cn } from "@/lib/utils/cn";
 import { formatZarFromCents } from "@/lib/format/money";
 
-/** Right-aligned tabular rand amount. Negatives are red with a minus sign. */
+/** Right-aligned tabular rand amount. Whole rands unless `showCents`. Negatives are red with a minus sign. */
 export function MoneyCell({
   cents,
+  showCents = false,
   className,
 }: {
+  /** Integer cents. Rounded to the nearest rand unless `showCents`. */
   cents: number;
+  showCents?: boolean;
   className?: string;
 }) {
-  const negative = Number.isFinite(cents) && cents < 0;
+  const text = formatZarFromCents(cents, { showCents });
+  const negative = text.startsWith("-");
   return (
     <span
       className={cn(
@@ -18,7 +22,7 @@ export function MoneyCell({
         className
       )}
     >
-      {formatZarFromCents(cents)}
+      {text}
     </span>
   );
 }
