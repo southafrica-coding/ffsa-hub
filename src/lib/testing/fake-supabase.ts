@@ -132,8 +132,11 @@ export type PermissionWorld = {
   roles: Array<{ id: string; name: string; scopeType?: string | null; scopeId?: string | null }>;
   direct: Perm[];
   bundles?: Record<string, Perm[]>; // role id → bundle
-  /** users.is_active. Omitted means active. false is an inactive account. */
-  active?: boolean;
+  /**
+   * users.is_active. Omitted or true is active. null is active
+   * (IS NOT FALSE). false is an inactive account.
+   */
+  active?: boolean | null;
 };
 
 function matchesEmbeddedFilters(q: FakeQuery, prefix: string, row: Record<string, unknown>) {
@@ -151,7 +154,10 @@ export function permissionWorldResolver(world: PermissionWorld) {
   return (q: FakeQuery): FakeResult | null => {
     if (q.table === "users" && (q.columns ?? "").includes("is_active")) {
       return {
-        data: [{ id: filterValue(q, "eq", "id") ?? null, is_active: world.active !== false }],
+        data: [{
+          id: filterValue(q, "eq", "id") ?? null,
+          is_active: world.active === undefined ? true : world.active,
+        }],
       };
     }
     if (q.table === "user_roles") {

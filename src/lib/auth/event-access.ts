@@ -13,16 +13,18 @@
 //   creator EXISTS fails, so only an unscoped grant remains (comment line 107).
 //
 // The function has no role bypass. Those sit on the policies:
-//   is_admin() — migration 002 lines 71–80, unscoped admin or super_admin
+//   is_admin() — unscoped admin or super_admin, and (migration 316) only
+//   when users.is_active IS NOT FALSE. false is inactive; NULL and true
+//   are active.
 //   has_role(name) — migration 002 lines 23–51, one argument counts only
-//   scope_type IS NULL
+//   scope_type IS NULL. events_admin / finance_admin / comms_admin arms
+//   still do not read is_active.
 //   events UPDATE also allows created_by = caller with no key (lines 160–163)
 //   events INSERT: is_admin, events_admin, unscoped events.create, or
 //   created_by = self with events.create in any scope (line 157, via
 //   has_permission, which is not scope-filtered)
 //
-// Role bypasses do not consult is_active. is_admin() and has_role() in
-// 002 do not, and 313 did not change them. Grant arms do.
+// Grant arms require an active account, same as has_event_permission.
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
@@ -145,8 +147,13 @@ function sameId(a: string | null | undefined, b: string | null | undefined): boo
   return left != null && left === right;
 }
 
-/** is_admin(): unscoped admin or super_admin. Scoped assignments do not count. */
+/**
+ * is_admin() after migration 316: an unscoped admin or super_admin on an
+ * active account. is_active false does not bypass. NULL and true do.
+ * A scoped admin assignment does not count.
+ */
 export function isUnscopedAdmin(snap: EventAccessSnapshot): boolean {
+  if (!snap.active) return false;
   return snap.roles.some(
     (r) => ADMIN_ROLES.includes(r.name) && r.scopeType == null
   );

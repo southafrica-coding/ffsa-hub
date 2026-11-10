@@ -134,12 +134,12 @@ describe("role bypasses sit outside the helper", () => {
     expect(allowsEventGate(eventsAdmin, ATTENDANCE_GATE, EVENT_A)).toBe(true);
   });
 
-  it("an inactive admin still matches is_admin(), which does not read is_active", () => {
+  it("an inactive admin does not take the is_admin bypass", () => {
     const inactive = snap({
       active: false,
-      roles: [{ roleId: "r", name: "super_admin", scopeType: null, scopeId: null }],
+      roles: [{ roleId: "r", name: "admin", scopeType: null, scopeId: null }],
     });
-    expect(allowsEventGate(inactive, EVENT_CREATE_GATE, EVENT_A)).toBe(true);
+    expect(allowsEventGate(inactive, EVENT_CREATE_GATE, EVENT_A)).toBe(false);
   });
 });
 
@@ -223,6 +223,30 @@ describe("canManageEvent loads grants and falls back when the RPC is missing", (
             : null
     );
     expect(await canManageEvent(db, "u1", "events.create", EVENT_A, EVENT_CREATE_GATE)).toBe(false);
+  });
+
+  it("an inactive admin is denied, a null is_active admin is allowed, and an active super_admin is allowed", async () => {
+    const missingRpc = (q: FakeQuery) =>
+      q.rpc
+        ? { error: { code: "PGRST202", message: "Could not find the function public.has_event_permission in the schema cache" } }
+        : q.table === "events"
+          ? { data: { created_by: "nope" } }
+          : null;
+    const inactive = client(
+      { roles: [{ id: "r", name: "admin" }], direct: [], active: false },
+      missingRpc
+    );
+    const nullActive = client(
+      { roles: [{ id: "r", name: "admin" }], direct: [], active: null },
+      missingRpc
+    );
+    const superAdmin = client(
+      { roles: [{ id: "r", name: "super_admin" }], direct: [], active: true },
+      missingRpc
+    );
+    expect(await canManageEvent(inactive, "u1", "events.create", EVENT_A, EVENT_CREATE_GATE)).toBe(false);
+    expect(await canManageEvent(nullActive, "u1", "events.create", EVENT_A, EVENT_CREATE_GATE)).toBe(true);
+    expect(await canManageEvent(superAdmin, "u1", "events.create", EVENT_A, EVENT_CREATE_GATE)).toBe(true);
   });
 
   it("a role bundle scoped to the event counts", async () => {

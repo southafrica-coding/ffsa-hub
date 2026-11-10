@@ -102,7 +102,9 @@ export async function canViewContacts(
 /**
  * Scope-aware events gate. `eventId` null counts only an unscoped grant
  * (has_event_permission's NULL rule) plus an unscoped admin / events_admin
- * role. Scan links must not use this — they have no events_admin bypass;
+ * role. The admin / super_admin bypass requires an active account
+ * (is_active IS NOT FALSE), matching is_admin() in migration 316.
+ * Scan links must not use this — they have no events_admin bypass;
  * call canManageEvent with SCAN_LINK_GATE. Order routes need finance_admin
  * and should pass ORDERS_GATE to canManageEvent instead.
  */
