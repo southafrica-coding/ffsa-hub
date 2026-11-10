@@ -4,28 +4,36 @@ import {
   getAccessibleModules,
 } from "@/config/modules";
 import type {
+  DepartmentHome,
   DepartmentPageModel,
+  DepartmentServiceListing,
   DepartmentSummary,
   DepartmentTab,
   DepartmentTool,
   DepartmentViewer,
   HubService,
   ListedService,
+  ServiceAudience,
+  ServiceDepartmentRole,
+  ServiceRunRole,
+  SubMinistry,
 } from "@/types/departments";
+import { DEPARTMENT_HOME_SLUGS, FOLDED_INTO, NON_HOME_SLUGS } from "./allow-list";
 import {
   BUDGETS,
   CLUSTER_LABEL,
   CURRENT_QUARTER,
-  EXCLUDED_DEPARTMENT_SLUGS,
+  FOLDED_MINISTRIES,
   MINISTRY_HOMES,
-  MOCK_VIEWER,
   OKR_CYCLE,
   ROCKS,
   SERVICES,
   type MinistryRecord,
 } from "./mocks";
 
-const EXCLUDED = new Set<string>(EXCLUDED_DEPARTMENT_SLUGS);
+const HOMES = new Set<string>(DEPARTMENT_HOME_SLUGS);
+const NON_HOMES = new Set<string>(NON_HOME_SLUGS);
+const RUN_ROLES = new Set<ServiceDepartmentRole>(["owner", "manager", "moderator"]);
 
 const TAB_LABEL: Record<DepartmentTab, string> = {
   overview: "Overview",
@@ -38,11 +46,17 @@ const TAB_LABEL: Record<DepartmentTab, string> = {
 };
 
 /**
- * The one function to replace when the session can name the caller.
- * Pages must not import `MOCK_VIEWER` themselves.
+ * Fail closed until the session is wired to `GET /api/me/home`.
+ * No departments and no permissions. Tests build their own viewers.
  */
 export function getDepartmentViewer(): DepartmentViewer {
-  return MOCK_VIEWER;
+  return {
+    name: "",
+    roles: [],
+    permittedModules: [],
+    memberships: [],
+    usedServiceIds: [],
+  };
 }
 
 export function clusterLabel(cluster: DepartmentSummary["cluster"]): string {
@@ -53,31 +67,56 @@ export function currentQuarter(): string {
   return CURRENT_QUARTER;
 }
 
-function normalise(slug: string): string {
-  return slug.trim().toLowerCase();
+function exact(slug: string): string {
+  return slug.trim();
 }
 
-function homeByKey(slug: string): MinistryRecord | undefined {
-  const key = normalise(slug);
-  return MINISTRY_HOMES.find(
-    (home) =>
-      home.slug === key ||
-      home.ministrySlug === key ||
-      home.aliases.includes(key)
-  );
+function homeBySlug(slug: string): MinistryRecord | undefined {
+  return MINISTRY_HOMES.find((home) => home.slug === slug);
 }
 
 /**
- * Allow-list. A home slug (or its ministry-slug alias) resolves.
- * Part-time ministries, RCA, No Ministry, Woven and the old portfolio
- * slugs resolve to null so the page can `notFound()`.
+ * A home slug resolves. Anything else is null, including hyphenated
+ * spellings and ministries that are folded or inactive.
+ * Folds are not resolved here — call `foldTarget` first.
  */
 export function resolveDepartment(slug: string): DepartmentSummary | null {
-  const key = normalise(slug);
-  if (!key || EXCLUDED.has(key)) return null;
-  const home = homeByKey(key);
-  if (!home) return null;
-  return toSummary(home);
+  const key = exact(slug);
+  if (!HOMES.has(key)) return null;
+  const home = homeBySlug(key);
+  return home ? toSummary(home) : null;
+}
+
+/**
+ * Redirect target for an explicit fold. Not a generic parent lookup:
+ * `education` stays a home, and `rooted_christian_academy` stays a 404.
+ * A stored `parentSlug` (from `parent_id`) wins over `FOLDED_INTO`.
+ */
+export function foldTarget(
+  slug: string,
+  folded: readonly { slug: string; parentSlug: string | null }[] = FOLDED_MINISTRIES
+): string | null {
+  const key = exact(slug);
+  if (!Object.prototype.hasOwnProperty.call(FOLDED_INTO, key)) return null;
+  const row = folded.find((ministry) => ministry.slug === key);
+  if (row?.parentSlug) return row.parentSlug;
+  return FOLDED_INTO[key as keyof typeof FOLDED_INTO];
+}
+
+export function subMinistriesOf(parentSlug: string): SubMinistry[] {
+  return FOLDED_MINISTRIES.filter((ministry) => foldTarget(ministry.slug) === parentSlug).map(
+    (ministry) => ({
+      slug: ministry.slug,
+      name: ministry.name,
+      purpose: ministry.purpose,
+      memberCount: ministry.memberCount,
+      people: ministry.people,
+    })
+  );
+}
+
+export function isNonHomeSlug(slug: string): boolean {
+  return NON_HOMES.has(exact(slug));
 }
 
 export function listDepartmentHomes(): DepartmentSummary[] {
@@ -87,7 +126,6 @@ export function listDepartmentHomes(): DepartmentSummary[] {
 function toSummary(home: MinistryRecord): DepartmentSummary {
   return {
     slug: home.slug,
-    ministrySlug: home.ministrySlug,
     name: home.name,
     cluster: home.cluster,
     parentSlug: home.parentSlug,
@@ -95,6 +133,49 @@ function toSummary(home: MinistryRecord): DepartmentSummary {
     memberCount: home.memberCount,
     active: home.active,
   };
+}
+
+const AUDIENCE_LABEL: Record<ServiceAudience, string> = {
+  all_signed_in: "Everyone signed in",
+  ministry_leaders: "Ministry leaders",
+  owners_only: "Departments that run it",
+};
+
+export function audienceLabel(audience: ServiceAudience): string {
+  return AUDIENCE_LABEL[audience];
+}
+
+const ROLE_LABEL: Record<ServiceDepartmentRole, string> = {
+  owner: "Owner",
+  manager: "Manager",
+  access: "Access",
+  moderator: "Moderator",
+};
+
+export function serviceRoleLabel(role: ServiceDepartmentRole): string {
+  return ROLE_LABEL[role];
+}
+
+function departmentName(slug: string): string {
+  return (
+    homeBySlug(slug)?.name ??
+    FOLDED_MINISTRIES.find((ministry) => ministry.slug === slug)?.name ??
+    slug
+  );
+}
+
+/** Managing departments, or the moderators when nobody owns or manages it. */
+export function managingLabel(service: HubService): string {
+  const managing = service.owners.filter(
+    (link) => link.role === "owner" || link.role === "manager"
+  );
+  const shown =
+    managing.length > 0
+      ? managing
+      : service.owners.filter((link) => link.role === "moderator");
+  const names = shown.map((link) => departmentName(link.slug)).join(", ");
+  if (!names) return audienceLabel(service.audience);
+  return managing.length > 0 ? names : `Moderators: ${names}`;
 }
 
 export function viewerCanOpenModule(moduleId: string, viewer: DepartmentViewer): boolean {
@@ -126,44 +207,73 @@ export function listServicesForViewer(viewer: DepartmentViewer): ListedService[]
   return filterServices(SERVICES, viewer);
 }
 
-export function describeOwner(service: HubService): string {
-  if (!service.ownerSlug) return "Owner to confirm";
-  const owner = resolveDepartment(service.ownerSlug);
-  const name = owner?.name ?? "Owner to confirm";
-  return service.ownerAssumed ? `${name} (to confirm)` : name;
-}
-
 function toListed(service: HubService, viewer: DepartmentViewer): ListedService {
   return {
     ...service,
-    ownerLabel: describeOwner(service),
+    managingLabel: managingLabel(service),
     canOpen: viewerCanOpenModule(service.moduleId, viewer),
   };
 }
 
-function ownedServices(home: MinistryRecord, viewer: DepartmentViewer): ListedService[] {
-  const ids = new Set(
-    SERVICES.filter((service) => service.ownerSlug === home.slug).map((service) => service.id)
+function runRole(service: HubService, departmentSlug: string): ServiceRunRole | null {
+  const link = service.owners.find(
+    (item) => item.slug === departmentSlug && RUN_ROLES.has(item.role)
   );
-  return SERVICES.filter((service) => ids.has(service.id)).map((service) =>
-    toListed(service, viewer)
-  );
+  return link ? (link.role as ServiceRunRole) : null;
+}
+
+function servicesRunFor(departmentSlug: string): { serviceId: string; role: ServiceRunRole }[] {
+  return SERVICES.flatMap((service) => {
+    const role = runRole(service, departmentSlug);
+    return role ? [{ serviceId: service.id, role }] : [];
+  });
+}
+
+function servicesRunBy(departmentSlug: string, viewer: DepartmentViewer): DepartmentServiceListing[] {
+  return servicesRunFor(departmentSlug).flatMap((row) => {
+    const service = SERVICES.find((item) => item.id === row.serviceId);
+    return service ? [{ ...toListed(service, viewer), role: row.role }] : [];
+  });
 }
 
 function visibleTools(tools: DepartmentTool[], viewer: DepartmentViewer): DepartmentTool[] {
   return tools.filter((item) => viewerCanOpenModule(item.moduleId, viewer));
 }
 
+export function getDepartmentHome(slug: string): DepartmentHome | null {
+  const home = homeBySlug(exact(slug));
+  if (!home || !HOMES.has(home.slug)) return null;
+  return {
+    department: toSummary(home),
+    people: home.people,
+    okrs: {
+      departmentSlug: home.slug,
+      cycleName: OKR_CYCLE.name,
+      cycleSlug: OKR_CYCLE.slug,
+      href: OKR_CYCLE.href,
+      objectives: home.objectives,
+    },
+    rocks: ROCKS.filter((rock) => rock.departmentSlug === home.slug),
+    budget: BUDGETS.find((row) => row.departmentSlug === home.slug) ?? {
+      departmentSlug: home.slug,
+      project: null,
+    },
+    tools: home.tools,
+    servicesRun: servicesRunFor(home.slug),
+    subMinistries: subMinistriesOf(home.slug),
+  };
+}
+
 export function getDepartmentPage(
   slug: string,
   viewer: DepartmentViewer
 ): DepartmentPageModel | null {
-  const key = normalise(slug);
-  if (!key || EXCLUDED.has(key)) return null;
-  const home = homeByKey(key);
+  const key = exact(slug);
+  if (foldTarget(key) || !HOMES.has(key)) return null;
+  const home = homeBySlug(key);
   if (!home) return null;
 
-  const services = ownedServices(home, viewer);
+  const services = servicesRunBy(home.slug, viewer);
   const tabKeys: DepartmentTab[] = [
     "overview",
     "people",
@@ -195,6 +305,7 @@ export function getDepartmentPage(
     },
     tools: visibleTools(home.tools, viewer),
     services,
+    subMinistries: subMinistriesOf(home.slug),
     tabs: tabKeys.map((key) => ({
       key,
       label: TAB_LABEL[key],

@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { formatDayRange } from "@/lib/format/sa-time";
-import { formatZar } from "@/lib/departments/money";
-import { clusterLabel } from "@/lib/departments/data";
+import { formatZarFromCents } from "@/lib/departments/money";
+import { audienceLabel, clusterLabel, serviceRoleLabel } from "@/lib/departments/data";
 import { STAFF_LANGUAGE } from "@/lib/departments/mocks";
 import type { DepartmentPageModel, DepartmentTab, OkrTone, RockStatus } from "@/types/departments";
 import { DataTable, EmptyNote, LocalTabs, PageHeading, SectionHeading, StackLink } from "../local-ui";
@@ -41,6 +41,12 @@ export function DepartmentView({ model, tab }: { model: DepartmentPageModel; tab
               <Fact
                 label="Sits under"
                 value={<Link href={`/departments/${model.parent.slug}`}>{model.parent.name}</Link>}
+              />
+            )}
+            {model.subMinistries.length > 0 && (
+              <Fact
+                label="Includes"
+                value={model.subMinistries.map((ministry) => ministry.name).join(", ")}
               />
             )}
           </dl>
@@ -99,6 +105,34 @@ function PeopleTab({ model }: { model: DepartmentPageModel }) {
             Open the live roster on <Link href="/ministry">Ministries</Link>.
           </p>
         </>
+      )}
+      {model.subMinistries.map((ministry) => (
+        <SubMinistryPeople key={ministry.slug} ministry={ministry} />
+      ))}
+    </>
+  );
+}
+
+function SubMinistryPeople({ ministry }: { ministry: DepartmentPageModel["subMinistries"][number] }) {
+  return (
+    <>
+      <SectionHeading title={ministry.name} meta="Sub-ministry" />
+      <p className="max-w-prose px-5 py-3 text-sm text-muted-foreground md:px-8">{ministry.purpose}</p>
+      {ministry.people.length === 0 ? (
+        <EmptyNote title="No names are listed for this sub-ministry yet">
+          {ministry.memberCount === 1 ? "1 person is" : `${ministry.memberCount} people are`} on{" "}
+          {ministry.name}, and no lead is set. The live roster is on <Link href="/ministry">Ministries</Link>.
+        </EmptyNote>
+      ) : (
+        <DataTable
+          caption={`People on ${ministry.name}`}
+          columns={["Name", "Capacity", "Role"]}
+          rows={ministry.people.map((person) => [
+            person.name,
+            person.capacity === "leader" ? "Leader" : "Member",
+            person.role ?? "—",
+          ])}
+        />
       )}
     </>
   );
@@ -173,9 +207,9 @@ function BudgetTab({ model }: { model: DepartmentPageModel }) {
             rows={[
               [
                 project.name,
-                formatZar(project.budgetRand),
-                formatZar(project.spentRand),
-                formatZar(project.budgetRand - project.spentRand),
+                formatZarFromCents(project.budgetCents),
+                formatZarFromCents(project.spentCents),
+                formatZarFromCents(project.budgetCents - project.spentCents),
               ],
             ]}
           />
@@ -194,11 +228,18 @@ function ServicesTab({ model }: { model: DepartmentPageModel }) {
       ) : (
         model.services.map((service) =>
           service.canOpen ? (
-            <StackLink key={service.id} href={service.href} title={service.name} meta={service.ownerLabel} />
+            <StackLink
+              key={service.id}
+              href={service.href}
+              title={service.name}
+              meta={`${serviceRoleLabel(service.role)} · ${audienceLabel(service.audience)}`}
+            />
           ) : (
             <div key={service.id} className="border-b px-5 py-3 md:px-8">
               <p className="font-medium">{service.name}</p>
-              <p className="text-sm text-muted-foreground">You cannot open this yet. {service.ownerLabel}</p>
+              <p className="text-sm text-muted-foreground">
+                {serviceRoleLabel(service.role)}. You cannot open this yet.
+              </p>
             </div>
           )
         )

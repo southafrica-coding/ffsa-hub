@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getDepartmentViewer, listServicesForViewer } from "@/lib/departments/data";
+import { audienceLabel, getDepartmentViewer, listServicesForViewer } from "@/lib/departments/data";
 import { STAFF_LANGUAGE } from "@/lib/departments/mocks";
 import { requireSignedIn } from "@/lib/departments/session";
 import { EmptyNote, PageHeading, ServiceCard } from "../departments/local-ui";
@@ -28,7 +28,8 @@ export default async function ServicesPage() {
               href={service.href}
               name={service.name}
               summary={service.summary}
-              owner={service.ownerLabel}
+              managing={service.managingLabel}
+              audience={audienceLabel(service.audience)}
             />
           ))}
         </div>

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import {
+  foldTarget,
   getDepartmentPage,
   getDepartmentViewer,
   isDepartmentTab,
@@ -29,14 +30,14 @@ export default async function DepartmentPage({
   await requireSignedIn();
   const { slug } = await params;
   const { tab: requested } = await searchParams;
+  const folded = foldTarget(slug);
+  if (folded) {
+    const query = requested ? `?tab=${encodeURIComponent(requested)}` : "";
+    redirect(`/departments/${folded}${query}`);
+  }
   const viewer = getDepartmentViewer();
   const model = getDepartmentPage(slug, viewer);
   if (!model) notFound();
-
-  if (slug !== model.department.slug) {
-    const query = requested ? `?tab=${encodeURIComponent(requested)}` : "";
-    redirect(`/departments/${model.department.slug}${query}`);
-  }
 
   const tab = isDepartmentTab(requested) && model.tabs.some((item) => item.key === requested)
     ? requested
