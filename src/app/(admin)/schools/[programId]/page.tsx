@@ -5,6 +5,7 @@ import { getProgramById, getEnrollmentsByProgram, getGradesByProgram, getQuestio
 import { fetchAssignableContacts } from "@/lib/auth/assignable-contacts";
 import { listProgramLeaders } from "@/services/program-leaders";
 import { StaffApplicants, type StaffApplicant } from "./staff-applicants";
+import { AssignmentsSection } from "@/components/schools/lms/assignments-section";
 import { interviewFormFromReview } from "@/lib/schools/interview-review-form";
 import {
   applicationsForViewer,
@@ -254,6 +255,10 @@ export default async function ProgramDetailPage({
             staffApplicantFromResponse(row, byResponse.get(row.id))
           )}
         />
+        {/* LMS slice 2: program staff grade and release assignments. */}
+        <div className="px-5 py-6 md:px-8">
+          <AssignmentsSection programId={programId} canEdit={false} />
+        </div>
         {viewer.showFees ? (
           <div className="px-5 py-6 md:px-8">
             <SchoolFeesPanel programId={programId} />
@@ -496,6 +501,7 @@ export default async function ProgramDetailPage({
         applicationExpiry={applicationExpiry}
         staffDecisionPanel={staffDecisionPanel ?? undefined}
         canEditClassroom={viewer.canManage}
+        canGradeAssignments={viewer.canManage || viewer.isStaff}
       />
     </>
   );

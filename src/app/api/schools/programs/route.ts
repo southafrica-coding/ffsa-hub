@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { lmsRestrictMessage } from "@/lib/schools/lms-assignments-auth";
 import {
   canCreateProgram,
   getAccessibleSchoolsProgramIds,
@@ -104,6 +105,9 @@ export async function DELETE(request: Request) {
   const { error } = await deleteProgram(supabase, id);
 
   if (error) {
+    // Classroom submissions hold the school's enrolments and courses (migration 310).
+    const restrict = lmsRestrictMessage(error, "program");
+    if (restrict) return NextResponse.json({ error: restrict }, { status: 409 });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

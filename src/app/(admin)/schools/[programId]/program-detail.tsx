@@ -10,6 +10,7 @@ import { ProgramCoursesManager, type PhaseCourse } from "./program-courses-manag
 import { LeadersTab, type ProgramLeaderRow } from "./leaders-tab";
 import { StaffTab, type ProgramStaffRow } from "./staff-tab";
 import { ClassroomTab } from "./classroom-tab";
+import { AssignmentsSection } from "@/components/schools/lms/assignments-section";
 import { EmailsTab } from "./emails-tab";
 import { StudentsExportPanel } from "./students-export-panel";
 import { ENROLLMENT_STATUS_LABELS } from "@/lib/schools/student-export-columns";
@@ -470,6 +471,7 @@ export function ProgramDetail({
   applicationExpiry,
   staffDecisionPanel,
   canEditClassroom = false,
+  canGradeAssignments = false,
 }: {
   program: Program;
   initialTab?: string;
@@ -516,8 +518,12 @@ export function ProgramDetail({
    *  server-rendered "accepted as staff?" tab. Absent = no tab. */
   staffDecisionPanel?: React.ReactNode;
   /** LMS slice 1: leaders / managers (userCanManageProgram) get the Classroom
-   *  editor. Everyone else who reaches this page sees no Classroom tab. */
+   *  editor. */
   canEditClassroom?: boolean;
+  /** LMS slice 2: program staff who reach this page (e.g. they also hold a
+   *  schools.* grant) get Classroom → Assignments to grade, without the
+   *  content editor. Everyone else sees no Classroom tab. */
+  canGradeAssignments?: boolean;
 }) {
   const router = useRouter();
   const [editingProgram, setEditingProgram] = useState(false);
@@ -609,7 +615,7 @@ export function ProgramDetail({
   const [tab, setTab] = useState(() => {
     const wanted = initialTab ? normaliseTab(initialTab) : "overview";
     if (!TAB_KEYS.includes(wanted)) return "overview";
-    if (wanted === "classroom" && !canEditClassroom) return "overview";
+    if (wanted === "classroom" && !canEditClassroom && !canGradeAssignments) return "overview";
     return wanted;
   });
   const [rosterFilter, setRosterFilter] = useState<RosterFilter>("all");
@@ -747,7 +753,7 @@ export function ProgramDetail({
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="students">Students ({activeEnrollments.length})</TabsTrigger>
             <TabsTrigger value="courses">Courses ({billingCourses.length})</TabsTrigger>
-            {canEditClassroom && <TabsTrigger value="classroom">Classroom</TabsTrigger>}
+            {(canEditClassroom || canGradeAssignments) && <TabsTrigger value="classroom">Classroom</TabsTrigger>}
             {trackSegments.length > 0 && (
               <TabsTrigger value="track">Track ({trackSummary.confirmed}/{trackSummary.total})</TabsTrigger>
             )}
@@ -806,9 +812,13 @@ export function ProgramDetail({
           />
         </TabsContent>
 
-        {canEditClassroom && (
+        {(canEditClassroom || canGradeAssignments) && (
           <TabsContent value="classroom" className="mt-0 px-5 py-6 md:px-8">
-            <ClassroomTab programId={program.id} />
+            {canEditClassroom ? (
+              <ClassroomTab programId={program.id} />
+            ) : (
+              <AssignmentsSection programId={program.id} canEdit={false} />
+            )}
           </TabsContent>
         )}
 
