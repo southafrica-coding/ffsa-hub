@@ -1,14 +1,23 @@
 import type { Metadata } from "next";
-import { audienceLabel, getDepartmentViewer, listServicesForViewer, managingLabel } from "@/lib/departments/data";
-import { STAFF_LANGUAGE } from "@/lib/departments/mocks";
+import { loadDepartmentsIndexForViewer, loadServicesForViewer } from "@/lib/departments";
+import { audienceLabel, departmentNames, managingLabel, STAFF_LANGUAGE } from "@/lib/departments/data";
+import { sessionClient, settleViewerResult } from "@/lib/departments/load";
 import { requireSignedIn } from "@/lib/departments/session";
 import { EmptyNote, PageHeading, ServiceCard } from "../departments/local-ui";
 
 export const metadata: Metadata = { title: "Services" };
 
 export default async function ServicesPage() {
-  await requireSignedIn();
-  const services = listServicesForViewer(getDepartmentViewer());
+  const path = "/services";
+  await requireSignedIn(path);
+  const supabase = await sessionClient();
+  const [servicesResult, departmentsResult] = await Promise.all([
+    loadServicesForViewer(supabase),
+    loadDepartmentsIndexForViewer(supabase),
+  ]);
+  const services = settleViewerResult(servicesResult, path);
+  const departments = settleViewerResult(departmentsResult, path);
+  const names = departmentNames(departments);
 
   return (
     <div>
@@ -28,7 +37,7 @@ export default async function ServicesPage() {
               href={service.href}
               name={service.name}
               summary={service.summary}
-              managing={managingLabel(service)}
+              managing={managingLabel(service, names)}
               audience={audienceLabel(service.audience)}
             />
           ))}

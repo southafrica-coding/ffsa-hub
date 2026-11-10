@@ -1,6 +1,7 @@
-// Shown automatically by Next.js for every (admin) route that doesn't define
-// its own loading.tsx — the sidebar and chrome stay visible while this fills
-// the content area. Eliminates the blank-screen pause between clicks.
+// Skeleton for one admin route. It used to live at (admin)/loading.tsx, which
+// wrapped every admin page — including departments — in Suspense. notFound()
+// inside that boundary was streamed as HTTP 200. Departments has no loading
+// file so its empty-list 404 is sent before the response starts.
 
 export default function AdminLoading() {
   return (

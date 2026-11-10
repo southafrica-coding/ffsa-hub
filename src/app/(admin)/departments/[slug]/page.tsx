@@ -1,28 +1,21 @@
 import type { Metadata } from "next";
-import { notFound, redirect } from "next/navigation";
-import {
-  foldTarget,
-  getDepartmentPage,
-  getDepartmentViewer,
-  isDepartmentTab,
-  resolveDepartment,
-  tabHref,
-  tabLabel,
-  viewerCanOpenModule,
-  visibleTabs,
-} from "@/lib/departments/data";
-import { ministryTools } from "@/lib/departments/mocks";
+import { loadDepartmentHomeForViewer, loadServicesForViewer } from "@/lib/departments";
+import { isDepartmentTab, tabHref, tabLabel, visibleTabs } from "@/lib/departments/data";
+import { redirectToCanonicalDepartment, sessionClient, settleViewerResult } from "@/lib/departments/load";
 import { requireSignedIn } from "@/lib/departments/session";
 import { DepartmentView } from "./department-view";
 
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ slug: string }>;
-}): Promise<Metadata> {
-  const { slug } = await params;
-  const department = resolveDepartment(slug);
-  return { title: department?.name ?? "Department" };
+export const metadata: Metadata = { title: "Department" };
+export const dynamic = "force-dynamic";
+
+function returnPath(pathname: string, search: Record<string, string | string[] | undefined>): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(search)) {
+    if (typeof value === "string") params.append(key, value);
+    else if (Array.isArray(value)) for (const item of value) params.append(key, item);
+  }
+  const query = params.toString();
+  return query ? `${pathname}?${query}` : pathname;
 }
 
 export default async function DepartmentPage({
@@ -30,27 +23,25 @@ export default async function DepartmentPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  await requireSignedIn();
   const { slug } = await params;
-  const { tab: requested } = await searchParams;
-  const folded = foldTarget(slug);
-  if (folded) {
-    const query = requested ? `?tab=${encodeURIComponent(requested)}` : "";
-    redirect(`/departments/${folded}${query}`);
-  }
-  const viewer = getDepartmentViewer();
-  const model = getDepartmentPage(slug, viewer);
-  if (!model) notFound();
+  const search = await searchParams;
+  const requested = typeof search.tab === "string" ? search.tab : undefined;
+  const path = returnPath(`/departments/${slug}`, search);
+  await requireSignedIn(path);
+  const supabase = await sessionClient();
+  const [homeResult, servicesResult] = await Promise.all([
+    loadDepartmentHomeForViewer(supabase, slug),
+    loadServicesForViewer(supabase),
+  ]);
+  redirectToCanonicalDepartment(homeResult, path);
+  const model = settleViewerResult(homeResult, path);
+  const services = settleViewerResult(servicesResult, path);
 
   const keys = visibleTabs(model);
-  const tab =
-    isDepartmentTab(requested) && keys.includes(requested) ? requested : (keys[0] ?? "overview");
+  const tab = isDepartmentTab(requested) && keys.includes(requested) ? requested : (keys[0] ?? "overview");
   const tabs = keys.map((key) => ({ key, label: tabLabel(key), href: tabHref(model.department.slug, key) }));
-  const tools = model.access.canSeeDepartmentDetail
-    ? ministryTools(model.department.slug).filter((item) => viewerCanOpenModule(item.moduleId, viewer))
-    : [];
 
-  return <DepartmentView model={model} tab={tab} tabs={tabs} tools={tools} />;
+  return <DepartmentView model={model} tab={tab} tabs={tabs} services={services} />;
 }

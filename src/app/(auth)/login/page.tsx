@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import Image from "next/image";
 import Link from "next/link";
 import { FFSA_TAGLINE } from "@/lib/brand/ffsa";
+import { loginDestination } from "@/lib/login-destination";
 import { loginErrorFromParam } from "./login-error";
 
 // The tagline sets as a stacked poster headline on the black panel. Derived from
@@ -100,7 +101,10 @@ export default function LoginPage() {
     );
     const isAdmin = roles.some((r: string) => adminRoles.includes(r));
 
-    router.push(isAdmin ? "/dashboard" : "/profile");
+    const requested = new URLSearchParams(window.location.search).get("redirect");
+    const destination =
+      requested == null ? (isAdmin ? "/dashboard" : "/profile") : (loginDestination(requested) ?? "/home");
+    router.push(destination);
     router.refresh();
   }
 

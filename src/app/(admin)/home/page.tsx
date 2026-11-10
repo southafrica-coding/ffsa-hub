@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { selectHomeDashboard } from "@/lib/departments/dashboard";
-import { clusterLabel, getDepartmentViewer, managingLabel } from "@/lib/departments/data";
-import { STAFF_LANGUAGE } from "@/lib/departments/mocks";
+import { loadHomeForViewer } from "@/lib/departments";
+import { clusterLabel, departmentNames, managingLabel, STAFF_LANGUAGE } from "@/lib/departments/data";
+import { sessionClient, settleViewerResult } from "@/lib/departments/load";
 import { requireSignedIn } from "@/lib/departments/session";
 import { formatDayRange } from "@/lib/format/sa-time";
 import type { RockStatus } from "@/lib/departments/ui-contract";
@@ -17,8 +17,10 @@ const ROCK_LABEL: Record<RockStatus, string> = {
 };
 
 export default async function HomePage() {
-  await requireSignedIn();
-  const home = selectHomeDashboard(getDepartmentViewer());
+  const path = "/home";
+  await requireSignedIn(path);
+  const home = settleViewerResult(await loadHomeForViewer(await sessionClient()), path);
+  const names = departmentNames(home.departments);
 
   return (
     <div>
@@ -36,7 +38,11 @@ export default async function HomePage() {
             key={department.slug}
             href={`/departments/${department.slug}`}
             title={department.name}
-            meta={clusterLabel(department.cluster)}
+            meta={
+              department.budgetOnly
+                ? `${clusterLabel(department.cluster)} · Budget only`
+                : clusterLabel(department.cluster)
+            }
           />
         ))
       )}
@@ -53,7 +59,7 @@ export default async function HomePage() {
               key={service.id}
               href={service.href}
               title={service.name}
-              meta={managingLabel(service)}
+              meta={managingLabel(service, names)}
             />
           ))}
           <p className="px-5 py-3 text-sm md:px-8">

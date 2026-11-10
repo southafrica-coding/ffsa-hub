@@ -19,6 +19,8 @@ export type FakeQuery = {
   head: boolean;
   /** select | insert | update | delete | upsert */
   action: string;
+  /** Body passed to insert / update / upsert / delete, when the caller sent one. */
+  payload?: unknown;
   filters: Array<{ op: string; args: unknown[] }>;
   single: boolean;
   rpc?: { name: string; args: unknown };
@@ -74,8 +76,9 @@ export function createFakeSupabase(options: {
       },
     };
     for (const op of ["insert", "update", "delete", "upsert"]) {
-      b[op] = () => {
+      b[op] = (payload?: unknown) => {
         q.action = op;
+        q.payload = payload;
         return b;
       };
     }

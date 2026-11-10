@@ -9,13 +9,22 @@ import Link from "next/link";
  * them, so these set `normal-case` until that template replaces them.
  */
 
-export function PageHeading({ context, title }: { context: string; title: string }) {
+export function PageHeading({
+  context,
+  title,
+  note,
+}: {
+  context: string;
+  title: string;
+  note?: string | null;
+}) {
   return (
     <header className="border-b px-5 py-5 md:px-8">
       <p className="text-sm text-muted-foreground">{context}</p>
       <h1 className="mt-1 font-sans text-2xl font-semibold normal-case tracking-normal">
         {title}
       </h1>
+      {note ? <p className="mt-1 text-sm">{note}</p> : null}
     </header>
   );
 }
