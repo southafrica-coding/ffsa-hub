@@ -2,9 +2,8 @@ import type { Config } from "tailwindcss";
 import tailwindcssAnimate from "tailwindcss-animate";
 
 const config: Config = {
-  // The hub is light only. Keeping the "class" strategy (with no `dark` class
-  // ever set on <html>) keeps legacy dark: variants permanently inert —
-  // omitting it would flip them to media strategy and follow the OS theme.
+  // Class strategy so a `dark` class can be set deliberately. It is not set
+  // on <html> by default, so legacy `dark:` variants stay inert.
   darkMode: "class",
   content: [
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
@@ -14,45 +13,90 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        border: "hsl(var(--border))",
-        input: "hsl(var(--input))",
-        ring: "hsl(var(--ring))",
-        background: "hsl(var(--background))",
-        foreground: "hsl(var(--foreground))",
-        primary: { DEFAULT: "hsl(var(--primary))", foreground: "hsl(var(--primary-foreground))" },
-        secondary: { DEFAULT: "hsl(var(--secondary))", foreground: "hsl(var(--secondary-foreground))" },
-        destructive: { DEFAULT: "hsl(var(--destructive))", foreground: "hsl(var(--destructive-foreground))" },
-        muted: { DEFAULT: "hsl(var(--muted))", foreground: "hsl(var(--muted-foreground))" },
-        accent: { DEFAULT: "hsl(var(--accent))", foreground: "hsl(var(--accent-foreground))" },
-        popover: { DEFAULT: "hsl(var(--popover))", foreground: "hsl(var(--popover-foreground))" },
-        card: { DEFAULT: "hsl(var(--card))", foreground: "hsl(var(--card-foreground))" },
+        // shadcn utilities. `border` is the hex token (not an HSL triplet).
+        // `accent` here is the hover wash, not the yellow brand accent —
+        // yellow is `yellow` / `var(--accent)` and is a fill only.
+        border: "var(--border)",
+        input: "var(--border-strong)",
+        ring: "var(--link)",
+        background: "var(--bg)",
+        foreground: "var(--text)",
+        primary: { DEFAULT: "var(--brand-black)", foreground: "var(--bg)" },
+        secondary: { DEFAULT: "var(--bg-subtle)", foreground: "var(--text-secondary)" },
+        destructive: { DEFAULT: "var(--danger)", foreground: "var(--bg)" },
+        muted: { DEFAULT: "var(--bg-subtle)", foreground: "var(--text-tertiary)" },
+        accent: { DEFAULT: "var(--bg-subtle)", foreground: "var(--text)" },
+        popover: { DEFAULT: "var(--bg)", foreground: "var(--text)" },
+        card: { DEFAULT: "var(--bg)", foreground: "var(--text)" },
 
-        // The surface ramp as utilities, so `bg-surface-1` resolves instead of
-        // silently emitting nothing. Values track the --surface-* CSS vars.
-        surface: { 1: "#FFFFFF", 2: "#F4F2EA", 3: "#F1EFE7", 4: "#E7E4D9" },
-
-        // Brand — use these directly: bg-ink, text-yellow, border-rule
-        ink: "#0A0A0A",
-        bone: { DEFAULT: "#F4F2EA", 2: "#F1EFE7", 3: "#E7E4D9" },
-        rule: { DEFAULT: "#DEDACE", strong: "#C7C3B5" },
-        yellow: { DEFAULT: "#FFB801", dim: "#FFF4D9" },
-        grass: { DEFAULT: "#3E7F2B", text: "#2F6620" },
-        amber: { DEFAULT: "#8A6400", border: "#B98600" },
-        electric: "#000DE5",
+        bg: "var(--bg)",
+        "bg-subtle": "var(--bg-subtle)",
+        "brand-black": "var(--brand-black)",
+        // Brand bone (#C5C2AE) is `bone-brand` / `var(--bone)`, for solid black
+        // only. The legacy `bg-bone` utility is the light paper (--bg-subtle)
+        // so unmigrated screens do not paint brand bone on white.
+        bone: {
+          DEFAULT: "var(--bg-subtle)",
+          2: "var(--bg-subtle)",
+          3: "var(--border)",
+          brand: "var(--bone)",
+        },
+        rule: { DEFAULT: "var(--border)", strong: "var(--border-strong)" },
+        yellow: { DEFAULT: "var(--accent)", hover: "var(--accent-hover)", dim: "#FFF4D9" },
+        grass: { DEFAULT: "var(--success)", text: "var(--success-text)" },
+        amber: { DEFAULT: "var(--warning)", border: "var(--warning)" },
+        electric: "var(--link)",
+        link: "var(--link)",
+        success: { DEFAULT: "var(--success)", text: "var(--success-text)" },
+        warning: "var(--warning)",
+        danger: "var(--danger)",
+        ink: "var(--brand-black)",
+        surface: {
+          1: "var(--bg)",
+          2: "var(--bg-subtle)",
+          3: "var(--bg-subtle)",
+          4: "var(--border)",
+        },
       },
-      // Square by default. Every radius token resolves to 0 so a stray
-      // rounded-lg in an old component cannot reintroduce corners.
-      borderRadius: { none: "0", sm: "0", DEFAULT: "0", md: "0", lg: "0", xl: "0", "2xl": "0", "3xl": "0", full: "0" },
-      // Shadows off — the system uses borders, not elevation.
-      boxShadow: { none: "none", sm: "none", DEFAULT: "none", md: "none", lg: "none", xl: "none", "2xl": "none", inner: "none" },
+      borderRadius: {
+        none: "0",
+        sm: "var(--radius)",
+        DEFAULT: "var(--radius)",
+        md: "var(--radius)",
+        lg: "var(--radius-card)",
+        xl: "var(--radius-card)",
+        "2xl": "12px",
+        "3xl": "16px",
+        full: "9999px",
+      },
+      boxShadow: {
+        none: "none",
+        sm: "none",
+        DEFAULT: "none",
+        md: "none",
+        lg: "none",
+        xl: "none",
+        "2xl": "none",
+        inner: "none",
+      },
       fontFamily: {
-        // 'display' kept as the key so existing font-display usages keep working —
-        // it now resolves to Roboto Condensed Black, not Bebas Neue.
-        display: ["var(--font-roboto-condensed)", "'Arial Narrow'", "sans-serif"],
-        sans: ["var(--font-roboto)", "'Roboto'", "sans-serif"],
-        mono: ["var(--font-roboto-mono)", "monospace"],
+        // Titles and body are Roboto. Notes use `font-condensed`.
+        display: ["var(--font-roboto)", "Roboto", "sans-serif"],
+        sans: ["var(--font-roboto)", "Roboto", "sans-serif"],
+        mono: ["var(--font-roboto-mono)", "ui-monospace", "monospace"],
+        condensed: ["var(--font-roboto-condensed)", "Roboto Condensed", "sans-serif"],
       },
-      letterSpacing: { label: "0.2em", chip: "0.12em" },
+      fontSize: {
+        caption: ["12px", { lineHeight: "16px", fontWeight: "500" }],
+        ui: ["13px", { lineHeight: "20px" }],
+        body: ["14px", { lineHeight: "22px" }],
+        section: ["15px", { lineHeight: "22px", fontWeight: "600" }],
+        "card-title": ["16px", { lineHeight: "24px", fontWeight: "600" }],
+        "page-title": ["20px", { lineHeight: "28px" }],
+        hero: ["28px", { lineHeight: "36px" }],
+        kpi: ["24px", { lineHeight: "32px", fontWeight: "500" }],
+      },
+      letterSpacing: { eyebrow: "0.06em", label: "0.06em", chip: "0.06em" },
     },
   },
   plugins: [tailwindcssAnimate],

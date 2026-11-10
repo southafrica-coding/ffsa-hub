@@ -10,13 +10,13 @@
 //   - true-black canvas, edge-to-edge (no "card")
 //   - a yellow slogan band under the masthead (the landing page's
 //     kinetic marquee, as a static band for email)
-//   - ROBOTO BLACK uppercase headings, Space Mono eyebrows/labels
+//   - ROBOTO BLACK uppercase headings, Roboto Mono for codes
 //   - #FFB801 accent, bone body copy, a stamped-yellow CTA
 //   - a footer that reproduces the deck cover's contact row
 //
 // Email-robust: table layout, inline CSS, explicit bgcolor for
 // Outlook, webfonts as progressive enhancement (Roboto Black falls
-// back to Arial Black; Space Mono to Courier). The other event
+// back to Arial Black; Roboto Mono to Courier). The other event
 // brands (THE SEND / Camps / PREACHERS) keep their own chrome.
 // ============================================================
 
@@ -25,6 +25,7 @@ import {
   FFSA_COLORS,
   FFSA_FONTS,
   FFSA_FONT_LINK,
+  FFSA_TITLE_WEIGHT,
 } from "@/lib/brand/ffsa";
 
 // ── Tokens (solid hexes — email clients are unreliable with rgba) ──
@@ -66,7 +67,7 @@ export function feEyebrow(text: string): string {
 
 export function feHeading(htmlOrText: string, opts?: { raw?: boolean }): string {
   const content = opts?.raw ? htmlOrText : feEsc(htmlOrText);
-  return `<h1 style="margin:0 0 20px;font-family:${DISPLAY};font-size:30px;line-height:0.98;font-weight:900;letter-spacing:-0.02em;text-transform:uppercase;color:${FE.WHITE};">${content}</h1>`;
+  return `<h1 style="margin:0 0 20px;font-family:${DISPLAY};font-size:30px;line-height:0.98;font-weight:${FFSA_TITLE_WEIGHT};letter-spacing:-0.02em;text-transform:uppercase;color:${FE.WHITE};">${content}</h1>`;
 }
 
 export function feParagraph(html: string): string {

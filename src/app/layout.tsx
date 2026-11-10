@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Roboto, Roboto_Condensed, Roboto_Mono, Bebas_Neue, Anton, Space_Mono } from "next/font/google";
+import { Roboto, Roboto_Condensed, Roboto_Mono, Bebas_Neue, Anton } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
@@ -36,12 +36,6 @@ const anton = Anton({
   variable: "--font-anton",
   display: "swap",
 });
-const spaceMono = Space_Mono({
-  weight: ["400", "700"],
-  subsets: ["latin"],
-  variable: "--font-space-mono",
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   metadataBase: new URL(
@@ -69,7 +63,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${roboto.variable} ${robotoCondensed.variable} ${robotoMono.variable} ${bebasNeue.variable} ${anton.variable} ${spaceMono.variable}`}>
+    <html lang="en" className={`${roboto.variable} ${robotoCondensed.variable} ${robotoMono.variable} ${bebasNeue.variable} ${anton.variable}`}>
       <body className={roboto.className}>
         {children}
         <Toaster />

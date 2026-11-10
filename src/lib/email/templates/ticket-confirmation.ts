@@ -56,9 +56,9 @@ export function ticketConfirmationEmailHtml(opts: {
             height="236"
             style="display:block;margin:0 auto;background:#ffffff;padding:12px;border-radius:10px;width:236px;height:236px;"
           />
-          <p style="margin:20px 0 8px 0;font-family:'Space Mono','Roboto Mono',monospace;font-size:10px;color:${FE.YELLOW};letter-spacing:0.22em;text-transform:uppercase;font-weight:700;">Ticket ${i + 1} of ${ticketsCount}</p>
+          <p style="margin:20px 0 8px 0;font-family:'Roboto Mono',ui-monospace,monospace;font-size:10px;color:${FE.YELLOW};letter-spacing:0.22em;text-transform:uppercase;font-weight:700;">Ticket ${i + 1} of ${ticketsCount}</p>
           <p style="margin:0;font-family:'Roboto','Arial Black',Arial,sans-serif;font-size:18px;font-weight:900;letter-spacing:-0.01em;text-transform:uppercase;color:${FE.WHITE};">${feEsc(t.tierName)}</p>
-          <p style="margin:9px 0 0 0;font-family:'Space Mono','Roboto Mono',monospace;font-size:11px;color:${FE.DIM};letter-spacing:0.1em;">${feEsc(t.code)}</p>
+          <p style="margin:9px 0 0 0;font-family:'Roboto Mono',ui-monospace,monospace;font-size:11px;color:${FE.DIM};letter-spacing:0.1em;">${feEsc(t.code)}</p>
         </td>
       </tr>
       <tr><td style="height:14px;line-height:14px;font-size:0;">&nbsp;</td></tr>`
@@ -79,7 +79,7 @@ export function ticketConfirmationEmailHtml(opts: {
   )}${eventMessageHtml(opts.message, { color: FE.WHITE, font: "'Roboto',Arial,sans-serif" })}${feSpacer("md")}
   <table role="presentation" cellpadding="0" cellspacing="0" width="100%">${ticketsHtml}</table>
   <div style="margin:18px 0 0;padding-top:18px;border-top:1px solid ${FE.LINE};">
-    <p style="margin:0;font-family:'Space Mono','Roboto Mono',monospace;font-size:12px;color:${FE.DIM};letter-spacing:0.04em;">Order #${feEsc(
+    <p style="margin:0;font-family:'Roboto Mono',ui-monospace,monospace;font-size:12px;color:${FE.DIM};letter-spacing:0.04em;">Order #${feEsc(
       opts.orderId.slice(0, 8)
     )}&nbsp;&nbsp;&middot;&nbsp;&nbsp;Total ${money(opts.totalCents)}</p>
     <p style="margin:9px 0 0;font-family:'Roboto',Arial,sans-serif;font-size:13px;color:${FE.BONE};">Questions? Just reply to this email.</p>

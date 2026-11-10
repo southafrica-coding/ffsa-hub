@@ -16,66 +16,104 @@
 
 @layer base {
   :root {
-    /* shadcn tokens */
+    /* Hub semantic colours. Hex values must match FFSA_HUB_CSS in
+       src/lib/brand/ffsa.ts — the contrast test locks the two together.
+       Bone is for solid black only, never text on white.
+       Accent is a fill; text on it is black. */
+    --brand-black:    #000000;
+    --bg:             #FFFFFF;
+    --bg-subtle:      #FBFAF7;
+    --bone:           #C5C2AE;
+    --border:         #E7E4D9;
+    --border-strong:  #8E8A7C;
+    --text:           #111111;
+    --text-secondary: #55524A;
+    --text-tertiary:  #6B675D;
+    --accent:         #FFB801;
+    --accent-hover:   #FFCB3D;
+    --link:           #000DE5;
+    --success:        #4C9F37;
+    --success-text:   #3E7F2B;
+    --warning:        #8A6400;
+    --danger:         #D92D20;
+
+    /* Page and hero titles. Flip this one number to change the weight. */
+    --title-weight: 900;
+
+    /* Type scale */
+    --text-caption-size: 12px;
+    --text-caption-leading: 16px;
+    --text-ui-size: 13px;
+    --text-ui-leading: 20px;
+    --text-body-size: 14px;
+    --text-body-leading: 22px;
+    --text-section-size: 15px;
+    --text-section-leading: 22px;
+    --text-card-size: 16px;
+    --text-card-leading: 24px;
+    --text-page-size: 20px;
+    --text-page-leading: 28px;
+    --text-hero-size: 28px;
+    --text-hero-leading: 36px;
+    --text-kpi-size: 24px;
+    --text-kpi-leading: 32px;
+
+    /* 6px controls, 8px cards */
+    --radius: 6px;
+    --radius-card: 8px;
+
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 24px;
+    --space-6: 32px;
+    --space-7: 48px;
+    --row-sidebar: 32px;
+    --row-table: 36px;
+    --row-control: 32px;
+
+    /* shadcn channels kept as HSL triplets because call sites use
+       hsl(var(--destructive)). They track the hex tokens above. */
     --background:    0 0% 100%;
-    --foreground:    0 0% 4%;
-
+    --foreground:    0 0% 7%;
     --card:          0 0% 100%;
-    --card-foreground: 0 0% 4%;
-
+    --card-foreground: 0 0% 7%;
     --popover:       0 0% 100%;
-    --popover-foreground: 0 0% 4%;
-
-    /* PRIMARY IS BLACK, NOT YELLOW.
-       Yellow is reserved for the single "needs you" band per screen. */
-    --primary:       0 0% 4%;
+    --popover-foreground: 0 0% 7%;
+    --primary:       0 0% 0%;
     --primary-foreground: 0 0% 100%;
-
-    --secondary:     48 20% 95%;
-    --secondary-foreground: 40 8% 26%;
-
-    --muted:         48 20% 95%;
-    --muted-foreground: 40 7% 46%;
-
-    --accent:        48 20% 92%;
-    --accent-foreground: 0 0% 4%;
-
-    --destructive:   0 62% 42%;
+    --secondary:     45 33% 98%;
+    --secondary-foreground: 44 7% 31%;
+    --muted:         45 33% 98%;
+    --muted-foreground: 43 7% 39%;
+    --accent-foreground: 0 0% 0%;
+    --destructive:   4 74% 49%;
     --destructive-foreground: 0 0% 100%;
+    --input:         47 7% 52%;
+    --ring:          237 100% 45%;
 
-    --border:        45 18% 88%;
-    --input:         42 12% 78%;
-    --ring:          0 0% 4%;
-
-    /* NO ROUNDED CORNERS ANYWHERE */
-    --radius: 0px;
-
-    /* Brand */
-    --ink:            #0A0A0A;
-    --yellow:         #FFB801;
-    --yellow-dim:     #FFF4D9;
-    --yellow-border:  #0A0A0A;
-    --green:          #3E7F2B;
-    --green-text:     #2F6620;
-    --amber:          #8A6400;
-    --amber-border:   #B98600;
-    --blue:           #000DE5;
-
-    /* Surfaces — same names, light values */
-    --surface-1:      #FFFFFF;
-    --surface-2:      #F4F2EA;
-    --surface-3:      #F1EFE7;
-    --surface-4:      #E7E4D9;
-    --rule:           #DEDACE;
-    --rule-strong:    #C7C3B5;
-
-    --text-primary:   #0A0A0A;
-    --text-secondary: #45423B;
-    --text-tertiary:  #7C786C;
-    --text-quiet:     #9A9689;
+    /* Legacy names, pointed at the semantic tokens. */
+    --ink:            var(--brand-black);
+    --yellow:         var(--accent);
+    --yellow-dim:     #FFF6D6;
+    --yellow-border:  var(--brand-black);
+    --green:          var(--success);
+    --green-text:     var(--success-text);
+    --amber:          var(--warning);
+    --amber-border:   var(--warning);
+    --blue:           var(--link);
+    --surface-1:      var(--bg);
+    --surface-2:      var(--bg-subtle);
+    --surface-3:      var(--bg-subtle);
+    --surface-4:      var(--border);
+    --rule:           var(--border);
+    --rule-strong:    var(--border-strong);
+    --text-primary:   var(--text);
+    --text-quiet:     var(--text-tertiary);
 
     --font-condensed: var(--font-roboto-condensed, 'Roboto Condensed', 'Arial Narrow', sans-serif);
-    --font-mono-brand: var(--font-roboto-mono, 'Roboto Mono', monospace);
+    --font-mono-brand: var(--font-roboto-mono, 'Roboto Mono', ui-monospace, monospace);
   }
 }
 
@@ -91,11 +129,12 @@
   html { color-scheme: light; }
 
   body {
-    background-color: var(--surface-1);
-    color: var(--text-primary);
+    background-color: var(--bg);
+    color: var(--text);
     font-family: var(--font-roboto, 'Roboto', sans-serif);
-    font-size: 14px;
-    line-height: 1.6;
+    font-weight: 400;
+    font-size: var(--text-body-size);
+    line-height: var(--text-body-leading);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -109,19 +148,35 @@
   ::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
 
   h1, h2, h3, h4, h5, h6 {
-    font-family: var(--font-condensed);
-    font-weight: 900;
-    text-transform: uppercase;
-    letter-spacing: -0.01em;
-    line-height: 0.95;
-    color: var(--text-primary);
+    font-family: var(--font-roboto, 'Roboto', sans-serif);
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: normal;
+    line-height: 1.3;
+    color: var(--text);
+  }
+
+  h1 { font-size: var(--text-page-size); line-height: var(--text-page-leading); }
+  h2 { font-size: var(--text-card-size); line-height: var(--text-card-leading); }
+  h3 { font-size: var(--text-section-size); line-height: var(--text-section-leading); }
+
+  /* Focus ring is the brand link blue on white. Inside the black sidebar
+     the ring is the accent (see [data-shell-sidebar]). */
+  :focus-visible {
+    outline: 2px solid var(--link);
+    outline-offset: 2px;
+  }
+  [data-shell-sidebar] :focus-visible {
+    outline-color: var(--accent);
   }
 
   /* Every number in the app lines up */
   .tabular, td, th { font-variant-numeric: tabular-nums; }
 
-  a { color: var(--ink); text-decoration: none; }
-  a:hover { color: var(--blue); }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  /* Dark islands keep their own link colour. */
+  .theme-hire a, .org-theme a { color: inherit; text-decoration: none; }
 }
 
 /* ─────────────────────────────────────────────────────
@@ -140,9 +195,9 @@
 
   /* ── Card — borders, never elevation ── */
   .card, [data-slot="card"] {
-    background: var(--surface-1) !important;
-    border: 1px solid var(--ink) !important;
-    border-radius: 0 !important;
+    background: var(--bg) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius-card);
     box-shadow: none !important;
   }
   /* The handoff zeroes card padding because recomposed screens build their own
@@ -151,29 +206,31 @@
      screen opts out per-instance with `p-0`. */
   /* Card header is a black bar; see .section-bar below for the canonical form. */
   [data-slot="card-title"] {
-    font-family: var(--font-condensed) !important;
-    font-size: 16px !important;
-    font-weight: 900 !important;
-    letter-spacing: 0.05em !important;
-    text-transform: uppercase !important;
-    color: var(--text-primary) !important;
+    font-family: var(--font-roboto, 'Roboto', sans-serif);
+    font-size: var(--text-card-size);
+    line-height: var(--text-card-leading);
+    font-weight: 600;
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--text);
   }
   [data-slot="card-description"] {
     font-size: 13px !important;
     color: var(--text-secondary) !important;
   }
 
-  /* ── Button — square, black primary ── */
+  /* ── Button — sentence case, black primary. Type is not !important. ── */
   [data-slot="button"] {
-    font-family: var(--font-mono-brand) !important;
-    font-weight: 700 !important;
-    font-size: 10px !important;
-    letter-spacing: 0.14em !important;
-    text-transform: uppercase !important;
-    border-radius: 0 !important;
-    transition: background 0.12s ease, color 0.12s ease !important;
-    cursor: pointer !important;
-    box-shadow: none !important;
+    font-family: var(--font-roboto, 'Roboto', sans-serif);
+    font-weight: 500;
+    font-size: var(--text-ui-size);
+    line-height: var(--text-ui-leading);
+    letter-spacing: normal;
+    text-transform: none;
+    border-radius: var(--radius);
+    transition: background 0.12s ease, color 0.12s ease;
+    cursor: pointer;
+    box-shadow: none;
   }
   [data-slot="button"][data-variant="default"],
   button.bg-primary {
@@ -214,10 +271,11 @@
   }
 
   button, [role="button"] {
-    font-family: var(--font-mono-brand) !important;
-    font-weight: 700 !important;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
+    font-family: var(--font-roboto, 'Roboto', sans-serif);
+    font-weight: 500;
+    font-size: var(--text-ui-size);
+    letter-spacing: normal;
+    text-transform: none;
   }
 
   /* ── Input ── */
@@ -227,10 +285,10 @@
   select {
     background: var(--surface-1) !important;
     border: 1px solid var(--rule-strong) !important;
-    border-radius: 0 !important;
-    color: var(--text-primary) !important;
+    border-radius: var(--radius);
+    color: var(--text) !important;
     font-family: var(--font-roboto, 'Roboto', sans-serif) !important;
-    font-size: 14.5px !important;
+    font-size: var(--text-body-size) !important;
     padding: 12px 13px !important;
     transition: border-color 0.12s !important;
   }
@@ -238,11 +296,12 @@
   input:not([type="checkbox"]):not([type="radio"]):focus,
   textarea:focus,
   select:focus {
-    border-color: var(--ink) !important;
+    border-color: var(--border-strong) !important;
     box-shadow: none !important;
-    outline: none !important;
+    outline: 2px solid var(--link) !important;
+    outline-offset: 2px;
   }
-  input::placeholder, textarea::placeholder { color: var(--text-quiet) !important; }
+  input::placeholder, textarea::placeholder { color: var(--text-tertiary) !important; }
 
   /* Search fields put a Lucide icon inside the box and clear it with Tailwind's
      pl-* utility — but the !important padding above (needed to beat shadcn's own
@@ -312,21 +371,22 @@
     color: var(--text-secondary);
   }
 
-  /* ── Label — mono, wide tracking ── */
+  /* ── Label — sentence case. Not mono, not uppercase. ── */
   [data-slot="label"], label {
-    font-family: var(--font-mono-brand) !important;
-    font-size: 9.5px !important;
-    font-weight: 700 !important;
-    letter-spacing: 0.2em !important;
-    text-transform: uppercase !important;
-    color: var(--text-secondary) !important;
+    font-family: var(--font-roboto, 'Roboto', sans-serif);
+    font-size: var(--text-ui-size);
+    font-weight: 500;
+    line-height: var(--text-ui-leading);
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--text-secondary);
   }
 
   /* ── Select ── */
   [data-slot="select-trigger"] {
     background: var(--surface-1) !important;
     border: 1px solid var(--rule-strong) !important;
-    border-radius: 0 !important;
+    border-radius: var(--radius);
     color: var(--text-primary) !important;
     font-size: 14px !important;
   }
@@ -334,24 +394,24 @@
   [data-slot="select-content"] {
     background: var(--surface-1) !important;
     border: 1px solid var(--ink) !important;
-    border-radius: 0 !important;
+    border-radius: var(--radius);
     box-shadow: none !important;
   }
-  [data-slot="select-item"] { font-size: 14px !important; color: var(--text-secondary) !important; border-radius: 0 !important; }
+  [data-slot="select-item"] { font-size: 14px !important; color: var(--text-secondary) !important; border-radius: var(--radius); }
   [data-slot="select-item"]:hover, [data-slot="select-item"]:focus {
     background: var(--surface-2) !important; color: var(--text-primary) !important;
   }
 
   /* ── Badge = status pill: outlined, never filled ── */
   [data-slot="badge"] {
-    font-family: var(--font-mono-brand) !important;
-    font-size: 9px !important;
-    font-weight: 700 !important;
-    letter-spacing: 0.12em !important;
-    text-transform: uppercase !important;
-    border-radius: 0 !important;
-    padding: 4px 8px !important;
-    background: transparent !important;
+    font-family: var(--font-roboto, 'Roboto', sans-serif);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: normal;
+    text-transform: none;
+    border-radius: var(--radius);
+    padding: 2px 8px;
+    background: transparent;
   }
   [data-slot="badge"][data-variant="default"] {
     border: 1px solid var(--green) !important; color: var(--green-text) !important;
@@ -371,19 +431,19 @@
     background: transparent !important;
     border: none !important;
     border-bottom: 1px solid var(--ink) !important;
-    border-radius: 0 !important;
+    border-radius: var(--radius);
     padding: 0 !important;
     gap: 0 !important;
     height: auto !important;
   }
   [data-slot="tabs-trigger"] {
-    border-radius: 0 !important;
-    font-family: var(--font-mono-brand) !important;
-    font-size: 10px !important;
-    font-weight: 700 !important;
-    letter-spacing: 0.14em !important;
-    text-transform: uppercase !important;
-    color: var(--text-tertiary) !important;
+    border-radius: var(--radius);
+    font-family: var(--font-roboto, 'Roboto', sans-serif);
+    font-size: var(--text-ui-size);
+    font-weight: 500;
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--text-secondary);
     padding: 10px 16px !important;
     border: 1px solid var(--rule) !important;
     border-bottom: none !important;
@@ -401,17 +461,17 @@
   [data-slot="table"] { border-collapse: separate !important; border-spacing: 0 !important; width: 100% !important; }
   [data-slot="table-header"] tr { background: var(--ink) !important; }
   [data-slot="table-head"] {
-    font-family: var(--font-mono-brand) !important;
-    font-size: 9px !important;
-    font-weight: 700 !important;
-    letter-spacing: 0.16em !important;
-    text-transform: uppercase !important;
-    color: #C5C2AE !important;
-    padding: 9px 16px !important;
-    white-space: nowrap !important;
+    font-family: var(--font-roboto, 'Roboto', sans-serif);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--bone);
+    padding: 8px 16px;
+    white-space: nowrap;
   }
-  [data-slot="table-row"] { border-bottom: 1px solid var(--surface-4) !important; }
-  [data-slot="table-row"]:hover { background: #F7F5EE !important; }
+  [data-slot="table-row"] { border-bottom: 1px solid var(--border) !important; }
+  [data-slot="table-row"]:hover { background: var(--bg-subtle) !important; }
   [data-slot="table-cell"] {
     padding: 13px 16px !important;
     font-size: 14px !important;
@@ -422,31 +482,34 @@
   /* ── Dialog / Sheet / Popover / Tooltip — square, bordered, flat ── */
   [data-slot="dialog-overlay"] { background: rgba(10,10,10,0.22) !important; backdrop-filter: none !important; }
   [data-slot="dialog-content"] {
-    background: var(--surface-1) !important;
-    border: 1px solid var(--ink) !important;
-    border-radius: 0 !important;
-    box-shadow: 0 24px 60px rgba(0,0,0,0.24) !important;
+    background: var(--bg) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius-card);
+    box-shadow: none !important;
   }
   [data-slot="dialog-title"] {
-    font-family: var(--font-condensed) !important;
-    font-size: 28px !important; font-weight: 900 !important;
-    text-transform: uppercase !important; color: var(--text-primary) !important;
+    font-family: var(--font-roboto, 'Roboto', sans-serif);
+    font-size: var(--text-page-size);
+    line-height: var(--text-page-leading);
+    font-weight: var(--title-weight);
+    text-transform: uppercase;
+    color: var(--text);
   }
   [data-slot="dialog-description"] { font-size: 13.5px !important; color: var(--text-secondary) !important; }
   [data-slot="sheet-overlay"] { background: rgba(10,10,10,0.22) !important; backdrop-filter: none !important; }
   [data-slot="sheet-content"] {
     background: var(--surface-1) !important;
     border-color: var(--ink) !important;
-    border-radius: 0 !important;
+    border-radius: var(--radius);
   }
   [data-slot="tooltip-content"] {
     background: var(--ink) !important; border: none !important; color: #FFFFFF !important;
-    font-family: var(--font-mono-brand) !important; font-size: 10px !important;
-    letter-spacing: 0.1em !important; border-radius: 0 !important; box-shadow: none !important;
+    font-family: var(--font-roboto, 'Roboto', sans-serif); font-size: 12px;
+    letter-spacing: normal; border-radius: var(--radius); box-shadow: none !important;
   }
   [data-slot="popover-content"] {
     background: var(--surface-1) !important; border: 1px solid var(--ink) !important;
-    border-radius: 0 !important; box-shadow: 0 20px 44px rgba(0,0,0,0.2) !important;
+    border-radius: var(--radius); box-shadow: 0 20px 44px rgba(0,0,0,0.2) !important;
   }
   [data-slot="separator"] { background: var(--rule) !important; }
 
@@ -455,20 +518,43 @@
   /* Masthead: yellow tick + mono context line + condensed H1 */
   .masthead { padding: 20px 20px 16px; border-bottom: 1px solid var(--ink); background: var(--surface-1); }
   @media (min-width: 768px) { .masthead { padding: 24px 32px 20px; } }
+  .text-eyebrow,
+  .masthead-context,
+  .page-eyebrow {
+    font-family: var(--font-roboto, 'Roboto', sans-serif);
+    font-weight: 700;
+    font-size: 12px;
+    line-height: 16px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+  }
   .masthead-context {
     display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
-    font-family: var(--font-mono-brand); font-size: 10px; font-weight: 700;
-    letter-spacing: 0.2em; text-transform: uppercase; color: var(--text-secondary);
   }
+  .page-eyebrow { margin-bottom: 8px; }
   .masthead-context::before { content: ''; width: 16px; height: 3px; background: var(--yellow); flex-shrink: 0; }
   /* 58px is the design size; it scales down on phones because screens pass
      dynamic titles here (event and campaign names), which would otherwise
      wrap to four lines before the content starts. */
-  .masthead-title {
-    font-family: var(--font-condensed); font-weight: 900;
-    font-size: clamp(34px, 7.5vw, 58px);
-    line-height: 0.9; letter-spacing: -0.01em; text-transform: uppercase; color: var(--text-primary);
+  .page-title,
+  .masthead-title,
+  .hero-title {
+    font-family: var(--font-roboto, 'Roboto', sans-serif);
+    font-weight: var(--title-weight);
+    letter-spacing: -0.01em;
+    text-transform: uppercase;
+    color: var(--text);
     overflow-wrap: anywhere;
+  }
+  .page-title,
+  .masthead-title {
+    font-size: var(--text-page-size);
+    line-height: var(--text-page-leading);
+  }
+  .hero-title {
+    font-size: var(--text-hero-size);
+    line-height: var(--text-hero-leading);
   }
 
   /* An EDITABLE masthead title. The event form builder's page title is an
@@ -481,17 +567,17 @@
      long, and an input cannot wrap — at 58px "Send Night 2026 — Take Action"
      scrolls out of its own box and you cannot read the end of it. */
   input.masthead-title:not([type="checkbox"]):not([type="radio"]):not([type="range"]) {
-    font-family: var(--font-condensed) !important;
-    font-size: clamp(20px, 3.2vw, 32px) !important;
-    font-weight: 900 !important;
-    line-height: 1.05 !important;
+    font-family: var(--font-roboto, 'Roboto', sans-serif) !important;
+    font-size: var(--text-page-size) !important;
+    font-weight: var(--title-weight) !important;
+    line-height: var(--text-page-leading) !important;
     letter-spacing: -0.01em !important;
     text-transform: uppercase !important;
-    color: var(--text-primary) !important;
+    color: var(--text) !important;
     background: transparent !important;
     border: 0 !important;
     border-bottom: 1px solid transparent !important;
-    border-radius: 0 !important;
+    border-radius: var(--radius);
     padding: 0 !important;
   }
   input.masthead-title:not([type="checkbox"]):not([type="radio"]):hover  { border-bottom-color: var(--rule-strong) !important; }
@@ -505,12 +591,21 @@
   }
   @media (min-width: 768px) { .section-bar { padding: 11px 22px; } }
   .section-bar-title {
-    font-family: var(--font-condensed); font-weight: 900; font-size: 16px;
-    letter-spacing: 0.05em; text-transform: uppercase; min-width: 0;
+    font-family: var(--font-roboto, 'Roboto', sans-serif);
+    font-weight: 600;
+    font-size: var(--text-section-size);
+    line-height: var(--text-section-leading);
+    letter-spacing: normal;
+    text-transform: none;
+    min-width: 0;
   }
   .section-bar-meta {
-    font-family: var(--font-mono-brand); font-size: 9px; font-weight: 700;
-    letter-spacing: 0.16em; color: #C5C2AE;
+    font-family: var(--font-roboto, 'Roboto', sans-serif);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--bone);
   }
 
   /* The one yellow band per screen. NEVER render two. */
@@ -522,29 +617,55 @@
   }
   @media (min-width: 768px) { .needs-you { padding: 13px 32px; flex-wrap: nowrap; } }
   .needs-you-tag {
-    font-family: var(--font-mono-brand); font-size: 9px; font-weight: 700; letter-spacing: 0.2em;
-    background: var(--ink); color: var(--yellow); padding: 4px 8px; flex-shrink: 0;
+    font-family: var(--font-roboto, 'Roboto', sans-serif);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    background: var(--brand-black);
+    color: var(--bone);
+    padding: 4px 8px;
+    flex-shrink: 0;
   }
   .needs-you-text { font-size: 14px; font-weight: 600; color: var(--ink); }
 
-  /* Mono micro-label */
+  /* Field and meta labels. Sentence case — the eyebrow class is the uppercase one. */
   .mono-label {
-    font-family: var(--font-mono-brand); font-size: 9px; font-weight: 700;
-    letter-spacing: 0.2em; text-transform: uppercase; color: var(--text-tertiary);
+    font-family: var(--font-roboto, 'Roboto', sans-serif);
+    font-size: var(--text-ui-size);
+    font-weight: 500;
+    line-height: var(--text-ui-leading);
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--text-secondary);
   }
 
   /* Mono chip (filters, saved views, tags) */
   .chip {
-    font-family: var(--font-mono-brand); font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em;
-    text-transform: uppercase; border: 1px solid var(--rule-strong); color: var(--text-secondary);
-    padding: 5px 9px; display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--font-roboto, 'Roboto', sans-serif);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: normal;
+    text-transform: none;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    color: var(--text-secondary);
+    padding: 4px 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
   }
   .chip[data-active="true"] { background: var(--ink); color: #FFFFFF; border-color: var(--ink); }
 
-  /* Big condensed numeral */
+  /* KPI numeral. Tabular figures use Roboto Mono. */
   .numeral {
-    font-family: var(--font-condensed); font-weight: 900; line-height: 0.85;
-    letter-spacing: -0.01em; color: var(--text-primary); font-variant-numeric: tabular-nums;
+    font-family: var(--font-mono-brand);
+    font-weight: 500;
+    line-height: var(--text-kpi-leading);
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
   }
 
   /* KPI strip cell */
@@ -564,14 +685,11 @@
   }
 
   /* Page header pattern — kept for compatibility, restyled */
-  .page-eyebrow {
-    font-family: var(--font-mono-brand); font-size: 10px; font-weight: 700;
-    letter-spacing: 0.2em; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 8px;
-  }
-  .page-title {
-    font-family: var(--font-condensed); font-size: clamp(2.25rem, 4vw, 3.625rem);
-    font-weight: 900; letter-spacing: -0.01em; line-height: 0.9;
-    text-transform: uppercase; color: var(--text-primary);
+  .note {
+    font-family: var(--font-condensed);
+    font-weight: 400;
+    font-size: var(--text-body-size);
+    line-height: var(--text-body-leading);
   }
 
   /* Surfaces */
@@ -597,4 +715,8 @@
   @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .animate-fade-in { animation: fadeIn 0.2s ease forwards; }
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-fade-up, .animate-fade-in { animation: none; }
+  }
 }
