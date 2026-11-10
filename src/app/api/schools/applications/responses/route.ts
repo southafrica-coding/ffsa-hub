@@ -20,8 +20,13 @@ import { resolveProgramEmail } from "@/lib/email/render-program-email";
 import { sendReferenceInvite } from "@/lib/email/send-reference-invite";
 import { sendReferenceReminder } from "@/lib/email/send-reference-reminder";
 import { referenceSendConfirmed } from "@/lib/email/reference-email";
-import { gateManualReminder } from "@/lib/references/manual-reminder";
-import { previewWritesDisabled } from "@/lib/preview-writes";
+import { claimThenSendReferenceReminder, type ReminderAttempt } from "@/lib/references/reminder-claim";
+import { previewWriteRefusal } from "@/lib/preview-writes";
+import {
+  BULK_STATUS_LIMIT,
+  acceptedRegressNeedsConfirm,
+  storedStatusError,
+} from "@/lib/schools/application-status";
 import { syncApplicantToContact } from "@/lib/applications/sync-contact";
 import { applicationRejectedEmailHtml } from "@/lib/email/templates/application-rejected";
 import { applicationWaitlistedEmailHtml } from "@/lib/email/templates/application-waitlisted";
@@ -404,12 +409,45 @@ export async function PUT(request: Request) {
 
   const body = await request.json();
   const { id, ids, status, admin_notes, send_email = true } = body;
+  const confirmRegress = body.confirm_regress === true;
 
   // ── Bulk status update ──
   if (ids && Array.isArray(ids) && ids.length > 0 && status) {
+    const statusError = storedStatusError(status);
+    if (statusError) return NextResponse.json({ error: statusError }, { status: 400 });
+    if (ids.length > BULK_STATUS_LIMIT) {
+      return NextResponse.json(
+        { error: `You can update at most ${BULK_STATUS_LIMIT} applications at once.` },
+        { status: 400 }
+      );
+    }
     const denied = await denyUnlessCanDecide(supabase, user.id, ids);
     if (denied) return denied;
     const adminSupabase = createAdminClient();
+    const { data: existingRows, error: existingError } = await adminSupabase
+      .from("application_responses")
+      .select("id, status")
+      .in("id", ids);
+    if (existingError) {
+      return NextResponse.json({ error: existingError.message }, { status: 500 });
+    }
+    if (
+      (existingRows ?? []).some((row) =>
+        acceptedRegressNeedsConfirm(row.status, status, confirmRegress)
+      )
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "An accepted applicant is still enrolled. Confirm to move them back to an earlier stage.",
+          code: "accepted_regress",
+        },
+        { status: 409 }
+      );
+    }
+    const previousById = new Map(
+      (existingRows ?? []).map((row) => [row.id as string, row.status as string])
+    );
     let updated = 0;
     // Accepted applicants we could not put on the roster because no account
     // exists for their email yet. Reported back rather than swallowed — they
@@ -459,8 +497,8 @@ export async function PUT(request: Request) {
           );
         }
 
-        // Send notification email for bulk updates too
-        if (send_email) {
+        // Send notification email only when this row's status actually changed.
+        if (send_email && previousById.get(responseId) !== status) {
           const { data: fullResp } = await adminSupabase
             .from("application_responses")
             .select("*, users!application_responses_user_id_fkey(first_name, email), programs(name)")
@@ -489,18 +527,32 @@ export async function PUT(request: Request) {
     );
   }
 
+  const statusError = storedStatusError(status);
+  if (statusError) return NextResponse.json({ error: statusError }, { status: 400 });
+
   const denied = await denyUnlessCanDecide(supabase, user.id, [id]);
   if (denied) return denied;
 
   // Get the current response to check previous status
   const adminSupabase = createAdminClient();
-  const { data: prevResponse } = await adminSupabase
+  const { data: prevResponse, error: prevError } = await adminSupabase
     .from("application_responses")
     .select("status")
     .eq("id", id)
     .single();
+  if (prevError) return NextResponse.json({ error: prevError.message }, { status: 500 });
 
   const previousStatus = prevResponse?.status;
+  if (acceptedRegressNeedsConfirm(previousStatus, status, confirmRegress)) {
+    return NextResponse.json(
+      {
+        error:
+          "This applicant is already accepted and still enrolled. Confirm to move them back to an earlier stage.",
+        code: "accepted_regress",
+      },
+      { status: 409 }
+    );
+  }
 
   const { data, error } = await updateResponseStatus(supabase, id, status, user.id, admin_notes);
 
@@ -664,18 +716,44 @@ function reminderApplicantName(app: ReminderApplication | null | undefined): str
   return fromUser || fromInfo || "An applicant";
 }
 
-function reminderGateResponse(gate: Exclude<ReturnType<typeof gateManualReminder>, { ok: true }>) {
-  const headers = gate.retryAfterSeconds
-    ? { "Retry-After": String(gate.retryAfterSeconds) }
-    : undefined;
+function reminderAttemptResponse(attempt: ReminderAttempt) {
+  if (attempt.outcome === "sent") {
+    return NextResponse.json({
+      success: true,
+      emailed: true,
+      skipped: false,
+      reminder_sent_at: attempt.reminderSentAt,
+    });
+  }
+  if (attempt.outcome === "disabled") {
+    return NextResponse.json({ success: true, emailed: false, skipped: true });
+  }
+  if (attempt.outcome === "not_outstanding") {
+    return NextResponse.json(
+      { error: "This reference has already been submitted." },
+      { status: 409 }
+    );
+  }
+  if (attempt.outcome === "cooldown") {
+    return NextResponse.json(
+      {
+        error: attempt.error,
+        retry_after_seconds: attempt.retryAfterSeconds,
+        next_allowed_at: attempt.nextAllowedAt,
+      },
+      { status: 429, headers: { "Retry-After": String(attempt.retryAfterSeconds) } }
+    );
+  }
   return NextResponse.json(
-    {
-      error: gate.error,
-      retry_after_seconds: gate.retryAfterSeconds,
-      next_allowed_at: gate.nextAllowedAt,
-    },
-    { status: gate.status, headers }
+    { error: "error" in attempt ? attempt.error : "Could not send the reminder." },
+    { status: 500 }
   );
+}
+
+function previewRefusalResponse() {
+  const refusal = previewWriteRefusal();
+  if (!refusal) return null;
+  return NextResponse.json(refusal.body, { status: refusal.status });
 }
 
 async function authorizeReferenceReminder(
@@ -693,28 +771,9 @@ async function authorizeReferenceReminder(
   return null;
 }
 
-/**
- * Send the existing reference-reminder email and stamp reminder_sent_at,
- * the same column the daily cron writes. Returns a response when the
- * reference cannot be reminded, or the send result when it can.
- */
-async function deliverReferenceReminder(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  admin: any,
-  ref: ReminderRequestRow
-): Promise<
-  | NextResponse
-  | { emailed: boolean; skipped?: boolean; reminder_sent_at?: string }
-> {
-  const gate = gateManualReminder({
-    status: ref.status,
-    reminderSentAt: ref.reminder_sent_at,
-    preview: previewWritesDisabled(),
-  });
-  if (!gate.ok) return reminderGateResponse(gate);
-
+function sendReminderForRow(ref: ReminderRequestRow) {
   const app = ref.application_responses;
-  const sent = await sendReferenceReminder({
+  return sendReferenceReminder({
     toEmail: ref.referee_email,
     refereeName: ref.referee_name,
     applicantName: reminderApplicantName(app),
@@ -724,17 +783,24 @@ async function deliverReferenceReminder(
     programId: app?.program_id ?? null,
     referenceRequestId: ref.id,
   });
+}
 
-  if (!sent.ok && sent.error === "disabled") {
-    return { emailed: false, skipped: true };
-  }
-
-  const emailed = referenceSendConfirmed(sent);
-  if (!emailed) return { emailed: false };
-
-  const reminder_sent_at = new Date().toISOString();
-  await admin.from("reference_requests").update({ reminder_sent_at }).eq("id", ref.id);
-  return { emailed: true, reminder_sent_at };
+/**
+ * Claim reminder_sent_at, then send the existing reminder email.
+ * The daily cron uses the same helper.
+ */
+async function deliverReferenceReminder(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+  ref: ReminderRequestRow
+) {
+  return claimThenSendReferenceReminder({
+    admin,
+    refId: ref.id,
+    status: ref.status,
+    previousSentAt: ref.reminder_sent_at ?? null,
+    send: () => sendReminderForRow(ref),
+  });
 }
 
 export async function PATCH(request: Request) {
@@ -809,14 +875,11 @@ export async function PATCH(request: Request) {
     );
     if (denied) return denied;
 
+    const preview = previewRefusalResponse();
+    if (preview) return preview;
+
     const result = await deliverReferenceReminder(adminSupabase, refReq as ReminderRequestRow);
-    if (result instanceof NextResponse) return result;
-    return NextResponse.json({
-      success: true,
-      emailed: result.emailed,
-      skipped: result.skipped ?? false,
-      reminder_sent_at: result.reminder_sent_at ?? null,
-    });
+    return reminderAttemptResponse(result);
   }
 
   if (action === "send_outstanding_reference_reminders" && application_id) {
@@ -841,13 +904,9 @@ export async function PATCH(request: Request) {
     );
     if (denied) return denied;
 
-    // Stop before any send or stamp. Preview shares the live database.
-    const previewGate = gateManualReminder({
-      status: "pending",
-      reminderSentAt: null,
-      preview: previewWritesDisabled(),
-    });
-    if (!previewGate.ok) return reminderGateResponse(previewGate);
+    // Stop before any claim. Preview shares the live database.
+    const preview = previewRefusalResponse();
+    if (preview) return preview;
 
     const { data: refs, error: refsError } = await (adminSupabase as any)
       .from("reference_requests")
@@ -858,58 +917,42 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: refsError.message }, { status: 500 });
     }
 
-    const outstanding = ((refs ?? []) as ReminderRequestRow[]).filter(
-      (ref) => ref.status !== "submitted"
-    );
-    if (outstanding.length === 0) {
-      return NextResponse.json(
-        { error: "Every reference on this application has already been submitted." },
-        { status: 409 }
-      );
-    }
+    const results: Array<{
+      id: string;
+      outcome: ReminderAttempt["outcome"];
+      error?: string;
+      retry_after_seconds?: number;
+      next_allowed_at?: string;
+    }> = [];
 
-    let emailed = 0;
-    let cooled = 0;
-    let soonestSeconds: number | null = null;
-    let soonestError = "A reminder was sent recently.";
-    let disabled = false;
-
-    for (const ref of outstanding) {
+    for (const ref of (refs ?? []) as ReminderRequestRow[]) {
       const row: ReminderRequestRow = {
         ...ref,
         application_responses: app as ReminderApplication,
       };
-      const result = await deliverReferenceReminder(adminSupabase, row);
-      if (result instanceof NextResponse) {
-        const body = await result.json();
-        if (result.status === 429) {
-          cooled += 1;
-          const seconds = typeof body.retry_after_seconds === "number" ? body.retry_after_seconds : null;
-          if (seconds !== null && (soonestSeconds === null || seconds < soonestSeconds)) {
-            soonestSeconds = seconds;
-            soonestError = typeof body.error === "string" ? body.error : soonestError;
-          }
-          continue;
-        }
-        if (emailed === 0 && cooled === 0) return NextResponse.json(body, { status: result.status });
-        continue;
+      try {
+        const attempt = await deliverReferenceReminder(adminSupabase, row);
+        results.push({
+          id: ref.id,
+          outcome: attempt.outcome,
+          error: "error" in attempt ? attempt.error : undefined,
+          retry_after_seconds:
+            attempt.outcome === "cooldown" ? attempt.retryAfterSeconds : undefined,
+          next_allowed_at: attempt.outcome === "cooldown" ? attempt.nextAllowedAt : undefined,
+        });
+      } catch (err) {
+        results.push({
+          id: ref.id,
+          outcome: "error",
+          error: err instanceof Error ? err.message : "Could not send the reminder.",
+        });
       }
-      if (result.skipped) disabled = true;
-      if (result.emailed) emailed += 1;
-    }
-
-    if (emailed === 0 && cooled > 0 && !disabled) {
-      return NextResponse.json(
-        { error: soonestError, retry_after_seconds: soonestSeconds },
-        { status: 429, headers: soonestSeconds ? { "Retry-After": String(soonestSeconds) } : undefined }
-      );
     }
 
     return NextResponse.json({
       success: true,
-      emailed,
-      skipped: cooled,
-      skipped_disabled: disabled && emailed === 0,
+      emailed: results.filter((row) => row.outcome === "sent").length,
+      results,
     });
   }
 

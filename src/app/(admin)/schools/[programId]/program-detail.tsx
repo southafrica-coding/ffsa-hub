@@ -68,6 +68,8 @@ import {
   type ReferenceRequestFact,
 } from "@/lib/schools/applicant-pipeline-stage";
 import { LastReminderSent } from "@/lib/references/last-reminder-sent";
+import { remindAllToast } from "@/lib/references/manual-reminder";
+import { BULK_STATUS_LIMIT, isBeforeAcceptance } from "@/lib/schools/application-status";
 import { FormBuilder, FormPreview } from "./form-builder";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
@@ -2325,6 +2327,21 @@ function ApplicantsTab({
 
   async function handleBulkStatusUpdate() {
     if (selectedIds.size === 0 || !statusWrittenByDecision(bulkStatus)) return;
+    if (selectedIds.size > BULK_STATUS_LIMIT) {
+      toast.error(`You can update at most ${BULK_STATUS_LIMIT} applications at once.`);
+      return;
+    }
+    const movingAccepted =
+      isBeforeAcceptance(bulkStatus) &&
+      responses.some((row) => selectedIds.has(row.id) && row.status === "accepted");
+    if (
+      movingAccepted &&
+      !window.confirm(
+        "Some of these applicants are already accepted and still enrolled. Move them back to an earlier stage?"
+      )
+    ) {
+      return;
+    }
     setBulkLoading(true);
     try {
       const res = await fetch("/api/schools/applications/responses", {
@@ -2334,6 +2351,7 @@ function ApplicantsTab({
           ids: Array.from(selectedIds),
           status: bulkStatus,
           send_email: true,
+          confirm_regress: movingAccepted,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -2378,9 +2396,10 @@ function ApplicantsTab({
     skipped?: boolean;
     emailed?: boolean;
     error?: string;
+    message?: string;
   }, ok: boolean) {
     if (!ok) {
-      toast.error(data.error || "Could not send the reminder");
+      toast.error(data.message || data.error || "Could not send the reminder");
       return;
     }
     if (data.skipped) {
@@ -2432,20 +2451,12 @@ function ApplicantsTab({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        toast.error(data.error || "Could not send reminders");
+        toast.error(data.message || data.error || "Could not send reminders");
         return;
       }
-      if (data.skipped_disabled) {
-        toast.error("This program has reference reminders switched off.");
-      } else if ((data.emailed ?? 0) === 0) {
-        toast.error("No reminders were sent.");
-      } else if ((data.skipped ?? 0) > 0) {
-        toast.success(
-          `Sent ${data.emailed} reminder${data.emailed === 1 ? "" : "s"}. ${data.skipped} already had one in the last 24 hours.`
-        );
-      } else {
-        toast.success(data.emailed === 1 ? "Reminder sent" : `Sent ${data.emailed} reminders`);
-      }
+      const summary = remindAllToast(data.results ?? []);
+      if (summary.tone === "ok") toast.success(summary.text);
+      else toast.error(summary.text);
       fetchReferences(reviewingResponse.id);
       router.refresh();
     } catch {
@@ -2527,9 +2538,17 @@ function ApplicantsTab({
       reviewingResponse.status
     );
     if (!nextStatus) {
-      toast.error(
-        "Interview complete comes from the interview outcome. It is not a status you can save."
-      );
+      toast.error("Record an interview outcome to reach Interview complete.");
+      return;
+    }
+    const confirmRegress =
+      reviewingResponse.status === "accepted" && isBeforeAcceptance(nextStatus);
+    if (
+      confirmRegress &&
+      !window.confirm(
+        "This applicant is already accepted and still enrolled. Move them back to an earlier stage?"
+      )
+    ) {
       return;
     }
     const draft = interviewDraft.current;
@@ -2580,6 +2599,7 @@ function ApplicantsTab({
           id: reviewingResponse.id,
           status: nextStatus,
           admin_notes: reviewNotes.trim() || null,
+          confirm_regress: confirmRegress,
         }),
       });
 
@@ -3635,7 +3655,7 @@ function ApplicantsTab({
               </Select>
               {stageOf(reviewingResponse) === "interview_complete" && (
                 <p className="text-xs text-muted-foreground">
-                  Interview complete comes from the interview outcome. It is not a status you set here.
+                  Record an interview outcome to reach Interview complete.
                 </p>
               )}
             </div>

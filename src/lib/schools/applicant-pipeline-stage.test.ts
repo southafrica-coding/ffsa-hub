@@ -368,6 +368,9 @@ describe("decision dropdown", () => {
       settable: false,
       writes: null,
     });
+    expect(choices.find((choice) => choice.value === "interview_complete")?.label).toMatch(
+      /record an interview outcome/i
+    );
     expect(choices.filter((choice) => choice.settable).every((choice) => choice.writes !== null)).toBe(true);
   });
 
@@ -391,6 +394,7 @@ describe("decision dropdown", () => {
     expect(src).not.toContain("Waiting for References");
     expect(src).toContain("Remind all outstanding");
     expect(src).toContain("LastReminderSent");
+    expect(src).toContain("Record an interview outcome to reach Interview complete.");
   });
 });
 

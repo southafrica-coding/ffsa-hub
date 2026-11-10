@@ -209,7 +209,7 @@ export function decisionChoices(): DecisionChoice[] {
     if (key === "interview_complete" || !isStoredApplicationStatus(key)) {
       return {
         value: key,
-        label: `${PIPELINE_STAGE_LABEL[key]} — from the interview outcome`,
+        label: `${PIPELINE_STAGE_LABEL[key]} — record an interview outcome to reach it`,
         settable: false,
         writes: null,
       };

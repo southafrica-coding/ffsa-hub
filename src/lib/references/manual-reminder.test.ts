@@ -5,6 +5,7 @@ import {
   REMINDER_COOLDOWN_MS,
   gateManualReminder,
   lastReminderLabel,
+  remindAllToast,
 } from "./manual-reminder";
 import { LastReminderSent } from "./last-reminder-sent";
 
@@ -17,7 +18,6 @@ describe("manual reminder gate", () => {
       status: "submitted",
       reminderSentAt: null,
       now: NOW,
-      preview: false,
     });
     expect(gate.ok).toBe(false);
     if (gate.ok) return;
@@ -29,7 +29,6 @@ describe("manual reminder gate", () => {
       status: "pending",
       reminderSentAt: new Date(NOW.getTime() - 3 * HOUR).toISOString(),
       now: NOW,
-      preview: false,
     });
     expect(gate.ok).toBe(false);
     if (gate.ok) return;
@@ -44,22 +43,26 @@ describe("manual reminder gate", () => {
         status: "pending",
         reminderSentAt: new Date(NOW.getTime() - REMINDER_COOLDOWN_MS).toISOString(),
         now: NOW,
-        preview: false,
       }).ok
     ).toBe(true);
   });
+});
 
-  it("refuses preview mode before any send", () => {
-    const gate = gateManualReminder({
-      status: "pending",
-      reminderSentAt: null,
-      now: NOW,
-      preview: true,
+describe("remind-all summary", () => {
+  it("names cooldown, a finished reference, or an error when nothing was sent", () => {
+    expect(remindAllToast([{ outcome: "cooldown", error: "You can send another in 5 hours." }])).toEqual({
+      tone: "error",
+      text: "No reminders were sent. You can send another in 5 hours.",
     });
-    expect(gate.ok).toBe(false);
-    if (gate.ok) return;
-    expect(gate.status).toBe(409);
-    expect(gate.error.toLowerCase()).toMatch(/preview/);
+    expect(remindAllToast([{ outcome: "not_outstanding" }])).toEqual({
+      tone: "error",
+      text: "No reminders were sent. Every reference has already been submitted.",
+    });
+    expect(remindAllToast([{ outcome: "error", error: "Could not claim this reminder." }])).toEqual({
+      tone: "error",
+      text: "No reminders were sent. Could not claim this reminder.",
+    });
+    expect(remindAllToast([{ outcome: "sent" }, { outcome: "cooldown" }]).tone).toBe("ok");
   });
 });
 

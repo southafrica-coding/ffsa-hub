@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { previewWritesDisabled } from "./preview-writes";
+import { previewWriteRefusal, previewWritesDisabled } from "./preview-writes";
 
 describe("previewWritesDisabled", () => {
   it("is on for a Vercel preview deployment", () => {
@@ -14,5 +14,16 @@ describe("previewWritesDisabled", () => {
   it("is off in production and when nothing is set", () => {
     expect(previewWritesDisabled({ VERCEL_ENV: "production" })).toBe(false);
     expect(previewWritesDisabled({})).toBe(false);
+  });
+
+  it("refuses a preview write with 403 preview_writes_disabled", () => {
+    expect(previewWriteRefusal({ VERCEL_ENV: "preview" })).toEqual({
+      status: 403,
+      body: {
+        error: "preview_writes_disabled",
+        message: "This preview deployment cannot change school records.",
+      },
+    });
+    expect(previewWriteRefusal({ VERCEL_ENV: "production" })).toBeNull();
   });
 });

@@ -11,3 +11,21 @@ export function previewWritesDisabled(env: NodeJS.ProcessEnv = process.env): boo
   if (flag === "1" || flag === "true") return true;
   return env.VERCEL_ENV === "preview";
 }
+
+/**
+ * Same refusal #536 uses for school writes on a preview deployment:
+ * 403 and the error code `preview_writes_disabled`. Null when writes are allowed.
+ */
+export function previewWriteRefusal(env: NodeJS.ProcessEnv = process.env): {
+  status: 403;
+  body: { error: "preview_writes_disabled"; message: string };
+} | null {
+  if (!previewWritesDisabled(env)) return null;
+  return {
+    status: 403,
+    body: {
+      error: "preview_writes_disabled",
+      message: "This preview deployment cannot change school records.",
+    },
+  };
+}
