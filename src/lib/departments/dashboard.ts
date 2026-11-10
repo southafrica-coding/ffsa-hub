@@ -71,13 +71,17 @@ export function selectRocksDue(
 ): Rock[] {
   const horizon = addIsoDays(today, withinDays);
   return rocks
-    .filter(
-      (rock) =>
-        departmentSlugs.has(rock.departmentSlug) &&
-        rock.status !== "done" &&
-        rock.dueOn != null &&
-        rock.dueOn <= horizon
-    )
+    .flatMap((rock) => {
+      if (
+        !departmentSlugs.has(rock.departmentSlug) ||
+        rock.status === "done" ||
+        rock.dueOn == null ||
+        rock.dueOn > horizon
+      ) {
+        return [];
+      }
+      return [{ ...rock, dueOn: rock.dueOn }];
+    })
     .sort((a, b) => a.dueOn.localeCompare(b.dueOn) || a.title.localeCompare(b.title));
 }
 
