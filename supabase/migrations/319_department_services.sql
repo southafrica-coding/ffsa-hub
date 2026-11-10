@@ -79,6 +79,26 @@ CREATE TABLE IF NOT EXISTS public.service_owners (
   CONSTRAINT service_owners_open_to_all_use_ck CHECK (NOT open_to_all OR capability = 'use')
 );
 
+-- A second paste finds the table already there. Add the check only when
+-- that earlier table does not have it yet.
+DO $open$
+BEGIN
+  IF to_regclass('public.service_owners') IS NULL THEN
+    RETURN;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1
+      FROM pg_constraint
+     WHERE conname = 'service_owners_open_to_all_use_ck'
+       AND conrelid = 'public.service_owners'::regclass
+  ) THEN
+    ALTER TABLE public.service_owners
+      ADD CONSTRAINT service_owners_open_to_all_use_ck
+      CHECK (NOT open_to_all OR capability = 'use');
+  END IF;
+END
+$open$;
+
 -- NULL staff_ministry_id does not participate in a plain UNIQUE, so the
 -- two cases are separate indexes.
 CREATE UNIQUE INDEX IF NOT EXISTS service_owners_ministry_capability_key
