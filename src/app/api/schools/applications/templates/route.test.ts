@@ -168,7 +168,7 @@ describe("application template routes", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     const saved = await save();
     expect(saved.status).toBe(500);
-    expect(await saved.json()).toEqual({ error: "insert failed" });
+    expect(await saved.json()).toEqual({ error: "insert failed", cleanup_failed: true });
     expect(h.deletedIds).toEqual(["t-new"]);
     expect(spy.mock.calls.some((call) => String(call[0]).includes("half-saved"))).toBe(true);
     spy.mockRestore();
@@ -197,6 +197,19 @@ describe("application template routes", () => {
     expect(deleted.status).toBe(404);
     expect(await deleted.json()).toEqual({ error: NOT_FOUND });
     expect(h.deleted).toBe(0);
+  });
+
+  it("maps an invalid template id to 404", async () => {
+    h.allowed = true;
+    h.templateRead = { data: null, error: { code: "22P02", message: 'invalid input syntax for type uuid: "nope"' } };
+    const deleted = await remove();
+    expect(deleted.status).toBe(404);
+    expect(await deleted.json()).toEqual({ error: NOT_FOUND });
+    expect(h.deleted).toBe(0);
+
+    const applied = await importTemplate();
+    expect(applied.status).toBe(404);
+    expect(await applied.json()).toEqual({ error: NOT_FOUND });
   });
 
   it("returns 404 when the caller cannot read the template", async () => {

@@ -25,28 +25,53 @@ function notFound() {
   return NextResponse.json({ error: TEMPLATE_NOT_FOUND }, { status: 404 });
 }
 
-// Best-effort. A failed question insert must not leave a template with no
-// questions. A cleanup failure is logged and the original error still returns.
+// A bad id (22P02), a hidden row (42501), and no row (PGRST116) all look
+// like "that template is not there" so the raw database text stays off the wire.
+function isHiddenTemplate(error: { code?: string } | null | undefined) {
+  return error?.code === "22P02" || error?.code === "42501" || error?.code === "PGRST116";
+}
+
+function templateReadFailure(
+  error: { code?: string; message?: string } | null | undefined,
+  row: unknown
+) {
+  if (!error && row) return null;
+  if (error && !isHiddenTemplate(error)) {
+    return NextResponse.json({ error: error.message ?? "Request failed" }, { status: 500 });
+  }
+  return notFound();
+}
+
+// Best-effort. Returns false when the half-saved row is still there.
 async function removeHalfSaved(
   supabase: Awaited<ReturnType<typeof createClient>>,
   templateId: string
-) {
+): Promise<boolean> {
   try {
     const { error } = await deleteApplicationTemplate(supabase, templateId);
     if (error) {
       console.error("Failed to remove half-saved application template", templateId, error.message ?? error);
+      return false;
     }
+    return true;
   } catch (err) {
     console.error("Failed to remove half-saved application template", templateId, err);
+    return false;
   }
 }
 
-function writeFailure(error: { code?: string; message?: string } | null) {
+function writeFailure(
+  error: { code?: string; message?: string } | null,
+  cleanupFailed = false
+) {
   if (!error) return null;
+  const extra = cleanupFailed ? { cleanup_failed: true } : {};
   // RLS refused the write (Postgres insufficient_privilege) instead of
   // returning an empty result. Same answer as the upfront check.
-  if (error.code === "42501") return forbidden();
-  return NextResponse.json({ error: error.message ?? "Request failed" }, { status: 500 });
+  if (error.code === "42501") {
+    return NextResponse.json({ error: TEMPLATE_FORBIDDEN, ...extra }, { status: 403 });
+  }
+  return NextResponse.json({ error: error.message ?? "Request failed", ...extra }, { status: 500 });
 }
 
 export async function GET() {
@@ -90,6 +115,18 @@ export async function POST(request: Request) {
     if (templateDenied) return templateDenied;
     if (!template) return NextResponse.json({ error: "Failed to save template" }, { status: 500 });
 
+    async function questionSaveFailed(error: { code?: string; message?: string } | null) {
+      const cleaned = await removeHalfSaved(supabase, template.id);
+      const denied = writeFailure(error, !cleaned);
+      if (denied) return denied;
+      return NextResponse.json(
+        cleaned
+          ? { error: "Failed to save template question" }
+          : { error: "Failed to save template question", cleanup_failed: true },
+        { status: 500 }
+      );
+    }
+
     // Templates have their own question IDs, so we have to insert parents first,
     // capture the new IDs, then insert follow-ups with remapped parent IDs.
     const programIdToTemplateId = new Map<string, string>();
@@ -107,12 +144,7 @@ export async function POST(request: Request) {
         is_required: q.is_required,
         options: q.options ?? [],
       });
-      if (error || !inserted) {
-        await removeHalfSaved(supabase, template.id);
-        const questionDenied = writeFailure(error);
-        if (questionDenied) return questionDenied;
-        return NextResponse.json({ error: "Failed to save template question" }, { status: 500 });
-      }
+      if (error || !inserted) return questionSaveFailed(error);
       programIdToTemplateId.set(q.id, inserted.id);
     }
 
@@ -139,12 +171,7 @@ export async function POST(request: Request) {
           parent_question_id: mappedParent,
           show_when_answer: q.show_when_answer,
         });
-        if (error || !row) {
-          await removeHalfSaved(supabase, template.id);
-          const followUpDenied = writeFailure(error);
-          if (followUpDenied) return followUpDenied;
-          return NextResponse.json({ error: "Failed to save template question" }, { status: 500 });
-        }
+        if (error || !row) return questionSaveFailed(error);
         programIdToTemplateId.set(q.id, row.id);
         inserted++;
       }
@@ -165,9 +192,8 @@ export async function POST(request: Request) {
     }
 
     const { data: template, error: tErr } = await getApplicationTemplate(supabase, template_id);
-    if (tErr || !template) {
-      return NextResponse.json({ error: "Template not found" }, { status: 404 });
-    }
+    // Any failed lookup, including an invalid id (22P02), is "not found".
+    if (tErr?.code === "22P02" || tErr || !template) return notFound();
 
     const { data: existing } = await getQuestionsByProgram(supabase, program_id);
     const startOrder = existing?.length ?? 0;
@@ -243,14 +269,11 @@ export async function DELETE(request: Request) {
   // look the same, so both are 404. A row they can read but cannot delete
   // is 403.
   const { data: existing, error: readError } = await getApplicationTemplate(supabase, id);
-  if (readError?.code === "42501" || readError?.code === "PGRST116" || !existing) {
-    if (readError && readError.code !== "42501" && readError.code !== "PGRST116") {
-      return NextResponse.json({ error: readError.message }, { status: 500 });
-    }
-    return notFound();
-  }
+  const missing = templateReadFailure(readError, existing);
+  if (missing) return missing;
 
   const { data, error } = await deleteApplicationTemplate(supabase, id);
+  if (error?.code === "22P02") return notFound();
   const denied = writeFailure(error);
   if (denied) return denied;
   // Readable, but RLS filtered the delete down to zero rows.
