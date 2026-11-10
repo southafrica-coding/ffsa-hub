@@ -38,6 +38,7 @@ function makeClient(opts: {
   token?: string | null; // access token in the cookie session
   validUserId?: string | null; // who the Auth server says the token belongs to
   inactive?: string[]; // user ids with is_active = false
+  holds?: Record<string, string>; // user id → access opens_on (migration 317)
   latencyMs?: number;
 }) {
   const fake = createFakeSupabase({
@@ -46,6 +47,11 @@ function makeClient(opts: {
       if (q.table === "users") {
         const id = filterValue(q, "eq", "id") as string;
         return { data: { is_active: !(opts.inactive ?? []).includes(id) } };
+      }
+      if (q.table === "user_access_holds") {
+        const id = filterValue(q, "eq", "user_id") as string;
+        const opens = opts.holds?.[id];
+        return { data: opens ? { opens_on: opens } : null };
       }
       return { data: [] };
     },
@@ -67,12 +73,21 @@ function makeClient(opts: {
 }
 
 // Token → user id, as the Auth server would answer for a bearer token.
-function makeBearerClient(opts: { valid?: Record<string, string>; inactive?: string[] }) {
+function makeBearerClient(opts: {
+  valid?: Record<string, string>;
+  inactive?: string[];
+  holds?: Record<string, string>;
+}) {
   const fake = createFakeSupabase({
     resolve: (q) => {
       if (q.table === "users") {
         const id = filterValue(q, "eq", "id") as string;
         return { data: { is_active: !(opts.inactive ?? []).includes(id) } };
+      }
+      if (q.table === "user_access_holds") {
+        const id = filterValue(q, "eq", "user_id") as string;
+        const opens = opts.holds?.[id];
+        return { data: opens ? { opens_on: opens } : null };
       }
       return { data: [] };
     },
@@ -87,6 +102,11 @@ function makeBearerClient(opts: { valid?: Record<string, string>; inactive?: str
   };
   return { ...fake, getUserCalls, headersSent: [] as Array<string | null> };
 }
+
+// The is_active reads (users table), in order — ignoring the hold reads.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const userReads = (queries: any[]) =>
+  queries.filter((q) => q.table === "users").map((q) => filterValue(q, "eq", "id"));
 
 const req = (path: string, headers: Record<string, string> = {}) =>
   new NextRequest(new URL(path, "https://hub.test"), { headers });
@@ -127,7 +147,7 @@ describe("middleware", () => {
     const res = await middleware(req("/finance"));
     expect(location(res)).toBeNull();
     expect(current.getUserCalls).toEqual([jwtFor("u1")]);
-    expect(current.queries.map((q) => filterValue(q, "eq", "id"))).toEqual(["u1"]);
+    expect(userReads(current.queries)).toEqual(["u1"]);
   });
 
   it("a deactivated user is sent to /login?error=deactivated", async () => {
@@ -146,10 +166,7 @@ describe("middleware", () => {
     });
     const loc = location(await middleware(req("/finance")))!;
     expect(loc.searchParams.get("error")).toBe("deactivated");
-    expect(current.queries.map((q) => filterValue(q, "eq", "id"))).toEqual([
-      "u-active",
-      "u-deactivated",
-    ]);
+    expect(userReads(current.queries)).toEqual(["u-active", "u-deactivated"]);
   });
 
   it("signed-in users leave /login for the dashboard", async () => {
@@ -263,7 +280,7 @@ describe("middleware: bearer tokens (phone app)", () => {
     expect(bearer.getUserCalls).toEqual([T1]);
     expect(bearer.headersSent).toEqual([`Bearer ${T1}`]);
     // is_active read once, for the validated user, with the bearer client.
-    expect(bearer.queries.map((q) => filterValue(q, "eq", "id"))).toEqual(["u1"]);
+    expect(userReads(bearer.queries)).toEqual(["u1"]);
     expect(cookieClientsBuilt).toBe(0);
     expect(forwardedHeaders(res)).toContain("authorization");
   });
@@ -339,5 +356,80 @@ describe("middleware: bearer tokens (phone app)", () => {
     expect(location(res)).toBeNull();
     expect(res.status).toBe(200);
     expect(current.getUserCalls).toHaveLength(0);
+  });
+});
+
+// ────────────────────────────────────────────────────────────
+// Access holds (migration 317): Gap Year students until a month before school
+// ────────────────────────────────────────────────────────────
+describe("middleware: access holds", () => {
+  const FUTURE = "2999-01-15";
+  const PAST = "2000-01-15";
+  const T1 = jwtFor("u1");
+
+  beforeEach(() => {
+    current = makeClient({});
+    bearer = makeBearerClient({});
+    cookieClientsBuilt = 0;
+  });
+
+  it("a held user is sent to /login?error=not_open with the date", async () => {
+    current = makeClient({ token: T1, validUserId: "u1", holds: { u1: FUTURE } });
+    const loc = location(await middleware(req("/dashboard")))!;
+    expect(loc.pathname).toBe("/login");
+    expect(loc.searchParams.get("error")).toBe("not_open");
+    expect(loc.searchParams.get("opens")).toBe(FUTURE);
+  });
+
+  it("a held user can stay on /login (no bounce to the dashboard)", async () => {
+    current = makeClient({ token: T1, validUserId: "u1", holds: { u1: FUTURE } });
+    expect(location(await middleware(req("/login?error=not_open")))).toBeNull();
+  });
+
+  it("a held user's fetch to /api/* gets 403 JSON", async () => {
+    current = makeClient({ token: T1, validUserId: "u1", holds: { u1: FUTURE } });
+    const res = await middleware(req("/api/me"));
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ error: "not_open", opens_on: FUTURE });
+  });
+
+  it("a hold whose date has arrived lets them in", async () => {
+    current = makeClient({ token: T1, validUserId: "u1", holds: { u1: PAST } });
+    expect(location(await middleware(req("/dashboard")))).toBeNull();
+  });
+
+  it("someone else's hold never affects this user", async () => {
+    current = makeClient({ token: T1, validUserId: "u1", holds: { u2: FUTURE } });
+    expect(location(await middleware(req("/dashboard")))).toBeNull();
+  });
+
+  it("deactivation still wins over a hold", async () => {
+    current = makeClient({
+      token: T1,
+      validUserId: "u1",
+      inactive: ["u1"],
+      holds: { u1: FUTURE },
+    });
+    const loc = location(await middleware(req("/dashboard")))!;
+    expect(loc.searchParams.get("error")).toBe("deactivated");
+  });
+
+  it("the hold is read in the same round trip as the token check", async () => {
+    current = makeClient({ token: T1, validUserId: "u1", holds: { u1: FUTURE }, latencyMs: 25 });
+    const { roundTrips } = await measure(25, () => middleware(req("/dashboard")));
+    expect(roundTrips).toBe(1);
+  });
+
+  it("phone app: a held bearer user → 403 not_open", async () => {
+    bearer = makeBearerClient({ valid: { [T1]: "u1" }, holds: { u1: FUTURE } });
+    const res = await middleware(req("/api/me", { authorization: `Bearer ${T1}` }));
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ error: "not_open", opens_on: FUTURE });
+  });
+
+  it("phone app: a past hold passes", async () => {
+    bearer = makeBearerClient({ valid: { [T1]: "u1" }, holds: { u1: PAST } });
+    const res = await middleware(req("/api/me", { authorization: `Bearer ${T1}` }));
+    expect(res.status).toBe(200);
   });
 });

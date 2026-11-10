@@ -1,4 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
+import { isAccessHeld, ACCESS_NOT_OPEN_CODE } from "@/lib/auth/access-hold";
 import { NextResponse, type NextRequest } from "next/server";
 import {
   createBearerClient,
@@ -167,14 +168,33 @@ export async function middleware(request: NextRequest) {
     claimedRow,
   ] = await Promise.all([
     accessToken ? supabase.auth.getUser(accessToken) : supabase.auth.getUser(),
-    claimedUserId ? readIsActive(claimedUserId) : Promise.resolve(null),
+    claimedUserId
+      ? Promise.all([readIsActive(claimedUserId), readAccessHold(supabase, claimedUserId)])
+      : Promise.resolve(null),
   ]);
 
   let isDeactivated = false;
+  let heldUntil: string | null = null;
   if (user) {
-    const userRow =
-      user.id === claimedUserId ? claimedRow : await readIsActive(user.id);
+    const [userRow, hold] =
+      user.id === claimedUserId && claimedRow
+        ? claimedRow
+        : await Promise.all([readIsActive(user.id), readAccessHold(supabase, user.id)]);
     isDeactivated = userRow?.is_active === false;
+    heldUntil = isAccessHeld(hold) ? hold : null;
+  }
+
+  // Access not open yet (migration 317 — Gap Year students until a month
+  // before school). Same treatment as deactivated: only /login, where the
+  // session is cleared and the date is shown.
+  if (heldUntil && !isDeactivated && !isPublicRoute && pathname !== "/login") {
+    if (isApi && !wantsHtml(request)) return apiNotOpen(heldUntil);
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    url.searchParams.set("error", ACCESS_NOT_OPEN_CODE);
+    url.searchParams.set("opens", heldUntil);
+    url.searchParams.delete("redirect");
+    return NextResponse.redirect(url);
   }
 
   // Deactivated accounts may only visit /login (so they can see the error and
@@ -206,7 +226,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && !isDeactivated && pathname === "/login") {
+  if (user && !isDeactivated && !heldUntil && pathname === "/login") {
     // A failed sign-out often leaves the session cookie in place. Let that
     // one URL through so the login page can show the error instead of
     // bouncing straight back to the dashboard.
@@ -254,19 +274,54 @@ async function bearerGate(request: NextRequest) {
     claimedRow,
   ] = await Promise.all([
     supabase.auth.getUser(token),
-    claimedUserId ? readIsActive(claimedUserId) : Promise.resolve(null),
+    claimedUserId
+      ? Promise.all([readIsActive(claimedUserId), readAccessHold(supabase, claimedUserId)])
+      : Promise.resolve(null),
   ]);
 
   if (!user) {
     return apiUnauthenticated("The access token is invalid or has expired.");
   }
-  const userRow =
-    user.id === claimedUserId ? claimedRow : await readIsActive(user.id);
+  const [userRow, hold] =
+    user.id === claimedUserId && claimedRow
+      ? claimedRow
+      : await Promise.all([readIsActive(user.id), readAccessHold(supabase, user.id)]);
   if (userRow?.is_active === false) return apiDeactivated();
+  if (isAccessHeld(hold)) return apiNotOpen(hold as string);
 
   // The Authorization header is forwarded untouched, so the route's
   // createClient() runs as this user.
   return NextResponse.next({ request });
+}
+
+// The account's access-hold date (migration 317), read with the caller's own
+// session — RLS lets a user read only their own row. Any failure (table not
+// there yet, network) reads as "no hold", so this can never lock out
+// everyone.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function readAccessHold(supabase: any, id: string): Promise<string | null> {
+  try {
+    const { data, error } = await supabase
+      .from("user_access_holds")
+      .select("opens_on")
+      .eq("user_id", id)
+      .maybeSingle();
+    if (error) return null;
+    return (data as { opens_on?: string } | null)?.opens_on ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function apiNotOpen(opensOn: string) {
+  return NextResponse.json(
+    {
+      error: ACCESS_NOT_OPEN_CODE,
+      opens_on: opensOn,
+      message: `Your HUB access opens on ${opensOn}.`,
+    },
+    { status: 403, headers: { "Cache-Control": "no-store" } }
+  );
 }
 
 // Both bodies are part of the phone app's contract; keep the `error` codes.
