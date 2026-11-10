@@ -1,70 +1,48 @@
 /**
- * Departments & Services — UI contract.
- *
- * Pages read this through `src/lib/departments/data.ts` (and the home
- * selectors in `dashboard.ts`). Those functions return mocks until the
- * backend routes exist. Swap the function bodies; keep these types.
- *
- * Expected endpoints (authenticated, the caller's RLS):
- *   GET /api/departments
- *     200 DepartmentSummary[] — homes only
- *   GET /api/departments/:slug
- *     200 DepartmentHome
- *     404 when the slug is unknown or is not a home:
- *       part-time brave_love, hope_again, watchmen, old_age_home;
- *       rooted_christian_academy; no_ministry;
- *       inactive woven, inside_ministry, outside_ministry
- *   GET /api/services
- *     200 HubService[]  — a bare array, no wrapper
- *   GET /api/me/home
- *     200 HomeDashboard
- *
- * `slug` is `staff_ministries.slug` exactly (`prayer_and_worship`).
- * There is no hyphenated alias.
- * `donors_dev` is folded into `finances_legal` (see `FOLDED_INTO`).
- * Money is integer cents. The UI formats whole rands.
+ * Mirror of src/lib/departments/ui-contract.ts @ 6492eb4bc31b31fe315f1453b35c3e5349c65eb1; replace with an import once #561 is in feat.
  */
 
-export type DepartmentCluster =
-  | "leadership"
-  | "inward"
-  | "outward"
-  | "backbone"
-  | "alongside";
+/**
+ * Provisional API shapes for Departments & Services.
+ *
+ * Serializer shapes are provisional pending Hub UI's final diff (#565 / #566).
+ * All response types live here. Serializers stay in src/lib/departments/shape.ts
+ * and src/lib/services/present.ts so the final swap stays small.
+ *
+ * Not checked against Hub UI's file until they send the final head.
+ * Slug is staff_ministries.slug. Money is integer cents. Currency is ZAR.
+ */
+
+export type DepartmentCluster = "leadership" | "inward" | "outward" | "backbone" | "alongside";
 
 export type PersonCapacity = "leader" | "member";
 
 export interface DepartmentPerson {
   name: string;
   capacity: PersonCapacity;
-  /** Title as recorded. Omit when the roster has none. */
   role?: string;
-  isLeader: boolean;
-  isPointLeader: boolean;
-  /** Hidden unless the viewer may see emails. */
   email: string | null;
 }
 
+export interface DepartmentAccess {
+  canSeeDepartmentDetail: boolean;
+  canSeeBudget: boolean;
+  canEditBudget: boolean;
+  canEditRocks: boolean;
+  canSeePeopleEmails: boolean;
+}
+
 export interface DepartmentSummary {
-  /** `staff_ministries.slug`, used as the URL slug. */
   slug: string;
   name: string;
   cluster: DepartmentCluster | null;
-  /**
-   * Parent ministry slug when this home sits under another home
-   * (`education` → `training`). A fold is not expressed here.
-   */
   parentSlug: string | null;
   purpose: string | null;
   memberCount: number;
   active: boolean;
-}
-
-export interface DepartmentTool {
-  label: string;
-  href: string;
-  /** Module id from `src/config/modules.ts`. */
-  moduleId: string;
+  /** True when the viewer gets the header and budget only. */
+  budgetOnly: boolean;
+  access: DepartmentAccess;
 }
 
 export type RockStatus = "on_track" | "off_track" | "done";
@@ -75,80 +53,63 @@ export interface Rock {
   title: string;
   owner: string;
   status: RockStatus;
-  /** Calendar date `YYYY-MM-DD` in Africa/Johannesburg, or null when unset. */
   dueOn: string | null;
   quarter: string;
 }
 
-export interface DepartmentBudgetLink {
-  /** Null when the row is not tied to a finance project yet. */
+export interface BudgetLink {
   projectId: string | null;
-  name: string;
+  name: string | null;
   budgetCents: number;
   spentCents: number;
-  /** South Africa only. No other currency is shown. */
   currency: "ZAR";
 }
 
 export interface DepartmentBudget {
   departmentSlug: string;
-  /** Empty when nothing is linked. The whole budget is null when the viewer cannot see it. */
-  links: DepartmentBudgetLink[];
+  links: BudgetLink[];
 }
 
-export type OkrTone =
-  | "complete"
-  | "in_progress"
-  | "moving_forward"
-  | "not_started"
-  | "stuck";
+export type OkrStatus = "complete" | "in_progress" | "moving_forward" | "not_started" | "stuck";
+
+export interface OkrKeyResult {
+  id: string;
+  label: string | null;
+  description: string;
+  status: OkrStatus;
+}
 
 export interface OkrObjective {
   title: string;
-  tone: OkrTone;
+  keyResults: OkrKeyResult[];
 }
 
 export interface DepartmentOkrs {
   departmentSlug: string;
-  cycleName: string;
-  cycleSlug: string;
-  /** Existing OKR wall for the current cycle. */
+  cycleName: string | null;
+  cycleSlug: string | null;
   href: string;
   objectives: OkrObjective[];
 }
 
-/**
- * How a department relates to a service.
- * Backend capabilities: own → owner, manage → manager, use → access, moderate → moderator.
- */
 export type ServiceDepartmentRole = "owner" | "manager" | "access" | "moderator";
+export type ServiceAudience = "all_signed_in" | "point_leaders" | "owners_only";
+export type ServiceRunRole = "owner" | "manager" | "moderator";
 
 export interface ServiceDepartmentLink {
-  /** `staff_ministries.slug`. */
   slug: string;
   role: ServiceDepartmentRole;
 }
-
-/** Who the service is for. Separate from department roles. */
-/**
- * `open_to_all` is the prod name for a base-wide service.
- * `point_leaders` is Contacts. `owners_only` is Communications.
- */
-export type ServiceAudience = "open_to_all" | "point_leaders" | "owners_only";
-
-/** Roles that put a service on a department's "Services we run" tab. */
-export type ServiceRunRole = Exclude<ServiceDepartmentRole, "access">;
 
 export interface DepartmentServiceRun {
   serviceId: string;
   role: ServiceRunRole;
 }
 
-/** A ministry folded into a home. Not itself a department home. */
 export interface SubMinistry {
   slug: string;
   name: string;
-  purpose: string;
+  purpose: string | null;
   memberCount: number;
   people: DepartmentPerson[];
 }
@@ -158,129 +119,42 @@ export interface HubService {
   name: string;
   summary: string;
   href: string;
-  /** Module id whose existing access rule gates the card. */
   moduleId: string;
-  /** Every department related to this service. */
   owners: ServiceDepartmentLink[];
   audience: ServiceAudience;
 }
 
-export interface OkrCheckIn {
-  id: string;
+export interface ViewerMembership {
   departmentSlug: string;
-  cycleName: string;
-  dueOn: string;
-  completed: boolean;
-  href: string;
-}
-
-export interface DepartmentMembership {
-  /** `staff_ministries.slug`. */
-  slug: string;
-  active: boolean;
-  isLeader: boolean;
+  capacity: PersonCapacity;
   isPointLeader: boolean;
-}
-
-export interface DepartmentViewer {
-  name: string;
-  /** Unscoped admin (`is_admin()`). */
-  isAdmin: boolean;
-  roles: string[];
-  /** Module ids from the caller's permission rows. */
-  permittedModules: string[];
-  /**
-   * Permission keys and role names used for finance.
-   * Includes `finance_admin`, `finance.view`, and `finance.edit`.
-   */
-  permissions: string[];
-  memberships: DepartmentMembership[];
-  /**
-   * Services this person opens. Empty until usage is recorded.
-   * "Services I use" stays empty rather than guessing from access.
-   */
-  usedServiceIds: string[];
-}
-
-/**
- * Flags for one department and one viewer.
- * Backend can return the same object later; the UI computes it until then.
- */
-export interface DepartmentAccess {
-  /** Full page: active member of this ministry, active Leadership member, or admin. */
-  canSeeDepartmentDetail: boolean;
-  /** Budget tab. False hides the tab and nulls `budget`. */
-  canSeeBudget: boolean;
-  canEditRocks: boolean;
-  canEditBudget: boolean;
-  /** Leaders, point leaders, and admin. Otherwise emails are omitted. */
-  canSeePeopleEmails: boolean;
 }
 
 export interface DepartmentHome {
   department: DepartmentSummary;
-  /**
-   * Null in budget-only mode. Empty when the roster has no rows.
-   * The page treats null and empty the same: it does not invent people.
-   */
-  people: DepartmentPerson[] | null;
-  okrs: DepartmentOkrs | null;
-  rocks: Rock[] | null;
-  /** Null when the viewer cannot see figures. No error is shown. */
-  budget: DepartmentBudget | null;
-  tools: DepartmentTool[];
-  /** Services this department owns, manages, or moderates. Access is omitted. Null in budget-only mode. */
-  servicesRun: DepartmentServiceRun[] | null;
-  /** Ministries explicitly folded into this home. Null in budget-only mode. */
-  subMinistries: SubMinistry[] | null;
-}
-
-export type DepartmentTab =
-  | "overview"
-  | "people"
-  | "okrs"
-  | "rocks"
-  | "budget"
-  | "services"
-  | "tools";
-
-export interface ListedService extends HubService {
-  /** Managing departments, or moderators when nobody owns or manages it. */
-  managingLabel: string;
-  canOpen: boolean;
-}
-
-export interface DepartmentServiceListing extends ListedService {
-  role: ServiceRunRole;
-}
-
-export interface DepartmentTabLink {
-  key: DepartmentTab;
-  label: string;
-  href: string;
-}
-
-/** What `/departments/[slug]` renders. Tools are already permission-filtered. */
-export interface DepartmentPageModel {
-  department: DepartmentSummary;
-  parent: DepartmentSummary | null;
-  people: DepartmentPerson[] | null;
-  leaders: DepartmentPerson[] | null;
-  okrs: DepartmentOkrs | null;
-  rocks: Rock[] | null;
-  budget: DepartmentBudget | null;
-  tools: DepartmentTool[];
-  services: DepartmentServiceListing[] | null;
-  servicesRun: DepartmentServiceRun[] | null;
-  subMinistries: SubMinistry[] | null;
   access: DepartmentAccess;
-  tabs: DepartmentTabLink[];
-  quarter: string;
+  viewerMemberships: ViewerMembership[];
+  people: DepartmentPerson[] | null;
+  okrs: DepartmentOkrs | null;
+  rocks: Rock[] | null;
+  budget: DepartmentBudget | null;
+  servicesRun: DepartmentServiceRun[] | null;
+  subMinistries: SubMinistry[] | null;
 }
 
 export interface HomeDashboard {
   departments: DepartmentSummary[];
-  services: ListedService[];
+  services: HubService[];
   rocksDue: Rock[];
-  okrCheckInsDue: OkrCheckIn[];
+  okrCheckInsDue: [];
+  viewerMemberships: ViewerMembership[];
+}
+
+export const OKR_STATUSES = ["complete", "in_progress", "moving_forward", "not_started", "stuck"] as const;
+
+/** Map a key-result status. Missing or blank becomes not_started. */
+export function okrStatus(value: string | null | undefined): OkrStatus {
+  if (value == null || value.trim() === "") return "not_started";
+  if ((OKR_STATUSES as readonly string[]).includes(value)) return value as OkrStatus;
+  return "not_started";
 }

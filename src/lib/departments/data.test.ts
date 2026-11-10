@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { ADMIN_MODULES } from "@/config/modules";
-import type { DepartmentMembership, DepartmentViewer, HubService } from "@/types/departments";
-import { getDepartmentAccess } from "./access";
+import type { HubService } from "@/types/departments";
+import { getDepartmentAccess, type AccessMembership, type AccessViewer } from "./access";
+import { visibleTabs } from "./data";
 import { DEPARTMENT_HOME_SLUGS, FOLDED_INTO, NON_HOME_SLUGS } from "./allow-list";
 import {
   filterServices,
@@ -20,12 +21,12 @@ import { CLUSTER_LABEL, FOLDED_MINISTRIES, MINISTRY_HOMES, SERVICES, STAFF_LANGU
 
 function membership(
   slug: string,
-  flags: Partial<Pick<DepartmentMembership, "active" | "isLeader" | "isPointLeader">> = {}
-): DepartmentMembership {
-  return { slug, active: true, isLeader: false, isPointLeader: false, ...flags };
+  flags: Partial<Pick<AccessMembership, "active" | "isLeader" | "isPointLeader">> = {}
+): AccessMembership {
+  return { slug, active: true, isLeader: false, isPointLeader: false, capacity: "member", ...flags };
 }
 
-function viewer(partial: Partial<DepartmentViewer> = {}): DepartmentViewer {
+function viewer(partial: Partial<AccessViewer> = {}): AccessViewer {
   return {
     name: "Test viewer",
     isAdmin: false,
@@ -38,13 +39,13 @@ function viewer(partial: Partial<DepartmentViewer> = {}): DepartmentViewer {
   };
 }
 
-const staff: DepartmentViewer = viewer({ roles: ["staff"] });
-const admin: DepartmentViewer = viewer({ name: "Test admin", isAdmin: true, roles: ["admin"] });
+const staff: AccessViewer = viewer({ roles: ["staff"] });
+const admin: AccessViewer = viewer({ name: "Test admin", isAdmin: true, roles: ["admin"] });
 const prayerMember = viewer({
   memberships: [membership("prayer_and_worship")],
 });
 
-function withPermissions(modules: string[]): DepartmentViewer {
+function withPermissions(modules: string[]): AccessViewer {
   return { ...staff, permittedModules: modules };
 }
 
@@ -93,11 +94,12 @@ describe("department slug allow-list", () => {
     const finances = getDepartmentPage("finances_legal", admin);
     expect(finances?.subMinistries?.map((ministry) => ministry.slug)).toEqual(["donors_dev"]);
     expect(finances?.subMinistries?.[0]?.name).toBe("Donors & Dev");
-    expect(getDepartmentHome("finances_legal")?.subMinistries).toEqual(subMinistriesOf("finances_legal"));
-    expect(getDepartmentPage("education", admin)?.parent?.slug).toBe("training");
-    expect(getDepartmentPage("missio_ministry", admin)?.tabs.map((tab) => tab.key)).not.toContain(
-      "services"
+    expect(getDepartmentHome("finances_legal", admin)?.subMinistries).toEqual(
+      subMinistriesOf("finances_legal")
     );
+    expect(getDepartmentPage("education", admin)?.department.parentSlug).toBe("training");
+    const missio = getDepartmentPage("missio_ministry", admin);
+    expect(missio && visibleTabs(missio)).not.toContain("services");
   });
 
   it("does not use Inside or Outside ministry as a name, or real staff names", () => {
@@ -135,7 +137,7 @@ describe("services catalogue data", () => {
     expect(byId.communications.audience).toBe("owners_only");
     expect(byId.contacts.audience).toBe("point_leaders");
     expect(byId.contacts.owners.every((link) => link.role === "manager")).toBe(true);
-    expect(byId.evangelism.audience).toBe("open_to_all");
+    expect(byId.evangelism.audience).toBe("all_signed_in");
     expect(byId.evangelism.owners).toEqual([
       { slug: "media", role: "moderator" },
       { slug: "hulk", role: "moderator" },
@@ -181,7 +183,7 @@ describe("services catalogue data", () => {
       href: "/mission",
       moduleId: "mission",
       owners: [],
-      audience: "open_to_all",
+      audience: "all_signed_in",
     };
     expect(filterServices([hidden], admin)).toEqual([]);
   });
@@ -190,17 +192,20 @@ describe("services catalogue data", () => {
 describe("department page model", () => {
   it("labels the roles Prayer & Worship runs, and filters tools by access", () => {
     const page = getDepartmentPage("prayer_and_worship", prayerMember);
-    expect(page?.services?.map((service) => [service.id, service.role])).toEqual([
+    expect(page?.servicesRun?.map((service) => [service.serviceId, service.role])).toEqual([
       ["prayer_room", "owner"],
       ["gear_hire", "owner"],
     ]);
-    expect(page?.tools.map((tool) => tool.label)).toEqual(["Prayer room", "OKRs"]);
-    expect(page?.leaders?.map((person) => person.name)).toEqual(["Test Leader A", "Test Leader B"]);
+    expect(page?.servicesRun?.map((service) => service.serviceId)).toContain("prayer_room");
+    expect(page?.people?.filter((person) => person.capacity === "leader").map((person) => person.name)).toEqual([
+      "Test Leader A",
+      "Test Leader B",
+    ]);
   });
 
   it("shows manager and moderator roles, and leaves access off the tab", () => {
     const media = getDepartmentPage("media", admin);
-    expect(media?.services?.map((service) => [service.id, service.role])).toEqual([
+    expect(media?.servicesRun?.map((service) => [service.serviceId, service.role])).toEqual([
       ["gear_hire", "owner"],
       ["brand_kit", "owner"],
       ["communications", "manager"],
@@ -208,8 +213,8 @@ describe("department page model", () => {
       ["evangelism", "moderator"],
     ]);
     const hulc = getDepartmentPage("hulk", admin);
-    expect(hulc?.services?.map((service) => service.id)).toEqual(["contacts", "evangelism"]);
-    expect(hulc?.services?.map((service) => service.id)).not.toContain("communications");
+    expect(hulc?.servicesRun?.map((service) => service.serviceId)).toEqual(["contacts", "evangelism"]);
+    expect(hulc?.servicesRun?.map((service) => service.serviceId)).not.toContain("communications");
   });
 
   it("leaves rocks and budget empty where nothing is linked yet", () => {
@@ -227,7 +232,7 @@ describe("department page model", () => {
     expect(page?.budget?.links[0]?.budgetCents).toBe(1_000_000);
     expect(page?.budget?.links[0]?.spentCents).toBe(500_000);
     expect(page?.budget?.links[0]?.projectId).toBe("test-worship");
-    expect(getDepartmentHome("missio_ministry")?.budget?.links[0]?.projectId).toBeNull();
+    expect(getDepartmentHome("missio_ministry", admin)?.budget?.links[0]?.projectId).toBeNull();
   });
 
   it("returns no access from the page viewer", () => {
@@ -275,8 +280,8 @@ describe("department access", () => {
       canSeePeopleEmails: false,
     });
     expect(page?.budget).toBeNull();
-    expect(page?.tabs.map((tab) => tab.key)).not.toContain("budget");
-    expect(page?.tabs.map((tab) => tab.key)).toEqual(
+    expect(page && visibleTabs(page)).not.toContain("budget");
+    expect(page && visibleTabs(page)).toEqual(
       expect.arrayContaining(["overview", "people", "okrs", "rocks"])
     );
   });
@@ -286,7 +291,7 @@ describe("department access", () => {
     expect(page?.access.canSeeDepartmentDetail).toBe(true);
     expect(page?.access.canSeeBudget).toBe(false);
     expect(page?.budget).toBeNull();
-    expect(page?.tabs.map((tab) => tab.key)).not.toContain("budget");
+    expect(page && visibleTabs(page)).not.toContain("budget");
     expect(page?.people).not.toBeNull();
   });
 
@@ -300,7 +305,7 @@ describe("department access", () => {
         canEditBudget: true,
         canSeePeopleEmails: true,
       });
-      expect(page?.tabs.map((tab) => tab.key)).toContain("budget");
+      expect(page && visibleTabs(page)).toContain("budget");
       expect(page?.budget?.links.length).toBeGreaterThan(0);
     }
   });
@@ -314,7 +319,7 @@ describe("department access", () => {
       canEditRocks: false,
       canSeePeopleEmails: false,
     });
-    expect(page?.tabs.map((tab) => tab.key)).toEqual(["budget"]);
+    expect(page && visibleTabs(page)).toEqual(["budget"]);
     expect(page?.people).toBeNull();
     expect(page?.okrs).toBeNull();
     expect(page?.rocks).toBeNull();
@@ -330,7 +335,7 @@ describe("department access", () => {
       expect(access.canSeeBudget).toBe(true);
       expect(access.canEditBudget).toBe(false);
       const page = getDepartmentPage("media", who);
-      expect(page?.tabs.map((tab) => tab.key)).toEqual(["budget"]);
+      expect(page && visibleTabs(page)).toEqual(["budget"]);
       expect(page?.rocks).toBeNull();
     }
   });
@@ -344,8 +349,8 @@ describe("department access", () => {
       canEditBudget: true,
       canSeePeopleEmails: true,
     });
-    expect(page?.tabs.map((tab) => tab.key)).toContain("budget");
-    expect(page?.tabs.map((tab) => tab.key)).toContain("people");
+    expect(page && visibleTabs(page)).toContain("budget");
+    expect(page && visibleTabs(page)).toContain("people");
   });
 
   it("ignores an inactive membership", () => {
