@@ -10,7 +10,8 @@ import {
 } from "@/services/event-feedback";
 import { sendTransactional } from "@/lib/email/send-transactional";
 import { eventFeedbackRequestEmailHtml } from "@/lib/email/templates/event-feedback-request";
-import { getAuthedUser, canManageEvents } from "@/lib/api-auth";
+import { getAuthedUser } from "@/lib/api-auth";
+import { canManageEvent, EVENT_CREATE_GATE, writeBlocked } from "@/lib/auth/event-access";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // A debrief goes to a team, not a mailing list. The cap is a guard against
@@ -41,11 +42,13 @@ export async function POST(
   const supabase = await createClient();
   const user = await getAuthedUser(supabase);
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  if (!(await canManageEvents(supabase, user.id))) {
+  if (!(await canManageEvent(supabase, user.id, EVENT_CREATE_GATE.keys, eventId, EVENT_CREATE_GATE))) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
-  const { data: form } = await getFeedbackFormById(supabase, formId);
+  const { data: form, error: formErr } = await getFeedbackFormById(supabase, formId);
+  if (writeBlocked(formErr)) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  if (formErr) return NextResponse.json({ error: formErr.message }, { status: 500 });
   if (!form || form.event_id !== eventId) {
     return NextResponse.json({ error: "Feedback form not found" }, { status: 404 });
   }
@@ -177,9 +180,31 @@ export async function POST(
     }
   }
 
-  // The audit rows are best-effort: a ledger hiccup must not report a
-  // successful send as a failure.
-  await recordFeedbackSends(supabase, sendRows);
+  // The emails have already gone out. A ledger failure must not look like
+  // a refusal — staff would resend, and the same people would get it twice.
+  const ledgerWarning = "Emails sent but the send log could not be saved; do not resend.";
+  try {
+    const recorded = await recordFeedbackSends(supabase, sendRows);
+    const ledgerMissed =
+      !!recorded.error || (sendRows.length > 0 && Array.isArray(recorded.data) && recorded.data.length === 0);
+    if (ledgerMissed) {
+      return NextResponse.json({
+        sent,
+        failed,
+        total: recipients.length,
+        invalid,
+        warning: ledgerWarning,
+      });
+    }
+  } catch {
+    return NextResponse.json({
+      sent,
+      failed,
+      total: recipients.length,
+      invalid,
+      warning: ledgerWarning,
+    });
+  }
 
   return NextResponse.json({ sent, failed, total: recipients.length, invalid });
 }

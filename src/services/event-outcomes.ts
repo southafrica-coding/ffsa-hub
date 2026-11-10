@@ -40,7 +40,7 @@ export async function updateEventOutcome(
 }
 
 export async function deleteEventOutcome(supabase: Client, id: string) {
-  return supabase.from("event_outcomes").delete().eq("id", id);
+  return supabase.from("event_outcomes").delete().eq("id", id).select("id");
 }
 
 // ────────────────────────────────────────────────────────────

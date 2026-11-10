@@ -16,9 +16,11 @@ type FormRow = {
 export function FormsTab({
   eventId,
   forms,
+  canEdit = false,
 }: {
   eventId: string;
   forms: FormRow[];
+  canEdit?: boolean;
 }) {
   const router = useRouter();
   const [creating, setCreating] = useState(false);
@@ -52,7 +54,7 @@ export function FormsTab({
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle className="text-base">Forms</CardTitle>
-        {!creating && (
+        {canEdit && !creating && (
           <button
             type="button"
             onClick={() => setCreating(true)}
@@ -94,19 +96,21 @@ export function FormsTab({
                   >
                     {f.is_active ? "Published" : "Draft"}
                   </span>
+                  {canEdit && (
                   <Link
                     href={`/events/${eventId}/forms/${f.id}`}
                     className="text-xs text-ink hover:underline"
                   >
                     Edit
                   </Link>
+                  )}
                 </div>
               </li>
             ))}
           </ul>
         )}
 
-        {creating && (
+        {canEdit && creating && (
           <div className="border-t pt-3 space-y-2">
             <input
               type="text"

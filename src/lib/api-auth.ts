@@ -8,6 +8,7 @@ import {
   permissionOf,
   type PermissionCheck,
 } from "@/lib/auth/grant-scope";
+import { canManageEvent } from "@/lib/auth/event-access";
 
 export type { GrantScope, PermissionCheck } from "@/lib/auth/grant-scope";
 
@@ -189,19 +190,24 @@ export async function canViewContacts(
 }
 
 /**
- * True if the user may manage events — either via a managing role
- * (EVENTS_MANAGE_ROLES) or a granular events permission. Mirrors the events
- * RLS (migration 086). Defaults to the "Create / Edit Events" capability
- * (events.create); pass a different key for registration/attendance routes
- * (e.g. ["events.manage_registrations"], ["events.manage_attendance"]).
+ * Scope-aware events gate. `eventId` null counts only an unscoped grant
+ * (has_event_permission's NULL rule) plus an unscoped admin / events_admin
+ * role. The admin, super_admin and events_admin bypasses require an
+ * active account (is_active IS NOT FALSE), matching is_admin() and
+ * has_role() in migration 316.
+ * Scan links must not use this — they have no events_admin bypass;
+ * call canManageEvent with SCAN_LINK_GATE. Order routes need finance_admin
+ * and should pass ORDERS_GATE to canManageEvent instead.
  */
 export async function canManageEvents(
   supabase: Client,
   userId: string,
-  perms: string[] = ["events.create"]
+  perms: string[] = ["events.create"],
+  eventId: string | null = null
 ): Promise<boolean> {
-  if (await hasAnyRole(supabase, userId, EVENTS_MANAGE_ROLES)) return true;
-  return hasAnyPermission(supabase, userId, perms);
+  return canManageEvent(supabase, userId, perms, eventId, {
+    bypassRoles: ["events_admin"],
+  });
 }
 
 // Roles or granular permissions that allow managing finance config

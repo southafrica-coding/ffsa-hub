@@ -59,7 +59,7 @@ export async function updateForm(supabase: Client, id: string, data: FormUpdate)
 }
 
 export async function deleteForm(supabase: Client, id: string) {
-  return supabase.from("forms").delete().eq("id", id);
+  return supabase.from("forms").delete().eq("id", id).select("id");
 }
 
 // ────────────────────────────────────────────────────────────

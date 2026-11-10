@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getAuthedUser, canManageEvents } from "@/lib/api-auth";
+import { getAuthedUser } from "@/lib/api-auth";
+import { canManageEvent, SCAN_LINK_GATE } from "@/lib/auth/event-access";
 import {
   getOrCreateScanLink,
   rotateScanLink,
@@ -11,13 +12,17 @@ import {
 // Mint / rotate / switch off the shareable door link for one event.
 // Only staff who could already run the door can hand it out.
 
-async function authorise() {
+async function authorise(
+  eventId: string
+): Promise<{ error: NextResponse } | { userId: string }> {
   const supabase = await createClient();
   const user = await getAuthedUser(supabase);
   if (!user) {
     return { error: NextResponse.json({ error: "Not authenticated" }, { status: 401 }) };
   }
-  if (!(await canManageEvents(supabase, user.id, ["events.manage_attendance"]))) {
+  // Scan links: is_admin, events.manage_attendance, or events.manage.
+  // events_admin alone is not enough (314 lines 276–279).
+  if (!(await canManageEvent(supabase, user.id, SCAN_LINK_GATE.keys, eventId, SCAN_LINK_GATE))) {
     return { error: NextResponse.json({ error: "Not authorized" }, { status: 403 }) };
   }
   return { userId: user.id };
@@ -30,7 +35,7 @@ export async function GET(
   context: { params: Promise<{ id: string }> }
 ) {
   const { id } = await context.params;
-  const auth = await authorise();
+  const auth = await authorise(id);
   if ("error" in auth) return auth.error;
 
   const link = await getOrCreateScanLink(createAdminClient(), id, auth.userId);
@@ -50,7 +55,7 @@ export async function POST(
   context: { params: Promise<{ id: string }> }
 ) {
   const { id } = await context.params;
-  const auth = await authorise();
+  const auth = await authorise(id);
   if ("error" in auth) return auth.error;
 
   const link = await rotateScanLink(createAdminClient(), id, auth.userId);
@@ -70,7 +75,7 @@ export async function PATCH(
   context: { params: Promise<{ id: string }> }
 ) {
   const { id } = await context.params;
-  const auth = await authorise();
+  const auth = await authorise(id);
   if ("error" in auth) return auth.error;
 
   let body: { isActive?: boolean };

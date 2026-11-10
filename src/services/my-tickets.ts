@@ -61,13 +61,18 @@ export async function createWaiverSignedUrl(admin: Client, path: string, expires
  * Ticketed, published events that haven't finished before `fromDate`
  * (YYYY-MM-DD). Multi-day events stay listed until their end date.
  */
-export async function listCheckInEvents(admin: Client, fromDate: string, limit = 50) {
-  return admin
+export async function listCheckInEvents(
+  admin: Client,
+  fromDate: string,
+  limit = 50,
+  ids?: string[]
+) {
+  let query = admin
     .from("events")
     .select("id, title, start_date, start_time, end_date, end_time, location")
     .eq("ticketing_enabled", true)
     .eq("status", "published")
-    .or(`end_date.gte.${fromDate},and(end_date.is.null,start_date.gte.${fromDate})`)
-    .order("start_date", { ascending: true })
-    .limit(limit);
+    .or(`end_date.gte.${fromDate},and(end_date.is.null,start_date.gte.${fromDate})`);
+  if (ids) query = query.in("id", ids);
+  return query.order("start_date", { ascending: true }).limit(limit);
 }

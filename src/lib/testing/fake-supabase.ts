@@ -17,6 +17,8 @@ export type FakeQuery = {
   table: string;
   columns: string | null;
   head: boolean;
+  /** select | insert | update | delete | upsert */
+  action: string;
   filters: Array<{ op: string; args: unknown[] }>;
   single: boolean;
   rpc?: { name: string; args: unknown };
@@ -51,7 +53,7 @@ export function createFakeSupabase(options: {
   }
 
   function builder(table: string, rpc?: FakeQuery["rpc"]) {
-    const q: FakeQuery = { table, columns: null, head: false, filters: [], single: false, rpc };
+    const q: FakeQuery = { table, columns: null, head: false, action: "select", filters: [], single: false, rpc };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const b: any = {
       select(columns?: string, opts?: { head?: boolean }) {
@@ -71,6 +73,12 @@ export function createFakeSupabase(options: {
         return run(q).then(onFulfilled, onRejected);
       },
     };
+    for (const op of ["insert", "update", "delete", "upsert"]) {
+      b[op] = () => {
+        q.action = op;
+        return b;
+      };
+    }
     for (const op of ["eq", "neq", "in", "is", "not", "or", "gte", "lte", "gt", "lt", "ilike", "order", "limit", "range", "contains", "filter", "match"]) {
       b[op] = (...args: unknown[]) => {
         q.filters.push({ op, args });
@@ -124,8 +132,11 @@ export type PermissionWorld = {
   roles: Array<{ id: string; name: string; scopeType?: string | null; scopeId?: string | null }>;
   direct: Perm[];
   bundles?: Record<string, Perm[]>; // role id → bundle
-  /** users.is_active. Omitted means active. false is an inactive account. */
-  active?: boolean;
+  /**
+   * users.is_active. Omitted or true is active. null is active
+   * (IS NOT FALSE). false is an inactive account.
+   */
+  active?: boolean | null;
 };
 
 function matchesEmbeddedFilters(q: FakeQuery, prefix: string, row: Record<string, unknown>) {
@@ -143,7 +154,10 @@ export function permissionWorldResolver(world: PermissionWorld) {
   return (q: FakeQuery): FakeResult | null => {
     if (q.table === "users" && (q.columns ?? "").includes("is_active")) {
       return {
-        data: [{ id: filterValue(q, "eq", "id") ?? null, is_active: world.active !== false }],
+        data: [{
+          id: filterValue(q, "eq", "id") ?? null,
+          is_active: world.active === undefined ? true : world.active,
+        }],
       };
     }
     if (q.table === "user_roles") {

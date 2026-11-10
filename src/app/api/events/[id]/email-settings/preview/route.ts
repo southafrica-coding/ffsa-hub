@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getAuthedUser, canManageEvents } from "@/lib/api-auth";
+import { getAuthedUser } from "@/lib/api-auth";
+import { canManageEvent, EVENT_UPDATE_GATE } from "@/lib/auth/event-access";
 import { resolveEventBrand } from "@/lib/ticketing/fulfillment";
 import { resolveEventSender } from "@/lib/email/event-sender";
 import { EVENT_EMAILS, cleanWording, wordingFor, type EventEmailKey } from "@/lib/email/event-email-wording";
@@ -44,7 +45,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const supabase = await createClient();
   const user = await getAuthedUser(supabase);
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  if (!(await canManageEvents(supabase, user.id))) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  if (!(await canManageEvent(supabase, user.id, EVENT_UPDATE_GATE.keys, id, EVENT_UPDATE_GATE))) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
 
   const b = await request.json().catch(() => ({}));
   const key = b.key as EventEmailKey;

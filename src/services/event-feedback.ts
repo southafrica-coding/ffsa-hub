@@ -98,7 +98,7 @@ export async function updateFeedbackForm(
 }
 
 export async function deleteFeedbackForm(supabase: Client, id: string) {
-  return supabase.from("event_feedback_forms").delete().eq("id", id);
+  return supabase.from("event_feedback_forms").delete().eq("id", id).select("id");
 }
 
 /** Slug for the public /fb/<slug> link. Event title + form title, deduped. */

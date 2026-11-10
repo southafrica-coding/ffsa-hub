@@ -199,6 +199,7 @@ export function OrdersTab({
   currency,
   eventStatus,
   hasCancellationMessage = false,
+  canManageOrders = false,
 }: {
   eventId: string;
   orders: Order[];
@@ -211,6 +212,8 @@ export function OrdersTab({
   // "email cancellation reason" action to cancelled events.
   eventStatus?: string;
   hasCancellationMessage?: boolean;
+  /** Refund, resend, reconcile, invoice actions. Viewers still see the table. */
+  canManageOrders?: boolean;
 }) {
   const router = useRouter();
   const money = (cents: number, c?: string | null) =>
@@ -406,7 +409,7 @@ export function OrdersTab({
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <CardTitle className="text-base">Orders</CardTitle>
-          {orders.length > 0 && (
+          {canManageOrders && orders.length > 0 && (
             <div className="flex items-center gap-2">
               {pendingStripe.length > 0 && (
                 <button
@@ -569,6 +572,7 @@ export function OrdersTab({
                           : "—"}
                       </TableCell>
                       <TableCell className="text-right">
+                        {canManageOrders && (
                         <div className="flex flex-col items-end gap-1">
                           {o.status === "paid" && (
                             <button
@@ -664,6 +668,7 @@ export function OrdersTab({
                             </button>
                           )}
                         </div>
+                        )}
                       </TableCell>
                     </TableRow>
                     {expanded && expandable && (
@@ -865,7 +870,7 @@ export function OrdersTab({
         </CardContent>
       </Card>
 
-      {refundOrder && (
+      {canManageOrders && refundOrder && (
         <RefundDialog
           eventId={eventId}
           order={refundOrder}

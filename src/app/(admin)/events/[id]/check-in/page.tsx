@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import { getEventById } from "@/services/events";
-import { canManageEvents } from "@/lib/api-auth";
+import { canManageEvent, ATTENDANCE_GATE } from "@/lib/auth/event-access";
 import { Scanner } from "@/components/ticket-scanner";
 import { Masthead } from "@/components/ffsa";
 
@@ -18,7 +18,7 @@ export default async function CheckInPage({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
-  if (!(await canManageEvents(supabase, user.id, ["events.manage_attendance"]))) {
+  if (!(await canManageEvent(supabase, user.id, ATTENDANCE_GATE.keys, id, ATTENDANCE_GATE))) {
     return (
       <div className="ffsa-screen">
         <p className="px-5 py-8 text-sm text-destructive md:px-8">

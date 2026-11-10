@@ -36,9 +36,13 @@ type AttendanceTicket = {
 export function CheckInTab({
   eventId,
   tickets,
+  canCheckIn = false,
+  canScanLink = false,
 }: {
   eventId: string;
   tickets: AttendanceTicket[];
+  canCheckIn?: boolean;
+  canScanLink?: boolean;
 }) {
   const router = useRouter();
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -75,7 +79,7 @@ export function CheckInTab({
 
   return (
     <div className="space-y-6">
-      {/* Scanner launcher — prominent so door staff can find it instantly */}
+      {canCheckIn && (
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Door scanner</CardTitle>
@@ -105,8 +109,9 @@ export function CheckInTab({
           </div>
         </CardContent>
       </Card>
+      )}
 
-      <ScanLinkCard eventId={eventId} />
+      {canScanLink && <ScanLinkCard eventId={eventId} />}
 
       {/* Live attendance stats */}
       <div className="grid gap-4 sm:grid-cols-4">

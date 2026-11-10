@@ -6,7 +6,9 @@ import {
   deleteTicketType,
 } from "@/services/ticketing";
 import { computeDisplayPriceCents } from "@/lib/payments/ticket-pricing";
-import { getAuthedUser, canManageEvents } from "@/lib/api-auth";
+import { getAuthedUser } from "@/lib/api-auth";
+import { EVENT_CREATE_GATE, writeBlocked } from "@/lib/auth/event-access";
+import { gateChildRow } from "@/lib/auth/event-route";
 import { sanitizeCheckoutQuestions } from "@/lib/ticketing/checkout-questions";
 import { sanitizeWaiver } from "@/lib/ticketing/waivers";
 
@@ -23,9 +25,15 @@ export async function PATCH(
   if (!user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
-  if (!(await canManageEvents(supabase, user.id))) {
-    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
-  }
+  const denied = await gateChildRow(
+    supabase,
+    user.id,
+    eventId,
+    "ticket_types",
+    ticketTypeId,
+    EVENT_CREATE_GATE
+  );
+  if (denied) return denied;
 
   let body: {
     name?: string;
@@ -116,6 +124,7 @@ export async function PATCH(
   }
 
   const { data, error } = await updateTicketType(supabase, ticketTypeId, patch);
+  if (writeBlocked(error)) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ticketType: data });
 }
@@ -125,17 +134,26 @@ export async function DELETE(
   request: Request,
   context: { params: Promise<{ id: string; ticketTypeId: string }> }
 ) {
-  const { ticketTypeId } = await context.params;
+  const { id: eventId, ticketTypeId } = await context.params;
   const supabase = await createClient();
   const user = await getAuthedUser(supabase);
   if (!user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
-  if (!(await canManageEvents(supabase, user.id))) {
+  const denied = await gateChildRow(
+    supabase,
+    user.id,
+    eventId,
+    "ticket_types",
+    ticketTypeId,
+    EVENT_CREATE_GATE
+  );
+  if (denied) return denied;
+
+  const { data, error } = await deleteTicketType(supabase, ticketTypeId);
+  if (writeBlocked(error, data)) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
-
-  const { error } = await deleteTicketType(supabase, ticketTypeId);
   if (error) {
     // FK from tickets / orders.promo_code_id may block deletion if
     // any sales have happened — surface a friendly message.

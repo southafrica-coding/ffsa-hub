@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { updateEvent } from "@/services/events";
-import { getAuthedUser, canManageEvents } from "@/lib/api-auth";
+import { getAuthedUser } from "@/lib/api-auth";
+import { canManageEvent, EVENT_CREATE_GATE, writeBlocked } from "@/lib/auth/event-access";
 import { EVENT_CURRENCIES, isEventCurrency } from "@/lib/currencies";
 import { computeDisplayPriceCents } from "@/lib/payments/ticket-pricing";
 
@@ -22,7 +23,7 @@ export async function PATCH(
   if (!user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
-  if (!(await canManageEvents(supabase, user.id))) {
+  if (!(await canManageEvent(supabase, user.id, EVENT_CREATE_GATE.keys, eventId, EVENT_CREATE_GATE))) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
@@ -129,6 +130,9 @@ export async function PATCH(
   }
 
   const { data, error } = await updateEvent(supabase, eventId, patch);
+  if (writeBlocked(error, data)) {
+    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  }
   if (error) {
     if (error.message?.includes("idx_events_public_slug")) {
       return NextResponse.json(
@@ -171,10 +175,26 @@ export async function PATCH(
           { status: 500 }
         );
       }
-      await supabase
+      const { data: pricedRows, error: saveErr } = await supabase
         .from("ticket_types")
         .update({ display_price_cents: displayPriceCents })
-        .eq("id", tier.id);
+        .eq("id", tier.id)
+        .select("id");
+      if (writeBlocked(saveErr, pricedRows)) {
+        return NextResponse.json(
+          {
+            error:
+              "Currency saved, but you don't have permission to update ticket prices for this event.",
+          },
+          { status: 403 }
+        );
+      }
+      if (saveErr) {
+        return NextResponse.json(
+          { error: `Currency saved, but a ticket price could not be updated: ${saveErr.message}` },
+          { status: 500 }
+        );
+      }
     }
   }
 

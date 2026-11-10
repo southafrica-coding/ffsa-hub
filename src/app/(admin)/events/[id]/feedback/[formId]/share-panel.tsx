@@ -156,12 +156,11 @@ export function SharePanel({
       setErr(data.error ?? "Failed to send");
       return;
     }
-    const result = (await res.json()) as { sent: number; failed: number };
-    setMsg(
-      result.failed
-        ? `Sent to ${result.sent}. ${result.failed} could not be delivered — see the send log below.`
-        : `Sent to ${result.sent} ${result.sent === 1 ? "person" : "people"}.`
-    );
+    const result = (await res.json()) as { sent: number; failed: number; warning?: string };
+    const summary = result.failed
+      ? `Sent to ${result.sent}. ${result.failed} could not be delivered — see the send log below.`
+      : `Sent to ${result.sent} ${result.sent === 1 ? "person" : "people"}.`;
+    setMsg(result.warning ? `${summary} ${result.warning}` : summary);
     setPicked(new Set());
     setExtra("");
     router.refresh();

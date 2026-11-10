@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getAuthedUser, canManageEvents } from "@/lib/api-auth";
+import { getAuthedUser } from "@/lib/api-auth";
+import { writeBlocked, OUTCOMES_GATE } from "@/lib/auth/event-access";
+import { gateChildRow } from "@/lib/auth/event-route";
 import {
   getWorkflowsForOutcome,
   createWorkflow,
@@ -36,15 +38,15 @@ export async function GET(
   _request: Request,
   context: { params: Promise<{ id: string; outcomeId: string }> }
 ) {
-  const { outcomeId } = await context.params;
+  const { id: eventId, outcomeId } = await context.params;
   const supabase = await createClient();
   const user = await getAuthedUser(supabase);
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  if (!(await canManageEvents(supabase, user.id))) {
-    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
-  }
+  const denied = await gateChildRow(supabase, user.id, eventId, "event_outcomes", outcomeId, OUTCOMES_GATE);
+  if (denied) return denied;
 
   const { data, error } = await getWorkflowsForOutcome(supabase, outcomeId);
+  if (writeBlocked(error)) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ workflows: data ?? [] });
 }
@@ -55,13 +57,12 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ id: string; outcomeId: string }> }
 ) {
-  const { outcomeId } = await context.params;
+  const { id: eventId, outcomeId } = await context.params;
   const supabase = await createClient();
   const user = await getAuthedUser(supabase);
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  if (!(await canManageEvents(supabase, user.id))) {
-    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
-  }
+  const denied = await gateChildRow(supabase, user.id, eventId, "event_outcomes", outcomeId, OUTCOMES_GATE);
+  if (denied) return denied;
 
   let body: {
     name?: string;

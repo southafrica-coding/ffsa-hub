@@ -1,5 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ASSIGNABLE_FOLLOWUP_HANDLER_PERMISSION_KEY } from "./assignable-followup-handlers";
+import {
+  ATTENDANCE_GATE,
+  REGISTRATIONS_GATE,
+  eventIdScope,
+  hasEventPermission,
+  isUnscopedAdmin,
+  hasUnscopedRole,
+  loadEventAccess,
+  type EventAccessSnapshot,
+} from "@/lib/auth/event-access";
 
 // Permission keys that grant queue access across all events. Anyone managing
 // registrations or attendance is already doing the operational work that
@@ -9,110 +19,73 @@ const ALL_EVENTS_FOLLOWUP_KEYS = [
   "events.manage_attendance",
 ] as const;
 
+function followupScope(snap: EventAccessSnapshot) {
+  if (isUnscopedAdmin(snap) || hasUnscopedRole(snap, ["events_admin"])) return "all" as const;
+  const regs = eventIdScope(snap, REGISTRATIONS_GATE);
+  const door = eventIdScope(snap, ATTENDANCE_GATE);
+  if (regs.kind === "all" || door.kind === "all") return "all" as const;
+  const ids = new Set<string>([...regs.ids, ...door.ids]);
+  if (snap.active) {
+    for (const g of snap.grants) {
+      if (g.via !== "direct") continue;
+      if (g.key !== ASSIGNABLE_FOLLOWUP_HANDLER_PERMISSION_KEY) continue;
+      if (g.scopeType === "event" && g.scopeId) ids.add(g.scopeId);
+    }
+  }
+  return ids;
+}
+
 // Can the user view/operate on the event follow-up queue at all?
-// Admin/super_admin/events_admin always; users with the broad events
-// permissions (manage_registrations / manage_attendance) get full-queue
-// access too; otherwise they need at least one event-scoped grant of
-// `events.assignable_as_followup_handler`.
+// Unscoped admin / events_admin, or an unscoped manage_registrations /
+// manage_attendance grant, see every event. A grant scoped to one event
+// opens only that event. The handler permission stays a direct, per-event
+// grant.
 export async function userCanAccessFollowupQueue(
   supabase: SupabaseClient,
   userId: string
 ): Promise<boolean> {
-  const { data: roles } = await supabase
-    .from("user_roles")
-    .select("roles!inner(name)")
-    .eq("user_id", userId)
-    .in("roles.name", ["super_admin", "admin", "events_admin"])
-    .limit(1);
-
-  if (roles && roles.length > 0) return true;
-
-  const { data: perms } = await supabase
-    .from("user_permissions")
-    .select("permissions!inner(key)")
-    .eq("user_id", userId)
-    .in("permissions.key", [
-      ASSIGNABLE_FOLLOWUP_HANDLER_PERMISSION_KEY,
-      ...ALL_EVENTS_FOLLOWUP_KEYS,
-    ])
-    .limit(1);
-
-  return !!perms && perms.length > 0;
+  const scope = followupScope(await loadEventAccess(supabase, userId));
+  return scope === "all" || scope.size > 0;
 }
 
 // Per-event check used by row actions (assign, mark finished, view).
-// Admin/super_admin/events_admin pass. Users with the broad events
-// permissions (manage_registrations / manage_attendance) also pass for
-// any event. Otherwise the user must hold the handler permission scoped
-// to THIS event.
+// Unscoped admin / events_admin pass. manage_registrations and
+// manage_attendance follow has_event_permission (unscoped, this event, or
+// the creator arm). Otherwise the handler permission must be a direct
+// grant scoped to this event.
 export async function userCanHandleFollowupForEvent(
   supabase: SupabaseClient,
   userId: string,
   eventId: string
 ): Promise<boolean> {
-  const { data: roles } = await supabase
-    .from("user_roles")
-    .select("roles!inner(name)")
-    .eq("user_id", userId)
-    .in("roles.name", ["super_admin", "admin", "events_admin"])
-    .limit(1);
-
-  if (roles && roles.length > 0) return true;
-
-  const { data: broadPerms } = await supabase
-    .from("user_permissions")
-    .select("permissions!inner(key)")
-    .eq("user_id", userId)
-    .in("permissions.key", ALL_EVENTS_FOLLOWUP_KEYS as unknown as string[])
-    .limit(1);
-
-  if (broadPerms && broadPerms.length > 0) return true;
-
-  const { data: perms } = await supabase
-    .from("user_permissions")
-    .select("permissions!inner(key)")
-    .eq("user_id", userId)
-    .eq("permissions.key", ASSIGNABLE_FOLLOWUP_HANDLER_PERMISSION_KEY)
-    .eq("scope_type", "event")
-    .eq("scope_id", eventId)
-    .limit(1);
-
-  return !!perms && perms.length > 0;
+  const snap = await loadEventAccess(supabase, userId);
+  if (isUnscopedAdmin(snap) || hasUnscopedRole(snap, ["events_admin"])) return true;
+  const { data: event } = await supabase.from("events").select("created_by").eq("id", eventId).maybeSingle();
+  const createdByCaller = event?.created_by === userId;
+  if (
+    ALL_EVENTS_FOLLOWUP_KEYS.some((key) =>
+      hasEventPermission(snap, key, eventId, { createdByCaller })
+    )
+  ) {
+    return true;
+  }
+  return snap.grants.some(
+    (g) =>
+      g.via === "direct" &&
+      g.key === ASSIGNABLE_FOLLOWUP_HANDLER_PERMISSION_KEY &&
+      g.scopeType === "event" &&
+      g.scopeId === eventId
+  );
 }
 
 // Returns the set of event IDs the user is permitted to handle.
-// Returns null (meaning "all events") for admins/events_admin AND for
-// users with the broad events permissions (manage_registrations /
-// manage_attendance). For everyone else, returns the set of event IDs
-// they have explicit per-event grants on.
+// Null means every event: unscoped admin / events_admin, or an unscoped
+// manage_registrations / manage_attendance / handler grant. A scoped grant
+// returns only those event ids.
 export async function getAccessibleEventIdsForFollowups(
   supabase: SupabaseClient,
   userId: string
 ): Promise<Set<string> | null> {
-  const { data: roles } = await supabase
-    .from("user_roles")
-    .select("roles!inner(name)")
-    .eq("user_id", userId)
-    .in("roles.name", ["super_admin", "admin", "events_admin"])
-    .limit(1);
-
-  if (roles && roles.length > 0) return null;
-
-  const { data: broadPerms } = await supabase
-    .from("user_permissions")
-    .select("permissions!inner(key)")
-    .eq("user_id", userId)
-    .in("permissions.key", ALL_EVENTS_FOLLOWUP_KEYS as unknown as string[])
-    .limit(1);
-
-  if (broadPerms && broadPerms.length > 0) return null;
-
-  const { data: perms } = await supabase
-    .from("user_permissions")
-    .select("scope_id, permissions!inner(key)")
-    .eq("user_id", userId)
-    .eq("permissions.key", ASSIGNABLE_FOLLOWUP_HANDLER_PERMISSION_KEY)
-    .eq("scope_type", "event");
-
-  return new Set(((perms ?? []) as { scope_id: string }[]).map((p) => p.scope_id));
+  const scope = followupScope(await loadEventAccess(supabase, userId));
+  return scope === "all" ? null : scope;
 }

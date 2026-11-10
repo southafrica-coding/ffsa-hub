@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { updateEvent } from "@/services/events";
-import { getAuthedUser, canManageEvents } from "@/lib/api-auth";
+import { getAuthedUser } from "@/lib/api-auth";
+import { writeBlocked, canManageEvent, EVENT_UPDATE_GATE } from "@/lib/auth/event-access";
 import { sanitizeBuyerFields } from "@/lib/ticketing/buyer-fields";
 
 // PATCH /api/events/[id]/buyer-fields — save the event's standard
@@ -17,7 +18,7 @@ export async function PATCH(
   const supabase = await createClient();
   const user = await getAuthedUser(supabase);
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  if (!(await canManageEvents(supabase, user.id))) {
+  if (!(await canManageEvent(supabase, user.id, EVENT_UPDATE_GATE.keys, id, EVENT_UPDATE_GATE))) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
@@ -36,6 +37,7 @@ export async function PATCH(
   const { data, error } = await updateEvent(supabase, id, {
     buyer_fields: buyerFields,
   });
+  if (writeBlocked(error)) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ event: data, buyer_fields: buyerFields });
 }
