@@ -1,11 +1,13 @@
-import { ROCK_STATUSES, type RockStatus } from "./types";
+import { ROCK_STATUSES, type RockStatus } from "./db.types";
+
+type BudgetCurrency = "ZAR";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+const QUARTER_RE = /^(\d{4})-Q([1-4])$/;
 
 const TITLE_MAX = 200;
-const DESCRIPTION_MAX = 4000;
-const NOTES_MAX = 2000;
+const TEXT_MAX = 4000;
 
 export function isUuid(value: unknown): value is string {
   return typeof value === "string" && UUID_RE.test(value);
@@ -32,9 +34,17 @@ export type RockWrite = {
 
 export type RockPatch = Partial<RockWrite>;
 
+export type BudgetWrite = {
+  finance_project_id: string | null;
+  budget_cents: number;
+  currency: BudgetCurrency;
+  notes: string | null;
+};
+
 export type BudgetPatch = {
   budget_cents?: number;
   notes?: string | null;
+  currency?: BudgetCurrency;
 };
 
 type Parsed<T> = { ok: true; value: T } | { ok: false; error: string };
@@ -50,11 +60,7 @@ function parseTitle(value: unknown): Parsed<string> {
   return { ok: true, value: title };
 }
 
-function parseOptionalText(
-  value: unknown,
-  label: string,
-  max: number
-): Parsed<string | null> {
+function parseOptionalText(value: unknown, label: string, max: number): Parsed<string | null> {
   if (value == null) return { ok: true, value: null };
   if (typeof value !== "string") return { ok: false, error: `${label} must be text` };
   const text = value.trim();
@@ -92,17 +98,43 @@ function parseQuarterField(value: unknown, fallback: string | undefined): Parsed
     if (fallback) return { ok: true, value: fallback };
     return { ok: false, error: "Quarter must look like 2026-Q4" };
   }
-  if (typeof value !== "string" || !/^(\d{4})-Q([1-4])$/.test(value)) {
+  if (typeof value !== "string" || !QUARTER_RE.test(value)) {
     return { ok: false, error: "Quarter must look like 2026-Q4" };
   }
   return { ok: true, value };
+}
+
+function parseCents(value: unknown): Parsed<number> {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > Number.MAX_SAFE_INTEGER) {
+    return { ok: false, error: "budget_cents must be a whole number of cents, zero or more" };
+  }
+  return { ok: true, value };
+}
+
+function parseCurrency(value: unknown, fallback: BudgetCurrency | undefined): Parsed<BudgetCurrency> {
+  if (value == null || value === "") {
+    if (fallback) return { ok: true, value: fallback };
+    return { ok: false, error: "Currency must be ZAR or USD" };
+  }
+  if (value !== "ZAR") return { ok: false, error: "Currency must be ZAR" };
+  return { ok: true, value };
+}
+
+function rejectSpend(body: Record<string, unknown>): Parsed<true> {
+  if ("spend_cents" in body) {
+    return { ok: false, error: "Spend is recorded from finance and can't be edited here" };
+  }
+  if ("year" in body) {
+    return { ok: false, error: "Year is set by the database and can't be edited here" };
+  }
+  return { ok: true, value: true };
 }
 
 export function parseRockCreate(body: unknown, quarter: string): Parsed<RockWrite> {
   if (!isRecord(body)) return { ok: false, error: "Invalid JSON body" };
   const title = parseTitle(body.title);
   if (!title.ok) return title;
-  const description = parseOptionalText(body.description, "Description", DESCRIPTION_MAX);
+  const description = parseOptionalText(body.description, "Description", TEXT_MAX);
   if (!description.ok) return description;
   const owner = parseOwner(body.owner_user_id);
   if (!owner.ok) return owner;
@@ -134,7 +166,7 @@ export function parseRockPatch(body: unknown): Parsed<RockPatch> {
     patch.title = title.value;
   }
   if ("description" in body) {
-    const description = parseOptionalText(body.description, "Description", DESCRIPTION_MAX);
+    const description = parseOptionalText(body.description, "Description", TEXT_MAX);
     if (!description.ok) return description;
     patch.description = description.value;
   }
@@ -158,35 +190,61 @@ export function parseRockPatch(body: unknown): Parsed<RockPatch> {
     if (!quarter.ok) return quarter;
     patch.quarter = quarter.value;
   }
-  if (Object.keys(patch).length === 0) {
-    return { ok: false, error: "Nothing to change" };
-  }
+  if (Object.keys(patch).length === 0) return { ok: false, error: "Nothing to change" };
   return { ok: true, value: patch };
 }
 
-export function parseBudgetPatch(
-  body: unknown
-): Parsed<{ linkId: string; patch: BudgetPatch }> {
+export function parseBudgetCreate(body: unknown): Parsed<BudgetWrite> {
   if (!isRecord(body)) return { ok: false, error: "Invalid JSON body" };
-  if ("spend_cents" in body) {
-    return { ok: false, error: "Spend is recorded from finance and can't be edited here" };
+  const spend = rejectSpend(body);
+  if (!spend.ok) return spend;
+  let financeProjectId: string | null = null;
+  if (body.finance_project_id != null && body.finance_project_id !== "") {
+    if (!isUuid(body.finance_project_id)) {
+      return { ok: false, error: "finance_project_id must be a finance project id" };
+    }
+    financeProjectId = body.finance_project_id;
   }
+  const cents = parseCents(body.budget_cents ?? 0);
+  if (!cents.ok) return cents;
+  const currency = parseCurrency(body.currency, "ZAR");
+  if (!currency.ok) return currency;
+  const notes = parseOptionalText(body.notes, "Notes", TEXT_MAX);
+  if (!notes.ok) return notes;
+  return {
+    ok: true,
+    value: {
+      finance_project_id: financeProjectId,
+      budget_cents: cents.value,
+      currency: currency.value,
+      notes: notes.value,
+    },
+  };
+}
+
+export function parseBudgetPatch(body: unknown): Parsed<{ linkId: string; patch: BudgetPatch }> {
+  if (!isRecord(body)) return { ok: false, error: "Invalid JSON body" };
+  const spend = rejectSpend(body);
+  if (!spend.ok) return spend;
   if (!isUuid(body.link_id)) return { ok: false, error: "link_id must be the budget link id" };
   const patch: BudgetPatch = {};
   if ("budget_cents" in body) {
-    const amount = body.budget_cents;
-    if (typeof amount !== "number" || !Number.isInteger(amount) || amount < 0 || amount > Number.MAX_SAFE_INTEGER) {
-      return { ok: false, error: "budget_cents must be a whole number of cents, zero or more" };
-    }
-    patch.budget_cents = amount;
+    const cents = parseCents(body.budget_cents);
+    if (!cents.ok) return cents;
+    patch.budget_cents = cents.value;
   }
   if ("notes" in body) {
-    const notes = parseOptionalText(body.notes, "Notes", NOTES_MAX);
+    const notes = parseOptionalText(body.notes, "Notes", TEXT_MAX);
     if (!notes.ok) return notes;
     patch.notes = notes.value;
   }
+  if ("currency" in body) {
+    const currency = parseCurrency(body.currency, undefined);
+    if (!currency.ok) return currency;
+    patch.currency = currency.value;
+  }
   if (Object.keys(patch).length === 0) {
-    return { ok: false, error: "Nothing to change: send budget_cents or notes" };
+    return { ok: false, error: "Nothing to change: send budget_cents, currency or notes" };
   }
   return { ok: true, value: { linkId: body.link_id, patch } };
 }

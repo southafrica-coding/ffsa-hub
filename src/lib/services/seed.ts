@@ -1,82 +1,86 @@
-// The service-ownership rules, as data.
-//
-// Helpers never switch on a ministry name. They read service_owners rows.
-// This fixture is the set those rows should hold once Hub Data's migration
-// lands — tests assert the rules against it, and the INSERT can be copied
-// from it. Slugs are staff_ministries.slug on main:
-//   Leadership Team → leadership_team
-//   HULC (spoken of as Hulk) → hulk
-//   Prayer & Worship → prayer_and_worship
-//   Finances & Legal → finances_legal
-//
-// capability 'own' is the ownership lookup only. It does not grant manage,
-// use or moderate. 'manage' implies 'use'. 'moderate' does not imply either.
+// Fixture matching the service_owners seed in migration 318.
+// Runtime reads the table. This is used when that relation is missing,
+// and by tests. own does not imply manage: owners are seeded with both.
 
-import type { MemberRole, ServiceCapability, ServiceOwnerRow } from "@/lib/departments/types";
+import type { ServiceCapability, ServiceOwner } from "@/lib/departments/db.types";
 
-export type ServiceOwnerSeed = {
+export type ServiceSeedRow = {
   service_key: string;
   ministry_slug: string | null;
   capability: ServiceCapability;
-  member_role: MemberRole;
+  member_role: "member" | "leader" | null;
   any_point_leader: boolean;
+    open_to_all: boolean;
   admin_href: string;
 };
 
-export const SERVICE_KEYS = {
-  communications: "communications",
-  contacts: "contacts",
-  evangelism: "evangelism",
-  gearHire: "gear_hire",
-} as const;
-
-export const SERVICE_OWNER_SEED: readonly ServiceOwnerSeed[] = [
-  // Communications: Media, HULC and Leadership can manage.
-  seed("communications", "media", "manage", "/communications"),
-  seed("communications", "hulk", "manage", "/communications"),
-  seed("communications", "leadership_team", "manage", "/communications"),
-
-  // Contacts: those three run it. Every ministry leader can use it.
-  seed("contacts", "media", "manage", "/contacts"),
-  seed("contacts", "hulk", "manage", "/contacts"),
-  seed("contacts", "leadership_team", "manage", "/contacts"),
-  {
-    service_key: "contacts",
-    ministry_slug: null,
-    capability: "use",
-    member_role: "leader",
-    any_point_leader: true,
-    admin_href: "/contacts",
-  },
-
-  // Evangelism: Media and HULC moderate.
-  seed("evangelism", "media", "moderate", "/evangelism"),
-  seed("evangelism", "hulk", "moderate", "/evangelism"),
-
-  // Gear hire: owned jointly by Prayer & Worship, Operations and Media.
-  // Ownership is its own capability — it does not by itself grant manage.
-  seed("gear_hire", "prayer_and_worship", "own", "/bookings/equipment/gear"),
-  seed("gear_hire", "operations", "own", "/bookings/equipment/gear"),
-  seed("gear_hire", "media", "own", "/bookings/equipment/gear"),
+export const SERVICE_CATALOG: ReadonlyArray<{ service_key: string; label: string; admin_href: string }> = [
+  { service_key: "gear_hire", label: "Gear hire", admin_href: "/bookings/equipment" },
+  { service_key: "communications", label: "Communications", admin_href: "/communications" },
+  { service_key: "contacts", label: "Contacts", admin_href: "/contacts" },
+  { service_key: "evangelism", label: "Evangelism", admin_href: "/evangelism" },
+  { service_key: "prayer_room", label: "Prayer room", admin_href: "/prayer-room" },
+  { service_key: "spaces", label: "Spaces", admin_href: "/bookings/spaces" },
+  { service_key: "vehicles", label: "Vehicles", admin_href: "/bookings/vehicles" },
+  { service_key: "brand_kit", label: "Brand kit", admin_href: "/brand-kit" },
 ];
 
-function seed(
+const href = Object.fromEntries(SERVICE_CATALOG.map((row) => [row.service_key, row.admin_href]));
+
+function row(
   serviceKey: string,
-  ministrySlug: string,
+  ministrySlug: string | null,
   capability: ServiceCapability,
-  adminHref: string
-): ServiceOwnerSeed {
+  memberRole: "member" | "leader" | null,
+  flags: { any_point_leader?: boolean; open_to_all?: boolean } = {}
+): ServiceSeedRow {
   return {
     service_key: serviceKey,
     ministry_slug: ministrySlug,
     capability,
-    member_role: "member",
-    any_point_leader: false,
-    admin_href: adminHref,
+    member_role: memberRole,
+    any_point_leader: flags.any_point_leader === true,
+    open_to_all: flags.open_to_all === true,
+    admin_href: href[serviceKey] ?? "",
   };
 }
 
-/** Resolve slugs to ministry ids so a test can run the real matcher. */
+/** staff_ministry_id null, capability use, open_to_all true. */
+function openToAll(serviceKey: string): ServiceSeedRow {
+  return row(serviceKey, null, "use", null, { open_to_all: true });
+}
+
+function owned(serviceKey: string, ministrySlug: string): ServiceSeedRow[] {
+  return [row(serviceKey, ministrySlug, "own", "member"), row(serviceKey, ministrySlug, "manage", "member")];
+}
+
+export const SERVICE_OWNER_SEED: readonly ServiceSeedRow[] = [
+  ...owned("gear_hire", "prayer_and_worship"),
+  ...owned("gear_hire", "operations"),
+  ...owned("gear_hire", "media"),
+  openToAll("gear_hire"),
+  ...owned("communications", "media"),
+  row("communications", "hulk", "use", "member"),
+  row("communications", "leadership_team", "use", "member"),
+  ...owned("contacts", "media"),
+  ...owned("contacts", "hulk"),
+  ...owned("contacts", "leadership_team"),
+  row("contacts", null, "use", "leader", { any_point_leader: true }),
+  row("evangelism", "media", "own", "member"),
+  row("evangelism", "hulk", "own", "member"),
+  openToAll("evangelism"),
+  ...owned("prayer_room", "prayer_and_worship"),
+  openToAll("prayer_room"),
+  ...owned("spaces", "operations"),
+  openToAll("spaces"),
+  ...owned("vehicles", "operations"),
+  openToAll("vehicles"),
+  ...owned("brand_kit", "media"),
+  openToAll("brand_kit"),
+];
+
+export type ServiceOwnerRow = ServiceOwner;
+
 export function seedGrants(ids: Record<string, string>): ServiceOwnerRow[] {
   return SERVICE_OWNER_SEED.map((row, index) => {
     let staffMinistryId: string | null = null;
@@ -92,7 +96,9 @@ export function seedGrants(ids: Record<string, string>): ServiceOwnerRow[] {
       capability: row.capability,
       member_role: row.member_role,
       any_point_leader: row.any_point_leader,
+      open_to_all: row.open_to_all,
       admin_href: row.admin_href,
+      created_at: "2026-11-10T00:00:00.000Z",
     };
   });
 }

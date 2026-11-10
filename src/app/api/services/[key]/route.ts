@@ -2,13 +2,12 @@ import { NextResponse } from "next/server";
 import { getAuthedUser } from "@/lib/api-auth";
 import { accountIsActive } from "@/lib/auth/grant-scope";
 import { notAuthenticated, notAuthorized, notFound, serverError } from "@/lib/departments/http";
-import { getServiceOwners } from "@/lib/services/access";
+import { listMinistriesById } from "@/lib/departments/repository";
+import { canUseService } from "@/lib/services/access";
+import { toHubService } from "@/lib/services/present";
+import { listServiceOwnerRows, listServices } from "@/lib/services/repository";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-
-// GET /api/services/[key]
-// One service's owning ministries and admin_href.
-// Any active signed-in user. Unknown key 404. Inactive 403.
 
 export const dynamic = "force-dynamic";
 
@@ -19,9 +18,17 @@ export async function GET(_request: Request, { params }: { params: Promise<{ key
   if (!user) return notAuthenticated();
   if (!(await accountIsActive(supabase, user.id))) return notAuthorized();
   if (!/^[a-z0-9_]+$/.test(key)) return notFound("Service not found");
-
-  const owners = await getServiceOwners(createAdminClient(), key);
-  if (owners.error) return serverError(owners.error.message);
-  if (!owners.data) return notFound("Service not found");
-  return NextResponse.json(owners.data);
+  const admin = createAdminClient();
+  const [services, grants] = await Promise.all([listServices(admin), listServiceOwnerRows(admin, key)]);
+  if (services.error || grants.error) return serverError(services.error ?? grants.error);
+  const service = services.data.find((row) => row.service_key === key);
+  if (!service && grants.data.length === 0) return notFound("Service not found");
+  if (!(await canUseService(supabase, user.id, key))) return notAuthorized();
+  const ministries = await listMinistriesById(
+    admin,
+    grants.data.flatMap((grant) => (grant.staff_ministry_id ? [grant.staff_ministry_id] : []))
+  );
+  if (ministries.error) return serverError(ministries.error);
+  const card = service ?? { service_key: key, label: key, admin_href: grants.data[0]?.admin_href ?? "" };
+  return NextResponse.json(toHubService(card, grants.data, ministries.data));
 }

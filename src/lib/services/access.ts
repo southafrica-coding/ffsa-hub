@@ -1,162 +1,126 @@
-// Service gates, driven by service_owners rows.
+// Mirrors user_can_use_service, reading service_owners rows.
+// open_to_all use row: any signed-in active user.
+// any_point_leader use row: an active member with is_point_leader.
+// ministry row: active member of staff_ministry_id. member_role null means
+// any active member; member includes leaders; leader is leaders only.
+// manage implies use. own does not. Unscoped admin may use a service that
+// has at least one row.
 //
-// manage implies use. moderate does not imply manage or use. own is the
-// ownership lookup only — it does not satisfy any of the three.
-//
-// Admin and super_admin (unscoped) are allowed when the service exists.
-// An unknown key is not an allow: there is nothing to administer.
-// is_active = false denies. A failed lookup denies, including a failed
-// membership read for someone who is otherwise an admin.
+// Evangelism moderation is only can_moderate_evangelism(). No service_owners
+// moderate check for that key.
 
 import { accountIsActive } from "@/lib/auth/grant-scope";
 import { holdsUnscopedRole } from "@/lib/departments/access";
-import {
-  listActiveMemberships,
-  listMinistriesById,
-  listUserRoleGrants,
-  type ActiveMembership,
-} from "@/lib/departments/repository";
-import type { ServiceCapability, ServiceOwnerRow, ServiceOwnership } from "@/lib/departments/types";
+import { listActiveMemberships, listUserRoleGrants, type ActiveMembership } from "@/lib/departments/repository";
 import { listServiceOwnerRows } from "./repository";
+import type { ServiceOwnerRow } from "./seed";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
 
 const ADMIN_ROLES = ["super_admin", "admin"];
-type LiveCapability = Exclude<ServiceCapability, "own">;
+type LiveCapability = "manage" | "use" | "moderate";
 
-export function grantMatches(
-  grant: Pick<ServiceOwnerRow, "capability" | "staff_ministry_id" | "member_role" | "any_point_leader">,
-  memberships: readonly Pick<ActiveMembership, "staff_ministry_id" | "member_role">[],
+export function isOpenToAll(grant: { open_to_all?: boolean | null; capability?: string }): boolean {
+  return grant.open_to_all === true && grant.capability === "use";
+}
+
+export function memberMatchesGrant(
+  grant: Pick<ServiceOwnerRow, "capability" | "staff_ministry_id" | "member_role" | "any_point_leader" | "open_to_all">,
+  memberships: readonly ActiveMembership[],
   wanted: LiveCapability
 ): boolean {
   const capabilityOk = grant.capability === wanted || (wanted === "use" && grant.capability === "manage");
   if (!capabilityOk) return false;
-  if (grant.any_point_leader) {
-    return memberships.some((membership) => membership.member_role === "leader");
-  }
+  if (grant.open_to_all === true) return true;
+  if (grant.any_point_leader) return memberships.some((membership) => membership.is_point_leader);
   if (!grant.staff_ministry_id) return false;
   const membership = memberships.find((row) => row.staff_ministry_id === grant.staff_ministry_id);
   if (!membership) return false;
-  if (grant.member_role === "leader") return membership.member_role === "leader";
-  return membership.member_role === "member" || membership.member_role === "leader";
+  if (grant.member_role == null || grant.member_role === "member") return true;
+  return membership.member_role === "leader";
 }
 
-export function holdsServiceCapability(
+/** Use rights from rows. Does not check the account; the caller already did. */
+export function mayUseService(
   grants: readonly ServiceOwnerRow[],
   memberships: readonly ActiveMembership[],
-  wanted: LiveCapability,
   isAdmin: boolean
 ): boolean {
+  if (grants.some((grant) => isOpenToAll(grant))) return true;
   if (grants.length === 0) return false;
   if (isAdmin) return true;
-  return grants.some((grant) => grantMatches(grant, memberships, wanted));
+  return grants.some((grant) => memberMatchesGrant(grant, memberships, "use"));
 }
 
-async function can(
-  supabase: Client,
-  userId: string,
-  serviceKey: string,
-  wanted: LiveCapability
-): Promise<boolean> {
-  const active = await accountIsActive(supabase, userId);
-  if (!active) return false;
+export function audienceFromGrants(
+  grants: readonly Pick<ServiceOwnerRow, "open_to_all" | "any_point_leader">[]
+): "all_signed_in" | "point_leaders" | "owners_only" {
+  if (grants.some((grant) => grant.open_to_all === true)) return "all_signed_in";
+  if (grants.some((grant) => grant.any_point_leader)) return "point_leaders";
+  return "owners_only";
+}
 
+async function load(
+  supabase: Client,
+  userId: string
+): Promise<{
+  grants: ServiceOwnerRow[] | null;
+  memberships: ActiveMembership[] | null;
+  isAdmin: boolean;
+  failed: boolean;
+}> {
   const [roles, grants, memberships] = await Promise.all([
     listUserRoleGrants(supabase, userId),
-    listServiceOwnerRows(supabase, serviceKey),
+    listServiceOwnerRows(supabase),
     listActiveMemberships(supabase, userId),
   ]);
-  if (roles.error || grants.error || memberships.error) return false;
-  return holdsServiceCapability(
-    grants.data,
-    memberships.data,
-    wanted,
-    holdsUnscopedRole(roles.data, ADMIN_ROLES)
+  if (roles.error || grants.error || memberships.error) {
+    return { grants: null, memberships: null, isAdmin: false, failed: true };
+  }
+  return {
+    grants: grants.data,
+    memberships: memberships.data,
+    isAdmin: holdsUnscopedRole(roles.data, ADMIN_ROLES),
+    failed: false,
+  };
+}
+
+export async function canUseService(supabase: Client, userId: string, serviceKey: string): Promise<boolean> {
+  const active = await accountIsActive(supabase, userId);
+  if (!active) return false;
+  const loaded = await load(supabase, userId);
+  if (loaded.failed || !loaded.grants || !loaded.memberships) return false;
+  return mayUseService(
+    loaded.grants.filter((grant) => grant.service_key === serviceKey),
+    loaded.memberships,
+    loaded.isAdmin
   );
 }
 
-export async function canManageService(
-  supabase: Client,
-  userId: string,
-  serviceKey: string
-): Promise<boolean> {
-  return can(supabase, userId, serviceKey, "manage");
+export async function canManageService(supabase: Client, userId: string, serviceKey: string): Promise<boolean> {
+  const active = await accountIsActive(supabase, userId);
+  if (!active) return false;
+  const loaded = await load(supabase, userId);
+  if (loaded.failed || !loaded.grants || !loaded.memberships) return false;
+  const grants = loaded.grants.filter((grant) => grant.service_key === serviceKey);
+  if (grants.length === 0) return false;
+  if (loaded.isAdmin) return true;
+  return grants.some((grant) => memberMatchesGrant(grant, loaded.memberships!, "manage"));
 }
 
-export async function canUseService(
-  supabase: Client,
-  userId: string,
-  serviceKey: string
-): Promise<boolean> {
-  return can(supabase, userId, serviceKey, "use");
-}
-
-export async function canModerateService(
-  supabase: Client,
-  userId: string,
-  serviceKey: string
-): Promise<boolean> {
-  return can(supabase, userId, serviceKey, "moderate");
-}
-
-export function toServiceOwnership(
-  serviceKey: string,
-  grants: readonly ServiceOwnerRow[],
-  ministries: readonly { id: string; slug: string; name: string }[]
-): ServiceOwnership {
-  const adminHref = grants.find((grant) => grant.admin_href)?.admin_href ?? null;
-  const seen = new Set<string>();
-  const owners = [];
-  for (const grant of grants) {
-    if (!grant.staff_ministry_id || seen.has(grant.staff_ministry_id)) continue;
-    seen.add(grant.staff_ministry_id);
-    const ministry = ministries.find((row) => row.id === grant.staff_ministry_id);
-    owners.push({
-      staff_ministry_id: grant.staff_ministry_id,
-      slug: ministry?.slug ?? null,
-      name: ministry?.name ?? null,
-    });
+export async function canModerateService(supabase: Client, userId: string, serviceKey: string): Promise<boolean> {
+  const active = await accountIsActive(supabase, userId);
+  if (!active) return false;
+  if (serviceKey === "evangelism") {
+    const { data, error } = await supabase.rpc("can_moderate_evangelism");
+    if (error) return false;
+    return data === true;
   }
-  owners.sort((a, b) => (a.slug ?? "").localeCompare(b.slug ?? ""));
-  return { service_key: serviceKey, admin_href: adminHref, owners };
-}
-
-/**
- * Owning ministries for one service key, plus admin_href.
- * data null and error null means the key has no rows (unknown).
- */
-export async function getServiceOwners(
-  supabase: Client,
-  serviceKey: string
-): Promise<{ data: ServiceOwnership | null; error: { message: string } | null }> {
-  const grants = await listServiceOwnerRows(supabase, serviceKey);
-  if (grants.error) return { data: null, error: grants.error };
-  if (grants.data.length === 0) return { data: null, error: null };
-  const ids = grants.data.flatMap((grant) => (grant.staff_ministry_id ? [grant.staff_ministry_id] : []));
-  const ministries = await listMinistriesById(supabase, ids);
-  if (ministries.error) return { data: null, error: ministries.error };
-  return { data: toServiceOwnership(serviceKey, grants.data, ministries.data), error: null };
-}
-
-/** Every service that has at least one service_owners row. */
-export async function listServiceOwnership(
-  supabase: Client
-): Promise<{ data: ServiceOwnership[] | null; error: { message: string } | null }> {
-  const grants = await listServiceOwnerRows(supabase);
-  if (grants.error) return { data: null, error: grants.error };
-  const ids = [...new Set(grants.data.flatMap((grant) => (grant.staff_ministry_id ? [grant.staff_ministry_id] : [])))];
-  const ministries = await listMinistriesById(supabase, ids);
-  if (ministries.error) return { data: null, error: ministries.error };
-  const keys = [...new Set(grants.data.map((grant) => grant.service_key))].sort((a, b) => a.localeCompare(b));
-  return {
-    data: keys.map((key) =>
-      toServiceOwnership(
-        key,
-        grants.data.filter((grant) => grant.service_key === key),
-        ministries.data
-      )
-    ),
-    error: null,
-  };
+  const loaded = await load(supabase, userId);
+  if (loaded.failed || !loaded.grants || !loaded.memberships) return false;
+  const grants = loaded.grants.filter((grant) => grant.service_key === serviceKey);
+  if (grants.length === 0) return false;
+  if (loaded.isAdmin) return true;
+  return grants.some((grant) => memberMatchesGrant(grant, loaded.memberships!, "moderate"));
 }

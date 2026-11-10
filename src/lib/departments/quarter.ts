@@ -24,6 +24,26 @@ export function currentQuarter(now = new Date()): string {
   return quarterOf(now);
 }
 
+/** Calendar date in Africa/Johannesburg, `YYYY-MM-DD`. */
+export function saTodayIso(now = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Africa/Johannesburg",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const read = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? "";
+  const [day, month, year] = [read("day"), read("month"), read("year")];
+  return `${year}-${month}-${day}`;
+}
+
+export function addIsoDays(iso: string, days: number): string {
+  const [year, month, day] = iso.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
 /**
  * Missing means "this quarter". A present value must already be `2026-Q4`
  * shaped — we do not coerce.

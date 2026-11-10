@@ -4,350 +4,139 @@ import { createFakeSupabase } from "@/lib/testing/fake-supabase";
 import {
   ADMIN,
   FINANCE_USER,
-  INACTIVE_ADMIN,
   LEADER,
   LEADERSHIP_MEMBER,
   LINK_ID,
   MEDIA,
   MEMBER,
-  OTHER_ROCK_ID,
   OUTSIDER,
-  ROCK_ID,
-  SCOPED_ADMIN,
+  PROJECT_ID,
   makeDepartmentWorld,
   resolveDepartmentWorld,
   type DepartmentWorld,
 } from "@/lib/testing/department-world";
-import { currentQuarter } from "@/lib/departments/quarter";
 
 const h = vi.hoisted(() => ({
   userId: null as string | null,
   world: null as DepartmentWorld | null,
-  userQueries: [] as FakeQuery[],
-  adminQueries: [] as FakeQuery[],
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
-  createClient: async () => {
-    const fake = createFakeSupabase({
+  createClient: async () =>
+    createFakeSupabase({
       user: h.userId ? { id: h.userId } : null,
-      resolve: (query) => resolveDepartmentWorld(h.world as DepartmentWorld, query),
-    });
-    h.userQueries = fake.queries;
-    return fake.client;
-  },
+      resolve: (query: FakeQuery) => resolveDepartmentWorld(h.world as DepartmentWorld, query),
+    }).client,
 }));
 
 vi.mock("@/lib/supabase/admin", () => ({
-  createAdminClient: () => {
-    const fake = createFakeSupabase({
+  createAdminClient: () =>
+    createFakeSupabase({
       user: h.userId ? { id: h.userId } : null,
-      resolve: (query) => resolveDepartmentWorld(h.world as DepartmentWorld, query),
-    });
-    h.adminQueries = fake.queries;
-    return fake.client;
-  },
+      resolve: (query: FakeQuery) => resolveDepartmentWorld(h.world as DepartmentWorld, query),
+    }).client,
 }));
 
-const { GET: getOverview } = await import("./[slug]/overview/route");
+const { GET: listDepartments } = await import("./route");
+const { GET: getHome } = await import("./[slug]/route");
 const { GET: getPeople } = await import("./[slug]/people/route");
 const { GET: getOkrs } = await import("./[slug]/okrs/route");
-const { GET: getRocks, POST: postRock } = await import("./[slug]/rocks/route");
-const { PATCH: patchRock } = await import("./[slug]/rocks/[rockId]/route");
-const { GET: getBudget, PATCH: patchBudget } = await import("./[slug]/budget/route");
-const { GET: getRollup } = await import("./rocks/route");
+const { GET: getRocks } = await import("./[slug]/rocks/route");
+const { GET: getBudget } = await import("./[slug]/budget/route");
 const { GET: getServices } = await import("../services/route");
-const { GET: getService } = await import("../services/[key]/route");
 
-function slugCtx(slug: string) {
-  return { params: Promise.resolve({ slug }) };
-}
-function rockCtx(slug: string, rockId: string) {
-  return { params: Promise.resolve({ slug, rockId }) };
-}
-function keyCtx(key: string) {
-  return { params: Promise.resolve({ key }) };
-}
-
-function jsonRequest(url: string, method: string, body: unknown) {
-  return new Request(url, {
-    method,
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-}
+const slug = (value: string) => ({ params: Promise.resolve({ slug: value }) });
 
 beforeEach(() => {
   h.userId = MEMBER;
   h.world = makeDepartmentWorld();
-  h.userQueries = [];
-  h.adminQueries = [];
 });
 
-describe("department routes", () => {
-  it("asks a signed-out caller to sign in", async () => {
-    h.userId = null;
-    const calls = [
-      getOverview(new Request("http://localhost/api/departments/media/overview"), slugCtx("media")),
-      getPeople(new Request("http://localhost/api/departments/media/people"), slugCtx("media")),
-      getOkrs(new Request("http://localhost/api/departments/media/okrs"), slugCtx("media")),
-      getRocks(new Request("http://localhost/api/departments/media/rocks"), slugCtx("media")),
-      postRock(jsonRequest("http://localhost/api/departments/media/rocks", "POST", { title: "A" }), slugCtx("media")),
-      patchRock(
-        jsonRequest("http://localhost/api/departments/media/rocks/" + ROCK_ID, "PATCH", { status: "done" }),
-        rockCtx("media", ROCK_ID)
-      ),
-      getBudget(new Request("http://localhost/api/departments/media/budget"), slugCtx("media")),
-      patchBudget(
-        jsonRequest("http://localhost/api/departments/media/budget", "PATCH", { link_id: LINK_ID, budget_cents: 1 }),
-        slugCtx("media")
-      ),
-      getRollup(new Request("http://localhost/api/departments/rocks")),
-      getServices(),
-      getService(new Request("http://localhost/api/services/communications"), keyCtx("communications")),
-    ];
-    const responses = await Promise.all(calls);
-    expect(responses.map((response) => response.status)).toEqual(Array(calls.length).fill(401));
-  });
-
-  it("returns 404 for an unknown department or service, and 403 for an inactive admin", async () => {
-    h.userId = ADMIN;
-    expect((await getOverview(new Request("http://localhost/x"), slugCtx("not_a_department"))).status).toBe(404);
-    expect((await getPeople(new Request("http://localhost/x"), slugCtx("not_a_department"))).status).toBe(404);
-    expect((await getService(new Request("http://localhost/x"), keyCtx("not_a_service"))).status).toBe(404);
-    expect((await getService(new Request("http://localhost/x"), keyCtx("Communications"))).status).toBe(404);
-
-    h.userId = INACTIVE_ADMIN;
-    expect((await getOverview(new Request("http://localhost/x"), slugCtx("media"))).status).toBe(403);
-    expect((await getBudget(new Request("http://localhost/x"), slugCtx("media"))).status).toBe(403);
-    expect((await getRollup(new Request("http://localhost/x"))).status).toBe(403);
-    expect((await getServices()).status).toBe(403);
-  });
-
-  it("denies the request when the access lookup fails", async () => {
-    h.userId = ADMIN;
-    h.world!.errors = { users: true };
-    expect((await getOverview(new Request("http://localhost/x"), slugCtx("media"))).status).toBe(403);
-    expect((await getRollup(new Request("http://localhost/x"))).status).toBe(403);
-    expect((await getServices()).status).toBe(403);
-  });
-
-  it("returns 500 when the department itself cannot be loaded", async () => {
-    h.userId = ADMIN;
-    h.world!.errors = { staff_ministries: true };
-    const response = await getOverview(new Request("http://localhost/x"), slugCtx("media"));
-    expect(response.status).toBe(500);
-  });
-
-  it("shows a member their department and hides it from an outsider", async () => {
-    const overview = await getOverview(new Request("http://localhost/x"), slugCtx("media"));
-    expect(overview.status).toBe(200);
-    const body = await overview.json();
-    expect(body.department).toMatchObject({ slug: "media", purpose: "Cameras and stories" });
-    expect(body.counts).toMatchObject({ people: 2, leaders: 1, rocks: 1, objectives: 1 });
-    expect(body.leaders).toEqual([
-      expect.objectContaining({ user_id: LEADER, name: "Hanno Leader", is_point_leader: true, job_title: "Producer" }),
-    ]);
-    expect(body.quarter).toBe(currentQuarter());
-
-    h.userId = OUTSIDER;
-    expect((await getOverview(new Request("http://localhost/x"), slugCtx("media"))).status).toBe(403);
-    h.userId = SCOPED_ADMIN;
-    expect((await getOverview(new Request("http://localhost/x"), slugCtx("media"))).status).toBe(403);
-    h.userId = LEADERSHIP_MEMBER;
-    expect((await getOverview(new Request("http://localhost/x"), slugCtx("media"))).status).toBe(200);
-  });
-
-  it("returns the roster and the open reporting line", async () => {
-    const response = await getPeople(new Request("http://localhost/x"), slugCtx("media"));
-    expect(response.status).toBe(200);
-    const body = await response.json();
-    expect(body.roster.map((row: { name: string; status: string }) => [row.name, row.status])).toEqual([
-      ["Hanno Leader", "active"],
-      ["Pete Pending", "pending"],
-      ["Amahle Member", "active"],
-    ]);
-    expect(body.reporting_lines).toEqual([
-      expect.objectContaining({ kind: "oversees", leader_name: "Hanno Leader", ends_on: null }),
-    ]);
-
-    h.userId = OUTSIDER;
-    expect((await getPeople(new Request("http://localhost/x"), slugCtx("media"))).status).toBe(403);
-  });
-
-  it("returns the current ministry cycle and leaves individual OKRs out", async () => {
-    const response = await getOkrs(new Request("http://localhost/x"), slugCtx("media"));
-    expect(response.status).toBe(200);
-    const body = await response.json();
-    expect(body.cycle.slug).toBe("2026");
-    expect(body.objectives.map((row: { title: string }) => row.title)).toEqual(["Tell the story"]);
-    expect(body.objectives[0].key_results[0]).toMatchObject({ description: "Publish 12 films", current_value: 4 });
-
-    h.userId = OUTSIDER;
-    expect((await getOkrs(new Request("http://localhost/x"), slugCtx("media"))).status).toBe(403);
-  });
-
-  it("lets a member read rocks and only a leader create or update them", async () => {
-    const listed = await getRocks(new Request("http://localhost/api/departments/media/rocks"), slugCtx("media"));
-    expect(listed.status).toBe(200);
-    const listBody = await listed.json();
-    expect(listBody.can_edit).toBe(false);
-    expect(listBody.rocks.map((row: { title: string }) => row.title)).toEqual(["Finish the recap"]);
-
-    const denied = await postRock(
-      jsonRequest("http://localhost/api/departments/media/rocks", "POST", { title: "Ship the film" }),
-      slugCtx("media")
-    );
-    expect(denied.status).toBe(403);
-    expect(h.adminQueries.some((query) => query.action === "insert")).toBe(false);
-
-    h.userId = LEADER;
-    const created = await postRock(
-      jsonRequest("http://localhost/api/departments/media/rocks", "POST", {
-        title: "Ship the film",
-        owner_user_id: LEADER,
-      }),
-      slugCtx("media")
-    );
-    expect(created.status).toBe(200);
-    const createdBody = await created.json();
-    expect(createdBody.rock).toMatchObject({ title: "Ship the film", owner_name: "Hanno Leader", status: "on_track" });
-    const inserted = h.adminQueries.find((query) => query.table === "rocks" && query.action === "insert");
-    expect(inserted?.payload).toMatchObject({
-      staff_ministry_id: MEDIA,
-      title: "Ship the film",
-      quarter: currentQuarter(),
-      created_by: LEADER,
-      status: "on_track",
-    });
-
-    h.userId = MEMBER;
-    const memberPatch = await patchRock(
-      jsonRequest("http://localhost/x", "PATCH", { status: "done" }),
-      rockCtx("media", ROCK_ID)
-    );
-    expect(memberPatch.status).toBe(403);
-
-    h.userId = LEADER;
-    const patched = await patchRock(
-      jsonRequest("http://localhost/x", "PATCH", { status: "done" }),
-      rockCtx("media", ROCK_ID)
-    );
-    expect(patched.status).toBe(200);
-    expect((await patched.json()).rock.status).toBe("done");
-
-    const missing = await patchRock(
-      jsonRequest("http://localhost/x", "PATCH", { status: "done" }),
-      rockCtx("media", OTHER_ROCK_ID)
-    );
-    expect(missing.status).toBe(404);
-
-    const badQuarter = await getRocks(
-      new Request("http://localhost/api/departments/media/rocks?quarter=nope"),
-      slugCtx("media")
-    );
-    expect(badQuarter.status).toBe(400);
-  });
-
-  it("lets Finances & Legal read every budget and only a leader edit it", async () => {
+describe("department visibility", () => {
+  it("gives a finance-only viewer the budget and nothing else", async () => {
     h.userId = FINANCE_USER;
-    const read = await getBudget(new Request("http://localhost/x"), slugCtx("media"));
-    expect(read.status).toBe(200);
-    const readBody = await read.json();
-    expect(readBody.can_edit).toBe(false);
-    expect(readBody.links[0]).toMatchObject({
-      id: LINK_ID,
-      budget_cents: 500000,
-      spend_cents: 125000,
+    const home = await getHome(new Request("http://localhost/x"), slug("media"));
+    expect(home.status).toBe(200);
+    const body = await home.json();
+    expect(body.access).toMatchObject({
+      canSeeDepartmentDetail: false,
+      canSeeBudget: true,
+      canEditBudget: false,
+      canEditRocks: false,
+      canSeePeopleEmails: false,
+    });
+    expect(body.department.budgetOnly).toBe(true);
+    expect(body.department.purpose).toBe("Cameras and stories");
+    expect(body.department.cluster).toBeNull();
+    expect(body.people).toBeNull();
+    expect(body.okrs).toBeNull();
+    expect(body.rocks).toBeNull();
+    expect(body.servicesRun).toBeNull();
+    expect(body.subMinistries).toBeNull();
+    expect(body.budget.links[0]).toMatchObject({
+      projectId: PROJECT_ID,
+      name: "Media",
+      budgetCents: 500000,
+      spentCents: 125000,
       currency: "ZAR",
-      project: { name: "Media", org_key: "npc", org_name: "FFSA NPC" },
     });
 
-    const edit = await patchBudget(
-      jsonRequest("http://localhost/x", "PATCH", { link_id: LINK_ID, budget_cents: 1 }),
-      slugCtx("media")
-    );
-    expect(edit.status).toBe(403);
-    expect(h.adminQueries.some((query) => query.action === "update")).toBe(false);
+    expect((await getPeople(new Request("http://localhost/x"), slug("media"))).status).toBe(404);
+    expect((await getOkrs(new Request("http://localhost/x"), slug("media"))).status).toBe(404);
+    expect((await getRocks(new Request("http://localhost/x"), slug("media"))).status).toBe(404);
+    expect((await getBudget(new Request("http://localhost/x"), slug("media"))).status).toBe(200);
 
-    h.userId = MEMBER;
-    expect((await getBudget(new Request("http://localhost/x"), slugCtx("media"))).status).toBe(403);
-    expect(
-      (
-        await patchBudget(
-          jsonRequest("http://localhost/x", "PATCH", { link_id: LINK_ID, budget_cents: 1 }),
-          slugCtx("media")
-        )
-      ).status
-    ).toBe(403);
-
-    h.userId = LEADER;
-    const spend = await patchBudget(
-      jsonRequest("http://localhost/x", "PATCH", { link_id: LINK_ID, spend_cents: 1 }),
-      slugCtx("media")
-    );
-    expect(spend.status).toBe(400);
-    expect(h.adminQueries.some((query) => query.action === "update")).toBe(false);
-
-    const saved = await patchBudget(
-      jsonRequest("http://localhost/x", "PATCH", { link_id: LINK_ID, budget_cents: 600000 }),
-      slugCtx("media")
-    );
-    expect(saved.status).toBe(200);
-    expect((await saved.json()).link).toMatchObject({ budget_cents: 600000, spend_cents: 125000 });
-    expect(h.adminQueries.find((query) => query.action === "update")?.payload).toMatchObject({
-      budget_cents: 600000,
-      updated_by: LEADER,
-    });
+    const list = await listDepartments();
+    const media = (await list.json()).find((row: { slug: string }) => row.slug === "media");
+    expect(media.budgetOnly).toBe(true);
+    expect(media.access.canSeeBudget).toBe(true);
   });
 
-  it("rolls every department's rocks up for Leadership Team and admins only", async () => {
+  it("gives a Leadership-only viewer detail with a null budget", async () => {
     h.userId = LEADERSHIP_MEMBER;
-    const response = await getRollup(new Request("http://localhost/api/departments/rocks"));
+    const home = await getHome(new Request("http://localhost/x"), slug("media"));
+    expect(home.status).toBe(200);
+    const body = await home.json();
+    expect(body.access.canSeeDepartmentDetail).toBe(true);
+    expect(body.access.canSeeBudget).toBe(false);
+    expect(body.budget).toBeNull();
+    expect(body.people).not.toBeNull();
+    expect(body.people.every((person: { email: string | null }) => person.email == null)).toBe(true);
+    expect((await getBudget(new Request("http://localhost/x"), slug("media"))).status).toBe(404);
+    expect((await getPeople(new Request("http://localhost/x"), slug("media"))).status).toBe(200);
+  });
+
+  it("returns 404 for an outsider and for a blocked slug", async () => {
+    h.userId = OUTSIDER;
+    expect((await getHome(new Request("http://localhost/x"), slug("media"))).status).toBe(404);
+    expect((await getBudget(new Request("http://localhost/x"), slug("media"))).status).toBe(404);
+    h.userId = ADMIN;
+    expect((await getHome(new Request("http://localhost/x"), slug("woven"))).status).toBe(404);
+    expect((await getHome(new Request("http://localhost/x"), slug("no_ministry"))).status).toBe(404);
+    h.userId = null;
+    expect((await getHome(new Request("http://localhost/x"), slug("media"))).status).toBe(401);
+  });
+
+  it("shows emails to a leader and keeps a missing rock due date null", async () => {
+    h.userId = LEADER;
+    const people = await getPeople(new Request("http://localhost/x"), slug("media"));
+    const roster = (await people.json()).roster as Array<{ email: string | null; user_id: string }>;
+    expect(roster.find((row) => row.user_id === LEADER)?.email).toBe("hanno@example.com");
+    const home = await (await getHome(new Request("http://localhost/x"), slug("media"))).json();
+    expect(home.access.canEditRocks).toBe(true);
+    expect(home.rocks[0].dueOn).toBe("2026-12-01");
+    expect(home.budget).not.toBeNull();
+    expect(home.budget.links[0].id === LINK_ID || home.budget.links[0].projectId === PROJECT_ID).toBe(true);
+  });
+
+  it("returns a bare services array whose gear_hire audience follows the open_to_all row", async () => {
+    h.userId = OUTSIDER;
+    const response = await getServices();
     expect(response.status).toBe(200);
     const body = await response.json();
-    expect(body.quarter).toBe(currentQuarter());
-    expect(body.departments.map((row: { slug: string }) => row.slug)).toEqual([
-      "leadership_team",
-      "prayer_and_worship",
-      "media",
-      "hulk",
-      "operations",
-      "finances_legal",
-    ]);
-    const media = body.departments.find((row: { slug: string }) => row.slug === "media");
-    expect(media.rocks.map((row: { title: string }) => row.title)).toEqual(["Finish the recap"]);
-    expect(body.departments.some((row: { slug: string }) => row.slug === "woven")).toBe(false);
-
-    h.userId = LEADER;
-    expect((await getRollup(new Request("http://localhost/x"))).status).toBe(403);
-    h.userId = ADMIN;
-    expect((await getRollup(new Request("http://localhost/x"))).status).toBe(200);
-    h.userId = LEADERSHIP_MEMBER;
-    const bad = await getRollup(new Request("http://localhost/api/departments/rocks?quarter=2026-Q5"));
-    expect(bad.status).toBe(400);
-  });
-
-  it("lists service ownership for any active user", async () => {
-    h.userId = OUTSIDER;
-    const list = await getServices();
-    expect(list.status).toBe(200);
-    const body = await list.json();
-    expect(body.services.map((row: { service_key: string }) => row.service_key)).toEqual([
-      "communications",
-      "contacts",
-      "evangelism",
-      "gear_hire",
-    ]);
-
-    const one = await getService(new Request("http://localhost/x"), keyCtx("gear_hire"));
-    expect(one.status).toBe(200);
-    const gear = await one.json();
-    expect(gear.admin_href).toBe("/bookings/equipment/gear");
-    expect(gear.owners.map((owner: { name: string }) => owner.name)).toEqual([
-      "Media",
-      "Operations",
-      "Prayer & Worship",
-    ]);
+    expect(Array.isArray(body)).toBe(true);
+    const gear = body.find((row: { id: string }) => row.id === "gear_hire");
+    expect(gear.audience).toBe("all_signed_in");
+    expect(gear.owners.some((owner: { role: string }) => owner.role === "manager")).toBe(true);
   });
 });

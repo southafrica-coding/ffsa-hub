@@ -1,21 +1,33 @@
 import { NextResponse } from "next/server";
-import { canViewDepartment } from "@/lib/departments/access";
-import { isDepartmentContext, loadDepartment, notAuthorized, serverError } from "@/lib/departments/http";
-import { getDepartmentPeople } from "@/lib/departments/repository";
+import { isOpened, openDepartment, serverError } from "@/lib/departments/http";
+import { listActiveMembers, loadPeopleById } from "@/lib/departments/repository";
+import { personName } from "@/lib/departments/names";
 
-// GET /api/departments/[slug]/people
-// Roster (role, point leader, status) and the ministry's open reporting lines.
-// Same view gate as the overview. Unknown slug 404.
+// Active members only. Emails only when canSeePeopleEmails.
+// Finance-only viewers get 404.
 
 export const dynamic = "force-dynamic";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params;
-  const ctx = await loadDepartment(slug);
-  if (!isDepartmentContext(ctx)) return ctx.response;
-  if (!(await canViewDepartment(ctx.supabase, ctx.userId, ctx.department.id))) return notAuthorized();
-
-  const people = await getDepartmentPeople(ctx.admin, ctx.department);
-  if (people.error) return serverError(people.error.message);
-  return NextResponse.json(people.data);
+  const opened = await openDepartment((await params).slug, "detail");
+  if (!isOpened(opened)) return opened.response;
+  const members = await listActiveMembers(opened.admin, opened.department.id);
+  if (members.error) return serverError(members.error);
+  const people = await loadPeopleById(opened.admin, members.data.map((member) => member.user_id));
+  if (people.error) return serverError(people.error);
+  const emails = opened.access.canSeePeopleEmails;
+  return NextResponse.json({
+    department: { id: opened.department.id, slug: opened.department.slug, name: opened.department.name },
+    roster: members.data.map((member) => {
+      const person = people.data.get(member.user_id);
+      return {
+        user_id: member.user_id,
+        name: personName(person),
+        email: emails ? (person?.email ?? null) : null,
+        member_role: member.member_role,
+        is_point_leader: member.is_point_leader,
+        status: member.status,
+      };
+    }),
+  });
 }

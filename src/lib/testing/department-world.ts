@@ -3,7 +3,7 @@
 // user_id and the resolver honours eq / in / is.
 
 import type { FakeQuery, FakeResult } from "@/lib/testing/fake-supabase";
-import { seedGrants } from "@/lib/services/seed";
+import { seedGrants, SERVICE_CATALOG } from "@/lib/services/seed";
 import { currentQuarter } from "@/lib/departments/quarter";
 
 export const MEDIA = "11111111-1111-4111-8111-111111111111";
@@ -62,6 +62,11 @@ export type DepartmentWorld = {
   objectives: Row[];
   keyResults: Row[];
   reportingLines: Row[];
+  services?: Row[];
+  aliases?: Row[];
+  permissions?: Row[];
+  rolePermissions?: Row[];
+  rpcModerate?: boolean | "error";
   errors?: Partial<Record<string, boolean>>;
 };
 
@@ -273,6 +278,9 @@ export function makeDepartmentWorld(): DepartmentWorld {
         metric_target: 12,
       },
     ],
+    services: SERVICE_CATALOG.map((service) => ({ ...service, created_at: "2026-11-10T00:00:00.000Z" })),
+    aliases: [],
+    permissions: [],
     reportingLines: [
       {
         id: LINE_ID,
@@ -330,9 +338,30 @@ function rowsFor(world: DepartmentWorld, table: string): Row[] | null {
       return world.keyResults;
     case "reporting_lines":
       return world.reportingLines;
+    case "services":
+      return world.services ?? [];
+    case "staff_ministry_aliases":
+      return world.aliases ?? [];
+    case "user_permissions":
+      return (world.permissions ?? []).map((row) => ({
+        user_id: row.user_id,
+        scope_type: row.scope_type ?? null,
+        scope_id: row.scope_id ?? null,
+        permissions: { key: row.key },
+      }));
+    case "role_permissions":
+      return world.rolePermissions ?? [];
     default:
       return null;
   }
+}
+
+function cell(row: Row, column: string): unknown {
+  if (!column.includes(".")) return row[column];
+  const [head, tail] = column.split(".");
+  const nested = row[head];
+  if (!nested || typeof nested !== "object" || Array.isArray(nested)) return undefined;
+  return (nested as Row)[tail];
 }
 
 function applyFilters(rows: Row[], query: FakeQuery): Row[] {
@@ -341,10 +370,11 @@ function applyFilters(rows: Row[], query: FakeQuery): Row[] {
       if (filter.op !== "eq" && filter.op !== "in" && filter.op !== "is") continue;
       const column = filter.args[0];
       if (typeof column !== "string") continue;
+      const value = cell(row, column);
       if (filter.op === "in") {
         const values = filter.args[1] as unknown[];
-        if (!values.includes(row[column])) return false;
-      } else if (row[column] !== filter.args[1]) {
+        if (!values.includes(value)) return false;
+      } else if (value !== filter.args[1]) {
         return false;
       }
     }
@@ -354,6 +384,10 @@ function applyFilters(rows: Row[], query: FakeQuery): Row[] {
 
 export function resolveDepartmentWorld(world: DepartmentWorld, query: FakeQuery): FakeResult {
   if (query.table === "audit_logs") return { data: null };
+  if (query.table === "rpc:can_moderate_evangelism") {
+    if (world.rpcModerate === "error") return { error: { message: "rpc down" } };
+    return { data: world.rpcModerate === true };
+  }
   if (world.errors?.[query.table]) return { error: { message: `${query.table} down` } };
 
   const rows = rowsFor(world, query.table);
