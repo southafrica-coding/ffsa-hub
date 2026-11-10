@@ -6,8 +6,11 @@
 -- Last defined in 304_program_staff.sql. Its final branch accepted ANY
 -- user_roles row for the program_leader role and ignored scope_type /
 -- scope_id, so a program_leader scoped to one school counted as a
--- manager of every school's applications, admin notes, staff reviews
--- (304/306) and, through lms_can_edit (305), every school's classroom.
+-- manager of every school's applications, admin notes and staff reviews
+-- (304/306). 312 scopes program_leader inside
+-- can_manage_program_applications (applications, admin notes, staff
+-- reviews); lms_can_edit gets equivalent scoping independently in 310;
+-- the two are consistent and order-independent.
 --
 -- New rule for that branch (the rest is unchanged):
 --   • program_leader with scope_type = 'program' → only that program
@@ -22,8 +25,11 @@
 --
 -- Same signature, return type, volatility, SECURITY DEFINER and owner, so
 -- the policies on application_admin_notes / application_staff_reviews,
--- guard_application_staff_review(), application_review_write_allowed()
--- and lms_can_edit() pick it up with no other change.
+-- guard_application_staff_review() and application_review_write_allowed()
+-- pick it up with no other change. 312 scopes program_leader inside
+-- can_manage_program_applications (applications, admin notes, staff
+-- reviews); lms_can_edit gets equivalent scoping independently in 310;
+-- the two are consistent and order-independent.
 --
 -- Live impact on 9 Nov 2026 (rolled-back simulation): 0 users change.
 -- Both program_leader holders also hold unscoped schools.* grants.
