@@ -11,13 +11,34 @@ import {
   createQuestion,
 } from "@/services/schools";
 
-// Migration 316: creating or deleting a template needs is_admin() or an
-// unscoped schools.manage grant. Reading and applying a template do not.
-// There is no template rename/update route today.
+// Migration 316: creating or deleting a template needs an active unscoped
+// admin, or an unscoped schools.manage / schools.templates.manage grant.
+// Reading and applying a template do not. There is no rename route today.
 const TEMPLATE_FORBIDDEN = "You don't have permission to change application templates.";
+const TEMPLATE_NOT_FOUND = "Template not found";
 
 function forbidden() {
   return NextResponse.json({ error: TEMPLATE_FORBIDDEN }, { status: 403 });
+}
+
+function notFound() {
+  return NextResponse.json({ error: TEMPLATE_NOT_FOUND }, { status: 404 });
+}
+
+// Best-effort. A failed question insert must not leave a template with no
+// questions. A cleanup failure is logged and the original error still returns.
+async function removeHalfSaved(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  templateId: string
+) {
+  try {
+    const { error } = await deleteApplicationTemplate(supabase, templateId);
+    if (error) {
+      console.error("Failed to remove half-saved application template", templateId, error.message ?? error);
+    }
+  } catch (err) {
+    console.error("Failed to remove half-saved application template", templateId, err);
+  }
 }
 
 function writeFailure(error: { code?: string; message?: string } | null) {
@@ -86,9 +107,12 @@ export async function POST(request: Request) {
         is_required: q.is_required,
         options: q.options ?? [],
       });
-      const questionDenied = writeFailure(error);
-      if (questionDenied) return questionDenied;
-      if (!inserted) return NextResponse.json({ error: "Failed to save template question" }, { status: 500 });
+      if (error || !inserted) {
+        await removeHalfSaved(supabase, template.id);
+        const questionDenied = writeFailure(error);
+        if (questionDenied) return questionDenied;
+        return NextResponse.json({ error: "Failed to save template question" }, { status: 500 });
+      }
       programIdToTemplateId.set(q.id, inserted.id);
     }
 
@@ -115,9 +139,12 @@ export async function POST(request: Request) {
           parent_question_id: mappedParent,
           show_when_answer: q.show_when_answer,
         });
-        const followUpDenied = writeFailure(error);
-        if (followUpDenied) return followUpDenied;
-        if (!row) return NextResponse.json({ error: "Failed to save template question" }, { status: 500 });
+        if (error || !row) {
+          await removeHalfSaved(supabase, template.id);
+          const followUpDenied = writeFailure(error);
+          if (followUpDenied) return followUpDenied;
+          return NextResponse.json({ error: "Failed to save template question" }, { status: 500 });
+        }
         programIdToTemplateId.set(q.id, row.id);
         inserted++;
       }
@@ -212,11 +239,21 @@ export async function DELETE(request: Request) {
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
 
+  // The caller's own client. A missing id and a row this user cannot read
+  // look the same, so both are 404. A row they can read but cannot delete
+  // is 403.
+  const { data: existing, error: readError } = await getApplicationTemplate(supabase, id);
+  if (readError?.code === "42501" || readError?.code === "PGRST116" || !existing) {
+    if (readError && readError.code !== "42501" && readError.code !== "PGRST116") {
+      return NextResponse.json({ error: readError.message }, { status: 500 });
+    }
+    return notFound();
+  }
+
   const { data, error } = await deleteApplicationTemplate(supabase, id);
   const denied = writeFailure(error);
   if (denied) return denied;
-  // RLS filters a row the caller cannot delete and reports success with
-  // nothing removed. That is not a successful delete.
+  // Readable, but RLS filtered the delete down to zero rows.
   if (!Array.isArray(data) || data.length === 0) return forbidden();
 
   return NextResponse.json({ success: true });

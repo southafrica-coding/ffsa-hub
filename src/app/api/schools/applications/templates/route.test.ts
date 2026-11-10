@@ -6,7 +6,16 @@ const h = vi.hoisted(() => ({
   checks: 0,
   created: 0,
   deleted: 0,
+  deletedIds: [] as string[],
   questionWrites: 0,
+  templateRead: {
+    data: { id: "t1", name: "Standard", application_template_questions: [] as unknown[] } as {
+      id: string;
+      name: string;
+      application_template_questions: unknown[];
+    } | null,
+    error: null as { code?: string; message: string } | null,
+  },
   createError: null as { code?: string; message: string } | null,
   questionError: null as { code?: string; message: string } | null,
   deleteResult: {
@@ -30,10 +39,7 @@ vi.mock("@/lib/auth/application-template-access", () => ({
 
 vi.mock("@/services/schools", () => ({
   getApplicationTemplates: async () => ({ data: [{ id: "t1", name: "Standard" }], error: null }),
-  getApplicationTemplate: async () => ({
-    data: { id: "t1", name: "Standard", application_template_questions: [] },
-    error: null,
-  }),
+  getApplicationTemplate: async () => h.templateRead,
   getQuestionsByProgram: async () => ({
     data: [{ id: "q1", label: "Why", parent_question_id: null, sort_order: 0, is_required: true, options: [] }],
     error: null,
@@ -46,8 +52,9 @@ vi.mock("@/services/schools", () => ({
     h.questionWrites += 1;
     return { data: h.questionError ? null : { id: "tq1" }, error: h.questionError };
   },
-  deleteApplicationTemplate: async () => {
+  deleteApplicationTemplate: async (_supabase: unknown, id: string) => {
     h.deleted += 1;
+    h.deletedIds.push(id);
     return h.deleteResult;
   },
   createQuestion: async () => ({ data: { id: "pq1" }, error: null }),
@@ -56,6 +63,14 @@ vi.mock("@/services/schools", () => ({
 const route = await import("./route");
 
 const FORBIDDEN = "You don't have permission to change application templates.";
+const NOT_FOUND = "Template not found";
+
+function visibleTemplate() {
+  return {
+    data: { id: "t1", name: "Standard", application_template_questions: [] as unknown[] },
+    error: null as { code?: string; message: string } | null,
+  };
+}
 
 beforeEach(() => {
   h.user = { id: "me" };
@@ -63,7 +78,9 @@ beforeEach(() => {
   h.checks = 0;
   h.created = 0;
   h.deleted = 0;
+  h.deletedIds = [];
   h.questionWrites = 0;
+  h.templateRead = visibleTemplate();
   h.createError = null;
   h.questionError = null;
   h.deleteResult = { data: [{ id: "t1" }], error: null };
@@ -134,13 +151,27 @@ describe("application template routes", () => {
     expect(await saved.json()).toEqual({ error: FORBIDDEN });
   });
 
-  it("maps a Postgres 42501 on a template question insert to a 403", async () => {
+  it("maps a Postgres 42501 on a template question insert to a 403 and removes the half-saved template", async () => {
     h.allowed = true;
     h.questionError = { code: "42501", message: "new row violates row-level security policy" };
     const saved = await save();
     expect(saved.status).toBe(403);
     expect(await saved.json()).toEqual({ error: FORBIDDEN });
     expect(h.questionWrites).toBe(1);
+    expect(h.deletedIds).toEqual(["t-new"]);
+  });
+
+  it("still returns the question error when cleaning up the half-saved template fails", async () => {
+    h.allowed = true;
+    h.questionError = { message: "insert failed" };
+    h.deleteResult = { data: null, error: { message: "cleanup failed" } };
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const saved = await save();
+    expect(saved.status).toBe(500);
+    expect(await saved.json()).toEqual({ error: "insert failed" });
+    expect(h.deletedIds).toEqual(["t-new"]);
+    expect(spy.mock.calls.some((call) => String(call[0]).includes("half-saved"))).toBe(true);
+    spy.mockRestore();
   });
 
   it("maps a Postgres 42501 on delete to a 403", async () => {
@@ -151,13 +182,30 @@ describe("application template routes", () => {
     expect(await deleted.json()).toEqual({ error: FORBIDDEN });
   });
 
-  it("does not report success when a delete affects zero rows", async () => {
+  it("returns 403 when a readable template delete affects zero rows", async () => {
     h.allowed = true;
     h.deleteResult = { data: [], error: null };
     const deleted = await remove();
     expect(deleted.status).toBe(403);
     expect(await deleted.json()).toEqual({ error: FORBIDDEN });
-    expect(deleted.status).not.toBe(200);
+  });
+
+  it("returns 404 when the template id does not exist", async () => {
+    h.allowed = true;
+    h.templateRead = { data: null, error: { code: "PGRST116", message: "JSON object requested, multiple (or no) rows returned" } };
+    const deleted = await remove();
+    expect(deleted.status).toBe(404);
+    expect(await deleted.json()).toEqual({ error: NOT_FOUND });
+    expect(h.deleted).toBe(0);
+  });
+
+  it("returns 404 when the caller cannot read the template", async () => {
+    h.allowed = true;
+    h.templateRead = { data: null, error: { code: "42501", message: "permission denied for table application_templates" } };
+    const deleted = await remove();
+    expect(deleted.status).toBe(404);
+    expect(await deleted.json()).toEqual({ error: NOT_FOUND });
+    expect(h.deleted).toBe(0);
   });
 
   it("requires a login before the permission check", async () => {

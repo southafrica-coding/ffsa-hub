@@ -4113,12 +4113,12 @@ function ApplicationTab({
 
       {/* ─── APPLICATION BUILDER ─── */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="font-medium flex items-center gap-2">
             <ClipboardList className="h-4 w-4" />
             Application Questions ({questions.length})
           </h3>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
               size="sm"
               variant="outline"
@@ -4151,6 +4151,11 @@ function ApplicationTab({
               Add Question
             </Button>
           </div>
+          {!canManageTemplates && (
+            <p className="w-full text-xs leading-snug text-muted-foreground">
+              Only admins and Hub-wide template managers can save or delete templates.
+            </p>
+          )}
         </div>
 
         {/* Save as Template Dialog */}
