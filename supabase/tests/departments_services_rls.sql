@@ -346,6 +346,7 @@ CREATE POLICY "Staff ministries are readable"
   ON public.staff_ministries FOR SELECT TO authenticated
   USING (auth.uid() IS NOT NULL);
 GRANT SELECT ON public.staff_ministries TO authenticated;
+GRANT SELECT ON public.staff_ministry_members TO authenticated;
 
 -- ── People and homes (Philip is deliberately absent) ────────
 INSERT INTO public.roles (name) VALUES
@@ -487,15 +488,37 @@ BEGIN
 END $$;
 GRANT EXECUTE ON FUNCTION public._t(text, boolean, text) TO PUBLIC;
 
+CREATE TABLE public.pre_apply AS
+SELECT
+  (SELECT parent_id FROM public.staff_ministries WHERE slug = 'donors_dev') AS donors_parent,
+  (SELECT staff_ministry_id FROM public.ministries WHERE slug = 'be-free') AS be_free_link,
+  (SELECT color FROM public.ministries WHERE slug = 'be-free') AS be_free_color;
+
 -- ── Apply, then again, before Philip exists ────────────────
-\ir ../migrations/317_department_homes.sql
-\ir ../migrations/318_department_services.sql
-\ir ../migrations/319_ministry_rocks.sql
-\ir ../migrations/320_department_budgets.sql
-\ir ../migrations/317_department_homes.sql
-\ir ../migrations/318_department_services.sql
-\ir ../migrations/319_ministry_rocks.sql
-\ir ../migrations/320_department_budgets.sql
+\ir ../migrations/318_department_homes.sql
+\ir ../migrations/319_department_services.sql
+\ir ../migrations/320_ministry_rocks.sql
+\ir ../migrations/321_department_budgets.sql
+UPDATE public.staff_ministries
+   SET is_active = false
+ WHERE slug IN ('hulk', 'missio_ministry', 'be_free');
+\ir ../migrations/318_department_homes.sql
+DO $do$
+DECLARE
+  n int;
+BEGIN
+  SELECT count(*) INTO n FROM public.staff_ministries
+   WHERE slug IN ('hulk', 'missio_ministry', 'be_free') AND is_active;
+  PERFORM public._t('re-run does not reactivate a deactivated ministry', n = 0, 'n=' || n);
+END
+$do$;
+UPDATE public.staff_ministries
+   SET is_active = true
+ WHERE slug IN ('hulk', 'missio_ministry', 'be_free');
+\ir ../migrations/318_department_homes.sql
+\ir ../migrations/319_department_services.sql
+\ir ../migrations/320_ministry_rocks.sql
+\ir ../migrations/321_department_budgets.sql
 
 DO $do$
 DECLARE
@@ -587,7 +610,7 @@ BEGIN
   SELECT count(*) INTO n FROM public.services;
   PERFORM public._t('eight services', n = 8, 'n=' || n);
   SELECT count(*) INTO n FROM public.service_owners;
-  PERFORM public._t('twenty nine service grants', n = 29, 'n=' || n);
+  PERFORM public._t('thirty three service grants', n = 33, 'n=' || n);
   SELECT count(*) INTO n FROM public.service_owners so
     JOIN public.staff_ministries sm ON sm.id = so.staff_ministry_id
    WHERE so.service_key = 'gear_hire' AND sm.slug = 'media'
@@ -602,19 +625,14 @@ BEGIN
      AND capability = 'use' AND member_role = 'leader';
   PERFORM public._t('contacts point-leader row is a null ministry', n = 1, 'n=' || n);
   SELECT count(*) INTO n FROM public.service_owners
-   WHERE service_key = 'evangelism' AND staff_ministry_id IS NULL;
-  PERFORM public._t('evangelism has no open-to-everyone grant', n = 0, 'n=' || n);
-  SELECT count(*) INTO n FROM public.service_owners so
-    JOIN public.staff_ministries sm ON sm.id = so.staff_ministry_id
-   WHERE so.service_key = 'evangelism' AND sm.slug = 'media'
-     AND so.capability IN ('own', 'moderate');
-  PERFORM public._t('evangelism media has own and moderate', n = 2, 'n=' || n);
-  SELECT count(*) INTO n FROM public.service_owners so
-    JOIN public.staff_ministries sm ON sm.id = so.staff_ministry_id
-   WHERE so.service_key = 'evangelism' AND so.capability = 'moderate'
-     AND so.member_role IS NULL
-     AND sm.slug IN ('media', 'hulk');
-  PERFORM public._t('evangelism moderate is any active member', n = 2, 'n=' || n);
+   WHERE open_to_all AND capability = 'use' AND staff_ministry_id IS NULL
+     AND service_key IN ('gear_hire', 'evangelism', 'prayer_room', 'spaces', 'vehicles', 'brand_kit');
+  PERFORM public._t('six open_to_all use rows', n = 6, 'n=' || n);
+  SELECT count(*) INTO n FROM public.service_owners
+   WHERE service_key IN ('communications', 'contacts') AND open_to_all;
+  PERFORM public._t('communications and contacts are not open_to_all', n = 0, 'n=' || n);
+  SELECT count(*) INTO n FROM public.service_owners WHERE capability = 'moderate';
+  PERFORM public._t('no evangelism moderate grant row', n = 0, 'n=' || n);
   PERFORM public._t(
     'gear hire href',
     (SELECT admin_href FROM public.services WHERE service_key = 'gear_hire') = '/bookings/equipment',
@@ -625,7 +643,7 @@ BEGIN
     FROM public.department_budget_links l
     JOIN public.staff_ministries sm ON sm.id = l.staff_ministry_id AND sm.slug = 'hulk'
     JOIN public.finance_projects fp ON fp.id = l.finance_project_id AND fp.name = 'HULC';
-  PERFORM public._t('hulk links both HULC projects', n = 2, 'n=' || n);
+  PERFORM public._t('hulk links only the SA HULC project', n = 1, 'n=' || n);
   SELECT count(*) INTO n
     FROM public.department_budget_links l
     JOIN public.finance_projects fp ON fp.id = l.finance_project_id AND fp.name = 'HULC Merch';
@@ -649,16 +667,23 @@ BEGIN
   SELECT count(*) INTO n
     FROM public.department_budget_links l
     JOIN public.staff_ministries sm ON sm.id = l.staff_ministry_id AND sm.slug = 'woven';
-  PERFORM public._t('inactive Woven still links both orgs', n = 2, 'n=' || n);
+  PERFORM public._t('inactive Woven links the SA project only', n = 1, 'n=' || n);
   SELECT count(*) INTO n
     FROM public.department_budget_links l
     JOIN public.staff_ministries sm ON sm.id = l.staff_ministry_id AND sm.slug = 'media';
-  PERFORM public._t('media links both Media projects', n = 2, 'n=' || n);
+  PERFORM public._t('media links the SA project only', n = 1, 'n=' || n);
+  SELECT count(*) INTO n
+    FROM public.department_budget_links l
+    JOIN public.finance_projects fp ON fp.id = l.finance_project_id
+    JOIN public.finance_orgs o ON o.id = fp.org_id AND o.key = 'usa';
+  PERFORM public._t('no USA org budget link', n = 0, 'n=' || n);
+  SELECT count(*) INTO n FROM public.department_budget_links WHERE currency <> 'ZAR';
+  PERFORM public._t('every budget link is ZAR', n = 0, 'n=' || n);
 
   SELECT count(*) INTO n FROM public.department_budget_links
    WHERE finance_project_id IS NOT NULL AND budget_cents = 0 AND spend_cents = 0
      AND year = EXTRACT(YEAR FROM CURRENT_DATE)::integer;
-  PERFORM public._t('seeded budget links are zero in the insert year', n = 8, 'n=' || n);
+  PERFORM public._t('seeded budget links are zero ZAR in the insert year', n = 4, 'n=' || n);
 
   SELECT count(*) INTO n FROM pg_class
    WHERE relname IN (
@@ -686,7 +711,7 @@ $do$;
 -- Philip arrives. A third apply records him and does not duplicate.
 INSERT INTO public.users (id, is_active) VALUES
   ('ac7d1c5e-4300-422f-9fad-d50c29a15ca6', true);
-\ir ../migrations/317_department_homes.sql
+\ir ../migrations/318_department_homes.sql
 
 DO $do$
 DECLARE
@@ -723,7 +748,7 @@ BEGIN
 END
 $do$;
 
-\ir ../migrations/317_department_homes.sql
+\ir ../migrations/318_department_homes.sql
 
 DO $do$
 DECLARE n int;
@@ -788,10 +813,20 @@ BEGIN
   PERFORM public._t('outsider cannot use contacts', NOT ok, ok::text);
   SELECT public.user_can_use_service('communications') INTO ok;
   PERFORM public._t('outsider cannot use communications', NOT ok, ok::text);
-  SELECT public.user_can_moderate_service('evangelism') INTO ok;
+  SELECT public.can_moderate_evangelism() INTO ok;
   PERFORM public._t('outsider cannot moderate evangelism', NOT ok, ok::text);
   SELECT count(*) INTO n FROM public.service_owners;
-  PERFORM public._t('outsider can read service owners', n = 29, 'n=' || n);
+  PERFORM public._t('outsider can read service owners', n = 33, 'n=' || n);
+  SELECT public.user_can_use_service('gear_hire') INTO ok;
+  PERFORM public._t('non-member can use gear hire', ok, ok::text);
+  SELECT count(*) INTO n
+    FROM public.service_owners so
+    JOIN public.staff_ministry_members mm ON mm.staff_ministry_id = so.staff_ministry_id
+   WHERE so.service_key = 'gear_hire'
+     AND so.capability = 'manage'
+     AND mm.user_id = 'e5555555-5555-4555-8555-555555555555'
+     AND mm.status = 'active';
+  PERFORM public._t('non-member cannot manage gear hire', n = 0, 'n=' || n);
   BEGIN
     INSERT INTO public.service_owners (
       service_key, staff_ministry_id, capability, member_role, any_point_leader, admin_href
@@ -816,13 +851,13 @@ BEGIN
   EXECUTE 'SET LOCAL ROLE authenticated';
   SELECT public.user_can_use_service('contacts') INTO ok;
   PERFORM public._t('media member can use contacts', ok, ok::text);
-  SELECT public.user_can_moderate_service('evangelism') INTO ok;
+  SELECT public.can_moderate_evangelism() INTO ok;
   PERFORM public._t('media member can moderate evangelism', ok, ok::text);
   EXECUTE 'RESET ROLE';
 
   PERFORM set_config('request.jwt.claim.sub', 'b2222222-2222-4222-8222-222222222222', true);
   EXECUTE 'SET LOCAL ROLE authenticated';
-  SELECT public.user_can_moderate_service('evangelism') INTO ok;
+  SELECT public.can_moderate_evangelism() INTO ok;
   PERFORM public._t('media leader moderates evangelism', ok, ok::text);
   SELECT public.user_can_use_service('communications') INTO ok;
   PERFORM public._t('media leader can use communications', ok, ok::text);
@@ -830,7 +865,7 @@ BEGIN
 
   PERFORM set_config('request.jwt.claim.sub', 'c2222222-2222-4222-8222-222222222222', true);
   EXECUTE 'SET LOCAL ROLE authenticated';
-  SELECT public.user_can_moderate_service('evangelism') INTO ok;
+  SELECT public.can_moderate_evangelism() INTO ok;
   PERFORM public._t('ops leader does not moderate evangelism', NOT ok, ok::text);
   SELECT public.user_can_use_service('spaces') INTO ok;
   PERFORM public._t('ops leader can use spaces', ok, ok::text);
@@ -846,7 +881,7 @@ BEGIN
   EXECUTE 'SET LOCAL ROLE authenticated';
   SELECT public.user_can_use_service('communications') INTO ok;
   PERFORM public._t('hulk leader has communications access', ok, ok::text);
-  SELECT public.user_can_moderate_service('evangelism') INTO ok;
+  SELECT public.can_moderate_evangelism() INTO ok;
   PERFORM public._t('hulk leader moderates evangelism', ok, ok::text);
   EXECUTE 'RESET ROLE';
 
@@ -854,7 +889,7 @@ BEGIN
   EXECUTE 'SET LOCAL ROLE authenticated';
   SELECT public.user_can_use_service('gear_hire') INTO ok;
   PERFORM public._t('admin can use gear hire', ok, ok::text);
-  SELECT public.user_can_moderate_service('evangelism') INTO ok;
+  SELECT public.can_moderate_evangelism() INTO ok;
   PERFORM public._t('admin can moderate evangelism', ok, ok::text);
   EXECUTE 'RESET ROLE';
 
@@ -987,6 +1022,23 @@ BEGIN
   SELECT count(*) INTO n FROM public.rocks;
   PERFORM public._t('outsider reads no rocks', n = 0, 'n=' || n);
   EXECUTE 'RESET ROLE';
+  INSERT INTO public.user_roles (user_id, role_id)
+  SELECT 'e5555555-5555-4555-8555-555555555555', id
+    FROM public.roles WHERE name = 'leadership_team';
+  PERFORM set_config('request.jwt.claim.sub', 'e5555555-5555-4555-8555-555555555555', true);
+  EXECUTE 'SET LOCAL ROLE authenticated';
+  SELECT count(*) INTO n FROM public.rocks;
+  PERFORM public._t('leadership role without membership reads no rocks', n = 0, 'n=' || n);
+  EXECUTE 'RESET ROLE';
+  DELETE FROM public.user_roles
+   WHERE user_id = 'e5555555-5555-4555-8555-555555555555';
+  UPDATE public.staff_ministries SET is_active = false WHERE slug = 'media';
+  PERFORM set_config('request.jwt.claim.sub', 'b1111111-1111-4111-8111-111111111111', true);
+  EXECUTE 'SET LOCAL ROLE authenticated';
+  SELECT count(*) INTO n FROM public.rocks;
+  PERFORM public._t('member of an inactive ministry reads no rocks', n = 0, 'n=' || n);
+  EXECUTE 'RESET ROLE';
+  UPDATE public.staff_ministries SET is_active = true WHERE slug = 'media';
 
   EXECUTE 'SET LOCAL ROLE anon';
   BEGIN
@@ -1013,14 +1065,14 @@ BEGIN
   PERFORM set_config('request.jwt.claim.sub', 'b2222222-2222-4222-8222-222222222222', true);
   EXECUTE 'SET LOCAL ROLE authenticated';
   SELECT count(*) INTO n FROM public.department_budget_links WHERE staff_ministry_id = media;
-  PERFORM public._t('media leader reads own budget', n = 2, 'n=' || n);
+  PERFORM public._t('media leader reads own budget', n = 1, 'n=' || n);
   SELECT count(*) INTO n FROM public.department_budget_links WHERE staff_ministry_id = ops;
   PERFORM public._t('media leader cannot read ops budget', n = 0, 'n=' || n);
   UPDATE public.department_budget_links SET budget_cents = 222 WHERE staff_ministry_id = media;
   EXECUTE 'RESET ROLE';
   SELECT count(*) INTO n FROM public.department_budget_links
    WHERE staff_ministry_id = media AND budget_cents = 222;
-  PERFORM public._t('media leader edited own budget', n = 2, 'n=' || n);
+  PERFORM public._t('media leader edited own budget', n = 1, 'n=' || n);
 
   PERFORM set_config('request.jwt.claim.sub', 'b1111111-1111-4111-8111-111111111111', true);
   EXECUTE 'SET LOCAL ROLE authenticated';
@@ -1031,7 +1083,7 @@ BEGIN
   PERFORM set_config('request.jwt.claim.sub', 'd3333333-3333-4333-8333-333333333333', true);
   EXECUTE 'SET LOCAL ROLE authenticated';
   SELECT count(*) INTO n FROM public.department_budget_links;
-  PERFORM public._t('unscoped finance.view reads every budget', n = 9, 'n=' || n);
+  PERFORM public._t('unscoped finance.view reads every budget', n = 5, 'n=' || n);
   UPDATE public.department_budget_links SET budget_cents = 1 WHERE staff_ministry_id = ops;
   EXECUTE 'RESET ROLE';
   SELECT budget_cents INTO amount FROM public.department_budget_links WHERE notes = 'rls fixture';
@@ -1046,7 +1098,7 @@ BEGIN
   PERFORM set_config('request.jwt.claim.sub', 'd5555555-5555-4555-8555-555555555555', true);
   EXECUTE 'SET LOCAL ROLE authenticated';
   SELECT count(*) INTO n FROM public.department_budget_links;
-  PERFORM public._t('unscoped finance.edit reads every budget', n = 9, 'n=' || n);
+  PERFORM public._t('unscoped finance.edit reads every budget', n = 5, 'n=' || n);
   UPDATE public.department_budget_links SET budget_cents = 2 WHERE staff_ministry_id = ops;
   EXECUTE 'RESET ROLE';
   SELECT budget_cents INTO amount FROM public.department_budget_links WHERE notes = 'rls fixture';
@@ -1055,14 +1107,20 @@ BEGIN
   PERFORM set_config('request.jwt.claim.sub', 'd2222222-2222-4222-8222-222222222222', true);
   EXECUTE 'SET LOCAL ROLE authenticated';
   SELECT count(*) INTO n FROM public.department_budget_links;
-  PERFORM public._t('finances member reads every budget', n = 9, 'n=' || n);
+  PERFORM public._t('finances member reads every budget', n = 5, 'n=' || n);
   SELECT count(*) INTO n FROM public.department_budget_links WHERE finance_project_id IS NOT NULL;
-  PERFORM public._t('finances member reads project links', n = 8, 'n=' || n);
+  PERFORM public._t('finances member reads project links', n = 4, 'n=' || n);
   UPDATE public.department_budget_links SET budget_cents = 3 WHERE staff_ministry_id = media;
   EXECUTE 'RESET ROLE';
   SELECT count(*) INTO n FROM public.department_budget_links
    WHERE staff_ministry_id = media AND budget_cents = 222;
-  PERFORM public._t('finances member cannot edit a budget', n = 2, 'n=' || n);
+  PERFORM public._t('finances member cannot edit a budget', n = 1, 'n=' || n);
+
+  PERFORM set_config('request.jwt.claim.sub', 'd1111111-1111-4111-8111-111111111111', true);
+  EXECUTE 'SET LOCAL ROLE authenticated';
+  SELECT count(*) INTO n FROM public.department_budget_links;
+  PERFORM public._t('leadership membership does not read budgets', n = 0, 'n=' || n);
+  EXECUTE 'RESET ROLE';
 
   PERFORM set_config('request.jwt.claim.sub', 'e4444444-4444-4444-8444-444444444444', true);
   EXECUTE 'SET LOCAL ROLE authenticated';
@@ -1091,19 +1149,101 @@ BEGIN
 END
 $do$;
 
--- Fresh palette path: delete the app row and apply again.
-DELETE FROM public.ministries WHERE slug = 'be-free';
-\ir ../migrations/317_department_homes.sql
+-- Demote Philip, then re-run homes. The membership must stay demoted.
+UPDATE public.staff_ministry_members mm
+   SET member_role = 'member', is_point_leader = false
+  FROM public.staff_ministries sm
+ WHERE sm.slug = 'be_free'
+   AND mm.staff_ministry_id = sm.id
+   AND mm.user_id = 'ac7d1c5e-4300-422f-9fad-d50c29a15ca6';
+\ir ../migrations/318_department_homes.sql
+DO $do$
+DECLARE
+  role text;
+  point boolean;
+BEGIN
+  SELECT mm.member_role, mm.is_point_leader INTO role, point
+    FROM public.staff_ministry_members mm
+    JOIN public.staff_ministries sm ON sm.id = mm.staff_ministry_id
+   WHERE sm.slug = 'be_free'
+     AND mm.user_id = 'ac7d1c5e-4300-422f-9fad-d50c29a15ca6';
+  PERFORM public._t('re-run does not re-promote Philip', role = 'member' AND point IS FALSE, coalesce(role, 'null'));
+END
+$do$;
+
+-- Philip stays in Prayer & Worship, a main ministry, so deleting the
+-- part-time be_free membership does not put him on No Ministry.
+INSERT INTO public.staff_ministry_members (staff_ministry_id, user_id, member_role, status)
+SELECT id, 'ac7d1c5e-4300-422f-9fad-d50c29a15ca6', 'member', 'active'
+  FROM public.staff_ministries WHERE slug = 'prayer_and_worship';
+
+\ir ../rollbacks/318_321_departments_rollback.sql
+
+DO $do$
+DECLARE
+  n int;
+  donors_parent uuid;
+  link uuid;
+  stamp timestamptz;
+  body text;
+BEGIN
+  SELECT parent_id INTO donors_parent FROM public.staff_ministries WHERE slug = 'donors_dev';
+  PERFORM public._t(
+    'rollback clears the donors parent 318 set',
+    donors_parent IS NULL,
+    coalesce(donors_parent::text, 'null')
+  );
+  SELECT staff_ministry_id, updated_at INTO link, stamp
+    FROM public.ministries WHERE slug = 'be-free';
+  PERFORM public._t('rollback clears the be-free link', link IS NULL, coalesce(link::text, 'null'));
+  PERFORM public._t(
+    'rollback restores the be-free timestamp',
+    stamp = '2026-10-19 08:33:36.68362+00',
+    coalesce(stamp::text, 'null')
+  );
+  SELECT count(*) INTO n FROM public.staff_ministries WHERE slug = 'be_free';
+  PERFORM public._t('rollback removes the be_free ministry 318 inserted', n = 0, 'n=' || n);
+  SELECT count(*) INTO n
+    FROM public.staff_ministry_members
+   WHERE user_id = 'ac7d1c5e-4300-422f-9fad-d50c29a15ca6'
+     AND staff_ministry_id = (SELECT id FROM public.staff_ministries WHERE slug = 'prayer_and_worship');
+  PERFORM public._t('Philip stays in Prayer and Worship', n = 1, 'n=' || n);
+  SELECT count(*) INTO n
+    FROM public.staff_ministry_members mm
+    JOIN public.staff_ministries sm ON sm.id = mm.staff_ministry_id
+   WHERE sm.slug = 'no_ministry'
+     AND mm.user_id = 'ac7d1c5e-4300-422f-9fad-d50c29a15ca6';
+  PERFORM public._t('No Ministry sync does not add Philip', n = 0, 'n=' || n);
+  SELECT pg_get_functiondef('public.can_moderate_evangelism()'::regprocedure) INTO body;
+  PERFORM public._t(
+    'rollback restores can_moderate_evangelism from 311',
+    body LIKE '%public.is_admin() OR public.has_permission(''evangelism.moderate'')%'
+      AND body NOT LIKE '%staff_ministries%',
+    'def'
+  );
+  PERFORM public._t('rocks table is gone', to_regclass('public.rocks') IS NULL, 'reg');
+  PERFORM public._t('budget links table is gone', to_regclass('public.department_budget_links') IS NULL, 'reg');
+  PERFORM public._t('service owners table is gone', to_regclass('public.service_owners') IS NULL, 'reg');
+END
+$do$;
+
+\ir ../migrations/318_department_homes.sql
+\ir ../migrations/319_department_services.sql
+\ir ../migrations/320_ministry_rocks.sql
+\ir ../migrations/321_department_budgets.sql
 
 DO $do$
 DECLARE
   n int;
   linked boolean;
 BEGIN
-  SELECT count(*), bool_or(staff_ministry_id IS NOT NULL)
-    INTO n, linked
-    FROM public.ministries WHERE slug = 'be-free';
-  PERFORM public._t('missing palette row is created and linked', n = 1 AND linked, 'n=' || n);
+  SELECT count(*) INTO n FROM public.staff_ministries WHERE slug = 'be_free';
+  PERFORM public._t('re-apply after rollback recreates be_free', n = 1, 'n=' || n);
+  SELECT count(*), bool_or(m.staff_ministry_id IS NOT NULL) INTO n, linked
+    FROM public.ministries m WHERE m.slug = 'be-free';
+  PERFORM public._t('re-apply after rollback links be-free', n = 1 AND linked, 'n=' || n);
+  SELECT count(*) INTO n FROM public.service_owners WHERE open_to_all AND capability = 'use';
+  PERFORM public._t('re-apply restores six open_to_all use rows', n = 6, 'n=' || n);
   SELECT count(*) INTO n FROM public.t_checks WHERE NOT ok;
   IF n > 0 THEN
     RAISE EXCEPTION 'departments services checks failed (%): %', n,
