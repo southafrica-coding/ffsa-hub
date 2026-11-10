@@ -15,13 +15,14 @@
  *       rooted_christian_academy; no_ministry;
  *       inactive woven, inside_ministry, outside_ministry
  *   GET /api/services
- *     200 HubService[]
+ *     200 HubService[]  — a bare array, no wrapper
  *   GET /api/me/home
  *     200 HomeDashboard
  *
- * URL slugs are hyphenated (`prayer-worship`).
- * `ministrySlug` is `staff_ministries.slug` (`prayer_and_worship`).
- * Money is whole rands (ZAR), South Africa only — not cents.
+ * `slug` is `staff_ministries.slug` exactly (`prayer_and_worship`).
+ * There is no hyphenated alias.
+ * `donors_dev` is folded into `finances_legal` (see `FOLDED_INTO`).
+ * Money is integer cents. The UI formats whole rands.
  */
 
 export type DepartmentCluster =
@@ -41,13 +42,14 @@ export interface DepartmentPerson {
 }
 
 export interface DepartmentSummary {
-  /** Canonical URL slug. */
+  /** `staff_ministries.slug`, used as the URL slug. */
   slug: string;
-  /** `staff_ministries.slug`. */
-  ministrySlug: string;
   name: string;
   cluster: DepartmentCluster;
-  /** Parent home URL slug, when this ministry sits under another. */
+  /**
+   * Parent ministry slug when this home sits under another home
+   * (`education` → `training`). A fold is not expressed here.
+   */
   parentSlug: string | null;
   purpose: string;
   memberCount: number;
@@ -78,12 +80,12 @@ export interface DepartmentBudget {
   departmentSlug: string;
   /**
    * Null when no finance project is linked.
-   * Amounts are whole rands (ZAR).
+   * Amounts are integer cents (ZAR).
    */
   project: null | {
     name: string;
-    budgetRand: number;
-    spentRand: number;
+    budgetCents: number;
+    spentCents: number;
   };
 }
 
@@ -103,6 +105,38 @@ export interface DepartmentOkrs {
   objectives: OkrObjective[];
 }
 
+/**
+ * How a department relates to a service.
+ * Backend capabilities: own → owner, manage → manager, use → access, moderate → moderator.
+ */
+export type ServiceDepartmentRole = "owner" | "manager" | "access" | "moderator";
+
+export interface ServiceDepartmentLink {
+  /** `staff_ministries.slug`. */
+  slug: string;
+  role: ServiceDepartmentRole;
+}
+
+/** Who the service is for. Separate from department roles. */
+export type ServiceAudience = "all_signed_in" | "ministry_leaders" | "owners_only";
+
+/** Roles that put a service on a department's "Services we run" tab. */
+export type ServiceRunRole = Exclude<ServiceDepartmentRole, "access">;
+
+export interface DepartmentServiceRun {
+  serviceId: string;
+  role: ServiceRunRole;
+}
+
+/** A ministry folded into a home. Not itself a department home. */
+export interface SubMinistry {
+  slug: string;
+  name: string;
+  purpose: string;
+  memberCount: number;
+  people: DepartmentPerson[];
+}
+
 export interface HubService {
   id: string;
   name: string;
@@ -110,10 +144,9 @@ export interface HubService {
   href: string;
   /** Module id whose existing access rule gates the card. */
   moduleId: string;
-  /** Owning department URL slug, or null when ownership is unset. */
-  ownerSlug: string | null;
-  /** True when the plan still marks that owner as assumed. */
-  ownerAssumed: boolean;
+  /** Every department related to this service. */
+  owners: ServiceDepartmentLink[];
+  audience: ServiceAudience;
 }
 
 export interface OkrCheckIn {
@@ -150,7 +183,10 @@ export interface DepartmentHome {
   rocks: Rock[];
   budget: DepartmentBudget;
   tools: DepartmentTool[];
-  ownedServiceIds: string[];
+  /** Services this department owns, manages, or moderates. Access is omitted. */
+  servicesRun: DepartmentServiceRun[];
+  /** Ministries explicitly folded into this home. */
+  subMinistries: SubMinistry[];
 }
 
 export type DepartmentTab =
@@ -163,8 +199,13 @@ export type DepartmentTab =
   | "tools";
 
 export interface ListedService extends HubService {
-  ownerLabel: string;
+  /** Managing departments, or moderators when nobody owns or manages it. */
+  managingLabel: string;
   canOpen: boolean;
+}
+
+export interface DepartmentServiceListing extends ListedService {
+  role: ServiceRunRole;
 }
 
 export interface DepartmentTabLink {
@@ -183,7 +224,8 @@ export interface DepartmentPageModel {
   rocks: Rock[];
   budget: DepartmentBudget;
   tools: DepartmentTool[];
-  services: ListedService[];
+  services: DepartmentServiceListing[];
+  subMinistries: SubMinistry[];
   tabs: DepartmentTabLink[];
   quarter: string;
 }

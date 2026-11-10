@@ -106,18 +106,21 @@ export function ServiceCard({
   href,
   name,
   summary,
-  owner,
+  managing,
+  audience,
 }: {
   href: string;
   name: string;
   summary: string;
-  owner: string;
+  managing: string;
+  audience: string;
 }) {
   return (
     <Link href={href} className="block border p-4">
       <h2 className="font-sans text-base font-semibold normal-case tracking-normal">{name}</h2>
       <p className="mt-1 text-sm text-muted-foreground">{summary}</p>
-      <p className="mt-3 text-sm">{owner}</p>
+      <p className="mt-3 text-sm">{managing}</p>
+      <p className="text-sm text-muted-foreground">{audience}</p>
     </Link>
   );
 }

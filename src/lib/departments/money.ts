@@ -1,14 +1,10 @@
-const zar = new Intl.NumberFormat("en-ZA", {
-  style: "currency",
-  currency: "ZAR",
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0,
-});
-
 /**
- * Whole rands, South Africa only.
- * `en-ZA` groups with a non-breaking space: `R\u00a0186\u00a0000`.
+ * Fixed South African rand formatter. Integer cents in, whole rands out.
+ * Groups with a regular space: 1_234_500 → "R 12 345".
  */
-export function formatZar(amountRand: number): string {
-  return zar.format(amountRand);
+export function formatZarFromCents(cents: number): string {
+  const negative = cents < 0;
+  const rands = Math.round(Math.abs(cents) / 100);
+  const grouped = String(rands).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  return `${negative ? "-" : ""}R ${grouped}`;
 }
