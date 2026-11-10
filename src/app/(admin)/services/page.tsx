@@ -1,18 +1,15 @@
 import type { Metadata } from "next";
 import { audienceLabel, departmentNames, managingLabel, STAFF_LANGUAGE } from "@/lib/departments/data";
-import { loadDepartmentApi } from "@/lib/departments/load";
+import { loadDepartmentList, loadHubServices } from "@/lib/departments/load";
 import { requireSignedIn } from "@/lib/departments/session";
-import type { DepartmentSummary, HubService } from "@/lib/departments/ui-contract";
 import { EmptyNote, PageHeading, ServiceCard } from "../departments/local-ui";
 
 export const metadata: Metadata = { title: "Services" };
 
 export default async function ServicesPage() {
-  await requireSignedIn();
-  const [services, departments] = await Promise.all([
-    loadDepartmentApi<HubService[]>("/api/services"),
-    loadDepartmentApi<DepartmentSummary[]>("/api/departments"),
-  ]);
+  const path = "/services";
+  await requireSignedIn(path);
+  const [services, departments] = await Promise.all([loadHubServices(path), loadDepartmentList(path)]);
   const names = departmentNames(departments);
 
   return (

@@ -15,6 +15,7 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: () => createClient(),
 }));
 
+import { loginPath } from "./login-path";
 import { requireSignedIn } from "./session";
 
 function client(user: { id: string } | null, row: { data: unknown; error: unknown }) {
@@ -36,6 +37,9 @@ describe("requireSignedIn", () => {
   it("redirects when nobody is signed in", async () => {
     createClient.mockResolvedValue(client(null, { data: null, error: null }));
     await expect(requireSignedIn()).rejects.toMatchObject({ url: "/login" });
+    await expect(requireSignedIn("/departments")).rejects.toMatchObject({ url: loginPath("/departments") });
+    await expect(requireSignedIn("//evil.example")).rejects.toMatchObject({ url: "/login" });
+    await expect(requireSignedIn("/departments\\secret")).rejects.toMatchObject({ url: "/login" });
   });
 
   it("404s an inactive account", async () => {

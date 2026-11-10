@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { clusterLabel, departmentNames, managingLabel, STAFF_LANGUAGE } from "@/lib/departments/data";
-import { loadDepartmentApi } from "@/lib/departments/load";
+import { loadHomeDashboard } from "@/lib/departments/load";
 import { requireSignedIn } from "@/lib/departments/session";
 import { formatDayRange } from "@/lib/format/sa-time";
-import type { HomeDashboard, RockStatus } from "@/lib/departments/ui-contract";
+import type { RockStatus } from "@/lib/departments/ui-contract";
 import { EmptyNote, PageHeading, SectionHeading, StackLink } from "../departments/local-ui";
 
 export const metadata: Metadata = { title: "Home" };
@@ -16,8 +16,9 @@ const ROCK_LABEL: Record<RockStatus, string> = {
 };
 
 export default async function HomePage() {
-  await requireSignedIn();
-  const home = await loadDepartmentApi<HomeDashboard>("/api/me/home");
+  const path = "/home";
+  await requireSignedIn(path);
+  const home = await loadHomeDashboard(path);
   const names = departmentNames(home.departments);
 
   return (

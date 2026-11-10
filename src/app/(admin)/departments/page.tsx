@@ -1,16 +1,16 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { clusterLabel, STAFF_LANGUAGE } from "@/lib/departments/data";
-import { loadDepartmentApi } from "@/lib/departments/load";
+import { loadDepartmentList } from "@/lib/departments/load";
 import { requireSignedIn } from "@/lib/departments/session";
-import type { DepartmentSummary } from "@/lib/departments/ui-contract";
 import { PageHeading, StackLink } from "./local-ui";
 
 export const metadata: Metadata = { title: "Departments" };
 
 export default async function DepartmentsIndexPage() {
-  await requireSignedIn();
-  const departments = await loadDepartmentApi<DepartmentSummary[]>("/api/departments");
+  const path = "/departments";
+  await requireSignedIn(path);
+  const departments = await loadDepartmentList(path);
   if (departments.length === 0) notFound();
 
   return (

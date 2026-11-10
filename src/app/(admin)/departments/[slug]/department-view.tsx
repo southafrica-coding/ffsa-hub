@@ -22,13 +22,11 @@ export function DepartmentView({
   tab,
   tabs,
   services,
-  parentName,
 }: {
   model: DepartmentHome;
   tab: DepartmentTab;
   tabs: { key: string; label: string; href: string }[];
   services: HubService[];
-  parentName: string | null;
 }) {
   const { department, access } = model;
   const leaders = (model.people ?? []).filter((person) => person.capacity === "leader");
@@ -50,11 +48,7 @@ export function DepartmentView({
             {department.parentSlug && (
               <Fact
                 label="Sits under"
-                value={
-                  <Link href={`/departments/${department.parentSlug}`}>
-                    {parentName ?? department.parentSlug}
-                  </Link>
-                }
+                value={<Link href={`/departments/${department.parentSlug}`}>{department.parentSlug}</Link>}
               />
             )}
             {(model.subMinistries ?? []).length > 0 && (

@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { DepartmentAccess, DepartmentHome, DepartmentSummary } from "@/lib/departments/ui-contract";
+import type { DepartmentAccess, DepartmentHome } from "@/lib/departments/ui-contract";
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
@@ -11,21 +11,18 @@ vi.mock("next/navigation", () => ({
   },
 }));
 
-vi.mock("next/headers", () => ({
-  headers: async () => ({
-    get: (key: string) => {
-      if (key === "host" || key === "x-forwarded-host") return "localhost:3000";
-      if (key === "x-forwarded-proto") return "http";
-      return null;
-    },
-  }),
-  cookies: async () => ({
-    getAll: () => [{ name: "sb", value: "test" }],
-  }),
-}));
+const loadDepartmentList = vi.hoisted(() => vi.fn());
+const loadDepartmentHome = vi.hoisted(() => vi.fn());
+const loadHubServices = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/departments/session", () => ({
   requireSignedIn: async () => ({ id: "donors-dev-member" }),
+}));
+
+vi.mock("@/lib/departments/load", () => ({
+  loadDepartmentList: (...args: unknown[]) => loadDepartmentList(...args),
+  loadDepartmentHome: (...args: unknown[]) => loadDepartmentHome(...args),
+  loadHubServices: (...args: unknown[]) => loadHubServices(...args),
 }));
 
 import DepartmentsIndexPage from "./page";
@@ -39,7 +36,7 @@ const detail: DepartmentAccess = {
   canSeePeopleEmails: false,
 };
 
-/** API payload for a donors_dev member. Detail is on the payload; the page must not recompute it. */
+/** Loader payload for a donors_dev member. Detail is on the payload; the page must not recompute it. */
 function foldedFinanceHome(): DepartmentHome {
   return {
     department: {
@@ -64,29 +61,17 @@ function foldedFinanceHome(): DepartmentHome {
   };
 }
 
-function jsonResponse(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
-}
-
-function routeBody(url: string, home: DepartmentHome | null, list: DepartmentSummary[]): unknown {
-  if (url.endsWith("/api/departments/finances_legal")) return home;
-  if (url.endsWith("/api/departments")) return list;
-  if (url.endsWith("/api/services")) return [];
-  throw new Error(`Unexpected ${url}`);
-}
-
-describe("department pages with API fixtures", () => {
+describe("department pages with loader fixtures", () => {
   beforeEach(() => {
-    vi.unstubAllGlobals();
+    loadDepartmentList.mockReset();
+    loadDepartmentHome.mockReset();
+    loadHubServices.mockReset();
+    loadHubServices.mockResolvedValue([]);
   });
 
-  it("renders detail for a donors_dev member when the API sets canSeeDepartmentDetail", async () => {
+  it("renders detail for a donors_dev member when the loader sets canSeeDepartmentDetail", async () => {
     const home = foldedFinanceHome();
-    const list: DepartmentSummary[] = [home.department];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (url: string) => jsonResponse(200, routeBody(String(url), home, list)))
-    );
+    loadDepartmentHome.mockResolvedValue(home);
 
     const element = await DepartmentPage({
       params: Promise.resolve({ slug: "finances_legal" }),
@@ -109,25 +94,26 @@ describe("department pages with API fixtures", () => {
     expect(markup).not.toContain("Budget");
   });
 
-  it("404s the index when the API department list is empty", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(200, [])));
+  it("redirects /departments/donors_dev to the slug the loader returns", async () => {
+    loadDepartmentHome.mockResolvedValue(foldedFinanceHome());
+
+    await expect(
+      DepartmentPage({
+        params: Promise.resolve({ slug: "donors_dev" }),
+        searchParams: Promise.resolve({}),
+      })
+    ).rejects.toMatchObject({ url: "/departments/finances_legal" });
+    expect(loadDepartmentHome).toHaveBeenCalledWith("donors_dev", "/departments/donors_dev");
+  });
+
+  it("404s the index when the loader department list is empty", async () => {
+    loadDepartmentList.mockResolvedValue([]);
     await expect(DepartmentsIndexPage()).rejects.toThrow("NOT_FOUND");
   });
 
   it("404s a department home for that same empty list", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (url: string) => {
-        const path = String(url);
-        if (path.endsWith("/api/departments/finances_legal")) {
-          return jsonResponse(404, { error: "Department not found" });
-        }
-        if (path.endsWith("/api/departments") || path.endsWith("/api/services")) {
-          return jsonResponse(200, []);
-        }
-        throw new Error(`Unexpected ${path}`);
-      })
-    );
+    loadDepartmentHome.mockRejectedValue(new Error("NOT_FOUND"));
+    loadHubServices.mockResolvedValue([]);
 
     await expect(
       DepartmentPage({
