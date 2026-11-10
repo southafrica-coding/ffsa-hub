@@ -461,6 +461,7 @@ export function ProgramDetail({
   applicationExpiry,
   staffDecisionPanel,
   canEditClassroom = false,
+  canManageTemplates = false,
 }: {
   program: Program;
   initialTab?: string;
@@ -509,6 +510,8 @@ export function ProgramDetail({
   /** LMS slice 1: leaders / managers (userCanManageProgram) get the Classroom
    *  editor. Everyone else who reaches this page sees no Classroom tab. */
   canEditClassroom?: boolean;
+  /** Admin or unscoped schools.manage. Scoped managers can still import. */
+  canManageTemplates?: boolean;
 }) {
   const router = useRouter();
   const [editingProgram, setEditingProgram] = useState(false);
@@ -873,6 +876,7 @@ export function ProgramDetail({
             questions={questions}
             referenceSlots={referenceSlots}
             referenceQuestions={referenceQuestions}
+            canManageTemplates={canManageTemplates}
           />
         </TabsContent>
 
@@ -3571,6 +3575,7 @@ function ApplicationTab({
   questions,
   referenceSlots,
   referenceQuestions,
+  canManageTemplates,
 }: {
   programId: string;
   programCode: string;
@@ -3580,6 +3585,7 @@ function ApplicationTab({
   questions: AppQuestion[];
   referenceSlots: ReferenceSlot[];
   referenceQuestions: TreeQuestion[];
+  canManageTemplates: boolean;
 }) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(applicationOpen);
@@ -4124,7 +4130,7 @@ function ApplicationTab({
               <Upload className="mr-2 h-4 w-4" />
               Import Template
             </Button>
-            {questions.length > 0 && (
+            {canManageTemplates && questions.length > 0 && (
               <Button
                 size="sm"
                 variant="outline"
@@ -4148,7 +4154,7 @@ function ApplicationTab({
         </div>
 
         {/* Save as Template Dialog */}
-        {showSaveTemplate && (
+        {canManageTemplates && showSaveTemplate && (
           <div className="border bg-card p-4 space-y-3">
             <h4 className="text-sm font-medium">Save Questions as Template</h4>
             <p className="text-xs text-muted-foreground">
@@ -4223,14 +4229,16 @@ function ApplicationTab({
                         "Import"
                       )}
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-muted-foreground hover:text-destructive"
-                      onClick={() => handleDeleteTemplate(t.id)}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
+                    {canManageTemplates && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-muted-foreground hover:text-destructive"
+                        onClick={() => handleDeleteTemplate(t.id)}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    )}
                   </div>
                 ))}
               </div>

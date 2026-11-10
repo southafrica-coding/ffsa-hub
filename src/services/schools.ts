@@ -1086,7 +1086,9 @@ export async function createApplicationTemplate(
 }
 
 export async function deleteApplicationTemplate(supabase: Client, id: string) {
-  return supabase.from("application_templates").delete().eq("id", id);
+  // select so a filtered (zero-row) delete is visible to the route. Without
+  // it PostgREST returns no error and the caller cannot tell nothing changed.
+  return supabase.from("application_templates").delete().eq("id", id).select("id");
 }
 
 export async function createTemplateQuestions(
