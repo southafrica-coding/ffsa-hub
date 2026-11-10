@@ -1,9 +1,11 @@
+import "server-only";
+
 // Reads public.services and public.service_owners. Rows come from the
 // database only. SERVICE_OWNER_SEED is a test fixture, not a runtime fallback.
 
 import type { Service, ServiceCapability } from "@/lib/departments/db.types";
-import { dbError, type DbError, type DbResult } from "@/lib/departments/repository";
-import type { ServiceOwnerRow } from "./seed";
+import { dbError, type DbError, type DbResult } from "@/lib/departments/internal/repository";
+import type { ServiceOwnerRow } from "../seed";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;

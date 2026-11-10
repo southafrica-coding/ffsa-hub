@@ -4,10 +4,10 @@ import { accountIsActive } from "@/lib/auth/grant-scope";
 import { holdsUnscopedRole } from "@/lib/departments/access";
 import { FOLDED_DEPARTMENTS, isBlockedHomeSlug } from "@/lib/departments/homes";
 import { badRequest, notAuthenticated, notAuthorized, notFound, serverError } from "@/lib/departments/http";
-import { rocksForDepartments } from "@/lib/departments/page";
+import { rocksForDepartments } from "@/lib/departments/internal/page";
 import { parseQuarter } from "@/lib/departments/quarter";
 import { rpcFlag } from "@/lib/departments/rpc";
-import { listAliases, listDepartmentRows, listUserRoleGrants } from "@/lib/departments/repository";
+import { listAliases, listDepartmentRows, listUserRoleGrants } from "@/lib/departments/internal/repository";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isOpened, openDepartment, serverError } from "@/lib/departments/http";
-import { countActiveMembers } from "@/lib/departments/repository";
+import { countActiveMembers } from "@/lib/departments/internal/repository";
 
 // Header only. Finance-only viewers may open it. No detail access is not
 // required. Anyone who cannot open the home already 404s in openDepartment.

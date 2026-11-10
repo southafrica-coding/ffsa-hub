@@ -1,3 +1,5 @@
+import "server-only";
+
 // Access-checked reads for a signed-in viewer.
 // Callers pass their user-session client. The service-role client is
 // created here, after the access check, and is never a parameter.
@@ -8,11 +10,11 @@ import { accountIsActive } from "@/lib/auth/grant-scope";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadMinistryAccess } from "./access";
 import { notAuthenticated, notAuthorized, notFound, resolveHome, serverError } from "./http";
-import { buildDepartmentHome, listVisibleDepartments, rocksDueFor, viewerMemberships } from "./page";
-import { listActiveMemberships, listDepartmentRows, listMinistriesById } from "./repository";
+import { buildDepartmentHome, listVisibleDepartments, rocksDueFor, viewerMemberships } from "./internal/page";
+import { listActiveMemberships, listDepartmentRows, listMinistriesById } from "./internal/repository";
 import { usableServiceKeys } from "@/lib/services/access";
 import { toHubService } from "@/lib/services/present";
-import { listServiceOwnerRows, listServices } from "@/lib/services/repository";
+import { listServiceOwnerRows, listServices } from "@/lib/services/internal/repository";
 import type { DepartmentHome, DepartmentSummary, HomeDashboard, HubService } from "./ui-contract";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

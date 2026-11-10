@@ -8,7 +8,7 @@ import {
   listBudgetLinks,
   listProjectsById,
   updateBudgetLink,
-} from "@/lib/departments/repository";
+} from "@/lib/departments/internal/repository";
 import { parseBudgetCreate, parseBudgetPatch } from "@/lib/departments/validate";
 
 export const dynamic = "force-dynamic";

@@ -11,8 +11,8 @@
 
 import { accountIsActive } from "@/lib/auth/grant-scope";
 import { holdsUnscopedRole } from "@/lib/departments/access";
-import { listActiveMemberships, listUserRoleGrants, type ActiveMembership } from "@/lib/departments/repository";
-import { listServiceOwnerRows } from "./repository";
+import { listActiveMemberships, listUserRoleGrants, type ActiveMembership } from "@/lib/departments/internal/repository";
+import { listServiceOwnerRows } from "./internal/repository";
 import type { ServiceOwnerRow } from "./seed";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

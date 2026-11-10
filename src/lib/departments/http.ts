@@ -10,7 +10,7 @@ import {
   getDepartmentBySlug,
   listAliases,
   type DepartmentRecord,
-} from "./repository";
+} from "./internal/repository";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;

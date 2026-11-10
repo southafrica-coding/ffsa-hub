@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isOpened, openDepartment, serverError } from "@/lib/departments/http";
-import { loadPeople } from "@/lib/departments/page";
+import { loadPeople } from "@/lib/departments/internal/page";
 
 // Active members only, as DepartmentPerson. Emails only when canSeePeopleEmails.
 // Finance-only viewers get 404.

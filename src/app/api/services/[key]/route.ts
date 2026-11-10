@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import { getAuthedUser } from "@/lib/api-auth";
 import { accountIsActive } from "@/lib/auth/grant-scope";
 import { notAuthenticated, notAuthorized, notFound, serverError } from "@/lib/departments/http";
-import { listMinistriesById } from "@/lib/departments/repository";
+import { listMinistriesById } from "@/lib/departments/internal/repository";
 import { canUseService } from "@/lib/services/access";
 import { toHubService } from "@/lib/services/present";
-import { listServiceOwnerRows, listServices } from "@/lib/services/repository";
+import { listServiceOwnerRows, listServices } from "@/lib/services/internal/repository";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 

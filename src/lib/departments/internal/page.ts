@@ -1,10 +1,12 @@
+import "server-only";
+
 // Assembles department payloads. Finance-only viewers get the header and
 // the budget; people, OKRs, rocks, services and sub-ministries are not read.
 
-import { foldedDetailIds, loadMinistryAccess, type DepartmentAccessFlags } from "./access";
-import { FOLDED_DEPARTMENTS, isBlockedHomeSlug } from "./homes";
-import { personName } from "./names";
-import { addIsoDays, currentQuarter, saTodayIso } from "./quarter";
+import { foldedDetailIds, loadMinistryAccess, type DepartmentAccessFlags } from "../access";
+import { FOLDED_DEPARTMENTS, isBlockedHomeSlug } from "../homes";
+import { personName } from "../names";
+import { addIsoDays, currentQuarter, saTodayIso } from "../quarter";
 import {
   countActiveMembers,
   getDepartmentBySlug,
@@ -21,7 +23,7 @@ import {
   type MembershipRecord,
   type PersonRecord,
 } from "./repository";
-import { budgetLinks } from "./shape";
+import { budgetLinks } from "../shape";
 import type {
   DepartmentAccess,
   DepartmentHome,
@@ -32,10 +34,10 @@ import type {
   Rock,
   SubMinistry,
   ViewerMembership,
-} from "./ui-contract";
-import { okrStatus } from "./ui-contract";
+} from "../ui-contract";
+import { okrStatus } from "../ui-contract";
 import { isEvangelismModeratorSlug } from "@/lib/services/evangelism-moderators";
-import { listServiceOwnerRows } from "@/lib/services/repository";
+import { listServiceOwnerRows } from "@/lib/services/internal/repository";
 import type { ServiceOwnerRow } from "@/lib/services/seed";
 import { createAdminClient } from "@/lib/supabase/admin";
 
