@@ -1,12 +1,14 @@
 // HubService cards for GET /api/services.
 // Capability maps to UI role. Null-ministry open_to_all and any_point_leader
 // rows set audience and are not owners.
-// Evangelism moderators are not service_owners rows. can_moderate_evangelism
-// covers Media and HULC, so those two slugs are emitted as moderator.
+// Evangelism moderators are not service_owners rows. They come from
+// EVANGELISM_MODERATOR_SLUGS, the same Media/HULC slugs as
+// can_moderate_evangelism().
 
 import type { ServiceCapability } from "@/lib/departments/db.types";
 import type { HubService, ServiceAudience, ServiceDepartmentRole } from "@/lib/departments/ui-contract";
 import { audienceFromGrants } from "./access";
+import { EVANGELISM_MODERATOR_SLUGS } from "./evangelism-moderators";
 import type { ServiceOwnerRow } from "./seed";
 
 const ROLE: Record<ServiceCapability, ServiceDepartmentRole> = {
@@ -46,7 +48,7 @@ export function toHubService(
     owners.push({ slug, role });
   }
   if (service.service_key === "evangelism") {
-    for (const slug of ["media", "hulk"]) {
+    for (const slug of EVANGELISM_MODERATOR_SLUGS) {
       const key = `${slug}:moderator`;
       if (seen.has(key)) continue;
       seen.add(key);

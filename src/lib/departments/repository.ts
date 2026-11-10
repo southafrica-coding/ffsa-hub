@@ -231,11 +231,14 @@ export async function listActiveMembers(
   return { data: Array.isArray(data) ? (data as MembershipRecord[]) : [], error: null };
 }
 
-export async function countActiveMembers(supabase: Client): Promise<DbResult<Map<string, number>>> {
-  const { data, error } = await supabase
-    .from("staff_ministry_members")
-    .select("staff_ministry_id")
-    .eq("status", "active");
+export async function countActiveMembers(
+  supabase: Client,
+  ministryIds?: readonly string[]
+): Promise<DbResult<Map<string, number>>> {
+  if (ministryIds && ministryIds.length === 0) return { data: new Map(), error: null };
+  let query = supabase.from("staff_ministry_members").select("staff_ministry_id").eq("status", "active");
+  if (ministryIds) query = query.in("staff_ministry_id", [...ministryIds]);
+  const { data, error } = await query;
   if (error) return failed(error);
   const counts = new Map<string, number>();
   for (const row of Array.isArray(data) ? data : []) {

@@ -58,16 +58,6 @@ export function isLeaderOf(gate: DepartmentGate, ministryId: string): boolean {
   );
 }
 
-export function isPointLeaderOf(gate: DepartmentGate, ministryId: string): boolean {
-  return gate.memberships.some(
-    (membership) => membership.staff_ministry_id === ministryId && membership.is_point_leader
-  );
-}
-
-export function isPointLeader(gate: DepartmentGate): boolean {
-  return gate.memberships.some((membership) => membership.is_point_leader);
-}
-
 /** Active member of the Leadership Team ministry. The role alone is not enough. */
 export function isLeadershipMember(gate: DepartmentGate): boolean {
   if (!gate.leadershipMinistryId) return false;
@@ -313,9 +303,36 @@ async function seesFoldedHome(
  * so detail adds that membership check.
  * ok false means the access lookup failed (403). denied means 404.
  */
+/** Homes a folded child (donors_dev) may open. One membership check per source, not per home. */
+export async function foldedDetailIds(
+  supabase: Client,
+  ministries: readonly { id: string; slug: string }[]
+): Promise<{ ok: true; ids: Set<string> } | { ok: false }> {
+  const bySlug = new Map(ministries.map((ministry) => [ministry.slug, ministry.id]));
+  const pairs = Object.entries(FOLDED_DEPARTMENTS).flatMap(([source, target]) => {
+    const sourceId = bySlug.get(source);
+    const targetId = bySlug.get(target);
+    if (!sourceId || !targetId) return [];
+    return [{ sourceId, targetId }];
+  });
+  if (pairs.length === 0) return { ok: true, ids: new Set() };
+  const checks = await Promise.all(
+    pairs.map((pair) =>
+      rpcFlag(supabase, "dept_is_ministry_member", { p_ministry_id: pair.sourceId, p_leaders_only: false })
+    )
+  );
+  if (checks.some((check) => !check.ok)) return { ok: false };
+  const ids = new Set<string>();
+  checks.forEach((check, index) => {
+    if (check.ok && check.value) ids.add(pairs[index]!.targetId);
+  });
+  return { ok: true, ids };
+}
+
 export async function loadMinistryAccess(
   supabase: Client,
-  ministryId: string
+  ministryId: string,
+  options?: { fold?: boolean }
 ): Promise<{ ok: true; access: DepartmentAccessFlags; denied: boolean } | { ok: false }> {
   const [readRock, readBudget, writeBudget, writeRock] = await Promise.all([
     rpcFlag(supabase, "dept_can_read_rock", { p_ministry_id: ministryId }),
@@ -326,7 +343,7 @@ export async function loadMinistryAccess(
   if (!readRock.ok || !readBudget.ok || !writeBudget.ok || !writeRock.ok) return { ok: false };
 
   let detail = readRock.value;
-  if (!detail) {
+  if (!detail && options?.fold !== false) {
     const folded = await seesFoldedHome(supabase, ministryId);
     if (!folded.ok) return { ok: false };
     detail = folded.value;

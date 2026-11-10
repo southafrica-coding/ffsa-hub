@@ -18,7 +18,7 @@ export async function GET() {
   if (!user) return notAuthenticated();
   if (!(await accountIsActive(supabase, user.id))) return notAuthorized();
   const [services, grants] = await Promise.all([listServices(supabase), listServiceOwnerRows(supabase)]);
-  if (services.error || grants.error) return serverError(services.error ?? grants.error);
+  if (services.error || grants.error) return notAuthorized();
   const usable = await usableServiceKeys(
     supabase,
     services.data.map((service) => service.service_key)

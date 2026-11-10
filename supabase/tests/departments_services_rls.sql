@@ -179,7 +179,7 @@ CREATE TABLE public.ministries (
   color text NOT NULL DEFAULT '#6366f1',
   is_active boolean NOT NULL DEFAULT true,
   sort_order int NOT NULL DEFAULT 0,
-  staff_ministry_id uuid REFERENCES public.staff_ministries (id),
+  staff_ministry_id uuid REFERENCES public.staff_ministries (id) ON DELETE SET NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
@@ -1188,6 +1188,33 @@ BEGIN
 END
 $do$;
 
+-- The table already exists. Dropping the check and pasting 319 again
+-- must put the named constraint back.
+ALTER TABLE public.service_owners DROP CONSTRAINT service_owners_open_to_all_use_ck;
+\ir ../migrations/319_department_services.sql
+DO $do$
+DECLARE
+  ok boolean;
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+     WHERE conname = 'service_owners_open_to_all_use_ck'
+       AND conrelid = 'public.service_owners'::regclass
+  ) THEN
+    RAISE EXCEPTION 'replay did not restore service_owners_open_to_all_use_ck';
+  END IF;
+  BEGIN
+    INSERT INTO public.service_owners (
+      service_key, staff_ministry_id, capability, member_role, any_point_leader, open_to_all
+    ) VALUES ('gear_hire', NULL, 'manage', NULL, false, true);
+    ok := false;
+  EXCEPTION WHEN check_violation THEN
+    ok := true;
+  END;
+  PERFORM public._t('replay restores the open_to_all use check', ok, ok::text);
+END
+$do$;
+
 -- Demote Philip, then re-run homes. The membership must stay demoted.
 UPDATE public.staff_ministry_members mm
    SET member_role = 'member', is_point_leader = false
@@ -1289,6 +1316,67 @@ DELETE FROM public.staff_ministry_member_subcategories sc
    AND sm.slug = 'be_free'
    AND mm.user_id = 'ac7d1c5e-4300-422f-9fad-d50c29a15ca6';
 
+-- be_free was not inserted by 318. The membership 318 did insert still
+-- has a subcategory, so the membership loop must refuse on its own.
+CREATE TEMP TABLE saved_be_free_insert AS
+SELECT *
+  FROM public.migration_318_changes
+ WHERE kind = 'insert'
+   AND table_name = 'staff_ministries'
+   AND row_id = (SELECT id FROM public.staff_ministries WHERE slug = 'be_free');
+DELETE FROM public.migration_318_changes
+ WHERE kind = 'insert'
+   AND table_name = 'staff_ministries'
+   AND row_id = (SELECT id FROM public.staff_ministries WHERE slug = 'be_free');
+INSERT INTO public.staff_ministry_member_subcategories (membership_id, subcategory_id)
+SELECT mm.id, sc.id
+  FROM public.staff_ministry_members mm
+  JOIN public.staff_ministries sm ON sm.id = mm.staff_ministry_id AND sm.slug = 'be_free'
+  JOIN public.staff_ministry_subcategories sc ON sc.name = 'Be Free seat'
+ WHERE mm.user_id = 'ac7d1c5e-4300-422f-9fad-d50c29a15ca6';
+
+\set ON_ERROR_STOP off
+\ir ../rollbacks/318_321_departments_rollback.sql
+\set ON_ERROR_STOP on
+
+DO $do$
+BEGIN
+  IF to_regclass('public.rocks') IS NULL
+     OR NOT EXISTS (SELECT 1 FROM public.staff_ministries WHERE slug = 'be_free')
+     OR EXISTS (
+       SELECT 1 FROM public.migration_318_changes
+        WHERE kind = 'insert'
+          AND table_name = 'staff_ministries'
+          AND row_id = (SELECT id FROM public.staff_ministries WHERE slug = 'be_free')
+     )
+     OR NOT EXISTS (
+       SELECT 1 FROM public.staff_ministry_member_subcategories sc
+         JOIN public.staff_ministry_members mm ON mm.id = sc.membership_id
+         JOIN public.staff_ministries sm ON sm.id = mm.staff_ministry_id
+        WHERE sm.slug = 'be_free'
+          AND mm.user_id = 'ac7d1c5e-4300-422f-9fad-d50c29a15ca6'
+     ) THEN
+    RAISE EXCEPTION 'tracked membership subcategory did not stop the rollback';
+  END IF;
+  PERFORM public._t(
+    'tracked membership subcategory stops the rollback without a be_free insert',
+    EXISTS (SELECT 1 FROM public.staff_ministries WHERE slug = 'be_free'),
+    'be_free'
+  );
+END
+$do$;
+
+DELETE FROM public.staff_ministry_member_subcategories sc
+ USING public.staff_ministry_members mm, public.staff_ministries sm
+ WHERE sc.membership_id = mm.id
+   AND mm.staff_ministry_id = sm.id
+   AND sm.slug = 'be_free'
+   AND mm.user_id = 'ac7d1c5e-4300-422f-9fad-d50c29a15ca6';
+INSERT INTO public.migration_318_changes
+OVERRIDING SYSTEM VALUE
+SELECT * FROM saved_be_free_insert;
+DROP TABLE saved_be_free_insert;
+
 -- Prod shape: version is the apply timestamp, name is the file stem.
 CREATE SCHEMA IF NOT EXISTS supabase_migrations;
 CREATE TABLE supabase_migrations.schema_migrations (
@@ -1301,7 +1389,8 @@ INSERT INTO supabase_migrations.schema_migrations (version, name) VALUES
   ('20261110180002', '319_department_services'),
   ('20261110180003', '320_ministry_rocks'),
   ('20261110180004', '321_department_budgets'),
-  ('318', '318_short_version');
+  ('318', NULL),
+  ('319', '319_unrelated_name');
 
 \ir ../rollbacks/318_321_departments_rollback.sql
 
@@ -1365,8 +1454,23 @@ BEGIN
      '320_ministry_rocks',
      '321_department_budgets'
    )
-      OR version IN ('318', '319', '320', '321');
+      OR (
+        version IN ('318', '319', '320', '321')
+        AND (
+          name IS NULL
+          OR name IN (
+            '318_department_homes',
+            '319_department_services',
+            '320_ministry_rocks',
+            '321_department_budgets'
+          )
+        )
+      );
   PERFORM public._t('rollback removes timestamp-style migration rows', n = 0, 'n=' || n);
+  SELECT count(*) INTO n
+    FROM supabase_migrations.schema_migrations
+   WHERE version = '319' AND name = '319_unrelated_name';
+  PERFORM public._t('rollback keeps a short version with another name', n = 1, 'n=' || n);
   SELECT count(*) INTO n
     FROM supabase_migrations.schema_migrations
    WHERE version = '20261110094706'

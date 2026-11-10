@@ -26,10 +26,8 @@ export async function GET() {
     listServiceOwnerRows(supabase),
     listActiveMemberships(supabase, user.id),
   ]);
-  if (departments.accessError || memberships.error) return notAuthorized();
-  if (departments.error || services.error || grants.error) {
-    return serverError(departments.error ?? services.error ?? grants.error);
-  }
+  if (departments.accessError || memberships.error || services.error || grants.error) return notAuthorized();
+  if (departments.error) return serverError(departments.error);
   const usable = await usableServiceKeys(
     supabase,
     services.data.map((service) => service.service_key)

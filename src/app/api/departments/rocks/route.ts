@@ -4,7 +4,7 @@ import { accountIsActive } from "@/lib/auth/grant-scope";
 import { holdsUnscopedRole } from "@/lib/departments/access";
 import { FOLDED_DEPARTMENTS, isBlockedHomeSlug } from "@/lib/departments/homes";
 import { badRequest, notAuthenticated, notAuthorized, notFound, serverError } from "@/lib/departments/http";
-import { loadQuarterRocks } from "@/lib/departments/page";
+import { rocksForDepartments } from "@/lib/departments/page";
 import { parseQuarter } from "@/lib/departments/quarter";
 import { rpcFlag } from "@/lib/departments/rpc";
 import { listAliases, listDepartmentRows, listUserRoleGrants } from "@/lib/departments/repository";
@@ -42,16 +42,15 @@ export async function GET(request: Request) {
     })
     .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
 
-  const loaded = await Promise.all(homes.map((home) => loadQuarterRocks(admin, home, quarter.quarter)));
-  const failed = loaded.find((row) => row.error);
-  if (failed?.error) return serverError(failed.error);
+  const rocks = await rocksForDepartments(admin, homes, quarter.quarter);
+  if (rocks.error || !rocks.data) return serverError(rocks.error);
 
   return NextResponse.json({
     quarter: quarter.quarter,
-    departments: homes.map((department, index) => ({
+    departments: homes.map((department) => ({
       slug: department.slug,
       name: department.name,
-      rocks: loaded[index]?.data ?? [],
+      rocks: rocks.data?.get(department.id) ?? [],
     })),
   });
 }

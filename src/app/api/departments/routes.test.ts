@@ -53,12 +53,18 @@ const { GET: getPeople } = await import("./[slug]/people/route");
 const { GET: getOkrs } = await import("./[slug]/okrs/route");
 const { GET: getRocks, POST: postRock } = await import("./[slug]/rocks/route");
 const { PATCH: patchRock } = await import("./[slug]/rocks/[rockId]/route");
-const { GET: getBudget, POST: postBudget } = await import("./[slug]/budget/route");
+const { GET: getBudget, POST: postBudget, PATCH: patchBudget } = await import("./[slug]/budget/route");
 const { GET: getOverview } = await import("./[slug]/overview/route");
 const { GET: getRollup } = await import("./rocks/route");
 const { GET: getServices } = await import("../services/route");
+const { GET: getService } = await import("../services/[key]/route");
+const { GET: getMeHome } = await import("../me/home/route");
 
 const slug = (value: string) => ({ params: Promise.resolve({ slug: value }) });
+const serviceKey = (value: string) => ({ params: Promise.resolve({ key: value }) });
+const rockParams = { params: Promise.resolve({ slug: "media", rockId: ROCK_ID }) };
+const write = (method: string) =>
+  new Request("http://localhost/x", { method, body: "{}", headers: { "content-type": "application/json" } });
 
 beforeEach(() => {
   h.userId = MEMBER;
@@ -201,6 +207,58 @@ describe("department visibility", () => {
     h.world = makeDepartmentWorld();
     h.world.errors = { staff_ministry_members: true };
     for (const response of await call()) expect(response.status).toBe(403);
+  });
+
+  it("returns 403 for writes, services, and home when the account or lookup fails", async () => {
+    const call = () =>
+      Promise.all([
+        postRock(write("POST"), slug("media")),
+        patchRock(write("PATCH"), rockParams),
+        postBudget(write("POST"), slug("media")),
+        patchBudget(write("PATCH"), slug("media")),
+        getServices(),
+        getService(new Request("http://localhost/x"), serviceKey("gear_hire")),
+        getMeHome(),
+      ]);
+
+    h.userId = INACTIVE_ADMIN;
+    for (const response of await call()) expect(response.status).toBe(403);
+
+    h.userId = MEMBER;
+    h.world!.errors = { users: true };
+    for (const response of await call()) expect(response.status).toBe(403);
+
+    h.world = makeDepartmentWorld();
+    h.world.errors = { staff_ministry_members: true };
+    expect((await postRock(write("POST"), slug("media"))).status).toBe(403);
+    expect((await patchRock(write("PATCH"), rockParams)).status).toBe(403);
+    expect((await postBudget(write("POST"), slug("media"))).status).toBe(403);
+    expect((await patchBudget(write("PATCH"), slug("media"))).status).toBe(403);
+
+    h.world = makeDepartmentWorld();
+    h.world.errors = { service_owners: true };
+    expect((await getServices()).status).toBe(403);
+    expect((await getMeHome()).status).toBe(403);
+    expect((await getService(new Request("http://localhost/x"), serviceKey("gear_hire"))).status).toBe(403);
+  });
+
+  it("does not reveal whether a service key exists to a caller who cannot use it", async () => {
+    h.userId = OUTSIDER;
+    h.world!.errors = { services: true, service_owners: true };
+    const hidden = await getService(new Request("http://localhost/x"), serviceKey("communications"));
+    const missing = await getService(new Request("http://localhost/x"), serviceKey("not_a_service"));
+    expect(hidden.status).toBe(403);
+    expect(missing.status).toBe(hidden.status);
+  });
+
+  it("returns quarter rocks for every home from one rocks query", async () => {
+    h.userId = LEADERSHIP_MEMBER;
+    const response = await getRollup(new Request("http://localhost/api/departments/rocks"));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    const media = body.departments.find((row: { slug: string }) => row.slug === "media");
+    expect(media.rocks[0]).toMatchObject({ id: ROCK_ID, title: "Finish the recap", dueOn: "2026-12-01" });
+    expect(media.rocks[0].created_by).toBeUndefined();
   });
 
   it("returns a bare services array whose gear_hire audience follows the open_to_all row", async () => {
