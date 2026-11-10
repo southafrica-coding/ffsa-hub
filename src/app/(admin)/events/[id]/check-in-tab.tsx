@@ -13,6 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { formatSaDateTime, formatSaTime } from "@/lib/format/sa-time";
 import { ScanLinkCard } from "./scan-link-card";
 
 type AttendanceTicket = {
@@ -46,7 +47,13 @@ export function CheckInTab({
 }) {
   const router = useRouter();
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date>(new Date());
+  // null until after mount. new Date() during render differs between the
+  // server and the browser and trips React #418 on ?tab=check-in.
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
+
+  useEffect(() => {
+    setLastRefreshedAt(new Date());
+  }, []);
 
   // Auto-refresh every 20s while the tab is in the foreground and
   // staff has it enabled. Pauses when the document is hidden so we
@@ -136,7 +143,7 @@ export function CheckInTab({
             </div>
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span>
-                Updated {lastRefreshedAt.toLocaleTimeString()}
+                {`Updated ${lastRefreshedAt ? formatSaTime(lastRefreshedAt) : "—"}`}
               </span>
               <label className="flex items-center gap-1.5 cursor-pointer">
                 <input
@@ -203,7 +210,7 @@ export function CheckInTab({
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {t.checked_in_at
-                        ? new Date(t.checked_in_at).toLocaleString()
+                        ? formatSaDateTime(t.checked_in_at)
                         : "—"}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">

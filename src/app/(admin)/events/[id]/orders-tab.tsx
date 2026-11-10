@@ -28,6 +28,7 @@ import { RefundDialog } from "./refund-dialog";
 import { RefundAllButton } from "./refund-all-button";
 import { CancellationNoticeButton } from "./cancellation-notice-button";
 import { formatMoney } from "@/lib/currencies";
+import { formatSaDateTime } from "@/lib/format/sa-time";
 
 type Order = {
   id: string;
@@ -567,9 +568,7 @@ export function OrdersTab({
                         <DeliveryBadge email={emailByOrder.get(o.id)} />
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
-                        {o.paid_at
-                          ? new Date(o.paid_at).toLocaleString()
-                          : "—"}
+                        {o.paid_at ? formatSaDateTime(o.paid_at) : "—"}
                       </TableCell>
                       <TableCell className="text-right">
                         {canManageOrders && (
@@ -770,9 +769,7 @@ export function OrdersTab({
                                             Signed at
                                           </dt>
                                           <dd className="text-sm">
-                                            {new Date(
-                                              t.signature.signed_at
-                                            ).toLocaleString()}
+                                            {formatSaDateTime(t.signature.signed_at)}
                                           </dd>
                                         </div>
                                       </dl>
@@ -834,9 +831,7 @@ export function OrdersTab({
                                           ? "recorded manually"
                                           : `via ${r.provider ?? "provider"}`}
                                         {" · "}
-                                        {new Date(
-                                          r.created_at
-                                        ).toLocaleString()}
+                                        {formatSaDateTime(r.created_at)}
                                         {r.users?.first_name
                                           ? ` · ${r.users.first_name} ${r.users.last_name ?? ""}`.trimEnd()
                                           : ""}
@@ -902,7 +897,7 @@ function DeliveryBadge({ email }: { email?: TicketEmailStatus }) {
     email.created_at;
   const title = [
     `${view.label} → ${email.to_email}`,
-    when ? new Date(when).toLocaleString() : null,
+    when ? formatSaDateTime(when) : null,
     view.tone === "problem" && email.error ? `Reason: ${email.error}` : null,
   ]
     .filter(Boolean)

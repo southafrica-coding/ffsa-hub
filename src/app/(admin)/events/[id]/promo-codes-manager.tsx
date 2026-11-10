@@ -12,6 +12,7 @@ import {
   type PromoKind,
   type WaivedQuestionRef,
 } from "@/lib/ticketing/promo-codes";
+import { formatSaDateTime } from "@/lib/format/sa-time";
 
 type TicketTypeLite = {
   id: string;
@@ -563,10 +564,10 @@ export function PromoCodesManager({
                       <p className="text-xs text-muted-foreground">
                         Valid:
                         {p.valid_from
-                          ? ` from ${new Date(p.valid_from).toLocaleString()}`
+                          ? ` from ${formatSaDateTime(p.valid_from)}`
                           : ""}
                         {p.valid_until
-                          ? ` until ${new Date(p.valid_until).toLocaleString()}`
+                          ? ` until ${formatSaDateTime(p.valid_until)}`
                           : ""}
                       </p>
                     )}

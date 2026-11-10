@@ -8,6 +8,7 @@ import { currencySymbol, formatMoney } from "@/lib/currencies";
 import type { FormField } from "@/lib/forms/schema";
 import type { TierWaiver } from "@/lib/ticketing/waivers";
 import { formatTierCount, type TierCount } from "@/lib/ticketing/tier-inventory";
+import { formatSaDateTime } from "@/lib/format/sa-time";
 import { QuestionsBuilder } from "./questions-builder";
 import { TierWaiverEditor } from "./tier-waiver-editor";
 
@@ -230,10 +231,10 @@ export function TicketTypesManager({
                     <p className="text-xs text-muted-foreground">
                       Sales:
                       {t.sales_start_at
-                        ? ` from ${new Date(t.sales_start_at).toLocaleString()}`
+                        ? ` from ${formatSaDateTime(t.sales_start_at)}`
                         : ""}
                       {t.sales_end_at
-                        ? ` until ${new Date(t.sales_end_at).toLocaleString()}`
+                        ? ` until ${formatSaDateTime(t.sales_end_at)}`
                         : ""}
                     </p>
                   )}

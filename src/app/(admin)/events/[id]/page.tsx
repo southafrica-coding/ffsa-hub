@@ -8,6 +8,7 @@ import { getAttendanceForEvent } from "@/services/attendance";
 import { getEventOutcomes } from "@/services/event-outcomes";
 import { getEventRoles } from "@/services/event-roles";
 import { getCachedActiveLabels } from "@/lib/cached-reads";
+import { formatSaDate } from "@/lib/format/sa-time";
 import { notFound } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -496,7 +497,7 @@ function DetailsTab(props: any) {
                       </StatusPill>
                     </TableCell>
                     <TableCell className="text-[color:var(--text-tertiary)]">
-                      {new Date(reg.registered_at).toLocaleDateString()}
+                      {formatSaDate(reg.registered_at)}
                     </TableCell>
                   </TableRow>
                 )
