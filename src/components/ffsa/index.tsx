@@ -101,8 +101,6 @@ export function NeedsYouAction({ href, children }: { href: string; children: Rea
   );
 }
 
-export { Drawer } from "./client";
-
 /* ── Module tab strip ─────────────────────────────── */
 /** Frames 10a / 12a: squared mono tabs sitting on the black page rule. */
 export function ModuleTabs({
