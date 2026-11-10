@@ -14,9 +14,6 @@ export type ServiceCapability = (typeof SERVICE_CAPABILITIES)[number];
 export const ROCK_STATUSES = ["on_track", "off_track", "done"] as const;
 export type RockStatus = (typeof ROCK_STATUSES)[number];
 
-export const BUDGET_CURRENCIES = ["ZAR", "USD"] as const;
-export type BudgetCurrency = (typeof BUDGET_CURRENCIES)[number];
-
 /** A staff ministry that department pages treat as another home (317). */
 export interface StaffMinistryAlias {
   id: string;
@@ -57,8 +54,8 @@ export interface Service {
 
 /**
  * service_owners. own does not imply manage. staff_ministry_id is null
- * only when any_point_leader is true. member_role null means any active
- * member of that ministry.
+ * only when any_point_leader or open_to_all is true, and only one of
+ * those flags is true.
  */
 export interface ServiceOwner {
   id: string;
@@ -68,6 +65,7 @@ export interface ServiceOwner {
   /** Null: any active member. 'member': members and leaders. 'leader': leaders only. */
   member_role: "member" | "leader" | null;
   any_point_leader: boolean;
+  open_to_all: boolean;
   admin_href: string | null;
   created_at: string;
 }
@@ -84,6 +82,7 @@ export interface MinistryServiceAccess {
   capability: ServiceCapability;
   member_role: "member" | "leader" | null;
   any_point_leader: boolean;
+  open_to_all: boolean;
   admin_href: string | null;
   service_label: string;
 }
@@ -133,7 +132,7 @@ export interface LeadershipMinistryRollup {
 }
 
 /**
- * department_budget_links. One finance project on a ministry, in cents.
+ * department_budget_links. Several ZAR links per ministry are allowed.
  * year defaults to the calendar year of the insert and is not read by the API.
  */
 export interface DepartmentBudgetLink {
@@ -142,7 +141,7 @@ export interface DepartmentBudgetLink {
   finance_project_id: string | null;
   budget_cents: number;
   spend_cents: number;
-  currency: BudgetCurrency;
+  currency: "ZAR";
   notes: string | null;
   year: number;
   updated_at: string;

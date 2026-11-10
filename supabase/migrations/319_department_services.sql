@@ -1,38 +1,44 @@
 -- ============================================================
--- FFSA Hub — Migration 318: Services and who may use them
+-- FFSA Hub — Migration 319: Services and who may use them
 -- ============================================================
--- Depends on 317 (dept_caller_is_active, dept_can_write_org_structure,
+-- Depends on 318 (dept_caller_is_active, dept_can_write_org_structure,
 -- staff_ministry_aliases).
 --
--- service_owners is the grant the department API reads. Columns, exactly:
+-- service_owners is the grant the department API reads. Columns:
 --   id, service_key, staff_ministry_id, capability, member_role,
---   any_point_leader, admin_href.
+--   any_point_leader, open_to_all, admin_href.
 -- capability is manage | use | moderate | own.
 --   own does not imply manage, use or moderate.
 --   manage implies use. moderate implies neither.
--- staff_ministry_id is null only when any_point_leader is true.
--- member_role null means any active member of that ministry, leaders
--- included. 'member' means members and leaders. 'leader' means leaders only.
--- Evangelism moderate is null, so every active member of Media and HULC
--- moderates, the same way a communications grant covers the whole roster.
+-- staff_ministry_id is null only when any_point_leader or open_to_all
+-- is true, and only one of those two flags may be true.
+-- member_role null on a ministry grant means any active member of that
+-- ministry. 'member' means members and leaders. 'leader' means leaders only.
 --
--- Evangelism USE is open to every signed-in active user. There is
--- deliberately no service_owners row for that. The app hardcodes it
--- (canUseService('evangelism') is not read from a grant). Media and HULC
--- still own the service and moderate it.
+-- Evangelism moderation is NOT a service_owners list. 319 extends
+-- public.can_moderate_evangelism() (last defined in 311) so active
+-- members of active Media and HULC ministries can moderate, and the
+-- old is_admin() / evangelism.moderate path is unchanged. There is no
+-- capability = 'moderate' seed row.
 --
--- Contacts for every ministry leader is one row: any_point_leader true,
--- staff_ministry_id null, capability use, member_role leader. The app
--- treats that flag as "any active ministry leader", not the
--- is_point_leader column.
+-- open_to_all on a use row means any signed-in active user may use that
+-- service. Seeded for gear_hire, evangelism, prayer_room, spaces,
+-- vehicles and brand_kit. Communications and contacts have no
+-- open_to_all row.
+--
+-- Contacts use for every ministry's point leader is one row:
+-- any_point_leader true, staff_ministry_id null, capability use.
+-- user_can_use_service requires mm.is_point_leader on that branch.
 --
 -- Owning ministries get both own and manage, because own does not imply
 -- manage:
---   gear_hire       Prayer & Worship, Operations, Media
+--   gear_hire       Prayer & Worship, Operations, Media own and manage,
+--                   plus an open_to_all use row
 --   communications  Media owns and manages; HULC and Leadership Team use
 --   contacts        Media, HULC, Leadership Team own and manage, plus the
 --                   any-point-leader use row
---   evangelism      Media and HULC own and moderate
+--   evangelism      Media and HULC own. Use is an open_to_all row.
+--                   Moderation is can_moderate_evangelism, not a grant.
 --   prayer_room     Prayer & Worship
 --   spaces          Operations
 --   vehicles        Operations
@@ -41,9 +47,12 @@
 -- operations, media, hulk, leadership_team. A missing slug skips that
 -- grant. admin_href is the existing route.
 --
--- A caller's folded ministry (317) counts as its home for a grant.
+-- A caller's folded ministry (318) counts as its home for a grant.
 -- Read: any active signed-in user. Write: admin or org.manage.
+-- Wrapped in one transaction.
 -- ============================================================
+
+BEGIN;
 
 CREATE TABLE IF NOT EXISTS public.services (
   service_key  text PRIMARY KEY,
@@ -53,7 +62,7 @@ CREATE TABLE IF NOT EXISTS public.services (
 );
 
 COMMENT ON TABLE public.services IS
-  'Catalog of service keys and their admin routes. Grants live in service_owners. Evangelism use is not a grant: the app opens it to every active signed-in user.';
+  'Catalog of service keys and their admin routes. Who may use a service is service_owners, including open_to_all use rows.';
 
 CREATE TABLE IF NOT EXISTS public.service_owners (
   id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -62,11 +71,13 @@ CREATE TABLE IF NOT EXISTS public.service_owners (
   capability         text NOT NULL CHECK (capability IN ('manage', 'use', 'moderate', 'own')),
   member_role        text CHECK (member_role IS NULL OR member_role IN ('member', 'leader')),
   any_point_leader   boolean NOT NULL DEFAULT false,
+  open_to_all        boolean NOT NULL DEFAULT false,
   admin_href         text,
   created_at         timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT service_owners_point_leader_ministry_ck CHECK (
-    (any_point_leader AND staff_ministry_id IS NULL)
-    OR (NOT any_point_leader AND staff_ministry_id IS NOT NULL)
+  CONSTRAINT service_owners_scope_ck CHECK (
+    (staff_ministry_id IS NOT NULL AND NOT any_point_leader AND NOT open_to_all)
+    OR (staff_ministry_id IS NULL AND any_point_leader AND NOT open_to_all)
+    OR (staff_ministry_id IS NULL AND NOT any_point_leader AND open_to_all)
   )
 );
 
@@ -80,20 +91,26 @@ CREATE UNIQUE INDEX IF NOT EXISTS service_owners_point_leader_capability_key
   ON public.service_owners (service_key, capability)
   WHERE any_point_leader AND staff_ministry_id IS NULL;
 
+CREATE UNIQUE INDEX IF NOT EXISTS service_owners_open_to_all_capability_key
+  ON public.service_owners (service_key, capability)
+  WHERE open_to_all AND staff_ministry_id IS NULL;
+
 CREATE INDEX IF NOT EXISTS service_owners_staff_ministry_id_idx
   ON public.service_owners (staff_ministry_id);
 
 COMMENT ON TABLE public.service_owners IS
   'Who may manage, use or moderate a service, and who owns it. own does not imply manage.';
 COMMENT ON COLUMN public.service_owners.any_point_leader IS
-  'True only with a null staff_ministry_id. The app treats it as any active ministry leader (member_role = leader), not is_point_leader.';
+  'True only with a null staff_ministry_id, and never together with open_to_all. Contacts use: the caller must be an active point leader (is_point_leader).';
+COMMENT ON COLUMN public.service_owners.open_to_all IS
+  'True only with a null staff_ministry_id, and never together with any_point_leader. A use row with this flag is open to every signed-in active user.';
 COMMENT ON COLUMN public.service_owners.member_role IS
   'Null means any active member of the ministry. member allows members and leaders; leader allows leaders only.';
 
 -- ────────────────────────────────────────────────────────────
 -- Use and moderate. Boolean only — no row leakage.
 -- manage implies use. own and moderate do not.
--- Evangelism use is open to every active account, with no grant row.
+-- open_to_all is read here; there is no hard-coded service key.
 -- ────────────────────────────────────────────────────────────
 
 CREATE OR REPLACE FUNCTION public.user_can_use_service(p_service_key text)
@@ -105,9 +122,13 @@ SET search_path = ''
 AS $$
   SELECT public.dept_caller_is_active()
      AND (
-       -- No service_owners row. The app treats evangelism use as open
-       -- to every signed-in active user.
-       p_service_key = 'evangelism'
+       EXISTS (
+         SELECT 1
+           FROM public.service_owners so
+          WHERE so.service_key = p_service_key
+            AND so.open_to_all
+            AND so.capability IN ('use', 'manage')
+       )
        OR (
          EXISTS (
            SELECT 1 FROM public.service_owners so
@@ -125,11 +146,13 @@ AS $$
                  ON al.staff_ministry_id = sm.id
                JOIN public.service_owners so
                  ON so.service_key = p_service_key
+                AND NOT so.open_to_all
                 AND so.capability IN ('use', 'manage')
                 AND (
                   (
                     so.any_point_leader
                     AND mm.member_role = 'leader'
+                    AND mm.is_point_leader
                   )
                   OR (
                     NOT so.any_point_leader
@@ -201,7 +224,7 @@ GRANT EXECUTE ON FUNCTION public.user_can_use_service(text) TO authenticated, se
 GRANT EXECUTE ON FUNCTION public.user_can_moderate_service(text) TO authenticated, service_role;
 
 COMMENT ON FUNCTION public.user_can_use_service(text) IS
-  'Active account may use the service. Evangelism is open to every active account and has no grant row for that. Otherwise: admin, or a matching use/manage grant (manage implies use; own and moderate do not). any_point_leader matches any active ministry leader.';
+  'Active account may use the service: an open_to_all use/manage row, an admin when any grant exists, a manage or use grant on their ministry (manage implies use; own does not), or the contacts any_point_leader row when they are an active point leader.';
 COMMENT ON FUNCTION public.user_can_moderate_service(text) IS
   'Active admin, or a member who meets a moderate grant. own and manage do not moderate.';
 
@@ -271,6 +294,7 @@ SELECT
   so.capability,
   so.member_role,
   so.any_point_leader,
+  so.open_to_all,
   so.admin_href,
   svc.label AS service_label
 FROM public.staff_ministries asked
@@ -285,6 +309,36 @@ COMMENT ON VIEW public.ministry_service_access IS
 
 REVOKE ALL ON public.ministry_service_access FROM PUBLIC, anon;
 GRANT SELECT ON public.ministry_service_access TO authenticated, service_role;
+
+-- Evangelism moderators. Last defined in 311. Same signature, language,
+-- volatility and search_path. The original predicate is unchanged; active
+-- members of the active Media and HULC ministries are added.
+-- There is no service_owners moderate row for this. Nothing in this
+-- migration checks capability = 'moderate' for evangelism.
+CREATE OR REPLACE FUNCTION public.can_moderate_evangelism()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SET search_path = ''
+AS $$
+  SELECT public.is_admin()
+      OR public.has_permission('evangelism.moderate')
+      OR EXISTS (
+        SELECT 1
+          FROM public.staff_ministry_members mm
+          JOIN public.staff_ministries sm ON sm.id = mm.staff_ministry_id
+         WHERE mm.user_id = auth.uid()
+           AND mm.status = 'active'
+           AND sm.is_active
+           AND sm.slug IN ('media', 'hulk')
+      );
+$$;
+
+REVOKE ALL ON FUNCTION public.can_moderate_evangelism() FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.can_moderate_evangelism() TO authenticated, service_role;
+
+COMMENT ON FUNCTION public.can_moderate_evangelism() IS
+  '311 rule (admin or evangelism.moderate) plus an active member of active Media or HULC. Not a service_owners row.';
 
 -- ────────────────────────────────────────────────────────────
 -- Seed. A second paste does not add a second grant.
@@ -302,40 +356,44 @@ INSERT INTO public.services (service_key, label, admin_href) VALUES
 ON CONFLICT (service_key) DO NOTHING;
 
 INSERT INTO public.service_owners (
-  service_key, staff_ministry_id, capability, member_role, any_point_leader, admin_href
+  service_key, staff_ministry_id, capability, member_role, any_point_leader, open_to_all, admin_href
 )
-SELECT s.service_key, m.id, v.capability, v.member_role, v.any_point_leader, s.admin_href
+SELECT s.service_key, m.id, v.capability, v.member_role, v.any_point_leader, v.open_to_all, s.admin_href
   FROM (VALUES
-    ('gear_hire',      'prayer_and_worship', 'own',     'member', false),
-    ('gear_hire',      'prayer_and_worship', 'manage',  'member', false),
-    ('gear_hire',      'operations',         'own',     'member', false),
-    ('gear_hire',      'operations',         'manage',  'member', false),
-    ('gear_hire',      'media',              'own',     'member', false),
-    ('gear_hire',      'media',              'manage',  'member', false),
-    ('communications', 'media',              'own',     'member', false),
-    ('communications', 'media',              'manage',  'member', false),
-    ('communications', 'hulk',               'use',     'member', false),
-    ('communications', 'leadership_team',    'use',     'member', false),
-    ('contacts',       'media',              'own',     'member', false),
-    ('contacts',       'media',              'manage',  'member', false),
-    ('contacts',       'hulk',               'own',     'member', false),
-    ('contacts',       'hulk',               'manage',  'member', false),
-    ('contacts',       'leadership_team',    'own',     'member', false),
-    ('contacts',       'leadership_team',    'manage',  'member', false),
-    ('contacts',       NULL,                 'use',     'leader', true),
-    ('evangelism',     'media',              'own',     'member', false),
-    ('evangelism',     'media',              'moderate', NULL,     false),
-    ('evangelism',     'hulk',               'own',     'member', false),
-    ('evangelism',     'hulk',               'moderate', NULL,     false),
-    ('prayer_room',    'prayer_and_worship', 'own',     'member', false),
-    ('prayer_room',    'prayer_and_worship', 'manage',  'member', false),
-    ('spaces',         'operations',         'own',     'member', false),
-    ('spaces',         'operations',         'manage',  'member', false),
-    ('vehicles',       'operations',         'own',     'member', false),
-    ('vehicles',       'operations',         'manage',  'member', false),
-    ('brand_kit',      'media',              'own',     'member', false),
-    ('brand_kit',      'media',              'manage',  'member', false)
-  ) AS v(service_key, slug, capability, member_role, any_point_leader)
+    ('gear_hire',      'prayer_and_worship', 'own',     'member', false, false),
+    ('gear_hire',      'prayer_and_worship', 'manage',  'member', false, false),
+    ('gear_hire',      'operations',         'own',     'member', false, false),
+    ('gear_hire',      'operations',         'manage',  'member', false, false),
+    ('gear_hire',      'media',              'own',     'member', false, false),
+    ('gear_hire',      'media',              'manage',  'member', false, false),
+    ('gear_hire',      NULL,                 'use',     NULL,     false, true),
+    ('communications', 'media',              'own',     'member', false, false),
+    ('communications', 'media',              'manage',  'member', false, false),
+    ('communications', 'hulk',               'use',     'member', false, false),
+    ('communications', 'leadership_team',    'use',     'member', false, false),
+    ('contacts',       'media',              'own',     'member', false, false),
+    ('contacts',       'media',              'manage',  'member', false, false),
+    ('contacts',       'hulk',               'own',     'member', false, false),
+    ('contacts',       'hulk',               'manage',  'member', false, false),
+    ('contacts',       'leadership_team',    'own',     'member', false, false),
+    ('contacts',       'leadership_team',    'manage',  'member', false, false),
+    ('contacts',       NULL,                 'use',     'leader', true,  false),
+    ('evangelism',     'media',              'own',     'member', false, false),
+    ('evangelism',     'hulk',               'own',     'member', false, false),
+    ('evangelism',     NULL,                 'use',     NULL,     false, true),
+    ('prayer_room',    'prayer_and_worship', 'own',     'member', false, false),
+    ('prayer_room',    'prayer_and_worship', 'manage',  'member', false, false),
+    ('prayer_room',    NULL,                 'use',     NULL,     false, true),
+    ('spaces',         'operations',         'own',     'member', false, false),
+    ('spaces',         'operations',         'manage',  'member', false, false),
+    ('spaces',         NULL,                 'use',     NULL,     false, true),
+    ('vehicles',       'operations',         'own',     'member', false, false),
+    ('vehicles',       'operations',         'manage',  'member', false, false),
+    ('vehicles',       NULL,                 'use',     NULL,     false, true),
+    ('brand_kit',      'media',              'own',     'member', false, false),
+    ('brand_kit',      'media',              'manage',  'member', false, false),
+    ('brand_kit',      NULL,                 'use',     NULL,     false, true)
+  ) AS v(service_key, slug, capability, member_role, any_point_leader, open_to_all)
   JOIN public.services s ON s.service_key = v.service_key
   LEFT JOIN public.staff_ministries m ON m.slug = v.slug
  WHERE (v.slug IS NULL OR m.id IS NOT NULL)
@@ -345,6 +403,7 @@ SELECT s.service_key, m.id, v.capability, v.member_role, v.any_point_leader, s.a
       WHERE so.service_key = v.service_key
         AND so.capability = v.capability
         AND so.any_point_leader = v.any_point_leader
+        AND so.open_to_all = v.open_to_all
         AND so.staff_ministry_id IS NOT DISTINCT FROM m.id
    );
 
@@ -358,6 +417,8 @@ BEGIN
     ) AS v(slug)
    WHERE NOT EXISTS (SELECT 1 FROM public.staff_ministries m WHERE m.slug = v.slug);
   IF missing IS NOT NULL THEN
-    RAISE NOTICE '318 services: skipped grants for missing staff ministries: %', missing;
+    RAISE NOTICE '319 services: skipped grants for missing staff ministries: %', missing;
   END IF;
 END $$;
+
+COMMIT;
