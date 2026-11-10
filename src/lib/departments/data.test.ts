@@ -11,6 +11,7 @@ import {
   getDepartmentPage,
   getDepartmentViewer,
   listDepartmentHomes,
+  listDepartmentsForViewer,
   listServicesForViewer,
   managingLabel,
   resolveDepartment,
@@ -358,5 +359,73 @@ describe("department access", () => {
       memberships: [membership("prayer_and_worship", { active: false, isPointLeader: true })],
     });
     expect(getDepartmentPage("prayer_and_worship", inactive)).toBeNull();
+  });
+});
+
+describe("department index", () => {
+  it("gives an empty viewer no rows, so the index 404s", () => {
+    expect(listDepartmentsForViewer(getDepartmentViewer())).toEqual([]);
+  });
+
+  it("lists the homes an active member belongs to", () => {
+    const rows = listDepartmentsForViewer(
+      viewer({
+        memberships: [
+          membership("prayer_and_worship"),
+          membership("events"),
+          membership("woven"),
+          membership("media", { active: false }),
+        ],
+      })
+    );
+    expect(rows.map((row) => row.slug)).toEqual(["prayer_and_worship", "events"]);
+    expect(rows.every((row) => row.budgetOnly === false && row.access.canSeeDepartmentDetail)).toBe(
+      true
+    );
+  });
+
+  it("lists every home for Leadership Team and an admin", () => {
+    const leadership = viewer({ memberships: [membership("leadership_team")] });
+    for (const who of [leadership, admin]) {
+      const rows = listDepartmentsForViewer(who);
+      expect(rows.map((row) => row.slug)).toEqual([...DEPARTMENT_HOME_SLUGS]);
+      expect(rows.every((row) => row.budgetOnly === false && row.access.canSeeDepartmentDetail)).toBe(
+        true
+      );
+    }
+  });
+
+  it("keeps a finance member's own home in detail and marks the rest budget only", () => {
+    const rows = listDepartmentsForViewer(
+      viewer({ memberships: [membership("finances_legal")] })
+    );
+    expect(rows.map((row) => row.slug)).toEqual([...DEPARTMENT_HOME_SLUGS]);
+    const own = rows.find((row) => row.slug === "finances_legal");
+    expect(own?.budgetOnly).toBe(false);
+    expect(own?.access.canSeeDepartmentDetail).toBe(true);
+    expect(
+      rows
+        .filter((row) => row.slug !== "finances_legal")
+        .every((row) => row.budgetOnly && !row.access.canSeeDepartmentDetail)
+    ).toBe(true);
+  });
+
+  it("lists every home as budget only for a finance role", () => {
+    for (const who of [
+      viewer({ permissions: ["finance.view"] }),
+      viewer({ permissions: ["finance.edit"] }),
+      viewer({ roles: ["finance_admin"] }),
+    ]) {
+      const rows = listDepartmentsForViewer(who);
+      expect(rows.map((row) => row.slug)).toEqual([...DEPARTMENT_HOME_SLUGS]);
+      expect(
+        rows.every(
+          (row) =>
+            row.budgetOnly &&
+            row.access.canSeeBudget &&
+            !row.access.canSeeDepartmentDetail
+        )
+      ).toBe(true);
+    }
   });
 });
