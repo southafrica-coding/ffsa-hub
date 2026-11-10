@@ -1,3 +1,4 @@
+import "server-only";
 import { notFound, redirect } from "next/navigation";
 import { getAuthedUser } from "@/lib/api-auth";
 import { accountIsActive } from "@/lib/auth/grant-scope";

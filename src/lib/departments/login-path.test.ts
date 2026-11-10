@@ -7,6 +7,9 @@ describe("loginPath", () => {
     expect(loginPath("/departments/finances_legal")).toBe(
       "/login?redirect=" + encodeURIComponent("/departments/finances_legal")
     );
+    expect(loginPath("/departments/x?tab=budget")).toBe(
+      "/login?redirect=" + encodeURIComponent("/departments/x?tab=budget")
+    );
   });
 
   it("drops a path that is not a single-slash relative path", () => {

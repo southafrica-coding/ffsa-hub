@@ -14,9 +14,12 @@ vi.mock("next/navigation", () => ({
 const loadDepartmentList = vi.hoisted(() => vi.fn());
 const loadDepartmentHome = vi.hoisted(() => vi.fn());
 const loadHubServices = vi.hoisted(() => vi.fn());
+const requireSignedIn = vi.hoisted(() =>
+  vi.fn<(path?: string) => Promise<{ id: string }>>()
+);
 
 vi.mock("@/lib/departments/session", () => ({
-  requireSignedIn: async () => ({ id: "donors-dev-member" }),
+  requireSignedIn: (path?: string) => requireSignedIn(path),
 }));
 
 vi.mock("@/lib/departments/load", () => ({
@@ -67,6 +70,8 @@ describe("department pages with loader fixtures", () => {
     loadDepartmentHome.mockReset();
     loadHubServices.mockReset();
     loadHubServices.mockResolvedValue([]);
+    requireSignedIn.mockReset();
+    requireSignedIn.mockResolvedValue({ id: "donors-dev-member" });
   });
 
   it("renders detail for a donors_dev member when the loader sets canSeeDepartmentDetail", async () => {
@@ -92,6 +97,19 @@ describe("department pages with loader fixtures", () => {
     expect(markup).toContain("Accounts for the base");
     expect(markup).toContain("Test Leader A");
     expect(markup).not.toContain("Budget");
+  });
+
+  it("puts the tab query on the login return path", async () => {
+    loadDepartmentHome.mockResolvedValue(foldedFinanceHome());
+    await DepartmentPage({
+      params: Promise.resolve({ slug: "finances_legal" }),
+      searchParams: Promise.resolve({ tab: "budget" }),
+    });
+    expect(requireSignedIn).toHaveBeenCalledWith("/departments/finances_legal?tab=budget");
+    expect(loadDepartmentHome).toHaveBeenCalledWith(
+      "finances_legal",
+      "/departments/finances_legal?tab=budget"
+    );
   });
 
   it("redirects /departments/donors_dev to the slug the loader returns", async () => {

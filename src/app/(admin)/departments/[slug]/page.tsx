@@ -7,20 +7,34 @@ import { DepartmentView } from "./department-view";
 
 export const metadata: Metadata = { title: "Department" };
 
+function returnPath(
+  pathname: string,
+  search: Record<string, string | string[] | undefined>
+): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(search)) {
+    if (typeof value === "string") params.append(key, value);
+    else if (Array.isArray(value)) for (const item of value) params.append(key, item);
+  }
+  const query = params.toString();
+  return query ? `${pathname}?${query}` : pathname;
+}
+
 export default async function DepartmentPage({
   params,
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { slug } = await params;
-  const { tab: requested } = await searchParams;
-  const path = `/departments/${slug}`;
+  const search = await searchParams;
+  const requested = typeof search.tab === "string" ? search.tab : undefined;
+  const path = returnPath(`/departments/${slug}`, search);
   await requireSignedIn(path);
   const [model, services] = await Promise.all([loadDepartmentHome(slug, path), loadHubServices(path)]);
   if (model.department.slug !== slug) {
-    const query = requested ? `?tab=${encodeURIComponent(requested)}` : "";
+    const query = path.includes("?") ? path.slice(path.indexOf("?")) : "";
     redirect(`/departments/${model.department.slug}${query}`);
   }
 
