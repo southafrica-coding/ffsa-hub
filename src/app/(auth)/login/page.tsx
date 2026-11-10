@@ -6,8 +6,8 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import Image from "next/image";
 import Link from "next/link";
+import { Logo } from "@/components/ffsa/logo";
 import { FFSA_TAGLINE } from "@/lib/brand/ffsa";
 import { loginErrorFromParam } from "./login-error";
 
@@ -113,14 +113,7 @@ export default function LoginPage() {
           content with a 55% black scrim; the wordmark and headline sit on top
           unchanged. Hidden below lg so the form never falls below the fold. */}
       <div className="relative hidden flex-col justify-between bg-ink p-12 lg:flex lg:w-[46%] xl:w-1/2">
-        <Image
-          src="/brand/ff-wordmark-white.png"
-          alt="Fire & Fragrance"
-          width={220}
-          height={26}
-          style={{ objectFit: "contain" }}
-          priority
-        />
+        <Logo surface="black" kind="wordmark" height={24} />
 
         <div>
           <div className="font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-[#9A9689]">
@@ -140,15 +133,9 @@ export default function LoginPage() {
       <div className="flex w-full flex-col justify-center px-6 py-14 sm:px-10 lg:w-[54%] lg:px-16 xl:w-1/2 xl:px-24">
         <div className="w-full max-w-[400px] animate-fade-up">
           {/* The black panel is hidden on phones, so the wordmark rides here instead. */}
-          <Image
-            src="/brand/ff-wordmark-black.png"
-            alt="Fire & Fragrance"
-            width={168}
-            height={20}
-            style={{ objectFit: "contain" }}
-            className="mb-10 lg:hidden"
-            priority
-          />
+          <span className="mb-6 inline-block lg:hidden">
+            <Logo surface="white" kind="wordmark" height={24} />
+          </span>
 
           {/* The screen's only yellow: the masthead tick rule. */}
           <div className="masthead-context">Sign in to your account</div>

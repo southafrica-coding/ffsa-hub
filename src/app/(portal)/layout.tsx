@@ -1,12 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
-import { AdminSidebar } from "@/components/admin-sidebar";
-import { MobileTabBar } from "@/components/mobile-tab-bar";
-import { ProfileCompletionGate } from "@/components/profile-completion-gate";
-import { AutoRefresh } from "@/components/auto-refresh";
-import { BackButton } from "@/components/back-button";
+import { HubShell } from "@/components/hub-shell";
 import { getSidebarAccess } from "@/lib/sidebar-access";
 import { getUserInitials } from "@/lib/user-initials";
-import { AssistantMount } from "@/components/assistant/assistant-mount";
 
 export default async function PortalLayout({
   children,
@@ -18,28 +13,13 @@ export default async function PortalLayout({
     await Promise.all([getSidebarAccess(supabase), getUserInitials(supabase)]);
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <AdminSidebar
-        userRoles={userRoles}
-        permittedModules={permittedModules}
-        menuLoadFailed={menuLoadFailed}
-        initials={initials}
-      />
-      {/*
-        Frame 4d: recomposed portal screens run edge-to-edge, bringing their
-        own Masthead rather than sitting in a centred box. pb-20 on phones
-        keeps the last row clear of the bottom tab bar.
-
-      */}
-      <main data-shell-main className="min-w-0 flex-1 overflow-y-auto bg-white pb-20 pt-14 md:pb-0 md:pt-0">
-        <div className="empty:hidden">
-          <AutoRefresh />
-          <BackButton />
-        </div>
-        <ProfileCompletionGate>{children}</ProfileCompletionGate>
-      </main>
-      <MobileTabBar />
-      <AssistantMount userRoles={userRoles} />
-    </div>
+    <HubShell
+      userRoles={userRoles}
+      permittedModules={permittedModules}
+      menuLoadFailed={menuLoadFailed}
+      initials={initials}
+    >
+      {children}
+    </HubShell>
   );
 }
