@@ -13,49 +13,82 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // shadcn utilities. `border` is the hex token (not an HSL triplet).
-        // `accent` here is the hover wash, not the yellow brand accent —
-        // yellow is `yellow` / `var(--accent)` and is a fill only.
-        border: "var(--border)",
-        input: "var(--border-strong)",
-        ring: "var(--link)",
-        background: "var(--bg)",
-        foreground: "var(--text)",
-        primary: { DEFAULT: "var(--brand-black)", foreground: "var(--bg)" },
-        secondary: { DEFAULT: "var(--bg-subtle)", foreground: "var(--text-secondary)" },
-        destructive: { DEFAULT: "var(--danger)", foreground: "var(--bg)" },
-        muted: { DEFAULT: "var(--bg-subtle)", foreground: "var(--text-tertiary)" },
-        accent: { DEFAULT: "var(--bg-subtle)", foreground: "var(--text)" },
-        popover: { DEFAULT: "var(--bg)", foreground: "var(--text)" },
-        card: { DEFAULT: "var(--bg)", foreground: "var(--text)" },
-
-        bg: "var(--bg)",
-        "bg-subtle": "var(--bg-subtle)",
-        "brand-black": "var(--brand-black)",
-        // Brand bone (#C5C2AE) is `bone-brand` / `var(--bone)`, for solid black
-        // only. The legacy `bg-bone` utility is the light paper (--bg-subtle)
-        // so unmigrated screens do not paint brand bone on white.
-        bone: {
-          DEFAULT: "var(--bg-subtle)",
-          2: "var(--bg-subtle)",
-          3: "var(--border)",
-          brand: "var(--bone)",
+        // rgb(var(--x-rgb) / <alpha-value>) so bg-primary/90 and bg-ink/40 emit.
+        // `accent` is the hover wash, not the yellow fill.
+        border: "rgb(var(--border-rgb) / <alpha-value>)",
+        input: "rgb(var(--border-strong-rgb) / <alpha-value>)",
+        ring: "rgb(var(--link-rgb) / <alpha-value>)",
+        background: "rgb(var(--bg-rgb) / <alpha-value>)",
+        foreground: "rgb(var(--text-rgb) / <alpha-value>)",
+        primary: {
+          DEFAULT: "rgb(var(--brand-black-rgb) / <alpha-value>)",
+          foreground: "rgb(var(--bg-rgb) / <alpha-value>)",
         },
-        rule: { DEFAULT: "var(--border)", strong: "var(--border-strong)" },
-        yellow: { DEFAULT: "var(--accent)", hover: "var(--accent-hover)", dim: "#FFF4D9" },
-        grass: { DEFAULT: "var(--success)", text: "var(--success-text)" },
-        amber: { DEFAULT: "var(--warning)", border: "var(--warning)" },
-        electric: "var(--link)",
-        link: "var(--link)",
-        success: { DEFAULT: "var(--success)", text: "var(--success-text)" },
-        warning: "var(--warning)",
-        danger: "var(--danger)",
-        ink: "var(--brand-black)",
+        secondary: {
+          DEFAULT: "rgb(var(--bg-subtle-rgb) / <alpha-value>)",
+          foreground: "rgb(var(--text-secondary-rgb) / <alpha-value>)",
+        },
+        destructive: {
+          DEFAULT: "rgb(var(--danger-rgb) / <alpha-value>)",
+          foreground: "rgb(var(--bg-rgb) / <alpha-value>)",
+        },
+        muted: {
+          DEFAULT: "rgb(var(--bg-subtle-rgb) / <alpha-value>)",
+          foreground: "rgb(var(--text-tertiary-rgb) / <alpha-value>)",
+        },
+        accent: {
+          DEFAULT: "rgb(var(--bg-subtle-rgb) / <alpha-value>)",
+          foreground: "rgb(var(--text-rgb) / <alpha-value>)",
+        },
+        popover: {
+          DEFAULT: "rgb(var(--bg-rgb) / <alpha-value>)",
+          foreground: "rgb(var(--text-rgb) / <alpha-value>)",
+        },
+        card: {
+          DEFAULT: "rgb(var(--bg-rgb) / <alpha-value>)",
+          foreground: "rgb(var(--text-rgb) / <alpha-value>)",
+        },
+
+        bg: "rgb(var(--bg-rgb) / <alpha-value>)",
+        "bg-subtle": "rgb(var(--bg-subtle-rgb) / <alpha-value>)",
+        "brand-black": "rgb(var(--brand-black-rgb) / <alpha-value>)",
+        bone: {
+          DEFAULT: "rgb(var(--bg-subtle-rgb) / <alpha-value>)",
+          2: "rgb(var(--bg-subtle-rgb) / <alpha-value>)",
+          3: "rgb(var(--border-rgb) / <alpha-value>)",
+          brand: "rgb(var(--bone-rgb) / <alpha-value>)",
+        },
+        rule: {
+          DEFAULT: "rgb(var(--border-rgb) / <alpha-value>)",
+          strong: "rgb(var(--border-strong-rgb) / <alpha-value>)",
+        },
+        yellow: {
+          DEFAULT: "rgb(var(--accent-rgb) / <alpha-value>)",
+          hover: "rgb(var(--accent-hover-rgb) / <alpha-value>)",
+          dim: "rgb(var(--yellow-dim-rgb) / <alpha-value>)",
+        },
+        grass: {
+          DEFAULT: "rgb(var(--success-rgb) / <alpha-value>)",
+          text: "rgb(var(--success-text-rgb) / <alpha-value>)",
+        },
+        amber: {
+          DEFAULT: "rgb(var(--warning-rgb) / <alpha-value>)",
+          border: "rgb(var(--warning-rgb) / <alpha-value>)",
+        },
+        electric: "rgb(var(--link-rgb) / <alpha-value>)",
+        link: "rgb(var(--link-rgb) / <alpha-value>)",
+        success: {
+          DEFAULT: "rgb(var(--success-rgb) / <alpha-value>)",
+          text: "rgb(var(--success-text-rgb) / <alpha-value>)",
+        },
+        warning: "rgb(var(--warning-rgb) / <alpha-value>)",
+        danger: "rgb(var(--danger-rgb) / <alpha-value>)",
+        ink: "rgb(var(--brand-black-rgb) / <alpha-value>)",
         surface: {
-          1: "var(--bg)",
-          2: "var(--bg-subtle)",
-          3: "var(--bg-subtle)",
-          4: "var(--border)",
+          1: "rgb(var(--bg-rgb) / <alpha-value>)",
+          2: "rgb(var(--bg-subtle-rgb) / <alpha-value>)",
+          3: "rgb(var(--bg-subtle-rgb) / <alpha-value>)",
+          4: "rgb(var(--border-rgb) / <alpha-value>)",
         },
       },
       borderRadius: {
@@ -65,8 +98,8 @@ const config: Config = {
         md: "var(--radius)",
         lg: "var(--radius-card)",
         xl: "var(--radius-card)",
-        "2xl": "12px",
-        "3xl": "16px",
+        "2xl": "var(--radius-card)",
+        "3xl": "var(--radius-card)",
         full: "9999px",
       },
       boxShadow: {

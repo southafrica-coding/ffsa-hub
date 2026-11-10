@@ -1,6 +1,7 @@
 "use client";
 
 import { PayLaterCountry } from "./pay-later-country";
+import { theSendFontClass } from "./the-send-fonts";
 import { useMemo, useState } from "react";
 import { PhoneInput } from "@/components/ui/phone-input";
 import type { FormField } from "@/lib/forms/schema";
@@ -462,7 +463,7 @@ export function TheSendStorefront({
   const tickerItems = Array.from({ length: 8 });
 
   return (
-    <div className="tss" style={{ position: "fixed", inset: 0, overflowY: "auto", zIndex: 50 }}>
+    <div className={`tss ${theSendFontClass}`} style={{ position: "fixed", inset: 0, overflowY: "auto", zIndex: 50 }}>
       <style dangerouslySetInnerHTML={{ __html: scopedCss }} />
 
       {/* ── TICKER ─────────────────────────────────────────── */}
@@ -1225,7 +1226,7 @@ const scopedCss = `
   --gold:#FACF50; --cream:#F7F1E8; --red:#FA0015;
   --blue:#1535C6; --navy:#1C314C; --ink:#0E1A2B;
   --paper:#F7F1E8;
-  font-family:var(--font-roboto-mono),ui-monospace,monospace;
+  font-family:var(--font-space-mono),ui-monospace,monospace;
   background:var(--paper);
   color:var(--navy);
   color-scheme:light;
@@ -1243,7 +1244,7 @@ const scopedCss = `
   color:var(--cream) !important;
   border:2px solid var(--navy) !important;
   border-radius:0 !important;
-  font-family:var(--font-roboto-mono),monospace !important;
+  font-family:var(--font-space-mono),monospace !important;
   font-size:15px !important;
   padding:13px 14px !important;
   width:100% !important;
@@ -1274,7 +1275,7 @@ const scopedCss = `
 .tss select, .tss textarea{
   width:100%;padding:13px 14px;border-radius:0;
   border:2px solid var(--navy);background:var(--navy);color:var(--cream);
-  font-family:var(--font-roboto-mono),monospace;font-size:15px;
+  font-family:var(--font-space-mono),monospace;font-size:15px;
   -webkit-appearance:none;-moz-appearance:none;appearance:none;
 }
 .tss select:focus, .tss textarea:focus{
@@ -1482,7 +1483,7 @@ const scopedCss = `
 .tss-stepper{display:flex;align-items:center;border:2.5px solid var(--navy);flex-shrink:0;background:#fff;}
 .tss-stepper button{
   width:42px;height:42px;font-size:22px;line-height:1;background:var(--navy);color:var(--cream);
-  border:none;cursor:pointer;transition:background .12s;font-family:var(--font-roboto-mono),monospace;
+  border:none;cursor:pointer;transition:background .12s;font-family:var(--font-space-mono),monospace;
 }
 .tss-stepper button:hover:not(:disabled){background:var(--blue);}
 .tss-stepper button:disabled{opacity:.3;cursor:not-allowed;}
