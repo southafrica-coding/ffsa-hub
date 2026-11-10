@@ -204,10 +204,10 @@ export default async function BrandKitPage() {
                 letterSpacing: "0.06em",
               }}
             >
-              Accent in Mono — eyebrows, labels, data
+              Roboto Mono — tabular figures and codes
             </p>
             <p className="text-xs mt-1" style={{ color: "var(--text-tertiary)" }}>
-              Space Mono
+              Roboto Mono
             </p>
           </div>
           <div>

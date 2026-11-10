@@ -42,7 +42,7 @@ Also seen in components: `#8E8A7C`, `#1C1C1A`.
 | Mastheads, numerals, h1–h3 | **Roboto Condensed** 900, UPPERCASE | letter-spacing −0.01em, line-height 0.9–0.95; masthead title `clamp(34px, 7.5vw, 58px)` |
 | Labels | **Roboto Mono**, ALL-CAPS, wide tracking | 9–11px, letter-spacing 0.10–0.20em; `masthead-context` 10px/700/0.2em with 16×3px yellow tick |
 | Numerals | Roboto Condensed 900, `tabular-nums` | "one big number per screen" on mobile |
-| Event pages only | Bebas Neue, Anton, Space Mono, Big Shoulders Display | per-event brand kits; bundled woff2 in `/public/brand/fonts` — not needed in the app |
+| Event pages only | Bebas Neue, Anton, Big Shoulders Display | per-event brand kits; bundled woff2 in `/public/brand/fonts` — not needed in the app |
 Observed sizes: dialog title 28px/900; table/dialog body 13.5–14.5px; chips 11px; tiny mono 9–9.5px.
 **Mobile note:** 9–10px mono labels are below comfortable phone sizes and will need a minimum (suggest ≥11pt) and Dynamic Type/font-scale support.
 

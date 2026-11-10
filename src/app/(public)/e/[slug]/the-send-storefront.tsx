@@ -1,6 +1,7 @@
 "use client";
 
 import { PayLaterCountry } from "./pay-later-country";
+import { theSendFontClass } from "./the-send-fonts";
 import { useMemo, useState } from "react";
 import { PhoneInputNative } from "@/components/ui/phone-input-native";
 import type { FormField } from "@/lib/forms/schema";
@@ -462,7 +463,7 @@ export function TheSendStorefront({
   const tickerItems = Array.from({ length: 8 });
 
   return (
-    <div className="tss" style={{ position: "fixed", inset: 0, overflowY: "auto", zIndex: 50 }}>
+    <div className={`tss ${theSendFontClass}`} style={{ position: "fixed", inset: 0, overflowY: "auto", zIndex: 50 }}>
       <style dangerouslySetInnerHTML={{ __html: scopedCss }} />
 
       {/* ── TICKER ─────────────────────────────────────────── */}
