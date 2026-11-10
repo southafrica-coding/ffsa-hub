@@ -271,8 +271,9 @@ export const SCHOOLS_MANAGE_PERMS = ["schools.manage"];
 export async function canManageSchools(
   supabase: Client,
   userId: string,
-  perms: string[] = SCHOOLS_MANAGE_PERMS
+  perms: string[] = SCHOOLS_MANAGE_PERMS,
+  scope?: PermissionCheck
 ): Promise<boolean> {
-  if (await hasAnyRole(supabase, userId, SCHOOLS_MANAGE_ROLES)) return true;
-  return hasAnyPermission(supabase, userId, perms);
+  if (await hasAnyRole(supabase, userId, SCHOOLS_MANAGE_ROLES, scope)) return true;
+  return hasAnyPermission(supabase, userId, perms, scope);
 }

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { accountIsActive } from "@/lib/auth/grant-scope";
 
 // The schools permission keys that confer management access. Kept in one place
 // so the global and program-scoped checks below can never drift apart.
@@ -23,24 +24,28 @@ export async function userCanManageApplications(
   supabase: SupabaseClient,
   userId: string
 ): Promise<boolean> {
-  // Check roles
-  const { data: roles } = await supabase
+  if (!(await accountIsActive(supabase, userId))) return false;
+
+  // Check roles. A failed read is not a grant.
+  const { data: roles, error: rolesError } = await supabase
     .from("user_roles")
     .select("roles!inner(name)")
     .eq("user_id", userId)
     .in("roles.name", ["super_admin", "admin", "program_leader"])
     .limit(1);
+  if (rolesError) return false;
 
   if (roles && roles.length > 0) return true;
 
   // Check schools-related permissions — GLOBAL grants only (scope_type IS NULL).
-  const { data: perms } = await supabase
+  const { data: perms, error: permsError } = await supabase
     .from("user_permissions")
     .select("permissions!inner(key)")
     .eq("user_id", userId)
     .is("scope_type", null)
     .in("permissions.key", SCHOOLS_MANAGE_KEYS)
     .limit(1);
+  if (permsError) return false;
 
   return !!perms && perms.length > 0;
 }
@@ -57,10 +62,11 @@ export async function userCanManageProgram(
   userId: string,
   programId: string
 ): Promise<boolean> {
+  if (!(await accountIsActive(supabase, userId))) return false;
   if (await userCanManageApplications(supabase, userId)) return true;
 
   // A schools.* permission scoped specifically to this program.
-  const { data: scopedPerms } = await supabase
+  const { data: scopedPerms, error: scopedError } = await supabase
     .from("user_permissions")
     .select("permissions!inner(key)")
     .eq("user_id", userId)
@@ -68,15 +74,17 @@ export async function userCanManageProgram(
     .eq("scope_id", programId)
     .in("permissions.key", SCHOOLS_MANAGE_KEYS)
     .limit(1);
+  if (scopedError) return false;
 
   if (scopedPerms && scopedPerms.length > 0) return true;
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("program_leaders")
     .select("id")
     .eq("program_id", programId)
     .eq("user_id", userId)
     .limit(1);
+  if (error) return false;
 
   return !!data && data.length > 0;
 }

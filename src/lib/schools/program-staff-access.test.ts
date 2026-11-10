@@ -81,7 +81,11 @@ describe("userCanManageProgram", () => {
 
   it("still treats a program leader as a manager", async () => {
     const f = createFakeSupabase({
-      resolve: (q) => (q.table === "program_leaders" ? { data: [{ id: "pl" }] } : { data: [] }),
+      resolve: (q) => {
+        if (q.table === "users") return { data: { is_active: true } };
+        if (q.table === "program_leaders") return { data: [{ id: "pl" }] };
+        return { data: [] };
+      },
     });
     expect(await userCanManageProgram(f.client, "u1", PROGRAM)).toBe(true);
   });
