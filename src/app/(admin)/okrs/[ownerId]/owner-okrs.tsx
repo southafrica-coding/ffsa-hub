@@ -5,7 +5,8 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Trash2 } from "lucide-react";
 
-import { Bar, Drawer, MastheadButton, SectionBar, StatusPill } from "@/components/ffsa";
+import { Bar, MastheadButton, SectionBar, StatusPill } from "@/components/ffsa";
+import { Drawer } from "@/components/ffsa/client";
 import { krProgress, metricCaption, statusLabel, statusTone } from "@/lib/okrs/progress";
 import { formatRelativeTime } from "@/lib/users/lifecycle";
 import type { OkrKeyResult, OkrObjective } from "@/types/okrs";

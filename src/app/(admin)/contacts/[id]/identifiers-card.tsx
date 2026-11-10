@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PhoneInputNative } from "@/components/ui/phone-input-native";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { MoreHorizontal, Plus, Star, X } from "lucide-react";
 import {
   DropdownMenu,
@@ -317,7 +317,7 @@ function AddRow({
     <div className=" border border-amber-border bg-yellow-dim p-3 space-y-2">
       <div className="flex gap-2">
         {kind === "phone" ? (
-          <PhoneInputNative
+          <PhoneInput
             value={value}
             onChange={onChange}
             wrapperClassName="flex gap-2 flex-1"

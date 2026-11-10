@@ -16,7 +16,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Drawer, Initials, StatusPill } from "@/components/ffsa";
+import { Initials, StatusPill } from "@/components/ffsa";
+import { Drawer } from "@/components/ffsa/client";
 import { cn } from "@/lib/utils/cn";
 import { fullName } from "./helpers";
 

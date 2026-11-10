@@ -1,48 +1,114 @@
 "use client";
 
-import { PhoneInputNative } from "@/components/ui/phone-input-native";
+import { useMemo, useState } from "react";
+import { COUNTRIES, splitPhone } from "@/lib/profile/options";
+import { formatStoredPhone, phoneEdit } from "./phone-country";
+
+const controlClass =
+  "h-9 rounded-md border border-rule-strong bg-bg px-3 text-body text-ink placeholder:text-[color:var(--text-tertiary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link";
 
 /**
- * Phone input with a country-code picker and a digits field.
- *
- * The bound value is the canonical concatenation: `"+27 71 234 5678"`.
- *
- * This is a thin wrapper over {@link PhoneInputNative}, which uses a native
- * <select> for the country picker. It previously used a Radix Popover + cmdk
- * combobox, which doesn't open in Safari (same failure as the country and
- * nationality dropdowns fixed in PR #193) — so on Safari the code was stuck on
- * whatever the default dial was. The old version also dropped a freshly picked
- * country whenever the digits field was still empty, because it re-derived its
- * dial from the (empty) parent value on the next render.
+ * The one phone field. Country picker is a native select so it opens in
+ * Safari. The stored value is `"+27 71 234 5678"` unless `separator` is set
+ * (the form builder passes "" so it keeps its existing dial+digits string).
  */
 export function PhoneInput({
   id,
   value,
   onChange,
+  onBlur,
   placeholder,
   required,
   defaultDial = "+27",
+  separator = " ",
+  storage = "display",
+  wrapperClassName = "flex gap-2",
+  selectClassName,
+  inputClassName,
+  "aria-invalid": ariaInvalid,
+  "aria-describedby": ariaDescribedBy,
 }: {
   id?: string;
   value: string;
   onChange: (combined: string) => void;
+  onBlur?: () => void;
   placeholder?: string;
   required?: boolean;
   defaultDial?: string;
+  /** Between the dial code and the national number. Default is a space. */
+  separator?: string;
+  /** `e164` stores a leading + and digits only, which is what the form builder keeps. */
+  storage?: "display" | "e164";
+  wrapperClassName?: string;
+  selectClassName?: string;
+  inputClassName?: string;
+  "aria-invalid"?: boolean;
+  "aria-describedby"?: string;
 }) {
-  const fieldClass =
-    "flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
+  const parsed = useMemo(
+    () => (value ? splitPhone(value) : { dial: defaultDial, number: "" }),
+    // The field owns its text after mount. A later parent value is a pre-fill.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
+
+  const isoForDial = (dial: string) =>
+    COUNTRIES.find((country) => country.dial === dial)?.iso ?? "ZA";
+
+  const [iso, setIso] = useState(() => isoForDial(parsed.dial));
+  const [number, setNumber] = useState(parsed.number);
+
+  const dial = useMemo(
+    () => COUNTRIES.find((country) => country.iso === iso)?.dial ?? defaultDial,
+    [iso, defaultDial]
+  );
+
+  function emit(nextDial: string, nextNumber: string) {
+    onChange(formatStoredPhone(nextDial, nextNumber, storage, separator));
+  }
+
+  function onNumber(raw: string) {
+    const next = phoneEdit(raw, dial, COUNTRIES, storage, separator);
+    if (next.iso) setIso(next.iso);
+    setNumber(next.national);
+    onChange(next.stored);
+  }
 
   return (
-    <PhoneInputNative
-      id={id}
-      value={value}
-      onChange={onChange}
-      placeholder={placeholder}
-      required={required}
-      defaultDial={defaultDial}
-      selectClassName={`${fieldClass} px-2`}
-      inputClassName={fieldClass}
-    />
+    <div className={wrapperClassName}>
+      <select
+        aria-label="Country code"
+        value={iso}
+        onChange={(event) => {
+          const nextIso = event.target.value;
+          setIso(nextIso);
+          const nextDial = COUNTRIES.find((country) => country.iso === nextIso)?.dial ?? defaultDial;
+          emit(nextDial, number);
+        }}
+        onBlur={onBlur}
+        className={selectClassName ?? `${controlClass} px-2`}
+        style={{ flex: "0 0 116px", width: 116, maxWidth: 116 }}
+      >
+        {COUNTRIES.map((country) => (
+          <option key={country.iso} value={country.iso}>
+            {country.flag} {country.dial} · {country.name}
+          </option>
+        ))}
+      </select>
+      <input
+        id={id}
+        type="tel"
+        inputMode="numeric"
+        placeholder={placeholder ?? "71 234 5678"}
+        value={number}
+        required={required}
+        onChange={(event) => onNumber(event.target.value)}
+        onBlur={onBlur}
+        aria-invalid={ariaInvalid || undefined}
+        aria-describedby={ariaDescribedBy}
+        className={inputClassName ?? controlClass}
+        style={{ flex: "1 1 auto", minWidth: 0 }}
+      />
+    </div>
   );
 }
