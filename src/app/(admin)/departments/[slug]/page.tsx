@@ -39,9 +39,10 @@ export default async function DepartmentPage({
   const model = getDepartmentPage(slug, viewer);
   if (!model) notFound();
 
-  const tab = isDepartmentTab(requested) && model.tabs.some((item) => item.key === requested)
-    ? requested
-    : "overview";
+  const tab =
+    isDepartmentTab(requested) && model.tabs.some((item) => item.key === requested)
+      ? requested
+      : (model.tabs[0]?.key ?? "overview");
 
   return <DepartmentView model={model} tab={tab} />;
 }

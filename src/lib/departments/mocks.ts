@@ -12,8 +12,9 @@ import type {
 
 /**
  * Mock stand-in for staff ministries, services, rocks and budgets.
- * Ministry names and slugs match the live list. People and amounts are
- * obvious placeholders, not staff.
+ * The app reads this file until the department API is wired. It is not
+ * test-only. Ministry names and slugs match the live list. People and
+ * amounts are placeholders, not staff.
  *
  * Language is "FFSA staff with ministries under them".
  * Woven is inactive. Part-time ministries, Rooted Christian Academy
@@ -62,10 +63,16 @@ interface HomeSeed {
   objectives?: OkrObjective[];
 }
 
-const leader = (name: string, role?: string): DepartmentPerson => ({
+function placeholderEmail(name: string): string {
+  return `${name.toLowerCase().replace(/[^a-z0-9]+/g, ".")}@example.com`;
+}
+
+const leader = (name: string, point = false): DepartmentPerson => ({
   name,
   capacity: "leader",
-  ...(role ? { role } : {}),
+  isLeader: true,
+  isPointLeader: point,
+  email: placeholderEmail(name),
 });
 
 const HOMES: HomeSeed[] = [
@@ -83,7 +90,7 @@ const HOMES: HomeSeed[] = [
       ROSTER,
     ],
     objectives: [
-      { title: "Keep a lead named on every staff ministry", tone: "on_track" },
+      { title: "Keep a lead named on every staff ministry", tone: "in_progress" },
     ],
   },
   {
@@ -95,7 +102,7 @@ const HOMES: HomeSeed[] = [
     people: [leader("Test Leader A"), leader("Test Leader B")],
     tools: [tool("Prayer room", "/prayer-room", "prayer-room"), OKRS, ROSTER],
     objectives: [
-      { title: "Cover the morning, noon and night bands", tone: "on_track" },
+      { title: "Cover the morning, noon and night bands", tone: "in_progress" },
       { title: "Sign off worship leads for the term", tone: "stuck" },
     ],
   },
@@ -107,7 +114,7 @@ const HOMES: HomeSeed[] = [
     memberCount: 1,
     people: [leader("Test Leader A")],
     tools: [tool("Training", "/schools", "schools"), OKRS, ROSTER],
-    objectives: [{ title: "Publish the next school dates", tone: "on_track" }],
+    objectives: [{ title: "Publish the next school dates", tone: "in_progress" }],
   },
   {
     slug: "education",
@@ -206,7 +213,7 @@ const HOMES: HomeSeed[] = [
     memberCount: 2,
     people: [leader("Test Leader A"), leader("Test Leader B")],
     tools: [OKRS, ROSTER],
-    objectives: [{ title: "Keep the preaching rota a month ahead", tone: "on_track" }],
+    objectives: [{ title: "Keep the preaching rota a month ahead", tone: "in_progress" }],
   },
 ];
 
@@ -264,7 +271,7 @@ export const SERVICES: HubService[] = [
     href: "/prayer-room",
     moduleId: "prayer-room",
     owners: [link("prayer_and_worship", "owner")],
-    audience: "all_signed_in",
+    audience: "open_to_all",
   },
   {
     id: "spaces",
@@ -273,7 +280,7 @@ export const SERVICES: HubService[] = [
     href: "/bookings/spaces",
     moduleId: "bookings",
     owners: [link("operations", "owner")],
-    audience: "all_signed_in",
+    audience: "open_to_all",
   },
   {
     id: "vehicles",
@@ -282,7 +289,7 @@ export const SERVICES: HubService[] = [
     href: "/bookings/vehicles",
     moduleId: "bookings",
     owners: [link("operations", "owner")],
-    audience: "all_signed_in",
+    audience: "open_to_all",
   },
   {
     id: "gear_hire",
@@ -295,7 +302,7 @@ export const SERVICES: HubService[] = [
       link("operations", "owner"),
       link("media", "owner"),
     ],
-    audience: "all_signed_in",
+    audience: "open_to_all",
   },
   {
     id: "brand_kit",
@@ -304,7 +311,7 @@ export const SERVICES: HubService[] = [
     href: "/brand-kit",
     moduleId: "brand-kit",
     owners: [link("media", "owner")],
-    audience: "all_signed_in",
+    audience: "open_to_all",
   },
   {
     id: "communications",
@@ -330,7 +337,7 @@ export const SERVICES: HubService[] = [
       link("hulk", "manager"),
       link("leadership_team", "manager"),
     ],
-    audience: "ministry_leaders",
+    audience: "point_leaders",
   },
   {
     id: "evangelism",
@@ -339,7 +346,7 @@ export const SERVICES: HubService[] = [
     href: "/evangelism",
     moduleId: "evangelism",
     owners: [link("media", "moderator"), link("hulk", "moderator")],
-    audience: "all_signed_in",
+    audience: "open_to_all",
   },
 ];
 
@@ -368,7 +375,7 @@ export const ROCKS: Rock[] = [
     title: "Write the Advent set plan",
     owner: "Test Leader A",
     status: "on_track",
-    dueOn: "2026-12-15",
+    dueOn: null,
     quarter: CURRENT_QUARTER,
   },
   {
@@ -412,27 +419,75 @@ export const ROCKS: Rock[] = [
 export const BUDGETS: DepartmentBudget[] = [
   {
     departmentSlug: "prayer_and_worship",
-    project: { name: "Worship and prayer", budgetCents: 1_000_000, spentCents: 500_000 },
+    links: [
+      {
+        projectId: "test-worship",
+        name: "Worship and prayer",
+        budgetCents: 1_000_000,
+        spentCents: 500_000,
+        currency: "ZAR",
+      },
+    ],
   },
   {
     departmentSlug: "missio_ministry",
-    project: { name: "Missio", budgetCents: 2_000_000, spentCents: 1_000_000 },
+    links: [
+      {
+        projectId: null,
+        name: "Missio",
+        budgetCents: 2_000_000,
+        spentCents: 1_000_000,
+        currency: "ZAR",
+      },
+    ],
   },
   {
     departmentSlug: "training",
-    project: { name: "Training", budgetCents: 5_000_000, spentCents: 2_000_000 },
+    links: [
+      {
+        projectId: "test-training",
+        name: "Training",
+        budgetCents: 5_000_000,
+        spentCents: 2_000_000,
+        currency: "ZAR",
+      },
+    ],
   },
   {
     departmentSlug: "operations",
-    project: { name: "Motor vehicles", budgetCents: 3_000_000, spentCents: 1_000_000 },
+    links: [
+      {
+        projectId: "test-fleet",
+        name: "Motor vehicles",
+        budgetCents: 3_000_000,
+        spentCents: 1_000_000,
+        currency: "ZAR",
+      },
+    ],
   },
   {
     departmentSlug: "events",
-    project: { name: "Events", budgetCents: 1_000_000, spentCents: 500_000 },
+    links: [
+      {
+        projectId: "test-events",
+        name: "Events",
+        budgetCents: 1_000_000,
+        spentCents: 500_000,
+        currency: "ZAR",
+      },
+    ],
   },
   {
     departmentSlug: "media",
-    project: { name: "Media", budgetCents: 2_000_000, spentCents: 1_000_000 },
+    links: [
+      {
+        projectId: "test-media",
+        name: "Media",
+        budgetCents: 2_000_000,
+        spentCents: 1_000_000,
+        currency: "ZAR",
+      },
+    ],
   },
 ];
 

@@ -18,6 +18,7 @@ import type {
   ServiceRunRole,
   SubMinistry,
 } from "@/types/departments";
+import { canOpenDepartment, getDepartmentAccess } from "./access";
 import { DEPARTMENT_HOME_SLUGS, FOLDED_INTO, NON_HOME_SLUGS } from "./allow-list";
 import {
   BUDGETS,
@@ -52,14 +53,17 @@ const TAB_LABEL: Record<DepartmentTab, string> = {
 export function getDepartmentViewer(): DepartmentViewer {
   return {
     name: "",
+    isAdmin: false,
     roles: [],
     permittedModules: [],
+    permissions: [],
     memberships: [],
     usedServiceIds: [],
   };
 }
 
 export function clusterLabel(cluster: DepartmentSummary["cluster"]): string {
+  if (!cluster) return "—";
   return CLUSTER_LABEL[cluster];
 }
 
@@ -136,8 +140,8 @@ function toSummary(home: MinistryRecord): DepartmentSummary {
 }
 
 const AUDIENCE_LABEL: Record<ServiceAudience, string> = {
-  all_signed_in: "Everyone signed in",
-  ministry_leaders: "Ministry leaders",
+  open_to_all: "Open to everyone",
+  point_leaders: "Point leaders",
   owners_only: "Departments that run it",
 };
 
@@ -166,6 +170,13 @@ function departmentName(slug: string): string {
 
 /** Managing departments, or the moderators when nobody owns or manages it. */
 export function managingLabel(service: HubService): string {
+  if (service.id === "evangelism") {
+    const names = service.owners
+      .filter((link) => link.role === "moderator")
+      .map((link) => departmentName(link.slug))
+      .join(", ");
+    return `Moderated by ${names} and anyone with evangelism moderation`;
+  }
   const managing = service.owners.filter(
     (link) => link.role === "owner" || link.role === "manager"
   );
@@ -254,14 +265,24 @@ export function getDepartmentHome(slug: string): DepartmentHome | null {
       objectives: home.objectives,
     },
     rocks: ROCKS.filter((rock) => rock.departmentSlug === home.slug),
-    budget: BUDGETS.find((row) => row.departmentSlug === home.slug) ?? {
-      departmentSlug: home.slug,
-      project: null,
-    },
     tools: home.tools,
     servicesRun: servicesRunFor(home.slug),
     subMinistries: subMinistriesOf(home.slug),
+    budget: budgetFor(home.slug),
   };
+}
+
+function budgetFor(slug: string) {
+  return (
+    BUDGETS.find((row) => row.departmentSlug === slug) ?? {
+      departmentSlug: slug,
+      links: [],
+    }
+  );
+}
+
+function tabHref(slug: string, key: DepartmentTab): string {
+  return key === "overview" ? `/departments/${slug}` : `/departments/${slug}?tab=${key}`;
 }
 
 export function getDepartmentPage(
@@ -273,46 +294,51 @@ export function getDepartmentPage(
   const home = homeBySlug(key);
   if (!home) return null;
 
-  const services = servicesRunBy(home.slug, viewer);
-  const tabKeys: DepartmentTab[] = [
-    "overview",
-    "people",
-    "okrs",
-    "rocks",
-    "budget",
-    ...(services.length > 0 ? (["services"] as const) : []),
-    "tools",
-  ];
+  const access = getDepartmentAccess(viewer, home.slug);
+  if (!canOpenDepartment(access)) return null;
+
+  const detail = access.canSeeDepartmentDetail;
+  const services = detail ? servicesRunBy(home.slug, viewer) : null;
+  const tabKeys: DepartmentTab[] = detail
+    ? [
+        "overview",
+        "people",
+        "okrs",
+        "rocks",
+        ...(services && services.length > 0 ? (["services"] as const) : []),
+        ...(access.canSeeBudget ? (["budget"] as const) : []),
+        "tools",
+      ]
+    : ["budget"];
 
   const parent = home.parentSlug ? resolveDepartment(home.parentSlug) : null;
+  const people = detail ? home.people : null;
 
   return {
     department: toSummary(home),
-    parent,
-    people: home.people,
-    leaders: home.people.filter((person) => person.capacity === "leader"),
-    okrs: {
-      departmentSlug: home.slug,
-      cycleName: OKR_CYCLE.name,
-      cycleSlug: OKR_CYCLE.slug,
-      href: OKR_CYCLE.href,
-      objectives: home.objectives,
-    },
-    rocks: ROCKS.filter((rock) => rock.departmentSlug === home.slug),
-    budget: BUDGETS.find((row) => row.departmentSlug === home.slug) ?? {
-      departmentSlug: home.slug,
-      project: null,
-    },
-    tools: visibleTools(home.tools, viewer),
+    parent: detail ? parent : null,
+    people,
+    leaders: people ? people.filter((person) => person.isLeader || person.isPointLeader) : null,
+    okrs: detail
+      ? {
+          departmentSlug: home.slug,
+          cycleName: OKR_CYCLE.name,
+          cycleSlug: OKR_CYCLE.slug,
+          href: OKR_CYCLE.href,
+          objectives: home.objectives,
+        }
+      : null,
+    rocks: detail ? ROCKS.filter((rock) => rock.departmentSlug === home.slug) : null,
+    budget: access.canSeeBudget ? budgetFor(home.slug) : null,
+    tools: detail ? visibleTools(home.tools, viewer) : [],
     services,
-    subMinistries: subMinistriesOf(home.slug),
+    servicesRun: detail ? servicesRunFor(home.slug) : null,
+    subMinistries: detail ? subMinistriesOf(home.slug) : null,
+    access,
     tabs: tabKeys.map((key) => ({
       key,
       label: TAB_LABEL[key],
-      href:
-        key === "overview"
-          ? `/departments/${home.slug}`
-          : `/departments/${home.slug}?tab=${key}`,
+      href: tabHref(home.slug, key),
     })),
     quarter: CURRENT_QUARTER,
   };

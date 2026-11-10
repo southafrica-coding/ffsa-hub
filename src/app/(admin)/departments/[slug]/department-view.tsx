@@ -4,7 +4,9 @@ import { formatDayRange } from "@/lib/format/sa-time";
 import { formatZarFromCents } from "@/lib/departments/money";
 import { audienceLabel, clusterLabel, serviceRoleLabel } from "@/lib/departments/data";
 import { STAFF_LANGUAGE } from "@/lib/departments/mocks";
-import type { DepartmentPageModel, DepartmentTab, OkrTone, RockStatus } from "@/types/departments";
+import { statusLabel, statusTone } from "@/lib/okrs/progress";
+import type { DepartmentPageModel, DepartmentTab, RockStatus } from "@/types/departments";
+import { StatusPill } from "@/components/ffsa";
 import { DataTable, EmptyNote, LocalTabs, PageHeading, SectionHeading, StackLink } from "../local-ui";
 
 const ROCK_LABEL: Record<RockStatus, string> = {
@@ -13,26 +15,18 @@ const ROCK_LABEL: Record<RockStatus, string> = {
   done: "Done",
 };
 
-const OKR_LABEL: Record<OkrTone, string> = {
-  on_track: "On track",
-  stuck: "Stuck",
-  not_started: "Not started",
-};
-
 export function DepartmentView({ model, tab }: { model: DepartmentPageModel; tab: DepartmentTab }) {
-  const { department } = model;
-  const lead =
-    model.leaders.length > 0
-      ? model.leaders.map((person) => person.name).join(", ")
-      : "No lead is set";
+  const { department, access } = model;
+  const leaders = model.leaders ?? [];
+  const lead = leaders.length > 0 ? leaders.map((person) => person.name).join(", ") : "No lead is set";
 
   return (
     <div>
       <PageHeading context={`${STAFF_LANGUAGE} · ${clusterLabel(department.cluster)}`} title={department.name} />
       <LocalTabs label={department.name} tabs={model.tabs} active={tab} />
-      {tab === "overview" && (
+      {tab === "overview" && access.canSeeDepartmentDetail && (
         <>
-          <p className="max-w-prose px-5 py-4 text-sm md:px-8">{department.purpose}</p>
+          <p className="max-w-prose px-5 py-4 text-sm md:px-8">{department.purpose ?? "—"}</p>
           <dl className="grid gap-3 px-5 pb-6 md:px-8">
             <Fact label="Cluster" value={clusterLabel(department.cluster)} />
             <Fact label="People" value={String(department.memberCount)} />
@@ -43,21 +37,21 @@ export function DepartmentView({ model, tab }: { model: DepartmentPageModel; tab
                 value={<Link href={`/departments/${model.parent.slug}`}>{model.parent.name}</Link>}
               />
             )}
-            {model.subMinistries.length > 0 && (
+            {(model.subMinistries ?? []).length > 0 && (
               <Fact
                 label="Includes"
-                value={model.subMinistries.map((ministry) => ministry.name).join(", ")}
+                value={(model.subMinistries ?? []).map((ministry) => ministry.name).join(", ")}
               />
             )}
           </dl>
         </>
       )}
-      {tab === "people" && <PeopleTab model={model} />}
-      {tab === "okrs" && <OkrsTab model={model} />}
-      {tab === "rocks" && <RocksTab model={model} />}
-      {tab === "budget" && <BudgetTab model={model} />}
-      {tab === "services" && <ServicesTab model={model} />}
-      {tab === "tools" && <ToolsTab model={model} />}
+      {tab === "people" && access.canSeeDepartmentDetail && <PeopleTab model={model} />}
+      {tab === "okrs" && access.canSeeDepartmentDetail && <OkrsTab model={model} />}
+      {tab === "rocks" && access.canSeeDepartmentDetail && <RocksTab model={model} />}
+      {tab === "budget" && access.canSeeBudget && <BudgetTab model={model} />}
+      {tab === "services" && access.canSeeDepartmentDetail && <ServicesTab model={model} />}
+      {tab === "tools" && access.canSeeDepartmentDetail && <ToolsTab model={model} />}
     </div>
   );
 }
@@ -72,8 +66,10 @@ function Fact({ label, value }: { label: string; value: ReactNode }) {
 }
 
 function PeopleTab({ model }: { model: DepartmentPageModel }) {
-  const listed = model.people.length;
+  const people = model.people ?? [];
+  const listed = people.length;
   const rest = model.department.memberCount - listed;
+  const showEmail = model.access.canSeePeopleEmails;
   return (
     <>
       <SectionHeading
@@ -84,19 +80,19 @@ function PeopleTab({ model }: { model: DepartmentPageModel }) {
         <EmptyNote title="No names are listed here yet">
           {model.department.memberCount === 1 ? "1 person is" : `${model.department.memberCount} people are`} on
           this ministry
-          {model.leaders.length === 0 ? ", and no lead is set" : ""}. The live roster is on{" "}
+          {(model.leaders ?? []).length === 0 ? ", and no lead is set" : ""}. The live roster is on{" "}
           <Link href="/ministry">Ministries</Link>.
         </EmptyNote>
       ) : (
         <>
           <DataTable
             caption={`People on ${model.department.name}`}
-            columns={["Name", "Capacity", "Role"]}
-            rows={model.people.map((person) => [
-              person.name,
-              person.capacity === "leader" ? "Leader" : "Member",
-              person.role ?? "—",
-            ])}
+            columns={showEmail ? ["Name", "Email", "Capacity", "Role"] : ["Name", "Capacity", "Role"]}
+            rows={people.map((person) =>
+              showEmail
+                ? [person.name, person.email ?? "—", person.capacity === "leader" ? "Leader" : "Member", person.role ?? "—"]
+                : [person.name, person.capacity === "leader" ? "Leader" : "Member", person.role ?? "—"]
+            )}
           />
           <p className="px-5 py-4 text-sm text-muted-foreground md:px-8">
             {rest > 0
@@ -106,14 +102,20 @@ function PeopleTab({ model }: { model: DepartmentPageModel }) {
           </p>
         </>
       )}
-      {model.subMinistries.map((ministry) => (
-        <SubMinistryPeople key={ministry.slug} ministry={ministry} />
+      {(model.subMinistries ?? []).map((ministry) => (
+        <SubMinistryPeople key={ministry.slug} ministry={ministry} showEmail={showEmail} />
       ))}
     </>
   );
 }
 
-function SubMinistryPeople({ ministry }: { ministry: DepartmentPageModel["subMinistries"][number] }) {
+function SubMinistryPeople({
+  ministry,
+  showEmail,
+}: {
+  ministry: NonNullable<DepartmentPageModel["subMinistries"]>[number];
+  showEmail: boolean;
+}) {
   return (
     <>
       <SectionHeading title={ministry.name} meta="Sub-ministry" />
@@ -126,12 +128,12 @@ function SubMinistryPeople({ ministry }: { ministry: DepartmentPageModel["subMin
       ) : (
         <DataTable
           caption={`People on ${ministry.name}`}
-          columns={["Name", "Capacity", "Role"]}
-          rows={ministry.people.map((person) => [
-            person.name,
-            person.capacity === "leader" ? "Leader" : "Member",
-            person.role ?? "—",
-          ])}
+          columns={showEmail ? ["Name", "Email", "Capacity", "Role"] : ["Name", "Capacity", "Role"]}
+          rows={(ministry.people ?? []).map((person) =>
+            showEmail
+              ? [person.name, person.email ?? "—", person.capacity === "leader" ? "Leader" : "Member", person.role ?? "—"]
+              : [person.name, person.capacity === "leader" ? "Leader" : "Member", person.role ?? "—"]
+          )}
         />
       )}
     </>
@@ -139,23 +141,27 @@ function SubMinistryPeople({ ministry }: { ministry: DepartmentPageModel["subMin
 }
 
 function OkrsTab({ model }: { model: DepartmentPageModel }) {
+  const okrs = model.okrs;
+  if (!okrs) return null;
   return (
     <>
-      <SectionHeading title={`${model.okrs.cycleName} cycle`} meta="Current cycle" />
+      <SectionHeading title={`${okrs.cycleName} cycle`} meta="Current cycle" />
       <p className="px-5 py-3 text-sm md:px-8">
-        <Link href={model.okrs.href}>Open the {model.okrs.cycleName} cycle</Link>
+        <Link href={okrs.href}>Open the {okrs.cycleName} cycle</Link>
       </p>
-      {model.okrs.objectives.length === 0 ? (
-        <EmptyNote title={`Nothing entered for the ${model.okrs.cycleName} cycle yet`}>
+      {okrs.objectives.length === 0 ? (
+        <EmptyNote title={`Nothing entered for the ${okrs.cycleName} cycle yet`}>
           Ministry OKRs already live on the OKR wall. This tab only points at that cycle.
         </EmptyNote>
       ) : (
         <DataTable
           caption={`OKRs for ${model.department.name}`}
           columns={["Objective", "State"]}
-          rows={model.okrs.objectives.map((objective) => [
+          rows={okrs.objectives.map((objective) => [
             objective.title,
-            OKR_LABEL[objective.tone],
+            <StatusPill key={objective.tone} tone={statusTone(objective.tone)}>
+              {statusLabel(objective.tone)}
+            </StatusPill>,
           ])}
         />
       )}
@@ -164,10 +170,11 @@ function OkrsTab({ model }: { model: DepartmentPageModel }) {
 }
 
 function RocksTab({ model }: { model: DepartmentPageModel }) {
+  const rocks = model.rocks ?? [];
   return (
     <>
       <SectionHeading title="Rocks" meta={model.quarter} />
-      {model.rocks.length === 0 ? (
+      {rocks.length === 0 ? (
         <EmptyNote title={`No rocks for ${model.quarter} yet`}>
           L10 rocks are not in the live schema. These rows will come from the rocks API.
         </EmptyNote>
@@ -175,11 +182,11 @@ function RocksTab({ model }: { model: DepartmentPageModel }) {
         <DataTable
           caption={`Rocks for ${model.department.name}`}
           columns={["Rock", "Owner", "Status", "Due"]}
-          rows={model.rocks.map((rock) => [
+          rows={rocks.map((rock) => [
             rock.title,
             rock.owner,
             ROCK_LABEL[rock.status],
-            formatDayRange(rock.dueOn),
+            rock.dueOn ? formatDayRange(rock.dueOn) : "No due date",
           ])}
         />
       )}
@@ -188,45 +195,44 @@ function RocksTab({ model }: { model: DepartmentPageModel }) {
 }
 
 function BudgetTab({ model }: { model: DepartmentPageModel }) {
-  const project = model.budget.project;
+  const budget = model.budget;
+  if (!budget) return null;
+  const links = budget.links ?? [];
+  const budgetTotal = links.reduce((sum, link) => sum + link.budgetCents, 0);
+  const spentTotal = links.reduce((sum, link) => sum + link.spentCents, 0);
   return (
     <>
       <SectionHeading title="Budget" meta="ZAR, South Africa" />
-      {!project ? (
-        <EmptyNote title="No finance project is linked yet">
-          Amounts will be whole rands. Nothing is shown as R 0 while the link is missing.
-        </EmptyNote>
+      {links.length === 0 ? (
+        <EmptyNote title="No finance project linked" />
       ) : (
-        <>
-          <p className="px-5 py-3 text-sm text-muted-foreground md:px-8">
-            Placeholder rands until a finance project is linked. Not live Xero.
-          </p>
-          <DataTable
-            caption={`Budget for ${model.department.name}`}
-            columns={["Project", "Budget", "Spent", "Left"]}
-            rows={[
-              [
-                project.name,
-                formatZarFromCents(project.budgetCents),
-                formatZarFromCents(project.spentCents),
-                formatZarFromCents(project.budgetCents - project.spentCents),
-              ],
-            ]}
-          />
-        </>
+        <DataTable
+          caption={`Budget for ${model.department.name}`}
+          columns={["Project", "Budget", "Spent", "Left"]}
+          rows={[
+            ...links.map((link) => [
+              link.name,
+              formatZarFromCents(link.budgetCents),
+              formatZarFromCents(link.spentCents),
+              formatZarFromCents(link.budgetCents - link.spentCents),
+            ]),
+            ["Total", formatZarFromCents(budgetTotal), formatZarFromCents(spentTotal), formatZarFromCents(budgetTotal - spentTotal)],
+          ]}
+        />
       )}
     </>
   );
 }
 
 function ServicesTab({ model }: { model: DepartmentPageModel }) {
+  const services = model.services ?? [];
   return (
     <>
       <SectionHeading title="Services we run" />
-      {model.services.length === 0 ? (
+      {services.length === 0 ? (
         <EmptyNote title="This ministry does not run a base-wide service" />
       ) : (
-        model.services.map((service) =>
+        services.map((service) =>
           service.canOpen ? (
             <StackLink
               key={service.id}
