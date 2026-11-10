@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { authorizeLms, badRequest, readJson, serverError } from "@/lib/schools/lms-route-auth";
+import { previewWritesDisabled } from "@/lib/schools/lms-http";
 import { validateCourseInput } from "@/lib/schools/lms-content";
 import { createCourse, listCoursesForProgram } from "@/services/lms-content";
 
@@ -21,6 +22,8 @@ export async function GET(_request: Request, context: Ctx) {
 }
 
 export async function POST(request: Request, context: Ctx) {
+  const blocked = previewWritesDisabled();
+  if (blocked) return blocked;
   const { programId } = await context.params;
   const auth = await authorizeLms(programId, "edit");
   if ("response" in auth) return auth.response;

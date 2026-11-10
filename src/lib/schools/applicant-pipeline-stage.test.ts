@@ -2,12 +2,17 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import {
+  PIPELINE_STAGE_ORDER,
   PIPELINE_TABS,
+  STORED_APPLICATION_STATUSES,
+  decisionChoices,
+  decisionSelectValue,
   derivePipelineStage,
   interviewOutcomeBadge,
   requiredReferenceProgress,
   requiredReferencesComplete,
   statusAfterReferencesComplete,
+  statusToPersist,
   type InterviewReviewFact,
   type ReferenceRequestFact,
 } from "./applicant-pipeline-stage";
@@ -336,6 +341,60 @@ describe("status write after the last required reference", () => {
         ),
       })
     ).toBeNull();
+  });
+});
+
+describe("decision dropdown", () => {
+  const choices = decisionChoices();
+  const stored = new Set<string>(STORED_APPLICATION_STATUSES);
+
+  it("follows the pipeline stages, in the same order, with no Waiting for refs choice", () => {
+    expect(choices.map((choice) => choice.value)).toEqual([...PIPELINE_STAGE_ORDER]);
+    expect(choices.map((choice) => choice.value)).not.toContain("waiting_for_references");
+    expect(PIPELINE_TABS.filter((tab) => tab.key !== "all" && tab.key !== "unassigned").map((tab) => tab.key)).toEqual(
+      choices.map((choice) => choice.value)
+    );
+  });
+
+  it("only emits status values the database enum accepts", () => {
+    const written = choices.map((choice) => choice.writes);
+    for (const value of written) {
+      if (value === null) continue;
+      expect(stored.has(value)).toBe(true);
+    }
+    expect(written).not.toContain("waiting_for_references");
+    expect(written).not.toContain("interview_complete");
+    expect(choices.find((choice) => choice.value === "interview_complete")).toMatchObject({
+      settable: false,
+      writes: null,
+    });
+    expect(choices.find((choice) => choice.value === "interview_complete")?.label).toMatch(
+      /record an interview outcome/i
+    );
+    expect(choices.filter((choice) => choice.settable).every((choice) => choice.writes !== null)).toBe(true);
+  });
+
+  it("shows a stored waiting_for_references as Submitted and does not rewrite it until the choice changes", () => {
+    expect(decisionSelectValue("waiting_for_references")).toBe("submitted");
+    expect(decisionSelectValue("references_received")).toBe("references_received");
+    expect(statusToPersist("submitted", "waiting_for_references")).toBe("waiting_for_references");
+    expect(statusToPersist("references_received", "waiting_for_references")).toBe("references_received");
+    expect(statusToPersist("accepted", "interview_scheduled")).toBe("accepted");
+    expect(statusToPersist("interview_complete", "submitted")).toBeNull();
+    expect(statusToPersist("waiting_for_references", "submitted")).toBeNull();
+  });
+
+  it("is what the applicant page renders, not a second hard-coded list", () => {
+    const src = readFileSync(
+      path.resolve(__dirname, "../../app/(admin)/schools/[programId]/program-detail.tsx"),
+      "utf8"
+    );
+    expect(src).toContain("decisionChoices()");
+    expect(src).not.toContain('value="waiting_for_references"');
+    expect(src).not.toContain("Waiting for References");
+    expect(src).toContain("Remind all outstanding");
+    expect(src).toContain("LastReminderSent");
+    expect(src).toContain("Record an interview outcome to reach Interview complete.");
   });
 });
 

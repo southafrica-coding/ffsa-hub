@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendReferenceReminder } from "@/lib/email/send-reference-reminder";
-import { referenceSendConfirmed } from "@/lib/email/reference-email";
+import { claimThenSendReferenceReminder } from "@/lib/references/reminder-claim";
+import { previewWriteRefusal } from "@/lib/preview-writes";
 
 export const maxDuration = 60;
 
@@ -11,8 +12,8 @@ export const maxDuration = 60;
 // whose leaders set an auto-reminder on the reference_reminder email
 // (program_email_templates.reminder_after_days, migration 147), it finds
 // still-pending reference requests older than that many days that haven't
-// been reminded yet, and sends the reminder — honoring that program's
-// custom subject/body — then stamps reminder_sent_at so it goes once.
+// been reminded yet. Each one is claimed (reminder_sent_at) before the
+// existing reminder email is sent, so it cannot race a manual reminder.
 //
 // Mirrors the auth + batch-drain shape of the other crons.
 
@@ -29,6 +30,10 @@ export async function GET(request: Request) {
   }
 
   const admin: Client = createAdminClient();
+
+  // Preview shares the production database. Do not claim or send from there.
+  const refusal = previewWriteRefusal();
+  if (refusal) return NextResponse.json(refusal.body, { status: refusal.status });
 
   // Programs opted into auto reference reminders.
   const { data: configs, error: cfgErr } = await admin
@@ -54,7 +59,7 @@ export async function GET(request: Request) {
     const { data: due } = await admin
       .from("reference_requests")
       .select(
-        "id, token, referee_email, referee_name, created_at, reference_slots(label), application_responses!inner(id, program_id, applicant_info, users:user_id(first_name, last_name), programs(name))"
+        "id, status, token, referee_email, referee_name, created_at, reminder_sent_at, reference_slots(label), application_responses!inner(id, program_id, applicant_info, users:user_id(first_name, last_name), programs(name))"
       )
       .eq("application_responses.program_id", cfg.program_id)
       .neq("status", "submitted")
@@ -78,32 +83,33 @@ export async function GET(request: Request) {
                 .filter(Boolean)
                 .join(" ")) || "An applicant";
 
-        const result = await sendReferenceReminder({
-          toEmail: req.referee_email,
-          refereeName: req.referee_name,
-          applicantName,
-          programName,
-          slotLabel: req.reference_slots?.label ?? "Reference",
-          token: req.token,
-          programId: cfg.program_id,
-          referenceRequestId: req.id,
+        // Claim the row before sending, same as a manual reminder, so this
+        // job and a person clicking Remind cannot both email the referee.
+        // A suppressed address keeps the claim. Any other failed send puts
+        // the previous stamp back.
+        const outcome = await claimThenSendReferenceReminder({
+          admin,
+          refId: req.id,
+          status: req.status ?? "pending",
+          previousSentAt: req.reminder_sent_at ?? null,
+          keepStampOnSuppressed: true,
+          send: () =>
+            sendReferenceReminder({
+              toEmail: req.referee_email,
+              refereeName: req.referee_name,
+              applicantName,
+              programName,
+              slotLabel: req.reference_slots?.label ?? "Reference",
+              token: req.token,
+              programId: cfg.program_id,
+              referenceRequestId: req.id,
+            }),
         });
 
-        // Stamp reminder_sent_at when the provider confirmed an id, or when
-        // the address is suppressed, so we don't retry a bad address every
-        // night. A send that returns no id is left unstamped to try again.
-        const stamp = () =>
-          admin
-            .from("reference_requests")
-            .update({ reminder_sent_at: new Date().toISOString() })
-            .eq("id", req.id);
-
-        if (referenceSendConfirmed(result)) {
-          sent += 1;
-          await stamp();
-        } else {
-          skipped += 1;
-          if (!result.ok && result.suppressed) await stamp();
+        if (outcome.outcome === "sent") sent += 1;
+        else skipped += 1;
+        if (outcome.outcome === "error") {
+          console.error("[school-reminders] failed for request", req.id, outcome.error);
         }
       } catch (e) {
         console.error("[school-reminders] failed for request", req.id, e);
