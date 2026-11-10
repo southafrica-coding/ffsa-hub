@@ -1,10 +1,12 @@
+import "server-only";
+
 // Assembles department payloads. Finance-only viewers get the header and
 // the budget; people, OKRs, rocks, services and sub-ministries are not read.
 
-import { foldedDetailIds, loadMinistryAccess, type DepartmentAccessFlags } from "./access";
-import { FOLDED_DEPARTMENTS, isBlockedHomeSlug } from "./homes";
-import { personName } from "./names";
-import { addIsoDays, currentQuarter, saTodayIso } from "./quarter";
+import { foldedDetailIds, loadMinistryAccess, type DepartmentAccessFlags } from "../access";
+import { FOLDED_DEPARTMENTS, isBlockedHomeSlug } from "../homes";
+import { personName } from "../names";
+import { addIsoDays, currentQuarter, saTodayIso } from "../quarter";
 import {
   countActiveMembers,
   getDepartmentBySlug,
@@ -21,7 +23,7 @@ import {
   type MembershipRecord,
   type PersonRecord,
 } from "./repository";
-import { budgetLinks } from "./shape";
+import { budgetLinks } from "../shape";
 import type {
   DepartmentAccess,
   DepartmentHome,
@@ -32,10 +34,10 @@ import type {
   Rock,
   SubMinistry,
   ViewerMembership,
-} from "./ui-contract";
-import { okrStatus } from "./ui-contract";
+} from "../ui-contract";
+import { okrStatus } from "../ui-contract";
 import { isEvangelismModeratorSlug } from "@/lib/services/evangelism-moderators";
-import { listServiceOwnerRows } from "@/lib/services/repository";
+import { listServiceOwnerRows } from "@/lib/services/internal/repository";
 import type { ServiceOwnerRow } from "@/lib/services/seed";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -79,19 +81,27 @@ export function viewerMemberships(
   });
 }
 
+function parentFields(
+  row: DepartmentRecord,
+  parents: Map<string, { slug: string; name: string }>
+): { parentSlug: string | null; parentName: string | null } {
+  const foldedChild = Object.prototype.hasOwnProperty.call(FOLDED_DEPARTMENTS, row.slug);
+  if (foldedChild || !row.parent_id) return { parentSlug: null, parentName: null };
+  const parent = parents.get(row.parent_id);
+  return { parentSlug: parent?.slug ?? null, parentName: parent?.name ?? null };
+}
+
 async function summaryFor(
   row: DepartmentRecord,
   access: DepartmentAccessFlags,
   counts: Map<string, number>,
-  parents: Map<string, string>
+  parents: Map<string, { slug: string; name: string }>
 ): Promise<DepartmentSummary> {
-  const parentSlug = row.parent_id ? (parents.get(row.parent_id) ?? null) : null;
-  const foldedChild = Object.prototype.hasOwnProperty.call(FOLDED_DEPARTMENTS, row.slug);
   return {
     slug: row.slug,
     name: row.name,
     cluster: clusterOf(row.cluster),
-    parentSlug: foldedChild ? null : parentSlug,
+    ...parentFields(row, parents),
     purpose: purposeOf(row),
     memberCount: access.canSeeDepartmentDetail ? (counts.get(row.id) ?? 0) : null,
     active: row.is_active,
@@ -115,7 +125,7 @@ export async function listVisibleDepartments(
     return { data: null, error: rows.error ?? aliases.error, accessError: true };
   }
   const foldedSources = new Set(aliases.data.map((alias) => alias.staff_ministry_id));
-  const parents = new Map(rows.data.map((row) => [row.id, row.slug]));
+  const parents = new Map(rows.data.map((row) => [row.id, { slug: row.slug, name: row.name }]));
   const homes = rows.data
     .filter((row) => isListedHome(row, foldedSources))
     .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
@@ -332,7 +342,7 @@ export async function buildDepartmentHome(
   if (counts.error) return { data: null, error: counts.error };
   const all = await listDepartmentRows(admin);
   if (all.error) return { data: null, error: all.error };
-  const parentMap = new Map(all.data.map((row) => [row.id, row.slug]));
+  const parentMap = new Map(all.data.map((row) => [row.id, { slug: row.slug, name: row.name }]));
   const summary = await summaryFor(department, access, counts.data, parentMap);
   const budget = seeBudget ? await loadBudget(admin, department) : { data: null, error: null };
   if (budget.error) return { data: null, error: budget.error };

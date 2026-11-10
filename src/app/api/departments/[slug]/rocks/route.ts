@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { createAuditLog } from "@/services/audit";
 import { badRequest, isOpened, notFound, openDepartment, readJson, serverError } from "@/lib/departments/http";
 import { currentQuarter, parseQuarter } from "@/lib/departments/quarter";
-import { loadQuarterRocks } from "@/lib/departments/page";
-import { createRock, isActiveMinistryMember } from "@/lib/departments/repository";
+import { loadQuarterRocks } from "@/lib/departments/internal/page";
+import { createRock, isActiveMinistryMember } from "@/lib/departments/internal/repository";
 import { parseRockCreate } from "@/lib/departments/validate";
 
 export const dynamic = "force-dynamic";

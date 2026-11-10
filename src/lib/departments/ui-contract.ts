@@ -18,7 +18,7 @@
  * is null because the roster is not read.
  *
  * Viewer memberships include isPointLeader. People include email, null
- * unless canSeePeopleEmails. purpose, cluster and dueOn are nullable.
+ * unless canSeePeopleEmails. purpose, cluster, dueOn and parentName are nullable.
  *
  * ServiceAudience is all_signed_in | point_leaders | owners_only.
  * HubService is the one service card type.
@@ -48,6 +48,8 @@ export interface DepartmentSummary {
   name: string;
   cluster: DepartmentCluster | null;
   parentSlug: string | null;
+  /** Name of the parent ministry, from the rows already loaded. Null when there is no parent. */
+  parentName: string | null;
   purpose: string | null;
   /** Null in finance-only mode: the roster is not read. */
   memberCount: number | null;

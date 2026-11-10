@@ -1,13 +1,15 @@
+import "server-only";
+
 // Data access for department homes. Table and column names are the ones in
 // src/lib/departments/db.types.ts (migrations 317–320 at 6a9a3b92):
 //   rocks, department_budget_links, service_owners.
 // rocks.notes and department_budget_links.year are not selected. year
 // defaults in the database and is not a filter. created_at is selected.
 
-import type { DepartmentBudgetLink, Rock as RockRow, StaffMinistryAlias } from "./db.types";
-import { personName } from "./names";
-import { currentQuarter } from "./quarter";
-import type { BudgetPatch, BudgetWrite, RockPatch, RockWrite } from "./validate";
+import type { DepartmentBudgetLink, Rock as RockRow, StaffMinistryAlias } from "../db.types";
+import { personName } from "../names";
+import { currentQuarter } from "../quarter";
+import type { BudgetPatch, BudgetWrite, RockPatch, RockWrite } from "../validate";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;

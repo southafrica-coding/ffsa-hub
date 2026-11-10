@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAuditLog } from "@/services/audit";
 import { badRequest, isOpened, notFound, openDepartment, readJson, serverError } from "@/lib/departments/http";
-import { isActiveMinistryMember, updateRock } from "@/lib/departments/repository";
+import { isActiveMinistryMember, updateRock } from "@/lib/departments/internal/repository";
 import { isUuid, parseRockPatch } from "@/lib/departments/validate";
 
 export const dynamic = "force-dynamic";
