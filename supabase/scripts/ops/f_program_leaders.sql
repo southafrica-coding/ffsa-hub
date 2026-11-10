@@ -22,8 +22,17 @@
 --   5. Enge: program_leaders row for Leadership Track Q4/2026, same columns
 --      as Makaio's FFBX row (program_id, user_id, added_by copied from his
 --      row). Idempotent (UNIQUE (program_id, user_id)). 1 row.
+--   6. Makaio only (Jack, 10 Nov 09:33 SAST: LIMIT): delete his UNSCOPED
+--      finance.approve, finance.edit, finance.export (3 rows on prod). His
+--      unscoped finance.view stays.
+--   7. Makaio only: ensure finance.approve, edit, export, view scoped to his
+--      own program (FFBX); insert only where missing (3 on prod: view @ FFBX
+--      already exists). Same shape as the other three program finance users
+--      on prod (08c957a0, c380c569 @ LTQ4; 666e334c @ FFBX): those four keys
+--      scoped to the program plus one unscoped finance.view. With 316 the
+--      scoped rows count only in has_permission_for(key, program).
 --   Not touched: roles (both keep program_leader scoped to their program),
---   non-schools keys, Makaio's unscoped finance.* grants (see REVIEW.md).
+--   non-schools / non-finance keys, Enge's finance (she has none).
 --
 -- ORDER: after 313 and 316, and after 310 or 312. Commit mode refuses to
 -- run otherwise. Verify mode runs anywhere and reports the preconditions;
@@ -33,7 +42,9 @@
 -- Run:  psql -v ON_ERROR_STOP=1 -f f_program_leaders.sql
 -- verify mode (default) always ends in RAISE EXCEPTION 'VERIFY_RESULTS
 -- {...}' so everything rolls back; the JSON has row counts per person and
--- key, grants and effective access per capability before and after.
+-- key, grants and effective access per capability before and after
+-- (schools.* and finance.* per program via has_permission_for, finance
+-- org-wide via has_permission).
 -- commit mode requires the EXACT counts in c_expected below (per person:
 -- deletes, inserts, program_leaders rows) and aborts with no change on any
 -- difference, including a second run.
@@ -50,18 +61,25 @@ DECLARE
   c_lt   constant uuid := '2783427b-de98-4620-b7f4-7defd51010ef';
   c_sa   constant uuid := 'f839fd44-0051-4d47-ab8d-b548c5d32648';
   c_tm   constant text := 'schools.templates.manage';
-  -- per person: own programs, programs whose scoped schools.* grants go
+  -- per person: own programs, programs whose scoped schools.* grants go,
+  -- unscoped finance.* keys to delete, finance.* keys to hold per own program
   plan jsonb := jsonb_build_object(
-    c_mak::text,  jsonb_build_object('name', 'Makaio', 'own', jsonb_build_array(c_ffbx), 'drop_scoped', jsonb_build_array(c_sa)),
-    c_enge::text, jsonb_build_object('name', 'Enge',   'own', jsonb_build_array(c_lt, c_sa), 'drop_scoped', jsonb_build_array()));
+    c_mak::text,  jsonb_build_object('name', 'Makaio', 'own', jsonb_build_array(c_ffbx), 'drop_scoped', jsonb_build_array(c_sa),
+                    'fin_drop_unscoped', jsonb_build_array('finance.approve', 'finance.edit', 'finance.export'),
+                    'fin_scoped', jsonb_build_array('finance.approve', 'finance.edit', 'finance.export', 'finance.view')),
+    c_enge::text, jsonb_build_object('name', 'Enge',   'own', jsonb_build_array(c_lt, c_sa), 'drop_scoped', jsonb_build_array(),
+                    'fin_drop_unscoped', jsonb_build_array(), 'fin_scoped', jsonb_build_array()));
   -- exact expected row counts for commit mode (prod, 10 Nov 2026)
   c_expected constant jsonb := jsonb_build_object(
-    'Makaio', jsonb_build_object('del_unscoped', 6, 'del_dropped_program', 7, 'ins_scoped', 0, 'ins_templates_manage', 1, 'ins_program_leaders', 0),
-    'Enge',   jsonb_build_object('del_unscoped', 6, 'del_dropped_program', 0, 'ins_scoped', 0, 'ins_templates_manage', 1, 'ins_program_leaders', 1));
+    'Makaio', jsonb_build_object('del_unscoped', 6, 'del_dropped_program', 7, 'ins_scoped', 0, 'ins_templates_manage', 1, 'ins_program_leaders', 0,
+                                 'del_finance_unscoped', 3, 'ins_finance_scoped', 3),
+    'Enge',   jsonb_build_object('del_unscoped', 6, 'del_dropped_program', 0, 'ins_scoped', 0, 'ins_templates_manage', 1, 'ins_program_leaders', 1,
+                                 'del_finance_unscoped', 0, 'ins_finance_scoped', 0));
   has_313 boolean; has_316 boolean; has_310 boolean; has_312 boolean; seeded_key boolean := false;
   u text; nm text; i int; k int; n int; pids uuid[]; pnames text[]; b boolean;
   caps text[] := ARRAY['schools.view','schools.view_applications','schools.approve_applications','schools.manage_enrollments',
-                       'schools.manage_attendance','schools.manage','schools.assignable_as_contact'];
+                       'schools.manage_attendance','schools.manage','schools.assignable_as_contact',
+                       'finance.view','finance.edit','finance.approve','finance.export'];
   cap text; lst text[]; acc jsonb; m jsonb; g jsonb; w boolean;
   before_g jsonb := '{}'; after_g jsonb := '{}'; before_a jsonb := '{}'; after_a jsonb := '{}';
   cnt jsonb := '{}'; c jsonb; rows jsonb; res jsonb;
@@ -130,6 +148,25 @@ BEGIN
           GET DIAGNOSTICS n = ROW_COUNT;
         END IF;
         c := c || jsonb_build_object('ins_program_leaders', n);
+        -- 6. unscoped finance keys to drop (Makaio: approve, edit, export; view stays)
+        WITH d AS (
+          DELETE FROM public.user_permissions up USING public.permissions p
+           WHERE p.id = up.permission_id AND up.user_id = u::uuid AND up.scope_type IS NULL
+             AND p.key IN (SELECT x FROM jsonb_array_elements_text(plan->u->'fin_drop_unscoped') x)
+          RETURNING p.key)
+        SELECT count(*), coalesce(jsonb_agg(key ORDER BY key), '[]') INTO n, g FROM d;
+        c := c || jsonb_build_object('del_finance_unscoped', n, 'del_finance_unscoped_keys', g);
+        -- 7. finance keys scoped to each own program, where missing
+        WITH ins AS (
+          INSERT INTO public.user_permissions (user_id, permission_id, scope_type, scope_id)
+          SELECT u::uuid, p.id, 'program', o.pid
+            FROM jsonb_array_elements_text(plan->u->'fin_scoped') kk(key)
+            JOIN public.permissions p ON p.key = kk.key
+           CROSS JOIN (SELECT x::uuid pid FROM jsonb_array_elements_text(plan->u->'own') x) o
+          ON CONFLICT (user_id, permission_id, scope_type, scope_id) DO NOTHING
+          RETURNING permission_id, scope_id)
+        SELECT count(*), coalesce(jsonb_agg((SELECT key FROM public.permissions WHERE id = ins.permission_id) || ' @ ' || ins.scope_id), '[]') INTO n, g FROM ins;
+        c := c || jsonb_build_object('ins_finance_scoped', n, 'ins_finance_scoped_rows', g);
         cnt := cnt || jsonb_build_object(nm, c);
       END LOOP;
     END IF;
@@ -182,7 +219,9 @@ BEGIN
                 WHEN OTHERS THEN w := false;
       END;
       acc := acc || jsonb_build_object('templates_write (actual INSERT)', w,
-                                       'finance org-wide view/edit', public.has_permission('finance.view')::text || '/' || public.has_permission('finance.edit')::text);
+                                       'finance org-wide view/edit/approve/export (has_permission)',
+                                       public.has_permission('finance.view')::text || '/' || public.has_permission('finance.edit')::text || '/' ||
+                                       public.has_permission('finance.approve')::text || '/' || public.has_permission('finance.export')::text);
       EXECUTE 'RESET ROLE';
       m := m || jsonb_build_object(plan->u->>'name', acc);
     END LOOP;

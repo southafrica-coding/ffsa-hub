@@ -9,7 +9,8 @@ Run them manually only after Jack approves.
   - Enge (`542986ea`): Leadership Track Q4/2026 and SA Experience 2027 (hers are kept).
   - For both: every unscoped `schools.*` grant is deleted, scoped copies are added for their own programs where missing, and `schools.templates.manage` is granted org-wide.
   - Enge gets a `program_leaders` row for Leadership Track Q4/2026.
-  - Commit needs the exact per-person counts in `c_expected`: deleted unscoped 6 / 6, deleted SA Exp 2027 7 / 0, scoped inserts 0 / 0, template key 1 / 1, `program_leaders` 0 / 1.
+  - Makaio's finance is limited to FFBX (Jack, 10 Nov): his unscoped `finance.approve`, `finance.edit` and `finance.export` are deleted, and those keys plus `finance.view` are held scoped to FFBX (3 inserts; view @ FFBX exists). His unscoped `finance.view` stays, the same shape as 08c957a0, 666e334c and c380c569. Enge's finance is not touched.
+  - Commit needs the exact per-person counts in `c_expected` (Makaio / Enge): deleted unscoped 6 / 6, deleted SA Exp 2027 7 / 0, scoped inserts 0 / 0, template key 1 / 1, `program_leaders` 0 / 1, deleted unscoped finance 3 / 0, scoped finance inserts 3 / 0.
 - `stale_program_grants_cleanup.sql` deletes grants scoped to programs that no longer exist: `48d733cb` 45, `68f5d637` 10 and `62d623b0` 9 rows. It replaces `h_48d733cb_cleanup.sql`.
   - Switch 2 also removes `68f5d637`'s 4 grants on a deleted event (14 for that user in total: 10 on deleted program `a311977f`, and 4 on deleted event `2a80fbbe`). It is on by default, as Jack approved all 14.
   - Before and after the delete, the script checks each person's effective access to every key, at org-wide, program and event level. Any difference aborts, in both modes. Commit needs the exact counts.
