@@ -20,6 +20,7 @@ function home(access: DepartmentAccess, servicesRun: DepartmentHome["servicesRun
       name: "Prayer & Worship",
       cluster: "inward",
       parentSlug: null,
+      parentName: null,
       purpose: null,
       memberCount: access.canSeeDepartmentDetail ? 2 : null,
       active: true,

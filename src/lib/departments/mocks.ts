@@ -263,6 +263,7 @@ export interface MinistryRecord {
   name: string;
   cluster: DepartmentCluster | null;
   parentSlug: string | null;
+  parentName: string | null;
   purpose: string | null;
   memberCount: number;
   active: boolean;
@@ -280,6 +281,7 @@ export const MINISTRY_HOMES: MinistryRecord[] = HOMES.map((home) => ({
   name: home.name,
   cluster: home.cluster,
   parentSlug: home.parentSlug ?? null,
+  parentName: home.parentSlug ? (HOMES.find((row) => row.slug === home.parentSlug)?.name ?? null) : null,
   purpose: home.purpose,
   memberCount: home.memberCount,
   active: true,
@@ -299,6 +301,7 @@ export const FOLDED_MINISTRIES: {
   memberCount: number;
   people: DepartmentPerson[];
   parentSlug: string | null;
+  parentName: string | null;
 }[] = [
   {
     slug: "donors_dev",
@@ -307,6 +310,7 @@ export const FOLDED_MINISTRIES: {
     memberCount: 1,
     people: [],
     parentSlug: null,
+    parentName: null,
   },
 ];
 

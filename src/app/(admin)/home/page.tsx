@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { loadHomeForViewer } from "@/lib/departments";
 import { clusterLabel, departmentNames, managingLabel, STAFF_LANGUAGE } from "@/lib/departments/data";
-import { loadHomeDashboard } from "@/lib/departments/load";
+import { sessionClient, settleViewerResult } from "@/lib/departments/load";
 import { requireSignedIn } from "@/lib/departments/session";
 import { formatDayRange } from "@/lib/format/sa-time";
 import type { RockStatus } from "@/lib/departments/ui-contract";
@@ -18,7 +19,7 @@ const ROCK_LABEL: Record<RockStatus, string> = {
 export default async function HomePage() {
   const path = "/home";
   await requireSignedIn(path);
-  const home = await loadHomeDashboard(path);
+  const home = settleViewerResult(await loadHomeForViewer(await sessionClient()), path);
   const names = departmentNames(home.departments);
 
   return (

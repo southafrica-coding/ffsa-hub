@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
+import { loadDepartmentsIndexForViewer, loadServicesForViewer } from "@/lib/departments";
 import { audienceLabel, departmentNames, managingLabel, STAFF_LANGUAGE } from "@/lib/departments/data";
-import { loadDepartmentList, loadHubServices } from "@/lib/departments/load";
+import { sessionClient, settleViewerResult } from "@/lib/departments/load";
 import { requireSignedIn } from "@/lib/departments/session";
 import { EmptyNote, PageHeading, ServiceCard } from "../departments/local-ui";
 
@@ -9,7 +10,13 @@ export const metadata: Metadata = { title: "Services" };
 export default async function ServicesPage() {
   const path = "/services";
   await requireSignedIn(path);
-  const [services, departments] = await Promise.all([loadHubServices(path), loadDepartmentList(path)]);
+  const supabase = await sessionClient();
+  const [servicesResult, departmentsResult] = await Promise.all([
+    loadServicesForViewer(supabase),
+    loadDepartmentsIndexForViewer(supabase),
+  ]);
+  const services = settleViewerResult(servicesResult, path);
+  const departments = settleViewerResult(departmentsResult, path);
   const names = departmentNames(departments);
 
   return (

@@ -45,12 +45,18 @@ export function DepartmentView({
               <Fact label="People" value={String(department.memberCount)} />
             )}
             <Fact label="Lead" value={lead} />
-            {department.parentSlug && (
+            {department.parentName ? (
               <Fact
                 label="Sits under"
-                value={<Link href={`/departments/${department.parentSlug}`}>{department.parentSlug}</Link>}
+                value={
+                  department.parentSlug ? (
+                    <Link href={`/departments/${department.parentSlug}`}>{department.parentName}</Link>
+                  ) : (
+                    department.parentName
+                  )
+                }
               />
-            )}
+            ) : null}
             {(model.subMinistries ?? []).length > 0 && (
               <Fact
                 label="Includes"
