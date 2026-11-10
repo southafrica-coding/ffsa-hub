@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { ADMIN_MODULES } from "@/config/modules";
-import type { HubService } from "@/types/departments";
-import { getDepartmentAccess, type AccessMembership, type AccessViewer } from "./access";
+import {
+  getDepartmentAccess,
+  type AccessMembership,
+  type AccessViewer,
+} from "@/app/(admin)/departments/_lib/viewer";
+import type { HubService } from "@/lib/departments/ui-contract";
 import { visibleTabs } from "./data";
 import { DEPARTMENT_HOME_SLUGS, FOLDED_INTO, NON_HOME_SLUGS } from "./allow-list";
 import {
@@ -296,19 +300,32 @@ describe("department access", () => {
     expect(page?.people).not.toBeNull();
   });
 
-  it("lets a point leader and a ministry leader edit rocks and budget", () => {
-    for (const who of [point, ministryLeader]) {
-      const page = getDepartmentPage("prayer_and_worship", who);
-      expect(page?.access).toMatchObject({
-        canSeeDepartmentDetail: true,
-        canSeeBudget: true,
-        canEditRocks: true,
-        canEditBudget: true,
-        canSeePeopleEmails: true,
-      });
-      expect(page && visibleTabs(page)).toContain("budget");
-      expect(page?.budget?.links.length).toBeGreaterThan(0);
-    }
+  it("lets a ministry leader edit rocks and budget", () => {
+    const page = getDepartmentPage("prayer_and_worship", ministryLeader);
+    expect(page?.access).toMatchObject({
+      canSeeDepartmentDetail: true,
+      canSeeBudget: true,
+      canEditRocks: true,
+      canEditBudget: true,
+      canSeePeopleEmails: true,
+    });
+    expect(page && visibleTabs(page)).toContain("budget");
+    expect(page?.budget?.links.length).toBeGreaterThan(0);
+  });
+
+  it("does not give a point leader budget, rock edit, or emails", () => {
+    const page = getDepartmentPage("prayer_and_worship", point);
+    expect(page?.access).toMatchObject({
+      canSeeDepartmentDetail: true,
+      canSeeBudget: false,
+      canEditRocks: false,
+      canEditBudget: false,
+      canSeePeopleEmails: false,
+    });
+    expect(page?.budget).toBeNull();
+    expect(page?.department.memberCount).not.toBeNull();
+    expect(page && visibleTabs(page)).not.toContain("budget");
+    expect(page?.people).not.toBeNull();
   });
 
   it("gives a finances_legal member budget-only mode on another ministry", () => {
@@ -321,6 +338,7 @@ describe("department access", () => {
       canSeePeopleEmails: false,
     });
     expect(page && visibleTabs(page)).toEqual(["budget"]);
+    expect(page?.department.memberCount).toBeNull();
     expect(page?.people).toBeNull();
     expect(page?.okrs).toBeNull();
     expect(page?.rocks).toBeNull();
@@ -382,6 +400,7 @@ describe("department index", () => {
     expect(rows.every((row) => row.budgetOnly === false && row.access.canSeeDepartmentDetail)).toBe(
       true
     );
+    expect(rows.every((row) => row.memberCount != null)).toBe(true);
   });
 
   it("lists every home for Leadership Team and an admin", () => {
@@ -403,10 +422,11 @@ describe("department index", () => {
     const own = rows.find((row) => row.slug === "finances_legal");
     expect(own?.budgetOnly).toBe(false);
     expect(own?.access.canSeeDepartmentDetail).toBe(true);
+    expect(own?.memberCount).not.toBeNull();
     expect(
       rows
         .filter((row) => row.slug !== "finances_legal")
-        .every((row) => row.budgetOnly && !row.access.canSeeDepartmentDetail)
+        .every((row) => row.budgetOnly && row.memberCount == null && !row.access.canSeeDepartmentDetail)
     ).toBe(true);
   });
 
@@ -422,6 +442,7 @@ describe("department index", () => {
         rows.every(
           (row) =>
             row.budgetOnly &&
+            row.memberCount == null &&
             row.access.canSeeBudget &&
             !row.access.canSeeDepartmentDetail
         )

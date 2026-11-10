@@ -1,12 +1,17 @@
-import type { DepartmentAccess, PersonCapacity } from "@/types/departments";
+import type { DepartmentAccess, PersonCapacity } from "@/lib/departments/ui-contract";
 
 /**
- * Input for access rules. Richer than the API's ViewerMembership, which has
- * no isLeader, active flag, admin bit, or finance permissions.
+ * Mock viewer until GET /api/me/home is wired.
+ * Not src/lib/departments/access.ts — Hub Backend #561 owns that path.
+ *
+ * Budget, rock edit and email follow member_role = leader, plus admin.
+ * Finance readers also get canSeeBudget. isPointLeader does not.
+ * Point leaders only gate Contacts (audience point_leaders).
  */
 export interface AccessMembership {
   slug: string;
   active: boolean;
+  /** member_role = 'leader'. A point leader alone is not a leader. */
   isLeader: boolean;
   isPointLeader: boolean;
   capacity: PersonCapacity;
@@ -29,10 +34,10 @@ function activeMembership(viewer: AccessViewer, slug: string) {
   return viewer.memberships.find((membership) => membership.slug === slug && membership.active);
 }
 
-/** Active leader or point leader of this ministry. Inactive rows do not count. */
-export function leadsMinistry(viewer: AccessViewer, slug: string): boolean {
+/** Active member_role = leader. Inactive rows do not count. */
+function isMinistryLeader(viewer: AccessViewer, slug: string): boolean {
   const membership = activeMembership(viewer, slug);
-  return Boolean(membership && (membership.isLeader || membership.isPointLeader));
+  return Boolean(membership?.isLeader);
 }
 
 function hasFinanceRead(viewer: AccessViewer): boolean {
@@ -42,19 +47,17 @@ function hasFinanceRead(viewer: AccessViewer): boolean {
 }
 
 /**
- * Provisional access for one department. Backend can return this same object.
- * A viewer with neither detail nor budget cannot open the page.
+ * Flags for one department. A viewer with neither detail nor budget cannot open the page.
  */
 export function getDepartmentAccess(viewer: AccessViewer, slug: string): DepartmentAccess {
   const canSeeDepartmentDetail =
     viewer.isAdmin ||
     Boolean(activeMembership(viewer, slug)) ||
     Boolean(activeMembership(viewer, LEADERSHIP));
-  const canSeeBudget = leadsMinistry(viewer, slug) || viewer.isAdmin || hasFinanceRead(viewer);
-  const canEdit = leadsMinistry(viewer, slug) || viewer.isAdmin;
+  const canEdit = isMinistryLeader(viewer, slug) || viewer.isAdmin;
   return {
     canSeeDepartmentDetail,
-    canSeeBudget,
+    canSeeBudget: isMinistryLeader(viewer, slug) || viewer.isAdmin || hasFinanceRead(viewer),
     canEditBudget: canEdit,
     canEditRocks: canEdit,
     canSeePeopleEmails: canEdit,

@@ -5,7 +5,7 @@ import type {
   HubService,
   OkrObjective,
   Rock,
-} from "@/types/departments";
+} from "@/lib/departments/ui-contract";
 
 /** Not on the API payload. HomeDashboard.okrCheckInsDue is an empty tuple. */
 export interface OkrCheckIn {
