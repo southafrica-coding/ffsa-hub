@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { userCanManageApplications } from "@/lib/auth/check-schools-access";
-import { getAccessibleSchoolsProgramIds } from "@/lib/auth/schools-program-access";
+import { manageablePrograms } from "@/lib/auth/check-schools-access";
 
 // Admin view: how many active applications + active enrollments each staff
 // member currently holds. Used to spot lopsided workloads.
@@ -16,12 +15,15 @@ export async function GET() {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const [globalAccess, schools] = await Promise.all([
-    userCanManageApplications(supabase, authUser.id),
-    getAccessibleSchoolsProgramIds(supabase, authUser.id),
-  ]);
-  const seesAll = globalAccess || schools === "all";
-  const ownPrograms = schools === "all" ? [] : schools;
+  // Unscoped managers see every program. Anyone else sees only programs
+  // where userCanManageProgram is true. A schools key that does not manage
+  // the program is left out.
+  const access = await manageablePrograms(supabase, authUser.id);
+  if (!access) {
+    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  }
+  const seesAll = access.all;
+  const ownPrograms = access.all ? [] : access.ids;
   if (!seesAll && ownPrograms.length === 0) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }

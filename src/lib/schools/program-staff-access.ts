@@ -59,14 +59,15 @@ export function programsVisibleOnSchoolsHome<T extends { id: string }>(
   return programs.filter((program) => allowed.has(program.id));
 }
 
-type AssignableGrant = { scope_type: string | null; scope_id: string | null };
+type AssignableGrant = { scope_type?: string | null; scope_id?: string | null };
 
 /**
- * Main's grantApplies: a missing scope counts for every program. A program
- * scope counts only for that program. Team and event scopes do not.
+ * Only scope_type === null is unscoped and covers every program. undefined,
+ * "", and any other value do not. A program scope covers that program only.
+ * Team and event scopes do not.
  */
 function assignableCovers(grant: AssignableGrant, programId: string): boolean {
-  if (!grant.scope_type || !grant.scope_id) return true;
+  if (grant.scope_type === null) return true;
   return grant.scope_type === "program" && grant.scope_id === programId;
 }
 
@@ -95,7 +96,7 @@ async function assignableContactGrants(
     permissions?: { key?: string } | { key?: string }[] | null;
   }>) {
     if (permissionOf(row)?.key !== ASSIGNABLE_CONTACT_PERMISSION_KEY) continue;
-    grants.push({ scope_type: row.scope_type ?? null, scope_id: row.scope_id ?? null });
+    grants.push({ scope_type: row.scope_type, scope_id: row.scope_id });
   }
 
   const roles = await db
@@ -129,7 +130,7 @@ async function assignableContactGrants(
   );
   for (const row of roleRows) {
     if (!carrying.has(row.role_id)) continue;
-    grants.push({ scope_type: row.scope_type ?? null, scope_id: row.scope_id ?? null });
+    grants.push({ scope_type: row.scope_type, scope_id: row.scope_id });
   }
   return grants;
 }
@@ -197,7 +198,7 @@ export async function canOpenSchools(
   const grantProgramIds = seesAll ? [] : schools;
   // An unscoped contact grant still opens every program page (main). A
   // program-scoped one opens only that program. Neither opens Training home.
-  const unscopedContact = assignable.some((grant) => !grant.scope_type || !grant.scope_id);
+  const unscopedContact = assignable.some((grant) => grant.scope_type === null);
   const contactOpens = (programId: string) =>
     assignable.some((grant) => assignableCovers(grant, programId));
   const covers = (programId: string) =>

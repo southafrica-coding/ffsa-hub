@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getApplicationExpiry } from "@/lib/auth/application-expiry";
 import { accountIsActive } from "@/lib/auth/grant-scope";
 
 // The schools permission keys that confer management access. Kept in one place
@@ -139,7 +140,129 @@ export async function userCanManageProgram(
   return !!data && data.length > 0;
 }
 
-/** True only when every program is one this user may manage. */
+// DELETE on application_responses (migration 313). Same shape as #540 so a
+// later merge keeps one copy: unscoped admin, or schools.manage /
+// schools.approve_applications unscoped or program-scoped to this program.
+// A program_leaders row does not qualify. schools.manage_enrollments does not.
+// Team and event scopes do not. When the school's applications are expired,
+// only can_access_expired_applications passes.
+const DELETE_PERMISSION_KEYS = ["schools.manage", "schools.approve_applications"] as const;
+
+function scopeCoversProgram(
+  scopeType: string | null | undefined,
+  scopeId: string | null | undefined,
+  programId: string
+): boolean {
+  if (scopeType === null) return true;
+  return scopeType === "program" && scopeId === programId;
+}
+
+function permissionKey(
+  value: { key: string } | { key: string }[] | null | undefined
+): string | null {
+  if (!value) return null;
+  const row = Array.isArray(value) ? value[0] : value;
+  return row?.key ?? null;
+}
+
+function isManageKey(key: string | null): boolean {
+  return key != null && (SCHOOLS_MANAGE_KEYS as readonly string[]).includes(key);
+}
+
+function isDeletePermission(key: string | null): boolean {
+  return key === "schools.manage" || key === "schools.approve_applications";
+}
+
+/** is_admin(): super_admin or admin with scope_type IS NULL. */
+async function hasUnscopedAdminRole(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("user_roles")
+    .select("scope_type, roles!inner(name)")
+    .eq("user_id", userId)
+    .in("roles.name", ["super_admin", "admin"]);
+  if (error) return false;
+
+  for (const row of data ?? []) {
+    const name = embeddedName(row.roles);
+    if ((name === "super_admin" || name === "admin") && row.scope_type === null) return true;
+  }
+  return false;
+}
+
+/**
+ * has_permission_for for the two DELETE keys. Scope is the grant's or the
+ * role assignment's: null is global, program must match, team and event do not.
+ */
+async function hasDeletePermissionForProgram(
+  supabase: SupabaseClient,
+  userId: string,
+  programId: string
+): Promise<boolean> {
+  if (!(await accountIsActive(supabase, userId))) return false;
+
+  const direct = await supabase
+    .from("user_permissions")
+    .select("scope_type, scope_id, permissions!inner(key)")
+    .eq("user_id", userId)
+    .in("permissions.key", [...DELETE_PERMISSION_KEYS]);
+  if (direct.error) return false;
+
+  for (const row of direct.data ?? []) {
+    if (!isDeletePermission(permissionKey(row.permissions))) continue;
+    if (scopeCoversProgram(row.scope_type, row.scope_id, programId)) return true;
+  }
+
+  const roles = await supabase
+    .from("user_roles")
+    .select("role_id, scope_type, scope_id")
+    .eq("user_id", userId);
+  if (roles.error) return false;
+  const roleIds = (roles.data ?? [])
+    .filter((row) => scopeCoversProgram(row.scope_type, row.scope_id, programId))
+    .map((row) => row.role_id)
+    .filter((id): id is string => typeof id === "string" && id.length > 0);
+  if (roleIds.length === 0) return false;
+
+  const bundle = await supabase
+    .from("role_permissions")
+    .select("permissions!inner(key)")
+    .in("role_id", roleIds)
+    .in("permissions.key", [...DELETE_PERMISSION_KEYS]);
+  if (bundle.error) return false;
+
+  for (const row of bundle.data ?? []) {
+    if (isDeletePermission(permissionKey(row.permissions))) return true;
+  }
+  return false;
+}
+
+/**
+ * May this user permanently delete an application in this program?
+ * Sits on top of userCanManageProgram. #540 owns the expiry lookupFailed
+ * detail; until that lands, a thrown expiry read denies and an expired
+ * school without can_access_expired_applications denies.
+ */
+export async function userCanDeleteApplication(
+  supabase: SupabaseClient,
+  userId: string,
+  programId: string
+): Promise<boolean> {
+  let expiry;
+  try {
+    expiry = await getApplicationExpiry(supabase, programId);
+  } catch {
+    return false;
+  }
+  if (expiry.expired && !expiry.canAccess) return false;
+
+  if (await hasUnscopedAdminRole(supabase, userId)) return true;
+  return hasDeletePermissionForProgram(supabase, userId, programId);
+}
+
+/** True only when every program passes userCanManageProgram. */
 export async function userCanManageEveryProgram(
   supabase: SupabaseClient,
   userId: string,
@@ -147,9 +270,64 @@ export async function userCanManageEveryProgram(
 ): Promise<boolean> {
   if (programIds.length === 0) return false;
   for (const programId of programIds) {
-    if (!(await userCanManageApplications(supabase, userId, programId))) return false;
+    if (!(await userCanManageProgram(supabase, userId, programId))) return false;
   }
   return true;
+}
+
+/**
+ * Programs this user may manage, for a list that has no program id of its own.
+ * `{ all: true }` is an unscoped manager (userCanManageApplications with no
+ * program). Otherwise only programs where userCanManageProgram is true:
+ * a program-scoped schools.manage / approve_applications / manage_enrollments
+ * grant, a program_leader role scoped to that program, or a program_leaders
+ * row. A schools key outside that set does not qualify. Null is a lookup error.
+ */
+export async function manageablePrograms(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<{ all: true } | { all: false; ids: string[] } | null> {
+  if (!(await accountIsActive(supabase, userId))) return { all: false, ids: [] };
+  if (await userCanManageApplications(supabase, userId)) return { all: true };
+
+  const [roles, perms, leaders] = await Promise.all([
+    supabase
+      .from("user_roles")
+      .select("scope_type, scope_id, roles!inner(name)")
+      .eq("user_id", userId)
+      .eq("roles.name", "program_leader"),
+    supabase
+      .from("user_permissions")
+      .select("scope_type, scope_id, permissions!inner(key)")
+      .eq("user_id", userId)
+      .eq("scope_type", "program")
+      .in("permissions.key", [...SCHOOLS_MANAGE_KEYS]),
+    supabase.from("program_leaders").select("program_id").eq("user_id", userId),
+  ]);
+  if (roles.error || perms.error || leaders.error) return null;
+
+  const ids = new Set<string>();
+  for (const row of roles.data ?? []) {
+    if (row.scope_type === "program" && typeof row.scope_id === "string" && row.scope_id.length > 0) {
+      ids.add(row.scope_id);
+    }
+  }
+  for (const row of perms.data ?? []) {
+    const key = permissionKey(row.permissions);
+    if (!isManageKey(key)) continue;
+    if (row.scope_type === "program" && typeof row.scope_id === "string" && row.scope_id.length > 0) {
+      ids.add(row.scope_id);
+    }
+  }
+  for (const row of leaders.data ?? []) {
+    if (typeof row.program_id === "string" && row.program_id.length > 0) ids.add(row.program_id);
+  }
+
+  const confirmed: string[] = [];
+  for (const programId of ids) {
+    if (await userCanManageProgram(supabase, userId, programId)) confirmed.push(programId);
+  }
+  return { all: false, ids: confirmed };
 }
 
 /**

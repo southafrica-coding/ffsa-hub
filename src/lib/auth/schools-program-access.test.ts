@@ -108,6 +108,36 @@ describe("getAccessibleSchoolsProgramIds", () => {
     expect(await userHasSchoolsGrant(broken.client, "u", A)).toBe(false);
   });
 
+  it("treats only a null scope as an unscoped contact grant", async () => {
+    function grant(scopeType: string | null | undefined) {
+      return createFakeSupabase({
+        resolve: (q) => {
+          if (q.table === "users") return { data: { is_active: true } };
+          if (q.table === "user_permissions") {
+            return {
+              data: [
+                {
+                  scope_type: scopeType,
+                  scope_id: scopeType === "program" ? A : null,
+                  permissions: { key: "schools.assignable_as_contact" },
+                },
+              ],
+            };
+          }
+          return { data: [] };
+        },
+      }).client;
+    }
+    const open = grant(null);
+    expect(await canOpenSchools(open, "u", { programId: A })).toMatchObject({ open: true });
+    expect(await canOpenSchools(open, "u", { programId: B })).toMatchObject({ open: true });
+    const blank = grant("");
+    expect(await canOpenSchools(blank, "u", { programId: A })).toMatchObject({ open: false });
+    const missing = grant(undefined);
+    expect(await canOpenSchools(missing, "u", { programId: A })).toMatchObject({ open: false });
+    expect(await userHasSchoolsGrant(missing, "u", A)).toBe(false);
+  });
+
   it("lets an unscoped contact grant cover every program page without opening Training home", async () => {
     const db = client({
       roles: [],

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createFakeSupabase, type FakeQuery } from "@/lib/testing/fake-supabase";
+import { createFakeSupabase, filterValue, type FakeQuery } from "@/lib/testing/fake-supabase";
 
 const updateEnrollmentStatus = vi.hoisted(() => vi.fn(async () => ({ data: { id: "e" }, error: null })));
 const setEnrollmentRemoved = vi.hoisted(() => vi.fn(async () => ({ data: { id: "e" }, error: null })));
@@ -21,7 +21,11 @@ vi.mock("@/lib/supabase/admin", () => ({
         in(_col: string, ids: string[]) { selected.ids = ids; return q; },
         eq() { return q; },
         insert() { return Promise.resolve({ error: null }); },
-        single() { return Promise.resolve(payload()); },
+        single() {
+          const body = payload();
+          const row = Array.isArray(body.data) ? body.data[0] ?? null : body.data;
+          return Promise.resolve({ data: row, error: body.error });
+        },
         then(resolve: (v: unknown) => unknown) { return Promise.resolve(payload()).then(resolve); },
       };
       function payload() {
@@ -112,4 +116,62 @@ describe("enrollment roster gates", () => {
     expect(res.status).toBe(403);
     expect(updateEnrollmentStatus).not.toHaveBeenCalled();
   });
+});
+
+type Persona = "manage" | "approve" | "enrollments" | "leader-row" | "role";
+
+function persona(kind: Persona) {
+  const key =
+    kind === "manage"
+      ? "schools.manage"
+      : kind === "approve"
+        ? "schools.approve_applications"
+        : "schools.manage_enrollments";
+  state.user = createFakeSupabase({
+    user: { id: "u" },
+    resolve: (q: FakeQuery) => {
+      if (q.table === "users") return { data: { is_active: true } };
+      if (q.table === "user_roles" && kind === "role") {
+        return { data: [{ scope_type: "program", scope_id: A, roles: { name: "program_leader" } }] };
+      }
+      if (q.table === "user_permissions" && (kind === "manage" || kind === "approve" || kind === "enrollments")) {
+        if (q.filters.some((f) => f.op === "is" && f.args[0] === "scope_type")) return { data: [] };
+        const scopeId = filterValue(q, "eq", "scope_id");
+        if (scopeId && scopeId !== A) return { data: [] };
+        return { data: [{ scope_type: "program", scope_id: A, permissions: { key } }] };
+      }
+      if (q.table === "program_leaders" && kind === "leader-row") {
+        const programId = filterValue(q, "eq", "program_id");
+        if (programId && programId !== A) return { data: [] };
+        return { data: [{ id: "pl" }] };
+      }
+      return { data: [] };
+    },
+  }).client;
+}
+
+describe("scoped managers on their own enrollment", () => {
+  beforeEach(() => {
+    state.error = false;
+    state.rows = [
+      { id: "own", program_id: A, removed_at: "2026-01-01" },
+      { id: "other", program_id: B, removed_at: "2026-01-01" },
+    ];
+    updateEnrollmentStatus.mockClear();
+    setEnrollmentRemoved.mockClear();
+    deleteEnrollment.mockClear();
+  });
+
+  it.each(["manage", "approve", "enrollments", "leader-row", "role"] as Persona[])(
+    "lets a %s holder dismiss, remove, and delete in their program only",
+    async (kind) => {
+      persona(kind);
+      expect((await PUT(req("PUT", { id: "own", status: "dismissed" }))).status).toBe(200);
+      expect((await PUT(req("PUT", { id: "other", status: "dismissed" }))).status).toBe(403);
+      expect((await PATCH(req("PATCH", { id: "own", removed: true }))).status).toBe(200);
+      expect((await PATCH(req("PATCH", { id: "other", removed: true }))).status).toBe(403);
+      expect((await DELETE(req("DELETE", { id: "own" }))).status).toBe(200);
+      expect((await DELETE(req("DELETE", { id: "other" }))).status).toBe(403);
+    }
+  );
 });

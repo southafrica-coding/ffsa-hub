@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { userCanManageApplications } from "@/lib/auth/check-schools-access";
+import { userCanManageProgram } from "@/lib/auth/check-schools-access";
 import { fetchAssignableContacts } from "@/lib/auth/assignable-contacts";
 
 // Returns users eligible to be the point-of-contact for the given
@@ -24,7 +24,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "program_id is required" }, { status: 400 });
   }
 
-  const hasAccess = await userCanManageApplications(supabase, authUser.id, programId);
+  const hasAccess = await userCanManageProgram(supabase, authUser.id, programId);
   if (!hasAccess) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }

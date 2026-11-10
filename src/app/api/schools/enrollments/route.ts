@@ -208,6 +208,11 @@ export async function DELETE(request: Request) {
   return NextResponse.json({ success: true });
 }
 
+/**
+ * `id` is the enrollment the handler writes. `ids`, when the body sends it,
+ * is check-only: every id has to belong to a program this user manages, and
+ * a bad entry rejects the request. Nothing in `ids` is written.
+ */
 function targetIds(body: { id?: unknown; ids?: unknown }): string[] | null {
   const ids: string[] = [];
   if (typeof body.id === "string" && body.id.length > 0) ids.push(body.id);

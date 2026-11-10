@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createFakeSupabase, type FakeQuery } from "@/lib/testing/fake-supabase";
+import { createFakeSupabase, filterValue, type FakeQuery } from "@/lib/testing/fake-supabase";
 
 const fetchAssignableContacts = vi.hoisted(() => vi.fn(async () => []));
 
@@ -49,16 +49,42 @@ import { GET as workload } from "./staff-workload/route";
 const A = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const B = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 
-function signIn() {
+type Kind = "role" | "admin" | "manage" | "approve" | "enrollments" | "leader-row" | "view-only";
+
+function signIn(kind: Kind = state.scoped ? "role" : "admin") {
+  const key =
+    kind === "approve"
+      ? "schools.approve_applications"
+      : kind === "enrollments"
+        ? "schools.manage_enrollments"
+        : kind === "view-only"
+          ? "schools.assignable_as_contact"
+          : "schools.manage";
   state.user = createFakeSupabase({
     user: { id: "u" },
     resolve: (q: FakeQuery) => {
       if (q.table === "users") return { data: { is_active: state.active } };
       if (q.table === "user_roles") {
-        if (!state.scoped) {
+        if (kind === "admin") {
           return { data: [{ scope_type: null, scope_id: null, roles: { name: "admin" } }] };
         }
-        return { data: [{ scope_type: "program", scope_id: A, role_id: "pl", roles: { name: "program_leader" } }] };
+        if (kind === "role") {
+          return { data: [{ scope_type: "program", scope_id: A, role_id: "pl", roles: { name: "program_leader" } }] };
+        }
+        return { data: [] };
+      }
+      if (q.table === "user_permissions" && (kind === "manage" || kind === "approve" || kind === "enrollments" || kind === "view-only")) {
+        if (q.filters.some((f) => f.op === "is" && f.args[0] === "scope_type")) return { data: [] };
+        const scopeId = filterValue(q, "eq", "scope_id");
+        if (scopeId && scopeId !== A) return { data: [] };
+        const wanted = filterValue(q, "in", "permissions.key") as string[] | undefined;
+        if (wanted && !wanted.includes(key)) return { data: [] };
+        return { data: [{ scope_type: "program", scope_id: A, permissions: { key } }] };
+      }
+      if (q.table === "program_leaders" && kind === "leader-row") {
+        const programId = filterValue(q, "eq", "program_id");
+        if (programId && programId !== A) return { data: [] };
+        return { data: [{ program_id: A }] };
       }
       if (q.table === "role_permissions") {
         return { data: [{ role_id: "pl", permissions: { module: "schools", key: "schools.manage" } }] };
@@ -104,6 +130,30 @@ describe("staff routes stay inside the caller's programs", () => {
     const open = await workload();
     const openBody = await open.json();
     expect(openBody.workload.map((row: { user: { id: string } }) => row.user.id).sort()).toEqual(["s1", "s2"]);
+  });
+
+  it.each(["manage", "approve", "enrollments", "leader-row", "role"] as const)(
+    "lets a %s holder open the picker for their program only",
+    async (kind) => {
+      signIn(kind);
+      expect((await pickable(new Request(`http://localhost/api/schools/staff-pickable?program_id=${A}`))).status).toBe(200);
+      fetchAssignableContacts.mockClear();
+      expect((await pickable(new Request(`http://localhost/api/schools/staff-pickable?program_id=${B}`))).status).toBe(403);
+      expect(fetchAssignableContacts).not.toHaveBeenCalled();
+    }
+  );
+
+  it("shows workload only for programs userCanManageProgram allows", async () => {
+    signIn("manage");
+    const scoped = await workload();
+    expect((await scoped.json()).workload.map((row: { user: { id: string } }) => row.user.id)).toEqual(["s1"]);
+
+    signIn("leader-row");
+    const named = await workload();
+    expect((await named.json()).workload.map((row: { user: { id: string } }) => row.user.id)).toEqual(["s1"]);
+
+    signIn("view-only");
+    expect((await workload()).status).toBe(403);
   });
 
   it("refuses a deactivated leader and a failed workload read", async () => {

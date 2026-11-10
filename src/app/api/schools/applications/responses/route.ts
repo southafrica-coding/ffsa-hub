@@ -13,6 +13,7 @@ import {
 } from "@/services/schools";
 import {
   programIdsForTargets,
+  userCanDeleteApplication,
   userCanManageEveryProgram,
   userCanManageProgram,
 } from "@/lib/auth/check-schools-access";
@@ -982,7 +983,10 @@ export async function DELETE(request: Request) {
   if (!id || !ids) {
     return NextResponse.json({ error: "id is required" }, { status: 400 });
   }
-  const denied = await denyUnlessApplicationPrograms(supabase, user.id, ids);
+  // userCanManageProgram for every target, then userCanDeleteApplication on
+  // top. A program_leaders row or schools.manage_enrollments can manage the
+  // school and still be refused here.
+  const denied = await denyUnlessApplicationPrograms(supabase, user.id, ids, "delete");
   if (denied) return denied;
 
   if (!(await userCanReadApplication(supabase, id))) {
@@ -1036,6 +1040,11 @@ export async function DELETE(request: Request) {
   return NextResponse.json({ success: true });
 }
 
+/**
+ * `id` is the row the handler writes. `ids`, when the body sends it, is
+ * check-only: every id has to be a real application in a program this user
+ * manages, and a bad entry rejects the request. Nothing in `ids` is written.
+ */
 function applicationTargetIds(body: { id?: unknown; ids?: unknown }): string[] | null {
   const ids: string[] = [];
   if (typeof body.id === "string" && body.id.length > 0) ids.push(body.id);
@@ -1051,11 +1060,19 @@ function applicationTargetIds(body: { id?: unknown; ids?: unknown }): string[] |
 async function denyUnlessApplicationPrograms(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
-  ids: string[]
+  ids: string[],
+  mode: "manage" | "delete" = "manage"
 ) {
   const programs = await programIdsForTargets(createAdminClient(), "application_responses", ids);
   if (!programs || !(await userCanManageEveryProgram(supabase, userId, programs))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (mode === "delete") {
+    for (const programId of new Set(programs)) {
+      if (!(await userCanDeleteApplication(supabase, userId, programId))) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+    }
   }
   return null;
 }
