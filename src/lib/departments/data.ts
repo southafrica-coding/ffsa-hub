@@ -148,6 +148,19 @@ export function listDepartmentHomes(viewer: AccessViewer = getDepartmentViewer()
   return MINISTRY_HOMES.map((home) => toSummary(home, viewer));
 }
 
+/**
+ * Homes this viewer can open.
+ * An active member sees the homes they belong to. Leadership Team and an
+ * unscoped admin see every home. A finance reader can open every home, and
+ * the ones without detail are already marked `budgetOnly` on the summary.
+ * An empty list is a 404 on `/departments`.
+ */
+export function listDepartmentsForViewer(viewer: AccessViewer): DepartmentSummary[] {
+  return listDepartmentHomes(viewer).filter(
+    (home) => home.active && canOpenDepartment(home.access)
+  );
+}
+
 function toSummary(home: MinistryRecord, viewer: AccessViewer): DepartmentSummary {
   const access = getDepartmentAccess(viewer, home.slug);
   return {
