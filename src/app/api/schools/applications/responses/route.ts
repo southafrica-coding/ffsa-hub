@@ -20,6 +20,8 @@ import { resolveProgramEmail } from "@/lib/email/render-program-email";
 import { sendReferenceInvite } from "@/lib/email/send-reference-invite";
 import { sendReferenceReminder } from "@/lib/email/send-reference-reminder";
 import { referenceSendConfirmed } from "@/lib/email/reference-email";
+import { gateManualReminder } from "@/lib/references/manual-reminder";
+import { previewWritesDisabled } from "@/lib/preview-writes";
 import { syncApplicantToContact } from "@/lib/applications/sync-contact";
 import { applicationRejectedEmailHtml } from "@/lib/email/templates/application-rejected";
 import { applicationWaitlistedEmailHtml } from "@/lib/email/templates/application-waitlisted";
@@ -630,6 +632,111 @@ async function sendStatusEmail(
 }
 
 // ── PATCH: Reference reminder ──
+const REFERENCE_REMINDER_SELECT =
+  "id, status, reminder_sent_at, referee_email, referee_name, token, application_id, reference_slots(label), application_responses(id, program_id, applicant_info, applicant_email, user_id, users!application_responses_user_id_fkey(first_name, last_name), programs(name))";
+
+type ReminderApplication = {
+  id?: string;
+  program_id?: string | null;
+  applicant_info?: { first_name?: string | null; last_name?: string | null } | null;
+  users?: { first_name?: string | null; last_name?: string | null } | null;
+  programs?: { name?: string | null } | null;
+};
+
+type ReminderRequestRow = {
+  id: string;
+  status: string;
+  reminder_sent_at?: string | null;
+  referee_email: string;
+  referee_name: string;
+  token: string;
+  reference_slots?: { label?: string | null } | null;
+  application_responses?: ReminderApplication | null;
+};
+
+function reminderApplicantName(app: ReminderApplication | null | undefined): string {
+  const fromUser = app?.users
+    ? [app.users.first_name, app.users.last_name].filter(Boolean).join(" ")
+    : "";
+  const fromInfo = [app?.applicant_info?.first_name, app?.applicant_info?.last_name]
+    .filter(Boolean)
+    .join(" ");
+  return fromUser || fromInfo || "An applicant";
+}
+
+function reminderGateResponse(gate: Exclude<ReturnType<typeof gateManualReminder>, { ok: true }>) {
+  const headers = gate.retryAfterSeconds
+    ? { "Retry-After": String(gate.retryAfterSeconds) }
+    : undefined;
+  return NextResponse.json(
+    {
+      error: gate.error,
+      retry_after_seconds: gate.retryAfterSeconds,
+      next_allowed_at: gate.nextAllowedAt,
+    },
+    { status: gate.status, headers }
+  );
+}
+
+async function authorizeReferenceReminder(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  applicationId: string | null | undefined,
+  programId: string | null | undefined
+) {
+  if (!applicationId || !(await userCanReadApplication(supabase, applicationId))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!programId || !(await userCanManageProgram(supabase, userId, programId))) {
+    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  }
+  return null;
+}
+
+/**
+ * Send the existing reference-reminder email and stamp reminder_sent_at,
+ * the same column the daily cron writes. Returns a response when the
+ * reference cannot be reminded, or the send result when it can.
+ */
+async function deliverReferenceReminder(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+  ref: ReminderRequestRow
+): Promise<
+  | NextResponse
+  | { emailed: boolean; skipped?: boolean; reminder_sent_at?: string }
+> {
+  const gate = gateManualReminder({
+    status: ref.status,
+    reminderSentAt: ref.reminder_sent_at,
+    preview: previewWritesDisabled(),
+  });
+  if (!gate.ok) return reminderGateResponse(gate);
+
+  const app = ref.application_responses;
+  const sent = await sendReferenceReminder({
+    toEmail: ref.referee_email,
+    refereeName: ref.referee_name,
+    applicantName: reminderApplicantName(app),
+    programName: app?.programs?.name ?? "School Program",
+    slotLabel: ref.reference_slots?.label ?? "Reference",
+    token: ref.token,
+    programId: app?.program_id ?? null,
+    referenceRequestId: ref.id,
+  });
+
+  if (!sent.ok && sent.error === "disabled") {
+    return { emailed: false, skipped: true };
+  }
+
+  const emailed = referenceSendConfirmed(sent);
+  if (!emailed) return { emailed: false };
+
+  const reminder_sent_at = new Date().toISOString();
+  await admin.from("reference_requests").update({ reminder_sent_at }).eq("id", ref.id);
+  return { emailed: true, reminder_sent_at };
+}
+
 export async function PATCH(request: Request) {
   const supabase = await createClient();
   const {
@@ -641,7 +748,7 @@ export async function PATCH(request: Request) {
   }
 
   const body = await request.json();
-  const { action, reference_request_id, id } = body;
+  const { action, reference_request_id, id, application_id } = body;
 
   // ── Archive / restore an application (reversible "remove") ──
   if (action === "archive" || action === "restore") {
@@ -685,53 +792,125 @@ export async function PATCH(request: Request) {
 
     const { data: refReq } = await (adminSupabase as any)
       .from("reference_requests")
-      .select("*, reference_slots(label), application_responses(id, applicant_info, applicant_email, user_id, program_id, users!application_responses_user_id_fkey(first_name, last_name), programs(name))")
+      .select(REFERENCE_REMINDER_SELECT)
       .eq("id", reference_request_id)
       .single();
 
-    if (!refReq || refReq.status === "submitted") {
+    if (!refReq) {
+      return NextResponse.json({ error: "Reference request not found" }, { status: 404 });
+    }
+
+    const app = refReq.application_responses as ReminderApplication | null;
+    const denied = await authorizeReferenceReminder(
+      supabase,
+      user.id,
+      app?.id,
+      app?.program_id
+    );
+    if (denied) return denied;
+
+    const result = await deliverReferenceReminder(adminSupabase, refReq as ReminderRequestRow);
+    if (result instanceof NextResponse) return result;
+    return NextResponse.json({
+      success: true,
+      emailed: result.emailed,
+      skipped: result.skipped ?? false,
+      reminder_sent_at: result.reminder_sent_at ?? null,
+    });
+  }
+
+  if (action === "send_outstanding_reference_reminders" && application_id) {
+    const adminSupabase = createAdminClient();
+    const { data: app } = await (adminSupabase as any)
+      .from("application_responses")
+      .select(
+        "id, program_id, applicant_info, applicant_email, user_id, users!application_responses_user_id_fkey(first_name, last_name), programs(name)"
+      )
+      .eq("id", application_id)
+      .single();
+
+    if (!app?.id) {
+      return NextResponse.json({ error: "Application not found" }, { status: 404 });
+    }
+
+    const denied = await authorizeReferenceReminder(
+      supabase,
+      user.id,
+      app.id,
+      app.program_id
+    );
+    if (denied) return denied;
+
+    // Stop before any send or stamp. Preview shares the live database.
+    const previewGate = gateManualReminder({
+      status: "pending",
+      reminderSentAt: null,
+      preview: previewWritesDisabled(),
+    });
+    if (!previewGate.ok) return reminderGateResponse(previewGate);
+
+    const { data: refs, error: refsError } = await (adminSupabase as any)
+      .from("reference_requests")
+      .select(REFERENCE_REMINDER_SELECT)
+      .eq("application_id", application_id);
+
+    if (refsError) {
+      return NextResponse.json({ error: refsError.message }, { status: 500 });
+    }
+
+    const outstanding = ((refs ?? []) as ReminderRequestRow[]).filter(
+      (ref) => ref.status !== "submitted"
+    );
+    if (outstanding.length === 0) {
       return NextResponse.json(
-        { error: refReq ? "Reference already submitted" : "Reference request not found" },
-        { status: 400 }
+        { error: "Every reference on this application has already been submitted." },
+        { status: 409 }
       );
     }
 
-    const app = refReq.application_responses;
-    if (!app?.id || !(await userCanReadApplication(supabase, app.id))) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-    if (!(await userCanManageProgram(supabase, user.id, app.program_id))) {
-      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
-    }
-    const applicantName = app?.users
-      ? [app.users.first_name, app.users.last_name].filter(Boolean).join(" ")
-      : [app?.applicant_info?.first_name, app?.applicant_info?.last_name].filter(Boolean).join(" ") || "An applicant";
+    let emailed = 0;
+    let cooled = 0;
+    let soonestSeconds: number | null = null;
+    let soonestError = "A reminder was sent recently.";
+    let disabled = false;
 
-    const reminderProgramName = app?.programs?.name ?? "School Program";
-    const sent = await sendReferenceReminder({
-      toEmail: refReq.referee_email,
-      refereeName: refReq.referee_name,
-      applicantName,
-      programName: reminderProgramName,
-      slotLabel: refReq.reference_slots?.label ?? "Reference",
-      token: refReq.token,
-      programId: app?.program_id ?? null,
-      referenceRequestId: refReq.id,
+    for (const ref of outstanding) {
+      const row: ReminderRequestRow = {
+        ...ref,
+        application_responses: app as ReminderApplication,
+      };
+      const result = await deliverReferenceReminder(adminSupabase, row);
+      if (result instanceof NextResponse) {
+        const body = await result.json();
+        if (result.status === 429) {
+          cooled += 1;
+          const seconds = typeof body.retry_after_seconds === "number" ? body.retry_after_seconds : null;
+          if (seconds !== null && (soonestSeconds === null || seconds < soonestSeconds)) {
+            soonestSeconds = seconds;
+            soonestError = typeof body.error === "string" ? body.error : soonestError;
+          }
+          continue;
+        }
+        if (emailed === 0 && cooled === 0) return NextResponse.json(body, { status: result.status });
+        continue;
+      }
+      if (result.skipped) disabled = true;
+      if (result.emailed) emailed += 1;
+    }
+
+    if (emailed === 0 && cooled > 0 && !disabled) {
+      return NextResponse.json(
+        { error: soonestError, retry_after_seconds: soonestSeconds },
+        { status: 429, headers: soonestSeconds ? { "Retry-After": String(soonestSeconds) } : undefined }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      emailed,
+      skipped: cooled,
+      skipped_disabled: disabled && emailed === 0,
     });
-
-    if (!sent.ok && sent.error === "disabled") {
-      return NextResponse.json({ success: true, skipped: true, emailed: false });
-    }
-
-    const emailed = referenceSendConfirmed(sent);
-    if (emailed) {
-      await (adminSupabase as any)
-        .from("reference_requests")
-        .update({ reminder_sent_at: new Date().toISOString() })
-        .eq("id", reference_request_id);
-    }
-
-    return NextResponse.json({ success: true, emailed });
   }
 
   return NextResponse.json({ error: "Invalid action" }, { status: 400 });

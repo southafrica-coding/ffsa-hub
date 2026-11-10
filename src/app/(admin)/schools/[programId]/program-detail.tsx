@@ -3,6 +3,7 @@
 import type { ApplicationExpiry } from "@/lib/auth/application-expiry";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { type TreeQuestion } from "@/components/admin/question-tree";
 import { ReferenceQuestionsBuilder } from "./reference-questions-builder";
 import { ProgramCoursesManager, type PhaseCourse } from "./program-courses-manager";
@@ -56,12 +57,17 @@ import {
   PIPELINE_STAGE_LABEL,
   PIPELINE_STAGE_ORDER,
   PIPELINE_TABS,
+  decisionChoices,
+  decisionSelectValue,
   derivePipelineStage,
   interviewOutcomeBadge,
+  statusToPersist,
+  statusWrittenByDecision,
   type DecisiveInterviewOutcome,
   type InterviewReviewFact,
   type ReferenceRequestFact,
 } from "@/lib/schools/applicant-pipeline-stage";
+import { LastReminderSent } from "@/lib/references/last-reminder-sent";
 import { FormBuilder, FormPreview } from "./form-builder";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
@@ -218,6 +224,7 @@ type ReferenceRequest = {
   known_duration: string | null;
   reference_text: string | null;
   submitted_at: string | null;
+  reminder_sent_at?: string | null;
   form_data: Record<string, any> | null;
   reference_slots: { label: string; description: string | null } | null;
   email_problem?: "bounced" | "not_sent" | null;
@@ -2317,7 +2324,7 @@ function ApplicantsTab({
   }
 
   async function handleBulkStatusUpdate() {
-    if (selectedIds.size === 0 || !bulkStatus) return;
+    if (selectedIds.size === 0 || !statusWrittenByDecision(bulkStatus)) return;
     setBulkLoading(true);
     try {
       const res = await fetch("/api/schools/applications/responses", {
@@ -2367,6 +2374,26 @@ function ApplicantsTab({
   }
 
   // ── Reference Reminder ──
+  function reminderToast(data: {
+    skipped?: boolean;
+    emailed?: boolean;
+    error?: string;
+  }, ok: boolean) {
+    if (!ok) {
+      toast.error(data.error || "Could not send the reminder");
+      return;
+    }
+    if (data.skipped) {
+      toast.error("This program has reference reminders switched off.");
+      return;
+    }
+    if (data.emailed) {
+      toast.success("Reminder sent");
+      return;
+    }
+    toast.error("The reminder was not sent. Check the address and try again.");
+  }
+
   async function handleSendReminder(refRequestId: string) {
     setSendingReminder(refRequestId);
     try {
@@ -2378,22 +2405,51 @@ function ApplicantsTab({
           reference_request_id: refRequestId,
         }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        alert(
-          data.skipped
-            ? "This program has reference reminders switched off."
-            : data.emailed
-              ? "Reminder sent!"
-              : "The reminder was not sent. Check the address and try again."
-        );
-        fetchReferences(reviewingResponse!.id);
-      } else {
-        const data = await res.json();
-        alert(data.error || "Failed to send reminder");
+      const data = await res.json().catch(() => ({}));
+      reminderToast(data, res.ok);
+      if (res.ok && reviewingResponse) {
+        fetchReferences(reviewingResponse.id);
+        router.refresh();
       }
     } catch {
-      alert("Failed to send reminder");
+      toast.error("Could not send the reminder");
+    } finally {
+      setSendingReminder(null);
+    }
+  }
+
+  async function handleRemindOutstanding() {
+    if (!reviewingResponse) return;
+    setSendingReminder("all");
+    try {
+      const res = await fetch("/api/schools/applications/responses", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "send_outstanding_reference_reminders",
+          application_id: reviewingResponse.id,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || "Could not send reminders");
+        return;
+      }
+      if (data.skipped_disabled) {
+        toast.error("This program has reference reminders switched off.");
+      } else if ((data.emailed ?? 0) === 0) {
+        toast.error("No reminders were sent.");
+      } else if ((data.skipped ?? 0) > 0) {
+        toast.success(
+          `Sent ${data.emailed} reminder${data.emailed === 1 ? "" : "s"}. ${data.skipped} already had one in the last 24 hours.`
+        );
+      } else {
+        toast.success(data.emailed === 1 ? "Reminder sent" : `Sent ${data.emailed} reminders`);
+      }
+      fetchReferences(reviewingResponse.id);
+      router.refresh();
+    } catch {
+      toast.error("Could not send reminders");
     } finally {
       setSendingReminder(null);
     }
@@ -2465,8 +2521,17 @@ function ApplicantsTab({
   /** `statusOverride` lets the 14c decision bar decide without waiting for the
    *  status select's state to settle. */
   async function handleReviewSave(statusOverride?: string) {
-    const nextStatus = statusOverride ?? reviewStatus;
-    if (!reviewingResponse || !nextStatus) return;
+    if (!reviewingResponse) return;
+    const nextStatus = statusToPersist(
+      statusOverride ?? reviewStatus,
+      reviewingResponse.status
+    );
+    if (!nextStatus) {
+      toast.error(
+        "Interview complete comes from the interview outcome. It is not a status you can save."
+      );
+      return;
+    }
     const draft = interviewDraft.current;
     const interviewDirty =
       draft.notes.trim() !== draft.baselineNotes.trim() ||
@@ -2760,22 +2825,20 @@ function ApplicantsTab({
 
       {/* Bulk Actions Bar */}
       {!isRemovedView && selectedIds.size > 0 && (
-        <div className="border border-ink bg-bone p-3 flex items-center gap-3">
+        <div className="border border-ink bg-bone p-3 flex flex-wrap items-center gap-3">
           <span className="text-sm font-medium">
             {selectedIds.size} selected
           </span>
           <Select value={bulkStatus} onValueChange={setBulkStatus}>
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-full sm:w-[240px]">
               <SelectValue placeholder="Set status..." />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="waiting_for_references">Waiting for References</SelectItem>
-              <SelectItem value="references_received">References Received</SelectItem>
-              <SelectItem value="interview_scheduled">Interview Scheduled</SelectItem>
-              <SelectItem value="accepted">Accepted</SelectItem>
-              <SelectItem value="rejected">Rejected</SelectItem>
-              <SelectItem value="waitlisted">Waitlisted</SelectItem>
-              <SelectItem value="cancelled">Cancelled</SelectItem>
+              {decisionChoices().map((choice) => (
+                <SelectItem key={choice.value} value={choice.value} disabled={!choice.settable}>
+                  {choice.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Button
@@ -2963,7 +3026,7 @@ function ApplicantsTab({
                           onClick={() => {
                             const note = resp.admin_notes ?? "";
                             setReviewingResponse(resp);
-                            setReviewStatus(resp.status);
+                            setReviewStatus(decisionSelectValue(resp.status));
                             setReviewNotes(note);
                             setSavedNotes(note);
                             setNoteFeedback(null);
@@ -3197,7 +3260,26 @@ function ApplicantsTab({
           {/* References */}
           {referenceSlots.length > 0 && (
             <div className="space-y-3">
-              <h4 className="text-sm font-medium">References</h4>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <h4 className="text-sm font-medium">References</h4>
+                {reviewReferences.some((ref) => ref.status !== "submitted") && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-11 w-full gap-1.5 sm:h-9 sm:w-auto"
+                    disabled={sendingReminder !== null}
+                    onClick={handleRemindOutstanding}
+                  >
+                    {sendingReminder === "all" ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Send className="h-3.5 w-3.5" />
+                    )}
+                    Remind all outstanding
+                  </Button>
+                )}
+              </div>
               {!refsLoading &&
                 referenceSlots.some(
                   (slot) =>
@@ -3255,14 +3337,19 @@ function ApplicantsTab({
                 <div className="space-y-3">
                   {reviewReferences.map((ref) => (
                     <div key={ref.id} className="border bg-muted/50 p-3 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div>
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
                           <p className="text-sm font-medium">
                             {ref.reference_slots?.label ?? "Reference"}
                           </p>
-                          <p className="text-xs text-muted-foreground">
+                          <p className="text-xs text-muted-foreground break-all">
                             {ref.referee_name} · {ref.referee_email}
                           </p>
+                          {ref.status !== "submitted" && (
+                            <div className="mt-1">
+                              <LastReminderSent sentAt={ref.reminder_sent_at ?? null} />
+                            </div>
+                          )}
                           {ref.status !== "submitted" && ref.email_problem === "bounced" && (
                             <p className="mt-1 text-xs text-destructive" role="status">
                               {REFERENCE_BOUNCE_MESSAGE}
@@ -3274,12 +3361,12 @@ function ApplicantsTab({
                             </p>
                           )}
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           {ref.status !== "submitted" && editingRefId !== ref.id && (
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="text-xs gap-1"
+                              className="h-11 text-xs gap-1 sm:h-8"
                               onClick={() => startEditReference(ref)}
                               title="Change reference name or email"
                             >
@@ -3289,10 +3376,11 @@ function ApplicantsTab({
                           )}
                           {ref.status !== "submitted" && (
                             <Button
-                              variant="ghost"
+                              type="button"
+                              variant="outline"
                               size="sm"
-                              className="text-xs gap-1"
-                              disabled={sendingReminder === ref.id}
+                              className="h-11 text-xs gap-1 sm:h-8"
+                              disabled={sendingReminder !== null}
                               onClick={() => handleSendReminder(ref.id)}
                               title="Send reminder email"
                             >
@@ -3524,28 +3612,46 @@ function ApplicantsTab({
           </div>
 
 
-          {/* Status Update */}
-          <div className="flex items-center gap-4 pt-2">
-            <Label>Decision:</Label>
-            <Select value={reviewStatus} onValueChange={setReviewStatus}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="submitted">Submitted</SelectItem>
-                <SelectItem value="waiting_for_references">Waiting for References</SelectItem>
-                <SelectItem value="references_received">References Received</SelectItem>
-                <SelectItem value="interview_scheduled">Interview Scheduled</SelectItem>
-                <SelectItem value="accepted">Accepted</SelectItem>
-                <SelectItem value="rejected">Rejected</SelectItem>
-                <SelectItem value="waitlisted">Waitlisted</SelectItem>
-                <SelectItem value="cancelled">Cancelled</SelectItem>
-              </SelectContent>
-            </Select>
+          {/* Status Update. Options are the pipeline stages. */}
+          <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-end">
+            <div className="min-w-0 flex-1 space-y-1.5">
+              <Label htmlFor="applicant-decision">Decision</Label>
+              <Select
+                value={decisionSelectValue(reviewStatus)}
+                onValueChange={(value) => {
+                  if (statusWrittenByDecision(value)) setReviewStatus(value);
+                }}
+              >
+                <SelectTrigger id="applicant-decision" className="w-full sm:max-w-[280px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {decisionChoices().map((choice) => (
+                    <SelectItem key={choice.value} value={choice.value} disabled={!choice.settable}>
+                      {choice.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {stageOf(reviewingResponse) === "interview_complete" && (
+                <p className="text-xs text-muted-foreground">
+                  Interview complete comes from the interview outcome. It is not a status you set here.
+                </p>
+              )}
+            </div>
             <Button
               onClick={() => handleReviewSave()}
-              disabled={reviewLoading || (reviewStatus === reviewingResponse.status && (reviewNotes.trim() || "") === (reviewingResponse.admin_notes || ""))}
+              disabled={
+                reviewLoading ||
+                (statusToPersist(reviewStatus, reviewingResponse.status) ===
+                  statusToPersist(
+                    decisionSelectValue(reviewingResponse.status),
+                    reviewingResponse.status
+                  ) &&
+                  (reviewNotes.trim() || "") === (reviewingResponse.admin_notes || ""))
+              }
               size="sm"
+              className="h-11 w-full sm:h-9 sm:w-auto"
             >
               {reviewLoading ? "Saving..." : "Save Decision"}
             </Button>
