@@ -138,7 +138,7 @@ export default function LoginPage() {
           </span>
 
           {/* The screen's only yellow: the masthead tick rule. */}
-          <div className="masthead-context">Sign in to your account</div>
+          <div className="text-eyebrow">Sign in to your account</div>
           <h1 className="page-title">Sign in</h1>
 
           <form onSubmit={handleLogin} className="mt-9 space-y-6">

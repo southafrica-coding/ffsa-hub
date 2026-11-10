@@ -12,6 +12,10 @@ describe("buildShellNav", () => {
         expect(hrefs.has(mod.href)).toBe(false);
         continue;
       }
+      if (mod.id === "dashboard") {
+        expect(hrefs.has("/home")).toBe(true);
+        continue;
+      }
       expect(hrefs.has(mod.href), mod.id).toBe(true);
     }
     expect(hrefs.has("/my-schools")).toBe(true);
@@ -28,6 +32,6 @@ describe("buildShellNav", () => {
     expect(labels).toContain("Home");
     expect(labels).not.toContain("Users");
     expect(labels).not.toContain("Contacts");
-    expect(labels).not.toContain("Hire gear");
+    expect(labels).toContain("Hire gear");
   });
 });

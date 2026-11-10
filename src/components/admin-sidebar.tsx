@@ -21,9 +21,6 @@ interface AdminSidebarProps {
   departments?: { id: string; label: string; href: string }[];
 }
 
-const GROUP_KEY = "ffsa-sidebar-groups";
-const COLLAPSE_KEY = "ffsa-sidebar-collapsed";
-
 function SignOutForm({ className, children }: { className?: string; children: React.ReactNode }) {
   return (
     <form action="/auth/sign-out" method="post">
@@ -35,7 +32,6 @@ function SignOutForm({ className, children }: { className?: string; children: Re
 }
 
 function isActive(pathname: string, href: string) {
-  if (href === "/dashboard") return pathname === "/dashboard";
   return pathname === href || pathname.startsWith(href + "/");
 }
 
@@ -262,7 +258,10 @@ function SidebarBody({
           {collapsed ? null : <span>Me</span>}
         </button>
         {meOpen ? (
-          <div className="absolute bottom-12 left-2 z-10 w-52 rounded-lg border border-border bg-bg p-1 text-ink shadow-none">
+          <div
+            className="absolute bottom-12 left-2 z-10 w-52 rounded-lg border border-border p-1 shadow-none"
+            style={{ background: "var(--bg)", color: "var(--text)" }}
+          >
             {nav.me.map((item) => (
               <Link
                 key={item.id}
@@ -318,17 +317,6 @@ export function AdminSidebar({
   );
 
   useEffect(() => {
-    try {
-      const storedCollapse = window.localStorage.getItem(COLLAPSE_KEY);
-      if (storedCollapse === "0" || storedCollapse === "1") setCollapsed(storedCollapse === "1");
-      const stored = window.localStorage.getItem(GROUP_KEY);
-      if (stored) setGroupsOpen(JSON.parse(stored) as Record<string, boolean>);
-    } catch {
-      /* keep defaults */
-    }
-  }, []);
-
-  useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
@@ -342,24 +330,14 @@ export function AdminSidebar({
 
   function toggleGroup(id: string) {
     setGroupsOpen((current) => {
-      const next = { ...current, [id]: current[id] === false };
-      try {
-        window.localStorage.setItem(GROUP_KEY, JSON.stringify(next));
-      } catch {
-        /* ignore */
-      }
-      return next;
+      return { ...current, [id]: current[id] === false };
     });
   }
 
   function toggleCollapsed() {
     setCollapsed((current) => {
       const next = !current;
-      try {
-        window.localStorage.setItem(COLLAPSE_KEY, next ? "1" : "0");
-      } catch {
-        /* ignore */
-      }
+      document.cookie = `ffsa-sidebar=${next ? "1" : "0"}; path=/; max-age=31536000; samesite=lax`;
       return next;
     });
   }
@@ -381,7 +359,7 @@ export function AdminSidebar({
         data-shell-panel
         data-shell-sidebar
         className={cn(
-          "hidden h-screen shrink-0 flex-col bg-brand-black text-bg md:flex",
+          "hidden h-screen shrink-0 flex-col bg-brand-black text-bg transition-[width] duration-200 ease-out md:flex",
           collapsed ? "w-14" : "w-60"
         )}
       >

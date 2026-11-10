@@ -3,6 +3,7 @@ import {
   Car,
   Inbox,
   KeyRound,
+  LayoutDashboard,
   LayoutGrid,
   Package,
   type LucideIcon,
@@ -56,11 +57,11 @@ export function buildShellNav(
   ];
   const prayer = byId.get("prayer-room");
   if (prayer) services.push(fromModule(prayer, "Prayer room"));
+  services.push({ id: "hire-gear", label: "Hire gear", href: "/bookings/equipment", icon: Package });
   if (byId.has("bookings")) {
     services.push(
       { id: "book-space", label: "Book a space", href: "/bookings/spaces", icon: Building2 },
-      { id: "hire-vehicle", label: "Hire a vehicle", href: "/bookings/vehicles", icon: Car },
-      { id: "hire-gear", label: "Hire gear", href: "/bookings/equipment", icon: Package }
+      { id: "hire-vehicle", label: "Hire a vehicle", href: "/bookings/vehicles", icon: Car }
     );
   }
   const training = byId.get("schools");
@@ -92,8 +93,12 @@ export function buildShellNav(
     ? { id: "inbox", label: "Inbox", href: "/communications/inbox", icon: Inbox }
     : null;
 
-  const dashboard = byId.get("dashboard");
-  const home = dashboard ? fromModule(dashboard, "Home") : null;
+  const home: ShellLink = {
+    id: "home",
+    label: "Home",
+    href: "/home",
+    icon: byId.get("dashboard")?.icon ?? LayoutDashboard,
+  };
 
   const me = getVisiblePortalTabs().map((tab) => ({
     id: tab.id,

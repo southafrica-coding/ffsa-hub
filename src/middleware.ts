@@ -56,7 +56,6 @@ export async function middleware(request: NextRequest) {
     "/scan", // public door scanner (/scan/[token]) — the welcome team has no Hub account, which is the point
     "/vr", // public vehicle request form (/vr/[token]) — shipped in 342 but never listed here, so every outsider was bounced to /login
     "/hire", // public equipment-hire storefront (/hire, /hire/c/[slug], /hire/p/[slug]) — browsing needs no account
-    "/design-system", // review gallery for shared templates and the shell
     "/t", // public tag landing (/t/[tag]) — the QR on every equipment tag; staff are sent on to the register
     "/track-intent", // public FFX track-intent survey (/track-intent/[token], migration 222) — same gotcha as /vr above
     "/.well-known", // public app-link files (apple-app-site-association, assetlinks.json) — fetched by Apple / Google with no session
