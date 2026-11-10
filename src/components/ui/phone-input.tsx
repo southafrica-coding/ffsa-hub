@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { COUNTRIES, splitPhone } from "@/lib/profile/options";
-import { matchDial } from "./phone-country";
+import { formatStoredPhone, phoneEdit } from "./phone-country";
 
 const controlClass =
   "h-9 rounded-md border border-rule-strong bg-bg px-3 text-body text-ink placeholder:text-[color:var(--text-tertiary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link";
@@ -64,45 +64,18 @@ export function PhoneInput({
   );
 
   function emit(nextDial: string, nextNumber: string) {
-    const digits = nextNumber.replace(/\D/g, "");
-    if (!digits) {
-      onChange("");
-      return;
-    }
-    if (storage === "e164") {
-      onChange(`${nextDial}${digits}`);
-      return;
-    }
-    onChange(`${nextDial}${separator}${digits}`);
+    onChange(formatStoredPhone(nextDial, nextNumber, storage, separator));
   }
 
   function onNumber(raw: string) {
-    const compact = raw.replace(/\s/g, "");
-    const international = compact.startsWith("+")
-      ? compact.slice(1).replace(/\D/g, "")
-      : compact.startsWith("00")
-        ? compact.slice(2).replace(/\D/g, "")
-        : null;
-    if (international) {
-      const match = matchDial(international, COUNTRIES);
-      if (match) {
-        const rest = international.slice(match.dial.replace(/\D/g, "").length);
-        if (rest.length > 0) {
-          setIso(match.iso);
-          setNumber(rest);
-          emit(match.dial, rest);
-          return;
-        }
-      }
-      setNumber(raw);
-      return;
-    }
-    setNumber(raw);
-    emit(dial, raw);
+    const next = phoneEdit(raw, dial, COUNTRIES, storage, separator);
+    if (next.iso) setIso(next.iso);
+    setNumber(next.national);
+    onChange(next.stored);
   }
 
   return (
-    <div className={wrapperClassName} style={{ display: "flex", gap: 8, minWidth: 0 }}>
+    <div className={wrapperClassName}>
       <select
         aria-label="Country code"
         value={iso}
