@@ -1,18 +1,17 @@
 import { describe, expect, it } from "vitest";
-import type { DepartmentViewer } from "@/types/departments";
+import type { AccessViewer } from "./access";
 import {
   addIsoDays,
   saTodayIso,
   selectHomeDashboard,
   selectMyDepartments,
-  selectOkrCheckInsDue,
   selectRocksDue,
   selectServicesIUse,
 } from "./dashboard";
 import { getDepartmentViewer } from "./data";
-import { OKR_CHECK_INS, ROCKS } from "./mocks";
+import { ROCKS } from "./mocks";
 
-const nobody: DepartmentViewer = {
+const nobody: AccessViewer = {
   name: "Test viewer",
   isAdmin: false,
   roles: ["staff"],
@@ -24,8 +23,8 @@ const nobody: DepartmentViewer = {
 
 const row = (
   slug: string,
-  flags: Partial<Pick<DepartmentViewer["memberships"][number], "active" | "isLeader" | "isPointLeader">> = {}
-) => ({ slug, active: true, isLeader: false, isPointLeader: false, ...flags });
+  flags: Partial<Pick<AccessViewer["memberships"][number], "active" | "isLeader" | "isPointLeader">> = {}
+) => ({ slug, active: true, isLeader: false, isPointLeader: false, capacity: "member" as const, ...flags });
 
 describe("home dashboard selectors", () => {
   it("reads today in Africa/Johannesburg", () => {
@@ -43,7 +42,7 @@ describe("home dashboard selectors", () => {
   });
 
   it("drops excluded ministries from my departments", () => {
-    const viewer: DepartmentViewer = {
+    const viewer: AccessViewer = {
       ...nobody,
       memberships: [
         row("woven"),
@@ -63,13 +62,13 @@ describe("home dashboard selectors", () => {
   });
 
   it("keeps services the viewer uses and can open", () => {
-    const viewer: DepartmentViewer = {
+    const viewer: AccessViewer = {
       ...nobody,
       usedServiceIds: ["brand_kit", "prayer_room", "evangelism"],
     };
     expect(selectServicesIUse(viewer).map((service) => service.id)).toEqual(["prayer_room"]);
 
-    const allowed: DepartmentViewer = {
+    const allowed: AccessViewer = {
       ...viewer,
       permittedModules: ["evangelism", "brand-kit"],
     };
@@ -92,16 +91,8 @@ describe("home dashboard selectors", () => {
     );
   });
 
-  it("includes open check-ins inside the window", () => {
-    const slugs = new Set(["prayer_and_worship", "missio_ministry"]);
-    expect(selectOkrCheckInsDue(OKR_CHECK_INS, slugs, "2026-11-10").map((row) => row.id)).toEqual([
-      "mc-open",
-      "pw-open",
-    ]);
-  });
-
   it("builds a fixture viewer's home from the mocks on 10 Nov 2026", () => {
-    const viewer: DepartmentViewer = {
+    const viewer: AccessViewer = {
       name: "Test viewer",
       isAdmin: false,
       roles: ["staff"],
@@ -124,7 +115,7 @@ describe("home dashboard selectors", () => {
       "gear_hire",
     ]);
     expect(home.rocksDue).toHaveLength(3);
-    expect(home.okrCheckInsDue).toHaveLength(2);
+    expect(home.okrCheckInsDue).toEqual([]);
   });
 
   it("fail-closes the page viewer", () => {

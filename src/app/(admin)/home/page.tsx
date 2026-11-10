@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { selectHomeDashboard } from "@/lib/departments/dashboard";
-import { clusterLabel, getDepartmentViewer } from "@/lib/departments/data";
+import { clusterLabel, getDepartmentViewer, managingLabel } from "@/lib/departments/data";
 import { STAFF_LANGUAGE } from "@/lib/departments/mocks";
 import { requireSignedIn } from "@/lib/departments/session";
 import { formatDayRange } from "@/lib/format/sa-time";
@@ -53,7 +53,7 @@ export default async function HomePage() {
               key={service.id}
               href={service.href}
               title={service.name}
-              meta={service.managingLabel}
+              meta={managingLabel(service)}
             />
           ))}
           <p className="px-5 py-3 text-sm md:px-8">
@@ -83,19 +83,7 @@ export default async function HomePage() {
         <EmptyNote title="No OKR check-ins due">
           Check-ins for your departments show here when the current cycle still needs one.
         </EmptyNote>
-      ) : (
-        home.okrCheckInsDue.map((checkIn) => {
-          const department = home.departments.find((item) => item.slug === checkIn.departmentSlug);
-          return (
-            <StackLink
-              key={checkIn.id}
-              href={checkIn.href}
-              title={`${department?.name ?? "Ministry"} · ${checkIn.cycleName} check-in`}
-              meta={formatDayRange(checkIn.dueOn)}
-            />
-          );
-        })
-      )}
+      ) : null}
     </div>
   );
 }

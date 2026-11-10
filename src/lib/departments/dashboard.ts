@@ -1,14 +1,12 @@
+import type { AccessViewer } from "./access";
 import type {
   DepartmentSummary,
-  DepartmentViewer,
   HomeDashboard,
   HubService,
-  ListedService,
-  OkrCheckIn,
   Rock,
 } from "@/types/departments";
 import { filterServices, listDepartmentHomes, resolveDepartment } from "./data";
-import { OKR_CHECK_INS, ROCKS, SERVICES } from "./mocks";
+import { ROCKS, SERVICES } from "./mocks";
 
 /** Calendar date in Africa/Johannesburg, `YYYY-MM-DD`. */
 export function saTodayIso(now = new Date()): string {
@@ -31,7 +29,7 @@ export function addIsoDays(iso: string, days: number): string {
   return date.toISOString().slice(0, 10);
 }
 
-function mySlugs(viewer: DepartmentViewer): Set<string> {
+function mySlugs(viewer: AccessViewer): Set<string> {
   const slugs = new Set<string>();
   for (const membership of viewer.memberships) {
     if (!membership.active) continue;
@@ -43,8 +41,8 @@ function mySlugs(viewer: DepartmentViewer): Set<string> {
 
 /** Homes the viewer leads or serves on. Excluded ministries never appear. */
 export function selectMyDepartments(
-  viewer: DepartmentViewer,
-  homes: DepartmentSummary[] = listDepartmentHomes()
+  viewer: AccessViewer,
+  homes: DepartmentSummary[] = listDepartmentHomes(viewer)
 ): DepartmentSummary[] {
   const slugs = mySlugs(viewer);
   return homes.filter((home) => home.active && slugs.has(home.slug));
@@ -55,9 +53,9 @@ export function selectMyDepartments(
  * An empty used-list stays empty — access alone is not usage.
  */
 export function selectServicesIUse(
-  viewer: DepartmentViewer,
+  viewer: AccessViewer,
   services: HubService[] = SERVICES
-): ListedService[] {
+): HubService[] {
   const used = new Set(viewer.usedServiceIds);
   return filterServices(services, viewer).filter((service) => used.has(service.id));
 }
@@ -85,27 +83,9 @@ export function selectRocksDue(
     .sort((a, b) => a.dueOn.localeCompare(b.dueOn) || a.title.localeCompare(b.title));
 }
 
-/** Uncompleted check-ins in the viewer's departments, due within `withinDays`. */
-export function selectOkrCheckInsDue(
-  checkIns: OkrCheckIn[],
-  departmentSlugs: Set<string>,
-  today: string,
-  withinDays = 21
-): OkrCheckIn[] {
-  const horizon = addIsoDays(today, withinDays);
-  return checkIns
-    .filter(
-      (checkIn) =>
-        departmentSlugs.has(checkIn.departmentSlug) &&
-        !checkIn.completed &&
-        checkIn.dueOn <= horizon
-    )
-    .sort((a, b) => a.dueOn.localeCompare(b.dueOn));
-}
-
 /** Mock home payload. Replace this body with `GET /api/me/home`. */
 export function selectHomeDashboard(
-  viewer: DepartmentViewer,
+  viewer: AccessViewer,
   today = saTodayIso()
 ): HomeDashboard {
   const departments = selectMyDepartments(viewer);
@@ -114,6 +94,14 @@ export function selectHomeDashboard(
     departments,
     services: selectServicesIUse(viewer),
     rocksDue: selectRocksDue(ROCKS, slugs, today),
-    okrCheckInsDue: selectOkrCheckInsDue(OKR_CHECK_INS, slugs, today),
+    // The API contract types this as an empty tuple. Check-in rows are not on the payload.
+    okrCheckInsDue: [],
+    viewerMemberships: viewer.memberships
+      .filter((membership) => membership.active)
+      .map((membership) => ({
+        departmentSlug: membership.slug,
+        capacity: membership.isLeader || membership.isPointLeader ? "leader" : "member",
+        isPointLeader: membership.isPointLeader,
+      })),
   };
 }
