@@ -6,7 +6,12 @@ import {
   getDepartmentViewer,
   isDepartmentTab,
   resolveDepartment,
+  tabHref,
+  tabLabel,
+  viewerCanOpenModule,
+  visibleTabs,
 } from "@/lib/departments/data";
+import { ministryTools } from "@/lib/departments/mocks";
 import { requireSignedIn } from "@/lib/departments/session";
 import { DepartmentView } from "./department-view";
 
@@ -39,10 +44,13 @@ export default async function DepartmentPage({
   const model = getDepartmentPage(slug, viewer);
   if (!model) notFound();
 
+  const keys = visibleTabs(model);
   const tab =
-    isDepartmentTab(requested) && model.tabs.some((item) => item.key === requested)
-      ? requested
-      : (model.tabs[0]?.key ?? "overview");
+    isDepartmentTab(requested) && keys.includes(requested) ? requested : (keys[0] ?? "overview");
+  const tabs = keys.map((key) => ({ key, label: tabLabel(key), href: tabHref(model.department.slug, key) }));
+  const tools = model.access.canSeeDepartmentDetail
+    ? ministryTools(model.department.slug).filter((item) => viewerCanOpenModule(item.moduleId, viewer))
+    : [];
 
-  return <DepartmentView model={model} tab={tab} />;
+  return <DepartmentView model={model} tab={tab} tabs={tabs} tools={tools} />;
 }

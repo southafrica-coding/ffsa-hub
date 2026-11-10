@@ -5,20 +5,15 @@ import {
 } from "@/config/modules";
 import type {
   DepartmentHome,
-  DepartmentPageModel,
-  DepartmentServiceListing,
   DepartmentSummary,
-  DepartmentTab,
-  DepartmentTool,
-  DepartmentViewer,
   HubService,
-  ListedService,
   ServiceAudience,
   ServiceDepartmentRole,
   ServiceRunRole,
   SubMinistry,
+  ViewerMembership,
 } from "@/types/departments";
-import { canOpenDepartment, getDepartmentAccess } from "./access";
+import { canOpenDepartment, getDepartmentAccess, type AccessViewer } from "./access";
 import { DEPARTMENT_HOME_SLUGS, FOLDED_INTO, NON_HOME_SLUGS } from "./allow-list";
 import {
   BUDGETS,
@@ -36,6 +31,19 @@ const HOMES = new Set<string>(DEPARTMENT_HOME_SLUGS);
 const NON_HOMES = new Set<string>(NON_HOME_SLUGS);
 const RUN_ROLES = new Set<ServiceDepartmentRole>(["owner", "manager", "moderator"]);
 
+export type DepartmentTab =
+  | "overview"
+  | "people"
+  | "okrs"
+  | "rocks"
+  | "services"
+  | "budget"
+  | "tools";
+
+export function tabLabel(key: DepartmentTab): string {
+  return TAB_LABEL[key];
+}
+
 const TAB_LABEL: Record<DepartmentTab, string> = {
   overview: "Overview",
   people: "People",
@@ -50,7 +58,7 @@ const TAB_LABEL: Record<DepartmentTab, string> = {
  * Fail closed until the session is wired to `GET /api/me/home`.
  * No departments and no permissions. Tests build their own viewers.
  */
-export function getDepartmentViewer(): DepartmentViewer {
+export function getDepartmentViewer(): AccessViewer {
   return {
     name: "",
     isAdmin: false,
@@ -60,6 +68,16 @@ export function getDepartmentViewer(): DepartmentViewer {
     memberships: [],
     usedServiceIds: [],
   };
+}
+
+export function toViewerMemberships(viewer: AccessViewer): ViewerMembership[] {
+  return viewer.memberships
+    .filter((membership) => membership.active)
+    .map((membership) => ({
+      departmentSlug: membership.slug,
+      capacity: membership.isLeader || membership.isPointLeader ? "leader" : "member",
+      isPointLeader: membership.isPointLeader,
+    }));
 }
 
 export function clusterLabel(cluster: DepartmentSummary["cluster"]): string {
@@ -84,11 +102,14 @@ function homeBySlug(slug: string): MinistryRecord | undefined {
  * spellings and ministries that are folded or inactive.
  * Folds are not resolved here — call `foldTarget` first.
  */
-export function resolveDepartment(slug: string): DepartmentSummary | null {
+export function resolveDepartment(
+  slug: string,
+  viewer: AccessViewer = getDepartmentViewer()
+): DepartmentSummary | null {
   const key = exact(slug);
   if (!HOMES.has(key)) return null;
   const home = homeBySlug(key);
-  return home ? toSummary(home) : null;
+  return home ? toSummary(home, viewer) : null;
 }
 
 /**
@@ -123,11 +144,12 @@ export function isNonHomeSlug(slug: string): boolean {
   return NON_HOMES.has(exact(slug));
 }
 
-export function listDepartmentHomes(): DepartmentSummary[] {
-  return MINISTRY_HOMES.map(toSummary);
+export function listDepartmentHomes(viewer: AccessViewer = getDepartmentViewer()): DepartmentSummary[] {
+  return MINISTRY_HOMES.map((home) => toSummary(home, viewer));
 }
 
-function toSummary(home: MinistryRecord): DepartmentSummary {
+function toSummary(home: MinistryRecord, viewer: AccessViewer): DepartmentSummary {
+  const access = getDepartmentAccess(viewer, home.slug);
   return {
     slug: home.slug,
     name: home.name,
@@ -136,11 +158,13 @@ function toSummary(home: MinistryRecord): DepartmentSummary {
     purpose: home.purpose,
     memberCount: home.memberCount,
     active: home.active,
+    budgetOnly: access.canSeeBudget && !access.canSeeDepartmentDetail,
+    access,
   };
 }
 
 const AUDIENCE_LABEL: Record<ServiceAudience, string> = {
-  open_to_all: "Open to everyone",
+  all_signed_in: "Everyone signed in",
   point_leaders: "Point leaders",
   owners_only: "Departments that run it",
 };
@@ -189,7 +213,7 @@ export function managingLabel(service: HubService): string {
   return managing.length > 0 ? names : `Moderators: ${names}`;
 }
 
-export function viewerCanOpenModule(moduleId: string, viewer: DepartmentViewer): boolean {
+export function viewerCanOpenModule(moduleId: string, viewer: AccessViewer): boolean {
   const mod = [...ADMIN_MODULES, ...SYSTEM_MODULES].find((item) => item.id === moduleId);
   if (!mod) return false;
   const permitted = new Set(viewer.permittedModules);
@@ -203,27 +227,17 @@ export function viewerCanOpenModule(moduleId: string, viewer: DepartmentViewer):
  */
 export function filterServices(
   services: HubService[],
-  viewer: DepartmentViewer,
+  viewer: AccessViewer,
   evangelismRouteExists = true
-): ListedService[] {
-  return services
-    .filter((service) => {
-      if (service.moduleId === "evangelism" && !evangelismRouteExists) return false;
-      return viewerCanOpenModule(service.moduleId, viewer);
-    })
-    .map((service) => toListed(service, viewer));
+): HubService[] {
+  return services.filter((service) => {
+    if (service.moduleId === "evangelism" && !evangelismRouteExists) return false;
+    return viewerCanOpenModule(service.moduleId, viewer);
+  });
 }
 
-export function listServicesForViewer(viewer: DepartmentViewer): ListedService[] {
+export function listServicesForViewer(viewer: AccessViewer): HubService[] {
   return filterServices(SERVICES, viewer);
-}
-
-function toListed(service: HubService, viewer: DepartmentViewer): ListedService {
-  return {
-    ...service,
-    managingLabel: managingLabel(service),
-    canOpen: viewerCanOpenModule(service.moduleId, viewer),
-  };
 }
 
 function runRole(service: HubService, departmentSlug: string): ServiceRunRole | null {
@@ -240,36 +254,19 @@ function servicesRunFor(departmentSlug: string): { serviceId: string; role: Serv
   });
 }
 
-function servicesRunBy(departmentSlug: string, viewer: DepartmentViewer): DepartmentServiceListing[] {
-  return servicesRunFor(departmentSlug).flatMap((row) => {
-    const service = SERVICES.find((item) => item.id === row.serviceId);
-    return service ? [{ ...toListed(service, viewer), role: row.role }] : [];
-  });
+export function visibleTabs(home: DepartmentHome): DepartmentTab[] {
+  if (!home.access.canSeeDepartmentDetail) {
+    return home.access.canSeeBudget ? ["budget"] : [];
+  }
+  const tabs: DepartmentTab[] = ["overview", "people", "okrs", "rocks"];
+  if ((home.servicesRun?.length ?? 0) > 0) tabs.push("services");
+  if (home.access.canSeeBudget) tabs.push("budget");
+  tabs.push("tools");
+  return tabs;
 }
 
-function visibleTools(tools: DepartmentTool[], viewer: DepartmentViewer): DepartmentTool[] {
-  return tools.filter((item) => viewerCanOpenModule(item.moduleId, viewer));
-}
-
-export function getDepartmentHome(slug: string): DepartmentHome | null {
-  const home = homeBySlug(exact(slug));
-  if (!home || !HOMES.has(home.slug)) return null;
-  return {
-    department: toSummary(home),
-    people: home.people,
-    okrs: {
-      departmentSlug: home.slug,
-      cycleName: OKR_CYCLE.name,
-      cycleSlug: OKR_CYCLE.slug,
-      href: OKR_CYCLE.href,
-      objectives: home.objectives,
-    },
-    rocks: ROCKS.filter((rock) => rock.departmentSlug === home.slug),
-    tools: home.tools,
-    servicesRun: servicesRunFor(home.slug),
-    subMinistries: subMinistriesOf(home.slug),
-    budget: budgetFor(home.slug),
-  };
+export function getDepartmentHome(slug: string, viewer: AccessViewer = getDepartmentViewer()): DepartmentHome | null {
+  return getDepartmentPage(slug, viewer);
 }
 
 function budgetFor(slug: string) {
@@ -281,14 +278,11 @@ function budgetFor(slug: string) {
   );
 }
 
-function tabHref(slug: string, key: DepartmentTab): string {
+export function tabHref(slug: string, key: DepartmentTab): string {
   return key === "overview" ? `/departments/${slug}` : `/departments/${slug}?tab=${key}`;
 }
 
-export function getDepartmentPage(
-  slug: string,
-  viewer: DepartmentViewer
-): DepartmentPageModel | null {
+export function getDepartmentPage(slug: string, viewer: AccessViewer): DepartmentHome | null {
   const key = exact(slug);
   if (foldTarget(key) || !HOMES.has(key)) return null;
   const home = homeBySlug(key);
@@ -298,27 +292,13 @@ export function getDepartmentPage(
   if (!canOpenDepartment(access)) return null;
 
   const detail = access.canSeeDepartmentDetail;
-  const services = detail ? servicesRunBy(home.slug, viewer) : null;
-  const tabKeys: DepartmentTab[] = detail
-    ? [
-        "overview",
-        "people",
-        "okrs",
-        "rocks",
-        ...(services && services.length > 0 ? (["services"] as const) : []),
-        ...(access.canSeeBudget ? (["budget"] as const) : []),
-        "tools",
-      ]
-    : ["budget"];
-
-  const parent = home.parentSlug ? resolveDepartment(home.parentSlug) : null;
-  const people = detail ? home.people : null;
+  const summary = toSummary(home, viewer);
 
   return {
-    department: toSummary(home),
-    parent: detail ? parent : null,
-    people,
-    leaders: people ? people.filter((person) => person.isLeader || person.isPointLeader) : null,
+    department: { ...summary, access, budgetOnly: access.canSeeBudget && !detail },
+    access,
+    viewerMemberships: toViewerMemberships(viewer),
+    people: detail ? home.people : null,
     okrs: detail
       ? {
           departmentSlug: home.slug,
@@ -330,17 +310,8 @@ export function getDepartmentPage(
       : null,
     rocks: detail ? ROCKS.filter((rock) => rock.departmentSlug === home.slug) : null,
     budget: access.canSeeBudget ? budgetFor(home.slug) : null,
-    tools: detail ? visibleTools(home.tools, viewer) : [],
-    services,
     servicesRun: detail ? servicesRunFor(home.slug) : null,
     subMinistries: detail ? subMinistriesOf(home.slug) : null,
-    access,
-    tabs: tabKeys.map((key) => ({
-      key,
-      label: TAB_LABEL[key],
-      href: tabHref(home.slug, key),
-    })),
-    quarter: CURRENT_QUARTER,
   };
 }
 

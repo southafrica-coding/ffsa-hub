@@ -2,13 +2,27 @@ import type {
   DepartmentBudget,
   DepartmentCluster,
   DepartmentPerson,
-  DepartmentSummary,
-  DepartmentTool,
   HubService,
-  OkrCheckIn,
   OkrObjective,
   Rock,
 } from "@/types/departments";
+
+/** Not on the API payload. HomeDashboard.okrCheckInsDue is an empty tuple. */
+export interface OkrCheckIn {
+  id: string;
+  departmentSlug: string;
+  cycleName: string;
+  dueOn: string;
+  completed: boolean;
+  href: string;
+}
+
+/** Local until a tools field exists on the department payload. */
+export interface DepartmentTool {
+  label: string;
+  href: string;
+  moduleId: string;
+}
 
 /**
  * Mock stand-in for staff ministries, services, rocks and budgets.
@@ -67,11 +81,9 @@ function placeholderEmail(name: string): string {
   return `${name.toLowerCase().replace(/[^a-z0-9]+/g, ".")}@example.com`;
 }
 
-const leader = (name: string, point = false): DepartmentPerson => ({
+const leader = (name: string): DepartmentPerson => ({
   name,
   capacity: "leader",
-  isLeader: true,
-  isPointLeader: point,
   email: placeholderEmail(name),
 });
 
@@ -90,7 +102,12 @@ const HOMES: HomeSeed[] = [
       ROSTER,
     ],
     objectives: [
-      { title: "Keep a lead named on every staff ministry", tone: "in_progress" },
+      {
+        title: "Keep a lead named on every staff ministry",
+        keyResults: [
+          { id: "lt-kr-1", label: null, description: "Every home has a named lead", status: "in_progress" },
+        ],
+      },
     ],
   },
   {
@@ -102,8 +119,18 @@ const HOMES: HomeSeed[] = [
     people: [leader("Test Leader A"), leader("Test Leader B")],
     tools: [tool("Prayer room", "/prayer-room", "prayer-room"), OKRS, ROSTER],
     objectives: [
-      { title: "Cover the morning, noon and night bands", tone: "in_progress" },
-      { title: "Sign off worship leads for the term", tone: "stuck" },
+      {
+        title: "Cover the morning, noon and night bands",
+        keyResults: [
+          { id: "pw-kr-1", label: "Bands", description: "Morning, noon and night are covered", status: "in_progress" },
+        ],
+      },
+      {
+        title: "Sign off worship leads for the term",
+        keyResults: [
+          { id: "pw-kr-2", label: null, description: "Worship leads signed off", status: "stuck" },
+        ],
+      },
     ],
   },
   {
@@ -114,7 +141,14 @@ const HOMES: HomeSeed[] = [
     memberCount: 1,
     people: [leader("Test Leader A")],
     tools: [tool("Training", "/schools", "schools"), OKRS, ROSTER],
-    objectives: [{ title: "Publish the next school dates", tone: "in_progress" }],
+    objectives: [
+      {
+        title: "Publish the next school dates",
+        keyResults: [
+          { id: "tr-kr-1", label: null, description: "Dates are published", status: "moving_forward" },
+        ],
+      },
+    ],
   },
   {
     slug: "education",
@@ -213,14 +247,32 @@ const HOMES: HomeSeed[] = [
     memberCount: 2,
     people: [leader("Test Leader A"), leader("Test Leader B")],
     tools: [OKRS, ROSTER],
-    objectives: [{ title: "Keep the preaching rota a month ahead", tone: "in_progress" }],
+    objectives: [
+      {
+        title: "Keep the preaching rota a month ahead",
+        keyResults: [
+          { id: "mc-kr-1", label: null, description: "Rota stays a month ahead", status: "not_started" },
+        ],
+      },
+    ],
   },
 ];
 
-export interface MinistryRecord extends DepartmentSummary {
+export interface MinistryRecord {
+  slug: string;
+  name: string;
+  cluster: DepartmentCluster | null;
+  parentSlug: string | null;
+  purpose: string | null;
+  memberCount: number;
+  active: boolean;
   people: DepartmentPerson[];
   tools: DepartmentTool[];
   objectives: OkrObjective[];
+}
+
+export function ministryTools(slug: string): DepartmentTool[] {
+  return MINISTRY_HOMES.find((home) => home.slug === slug)?.tools ?? [];
 }
 
 export const MINISTRY_HOMES: MinistryRecord[] = HOMES.map((home) => ({
@@ -271,7 +323,7 @@ export const SERVICES: HubService[] = [
     href: "/prayer-room",
     moduleId: "prayer-room",
     owners: [link("prayer_and_worship", "owner")],
-    audience: "open_to_all",
+    audience: "all_signed_in",
   },
   {
     id: "spaces",
@@ -280,7 +332,7 @@ export const SERVICES: HubService[] = [
     href: "/bookings/spaces",
     moduleId: "bookings",
     owners: [link("operations", "owner")],
-    audience: "open_to_all",
+    audience: "all_signed_in",
   },
   {
     id: "vehicles",
@@ -289,7 +341,7 @@ export const SERVICES: HubService[] = [
     href: "/bookings/vehicles",
     moduleId: "bookings",
     owners: [link("operations", "owner")],
-    audience: "open_to_all",
+    audience: "all_signed_in",
   },
   {
     id: "gear_hire",
@@ -302,7 +354,7 @@ export const SERVICES: HubService[] = [
       link("operations", "owner"),
       link("media", "owner"),
     ],
-    audience: "open_to_all",
+    audience: "all_signed_in",
   },
   {
     id: "brand_kit",
@@ -311,7 +363,7 @@ export const SERVICES: HubService[] = [
     href: "/brand-kit",
     moduleId: "brand-kit",
     owners: [link("media", "owner")],
-    audience: "open_to_all",
+    audience: "all_signed_in",
   },
   {
     id: "communications",
@@ -346,7 +398,7 @@ export const SERVICES: HubService[] = [
     href: "/evangelism",
     moduleId: "evangelism",
     owners: [link("media", "moderator"), link("hulk", "moderator")],
-    audience: "open_to_all",
+    audience: "all_signed_in",
   },
 ];
 
