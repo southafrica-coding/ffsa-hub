@@ -8,7 +8,9 @@ import {
 import {
   ATTENDANCE_GATE,
   EVENT_CREATE_GATE,
+  FORMS_GATE,
   ORDERS_GATE,
+  OUTCOMES_GATE,
   SCAN_LINK_GATE,
   allowsEventGate,
   canInsertEvent,
@@ -134,6 +136,18 @@ describe("role bypasses sit outside the helper", () => {
     expect(allowsEventGate(eventsAdmin, ATTENDANCE_GATE, EVENT_A)).toBe(true);
   });
 
+  it("an inactive events_admin, finance_admin or comms_admin does not take the role bypass", () => {
+    const inactive = (name: string) =>
+      snap({
+        active: false,
+        roles: [{ roleId: "r", name, scopeType: null, scopeId: null }],
+      });
+    expect(allowsEventGate(inactive("events_admin"), ATTENDANCE_GATE, EVENT_A)).toBe(false);
+    expect(allowsEventGate(inactive("finance_admin"), ORDERS_GATE, EVENT_A)).toBe(false);
+    expect(allowsEventGate(inactive("comms_admin"), FORMS_GATE, EVENT_A)).toBe(false);
+    expect(allowsEventGate(inactive("comms_admin"), OUTCOMES_GATE, EVENT_A)).toBe(false);
+  });
+
   it("an inactive admin does not take the is_admin bypass", () => {
     const inactive = snap({
       active: false,
@@ -247,6 +261,20 @@ describe("canManageEvent loads grants and falls back when the RPC is missing", (
     expect(await canManageEvent(inactive, "u1", "events.create", EVENT_A, EVENT_CREATE_GATE)).toBe(false);
     expect(await canManageEvent(nullActive, "u1", "events.create", EVENT_A, EVENT_CREATE_GATE)).toBe(true);
     expect(await canManageEvent(superAdmin, "u1", "events.create", EVENT_A, EVENT_CREATE_GATE)).toBe(true);
+  });
+
+  it("a null is_active events_admin, finance_admin or comms_admin is allowed", async () => {
+    const missingRpc = (q: FakeQuery) =>
+      q.rpc
+        ? { error: { code: "PGRST202", message: "Could not find the function public.has_event_permission in the schema cache" } }
+        : q.table === "events"
+          ? { data: { created_by: "nope" } }
+          : null;
+    const asRole = (name: string) =>
+      client({ roles: [{ id: "r", name }], direct: [], active: null }, missingRpc);
+    expect(await canManageEvent(asRole("events_admin"), "u1", ATTENDANCE_GATE.keys, EVENT_A, ATTENDANCE_GATE)).toBe(true);
+    expect(await canManageEvent(asRole("finance_admin"), "u1", ORDERS_GATE.keys, EVENT_A, ORDERS_GATE)).toBe(true);
+    expect(await canManageEvent(asRole("comms_admin"), "u1", FORMS_GATE.keys, EVENT_A, FORMS_GATE)).toBe(true);
   });
 
   it("a role bundle scoped to the event counts", async () => {

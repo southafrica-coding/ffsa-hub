@@ -16,9 +16,9 @@
 //   is_admin() — unscoped admin or super_admin, and (migration 316) only
 //   when users.is_active IS NOT FALSE. false is inactive; NULL and true
 //   are active.
-//   has_role(name) — migration 002 lines 23–51, one argument counts only
-//   scope_type IS NULL. events_admin / finance_admin / comms_admin arms
-//   still do not read is_active.
+//   has_role(name) — one argument counts only scope_type IS NULL, and
+//   migration 316 also requires users.is_active IS NOT FALSE. That covers
+//   the events_admin, finance_admin and comms_admin bypasses.
 //   events UPDATE also allows created_by = caller with no key (lines 160–163)
 //   events INSERT: is_admin, events_admin, unscoped events.create, or
 //   created_by = self with events.create in any scope (line 157, via
@@ -159,8 +159,12 @@ export function isUnscopedAdmin(snap: EventAccessSnapshot): boolean {
   );
 }
 
-/** has_role(name) with one argument: scope_type IS NULL only. */
+/**
+ * has_role(name) after migration 316: an unscoped role on an active
+ * account. is_active false does not bypass. NULL and true do.
+ */
 export function hasUnscopedRole(snap: EventAccessSnapshot, names: readonly string[]): boolean {
+  if (!snap.active) return false;
   if (names.length === 0) return false;
   return snap.roles.some((r) => names.includes(r.name) && r.scopeType == null);
 }
