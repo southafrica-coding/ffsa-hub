@@ -14,6 +14,10 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import {
+  badgeVariant,
+  presentationForMessage,
+} from "@/lib/email/delivery-state";
+import {
   formatAnswerValue,
   type CheckoutAnswerSnapshot,
 } from "@/lib/ticketing/checkout-questions";
@@ -195,6 +199,7 @@ export function OrdersTab({
   currency,
   eventStatus,
   hasCancellationMessage = false,
+  canManageOrders = false,
 }: {
   eventId: string;
   orders: Order[];
@@ -207,6 +212,8 @@ export function OrdersTab({
   // "email cancellation reason" action to cancelled events.
   eventStatus?: string;
   hasCancellationMessage?: boolean;
+  /** Refund, resend, reconcile, invoice actions. Viewers still see the table. */
+  canManageOrders?: boolean;
 }) {
   const router = useRouter();
   const money = (cents: number, c?: string | null) =>
@@ -402,7 +409,7 @@ export function OrdersTab({
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <CardTitle className="text-base">Orders</CardTitle>
-          {orders.length > 0 && (
+          {canManageOrders && orders.length > 0 && (
             <div className="flex items-center gap-2">
               {pendingStripe.length > 0 && (
                 <button
@@ -565,6 +572,7 @@ export function OrdersTab({
                           : "—"}
                       </TableCell>
                       <TableCell className="text-right">
+                        {canManageOrders && (
                         <div className="flex flex-col items-end gap-1">
                           {o.status === "paid" && (
                             <button
@@ -660,6 +668,7 @@ export function OrdersTab({
                             </button>
                           )}
                         </div>
+                        )}
                       </TableCell>
                     </TableRow>
                     {expanded && expandable && (
@@ -861,7 +870,7 @@ export function OrdersTab({
         </CardContent>
       </Card>
 
-      {refundOrder && (
+      {canManageOrders && refundOrder && (
         <RefundDialog
           eventId={eventId}
           order={refundOrder}
@@ -876,46 +885,31 @@ export function OrdersTab({
   );
 }
 
-// Confirmation-email delivery at a glance. Distinguishes the states that
-// matter operationally: delivered/opened (good), bounced/complained/failed
-// (needs attention), sent (accepted by provider, awaiting a delivery
-// webhook), and "—" when there's no ledger row yet (e.g. before migration
-// 141 is applied, or an order that predates it).
+// Confirmation-email delivery at a glance. Sent and delivered are success.
+// A missing open or click is not a problem — tracking is off. Bounced,
+// complained, failed and dropped need attention. "—" means there's no
+// ledger row yet.
 function DeliveryBadge({ email }: { email?: TicketEmailStatus }) {
   if (!email) {
     return <span className="text-xs text-muted-foreground">—</span>;
   }
-  const map: Record<
-    string,
-    { label: string; variant: "default" | "secondary" | "destructive" | "outline" }
-  > = {
-    delivered: { label: "Delivered", variant: "secondary" },
-    opened: { label: "Opened", variant: "secondary" },
-    sent: { label: "Sent", variant: "outline" },
-    queued: { label: "Queued", variant: "outline" },
-    bounced: { label: "Bounced", variant: "destructive" },
-    complained: { label: "Spam", variant: "destructive" },
-    dropped: { label: "Dropped", variant: "destructive" },
-    failed: { label: "Failed", variant: "destructive" },
-  };
-  const meta = map[email.status] ?? { label: email.status, variant: "outline" as const };
+  const view = presentationForMessage(email);
   const when =
     email.delivered_at ??
-    email.opened_at ??
     email.bounced_at ??
     email.complained_at ??
     email.sent_at ??
     email.created_at;
   const title = [
-    `${meta.label} → ${email.to_email}`,
+    `${view.label} → ${email.to_email}`,
     when ? new Date(when).toLocaleString() : null,
-    email.error ? `Reason: ${email.error}` : null,
+    view.tone === "problem" && email.error ? `Reason: ${email.error}` : null,
   ]
     .filter(Boolean)
     .join("\n");
   return (
-    <Badge variant={meta.variant} className="cursor-default" title={title}>
-      {meta.label}
+    <Badge variant={badgeVariant(view.tone)} className="cursor-default" title={title}>
+      {view.label}
     </Badge>
   );
 }

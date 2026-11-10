@@ -10,16 +10,14 @@ import {
 import { setupProgramBillingOnAcceptance } from "@/services/billing-generation";
 import { sendTransactional } from "@/lib/email/send-transactional";
 import { applicationAcceptedEmailHtml } from "@/lib/email/templates/application-accepted";
-import {
-  escapeIlike,
-  sendAcceptanceToLinkedAccount,
-} from "@/lib/schools/acceptance-email";
+import { sendAcceptanceToLinkedAccount } from "@/lib/schools/acceptance-email";
 import { userCanManageProgram } from "@/lib/auth/check-schools-access";
 import { userCanReadApplication, APPLICATIONS_EXPIRED_MESSAGE } from "@/lib/auth/application-expiry";
 import {
   substitutePlaceholders,
   plainTextToEmailHtml,
 } from "@/lib/email/placeholders";
+import { applicantEmailIlikePattern } from "@/lib/applications/applicant-identity";
 
 
 export async function POST(request: Request) {
@@ -146,16 +144,49 @@ export async function POST(request: Request) {
   // is sent after enrolment instead.
   const wasPreLinked = !!appResponse.user_id;
 
+  // Same rule as the public duplicate check: ILIKE is case-insensitive, `_`
+  // and `%` are escaped, and `*` is refused. PostgREST treats `*` as a
+  // wildcard a backslash cannot escape, so matching on it could attach this
+  // application to the wrong account.
+  let applicantEmailPattern: string;
+  try {
+    applicantEmailPattern = applicantEmailIlikePattern(applicantEmail);
+  } catch {
+    return NextResponse.json(
+      { error: "This applicant's email can't be matched safely." },
+      { status: 400 }
+    );
+  }
+
   // Update response status to accepted
-  await adminSupabase
+  const { error: statusError } = await adminSupabase
     .from("application_responses")
     .update({
       status: "accepted",
       reviewed_by: authUser.id,
       reviewed_at: new Date().toISOString(),
-      ...(admin_notes !== undefined ? { admin_notes } : {}),
     })
     .eq("id", response_id);
+  if (statusError) {
+    return NextResponse.json({ error: statusError.message }, { status: 500 });
+  }
+
+  if (admin_notes !== undefined) {
+    // Table is newer than the generated Database types.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: notesError } = await (adminSupabase as any).from("application_admin_notes").upsert(
+      {
+        application_response_id: response_id,
+        program_id: appResponse.programs.id,
+        notes: admin_notes,
+        updated_by: authUser.id,
+      },
+      { onConflict: "application_response_id" }
+    );
+    if (notesError) {
+      return NextResponse.json({ error: notesError.message }, { status: 500 });
+    }
+  }
 
   let userId = appResponse.user_id;
 
@@ -175,7 +206,7 @@ export async function POST(request: Request) {
     const { data: existingUser } = await adminSupabase
       .from("users")
       .select("id, first_name")
-      .ilike("email", escapeIlike(applicantEmail.trim()))
+      .ilike("email", applicantEmailPattern)
       .maybeSingle();
 
     if (existingUser) {

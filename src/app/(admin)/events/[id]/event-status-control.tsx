@@ -40,10 +40,13 @@ export function EventStatusControl({
   eventId,
   status,
   cancellationMessage,
+  canEdit = false,
 }: {
   eventId: string;
   status: Status;
   cancellationMessage?: string | null;
+  /** Publish, cancel, and the buyer-facing note. Viewers see the status only. */
+  canEdit?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -88,6 +91,14 @@ export function EventStatusControl({
       setMsg(cancellationMessage ?? "");
       setErr(null);
     }
+  }
+
+  if (!canEdit) {
+    return (
+      <Badge variant={STATUS_VARIANT[status]} className="capitalize">
+        {status}
+      </Badge>
+    );
   }
 
   return (

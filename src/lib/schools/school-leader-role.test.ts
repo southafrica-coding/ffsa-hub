@@ -88,11 +88,11 @@ describe("revokeSchoolLeaderRoleIfOrphaned", () => {
     expect(roleRows(db, "u1")).toHaveLength(1);
   });
 
-  it("revokes the role once they lead no program", async () => {
+  it("does not revoke the role, because a system grant cannot be told from a hand grant", async () => {
     const other = { id: "y", user_id: "u2", role_id: "role-sl", scope_type: null };
     const { db, client } = fakeAdmin({ user_roles: [held, other] });
     await revokeSchoolLeaderRoleIfOrphaned(client, "u1");
-    expect(roleRows(db, "u1")).toHaveLength(0);
+    expect(roleRows(db, "u1")).toHaveLength(1);
     expect(roleRows(db, "u2")).toHaveLength(1);
   });
 
@@ -100,6 +100,6 @@ describe("revokeSchoolLeaderRoleIfOrphaned", () => {
     const staff = { id: "z", user_id: "u1", role_id: "role-staff", scope_type: null };
     const { db, client } = fakeAdmin({ user_roles: [held, staff] });
     await revokeSchoolLeaderRoleIfOrphaned(client, "u1");
-    expect(db.user_roles).toEqual([staff]);
+    expect(db.user_roles).toEqual([held, staff]);
   });
 });

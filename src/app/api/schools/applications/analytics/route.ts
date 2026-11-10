@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { passesApplicationExpiry, APPLICATIONS_EXPIRED_MESSAGE } from "@/lib/auth/application-expiry";
+import { applicationExpiryDenial } from "@/lib/auth/application-expiry";
 
 export async function GET(request: Request) {
   const supabase = await createClient();
@@ -22,8 +22,9 @@ export async function GET(request: Request) {
     );
   }
 
-  if (!(await passesApplicationExpiry(supabase, programId))) {
-    return NextResponse.json({ error: APPLICATIONS_EXPIRED_MESSAGE }, { status: 403 });
+  const expiryDenial = await applicationExpiryDenial(supabase, programId);
+  if (expiryDenial) {
+    return NextResponse.json({ error: expiryDenial }, { status: 403 });
   }
 
   // Fetch all responses for this program

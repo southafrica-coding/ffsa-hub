@@ -157,6 +157,32 @@ describe("middleware", () => {
     expect(location(await middleware(req("/login")))?.pathname).toBe("/dashboard");
   });
 
+  it("a signed-out visit to /login stays on /login", async () => {
+    current = makeClient({});
+    expect(location(await middleware(req("/login")))).toBeNull();
+  });
+
+  it("a cleared session can open /login?error=signout", async () => {
+    current = makeClient({});
+    const res = await middleware(req("/login?error=signout"));
+    expect(location(res)).toBeNull();
+  });
+
+  it("a still-signed-in visit to /login?error=signout is not sent to the dashboard", async () => {
+    current = makeClient({ token: jwtFor("u1"), validUserId: "u1" });
+    const res = await middleware(req("/login?error=signout"));
+    expect(location(res)).toBeNull();
+  });
+
+  it("POST /auth/sign-out is not refreshed or sent to the dashboard", async () => {
+    current = makeClient({ token: jwtFor("u1"), validUserId: "u1" });
+    const res = await middleware(
+      new NextRequest(new URL("/auth/sign-out", "https://hub.test"), { method: "POST" })
+    );
+    expect(location(res)).toBeNull();
+    expect(current.getUserCalls).toHaveLength(0);
+  });
+
   it("deactivated users can still reach /login", async () => {
     current = makeClient({ token: jwtFor("u1"), validUserId: "u1", inactive: ["u1"] });
     expect(location(await middleware(req("/login")))).toBeNull();

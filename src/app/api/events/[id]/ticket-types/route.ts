@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createTicketType } from "@/services/ticketing";
 import { computeDisplayPriceCents } from "@/lib/payments/ticket-pricing";
-import { getAuthedUser, canManageEvents } from "@/lib/api-auth";
+import { getAuthedUser } from "@/lib/api-auth";
+import { writeBlocked, canManageEvent, EVENT_CREATE_GATE } from "@/lib/auth/event-access";
 import { sanitizeCheckoutQuestions } from "@/lib/ticketing/checkout-questions";
 import { sanitizeWaiver } from "@/lib/ticketing/waivers";
 
@@ -20,7 +21,7 @@ export async function POST(
   if (!user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
-  if (!(await canManageEvents(supabase, user.id))) {
+  if (!(await canManageEvent(supabase, user.id, EVENT_CREATE_GATE.keys, eventId, EVENT_CREATE_GATE))) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
@@ -97,6 +98,7 @@ export async function POST(
     waiver: sanitizeWaiver(body.waiver),
   });
 
+  if (writeBlocked(error)) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ticketType: data });
 }

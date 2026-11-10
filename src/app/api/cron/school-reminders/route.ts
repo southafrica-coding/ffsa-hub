@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendTransactional } from "@/lib/email/send-transactional";
-import { resolveProgramEmail } from "@/lib/email/render-program-email";
-import { referenceReminderEmailHtml } from "@/lib/email/templates/reference-reminder";
+import { sendReferenceReminder } from "@/lib/email/send-reference-reminder";
+import { claimThenSendReferenceReminder } from "@/lib/references/reminder-claim";
+import { previewWriteRefusal } from "@/lib/preview-writes";
 
 export const maxDuration = 60;
 
@@ -12,8 +12,8 @@ export const maxDuration = 60;
 // whose leaders set an auto-reminder on the reference_reminder email
 // (program_email_templates.reminder_after_days, migration 147), it finds
 // still-pending reference requests older than that many days that haven't
-// been reminded yet, and sends the reminder — honoring that program's
-// custom subject/body — then stamps reminder_sent_at so it goes once.
+// been reminded yet. Each one is claimed (reminder_sent_at) before the
+// existing reminder email is sent, so it cannot race a manual reminder.
 //
 // Mirrors the auth + batch-drain shape of the other crons.
 
@@ -30,7 +30,10 @@ export async function GET(request: Request) {
   }
 
   const admin: Client = createAdminClient();
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://ffsahub.com";
+
+  // Preview shares the production database. Do not claim or send from there.
+  const refusal = previewWriteRefusal();
+  if (refusal) return NextResponse.json(refusal.body, { status: refusal.status });
 
   // Programs opted into auto reference reminders.
   const { data: configs, error: cfgErr } = await admin
@@ -56,7 +59,7 @@ export async function GET(request: Request) {
     const { data: due } = await admin
       .from("reference_requests")
       .select(
-        "id, token, referee_email, referee_name, created_at, reference_slots(label), application_responses!inner(id, program_id, applicant_info, users:user_id(first_name, last_name), programs(name))"
+        "id, status, token, referee_email, referee_name, created_at, reminder_sent_at, reference_slots(label), application_responses!inner(id, program_id, applicant_info, users:user_id(first_name, last_name), programs(name))"
       )
       .eq("application_responses.program_id", cfg.program_id)
       .neq("status", "submitted")
@@ -79,69 +82,34 @@ export async function GET(request: Request) {
               ]
                 .filter(Boolean)
                 .join(" ")) || "An applicant";
-        const referenceUrl = `${siteUrl}/reference/${req.token}`;
 
-        const defaults = {
-          subject: `Reference Reminder — ${programName}`,
-          html: referenceReminderEmailHtml({
-            refereeName: req.referee_name,
-            applicantName,
-            programName,
-            slotLabel: req.reference_slots?.label ?? "Reference",
-            referenceUrl,
-          }),
-        };
-
-        const resolved = await resolveProgramEmail(
+        // Claim the row before sending, same as a manual reminder, so this
+        // job and a person clicking Remind cannot both email the referee.
+        // A suppressed address keeps the claim. Any other failed send puts
+        // the previous stamp back.
+        const outcome = await claimThenSendReferenceReminder({
           admin,
-          cfg.program_id,
-          "reference_reminder",
-          defaults,
-          {
-            values: {
-              program_name: programName,
-              applicant_name: applicantName,
-              referee_name: req.referee_name,
-              reference_type: req.reference_slots?.label ?? "Reference",
-            },
-            cta: { label: "Complete the reference", url: referenceUrl },
-            siteUrl,
-          }
-        );
-
-        if (resolved.skip) {
-          skipped += 1;
-          continue;
-        }
-
-        const result = await sendTransactional({
-          to: req.referee_email,
-          subject: resolved.subject,
-          html: resolved.html,
-          category: "reference_reminder",
-          sourceType: "school_application",
-          sourceId: app?.id ?? null,
-          programDocuments: {
-            programId: cfg.program_id,
-            emailType: "reference_reminder",
-          },
+          refId: req.id,
+          status: req.status ?? "pending",
+          previousSentAt: req.reminder_sent_at ?? null,
+          keepStampOnSuppressed: true,
+          send: () =>
+            sendReferenceReminder({
+              toEmail: req.referee_email,
+              refereeName: req.referee_name,
+              applicantName,
+              programName,
+              slotLabel: req.reference_slots?.label ?? "Reference",
+              token: req.token,
+              programId: cfg.program_id,
+              referenceRequestId: req.id,
+            }),
         });
 
-        // Stamp reminder_sent_at whenever the send left our hands (sent,
-        // or dropped-because-suppressed) so we don't retry a bad address
-        // every night. A hard provider error leaves it null to try again.
-        const stamp = () =>
-          admin
-            .from("reference_requests")
-            .update({ reminder_sent_at: new Date().toISOString() })
-            .eq("id", req.id);
-
-        if (result.ok) {
-          sent += 1;
-          await stamp();
-        } else {
-          skipped += 1;
-          if (result.suppressed) await stamp();
+        if (outcome.outcome === "sent") sent += 1;
+        else skipped += 1;
+        if (outcome.outcome === "error") {
+          console.error("[school-reminders] failed for request", req.id, outcome.error);
         }
       } catch (e) {
         console.error("[school-reminders] failed for request", req.id, e);

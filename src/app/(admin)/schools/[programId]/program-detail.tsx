@@ -1,17 +1,32 @@
 "use client";
 
-import type { ApplicationExpiry } from "@/lib/auth/application-expiry";
-import { useState, useEffect } from "react";
+import {
+  APPLICATIONS_STATUS_UNKNOWN_MESSAGE,
+  type ApplicationExpiry,
+} from "@/lib/auth/application-expiry";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { type TreeQuestion } from "@/components/admin/question-tree";
 import { ReferenceQuestionsBuilder } from "./reference-questions-builder";
 import { ProgramCoursesManager, type PhaseCourse } from "./program-courses-manager";
 import { LeadersTab, type ProgramLeaderRow } from "./leaders-tab";
+import { StaffTab, type ProgramStaffRow } from "./staff-tab";
+import { ClassroomTab } from "./classroom-tab";
+import { AssignmentsSection } from "@/components/schools/lms/assignments-section";
 import { EmailsTab } from "./emails-tab";
 import { StudentsExportPanel } from "./students-export-panel";
 import { ENROLLMENT_STATUS_LABELS } from "@/lib/schools/student-export-columns";
 import type { ArrivalInsuranceInfo } from "@/lib/schools/arrival-insurance";
 import { Badge } from "@/components/ui/badge";
+import {
+  badgeVariant,
+  presentationForMessage,
+} from "@/lib/email/delivery-state";
+import {
+  REFERENCE_BOUNCE_MESSAGE,
+  REFERENCE_NOT_SENT_MESSAGE,
+} from "@/lib/references/reference-delivery";
 import { Chip, Masthead, StatusPill } from "@/components/ffsa";
 import { TrackTab } from "./track-tab";
 import type { PipelinePerson, TrackSummary } from "@/lib/schools/track-pipeline";
@@ -27,7 +42,38 @@ import {
 } from "@/lib/schools/course-arrival";
 import { todayInSouthAfrica } from "@/lib/finance/student-balance";
 import { GradesMatrix } from "./grades-matrix";
-import { ApplicantReview, type PipelineStage, type ReviewCheck } from "./applicant-review";
+import { ApplicantReview, type PipelineStage, type ReviewCheck, type ShownInterviewReview } from "./applicant-review";
+import {
+  INTERVIEW_OUTCOME_LABEL,
+  type InterviewOutcome,
+} from "@/lib/schools/interview-outcomes";
+import {
+  draftFromSaved,
+  emptyInterviewDraft,
+  interviewClearFlags,
+  interviewFormFromReview,
+  nextDraftAfterLoad,
+  reconcileInterviewDraft,
+  savedInterviewFor,
+  type InterviewDraft,
+} from "@/lib/schools/interview-review-form";
+import {
+  PIPELINE_STAGE_LABEL,
+  PIPELINE_STAGE_ORDER,
+  PIPELINE_TABS,
+  decisionChoices,
+  decisionSelectValue,
+  derivePipelineStage,
+  interviewOutcomeBadge,
+  statusToPersist,
+  statusWrittenByDecision,
+  type DecisiveInterviewOutcome,
+  type InterviewReviewFact,
+  type ReferenceRequestFact,
+} from "@/lib/schools/applicant-pipeline-stage";
+import { LastReminderSent } from "@/lib/references/last-reminder-sent";
+import { remindAllToast } from "@/lib/references/manual-reminder";
+import { BULK_STATUS_LIMIT, isBeforeAcceptance } from "@/lib/schools/application-status";
 import { FormBuilder, FormPreview } from "./form-builder";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
@@ -184,8 +230,10 @@ type ReferenceRequest = {
   known_duration: string | null;
   reference_text: string | null;
   submitted_at: string | null;
+  reminder_sent_at?: string | null;
   form_data: Record<string, any> | null;
   reference_slots: { label: string; description: string | null } | null;
+  email_problem?: "bounced" | "not_sent" | null;
 };
 
 type ApplicantInfo = {
@@ -339,16 +387,25 @@ function isStoragePath(value: string): boolean {
 type RefRequestSummary = {
   id: string;
   application_id: string;
+  slot_id: string;
   status: string;
   submitted_at: string | null;
   reminder_sent_at: string | null;
 };
 
+type InterviewReviewSummary = {
+  application_response_id: string;
+  author_id?: string | null;
+  notes?: string | null;
+  interview_outcome: string | null;
+  updated_at: string | null;
+};
+
 /** Tabs this screen knows. `enrollments` is the pre-14a name for Students and
  *  is still in the wild as ?tab=enrollments, so it maps rather than 404s. */
 const TAB_KEYS = [
-  "overview", "students", "courses", "track", "grades", "applicants", "application", "arrival", "leaders", "emails", "fees",
-  "staff_decision",
+  "overview", "students", "courses", "track", "grades", "applicants", "application", "arrival", "leaders", "staff", "emails", "fees",
+  "staff_decision", "classroom",
 ];
 function normaliseTab(tab: string): string {
   return tab === "enrollments" ? "students" : tab;
@@ -394,6 +451,7 @@ export function ProgramDetail({
   trackSummary,
   arrivalInsurance,
   leaders,
+  staff,
   emailTemplates,
   grades,
   feesByEnrollment,
@@ -411,8 +469,13 @@ export function ProgramDetail({
   referenceSlots,
   referenceQuestions,
   refRequestSummaries,
+  interviewReviews = [],
+  viewerId,
   applicationExpiry,
   staffDecisionPanel,
+  canEditClassroom = false,
+  canManageTemplates = false,
+  canGradeAssignments = false,
 }: {
   program: Program;
   initialTab?: string;
@@ -423,6 +486,7 @@ export function ProgramDetail({
   enrollments: Enrollment[];
   arrivalInsurance: Record<string, ArrivalInsuranceInfo>;
   leaders: ProgramLeaderRow[];
+  staff: ProgramStaffRow[];
   emailTemplates: {
     email_type: string;
     enabled: boolean;
@@ -450,10 +514,22 @@ export function ProgramDetail({
   referenceSlots: ReferenceSlot[];
   referenceQuestions: TreeQuestion[];
   refRequestSummaries: RefRequestSummary[];
+  interviewReviews?: InterviewReviewSummary[];
+  /** Signed-in reviewer. Used to prefill their own interview row. */
+  viewerId: string;
   applicationExpiry: ApplicationExpiry;
   /** Leadership Track only, and only for Leadership Team viewers — the
    *  server-rendered "accepted as staff?" tab. Absent = no tab. */
   staffDecisionPanel?: React.ReactNode;
+  /** LMS slice 1: leaders / managers (userCanManageProgram) get the Classroom
+   *  editor. */
+  canEditClassroom?: boolean;
+  /** Admin or unscoped schools.manage / schools.templates.manage. Scoped managers can still import. */
+  canManageTemplates?: boolean;
+  /** LMS slice 2: program staff who reach this page (e.g. they also hold a
+   *  schools.* grant) get Classroom → Assignments to grade, without the
+   *  content editor. Everyone else sees no Classroom tab. */
+  canGradeAssignments?: boolean;
 }) {
   const router = useRouter();
   const [editingProgram, setEditingProgram] = useState(false);
@@ -542,9 +618,12 @@ export function ProgramDetail({
       arrivals: Object.fromEntries(arrivals),
     };
   });
-  const [tab, setTab] = useState(
-    initialTab && TAB_KEYS.includes(normaliseTab(initialTab)) ? normaliseTab(initialTab) : "overview"
-  );
+  const [tab, setTab] = useState(() => {
+    const wanted = initialTab ? normaliseTab(initialTab) : "overview";
+    if (!TAB_KEYS.includes(wanted)) return "overview";
+    if (wanted === "classroom" && !canEditClassroom && !canGradeAssignments) return "overview";
+    return wanted;
+  });
   const [rosterFilter, setRosterFilter] = useState<RosterFilter>("all");
   const rosterStaffOptions = staffOptions
     .map((s) => ({ id: s.id, name: displayName(s) }))
@@ -680,6 +759,7 @@ export function ProgramDetail({
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="students">Students ({activeEnrollments.length})</TabsTrigger>
             <TabsTrigger value="courses">Courses ({billingCourses.length})</TabsTrigger>
+            {(canEditClassroom || canGradeAssignments) && <TabsTrigger value="classroom">Classroom</TabsTrigger>}
             {trackSegments.length > 0 && (
               <TabsTrigger value="track">Track ({trackSummary.confirmed}/{trackSummary.total})</TabsTrigger>
             )}
@@ -688,6 +768,7 @@ export function ProgramDetail({
             <TabsTrigger value="application">Application form</TabsTrigger>
             <TabsTrigger value="arrival">Arrival</TabsTrigger>
             <TabsTrigger value="leaders">Leaders ({leaders.length})</TabsTrigger>
+            <TabsTrigger value="staff">Staff ({staff.length})</TabsTrigger>
             <TabsTrigger value="emails">Emails</TabsTrigger>
             <TabsTrigger value="fees">Fees</TabsTrigger>
             {staffDecisionPanel && (
@@ -737,6 +818,16 @@ export function ProgramDetail({
           />
         </TabsContent>
 
+        {(canEditClassroom || canGradeAssignments) && (
+          <TabsContent value="classroom" className="mt-0 px-5 py-6 md:px-8">
+            {canEditClassroom ? (
+              <ClassroomTab programId={program.id} />
+            ) : (
+              <AssignmentsSection programId={program.id} canEdit={false} />
+            )}
+          </TabsContent>
+        )}
+
         {/* Frame 14b */}
         {trackSegments.length > 0 && (
           <TabsContent value="track" className="mt-0">
@@ -775,14 +866,18 @@ export function ProgramDetail({
         </TabsContent>
 
         <TabsContent value="applicants" className="mt-0 px-5 py-6 md:px-8">
-          {applicationExpiry.expired && (
+          {applicationExpiry.lookupFailed ? (
+            <p className="mb-4 border border-ink bg-muted px-4 py-3 text-[13px]">
+              {APPLICATIONS_STATUS_UNKNOWN_MESSAGE}
+            </p>
+          ) : applicationExpiry.expired && (
             <p className="mb-4 border border-ink bg-muted px-4 py-3 text-[13px]">
               {applicationExpiry.canAccess
                 ? `Archived on ${formatExpiryDate(applicationExpiry.expiresOn)} — only admins and the Training team can see these applications.`
                 : `Applications for this school were archived on ${formatExpiryDate(applicationExpiry.expiresOn)}. Contact the Training team for access.`}
             </p>
           )}
-          {(!applicationExpiry.expired || applicationExpiry.canAccess) && (
+          {!applicationExpiry.lookupFailed && (!applicationExpiry.expired || applicationExpiry.canAccess) && (
           <ApplicantsTab
             programId={program.id}
             programCode={program.code}
@@ -790,6 +885,8 @@ export function ProgramDetail({
             removedResponses={removedResponses}
             referenceSlots={referenceSlots}
             refRequestSummaries={refRequestSummaries}
+            pipelineReviews={interviewReviews}
+            viewerId={viewerId}
             staffOptions={staffOptions}
           />
           )}
@@ -805,6 +902,7 @@ export function ProgramDetail({
             questions={questions}
             referenceSlots={referenceSlots}
             referenceQuestions={referenceQuestions}
+            canManageTemplates={canManageTemplates}
           />
         </TabsContent>
 
@@ -822,6 +920,14 @@ export function ProgramDetail({
           <LeadersTab
             programId={program.id}
             leaders={leaders}
+            allUsers={allUsers}
+          />
+        </TabsContent>
+
+        <TabsContent value="staff" className="mt-0 px-5 py-6 md:px-8">
+          <StaffTab
+            programId={program.id}
+            staff={staff}
             allUsers={allUsers}
           />
         </TabsContent>
@@ -1552,18 +1658,6 @@ type AnalyticsData = {
   weeklyData: Array<{ week: string; count: number }>;
 };
 
-const ALL_STATUSES = [
-  { key: "all", label: "All" },
-  { key: "submitted", label: "Submitted" },
-  { key: "waiting_for_references", label: "Waiting for Refs" },
-  { key: "references_received", label: "Refs Received" },
-  { key: "interview_scheduled", label: "Interview" },
-  { key: "accepted", label: "Accepted" },
-  { key: "waitlisted", label: "Waitlisted" },
-  { key: "rejected", label: "Rejected" },
-  { key: "cancelled", label: "Cancelled" },
-] as const;
-
 type ApplicantEmailRow = {
   id: string;
   category: string | null;
@@ -1587,39 +1681,53 @@ function prettyCategory(c: string | null): string {
     .join(" ");
 }
 
-function ApplicantEmailStatusBadge({ status }: { status: string }) {
-  const map: Record<
-    string,
-    { label: string; variant: "default" | "secondary" | "destructive" | "outline" }
-  > = {
-    delivered: { label: "Delivered", variant: "secondary" },
-    opened: { label: "Opened", variant: "secondary" },
-    sent: { label: "Sent", variant: "outline" },
-    queued: { label: "Queued", variant: "outline" },
-    bounced: { label: "Bounced", variant: "destructive" },
-    complained: { label: "Spam", variant: "destructive" },
-    dropped: { label: "Dropped", variant: "destructive" },
-    failed: { label: "Failed", variant: "destructive" },
-  };
-  const meta = map[status] ?? { label: status, variant: "outline" as const };
+function ApplicantStageBadges({
+  stage,
+  outcome,
+  variant,
+}: {
+  stage: string;
+  outcome: DecisiveInterviewOutcome | null;
+  variant: "default" | "secondary" | "destructive";
+}) {
+  const label =
+    stage in PIPELINE_STAGE_LABEL
+      ? PIPELINE_STAGE_LABEL[stage as keyof typeof PIPELINE_STAGE_LABEL]
+      : stage.replace(/_/g, " ");
   return (
-    <Badge variant={meta.variant} className="shrink-0">
-      {meta.label}
-    </Badge>
+    <div className="flex max-w-full flex-wrap items-center gap-1">
+      <Badge variant={variant} className="whitespace-nowrap">
+        {label}
+      </Badge>
+      {stage === "interview_complete" && (
+        <Badge
+          variant={
+            outcome === "decline"
+              ? "destructive"
+              : outcome === "recommend"
+                ? "default"
+                : outcome === "hold"
+                  ? "secondary"
+                  : "outline"
+          }
+          className="whitespace-nowrap"
+        >
+          {outcome ? INTERVIEW_OUTCOME_LABEL[outcome] : "No outcome"}
+        </Badge>
+      )}
+    </div>
   );
 }
 
-/** The pipeline strip across the top of frame 14c. Seven real stages — the
- *  frame drew six, but dropping one would hide applicants that exist. */
-const PIPELINE_STAGES: Array<[key: string, label: string]> = [
-  ["submitted", "SUBMITTED"],
-  ["waiting_for_references", "WAITING FOR REFS"],
-  ["references_received", "REFS RECEIVED"],
-  ["interview_scheduled", "INTERVIEW"],
-  ["accepted", "ACCEPTED"],
-  ["waitlisted", "WAITLISTED"],
-  ["rejected", "REJECTED"],
-];
+function ApplicantEmailStatusBadge({ email }: { email: ApplicantEmailRow }) {
+  // Sent and delivered are success. A missing open or click is not a problem.
+  const view = presentationForMessage(email);
+  return (
+    <Badge variant={badgeVariant(view.tone)} className="shrink-0">
+      {view.label}
+    </Badge>
+  );
+}
 
 /**
  * The four readiness checks. Deliberately only things the Hub actually knows:
@@ -1654,6 +1762,14 @@ function reviewChecks(resp: AppResponse, refs: ReferenceRequest[]): ReviewCheck[
   ];
 }
 
+function formatInterviewWhen(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return date
+    .toLocaleDateString("en-ZA", { day: "2-digit", month: "short", year: "numeric" })
+    .toUpperCase();
+}
+
 function ApplicantsTab({
   programId,
   programCode,
@@ -1661,6 +1777,8 @@ function ApplicantsTab({
   removedResponses,
   referenceSlots,
   refRequestSummaries,
+  pipelineReviews,
+  viewerId,
   staffOptions,
 }: {
   programId: string;
@@ -1669,6 +1787,8 @@ function ApplicantsTab({
   removedResponses: AppResponse[];
   referenceSlots: ReferenceSlot[];
   refRequestSummaries: RefRequestSummary[];
+  pipelineReviews: InterviewReviewSummary[];
+  viewerId: string;
   staffOptions: StaffUser[];
 }) {
   const router = useRouter();
@@ -1751,7 +1871,7 @@ function ApplicantsTab({
           alert(
             data.emailed
               ? "Reference updated — a fresh invite was sent to the new email and the old link no longer works."
-              : "Reference updated, but the invite email could not be sent. Use 'Remind' to retry."
+              : "Reference updated, but the invite email could not be sent. Check the address and try again."
           );
         }
         cancelEditReference();
@@ -1923,12 +2043,47 @@ function ApplicantsTab({
   // Review state
   const [reviewStatus, setReviewStatus] = useState("");
   const [reviewNotes, setReviewNotes] = useState("");
+  const [savedNotes, setSavedNotes] = useState("");
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [noteFeedback, setNoteFeedback] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+  const [interviewReviews, setInterviewReviews] = useState<ShownInterviewReview[]>([]);
+  const [interviewLoading, setInterviewLoading] = useState(false);
+  const [interviewReady, setInterviewReady] = useState(false);
+  const [interviewNotes, setInterviewNotes] = useState("");
+  const [savedInterviewNotes, setSavedInterviewNotes] = useState("");
+  const [interviewOutcome, setInterviewOutcome] = useState<InterviewOutcome>("pending");
+  const [savedInterviewOutcome, setSavedInterviewOutcome] = useState<InterviewOutcome>("pending");
+  const [interviewSaving, setInterviewSaving] = useState(false);
+  const [interviewFeedback, setInterviewFeedback] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+  const interviewRequest = useRef(0);
+  const interviewDraft = useRef<InterviewDraft>(emptyInterviewDraft());
+  // False until this open's fetch returns. Pipeline props can prefill before
+  // that; they must not overwrite the fetch afterwards.
+  const interviewAuthoritative = useRef(false);
   const [reviewLoading, setReviewLoading] = useState(false);
+
+  const commitInterviewDraft = useCallback((next: InterviewDraft) => {
+    interviewDraft.current = next;
+    setInterviewNotes(next.notes);
+    setSavedInterviewNotes(next.baselineNotes);
+    setInterviewOutcome(next.outcome);
+    setSavedInterviewOutcome(next.baselineOutcome);
+  }, []);
+
+  // Pipeline props can arrive after the panel is open (refresh, or a late
+  // server payload). Copy the viewer's saved row in until the reviews
+  // request has become the source of truth. The open click also prefills
+  // immediately; this covers the payload that lands afterwards.
+  useEffect(() => {
+    if (!reviewingResponse || interviewAuthoritative.current) return;
+    const saved = savedInterviewFor(pipelineReviews, reviewingResponse.id, viewerId);
+    const next = reconcileInterviewDraft(interviewDraft.current, saved, reviewingResponse.id);
+    if (next !== interviewDraft.current) commitInterviewDraft(next);
+  }, [reviewingResponse, pipelineReviews, viewerId, commitInterviewDraft]);
 
   // Pipeline filter & search
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [unassignedOnly, setUnassignedOnly] = useState(false);
 
   async function handleAssignStaff(responseId: string, staffId: string | null) {
     const res = await fetch("/api/schools/applications/responses/assign-staff", {
@@ -1962,19 +2117,48 @@ function ApplicantsTab({
 
   const responseStatusColors: Record<string, "default" | "secondary" | "destructive"> = {
     submitted: "secondary",
-    waiting_for_references: "secondary",
     references_received: "secondary",
     interview_scheduled: "secondary",
+    interview_complete: "secondary",
     accepted: "default",
     rejected: "destructive",
     waitlisted: "secondary",
     cancelled: "secondary",
   };
 
-  // Compute status counts for pipeline chips
+  const requiredSlotIds = referenceSlots.filter((slot) => slot.is_required).map((slot) => slot.id);
+  const requestsByApp = new Map<string, ReferenceRequestFact[]>();
+  for (const ref of refRequestSummaries) {
+    const rows = requestsByApp.get(ref.application_id) ?? [];
+    rows.push({ slotId: ref.slot_id, status: ref.status });
+    requestsByApp.set(ref.application_id, rows);
+  }
+  const reviewsByApp = new Map<string, InterviewReviewFact[]>();
+  for (const review of pipelineReviews) {
+    const rows = reviewsByApp.get(review.application_response_id) ?? [];
+    rows.push({ interviewOutcome: review.interview_outcome, updatedAt: review.updated_at });
+    reviewsByApp.set(review.application_response_id, rows);
+  }
+
+  function stageOf(resp: AppResponse) {
+    return derivePipelineStage({
+      storedStatus: resp.status,
+      requiredSlotIds,
+      requests: requestsByApp.get(resp.id) ?? [],
+      reviews: reviewsByApp.get(resp.id) ?? [],
+    });
+  }
+
+  function outcomeOf(resp: AppResponse): DecisiveInterviewOutcome | null {
+    return interviewOutcomeBadge(reviewsByApp.get(resp.id) ?? []);
+  }
+
+  // Counts follow the derived tab, so a stale stored status does not
+  // leave someone under Waiting for refs or Submitted after the refs are in.
   const statusCounts: Record<string, number> = {};
   for (const resp of responses) {
-    statusCounts[resp.status] = (statusCounts[resp.status] ?? 0) + 1;
+    const stage = stageOf(resp);
+    statusCounts[stage] = (statusCounts[stage] ?? 0) + 1;
   }
 
   const unassignedCount = responses.filter((r) => !r.assigned_staff_id).length;
@@ -1985,8 +2169,11 @@ function ApplicantsTab({
 
   // Filter responses by status, search, and unassigned-only toggle.
   const filteredResponses = sourceResponses.filter((resp) => {
-    if (!isRemovedView && statusFilter !== "all" && resp.status !== statusFilter) return false;
-    if (unassignedOnly && resp.assigned_staff_id) return false;
+    if (!isRemovedView && statusFilter === "unassigned") {
+      if (resp.assigned_staff_id) return false;
+    } else if (!isRemovedView && statusFilter !== "all" && stageOf(resp) !== statusFilter) {
+      return false;
+    }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       const name = respName(resp).toLowerCase();
@@ -2009,6 +2196,161 @@ function ApplicantsTab({
     }
   }
 
+  function applyInterviewRows(
+    applicationId: string,
+    rows: Array<{
+      id: string;
+      author_name?: string;
+      author_id?: string | null;
+      notes?: string | null;
+      note?: string | null;
+      interview_notes?: string | null;
+      interview_outcome?: string | null;
+      outcome?: string | null;
+      interviewOutcome?: string | null;
+      updated_at: string;
+      mine?: boolean;
+    }>
+  ) {
+    if (interviewDraft.current.applicationId !== applicationId) return;
+    const shown: ShownInterviewReview[] = rows.map((row) => {
+      const form = interviewFormFromReview(row);
+      return {
+        id: row.id,
+        authorName: row.author_name?.trim() || "Someone",
+        outcome: form.outcome,
+        notes: form.notes || null,
+        when: formatInterviewWhen(row.updated_at),
+        mine: !!row.mine || (!!viewerId && row.author_id === viewerId),
+      };
+    });
+    setInterviewReviews(shown);
+    interviewAuthoritative.current = true;
+    const next = nextDraftAfterLoad(interviewDraft.current, rows, viewerId);
+    if (next !== interviewDraft.current) commitInterviewDraft(next);
+  }
+
+  async function fetchInterviewReviews(applicationId: string, background = false) {
+    const ticket = ++interviewRequest.current;
+    if (!background) setInterviewLoading(true);
+    try {
+      const res = await fetch(`/api/schools/applications/reviews?response_id=${applicationId}`);
+      const data = await res.json().catch(() => ({}));
+      if (ticket !== interviewRequest.current) return;
+      if (!res.ok) {
+        if (!background) {
+          setInterviewReviews([]);
+          setInterviewReady(false);
+          setInterviewFeedback({
+            tone: "error",
+            text: data.error || "Could not load interview notes",
+          });
+        }
+        return;
+      }
+      applyInterviewRows(applicationId, data.reviews ?? []);
+      setInterviewReady(true);
+    } catch {
+      if (ticket !== interviewRequest.current || background) return;
+      setInterviewReady(false);
+      setInterviewFeedback({ tone: "error", text: "Could not load interview notes" });
+    } finally {
+      if (ticket === interviewRequest.current) setInterviewLoading(false);
+    }
+  }
+
+  function closeReview() {
+    const noteDirty = reviewNotes.trim() !== savedNotes.trim();
+    const draft = interviewDraft.current;
+    const interviewDirty =
+      draft.notes.trim() !== draft.baselineNotes.trim() ||
+      draft.outcome !== draft.baselineOutcome;
+    if (noteDirty || interviewDirty) {
+      const what =
+        noteDirty && interviewDirty
+          ? "The internal note and the interview notes are not saved."
+          : noteDirty
+            ? "This internal note is not saved."
+            : "These interview notes are not saved.";
+      if (!window.confirm(`${what} Close without saving?`)) return;
+    }
+    setReviewingResponse(null);
+  }
+
+  async function handleSaveNote() {
+    if (!reviewingResponse) return;
+    setNoteSaving(true);
+    setNoteFeedback(null);
+    const stored = reviewNotes.trim();
+    try {
+      const res = await fetch("/api/schools/applications/notes", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: reviewingResponse.id,
+          admin_notes: stored || null,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setNoteFeedback({ tone: "error", text: data.error || "Could not save the note" });
+        return;
+      }
+      setSavedNotes(stored);
+      setReviewNotes(stored);
+      setReviewingResponse((prev) => (prev ? { ...prev, admin_notes: stored || null } : prev));
+      setNoteFeedback({ tone: "ok", text: "Saved" });
+      router.refresh();
+    } catch {
+      setNoteFeedback({ tone: "error", text: "Could not save the note" });
+    } finally {
+      setNoteSaving(false);
+    }
+  }
+
+  async function handleSaveInterview() {
+    if (!reviewingResponse) return;
+    const applicationId = reviewingResponse.id;
+    setInterviewSaving(true);
+    setInterviewFeedback(null);
+    const draft = interviewDraft.current;
+    const stored = draft.notes.trim();
+    const flags = interviewClearFlags(draft);
+    try {
+      const res = await fetch("/api/schools/applications/reviews", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          response_id: applicationId,
+          notes: stored,
+          interview_outcome: draft.outcome,
+          clear_outcome: flags.clear_outcome,
+          clear_notes: flags.clear_notes,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setInterviewFeedback({
+          tone: "error",
+          text: data.error || "Could not save the interview notes",
+        });
+        return;
+      }
+      if (interviewDraft.current.applicationId !== applicationId) return;
+      const storedForm = interviewFormFromReview(
+        data.review ?? { notes: stored, interview_outcome: draft.outcome }
+      );
+      interviewAuthoritative.current = true;
+      commitInterviewDraft(draftFromSaved(storedForm, applicationId));
+      setInterviewFeedback({ tone: "ok", text: "Saved" });
+      await fetchInterviewReviews(applicationId, true);
+    } catch {
+      setInterviewFeedback({ tone: "error", text: "Could not save the interview notes" });
+    } finally {
+      setInterviewSaving(false);
+    }
+  }
+
   // ── Bulk Actions ──
   function toggleSelect(id: string) {
     setSelectedIds((prev) => {
@@ -2028,7 +2370,22 @@ function ApplicantsTab({
   }
 
   async function handleBulkStatusUpdate() {
-    if (selectedIds.size === 0 || !bulkStatus) return;
+    if (selectedIds.size === 0 || !statusWrittenByDecision(bulkStatus)) return;
+    if (selectedIds.size > BULK_STATUS_LIMIT) {
+      toast.error(`You can update at most ${BULK_STATUS_LIMIT} applications at once.`);
+      return;
+    }
+    const movingAccepted =
+      isBeforeAcceptance(bulkStatus) &&
+      responses.some((row) => selectedIds.has(row.id) && row.status === "accepted");
+    if (
+      movingAccepted &&
+      !window.confirm(
+        "Some of these applicants are already accepted and still enrolled. Move them back to an earlier stage?"
+      )
+    ) {
+      return;
+    }
     setBulkLoading(true);
     try {
       const res = await fetch("/api/schools/applications/responses", {
@@ -2038,32 +2395,35 @@ function ApplicantsTab({
           ids: Array.from(selectedIds),
           status: bulkStatus,
           send_email: true,
+          confirm_regress: movingAccepted,
         }),
       });
-      if (res.ok) {
-        // Accepting now also puts people on the roster. Anyone we couldn't
-        // enrol has no account for their email yet and needs the Accept
-        // button, which invites them — say so rather than letting them look
-        // accepted while being absent from the Arrival tab.
-        const data = await res.json().catch(() => ({}));
-        const stranded = (data.notEnrolled ?? []).length;
-        if (stranded > 0) {
-          alert(
-            `${stranded} applicant${stranded === 1 ? " was" : "s were"} marked accepted but not added to the roster — ` +
-              `they have no account yet. Use Accept on each so they get an invite.`
-          );
-        }
-        const emailWarnings: string[] = data.emailWarnings ?? [];
-        if (emailWarnings.length > 0) {
-          alert(
-            `${emailWarnings.length} acceptance email${emailWarnings.length === 1 ? " was" : "s were"} not sent:\n\n` +
-              emailWarnings.join("\n")
-          );
-        }
-        setSelectedIds(new Set());
-        setBulkStatus("");
-        router.refresh();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || "Failed to update statuses");
+        return;
       }
+      // Accepting now also puts people on the roster. Anyone we couldn't
+      // enrol has no account for their email yet and needs the Accept
+      // button, which invites them — say so rather than letting them look
+      // accepted while being absent from the Arrival tab.
+      const stranded = (data.notEnrolled ?? []).length;
+      if (stranded > 0) {
+        alert(
+          `${stranded} applicant${stranded === 1 ? " was" : "s were"} marked accepted but not added to the roster — ` +
+            `they have no account yet. Use Accept on each so they get an invite.`
+        );
+      }
+      const emailWarnings: string[] = data.emailWarnings ?? [];
+      if (emailWarnings.length > 0) {
+        alert(
+          `${emailWarnings.length} acceptance email${emailWarnings.length === 1 ? " was" : "s were"} not sent:\n\n` +
+            emailWarnings.join("\n")
+        );
+      }
+      setSelectedIds(new Set());
+      setBulkStatus("");
+      router.refresh();
     } catch {
       alert("Failed to update statuses");
     } finally {
@@ -2083,6 +2443,27 @@ function ApplicantsTab({
   }
 
   // ── Reference Reminder ──
+  function reminderToast(data: {
+    skipped?: boolean;
+    emailed?: boolean;
+    error?: string;
+    message?: string;
+  }, ok: boolean) {
+    if (!ok) {
+      toast.error(data.message || data.error || "Could not send the reminder");
+      return;
+    }
+    if (data.skipped) {
+      toast.error("This program has reference reminders switched off.");
+      return;
+    }
+    if (data.emailed) {
+      toast.success("Reminder sent");
+      return;
+    }
+    toast.error("The reminder was not sent. Check the address and try again.");
+  }
+
   async function handleSendReminder(refRequestId: string) {
     setSendingReminder(refRequestId);
     try {
@@ -2094,15 +2475,43 @@ function ApplicantsTab({
           reference_request_id: refRequestId,
         }),
       });
-      if (res.ok) {
-        alert("Reminder sent!");
-        fetchReferences(reviewingResponse!.id);
-      } else {
-        const data = await res.json();
-        alert(data.error || "Failed to send reminder");
+      const data = await res.json().catch(() => ({}));
+      reminderToast(data, res.ok);
+      if (res.ok && reviewingResponse) {
+        fetchReferences(reviewingResponse.id);
+        router.refresh();
       }
     } catch {
-      alert("Failed to send reminder");
+      toast.error("Could not send the reminder");
+    } finally {
+      setSendingReminder(null);
+    }
+  }
+
+  async function handleRemindOutstanding() {
+    if (!reviewingResponse) return;
+    setSendingReminder("all");
+    try {
+      const res = await fetch("/api/schools/applications/responses", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "send_outstanding_reference_reminders",
+          application_id: reviewingResponse.id,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.message || data.error || "Could not send reminders");
+        return;
+      }
+      const summary = remindAllToast(data.results ?? []);
+      if (summary.tone === "ok") toast.success(summary.text);
+      else toast.error(summary.text);
+      fetchReferences(reviewingResponse.id);
+      router.refresh();
+    } catch {
+      toast.error("Could not send reminders");
     } finally {
       setSendingReminder(null);
     }
@@ -2174,8 +2583,35 @@ function ApplicantsTab({
   /** `statusOverride` lets the 14c decision bar decide without waiting for the
    *  status select's state to settle. */
   async function handleReviewSave(statusOverride?: string) {
-    const nextStatus = statusOverride ?? reviewStatus;
-    if (!reviewingResponse || !nextStatus) return;
+    if (!reviewingResponse) return;
+    const nextStatus = statusToPersist(
+      statusOverride ?? reviewStatus,
+      reviewingResponse.status
+    );
+    if (!nextStatus) {
+      toast.error("Record an interview outcome to reach Interview complete.");
+      return;
+    }
+    const confirmRegress =
+      reviewingResponse.status === "accepted" && isBeforeAcceptance(nextStatus);
+    if (
+      confirmRegress &&
+      !window.confirm(
+        "This applicant is already accepted and still enrolled. Move them back to an earlier stage?"
+      )
+    ) {
+      return;
+    }
+    const draft = interviewDraft.current;
+    const interviewDirty =
+      draft.notes.trim() !== draft.baselineNotes.trim() ||
+      draft.outcome !== draft.baselineOutcome;
+    if (interviewDirty) {
+      const proceed = window.confirm(
+        "These interview notes are not saved. Continue with the decision without them?"
+      );
+      if (!proceed) return;
+    }
     setReviewLoading(true);
 
     try {
@@ -2220,6 +2656,7 @@ function ApplicantsTab({
           id: reviewingResponse.id,
           status: nextStatus,
           admin_notes: reviewNotes.trim() || null,
+          confirm_regress: confirmRegress,
         }),
       });
 
@@ -2238,10 +2675,10 @@ function ApplicantsTab({
     }
   }
 
-  const pipelineStages: PipelineStage[] = PIPELINE_STAGES.map(([key, label]) => ({
+  const pipelineStages: PipelineStage[] = PIPELINE_STAGE_ORDER.map((key) => ({
     key,
-    label,
-    count: responses.filter((r) => r.status === key).length,
+    label: PIPELINE_STAGE_LABEL[key].toUpperCase(),
+    count: responses.filter((r) => stageOf(r) === key).length,
   }));
 
   /** The mono strap above the applicant's name: school · when · who. */
@@ -2260,16 +2697,16 @@ function ApplicantsTab({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6">
       {/* Pipeline Filter Chips & Search */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
+      <div className="min-w-0 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Users className="h-4 w-4 text-muted-foreground" />
             <h3 className="font-medium">Applicant Pipeline</h3>
           </div>
           {responses.length > 0 && (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 size="sm"
                 variant="outline"
@@ -2306,16 +2743,22 @@ function ApplicantsTab({
           )}
         </div>
 
-        {/* Status filter chips */}
-        <div className="flex flex-wrap gap-2">
-          {ALL_STATUSES.map(({ key, label }) => {
-            const count = key === "all" ? responses.length : (statusCounts[key] ?? 0);
+        {/* Status filter chips. They wrap; a chip never grows wider than the screen. */}
+        <div className="flex min-w-0 flex-wrap gap-2">
+          {PIPELINE_TABS.map(({ key, label }) => {
+            const count =
+              key === "all"
+                ? responses.length
+                : key === "unassigned"
+                  ? unassignedCount
+                  : (statusCounts[key] ?? 0);
             const isActive = statusFilter === key;
             return (
               <button
                 key={key}
+                type="button"
                 onClick={() => setStatusFilter(key)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
+                className={`inline-flex max-w-full items-center gap-1.5 whitespace-nowrap px-2.5 py-1.5 text-xs font-medium transition-colors ${
                   isActive
                     ? "bg-primary text-primary-foreground"
                     : "bg-muted text-muted-foreground hover:bg-muted/80"
@@ -2330,22 +2773,6 @@ function ApplicantsTab({
               </button>
             );
           })}
-          <button
-            onClick={() => setUnassignedOnly((v) => !v)}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
-              unassignedOnly
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted text-muted-foreground hover:bg-muted/80"
-            }`}
-            title="Show only applicants with no staff assigned"
-          >
-            Unassigned
-            <span className={`px-1.5 py-0.5 text-[10px] font-bold ${
-              unassignedOnly ? "text-white" : "bg-bone"
-            }`}>
-              {unassignedCount}
-            </span>
-          </button>
           {removedResponses.length > 0 && (
             <button
               onClick={() => setStatusFilter(isRemovedView ? "all" : "removed")}
@@ -2475,22 +2902,20 @@ function ApplicantsTab({
 
       {/* Bulk Actions Bar */}
       {!isRemovedView && selectedIds.size > 0 && (
-        <div className="border border-ink bg-bone p-3 flex items-center gap-3">
+        <div className="border border-ink bg-bone p-3 flex flex-wrap items-center gap-3">
           <span className="text-sm font-medium">
             {selectedIds.size} selected
           </span>
           <Select value={bulkStatus} onValueChange={setBulkStatus}>
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-full sm:w-[240px]">
               <SelectValue placeholder="Set status..." />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="waiting_for_references">Waiting for References</SelectItem>
-              <SelectItem value="references_received">References Received</SelectItem>
-              <SelectItem value="interview_scheduled">Interview Scheduled</SelectItem>
-              <SelectItem value="accepted">Accepted</SelectItem>
-              <SelectItem value="rejected">Rejected</SelectItem>
-              <SelectItem value="waitlisted">Waitlisted</SelectItem>
-              <SelectItem value="cancelled">Cancelled</SelectItem>
+              {decisionChoices().map((choice) => (
+                <SelectItem key={choice.value} value={choice.value} disabled={!choice.settable}>
+                  {choice.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Button
@@ -2531,7 +2956,7 @@ function ApplicantsTab({
                 <TableHead>Student</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Submitted</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead className="hidden md:table-cell">Status</TableHead>
                 {referenceSlots.length > 0 && <TableHead>References</TableHead>}
                 <TableHead>Assigned</TableHead>
                 <TableHead className="w-[120px]" />
@@ -2564,6 +2989,15 @@ function ApplicantsTab({
                         </Badge>
                       </div>
                     )}
+                    {/* The status column sits past the fold on a phone. Repeat
+                        the stage here so the tab's badge is on screen. */}
+                    <div className="mt-1.5 md:hidden">
+                      <ApplicantStageBadges
+                        stage={stageOf(resp)}
+                        outcome={outcomeOf(resp)}
+                        variant={responseStatusColors[stageOf(resp)] ?? "secondary"}
+                      />
+                    </div>
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {respEmail(resp)}
@@ -2571,27 +3005,12 @@ function ApplicantsTab({
                   <TableCell className="text-muted-foreground">
                     {new Date(resp.submitted_at).toLocaleDateString()}
                   </TableCell>
-                  <TableCell>
-                    {(() => {
-                      const refs = refRequestSummaries.filter((r) => r.application_id === resp.id);
-                      const totalRefs = refs.length;
-                      const submittedRefs = refs.filter((r) => r.status === "submitted").length;
-                      const allRefsIn = totalRefs > 0 && submittedRefs === totalRefs;
-                      const isComplete = allRefsIn && resp.status === "submitted";
-
-                      if (isComplete) {
-                        return (
-                          <Badge style={{ background: "hsl(142 55% 25%)", color: "hsl(142 55% 75%)", border: "1px solid hsl(142 55% 35%)" }}>
-                            Complete
-                          </Badge>
-                        );
-                      }
-                      return (
-                        <Badge variant={responseStatusColors[resp.status] ?? "secondary"}>
-                          {resp.status.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())}
-                        </Badge>
-                      );
-                    })()}
+                  <TableCell className="hidden md:table-cell">
+                    <ApplicantStageBadges
+                      stage={stageOf(resp)}
+                      outcome={outcomeOf(resp)}
+                      variant={responseStatusColors[stageOf(resp)] ?? "secondary"}
+                    />
                   </TableCell>
                   {referenceSlots.length > 0 && (
                     <TableCell>
@@ -2682,11 +3101,25 @@ function ApplicantsTab({
                           variant="outline"
                           size="sm"
                           onClick={() => {
+                            const note = resp.admin_notes ?? "";
                             setReviewingResponse(resp);
-                            setReviewStatus(resp.status);
-                            setReviewNotes(resp.admin_notes ?? "");
+                            setReviewStatus(decisionSelectValue(resp.status));
+                            setReviewNotes(note);
+                            setSavedNotes(note);
+                            setNoteFeedback(null);
+                            setInterviewReviews([]);
+                            setInterviewReady(false);
+                            setInterviewFeedback(null);
+                            interviewAuthoritative.current = false;
+                            commitInterviewDraft(
+                              draftFromSaved(
+                                savedInterviewFor(pipelineReviews, resp.id, viewerId),
+                                resp.id
+                              )
+                            );
                             fetchReferences(resp.id);
                             fetchApplicantEmails(resp.id);
+                            fetchInterviewReviews(resp.id);
                           }}
                         >
                           Review
@@ -2789,7 +3222,7 @@ function ApplicantsTab({
           phone={reviewingResponse.applicant_info?.phone ?? null}
           contextLine={reviewContextLine(reviewingResponse)}
           stages={pipelineStages}
-          currentStatus={reviewingResponse.status}
+          currentStatus={stageOf(reviewingResponse)}
           answers={reviewingResponse.answers ?? []}
           references={reviewReferences.map((ref) => ({
             id: ref.id,
@@ -2808,6 +3241,25 @@ function ApplicantsTab({
                   .toUpperCase()}`
               : "INTERNAL NOTE"
           }
+          noteSaving={noteSaving}
+          noteFeedback={noteFeedback}
+          onSaveNote={handleSaveNote}
+          interviewReviews={interviewReviews}
+          interviewLoading={interviewLoading}
+          interviewReady={interviewReady}
+          interviewNotes={interviewNotes}
+          interviewOutcome={interviewOutcome}
+          onInterviewNotesChange={(value) => {
+            commitInterviewDraft({ ...interviewDraft.current, notes: value });
+            setInterviewFeedback(null);
+          }}
+          onInterviewOutcomeChange={(value) => {
+            commitInterviewDraft({ ...interviewDraft.current, outcome: value });
+            setInterviewFeedback(null);
+          }}
+          onSaveInterview={handleSaveInterview}
+          interviewSaving={interviewSaving}
+          interviewFeedback={interviewFeedback}
           acceptConsequence={
             reviewingResponse.status === "accepted"
               ? "ALREADY ACCEPTED — SAVING AGAIN ONLY UPDATES THE NOTE."
@@ -2824,9 +3276,12 @@ function ApplicantsTab({
               answer
             )
           }
-          onNoteChange={setReviewNotes}
+          onNoteChange={(value) => {
+            setReviewNotes(value);
+            setNoteFeedback(null);
+          }}
           onDecision={(status) => handleReviewSave(status)}
-          onClose={() => setReviewingResponse(null)}
+          onClose={closeReview}
           extras={
             <div className="space-y-6">
           {/* Email, phone and the submitted date are NOT repeated here — the
@@ -2881,13 +3336,11 @@ function ApplicantsTab({
                         ).toLocaleString()}
                       </p>
                       {em.error &&
-                        ["bounced", "complained", "failed", "dropped"].includes(
-                          em.status
-                        ) && (
+                        presentationForMessage(em).tone === "problem" && (
                           <p className="text-xs text-destructive">{em.error}</p>
                         )}
                     </div>
-                    <ApplicantEmailStatusBadge status={em.status} />
+                    <ApplicantEmailStatusBadge email={em} />
                   </li>
                 ))}
               </ul>
@@ -2901,7 +3354,26 @@ function ApplicantsTab({
           {/* References */}
           {referenceSlots.length > 0 && (
             <div className="space-y-3">
-              <h4 className="text-sm font-medium">References</h4>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <h4 className="text-sm font-medium">References</h4>
+                {reviewReferences.some((ref) => ref.status !== "submitted") && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-11 w-full gap-1.5 sm:h-9 sm:w-auto"
+                    disabled={sendingReminder !== null}
+                    onClick={handleRemindOutstanding}
+                  >
+                    {sendingReminder === "all" ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Send className="h-3.5 w-3.5" />
+                    )}
+                    Remind all outstanding
+                  </Button>
+                )}
+              </div>
               {!refsLoading &&
                 referenceSlots.some(
                   (slot) =>
@@ -2959,21 +3431,36 @@ function ApplicantsTab({
                 <div className="space-y-3">
                   {reviewReferences.map((ref) => (
                     <div key={ref.id} className="border bg-muted/50 p-3 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div>
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
                           <p className="text-sm font-medium">
                             {ref.reference_slots?.label ?? "Reference"}
                           </p>
-                          <p className="text-xs text-muted-foreground">
+                          <p className="text-xs text-muted-foreground break-all">
                             {ref.referee_name} · {ref.referee_email}
                           </p>
+                          {ref.status !== "submitted" && (
+                            <div className="mt-1">
+                              <LastReminderSent sentAt={ref.reminder_sent_at ?? null} />
+                            </div>
+                          )}
+                          {ref.status !== "submitted" && ref.email_problem === "bounced" && (
+                            <p className="mt-1 text-xs text-destructive" role="status">
+                              {REFERENCE_BOUNCE_MESSAGE}
+                            </p>
+                          )}
+                          {ref.status !== "submitted" && ref.email_problem === "not_sent" && (
+                            <p className="mt-1 text-xs text-destructive" role="status">
+                              {REFERENCE_NOT_SENT_MESSAGE}
+                            </p>
+                          )}
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           {ref.status !== "submitted" && editingRefId !== ref.id && (
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="text-xs gap-1"
+                              className="h-11 text-xs gap-1 sm:h-8"
                               onClick={() => startEditReference(ref)}
                               title="Change reference name or email"
                             >
@@ -2983,10 +3470,11 @@ function ApplicantsTab({
                           )}
                           {ref.status !== "submitted" && (
                             <Button
-                              variant="ghost"
+                              type="button"
+                              variant="outline"
                               size="sm"
-                              className="text-xs gap-1"
-                              disabled={sendingReminder === ref.id}
+                              className="h-11 text-xs gap-1 sm:h-8"
+                              disabled={sendingReminder !== null}
                               onClick={() => handleSendReminder(ref.id)}
                               title="Send reminder email"
                             >
@@ -2998,9 +3486,13 @@ function ApplicantsTab({
                               Remind
                             </Button>
                           )}
-                          <Badge variant={ref.status === "submitted" ? "default" : "secondary"}>
-                            {ref.status === "submitted" ? "Submitted" : "Pending"}
-                          </Badge>
+                          {ref.status !== "submitted" && ref.email_problem === "bounced" ? (
+                            <Badge variant="destructive">Email bounced</Badge>
+                          ) : (
+                            <Badge variant={ref.status === "submitted" ? "default" : "secondary"}>
+                              {ref.status === "submitted" ? "Submitted" : "Pending"}
+                            </Badge>
+                          )}
                         </div>
                       </div>
 
@@ -3214,28 +3706,46 @@ function ApplicantsTab({
           </div>
 
 
-          {/* Status Update */}
-          <div className="flex items-center gap-4 pt-2">
-            <Label>Decision:</Label>
-            <Select value={reviewStatus} onValueChange={setReviewStatus}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="submitted">Submitted</SelectItem>
-                <SelectItem value="waiting_for_references">Waiting for References</SelectItem>
-                <SelectItem value="references_received">References Received</SelectItem>
-                <SelectItem value="interview_scheduled">Interview Scheduled</SelectItem>
-                <SelectItem value="accepted">Accepted</SelectItem>
-                <SelectItem value="rejected">Rejected</SelectItem>
-                <SelectItem value="waitlisted">Waitlisted</SelectItem>
-                <SelectItem value="cancelled">Cancelled</SelectItem>
-              </SelectContent>
-            </Select>
+          {/* Status Update. Options are the pipeline stages. */}
+          <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-end">
+            <div className="min-w-0 flex-1 space-y-1.5">
+              <Label htmlFor="applicant-decision">Decision</Label>
+              <Select
+                value={decisionSelectValue(reviewStatus)}
+                onValueChange={(value) => {
+                  if (statusWrittenByDecision(value)) setReviewStatus(value);
+                }}
+              >
+                <SelectTrigger id="applicant-decision" className="w-full sm:max-w-[280px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {decisionChoices().map((choice) => (
+                    <SelectItem key={choice.value} value={choice.value} disabled={!choice.settable}>
+                      {choice.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {stageOf(reviewingResponse) === "interview_complete" && (
+                <p className="text-xs text-muted-foreground">
+                  Record an interview outcome to reach Interview complete.
+                </p>
+              )}
+            </div>
             <Button
               onClick={() => handleReviewSave()}
-              disabled={reviewLoading || (reviewStatus === reviewingResponse.status && (reviewNotes.trim() || "") === (reviewingResponse.admin_notes || ""))}
+              disabled={
+                reviewLoading ||
+                (statusToPersist(reviewStatus, reviewingResponse.status) ===
+                  statusToPersist(
+                    decisionSelectValue(reviewingResponse.status),
+                    reviewingResponse.status
+                  ) &&
+                  (reviewNotes.trim() || "") === (reviewingResponse.admin_notes || ""))
+              }
               size="sm"
+              className="h-11 w-full sm:h-9 sm:w-auto"
             >
               {reviewLoading ? "Saving..." : "Save Decision"}
             </Button>
@@ -3261,6 +3771,7 @@ function ApplicationTab({
   questions,
   referenceSlots,
   referenceQuestions,
+  canManageTemplates,
 }: {
   programId: string;
   programCode: string;
@@ -3270,6 +3781,7 @@ function ApplicationTab({
   questions: AppQuestion[];
   referenceSlots: ReferenceSlot[];
   referenceQuestions: TreeQuestion[];
+  canManageTemplates: boolean;
 }) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(applicationOpen);
@@ -3797,12 +4309,12 @@ function ApplicationTab({
 
       {/* ─── APPLICATION BUILDER ─── */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="font-medium flex items-center gap-2">
             <ClipboardList className="h-4 w-4" />
             Application Questions ({questions.length})
           </h3>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
               size="sm"
               variant="outline"
@@ -3814,7 +4326,7 @@ function ApplicationTab({
               <Upload className="mr-2 h-4 w-4" />
               Import Template
             </Button>
-            {questions.length > 0 && (
+            {canManageTemplates && questions.length > 0 && (
               <Button
                 size="sm"
                 variant="outline"
@@ -3835,10 +4347,15 @@ function ApplicationTab({
               Add Question
             </Button>
           </div>
+          {!canManageTemplates && (
+            <p className="w-full text-xs leading-snug text-muted-foreground">
+              Only admins and Hub-wide template managers can save or delete templates.
+            </p>
+          )}
         </div>
 
         {/* Save as Template Dialog */}
-        {showSaveTemplate && (
+        {canManageTemplates && showSaveTemplate && (
           <div className="border bg-card p-4 space-y-3">
             <h4 className="text-sm font-medium">Save Questions as Template</h4>
             <p className="text-xs text-muted-foreground">
@@ -3913,14 +4430,16 @@ function ApplicationTab({
                         "Import"
                       )}
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-muted-foreground hover:text-destructive"
-                      onClick={() => handleDeleteTemplate(t.id)}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
+                    {canManageTemplates && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-muted-foreground hover:text-destructive"
+                        onClick={() => handleDeleteTemplate(t.id)}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    )}
                   </div>
                 ))}
               </div>

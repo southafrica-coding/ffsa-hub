@@ -1,3 +1,6 @@
+import { applicantEmailIlikePattern } from "@/lib/applications/applicant-identity";
+import { redactInterviewNotesForViewer } from "@/lib/schools/interview-review-form";
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
 
@@ -793,10 +796,12 @@ export async function getResponseByEmailAndProgram(
   email: string,
   programId: string
 ) {
+  // ILIKE, not eq: stored applicant emails are mixed-case, and a lowercased
+  // new value would miss them. Wildcards in the address are escaped.
   return supabase
     .from("application_responses")
     .select("id, status")
-    .eq("applicant_email", email)
+    .ilike("applicant_email", applicantEmailIlikePattern(email))
     .eq("program_id", programId)
     .is("user_id", null)
     .maybeSingle();
@@ -822,14 +827,62 @@ export async function updateResponseStatus(
     reviewed_by: reviewedBy,
     reviewed_at: new Date().toISOString(),
   };
-  if (adminNotes !== undefined) updateData.admin_notes = adminNotes;
-
-  return supabase
+  const result = await supabase
     .from("application_responses")
     .update(updateData)
     .eq("id", id)
     .select()
     .single();
+
+  if (result.error || adminNotes === undefined) return result;
+
+  const programId = (result.data as { program_id?: string } | null)?.program_id;
+  if (!programId) {
+    return {
+      data: result.data,
+      error: { message: "Could not save the note: the application has no school." },
+    };
+  }
+  const notesWrite = await supabase.from("application_admin_notes").upsert(
+    {
+      application_response_id: id,
+      program_id: programId,
+      notes: adminNotes,
+      updated_by: reviewedBy,
+    },
+    { onConflict: "application_response_id" }
+  );
+  if (notesWrite.error) {
+    return { data: result.data, error: notesWrite.error };
+  }
+  return result;
+}
+
+/**
+ * Leader scratch note only. Writes application_admin_notes and does not
+ * touch application_responses, so status, reviewed_at, and email stay put.
+ * program_id is stored for the NOT NULL column; the row trigger overwrites
+ * it from the application.
+ */
+export async function saveApplicationAdminNote(
+  supabase: Client,
+  input: {
+    applicationResponseId: string;
+    programId: string;
+    notes: string | null;
+    updatedBy: string;
+  }
+) {
+  return supabase.from("application_admin_notes").upsert(
+    {
+      application_response_id: input.applicationResponseId,
+      program_id: input.programId,
+      notes: input.notes,
+      updated_by: input.updatedBy,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "application_response_id" }
+  );
 }
 
 // ────────────────────────────────────────────────────────────
@@ -934,8 +987,37 @@ export async function getReferenceRequestSummaries(supabase: Client, application
   if (applicationIds.length === 0) return { data: [], error: null };
   return supabase
     .from("reference_requests")
-    .select("id, application_id, status, submitted_at, reminder_sent_at")
+    .select("id, application_id, slot_id, status, submitted_at, reminder_sent_at")
     .in("application_id", applicationIds);
+}
+
+/**
+ * Interview rows for the applicants tab. Every reviewer's outcome is included
+ * for the pipeline badge. Notes are limited to `viewerId`; other authors'
+ * notes are nulled before the rows leave this function.
+ */
+export async function getInterviewReviewSummaries(
+  supabase: Client,
+  applicationIds: string[],
+  viewerId?: string | null
+) {
+  if (applicationIds.length === 0) return { data: [], error: null };
+  const rows: Array<{
+    application_response_id: string;
+    author_id: string | null;
+    notes: string | null;
+    interview_outcome: string | null;
+    updated_at: string | null;
+  }> = [];
+  for (let i = 0; i < applicationIds.length; i += 150) {
+    const { data, error } = await supabase
+      .from("application_staff_reviews")
+      .select("application_response_id, author_id, notes, interview_outcome, updated_at")
+      .in("application_response_id", applicationIds.slice(i, i + 150));
+    if (error) return { data: redactInterviewNotesForViewer(rows, viewerId), error };
+    rows.push(...(data ?? []));
+  }
+  return { data: redactInterviewNotesForViewer(rows, viewerId), error: null };
 }
 
 export async function getReferenceRequestsByApplication(supabase: Client, applicationId: string) {
@@ -1004,7 +1086,9 @@ export async function createApplicationTemplate(
 }
 
 export async function deleteApplicationTemplate(supabase: Client, id: string) {
-  return supabase.from("application_templates").delete().eq("id", id);
+  // select so a filtered (zero-row) delete is visible to the route. Without
+  // it PostgREST returns no error and the caller cannot tell nothing changed.
+  return supabase.from("application_templates").delete().eq("id", id).select("id");
 }
 
 export async function createTemplateQuestions(

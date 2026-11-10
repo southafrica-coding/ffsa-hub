@@ -29,7 +29,16 @@ const state = vi.hoisted(() => {
             },
           },
         },
-        rpc: async () => ({ data: null, error: null }),
+        rpc: async (name: string) => {
+          if (name === "is_admin") {
+            const names = state.roles[state.callerId] ?? [];
+            return {
+              data: names.includes("admin") || names.includes("super_admin"),
+              error: null,
+            };
+          }
+          return { data: null, error: null };
+        },
         from(table: string) {
           const filters: Filters = {};
           let op = "select";
@@ -111,8 +120,8 @@ vi.mock("@/lib/users/set-membership-role", async (orig) => ({
   }),
 }));
 vi.mock("@/services/users", () => ({
-  approveUser: vi.fn(async () => {
-    state.writes.push("approveUser");
+  activateApprovedUser: vi.fn(async () => {
+    state.writes.push("activateApprovedUser");
     return { data: {}, error: null };
   }),
 }));
@@ -151,8 +160,10 @@ beforeEach(() => {
     pat: ["staff"], // an ordinary staff member
   };
   state.users = {
-    boss: { email: "boss@ffsa.test", job_title: "Director" },
-    pat: { email: "pat@ffsa.test", job_title: null },
+    ga: { email: "ga@ffsa.test", is_active: true },
+    sa: { email: "sa@ffsa.test", is_active: true },
+    boss: { email: "boss@ffsa.test", job_title: "Director", is_active: true },
+    pat: { email: "pat@ffsa.test", job_title: null, is_active: true },
   };
   state.writes = [];
 });

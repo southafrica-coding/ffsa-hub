@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getAuthedUser, canManageEvents } from "@/lib/api-auth";
+import { getAuthedUser } from "@/lib/api-auth";
+import { canManageEvent, ORDERS_GATE } from "@/lib/auth/event-access";
 import {
   reconcileStripeOrder,
   type ReconcileOrder,
@@ -33,7 +34,7 @@ export async function POST(
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
   if (
-    !(await canManageEvents(supabase, user.id, ["events.manage_registrations"]))
+    !(await canManageEvent(supabase, user.id, ORDERS_GATE.keys, eventId, ORDERS_GATE))
   ) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }

@@ -114,6 +114,11 @@ export function FormBuilder({
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [origin, setOrigin] = useState("");
+
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
 
   // ── schema mutation helpers ───────────────────────────────
   function update(next: Partial<FormSchema>) {
@@ -225,8 +230,7 @@ export function FormBuilder({
     router.refresh();
   }
 
-  const publicUrl =
-    typeof window !== "undefined" ? `${window.location.origin}/f/${form.slug}` : `/f/${form.slug}`;
+  const publicUrl = origin ? `${origin}/f/${form.slug}` : `/f/${form.slug}`;
 
   return (
     <>

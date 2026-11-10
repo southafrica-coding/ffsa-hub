@@ -66,7 +66,8 @@ export const PROGRAM_EMAIL_TYPES: ProgramEmailType[] = [
       "Sent to each referee the applicant lists, asking them to complete a reference.",
     audience: "referee",
     mergeFields: REFEREE_FIELDS,
-    defaultSubject: "Reference Request — {{program_name}}",
+    defaultSubject:
+      "{{applicant_name}} asked you to give a reference for {{program_name}}",
     defaultEyebrow: "Reference Request",
     defaultHeading: "Hi {{referee_name}}",
     defaultBody:

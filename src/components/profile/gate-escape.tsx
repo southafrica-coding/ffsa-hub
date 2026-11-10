@@ -1,8 +1,5 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { LogOut } from "lucide-react";
 
 /**
@@ -21,37 +18,20 @@ import { LogOut } from "lucide-react";
  * escape.
  */
 export function GateEscape() {
-  const router = useRouter();
-  const [busy, setBusy] = useState(false);
-
-  async function handleSignOut() {
-    setBusy(true);
-    try {
-      const supabase = createClient();
-      await supabase.auth.signOut();
-      router.push("/login");
-      router.refresh();
-    } catch {
-      // Never strand someone here because the network hiccuped: the login
-      // page will bounce them back if the session somehow survived.
-      router.push("/login");
-    }
-  }
-
   return (
     <div className="sticky top-0 z-10 -mx-4 mb-4 flex items-center justify-between gap-3 border-b border-[#2A2A2A] bg-black/95 px-4 py-3 backdrop-blur sm:-mx-8 sm:px-8">
       <p className="font-mono text-[9.5px] font-bold uppercase tracking-[0.16em] text-[#9A9689]">
         Finish this to use the Hub
       </p>
-      <button
-        type="button"
-        onClick={handleSignOut}
-        disabled={busy}
-        className="flex min-h-[44px] items-center gap-2 px-1 font-mono text-[9.5px] font-bold uppercase tracking-[0.16em] text-[#9A9689] transition-colors hover:text-white disabled:opacity-50"
-      >
-        <LogOut className="h-3.5 w-3.5" aria-hidden />
-        {busy ? "Signing out…" : "Sign out"}
-      </button>
+      <form action="/auth/sign-out" method="post">
+        <button
+          type="submit"
+          className="flex min-h-[44px] items-center gap-2 px-1 font-mono text-[9.5px] font-bold uppercase tracking-[0.16em] text-[#9A9689] transition-colors hover:text-white"
+        >
+          <LogOut className="h-3.5 w-3.5" aria-hidden />
+          Sign out
+        </button>
+      </form>
     </div>
   );
 }

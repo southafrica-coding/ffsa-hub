@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getAuthedUser, canManageEvents } from "@/lib/api-auth";
+import { getAuthedUser } from "@/lib/api-auth";
+import { canManageEvent, EVENT_CREATE_GATE } from "@/lib/auth/event-access";
 import type { WaiverSignatureRecord } from "@/lib/ticketing/waivers";
 
 // GET /api/tickets/[code]/waiver
@@ -21,7 +22,31 @@ export async function GET(
   if (!user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
-  if (!(await canManageEvents(supabase, user.id))) {
+  // The ticket code is not an event id. Read event_id as the caller first.
+  // Tickets SELECT is events.view, so a create-only organizer may not see
+  // the row; an id-only service-role probe then distinguishes a missing
+  // ticket from one outside their scope. The file itself is downloaded
+  // only after the gate.
+  const { data: visible } = await supabase
+    .from("tickets")
+    .select("id, event_id")
+    .eq("code", code)
+    .maybeSingle();
+  let eventId = (visible?.event_id as string | null) ?? null;
+  if (!eventId) {
+    const { data: hidden } = await createAdminClient()
+      .from("tickets")
+      .select("id, event_id")
+      .eq("code", code)
+      .maybeSingle();
+    if (!hidden?.event_id) {
+      return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
+    }
+    eventId = hidden.event_id as string;
+    if (!(await canManageEvent(supabase, user.id, EVENT_CREATE_GATE.keys, eventId, EVENT_CREATE_GATE))) {
+      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+    }
+  } else if (!(await canManageEvent(supabase, user.id, EVENT_CREATE_GATE.keys, eventId, EVENT_CREATE_GATE))) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 

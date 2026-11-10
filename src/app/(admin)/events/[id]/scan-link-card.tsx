@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Copy, Check, RefreshCw, Link2 } from "lucide-react";
+import { ShareLinkQr } from "@/components/share/share-link-qr";
 
 /**
  * The shareable door link for a welcome team with no Hub accounts.
@@ -129,27 +130,38 @@ export function ScanLinkCard({ eventId }: { eventId: string }) {
           </Button>
         ) : (
           <div className="mt-4 space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                readOnly
-                value={busy && !token ? "Loading…" : url}
-                onFocus={(e) => e.currentTarget.select()}
-                className="h-9 min-w-0 flex-1 border border-rule-strong bg-white px-2 font-mono text-xs"
-              />
-              <Button
-                size="sm"
-                variant="outline"
-                className="gap-1.5"
-                onClick={copy}
-                disabled={!token || !isActive}
-              >
-                {copied ? (
-                  <Check className="h-3.5 w-3.5" />
-                ) : (
-                  <Copy className="h-3.5 w-3.5" />
-                )}
-                {copied ? "Copied" : "Copy"}
-              </Button>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                <input
+                  readOnly
+                  value={busy && !token ? "Loading…" : url}
+                  onFocus={(e) => e.currentTarget.select()}
+                  className="h-9 min-w-0 w-full flex-1 border border-rule-strong bg-white px-2 font-mono text-xs sm:w-auto"
+                  aria-label="Welcome team door link"
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5"
+                  onClick={copy}
+                  disabled={!token || !isActive}
+                >
+                  {copied ? (
+                    <Check className="h-3.5 w-3.5" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5" />
+                  )}
+                  {copied ? "Copied" : "Copy"}
+                </Button>
+              </div>
+              {url ? (
+                <ShareLinkQr
+                  url={url}
+                  filename={token ?? "door"}
+                  label="QR code for the welcome team door link"
+                  showCopy={false}
+                />
+              ) : null}
             </div>
 
             {!isActive && (

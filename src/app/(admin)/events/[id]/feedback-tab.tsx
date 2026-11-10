@@ -31,10 +31,12 @@ export function FeedbackTab({
   eventId,
   forms,
   responseCounts,
+  canEdit = false,
 }: {
   eventId: string;
   forms: FeedbackFormRow[];
   responseCounts: Record<string, number>;
+  canEdit?: boolean;
 }) {
   const router = useRouter();
   const [creating, setCreating] = useState(false);
@@ -69,7 +71,7 @@ export function FeedbackTab({
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle className="text-base">Feedback</CardTitle>
-        {!creating && (
+        {canEdit && !creating && (
           <button
             type="button"
             onClick={() => setCreating(true)}
@@ -119,12 +121,14 @@ export function FeedbackTab({
                     >
                       Results
                     </Link>
+                    {canEdit && (
                     <Link
                       href={`/events/${eventId}/feedback/${f.id}`}
                       className="text-xs text-ink hover:underline"
                     >
                       Edit
                     </Link>
+                    )}
                   </div>
                 </li>
               );
@@ -132,7 +136,7 @@ export function FeedbackTab({
           </ul>
         )}
 
-        {creating && (
+        {canEdit && creating && (
           <div className="border-t pt-3 space-y-2">
             <input
               type="text"

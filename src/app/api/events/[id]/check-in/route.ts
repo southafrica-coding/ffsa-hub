@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getAuthedUser, canManageEvents } from "@/lib/api-auth";
+import { getAuthedUser } from "@/lib/api-auth";
+import { canManageEvent, ATTENDANCE_GATE } from "@/lib/auth/event-access";
 import {
   checkInTicket,
   undoCheckIn,
@@ -19,7 +20,7 @@ async function authorise(eventId: string) {
   if (!user) {
     return { error: NextResponse.json({ error: "Not authenticated" }, { status: 401 }) };
   }
-  if (!(await canManageEvents(supabase, user.id, ["events.manage_attendance"]))) {
+  if (!(await canManageEvent(supabase, user.id, ATTENDANCE_GATE.keys, eventId, ATTENDANCE_GATE))) {
     return { error: NextResponse.json({ error: "Not authorized" }, { status: 403 }) };
   }
   return { userId: user.id, eventId };

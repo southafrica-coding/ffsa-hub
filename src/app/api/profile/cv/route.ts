@@ -4,6 +4,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getAuthedUser } from "@/lib/api-auth";
 import { canEditEssenceStatement } from "@/lib/auth/check-cv-access";
 import { updateEssenceStatement } from "@/services/staff-cv";
+import { rejectIfDeactivated } from "@/lib/users/self-edit-guard";
+import { usersUpdateDeniedResponse } from "@/lib/users/users-update-error";
 
 // PATCH /api/profile/cv — update a staff member's essence statement.
 // Self, or admin editing on behalf (body.userId).
@@ -22,9 +24,17 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Not allowed" }, { status: 403 });
   }
 
-  const client = targetUserId === user.id ? supabase : createAdminClient();
+  const self = targetUserId === user.id;
+  if (self) {
+    const blocked = await rejectIfDeactivated(supabase, user.id);
+    if (blocked) return blocked;
+  }
+
+  const client = self ? supabase : createAdminClient();
   const { error } = await updateEssenceStatement(client, targetUserId, essenceStatement);
   if (error) {
+    const denied = self ? usersUpdateDeniedResponse(error) : null;
+    if (denied) return denied;
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   return NextResponse.json({ success: true });

@@ -11,16 +11,34 @@ import {
   removeEnrollmentForApplicant,
   ensureEnrollmentForApplicant,
 } from "@/services/schools";
-import { userCanManageApplications } from "@/lib/auth/check-schools-access";
-import { userCanReadApplication, APPLICATIONS_EXPIRED_MESSAGE } from "@/lib/auth/application-expiry";
+import {
+  programIdsForTargets,
+  userCanDeleteApplication,
+  userCanManageApplications,
+  userCanManageEveryProgram,
+  userCanManageProgram,
+} from "@/lib/auth/check-schools-access";
+import {
+  userCanReadApplication,
+  APPLICATIONS_EXPIRED_MESSAGE,
+  getApplicationExpiry,
+} from "@/lib/auth/application-expiry";
 import { normaliseGender } from "@/lib/schools/demographics";
 import { ensureStudentRole, deactivateMembershipProfile } from "@/lib/auth/membership-roles";
 import { sendTransactional } from "@/lib/email/send-transactional";
 import { resolveProgramEmail } from "@/lib/email/render-program-email";
 import { sendReferenceInvite } from "@/lib/email/send-reference-invite";
+import { sendReferenceReminder } from "@/lib/email/send-reference-reminder";
+import { referenceSendConfirmed } from "@/lib/email/reference-email";
+import { claimThenSendReferenceReminder, type ReminderAttempt } from "@/lib/references/reminder-claim";
+import { previewWriteRefusal } from "@/lib/preview-writes";
+import {
+  BULK_STATUS_LIMIT,
+  acceptedRegressNeedsConfirm,
+  storedStatusError,
+} from "@/lib/schools/application-status";
 import { syncApplicantToContact } from "@/lib/applications/sync-contact";
 import { sendAcceptanceToLinkedAccount } from "@/lib/schools/acceptance-email";
-import { referenceReminderEmailHtml } from "@/lib/email/templates/reference-reminder";
 import { applicationRejectedEmailHtml } from "@/lib/email/templates/application-rejected";
 import { applicationWaitlistedEmailHtml } from "@/lib/email/templates/application-waitlisted";
 import { interviewScheduledEmailHtml } from "@/lib/email/templates/interview-scheduled";
@@ -319,7 +337,7 @@ export async function POST(request: Request) {
       if (refRequest) {
         const slot = slotMap.get(ref.slot_id);
 
-        await sendReferenceInvite({
+        const sent = await sendReferenceInvite({
           toEmail: ref.referee_email,
           refereeName: ref.referee_name,
           applicantName,
@@ -327,12 +345,15 @@ export async function POST(request: Request) {
           slotLabel: slot?.label ?? "Reference",
           token: refRequest.token,
           programId: program_id,
+          referenceRequestId: refRequest.id,
         });
 
-        await (adminSupabase as any)
-          .from("reference_requests")
-          .update({ email_sent_at: new Date().toISOString() })
-          .eq("id", refRequest.id);
+        if (referenceSendConfirmed(sent)) {
+          await (adminSupabase as any)
+            .from("reference_requests")
+            .update({ email_sent_at: new Date().toISOString() })
+            .eq("id", refRequest.id);
+        }
       }
     }
   }
@@ -361,6 +382,32 @@ function getApplicantDetails(response: any) {
   return { email, firstName: firstName || "there" };
 }
 
+// Status, acceptance, and admin notes stay with people who manage the
+// school. Program staff write application_staff_reviews instead, and
+// userCanManageProgram is false for them.
+async function denyUnlessCanDecide(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  responseIds: string[]
+) {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("application_responses")
+    .select("id, program_id")
+    .in("id", responseIds);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!data || data.length === 0) {
+    return NextResponse.json({ error: "Application not found" }, { status: 404 });
+  }
+  const programIds = [...new Set(data.map((row) => row.program_id as string))];
+  for (const programId of programIds) {
+    if (!(await userCanManageProgram(supabase, userId, programId))) {
+      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+    }
+  }
+  return null;
+}
+
 export async function PUT(request: Request) {
   const supabase = await createClient();
   const {
@@ -373,10 +420,45 @@ export async function PUT(request: Request) {
 
   const body = await request.json();
   const { id, ids, status, admin_notes, send_email = true } = body;
+  const confirmRegress = body.confirm_regress === true;
 
   // ── Bulk status update ──
   if (ids && Array.isArray(ids) && ids.length > 0 && status) {
+    const statusError = storedStatusError(status);
+    if (statusError) return NextResponse.json({ error: statusError }, { status: 400 });
+    if (ids.length > BULK_STATUS_LIMIT) {
+      return NextResponse.json(
+        { error: `You can update at most ${BULK_STATUS_LIMIT} applications at once.` },
+        { status: 400 }
+      );
+    }
+    const denied = await denyUnlessCanDecide(supabase, user.id, ids);
+    if (denied) return denied;
     const adminSupabase = createAdminClient();
+    const { data: existingRows, error: existingError } = await adminSupabase
+      .from("application_responses")
+      .select("id, status")
+      .in("id", ids);
+    if (existingError) {
+      return NextResponse.json({ error: existingError.message }, { status: 500 });
+    }
+    if (
+      (existingRows ?? []).some((row) =>
+        acceptedRegressNeedsConfirm(row.status, status, confirmRegress)
+      )
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "An accepted applicant is still enrolled. Confirm to move them back to an earlier stage.",
+          code: "accepted_regress",
+        },
+        { status: 409 }
+      );
+    }
+    const previousById = new Map(
+      (existingRows ?? []).map((row) => [row.id as string, row.status as string])
+    );
     let updated = 0;
     // Accepted applicants we could not put on the roster because no account
     // exists for their email yet. Reported back rather than swallowed — they
@@ -404,7 +486,10 @@ export async function PUT(request: Request) {
         user.id,
         admin_notes
       );
-      if (!error && resp) {
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      if (resp) {
         updated++;
 
         // Leaving a school (rejected/cancelled) deactivates a student-level
@@ -443,8 +528,8 @@ export async function PUT(request: Request) {
           );
         }
 
-        // Send notification email for bulk updates too
-        if (send_email) {
+        // Send notification email only when this row's status actually changed.
+        if (send_email && previousById.get(responseId) !== status) {
           const { data: fullResp } = await adminSupabase
             .from("application_responses")
             .select("*, users!application_responses_user_id_fkey(first_name, email), programs(name)")
@@ -473,15 +558,32 @@ export async function PUT(request: Request) {
     );
   }
 
+  const statusError = storedStatusError(status);
+  if (statusError) return NextResponse.json({ error: statusError }, { status: 400 });
+
+  const denied = await denyUnlessCanDecide(supabase, user.id, [id]);
+  if (denied) return denied;
+
   // Get the current response to check previous status
   const adminSupabase = createAdminClient();
-  const { data: prevResponse } = await adminSupabase
+  const { data: prevResponse, error: prevError } = await adminSupabase
     .from("application_responses")
     .select("status")
     .eq("id", id)
     .single();
+  if (prevError) return NextResponse.json({ error: prevError.message }, { status: 500 });
 
   const previousStatus = prevResponse?.status;
+  if (acceptedRegressNeedsConfirm(previousStatus, status, confirmRegress)) {
+    return NextResponse.json(
+      {
+        error:
+          "This applicant is already accepted and still enrolled. Confirm to move them back to an earlier stage.",
+        code: "accepted_regress",
+      },
+      { status: 409 }
+    );
+  }
 
   const { data, error } = await updateResponseStatus(supabase, id, status, user.id, admin_notes);
 
@@ -626,6 +728,125 @@ async function sendStatusEmail(
 }
 
 // ── PATCH: Reference reminder ──
+const REFERENCE_REMINDER_SELECT =
+  "id, status, reminder_sent_at, referee_email, referee_name, token, application_id, reference_slots(label), application_responses(id, program_id, applicant_info, applicant_email, user_id, users!application_responses_user_id_fkey(first_name, last_name), programs(name))";
+
+type ReminderApplication = {
+  id?: string;
+  program_id?: string | null;
+  applicant_info?: { first_name?: string | null; last_name?: string | null } | null;
+  users?: { first_name?: string | null; last_name?: string | null } | null;
+  programs?: { name?: string | null } | null;
+};
+
+type ReminderRequestRow = {
+  id: string;
+  status: string;
+  reminder_sent_at?: string | null;
+  referee_email: string;
+  referee_name: string;
+  token: string;
+  reference_slots?: { label?: string | null } | null;
+  application_responses?: ReminderApplication | null;
+};
+
+function reminderApplicantName(app: ReminderApplication | null | undefined): string {
+  const fromUser = app?.users
+    ? [app.users.first_name, app.users.last_name].filter(Boolean).join(" ")
+    : "";
+  const fromInfo = [app?.applicant_info?.first_name, app?.applicant_info?.last_name]
+    .filter(Boolean)
+    .join(" ");
+  return fromUser || fromInfo || "An applicant";
+}
+
+function reminderAttemptResponse(attempt: ReminderAttempt) {
+  if (attempt.outcome === "sent") {
+    return NextResponse.json({
+      success: true,
+      emailed: true,
+      skipped: false,
+      reminder_sent_at: attempt.reminderSentAt,
+    });
+  }
+  if (attempt.outcome === "disabled") {
+    return NextResponse.json({ success: true, emailed: false, skipped: true });
+  }
+  if (attempt.outcome === "not_outstanding") {
+    return NextResponse.json(
+      { error: "This reference has already been submitted." },
+      { status: 409 }
+    );
+  }
+  if (attempt.outcome === "cooldown") {
+    return NextResponse.json(
+      {
+        error: attempt.error,
+        retry_after_seconds: attempt.retryAfterSeconds,
+        next_allowed_at: attempt.nextAllowedAt,
+      },
+      { status: 429, headers: { "Retry-After": String(attempt.retryAfterSeconds) } }
+    );
+  }
+  return NextResponse.json(
+    { error: "error" in attempt ? attempt.error : "Could not send the reminder." },
+    { status: 500 }
+  );
+}
+
+function previewRefusalResponse() {
+  const refusal = previewWriteRefusal();
+  if (!refusal) return null;
+  return NextResponse.json(refusal.body, { status: refusal.status });
+}
+
+async function authorizeReferenceReminder(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  applicationId: string | null | undefined,
+  programId: string | null | undefined
+) {
+  if (!applicationId || !(await userCanReadApplication(supabase, applicationId))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!programId || !(await userCanManageProgram(supabase, userId, programId))) {
+    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  }
+  return null;
+}
+
+function sendReminderForRow(ref: ReminderRequestRow) {
+  const app = ref.application_responses;
+  return sendReferenceReminder({
+    toEmail: ref.referee_email,
+    refereeName: ref.referee_name,
+    applicantName: reminderApplicantName(app),
+    programName: app?.programs?.name ?? "School Program",
+    slotLabel: ref.reference_slots?.label ?? "Reference",
+    token: ref.token,
+    programId: app?.program_id ?? null,
+    referenceRequestId: ref.id,
+  });
+}
+
+/**
+ * Claim reminder_sent_at, then send the existing reminder email.
+ * The daily cron uses the same helper.
+ */
+async function deliverReferenceReminder(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+  ref: ReminderRequestRow
+) {
+  return claimThenSendReferenceReminder({
+    admin,
+    refId: ref.id,
+    status: ref.status,
+    previousSentAt: ref.reminder_sent_at ?? null,
+    send: () => sendReminderForRow(ref),
+  });
+}
+
 export async function PATCH(request: Request) {
   const supabase = await createClient();
   const {
@@ -637,16 +858,17 @@ export async function PATCH(request: Request) {
   }
 
   const body = await request.json();
-  const { action, reference_request_id, id } = body;
+  const { action, reference_request_id, id, application_id } = body;
 
   // ── Archive / restore an application (reversible "remove") ──
   if (action === "archive" || action === "restore") {
-    if (!id) {
+    const ids = applicationTargetIds(body);
+    if (!id || !ids) {
       return NextResponse.json({ error: "id is required" }, { status: 400 });
     }
-    if (!(await userCanManageApplications(supabase, user.id))) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    // Every id in the batch has to pass userCanManageProgram. ids is check-only.
+    const denied = await denyUnlessApplicationPrograms(supabase, user.id, ids);
+    if (denied) return denied;
     // RLS-backed: the 6-month expiry lock (migration 223) applies here too.
     if (!(await userCanReadApplication(supabase, id))) {
       return NextResponse.json({ error: APPLICATIONS_EXPIRED_MESSAGE }, { status: 403 });
@@ -678,90 +900,121 @@ export async function PATCH(request: Request) {
 
   if (action === "send_reference_reminder" && reference_request_id) {
     const adminSupabase = createAdminClient();
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://ffsahub.com";
 
     const { data: refReq } = await (adminSupabase as any)
       .from("reference_requests")
-      .select("*, reference_slots(label), application_responses(id, applicant_info, applicant_email, user_id, program_id, users!application_responses_user_id_fkey(first_name, last_name), programs(name))")
+      .select(REFERENCE_REMINDER_SELECT)
       .eq("id", reference_request_id)
       .single();
 
-    if (!refReq || refReq.status === "submitted") {
-      return NextResponse.json(
-        { error: refReq ? "Reference already submitted" : "Reference request not found" },
-        { status: 400 }
-      );
+    if (!refReq) {
+      return NextResponse.json({ error: "Reference request not found" }, { status: 404 });
     }
 
-    const app = refReq.application_responses;
-    if (!app?.id || !(await userCanReadApplication(supabase, app.id))) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-    const applicantName = app?.users
-      ? [app.users.first_name, app.users.last_name].filter(Boolean).join(" ")
-      : [app?.applicant_info?.first_name, app?.applicant_info?.last_name].filter(Boolean).join(" ") || "An applicant";
+    const app = refReq.application_responses as ReminderApplication | null;
+    const denied = await authorizeReferenceReminder(
+      supabase,
+      user.id,
+      app?.id,
+      app?.program_id
+    );
+    if (denied) return denied;
 
-    const referenceUrl = `${siteUrl}/reference/${refReq.token}`;
-    const reminderProgramName = app?.programs?.name ?? "School Program";
-    const reminderDefaults = {
-      subject: `Reference Reminder — ${reminderProgramName}`,
-      html: referenceReminderEmailHtml({
-        refereeName: refReq.referee_name,
-        applicantName,
-        programName: reminderProgramName,
-        slotLabel: refReq.reference_slots?.label ?? "Reference",
-        referenceUrl,
-      }),
-    };
+    const preview = previewRefusalResponse();
+    if (preview) return preview;
 
-    // Apply the school's per-program override; a custom body still gets the
-    // "complete the reference" button re-appended so the link is never lost.
-    let reminderSubject = reminderDefaults.subject;
-    let reminderHtml = reminderDefaults.html;
-    if (app?.program_id) {
-      const resolved = await resolveProgramEmail(
-        adminSupabase,
-        app.program_id,
-        "reference_reminder",
-        reminderDefaults,
-        {
-          values: {
-            program_name: reminderProgramName,
-            applicant_name: applicantName,
-            referee_name: refReq.referee_name,
-            reference_type: refReq.reference_slots?.label ?? "Reference",
-          },
-          cta: { label: "Complete the reference", url: referenceUrl },
-          siteUrl,
-        }
-      );
-      if (resolved.skip) {
-        return NextResponse.json({ success: true, skipped: true });
-      }
-      reminderSubject = resolved.subject;
-      reminderHtml = resolved.html;
+    const result = await deliverReferenceReminder(adminSupabase, refReq as ReminderRequestRow);
+    return reminderAttemptResponse(result);
+  }
+
+  if (action === "send_outstanding_reference_reminders" && application_id) {
+    const adminSupabase = createAdminClient();
+    const { data: app } = await (adminSupabase as any)
+      .from("application_responses")
+      .select(
+        "id, program_id, applicant_info, applicant_email, user_id, users!application_responses_user_id_fkey(first_name, last_name), programs(name)"
+      )
+      .eq("id", application_id)
+      .single();
+
+    if (!app?.id) {
+      return NextResponse.json({ error: "Application not found" }, { status: 404 });
     }
 
-    await sendTransactional({
-      to: refReq.referee_email,
-      subject: reminderSubject,
-      html: reminderHtml,
-      category: "reference_reminder",
-      sourceType: "school_application",
-      sourceId: app?.id ?? null,
-      programDocuments: { programId: app?.program_id, emailType: "reference_reminder" },
-    });
+    const denied = await authorizeReferenceReminder(
+      supabase,
+      user.id,
+      app.id,
+      app.program_id
+    );
+    if (denied) return denied;
 
-    // Update reminder_sent_at
-    await (adminSupabase as any)
+    // Stop before any claim. Preview shares the live database.
+    const preview = previewRefusalResponse();
+    if (preview) return preview;
+
+    const { data: refs, error: refsError } = await (adminSupabase as any)
       .from("reference_requests")
-      .update({ reminder_sent_at: new Date().toISOString() })
-      .eq("id", reference_request_id);
+      .select(REFERENCE_REMINDER_SELECT)
+      .eq("application_id", application_id);
 
-    return NextResponse.json({ success: true });
+    if (refsError) {
+      return NextResponse.json({ error: refsError.message }, { status: 500 });
+    }
+
+    const results: Array<{
+      id: string;
+      outcome: ReminderAttempt["outcome"];
+      error?: string;
+      retry_after_seconds?: number;
+      next_allowed_at?: string;
+    }> = [];
+
+    for (const ref of (refs ?? []) as ReminderRequestRow[]) {
+      const row: ReminderRequestRow = {
+        ...ref,
+        application_responses: app as ReminderApplication,
+      };
+      try {
+        const attempt = await deliverReferenceReminder(adminSupabase, row);
+        results.push({
+          id: ref.id,
+          outcome: attempt.outcome,
+          error: "error" in attempt ? attempt.error : undefined,
+          retry_after_seconds:
+            attempt.outcome === "cooldown" ? attempt.retryAfterSeconds : undefined,
+          next_allowed_at: attempt.outcome === "cooldown" ? attempt.nextAllowedAt : undefined,
+        });
+      } catch (err) {
+        results.push({
+          id: ref.id,
+          outcome: "error",
+          error: err instanceof Error ? err.message : "Could not send the reminder.",
+        });
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      emailed: results.filter((row) => row.outcome === "sent").length,
+      results,
+    });
   }
 
   return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+}
+
+async function expiredWithoutAccess(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  programId: string
+): Promise<boolean> {
+  try {
+    const expiry = await getApplicationExpiry(supabase, programId);
+    if (expiry.lookupFailed) return false;
+    return expiry.expired && !expiry.canAccess;
+  } catch {
+    return false;
+  }
 }
 
 // ── DELETE: permanently remove an application ──
@@ -777,19 +1030,18 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  if (!(await userCanManageApplications(supabase, user.id))) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
   const body = await request.json().catch(() => ({}));
   const { id } = body;
-  if (!id) {
+  const ids = applicationTargetIds(body);
+  if (!id || !ids) {
     return NextResponse.json({ error: "id is required" }, { status: 400 });
   }
-
-  if (!(await userCanReadApplication(supabase, id))) {
-    return NextResponse.json({ error: APPLICATIONS_EXPIRED_MESSAGE }, { status: 403 });
-  }
+  // userCanManageProgram for every target. userCanDeleteApplication stays on
+  // top of that, in the block below, so an expired school still gets its
+  // own message. A program_leaders row or schools.manage_enrollments can
+  // manage the school and still be refused the delete.
+  const denied = await denyUnlessApplicationPrograms(supabase, user.id, ids);
+  if (denied) return denied;
 
   const adminSupabase = createAdminClient();
 
@@ -798,6 +1050,32 @@ export async function DELETE(request: Request) {
     .select("id, status, program_id, applicant_email, user_id")
     .eq("id", id)
     .single();
+
+  // Both gates are required. userCanDeleteApplication is migration 223's
+  // DELETE policy (a program_leaders row is not enough). The user-client
+  // read is RLS, and it is what keeps a school-scoped grant inside that
+  // school — the service role below would otherwise ignore it. A missing
+  // row has no program, so the policy check stays global.
+  const allowed = existing?.program_id
+    ? await userCanDeleteApplication(supabase, user.id, existing.program_id)
+    : await userCanManageApplications(supabase, user.id);
+  if (!allowed) {
+    if (existing?.program_id && (await expiredWithoutAccess(supabase, existing.program_id))) {
+      return NextResponse.json({ error: APPLICATIONS_EXPIRED_MESSAGE }, { status: 403 });
+    }
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // Fail closed: a throw, an error, or no row is not permission to delete.
+  let canRead = false;
+  try {
+    canRead = (await userCanReadApplication(supabase, id)) === true;
+  } catch {
+    canRead = false;
+  }
+  if (!canRead) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   if (fetchError || !existing) {
     return NextResponse.json({ error: "Application not found" }, { status: 404 });
@@ -836,4 +1114,33 @@ export async function DELETE(request: Request) {
   });
 
   return NextResponse.json({ success: true });
+}
+
+/**
+ * `id` is the row the handler writes. `ids`, when the body sends it, is
+ * check-only: every id has to be a real application in a program this user
+ * manages, and a bad entry rejects the request. Nothing in `ids` is written.
+ */
+function applicationTargetIds(body: { id?: unknown; ids?: unknown }): string[] | null {
+  const ids: string[] = [];
+  if (typeof body.id === "string" && body.id.length > 0) ids.push(body.id);
+  if (Array.isArray(body.ids)) {
+    for (const id of body.ids) {
+      if (typeof id !== "string" || id.length === 0) return null;
+      if (!ids.includes(id)) ids.push(id);
+    }
+  }
+  return ids.length > 0 ? ids : null;
+}
+
+async function denyUnlessApplicationPrograms(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  ids: string[]
+) {
+  const programs = await programIdsForTargets(createAdminClient(), "application_responses", ids);
+  if (!programs || !(await userCanManageEveryProgram(supabase, userId, programs))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  return null;
 }

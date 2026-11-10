@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import QRCode from "qrcode";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusPill } from "@/components/ffsa";
+import { ShareLinkQr } from "@/components/share/share-link-qr";
 
 export type RosterPerson = { name: string; email: string; role: string };
 export type SendRow = {
@@ -46,7 +46,6 @@ export function SharePanel({
 }) {
   const router = useRouter();
   const [origin, setOrigin] = useState("");
-  const [qr, setQr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [extra, setExtra] = useState("");
@@ -63,13 +62,6 @@ export function SharePanel({
   useEffect(() => {
     setOrigin(window.location.origin);
   }, []);
-
-  useEffect(() => {
-    if (!origin) return;
-    QRCode.toDataURL(url, { width: 720, margin: 2, errorCorrectionLevel: "M" })
-      .then(setQr)
-      .catch(() => setQr(null));
-  }, [url, origin]);
 
   const answered = useMemo(
     () => new Set(respondentEmails.map((e) => e.toLowerCase())),
@@ -99,14 +91,6 @@ export function SharePanel({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
-  }
-
-  function downloadQr() {
-    if (!qr) return;
-    const a = document.createElement("a");
-    a.href = qr;
-    a.download = `${slug}-feedback-qr.png`;
-    a.click();
   }
 
   function selectOutstanding() {
@@ -156,12 +140,11 @@ export function SharePanel({
       setErr(data.error ?? "Failed to send");
       return;
     }
-    const result = (await res.json()) as { sent: number; failed: number };
-    setMsg(
-      result.failed
-        ? `Sent to ${result.sent}. ${result.failed} could not be delivered — see the send log below.`
-        : `Sent to ${result.sent} ${result.sent === 1 ? "person" : "people"}.`
-    );
+    const result = (await res.json()) as { sent: number; failed: number; warning?: string };
+    const summary = result.failed
+      ? `Sent to ${result.sent}. ${result.failed} could not be delivered — see the send log below.`
+      : `Sent to ${result.sent} ${result.sent === 1 ? "person" : "people"}.`;
+    setMsg(result.warning ? `${summary} ${result.warning}` : summary);
     setPicked(new Set());
     setExtra("");
     router.refresh();
@@ -184,48 +167,38 @@ export function SharePanel({
             </p>
           )}
 
-          <div className="flex flex-wrap items-center gap-2">
-            <code className="border px-2 py-1.5 text-xs font-mono break-all flex-1 min-w-[240px]">
-              {url}
-            </code>
-            <button
-              type="button"
-              onClick={copyLink}
-              className="px-3 py-1.5 border text-xs hover:bg-[color:var(--surface-2)]"
-            >
-              {copied ? "Copied" : "Copy link"}
-            </button>
-            <a
-              href={url}
-              target="_blank"
-              rel="noreferrer"
-              className="px-3 py-1.5 border text-xs hover:bg-[color:var(--surface-2)]"
-            >
-              Open ↗
-            </a>
-          </div>
+          <p className="text-sm text-muted-foreground max-w-prose">
+            Put the QR on the screen at pack-down, while everyone is still in
+            the room. It is the single highest-response moment you will get.
+          </p>
 
-          <div className="flex items-center gap-4">
-            {qr ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={qr} alt="Feedback form QR code" className="w-32 h-32 border bg-white" />
-            ) : (
-              <div className="w-32 h-32 border bg-[color:var(--surface-2)]" />
-            )}
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground max-w-sm">
-                Put the QR on the screen at pack-down, while everyone is still in
-                the room. It is the single highest-response moment you will get.
-              </p>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+              <code className="min-w-0 flex-1 break-all border px-2 py-1.5 font-mono text-xs">
+                {url}
+              </code>
               <button
                 type="button"
-                onClick={downloadQr}
-                disabled={!qr}
-                className="px-3 py-1.5 border text-sm hover:bg-[color:var(--surface-2)] disabled:opacity-50"
+                onClick={copyLink}
+                className="px-3 py-1.5 border text-xs hover:bg-[color:var(--surface-2)]"
               >
-                Download QR
+                {copied ? "Copied" : "Copy link"}
               </button>
+              <a
+                href={url}
+                target="_blank"
+                rel="noreferrer"
+                className="px-3 py-1.5 border text-xs hover:bg-[color:var(--surface-2)]"
+              >
+                Open ↗
+              </a>
             </div>
+            <ShareLinkQr
+              url={url}
+              filename={slug}
+              label="QR code for the feedback form"
+              showCopy={false}
+            />
           </div>
         </CardContent>
       </Card>

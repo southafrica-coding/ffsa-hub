@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getAuthedUser, canManageEvents } from "@/lib/api-auth";
+import { getAuthedUser } from "@/lib/api-auth";
+import { writeBlocked, canManageEvent, EVENT_UPDATE_GATE } from "@/lib/auth/event-access";
 import { updateEvent } from "@/services/events";
 import {
   createXeroEventItem,
@@ -32,7 +33,7 @@ async function guard(eventId: string) {
   const supabase = await createClient();
   const user = await getAuthedUser(supabase);
   if (!user) return { error: NextResponse.json({ error: "Not authenticated" }, { status: 401 }) };
-  if (!(await canManageEvents(supabase, user.id))) {
+  if (!(await canManageEvent(supabase, user.id, EVENT_UPDATE_GATE.keys, eventId, EVENT_UPDATE_GATE))) {
     return { error: NextResponse.json({ error: "Not authorized" }, { status: 403 }) };
   }
   const { data: event } = await supabase
@@ -187,6 +188,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
   if (Object.keys(patch).length > 0) {
     const { error } = await updateEvent(supabase, id, patch);
+    if (writeBlocked(error)) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   }
   // Once the item is in place (or when asked), invoice anyone left on hold.

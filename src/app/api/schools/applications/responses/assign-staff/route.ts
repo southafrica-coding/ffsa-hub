@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { userCanManageProgram } from "@/lib/auth/check-schools-access";
 import { userCanReadApplication, APPLICATIONS_EXPIRED_MESSAGE } from "@/lib/auth/application-expiry";
+import { unassignableContactError } from "@/lib/auth/assignable-contacts";
 import { sendStaffAssignmentEmails } from "@/lib/email/send-staff-assignment";
 
 // Assigns (or clears) the point-of-contact staff member for an application
@@ -57,6 +58,18 @@ export async function PUT(request: Request) {
   const previousStaffId = (existing as unknown as { assigned_staff_id: string | null }).assigned_staff_id;
   const newStaffId = assigned_staff_id ?? null;
   const changed = previousStaffId !== newStaffId;
+
+  // Same eligibility as the Applicants dropdown: program-scoped
+  // assignable-contact grants, super admins, active leaders, and active
+  // program staff of this program. Clearing the assignment stays open.
+  const rejection = await unassignableContactError(
+    adminSupabase,
+    responseProgramId,
+    newStaffId
+  );
+  if (rejection) {
+    return NextResponse.json({ error: rejection }, { status: 400 });
+  }
 
   const updates: Record<string, unknown> = {
     assigned_staff_id: newStaffId,

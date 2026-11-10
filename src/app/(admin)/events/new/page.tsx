@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DateInput } from "@/components/ui/date-input";
@@ -12,7 +11,6 @@ import { Masthead } from "@/components/ffsa";
 
 export default function NewEventPage() {
   const router = useRouter();
-  const supabase = createClient();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,36 +36,30 @@ export default function NewEventPage() {
     setError(null);
     setLoading(true);
 
-    // Get current user ID for created_by
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      setError("Not authenticated");
-      setLoading(false);
-      return;
-    }
-
-    const { error: insertError } = await (supabase.from("events") as any).insert({
-      title: form.title.trim(),
-      description: form.description.trim() || null,
-      location: form.location.trim() || null,
-      start_date: form.start_date,
-      end_date: form.end_date || null,
-      start_time: form.start_time || null,
-      end_time: form.end_time || null,
-      max_capacity: form.max_capacity ? parseInt(form.max_capacity, 10) : null,
-      is_public: form.is_public,
-      registration_required: form.registration_required,
-      created_by: user.id,
-      status: "draft" as const,
+    const res = await fetch("/api/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: form.title.trim(),
+        description: form.description.trim() || null,
+        location: form.location.trim() || null,
+        start_date: form.start_date,
+        end_date: form.end_date || null,
+        start_time: form.start_time || null,
+        end_time: form.end_time || null,
+        max_capacity: form.max_capacity ? parseInt(form.max_capacity, 10) : null,
+        is_public: form.is_public,
+        registration_required: form.registration_required,
+      }),
     });
-
-    if (insertError) {
-      setError(insertError.message);
+    const data = (await res.json().catch(() => ({}))) as { error?: string; event?: { id: string } };
+    if (!res.ok) {
+      setError(data.error ?? "Couldn't create the event");
       setLoading(false);
       return;
     }
 
-    router.push("/events");
+    router.push(data.event?.id ? `/events/${data.event.id}` : "/events");
     router.refresh();
   }
 

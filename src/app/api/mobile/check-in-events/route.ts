@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getAuthedUser, canManageEvents } from "@/lib/api-auth";
+import { getAuthedUser } from "@/lib/api-auth";
+import { ATTENDANCE_GATE, eventIdScope, loadEventAccess } from "@/lib/auth/event-access";
 import { listCheckInEvents } from "@/services/my-tickets";
 import { checkInWindowStart } from "@/lib/mobile/my-tickets";
 
@@ -35,15 +36,29 @@ export async function GET() {
       { status: 401, headers: NO_STORE }
     );
   }
-  if (!(await canManageEvents(supabase, user.id, ["events.manage_attendance"]))) {
-    return NextResponse.json(
-      { error: "Not authorized" },
-      { status: 403, headers: NO_STORE }
-    );
+  const snap = await loadEventAccess(supabase, user.id);
+  const scope = eventIdScope(snap, ATTENDANCE_GATE);
+  let ids: string[] | undefined;
+  if (scope.kind === "some") {
+    const allowed = new Set(scope.ids);
+    if (scope.includeCreated) {
+      const { data: created } = await supabase
+        .from("events")
+        .select("id")
+        .eq("created_by", user.id);
+      for (const row of (created ?? []) as Array<{ id: string }>) allowed.add(row.id);
+    }
+    if (allowed.size === 0) {
+      return NextResponse.json(
+        { error: "Not authorized" },
+        { status: 403, headers: NO_STORE }
+      );
+    }
+    ids = [...allowed];
   }
 
   const admin = createAdminClient();
-  const { data, error } = await listCheckInEvents(admin, checkInWindowStart(new Date()));
+  const { data, error } = await listCheckInEvents(admin, checkInWindowStart(new Date()), 50, ids);
   if (error) {
     return NextResponse.json(
       { error: "server_error", message: error.message },

@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { requireModuleAccess } from "@/lib/require-permission";
+import { canCreateProgram } from "@/lib/auth/schools-program-access";
+import {
+  canOpenSchools,
+  programsVisibleOnSchoolsHome,
+} from "@/lib/schools/program-staff-access";
+import { adminNotesByResponse } from "@/lib/schools/admin-notes";
 import { getPrograms } from "@/services/schools";
 import { Masthead, NeedsYou, NeedsYouAction, Chip } from "@/components/ffsa";
 import { ProgramsTable, type ProgramStats } from "./programs-table";
@@ -62,18 +67,24 @@ export default async function SchoolsPage({
   const params = await searchParams;
   const statusFilter = params.status || "active";
 
-  // Permission check + programs fetch are independent — run together.
-  const [, programsResult] = await Promise.all([
-    requireModuleAccess(supabase, user.id, "schools"),
+  // Module access, or a program_staff seat (migration 304). Staff with no
+  // other schools grant only see the schools they staff.
+  const [access, programsResult] = await Promise.all([
+    canOpenSchools(supabase, user.id),
     getPrograms(supabase, { status: statusFilter }),
   ]);
+  if (!access.open) redirect("/dashboard");
   const { data: programs, error, count } = programsResult;
 
   if (error) {
     console.error("getPrograms error:", JSON.stringify(error, null, 2));
   }
 
-  const rows = programs ?? [];
+  // getPrograms is untyped (`Client = any`). Passing that array straight into
+  // a `{ id: string }` generic collapses the row and the table stops compiling.
+  const allPrograms = (programs ?? []) as Array<{ id: string }>;
+  const rows = programsVisibleOnSchoolsHome(allPrograms, access) as typeof programs;
+  const shownCount = access.hasModuleAccess ? (count ?? rows.length) : rows.length;
   const ids: string[] = rows.map((p: { id: string }) => p.id);
   const has = ids.length > 0;
 
@@ -111,7 +122,7 @@ export default async function SchoolsPage({
         ? db
             .from("application_responses")
             .select(
-              "id, program_id, status, submitted_at, admin_notes, applicant_email, applicant_info, " +
+              "id, program_id, status, submitted_at, applicant_email, applicant_info, " +
                 "users!application_responses_user_id_fkey(first_name, last_name, preferred_name)",
               { count: "exact" }
             )
@@ -151,28 +162,28 @@ export default async function SchoolsPage({
   }
 
   const awaiting = applicationsResult?.count ?? 0;
-  const pipeline: PipelineRow[] = (applicationsResult?.data ?? []).map(
-    (r: {
-      id: string;
-      program_id: string;
-      status: string;
-      submitted_at: string | null;
-      admin_notes: string | null;
-      applicant_email: string | null;
-      applicant_info: ApplicantInfo;
-      // The embedded join is nulled by RLS for viewers who can't read other
-      // users' rows; applicant_info/applicant_email carry public applicants.
-      users: UserIdentity | UserIdentity[] | null;
-    }) => ({
-      id: r.id,
-      programId: r.program_id,
-      programName: programNames.get(r.program_id) ?? "—",
-      name: applicantName(r),
-      status: r.status,
-      note: r.admin_notes,
-      submittedAt: r.submitted_at,
-    })
+  const applicationRows = (applicationsResult?.data ?? []) as Array<{
+    id: string;
+    program_id: string;
+    status: string;
+    submitted_at: string | null;
+    applicant_email: string | null;
+    applicant_info: ApplicantInfo;
+    users: UserIdentity | UserIdentity[] | null;
+  }>;
+  const leaderNotes = await adminNotesByResponse(
+    db,
+    applicationRows.map((row) => row.id)
   );
+  const pipeline: PipelineRow[] = applicationRows.map((r) => ({
+    id: r.id,
+    programId: r.program_id,
+    programName: programNames.get(r.program_id) ?? "—",
+    name: applicantName(r),
+    status: r.status,
+    note: leaderNotes.get(r.id) ?? null,
+    submittedAt: r.submitted_at,
+  }));
 
   // Only offer a "review" destination when the band and the column are looking
   // at exactly the same, single school — with more schools in play (or more
@@ -186,11 +197,11 @@ export default async function SchoolsPage({
   return (
     <div className="ffsa-screen">
       <Masthead
-        context={`Operations · ${count ?? rows.length} ${
+        context={`Operations · ${shownCount} ${
           statusFilter === "archived" ? "archived " : ""
-        }${(count ?? rows.length) === 1 ? "school" : "schools"}`}
+        }${shownCount === 1 ? "school" : "schools"}`}
         title="Training"
-        actions={<CreateProgramForm />}
+        actions={canCreateProgram(access.schools) ? <CreateProgramForm /> : undefined}
       />
 
       {/* The page's ONE yellow band. Never add a second. */}

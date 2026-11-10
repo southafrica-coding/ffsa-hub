@@ -15,7 +15,8 @@
  * finance_org_for_order().
  */
 
-import { canManageEvents, hasAnyRole } from "@/lib/api-auth";
+import { hasAnyRole } from "@/lib/api-auth";
+import { canHoldEventsKeyInAnyScope } from "@/lib/auth/event-access";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
@@ -172,7 +173,10 @@ export async function getEventFinanceOrgPicker(
   supabase: Client,
   userId: string | null
 ): Promise<{ canPick: boolean; orgs: FinanceOrgChoice[] }> {
-  if (!userId || !(await canManageEvents(supabase, userId))) return { canPick: false, orgs: [] };
+  // finance_org_choices() is unchanged by 314: events.create in any scope.
+  if (!userId || !(await canHoldEventsKeyInAnyScope(supabase, userId, "events.create"))) {
+    return { canPick: false, orgs: [] };
+  }
   const { data, error } = await listFinanceOrgChoices(supabase);
   // Before migration 291 the function doesn't exist: no select, not an error page.
   if (error || !Array.isArray(data)) return { canPick: false, orgs: [] };

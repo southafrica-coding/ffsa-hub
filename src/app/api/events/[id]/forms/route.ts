@@ -3,7 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createForm, generateUniqueFormSlug } from "@/services/forms";
 import { getEventById } from "@/services/events";
 import { emptyFormSchema } from "@/lib/forms/schema";
-import { getAuthedUser, canManageEvents } from "@/lib/api-auth";
+import { getAuthedUser } from "@/lib/api-auth";
+import { writeBlocked, canManageEvent, FORMS_GATE } from "@/lib/auth/event-access";
 import type { Json } from "@/types/database";
 
 // POST /api/events/[id]/forms — create a new form scoped to the event.
@@ -15,7 +16,7 @@ export async function POST(
   const supabase = await createClient();
   const user = await getAuthedUser(supabase);
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  if (!(await canManageEvents(supabase, user.id))) {
+  if (!(await canManageEvent(supabase, user.id, FORMS_GATE.keys, eventId, FORMS_GATE))) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
@@ -46,6 +47,7 @@ export async function POST(
     created_by: user.id,
   });
 
+  if (writeBlocked(error)) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ form: data });
 }

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { userCanManageProgram } from "@/lib/auth/check-schools-access";
+import { adminNotesByResponse } from "@/lib/schools/admin-notes";
 
 function escapeHtml(text: string): string {
   return text
@@ -121,7 +123,15 @@ export async function GET(request: Request) {
     answersMap.set(a.question_id, a.answer);
   }
 
-  const adminNotes = (response as any).admin_notes ?? "";
+  // select("*") above still returns admin_notes. This PDF does not print
+  // that column. Leaders' notes are loaded below from application_admin_notes,
+  // and only for someone who can manage the program. The column stays
+  // populated until the follow-up SQL in docs/program-staff.md.
+  let adminNotes = "";
+  if (await userCanManageProgram(supabase, user.id, response.program_id)) {
+    const notes = await adminNotesByResponse(supabase, [responseId]);
+    adminNotes = notes.get(responseId) ?? "";
+  }
   const submittedDate = response.submitted_at
     ? new Date(response.submitted_at).toLocaleDateString("en-ZA", {
         year: "numeric",

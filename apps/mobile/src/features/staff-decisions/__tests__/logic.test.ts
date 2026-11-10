@@ -7,6 +7,7 @@ import {
   decisionProblem,
   decisionWord,
   departmentLabel,
+  initialDepartmentSelection,
   formatDecidedDate,
   isUuid,
   needsDecisionCount,
@@ -86,6 +87,14 @@ describe("words and counts", () => {
     expect(departmentLabel(opts, "media")).toBe("Media");
     expect(departmentLabel(opts, "gone")).toBe("gone");
     expect(departmentLabel(opts, null)).toBeNull();
+    expect(departmentLabel(opts, "leadership_team")).toBe("Leadership Team");
+  });
+
+  it("does not preselect leadership_team when the picker does not offer it", () => {
+    const opts = detail().departmentOptions;
+    expect(initialDepartmentSelection("leadership_team", opts, "__later__")).toBe("__later__");
+    expect(initialDepartmentSelection("media", opts, "__later__")).toBe("media");
+    expect(initialDepartmentSelection(null, opts, "__later__")).toBe("__later__");
   });
 
   it("screen-reader sentences", () => {

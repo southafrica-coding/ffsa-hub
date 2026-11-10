@@ -34,5 +34,5 @@ export async function updateEventRole(
 }
 
 export async function deleteEventRole(supabase: Client, id: string) {
-  return supabase.from("event_roles").delete().eq("id", id);
+  return supabase.from("event_roles").delete().eq("id", id).select("id");
 }

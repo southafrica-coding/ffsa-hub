@@ -45,24 +45,15 @@ export async function ensureSchoolLeaderRole(
   }
 }
 
-// Revoke the school_leader role if the user no longer leads ANY program.
+// Does not remove the role. Migration 292's backfill stores assigned_by
+// NULL, and the leaders API stores the person who clicked Add. A hand
+// grant can look like either of those, so there is no marker that means
+// "the system granted this." Leave the row alone.
 export async function revokeSchoolLeaderRoleIfOrphaned(
   admin: Client,
   userId: string
 ) {
-  const { data: stillLeads } = await admin
-    .from("program_leaders")
-    .select("id")
-    .eq("user_id", userId)
-    .limit(1);
-  if (stillLeads && stillLeads.length > 0) return;
-  const roleId = await schoolLeaderRoleId(admin);
-  if (!roleId) return;
-  const { error } = await admin
-    .from("user_roles")
-    .delete()
-    .eq("user_id", userId)
-    .eq("role_id", roleId)
-    .is("scope_type", null);
-  if (error) console.error("[school-leader-role] revoke failed:", error.message);
+  // No reliable marker distinguishes a system grant from a hand grant.
+  void admin;
+  void userId;
 }

@@ -16,6 +16,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { TranscriptButton } from "./transcript-button";
+import { ClassroomSection } from "./classroom-section";
+import { AssignmentsSection } from "./assignments-section";
+import { listAssignmentsForProgram, listAttemptsForEnrollment } from "@/services/lms-assignments";
+import { buildStudentItems, type StudentAssignmentItem } from "@/lib/schools/lms-assignments";
+import { getProgramClassroom } from "@/services/lms-content";
+import { isClassroomEnrollment, publishedOnly, type LmsCourseTree } from "@/lib/schools/lms-content";
 import { Masthead, KpiStrip, Kpi, StatusPill, type Tone } from "@/components/ffsa";
 
 const ENROLLMENT_TONE: Record<string, Tone> = {
@@ -68,6 +74,29 @@ export default async function EnrollmentDetailPage({
   );
 
   const program = enrollment.programs;
+
+  // Classroom (LMS slice 1): the student's own, still-active enrolment only,
+  // published content only. RLS (migration 305) applies the same rule. If
+  // the lms_* tables are not there yet, the section is simply left out.
+  let classroom: LmsCourseTree[] | null = null;
+  let assignmentItems: StudentAssignmentItem[] | null = null;
+  if (enrollment.user_id === user.id && isClassroomEnrollment(enrollment)) {
+    const { data, error: classroomError } = await getProgramClassroom(supabase, program.id, {
+      includeUnpublished: false,
+    });
+    if (!classroomError) classroom = publishedOnly(data ?? []);
+
+    // Assignments (LMS slice 2): published only, the student's own attempts,
+    // grades only once released. Left out if migration 310 is not applied.
+    const { data: assignmentRows, error: assignmentsError } = await listAssignmentsForProgram(supabase, program.id, {
+      includeUnpublished: false,
+    });
+    if (!assignmentsError) {
+      const visible = (assignmentRows ?? []).filter((a) => a.published && a.course_published);
+      const attempts = await listAttemptsForEnrollment(supabase, enrollmentId, visible.map((a) => a.id));
+      if (!attempts.error) assignmentItems = buildStudentItems(visible, attempts.data ?? []);
+    }
+  }
   const courses = program.courses ?? [];
   const grades = gradesData ?? [];
 
@@ -228,6 +257,9 @@ export default async function EnrollmentDetailPage({
         </Table>
       </div>
       </div>
+
+      {classroom && <ClassroomSection courses={classroom} />}
+      {assignmentItems && <AssignmentsSection enrollmentId={enrollmentId} items={assignmentItems} />}
     </div>
   );
 }

@@ -94,6 +94,7 @@ export function RefundDialog({
         emailSent?: boolean;
         isFullRefund?: boolean;
         dryRunPreview?: unknown;
+        warning?: string;
       };
 
       if (!res.ok) {
@@ -109,6 +110,12 @@ export function RefundDialog({
       // "pending" is normal for PayFast — the payout is queued and
       // there's no callback, so say so rather than implying it's done.
       const settled = data.status === "succeeded";
+      if (data.warning) {
+        toast.warning(data.warning);
+        router.refresh();
+        onOpenChange(false);
+        return;
+      }
       toast.success(
         manual
           ? `Recorded ${money(amountCents)} refunded outside the Hub.`

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import { getFormById, listFormSubmissions } from "@/services/forms";
+import { formOnEventStatus } from "@/lib/auth/event-access";
 import { fieldKey, type FormSchema, type FormField } from "@/lib/forms/schema";
 import { Masthead, StatusPill } from "@/components/ffsa";
 
@@ -19,7 +20,7 @@ export default async function FormResponsesPage({
   if (!user) redirect("/login");
 
   const { data: form, error } = await getFormById(supabase, formId);
-  if (error || !form) notFound();
+  if (error || formOnEventStatus(form, eventId) !== 200) notFound();
 
   const { data: submissions } = await listFormSubmissions(supabase, formId);
 

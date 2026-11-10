@@ -6,7 +6,9 @@ import {
   getPromoCode,
   listTicketTypesByEvent,
 } from "@/services/ticketing";
-import { getAuthedUser, canManageEvents } from "@/lib/api-auth";
+import { getAuthedUser } from "@/lib/api-auth";
+import { EVENT_CREATE_GATE, writeBlocked } from "@/lib/auth/event-access";
+import { gateChildRow } from "@/lib/auth/event-route";
 import { validatePromoConfig, type PromoConfigInput } from "@/lib/ticketing/promo-config";
 import type { FormField } from "@/lib/forms/schema";
 
@@ -25,9 +27,8 @@ export async function PATCH(
   if (!user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
-  if (!(await canManageEvents(supabase, user.id))) {
-    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
-  }
+  const denied = await gateChildRow(supabase, user.id, eventId, "promo_codes", promoCodeId, EVENT_CREATE_GATE);
+  if (denied) return denied;
 
   let body: PromoConfigInput;
   try {
@@ -49,6 +50,7 @@ export async function PATCH(
     const { data, error } = await updatePromoCode(supabase, eventId, promoCodeId, {
       is_active: body.is_active,
     });
+    if (writeBlocked(error)) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ promoCode: data });
   }
@@ -73,6 +75,7 @@ export async function PATCH(
   }
 
   const { data, error } = await updatePromoCode(supabase, eventId, promoCodeId, v.config);
+  if (writeBlocked(error, data)) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   if (error) {
     if (error.code === "23505") {
       return NextResponse.json(
@@ -96,9 +99,8 @@ export async function DELETE(
   if (!user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
-  if (!(await canManageEvents(supabase, user.id))) {
-    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
-  }
+  const denied = await gateChildRow(supabase, user.id, eventId, "promo_codes", promoCodeId, EVENT_CREATE_GATE);
+  if (denied) return denied;
 
   // A redeemed code is history on its orders — deactivate it instead.
   const { data: existing } = await getPromoCode(supabase, promoCodeId);
@@ -109,7 +111,10 @@ export async function DELETE(
     );
   }
 
-  const { error } = await deletePromoCode(supabase, eventId, promoCodeId);
+  const { data, error } = await deletePromoCode(supabase, eventId, promoCodeId);
+  if (writeBlocked(error, data)) {
+    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  }
   if (error) {
     if (error.code === "23503") {
       return NextResponse.json(

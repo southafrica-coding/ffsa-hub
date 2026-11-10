@@ -19,6 +19,7 @@ type RefundAllResult = {
   failed: number;
   totalRefundedCents: number;
   failures: Array<{ orderId: string; error: string }>;
+  warning?: string;
 };
 
 // Standalone "refund every outstanding order" action for the Orders tab.
@@ -62,7 +63,9 @@ export function RefundAllButton({
     }
     const data = (await res.json()) as RefundAllResult;
     setResult(data);
-    if (data.failed === 0) {
+    if (data.warning) {
+      toast.warning(data.warning);
+    } else if (data.failed === 0) {
       toast.success(
         `Refunded ${data.refunded} order${data.refunded === 1 ? "" : "s"} · ${formatMoney(data.totalRefundedCents)}`
       );

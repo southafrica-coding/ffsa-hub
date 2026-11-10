@@ -85,7 +85,7 @@ export async function updateWorkflow(supabase: Client, id: string, data: Workflo
 }
 
 export async function deleteWorkflow(supabase: Client, id: string) {
-  return supabase.from("outcome_workflows").delete().eq("id", id);
+  return supabase.from("outcome_workflows").delete().eq("id", id).select("id");
 }
 
 // ────────────────────────────────────────────────────────────

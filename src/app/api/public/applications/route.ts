@@ -21,31 +21,15 @@ import {
   applicationConfirmationEmailHtml,
   applicationReferenceNotice,
 } from "@/lib/email/templates/application-confirmation";
-import { referenceRequestEmailHtml } from "@/lib/email/templates/reference-request";
-
-
-function findAnswerByType(
-  answers: Array<{ question_id: string; question_label: string; answer: string }>,
-  questions: Array<{ id: string; type: string; label: string }>,
-  type: string
-): string | null {
-  const questionIds = new Set(questions.filter((q) => q.type === type).map((q) => q.id));
-  const match = answers.find((a) => questionIds.has(a.question_id) && a.answer?.trim());
-  return match?.answer?.trim() || null;
-}
-
-function findAnswerByLabel(
-  answers: Array<{ question_id: string; question_label: string; answer: string }>,
-  patterns: string[]
-): string | null {
-  for (const pattern of patterns) {
-    const match = answers.find(
-      (a) => a.question_label.toLowerCase().includes(pattern) && a.answer?.trim()
-    );
-    if (match) return match.answer.trim();
-  }
-  return null;
-}
+import { sendReferenceInvite } from "@/lib/email/send-reference-invite";
+import { referenceSendConfirmed } from "@/lib/email/reference-email";
+import {
+  applicantEmailIlikePattern,
+  findAnswerByLabel,
+  identityGaps,
+  resolveApplicantIdentity,
+  withIdentityAnswers,
+} from "@/lib/applications/applicant-identity";
 
 export async function POST(request: Request) {
   const body = await request.json();
@@ -60,7 +44,7 @@ export async function POST(request: Request) {
   const trackChoice: { whole_program?: boolean; segment_ids?: unknown } | null =
     body.track_choice && typeof body.track_choice === "object" ? body.track_choice : null;
 
-  if (!program_id || !answers) {
+  if (!program_id || !Array.isArray(answers)) {
     return NextResponse.json(
       { error: "Missing required fields" },
       { status: 400 }
@@ -153,8 +137,36 @@ export async function POST(request: Request) {
 
   // Validate required questions
   const { data: questions } = await getQuestionsByProgram(supabase, program_id);
+  const questionList = (questions ?? []) as Array<{
+    id: string;
+    type: string;
+    label: string;
+    is_required: boolean;
+    system_key?: string | null;
+  }>;
+
+  // Name and email are required even when this school's form never asked.
+  // A school with only the nationality / home-country system questions used
+  // to fall through to applicant_email 'unknown@applicant.local' and no name.
+  const identity = resolveApplicantIdentity({
+    questions: questionList,
+    answers,
+    firstName: body.first_name,
+    lastName: body.last_name,
+    email: body.email,
+  });
+  if (!identity.ok) {
+    return NextResponse.json({ error: identity.error }, { status: 400 });
+  }
+  const { firstName, lastName, email } = identity.identity;
+  const answersWithIdentity = withIdentityAnswers(
+    answers,
+    identity.identity,
+    identityGaps(questionList)
+  );
+
   const requiredIds = new Set(
-    (questions ?? []).filter((q: { is_required: boolean }) => q.is_required).map((q: { id: string }) => q.id)
+    questionList.filter((q) => q.is_required).map((q) => q.id)
   );
 
   for (const a of answers) {
@@ -192,25 +204,8 @@ export async function POST(request: Request) {
     }
   }
 
-  // Try to extract email from answers (look for email-type question first, then label match)
-  const email = findAnswerByType(answers, questions ?? [], "email")
-    ?? findAnswerByLabel(answers, ["email"]);
-
-  // Try to extract name from answers
-  const firstName = findAnswerByLabel(answers, ["first name", "first_name"])
-    ?? findAnswerByLabel(answers, ["name"]);
-  const lastName = findAnswerByLabel(answers, ["last name", "last_name", "surname"]);
-
-  // Check for duplicate if we have an email
-  if (email) {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return NextResponse.json(
-        { error: "Please provide a valid email address" },
-        { status: 400 }
-      );
-    }
-
+  // Email was already checked. Refuse a second application for this school.
+  {
     const { data: existing } = await getResponseByEmailAndProgram(
       supabase,
       email,
@@ -227,7 +222,7 @@ export async function POST(request: Request) {
     const { data: existingUser } = await supabase
       .from("users")
       .select("id")
-      .eq("email", email)
+      .ilike("email", applicantEmailIlikePattern(email))
       .maybeSingle();
 
     if (existingUser) {
@@ -247,11 +242,13 @@ export async function POST(request: Request) {
     }
   }
 
-  // Build applicant_info from answers
+  // Build applicant_info from answers. Always store the name we accepted,
+  // including an empty last name, so a missing key is not later rendered
+  // as the word "undefined". Never the placeholder address.
   const applicantInfo: Record<string, unknown> = {};
-  if (email) applicantInfo.email = email;
-  if (firstName) applicantInfo.first_name = firstName;
-  if (lastName) applicantInfo.last_name = lastName;
+  applicantInfo.email = email;
+  applicantInfo.first_name = firstName;
+  applicantInfo.last_name = lastName;
   // Nationality is now collected explicitly (no longer copied from home
   // country) and is the field accept-application reads onto users.nationality,
   // which drives the fee tier via country_tiers (keyed on country names).
@@ -262,17 +259,21 @@ export async function POST(request: Request) {
   // it off the answers and normalise it onto applicant_info — mirroring
   // nationality — so the demographics dashboard can read it without depending on
   // the applicant's profile. Unrecognised answers are simply not stored.
-  const gender = normaliseGender(findAnswerByLabel(answers, ["gender"]));
+  const gender = normaliseGender(findAnswerByLabel(answersWithIdentity, ["gender"]));
   if (gender) applicantInfo.gender = gender;
   if (files && Array.isArray(files) && files.length > 0) {
     applicantInfo.files = files;
   }
 
   // Surface nationality + home country in the answers list so reviewers see them.
-  const answersWithCountry = [
+  const savedAnswers: Array<{ question_id: string; question_label: string; answer: string }> = [
     { question_id: "nationality", question_label: "Nationality", answer: nationality },
     { question_id: "home_country", question_label: "Home Country", answer: homeCountry },
-    ...answers,
+    ...answersWithIdentity.map((answer) => ({
+      question_id: answer.question_id ?? "",
+      question_label: answer.question_label ?? "",
+      answer: answer.answer ?? "",
+    })),
   ];
 
   // Same treatment for the track choice, when this program has segments —
@@ -284,7 +285,7 @@ export async function POST(request: Request) {
           .map((id) => segmentById.get(id)?.name ?? segmentById.get(id)?.code)
           .filter(Boolean)
           .join(", ");
-    answersWithCountry.push({
+    savedAnswers.push({
       question_id: "program_track",
       question_label: "Which part are you applying for?",
       answer: label,
@@ -295,9 +296,9 @@ export async function POST(request: Request) {
     supabase,
     {
       program_id,
-      applicant_email: email || "unknown@applicant.local",
+      applicant_email: email,
       applicant_info: applicantInfo,
-      answers: answersWithCountry,
+      answers: savedAnswers,
     }
   );
 
@@ -382,11 +383,16 @@ export async function POST(request: Request) {
     (ref) => ref.slot_id && ref.referee_name?.trim() && ref.referee_email?.trim()
   ).length;
 
-  if (email) {
+  // "sent" only when Resend accepted it. A school that turned this
+  // template off is "skipped" — the page stays neutral. "failed" is a
+  // real send error, and that is the only case that says so.
+  let confirmationStatus: "sent" | "skipped" | "failed" = "failed";
+  const greetingName = firstName || lastName || "Applicant";
+  try {
     const receivedDefaults = {
       subject: `Application Received — ${program.name}`,
       html: applicationConfirmationEmailHtml({
-        firstName: firstName || "Applicant",
+        firstName: greetingName,
         programName: program.name,
         statusUrl: statusTrackerUrl,
         referenceCount: suppliedReferenceCount,
@@ -399,7 +405,7 @@ export async function POST(request: Request) {
       receivedDefaults,
       {
         values: {
-          first_name: firstName || "Applicant",
+          first_name: greetingName,
           program_name: program.name,
         },
         cta: statusTrackerUrl
@@ -416,8 +422,10 @@ export async function POST(request: Request) {
         siteUrl,
       }
     );
-    if (!resolved.skip) {
-      await sendTransactional({
+    if (resolved.skip) {
+      confirmationStatus = "skipped";
+    } else {
+      const sent = await sendTransactional({
         to: email,
         subject: resolved.subject,
         html: resolved.html,
@@ -426,7 +434,11 @@ export async function POST(request: Request) {
         sourceId: response.id,
         programDocuments: { programId: program_id, emailType: "application_received" },
       });
+      confirmationStatus = sent.ok === true ? "sent" : "failed";
     }
+  } catch (err) {
+    console.error("[applications] confirmation email failed", err);
+    confirmationStatus = "failed";
   }
   const referenceLinks: Array<{ label: string; url: string }> = [];
 
@@ -453,48 +465,23 @@ export async function POST(request: Request) {
           url: referenceUrl,
         });
 
-        const refDefaults = {
-          subject: `Reference Request — ${program.name}`,
-          html: referenceRequestEmailHtml({
-            refereeName: ref.referee_name,
-            applicantName,
-            programName: program.name,
-            slotLabel: slot?.label ?? "Reference",
-            referenceUrl,
-          }),
-        };
-        const resolvedRef = await resolveProgramEmail(
-          supabase,
-          program_id,
-          "reference_request",
-          refDefaults,
-          {
-            values: {
-              program_name: program.name,
-              applicant_name: applicantName,
-              referee_name: ref.referee_name,
-              reference_type: slot?.label ?? "Reference",
-            },
-            cta: { label: "Complete the reference", url: referenceUrl },
-            siteUrl,
-          }
-        );
-        if (!resolvedRef.skip) {
-          await sendTransactional({
-            to: ref.referee_email,
-            subject: resolvedRef.subject,
-            html: resolvedRef.html,
-            category: "reference_request",
-            sourceType: "school_application",
-            sourceId: response.id,
-            programDocuments: { programId: program_id, emailType: "reference_request" },
-          });
-        }
+        const sent = await sendReferenceInvite({
+          toEmail: ref.referee_email,
+          refereeName: ref.referee_name,
+          applicantName,
+          programName: program.name,
+          slotLabel: slot?.label ?? "Reference",
+          token: refRequest.token,
+          programId: program_id,
+          referenceRequestId: refRequest.id,
+        });
 
-        await (supabase as any)
-          .from("reference_requests")
-          .update({ email_sent_at: new Date().toISOString() })
-          .eq("id", refRequest.id);
+        if (referenceSendConfirmed(sent)) {
+          await (supabase as any)
+            .from("reference_requests")
+            .update({ email_sent_at: new Date().toISOString() })
+            .eq("id", refRequest.id);
+        }
       }
     }
   }
@@ -504,5 +491,7 @@ export async function POST(request: Request) {
     id: response.id,
     statusUrl: statusTrackerUrl,
     referenceLinks,
+    confirmationEmailed: confirmationStatus === "sent",
+    confirmationStatus,
   });
 }

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Check, Copy, ExternalLink } from "lucide-react";
 import { EVENT_CURRENCIES, providersForCurrency } from "@/lib/currencies";
+import { ShareLinkQr } from "@/components/share/share-link-qr";
 
 export function TicketingSettings({
   eventId,
@@ -164,37 +165,45 @@ export function TicketingSettings({
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Shareable ticket link
             </p>
-            <div className="flex items-center gap-2">
-              <input
-                readOnly
-                value={fullUrl || `/e/${trimmedSlug}`}
-                onFocus={(e) => e.currentTarget.select()}
-                className="flex-1 min-w-0 border px-2 py-1.5 text-xs font-mono"
-                aria-label="Public ticket link"
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                <input
+                  readOnly
+                  value={fullUrl || `/e/${trimmedSlug}`}
+                  onFocus={(e) => e.currentTarget.select()}
+                  className="min-w-0 w-full flex-1 border px-2 py-1.5 text-xs font-mono sm:w-auto"
+                  aria-label="Public ticket link"
+                />
+                <button
+                  type="button"
+                  onClick={copyLink}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-ink text-white text-xs hover:bg-[#262622] shrink-0"
+                >
+                  {copied ? (
+                    <>
+                      <Check className="h-3.5 w-3.5" /> Copied
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-3.5 w-3.5" /> Copy
+                    </>
+                  )}
+                </button>
+                <a
+                  href={fullUrl || `/e/${trimmedSlug}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 border border-border text-xs hover:bg-muted shrink-0"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" /> Open
+                </a>
+              </div>
+              <ShareLinkQr
+                url={fullUrl || `/e/${trimmedSlug}`}
+                filename={trimmedSlug}
+                label="QR code for the public ticket link"
+                showCopy={false}
               />
-              <button
-                type="button"
-                onClick={copyLink}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-ink text-white text-xs hover:bg-[#262622] shrink-0"
-              >
-                {copied ? (
-                  <>
-                    <Check className="h-3.5 w-3.5" /> Copied
-                  </>
-                ) : (
-                  <>
-                    <Copy className="h-3.5 w-3.5" /> Copy
-                  </>
-                )}
-              </button>
-              <a
-                href={fullUrl || `/e/${trimmedSlug}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 border border-border text-xs hover:bg-muted shrink-0"
-              >
-                <ExternalLink className="h-3.5 w-3.5" /> Open
-              </a>
             </div>
             {(!enabled || dirty) && (
               <p className="text-[11px] text-amber">

@@ -6,7 +6,8 @@ import {
 } from "@/services/event-feedback";
 import { parseFeedbackSchema } from "@/lib/feedback/schema";
 import { responsesToCsv, type ResponseRow } from "@/lib/feedback/summary";
-import { getAuthedUser, canManageEvents } from "@/lib/api-auth";
+import { getAuthedUser } from "@/lib/api-auth";
+import { canManageEvent, EVENT_VIEW_OR_CREATE_GATE } from "@/lib/auth/event-access";
 
 // GET /api/events/[id]/feedback/[formId]/export — every response as CSV.
 export async function GET(
@@ -17,7 +18,7 @@ export async function GET(
   const supabase = await createClient();
   const user = await getAuthedUser(supabase);
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  if (!(await canManageEvents(supabase, user.id, ["events.view", "events.create"]))) {
+  if (!(await canManageEvent(supabase, user.id, EVENT_VIEW_OR_CREATE_GATE.keys, eventId, EVENT_VIEW_OR_CREATE_GATE))) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 

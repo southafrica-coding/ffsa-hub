@@ -9,15 +9,15 @@ import {
   isHiddenFromNav,
 } from "./modules";
 
-// The unbuilt placeholder pages (Teams, Mission, Evangelism, My Mission) stay
+// The unbuilt placeholder pages (Teams, Mission, My Mission) stay
 // out of every menu for every role; everything that works stays put.
 
-const PLACEHOLDERS = ["teams", "mission", "evangelism", "my-mission"];
+const PLACEHOLDERS = ["teams", "mission", "my-mission"];
 
 const ids = (mods: { id: string }[]) => mods.map((m) => m.id);
 
 describe("placeholder pages are hidden from navigation", () => {
-  it("hides exactly the four placeholders", () => {
+  it("hides exactly the three placeholders", () => {
     expect([...HIDDEN_FROM_NAV].sort()).toEqual([...PLACEHOLDERS].sort());
     for (const id of PLACEHOLDERS) expect(isHiddenFromNav(id)).toBe(true);
     expect(isHiddenFromNav("finance")).toBe(false);
@@ -64,6 +64,16 @@ describe("placeholder pages are hidden from navigation", () => {
   it("still gives everyone the always-open modules", () => {
     const visible = ids(getAccessibleModules(ADMIN_MODULES, ["staff"], new Set()));
     expect(visible).toEqual(expect.arrayContaining(["dashboard", "finance", "prayer-room", "okrs"]));
+  });
+
+  it("shows Evangelism to admins and to anyone with an evangelism permission", () => {
+    const has = (roles: string[], permitted: string[] = []) =>
+      ids(getAccessibleModules(ADMIN_MODULES, roles, new Set(permitted))).includes("evangelism");
+    expect(isHiddenFromNav("evangelism")).toBe(false);
+    expect(has(["super_admin"])).toBe(true);
+    expect(has(["admin"])).toBe(true);
+    expect(has(["staff"], ["evangelism"])).toBe(true);
+    expect(has(["staff"])).toBe(false);
   });
 
   it("does not change permission-based access to working modules", () => {

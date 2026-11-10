@@ -24,6 +24,8 @@ import {
 } from "@/components/public-form-shell";
 import { ReferenceEditor, type EditableReference } from "./reference-editor";
 import { ReferenceStatusBanner } from "./reference-status-banner";
+import { annotateReferenceDelivery } from "@/lib/references/reference-delivery";
+import { requiredReferenceProgress } from "@/lib/schools/applicant-pipeline-stage";
 
 const T = PUBLIC_SHELL_TOKENS;
 
@@ -118,51 +120,71 @@ export default async function ApplicationStatusPage({
     notFound();
   }
 
+  type RawRef = {
+    id: string;
+    slot_id: string;
+    status: string;
+    referee_name: string | null;
+    referee_email: string | null;
+    email_sent_at: string | null;
+    reference_slots: { label: string } | null;
+  };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: refs } = await (supabase as any)
+  const { data: refData } = await (supabase as any)
     .from("reference_requests")
-    .select("id, slot_id, status, referee_name, referee_email, reference_slots(label)")
+    .select("id, slot_id, status, referee_name, referee_email, email_sent_at, reference_slots(label)")
     .eq("application_id", response.id);
+  const refs = (refData ?? []) as RawRef[];
 
-  // The program's reference slots — used to surface any REQUIRED reference the
-  // applicant never supplied (older applications submitted before references
-  // were enforced), so they can add it here.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: slots } = await (supabase as any)
-    .from("reference_slots")
-    .select("id, label, is_required, sort_order")
-    .eq("program_id", response.program_id)
-    .order("sort_order", { ascending: true });
+  const deliveryRows = refs.map((r) => ({
+    id: r.id,
+    status: r.status,
+    referee_email: r.referee_email ?? "",
+    email_sent_at: r.email_sent_at ?? null,
+    application_id: response.id,
+    slot_label: r.reference_slots?.label ?? "Reference",
+    referee_name: r.referee_name ?? "",
+  }));
 
-  const totalRefs = refs?.length ?? 0;
-  const submittedRefs =
-    refs?.filter((r: { status: string }) => r.status === "submitted").length ??
-    0;
-
-  const filledSlotIds = new Set(
-    (refs ?? []).map((r: { slot_id: string }) => r.slot_id)
-  );
-  const missingRequiredSlots: { id: string; label: string }[] = (slots ?? [])
-    .filter(
-      (s: { id: string; is_required: boolean }) =>
-        s.is_required && !filledSlotIds.has(s.id)
-    )
-    .map((s: { id: string; label: string }) => ({ id: s.id, label: s.label }));
-
-  const editableRefs: EditableReference[] = (refs ?? []).map(
+  // Slots and delivery state don't depend on each other.
+  const [{ data: slotData }, annotatedRefs] = await Promise.all([
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (r: any) => ({
-      id: r.id,
-      status: r.status,
-      referee_name: r.referee_name ?? "",
-      referee_email: r.referee_email ?? "",
-      slot_label: r.reference_slots?.label ?? "Reference",
-    })
+    (supabase as any)
+      .from("reference_slots")
+      .select("id, label, is_required, sort_order")
+      .eq("program_id", response.program_id)
+      .order("sort_order", { ascending: true }),
+    annotateReferenceDelivery(supabase, response.id, deliveryRows),
+  ]);
+  const slots = (slotData ?? []) as Array<{
+    id: string;
+    label: string;
+    is_required: boolean;
+  }>;
+
+  const totalRefs = refs.length;
+  const referenceProgress = requiredReferenceProgress(
+    slots,
+    refs.map((r) => ({ slotId: r.slot_id, status: r.status }))
   );
 
-  // Nothing advances `status` when references arrive (staff set it by hand), so
-  // light up the References step as soon as they're actually all in.
-  const allReferencesIn = totalRefs > 0 && submittedRefs === totalRefs;
+  const filledSlotIds = new Set(refs.map((r) => r.slot_id));
+  const missingRequiredSlots: { id: string; label: string }[] = slots
+    .filter((s) => s.is_required && !filledSlotIds.has(s.id))
+    .map((s) => ({ id: s.id, label: s.label }));
+  const editableRefs: EditableReference[] = annotatedRefs.map((r) => ({
+    id: r.id,
+    status: r.status,
+    referee_name: r.referee_name,
+    referee_email: r.referee_email,
+    slot_label: r.slot_label,
+    email_problem: r.email_problem,
+  }));
+
+  // Same required-slot rule as the pipeline and the staff "refs complete"
+  // email. An optional request does not count, and a required slot with
+  // no request row does not count as in.
+  const allReferencesIn = referenceProgress.complete;
   const currentStep = Math.max(
     STATUS_ORDER[response.status] ?? 0,
     allReferencesIn ? 1 : 0
@@ -222,8 +244,8 @@ export default async function ApplicationStatusPage({
 
       {!SUPPRESS_REFERENCE_BANNER.has(response.status) && (
         <ReferenceStatusBanner
-          total={totalRefs}
-          submitted={submittedRefs}
+          total={referenceProgress.required}
+          submitted={referenceProgress.received}
           missingLabels={missingRequiredSlots.map((s) => s.label)}
         />
       )}
@@ -314,7 +336,7 @@ export default async function ApplicationStatusPage({
             })}
           </span>
         </div>
-        {totalRefs > 0 && (
+        {referenceProgress.required > 0 && (
           <div
             className="flex justify-between items-center py-2.5"
             style={{ borderBottom: `1px solid ${T.border}`, fontSize: 14 }}
@@ -322,13 +344,10 @@ export default async function ApplicationStatusPage({
             <span style={{ color: T.textDim }}>References</span>
             <span
               style={{
-                color:
-                  submittedRefs === totalRefs
-                    ? T.green
-                    : "hsl(42 95% 65%)",
+                color: allReferencesIn ? T.green : "hsl(42 95% 65%)",
               }}
             >
-              {submittedRefs} of {totalRefs} received
+              {referenceProgress.received} of {referenceProgress.required} received
             </span>
           </div>
         )}

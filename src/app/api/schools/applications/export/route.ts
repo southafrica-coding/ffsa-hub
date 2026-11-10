@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { passesApplicationExpiry, APPLICATIONS_EXPIRED_MESSAGE } from "@/lib/auth/application-expiry";
+import { applicationExpiryDenial } from "@/lib/auth/application-expiry";
+import { adminNotesByResponse } from "@/lib/schools/admin-notes";
 
 function escapeCsvValue(value: string): string {
   if (
@@ -34,8 +35,9 @@ export async function GET(request: Request) {
     );
   }
 
-  if (!(await passesApplicationExpiry(supabase, programId))) {
-    return NextResponse.json({ error: APPLICATIONS_EXPIRED_MESSAGE }, { status: 403 });
+  const expiryDenial = await applicationExpiryDenial(supabase, programId);
+  if (expiryDenial) {
+    return NextResponse.json({ error: expiryDenial }, { status: 403 });
   }
 
   // Fetch program info
@@ -72,13 +74,17 @@ export async function GET(request: Request) {
     .order("submitted_at", { ascending: true });
 
   const allResponses = responses ?? [];
+  const leaderNotes = await adminNotesByResponse(
+    supabase,
+    allResponses.map((response) => response.id)
+  );
 
   // Fetch user info for responses that have a user_id
   const userIds = allResponses
     .map((r) => r.user_id)
     .filter((id): id is string => !!id);
 
-  let usersMap = new Map<
+  const usersMap = new Map<
     string,
     { first_name: string | null; last_name: string | null; email: string | null }
   >();
@@ -96,7 +102,7 @@ export async function GET(request: Request) {
 
   // Fetch all reference requests for these applications (including full form_data)
   const applicationIds = allResponses.map((r) => r.id);
-  let referencesMap = new Map<string, any[]>();
+  const referencesMap = new Map<string, any[]>();
 
   if (applicationIds.length > 0) {
     const { data: refRequests } = await (supabase as any)
@@ -203,7 +209,7 @@ export async function GET(request: Request) {
       .map((r: any) => `${r.reference_slots?.label ?? "Ref"}: ${r.referee_name} (${r.status})`)
       .join("; ");
 
-    const adminNotes = (response as any).admin_notes ?? "";
+    const adminNotes = leaderNotes.get(response.id) ?? "";
 
     const row: string[] = [
       name,

@@ -74,8 +74,9 @@ export const REQUIRED_PROFILE_FIELDS: FieldConfig[] = [
     field: "department",
     label: "Department",
     type: "select",
+    // Leadership Team is not offered here. Setting department to
+    // leadership_team is admin-only (migration 315 / PATCH /api/users/[id]).
     options: [
-      { value: "leadership_team", label: "Leadership Team" },
       { value: "prayer_and_worship", label: "Prayer & Worship" },
       { value: "media", label: "Media" },
       { value: "hulk", label: "HULC" },

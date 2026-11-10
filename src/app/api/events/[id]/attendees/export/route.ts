@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getAuthedUser, canManageEvents } from "@/lib/api-auth";
+import { getAuthedUser } from "@/lib/api-auth";
+import { canManageEvent, REGISTRATIONS_GATE } from "@/lib/auth/event-access";
 import { getEventById } from "@/services/events";
 import { listTicketTypesByEvent } from "@/services/ticketing";
 import {
@@ -74,7 +75,7 @@ export async function GET(
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
   if (
-    !(await canManageEvents(supabase, user.id, ["events.manage_registrations"]))
+    !(await canManageEvent(supabase, user.id, REGISTRATIONS_GATE.keys, eventId, REGISTRATIONS_GATE))
   ) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }

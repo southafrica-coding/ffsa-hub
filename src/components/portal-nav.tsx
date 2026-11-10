@@ -2,8 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname, useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils/cn";
 import { LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -11,14 +10,6 @@ import { getVisiblePortalTabs } from "@/config/modules";
 
 export function PortalNav() {
   const pathname = usePathname();
-  const router = useRouter();
-  const supabase = createClient();
-
-  async function handleSignOut() {
-    await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
-  }
 
   return (
     <header className="border-b bg-card">
@@ -60,15 +51,17 @@ export function PortalNav() {
             );
           })}
 
-          <Button
-            variant="ghost"
-            size="sm"
-            className="ml-2 gap-2 text-muted-foreground"
-            onClick={handleSignOut}
-          >
-            <LogOut className="h-4 w-4" />
-            <span className="hidden sm:inline">Sign out</span>
-          </Button>
+          <form action="/auth/sign-out" method="post">
+            <Button
+              type="submit"
+              variant="ghost"
+              size="sm"
+              className="ml-2 gap-2 text-muted-foreground"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline">Sign out</span>
+            </Button>
+          </form>
         </nav>
       </div>
     </header>

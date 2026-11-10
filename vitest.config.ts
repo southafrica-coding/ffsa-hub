@@ -5,6 +5,10 @@ import path from "node:path";
 // be declared here too — without it any test whose import chain reaches an
 // "@/" import fails to resolve.
 export default defineConfig({
+  // Next keeps "jsx": "preserve" for its compiler. Vitest's oxc transform
+  // follows that and then refuses the raw JSX, so component tests opt into
+  // the automatic runtime here.
+  oxc: { jsx: { runtime: "automatic" } },
   resolve: {
     alias: { "@": path.resolve(__dirname, "src") },
   },

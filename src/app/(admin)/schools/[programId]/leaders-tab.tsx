@@ -74,6 +74,28 @@ export function LeadersTab({
       .slice(0, 6);
   }, [query, allUsers, leaderIds]);
 
+  async function moveToStaff(userId: string, name: string) {
+    const ok = window.confirm(
+      `Move ${name} to staff of this school? They lose leader access here, and any schools permissions scoped to this school. Other schools stay as they are.`
+    );
+    if (!ok) return;
+    setBusyId(userId);
+    setError(null);
+    const res = await fetch(`/api/schools/programs/${programId}/staff/switch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId }),
+    });
+    setBusyId(null);
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      setError(data.error ?? "Something went wrong");
+      return;
+    }
+    setLeaders((rows) => rows.filter((row) => row.user_id !== userId));
+    router.refresh();
+  }
+
   async function mutate(method: "POST" | "DELETE", userId: string) {
     setBusyId(userId);
     setError(null);
@@ -128,6 +150,16 @@ export function LeadersTab({
                     </p>
                   )}
                 </div>
+                <div className="flex shrink-0 items-center gap-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={busyId === l.user_id}
+                  onClick={() => moveToStaff(l.user_id, displayName(l.users))}
+                >
+                  Move to staff
+                </Button>
                 <Button
                   type="button"
                   variant="ghost"
@@ -142,6 +174,7 @@ export function LeadersTab({
                     <Trash2 className="h-4 w-4" />
                   )}
                 </Button>
+                </div>
               </li>
             ))}
           </ul>
