@@ -24,3 +24,9 @@ All of them default to verify mode, which rolls the transaction back and prints 
 - 316 refuses to run unless 313 is applied (`has_permission_for` must already have the `is_active` check).
 - 314 can run before or after 316. It redefines none of the functions or policies 316 changes.
 - 316 seeds the `schools.templates.manage` permission. A trigger refuses any scoped grant of that key.
+
+## Scoped finance after 316
+
+After 316, a program-scoped finance user keeps org-wide finance READ through the unscoped `finance.view` grant. That is Makaio (`41763eb6`) and the existing `666e334c`, `08c957a0` and `c380c569`. The read covers `finance_orgs`, `finance_projects`, every `xero_*` table, and `is_outreach_staff_viewer`. No database policy reads scoped `finance.approve`, `finance.edit` or `finance.export`, so at the database level they cannot edit, approve or export finance anywhere, and they lose `is_outreach_staff_editor`.
+
+Nothing in the app is program-aware for a finance key: no call passes a program id to `has_permission_for` for `finance.*`, and `finance.approve` and `finance.export` are not checked in `src/` at all. The read and edit gates (`canReadFinanceXero`, `canEditFinanceProjects`, `getFinanceHubAccess`) call `has_permission` and so follow 316; `isFinanceStaff` (`src/lib/slack/assistant/outreach.ts`) and the finance-module gate count any `finance.view` or `finance.edit` row and ignore `scope_type`, but these four still pass those through the unscoped `finance.view`.
