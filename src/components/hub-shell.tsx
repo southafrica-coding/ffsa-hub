@@ -1,0 +1,56 @@
+import { cookies } from "next/headers";
+import { AdminSidebar } from "@/components/admin-sidebar";
+import { MobileTabBar } from "@/components/mobile-tab-bar";
+import { ProfileCompletionGate } from "@/components/profile-completion-gate";
+import { AutoRefresh } from "@/components/auto-refresh";
+import { BackButton } from "@/components/back-button";
+import { AssistantMount } from "@/components/assistant/assistant-mount";
+
+/** One shell for the staff admin and the personal portal. */
+export async function HubShell({
+  children,
+  userRoles,
+  permittedModules,
+  menuLoadFailed,
+  initials,
+  departments = [],
+  equipmentStaff = false,
+  variant = "staff",
+}: {
+  children: React.ReactNode;
+  userRoles: string[];
+  permittedModules?: Set<string>;
+  menuLoadFailed?: boolean;
+  initials?: string;
+  /** Empty until the department API is wired. A non-empty list shows the tab and group. */
+  departments?: { id: string; label: string; href: string }[];
+  /** True when has_equipment_access() is true. Hire gear then opens the staff register. */
+  equipmentStaff?: boolean;
+  variant?: "staff" | "portal";
+}) {
+  const collapsed = (await cookies()).get("ffsa-sidebar")?.value === "1";
+  return (
+    <div className="flex h-screen overflow-hidden bg-bg text-ink">
+      <AdminSidebar
+        userRoles={userRoles}
+        permittedModules={permittedModules}
+        menuLoadFailed={menuLoadFailed}
+        initials={initials}
+        departments={departments}
+        equipmentStaff={equipmentStaff}
+        defaultCollapsed={collapsed}
+      />
+      <main data-shell-main className="min-w-0 flex-1 overflow-y-auto bg-bg pb-20 pt-14 md:pb-0 md:pt-0">
+        <div className="animate-fade-up">
+          <div data-shell-topbar className="mx-auto max-w-6xl empty:hidden">
+            <AutoRefresh />
+            <BackButton />
+          </div>
+          <ProfileCompletionGate>{children}</ProfileCompletionGate>
+        </div>
+      </main>
+      <MobileTabBar showDepartments={(departments?.length ?? 0) > 0} variant={variant} />
+      <AssistantMount userRoles={userRoles} />
+    </div>
+  );
+}
