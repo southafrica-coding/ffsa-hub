@@ -50,7 +50,14 @@ export type RegisterProduct = {
 
 type PhoneFilter = "all" | "attention" | "out";
 
-const COLS = "md:grid-cols-[28px_minmax(0,1fr)_110px_64px_84px_220px_190px]";
+// The name track cannot be minmax(0, 1fr). Beside the admin shell and the
+// hire panel, the other tracks already fill a 1280px viewport, so a 0
+// minimum collapses the product column to 0px. The name, the category
+// label, and the first quantity then paint from the same x — "AUXILIARY"
+// lands on "Printer", and a long name runs through the units figure.
+// 140px keeps a short name intact; longer names wrap inside the cell.
+const COLS =
+  "md:grid-cols-[28px_minmax(140px,1.6fr)_minmax(96px,100px)_52px_64px_minmax(152px,1fr)_minmax(108px,116px)]";
 const UNIT_COLS = "md:grid-cols-[110px_64px_minmax(0,1fr)_190px_180px_120px_130px]";
 
 export function StatusPill({ status }: { status: EquipmentLiveStatus }) {
@@ -224,7 +231,11 @@ export function RegisterView({
         </div>
       </div>
 
-      {/* ── Desktop table head ── */}
+      {/* ── Desktop table head + rows. min-width keeps the tracks from
+          collapsing when the shell is open; overflow scrolls rather than
+          letting a cell paint into its neighbour. ── */}
+      <div className="md:overflow-x-auto">
+      <div className="md:min-w-[780px]">
       <div
         className={cn(
           "hidden gap-3 bg-[color:var(--hire-surface)] py-2.5 pl-6 pr-9 text-[10px] font-bold uppercase tracking-[0.16em] text-[color:var(--hire-muted)] md:grid",
@@ -232,12 +243,12 @@ export function RegisterView({
         )}
       >
         <span />
-        <span>Product</span>
-        <span>Category</span>
-        <span>Units</span>
-        <span>Bookable</span>
-        <span>Needs attention</span>
-        <span>Last checked</span>
+        <span className="min-w-0 overflow-hidden">Product</span>
+        <span className="min-w-0 overflow-hidden">Category</span>
+        <span className="text-right">Units</span>
+        <span className="text-right">Bookable</span>
+        <span className="min-w-0 overflow-hidden">Needs attention</span>
+        <span className="min-w-0 overflow-hidden">Last checked</span>
       </div>
 
       {/* ── Rows (desktop table rows, phone two-line rows) ── */}
@@ -268,25 +279,35 @@ export function RegisterView({
                 onClick={() => setOpenId(open && !viaUnits ? null : p.id)}
                 aria-expanded={open}
                 className={cn(
-                  "grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-[18px] py-2.5 text-left md:items-baseline md:py-3 md:pl-6 md:pr-9",
+                  "grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-[18px] py-2.5 text-left normal-case tracking-normal md:py-3 md:pl-6 md:pr-9",
                   COLS,
                   open ? "bg-[color:var(--hire-surface)]" : "hover:bg-[color:var(--hire-surface)]",
                   "min-h-[56px] md:min-h-0"
                 )}
               >
-                <span className="hidden text-center text-[15px] font-bold text-[color:var(--hire-ink)] md:inline">
+                <span className="hidden text-center text-[15px] font-bold text-[color:var(--hire-ink)] md:block">
                   {open ? "−" : "+"}
                 </span>
-                <span className="min-w-0">
-                  <span className="block truncate text-[15px] text-[color:var(--hire-ink)] md:inline md:text-[14px] md:font-bold">
+                {/* Name and make stay in normal flow. Inline + truncate does
+                    not clip, so a 0-wide cell painted the full string over
+                    the category and the units figure, and the ellipsis left
+                    a second, offset copy of the name. */}
+                <span className="flex min-w-0 flex-col gap-0.5 overflow-hidden md:flex-row md:flex-wrap md:items-baseline md:gap-x-2">
+                  <span
+                    className="min-w-0 max-w-full break-words text-[15px] leading-snug text-[color:var(--hire-ink)] md:text-[14px] md:font-bold"
+                    title={p.name}
+                  >
                     {p.name}
-                  </span>{" "}
-                  <span className="block truncate text-[12px] text-[color:var(--hire-muted)] md:inline md:text-[13px]">
+                  </span>
+                  <span
+                    className="min-w-0 max-w-full break-words text-[12px] leading-snug text-[color:var(--hire-muted)] md:text-[13px]"
+                    title={p.make}
+                  >
                     {p.make}
                   </span>
                 </span>
                 {/* Phone: bookable/total and what needs attention, on the right. */}
-                <span className="text-right md:hidden">
+                <span className="shrink-0 whitespace-nowrap text-right tabular-nums md:hidden">
                   <span className="hire-display block text-[24px] leading-none">
                     {p.bookable}/{p.total}
                   </span>
@@ -295,17 +316,18 @@ export function RegisterView({
                       "block max-w-[150px] truncate text-[11px]",
                       p.attention ? "text-[color:var(--hire-accent)]" : "text-[color:var(--hire-dim)]"
                     )}
+                    title={p.attention || undefined}
                   >
                     {p.attention || "—"}
                   </span>
                 </span>
-                <span className="hidden text-[11px] uppercase tracking-[0.12em] text-[color:var(--hire-muted)] md:inline">
+                <span className="hidden min-w-0 overflow-hidden break-words text-[11px] uppercase leading-tight tracking-[0.12em] text-[color:var(--hire-muted)] md:block">
                   {p.category}
                 </span>
-                <span className="hire-display hidden text-[22px] md:inline">{p.total}</span>
+                <span className="hire-display hidden text-right text-[22px] tabular-nums md:block">{p.total}</span>
                 <span
                   className={cn(
-                    "hire-display hidden text-[22px] md:inline",
+                    "hire-display hidden text-right text-[22px] tabular-nums md:block",
                     p.bookable < p.total && "!text-[color:var(--hire-accent)]"
                   )}
                 >
@@ -313,15 +335,16 @@ export function RegisterView({
                 </span>
                 <span
                   className={cn(
-                    "hidden text-[13px] md:inline",
+                    "hidden min-w-0 overflow-hidden break-words text-[13px] leading-snug md:block",
                     p.attention ? "text-[color:var(--hire-accent)]" : "text-[color:var(--hire-dim)]"
                   )}
+                  title={p.attention || undefined}
                 >
                   {p.attention || "—"}
                 </span>
                 <span
                   className={cn(
-                    "hidden text-[13px] md:inline",
+                    "hidden min-w-0 overflow-hidden break-words text-[13px] leading-snug md:block",
                     p.checkedIncomplete ? "text-[color:var(--hire-accent)]" : "text-[color:var(--hire-body)]"
                   )}
                 >
@@ -334,6 +357,8 @@ export function RegisterView({
           );
         })}
       </ul>
+      </div>
+      </div>
     </div>
   );
 }
