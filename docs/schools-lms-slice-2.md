@@ -97,6 +97,19 @@ signs a **5-minute** URL. The service role is used only in
 and never with a path from the request body. Submit checks every draft file
 actually landed in storage (else 409 `upload_incomplete`).
 
+File names and types:
+
+- Registering a file whose name's extension does not match its declared (or
+  extension-derived) type is a 400 `file_type_mismatch` (`payload.exe` sent
+  as `application/pdf` is refused). Nothing is created.
+- A download is always named `<cleaned base name>.<extension of the stored
+  type>` (`downloadFileName`), never with the extension in the stored name.
+- Android's `image/heif` / `.heif` is stored as `image/heic` (browser and
+  server both map it before the allowlist check), so the bucket and the 310
+  CHECK are unchanged.
+- `.doc` / `.ppt` can carry macros. They stay allowed (no behaviour change);
+  downloads are attachments and Office opens them in Protected View.
+
 ## API
 
 Staff, `/api/schools/programs/[programId]/lms/` (user client; 401/403/404):
@@ -137,8 +150,15 @@ Deletes that touch student work:
   23503 from 310 to a 409 sentence instead of a 500.
 
 Re-grading is optimistic: the grade drawer sends `expected_updated_at` (the
-grade's `updated_at` it showed, or null if it showed none). A mismatch, or an
-update that matches no row, is 409 `grade_changed` and nothing is written.
+grade's `updated_at` it showed, or null if it showed none). A mismatch is 409
+`grade_changed` and nothing is written.
+
+An UPDATE that matches no row is re-checked, because RLS (F3) hides the
+grade row from a grader's own attempt and that also looks like "0 rows":
+your own attempt (`lms_submission_is_mine`) → 403 `not_allowed`; the grade
+still there with a different `updated_at` → 409 `grade_changed`; anything
+else → 403 `not_allowed`. A first grade on your own attempt fails the INSERT
+policy and is 403 `not_allowed` too.
 
 ### Preview deployments
 
@@ -147,8 +167,10 @@ submitted attempt or a frozen grade can't be deleted afterwards. Every write
 route calls `previewWritesDisabled()` (`src/lib/schools/lms-http.ts`, ported
 from #501) first and returns 403 `preview_writes_disabled` when
 `VERCEL_ENV=preview`: draft PUT / DELETE, files POST, file DELETE, submit
-POST, assignments POST, assignment PATCH / DELETE, release POST, grade PUT.
-Reads stay open.
+POST, assignments POST, assignment PATCH / DELETE, release POST, grade PUT,
+and the slice-1 content writes: course POST / PATCH / DELETE, module POST /
+PATCH / DELETE, lesson POST / PATCH / DELETE, and the course, module and
+lesson reorders. Reads stay open.
 
 ## UI
 
@@ -166,7 +188,8 @@ Reads stay open.
   (`canGradeAssignments = canManage || isStaff`).
 - Downloads use `location.assign` on the signed URL (mobile browsers block
   `window.open` after an `await`). When a phone gives a file no type (HEIC,
-  Office), the mime comes from the extension.
+  Office), the mime comes from the extension; Android's `image/heif` counts
+  as `image/heic`, and the file picker offers `.heif`.
 - **Students**: `/my-schools/[enrollmentId]` gains an *Assignments* section
   grouped To do / Submitted / Graded with due badges (Late / Closed in red).
   `/my-schools/[enrollmentId]/assignments/[assignmentId]` has instructions, the
@@ -224,17 +247,20 @@ Rejected:
 
 - `src/lib/schools/lms-assignments.test.ts` — late logic (both switch values),
   points bounds, type validation, current-attempt selection, row builders,
-  path builder has no uid.
+  path builder has no uid, name/type mismatch, download names, HEIF → HEIC.
 - `src/app/api/schools/programs/[programId]/lms/assignments/route.test.ts` and
   `src/app/api/my-schools/[enrollmentId]/lms/assignments/route.test.ts` — 401/403
   for non-members, 404 cross-program, student cannot read another student's
   submission or file, grade hidden until released, resubmit after release →
   attempt 2 with attempt 1 and its grade intact, late blocked with
-  `allow_late=false` (incl. resubmits). Services are an in-memory fake that
+  `allow_late=false` (incl. resubmits), self-grading is 403 `not_allowed`
+  (first grade and re-grade) while a real concurrent change is 409, a
+  mismatched upload is 400 `file_type_mismatch`, HEIF uploads, download names
+  follow the stored type. Services are an in-memory fake that
   mirrors 310 (`src/lib/testing/fake-lms-assignments.ts`).
-- `src/lib/schools/lms-http.test.ts` — every write route returns 403
-  `preview_writes_disabled` on a preview and is not blocked otherwise; the
-  error mapping.
+- `src/lib/schools/lms-http.test.ts` — every slice-1 and slice-2 write route
+  returns 403 `preview_writes_disabled` on a preview and is not blocked
+  otherwise; reads stay open; the error mapping.
 - `src/app/api/schools/programs/[programId]/lms/courses/[courseId]/route.test.ts`
   — course DELETE 409s on submitted work (pre-check and 23503 backstop).
 - `supabase/tests/lms_assignments_rls.sql` + `src/lib/schools/lms-assignments-rls.test.ts`

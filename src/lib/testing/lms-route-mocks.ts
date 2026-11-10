@@ -4,15 +4,18 @@
 
 import { createFakeSupabase } from "@/lib/testing/fake-supabase";
 import { createFakeLmsService, emptyWorld, type LmsWorld } from "@/lib/testing/fake-lms-assignments";
+import { downloadFileName } from "@/lib/schools/lms-assignments";
 
 export const lmsTestState: {
   world: LmsWorld;
   service: ReturnType<typeof createFakeLmsService>;
   uploaded: Set<string>;
   signed: string[];
+  /** The name each signed download would save as. */
+  downloadNames: string[];
 } = (() => {
   const world = emptyWorld();
-  return { world, service: createFakeLmsService(world), uploaded: new Set<string>(), signed: [] };
+  return { world, service: createFakeLmsService(world), uploaded: new Set<string>(), signed: [], downloadNames: [] };
 })();
 
 export function resetLmsWorld(now = new Date("2026-11-09T10:00:00Z")): LmsWorld {
@@ -22,6 +25,7 @@ export function resetLmsWorld(now = new Date("2026-11-09T10:00:00Z")): LmsWorld 
   lmsTestState.service = createFakeLmsService(world);
   lmsTestState.uploaded = new Set();
   lmsTestState.signed = [];
+  lmsTestState.downloadNames = [];
   return world;
 }
 
@@ -77,6 +81,8 @@ export function serviceMock() {
     "listAttempts",
     "listAttemptsForEnrollment",
     "getSubmission",
+    "submissionIsMine",
+    "getGradeForSubmission",
     "upsertGrade",
     "releaseGrades",
     "insertAttempt",
@@ -97,9 +103,11 @@ export function serviceMock() {
 
 export function storageMock() {
   return {
-    signDownload: async (path: string) => {
-      lmsTestState.signed.push(path);
-      return { url: `https://storage.test/sign/${path}?ttl=300`, error: null };
+    // Same naming as the real signDownload.
+    signDownload: async (file: { storage_path: string; file_name: string; mime: string }) => {
+      lmsTestState.signed.push(file.storage_path);
+      lmsTestState.downloadNames.push(downloadFileName(file.file_name, file.mime));
+      return { url: `https://storage.test/sign/${file.storage_path}?ttl=300`, error: null };
     },
     signUpload: async (path: string) => ({
       data: { signedUrl: `https://storage.test/upload/${path}?token=t`, token: "t", path },

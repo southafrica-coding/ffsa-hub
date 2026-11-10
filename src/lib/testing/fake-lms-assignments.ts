@@ -210,9 +210,11 @@ export function createFakeLmsService(w: LmsWorld) {
       basedOn: string | null = existing?.updated_at ?? null
     ) {
       const s = w.submissions.find((x) => x.id === submissionId);
-      // 310 F3: never your own attempt.
+      const current = w.grades.find((g) => g.submission_id === submissionId);
+      // 310 F3: never your own attempt. Like Postgres RLS: an INSERT fails
+      // its WITH CHECK (42501); an UPDATE's USING hides the row (0 rows).
       if (!s || s.status !== "submitted" || !canGrade(programOfAssignment(s.assignment_id)) || ownsEnrollment(s.enrollment_id)) {
-        return err("new row violates row-level security policy", "42501");
+        return current ? { data: null, error: null, stale: true } : err("new row violates row-level security policy", "42501");
       }
       const a = w.assignments.find((x) => x.id === s.assignment_id)!;
       if (input.points < 0 || input.points > a.max_points) return err("points out of range", "23514");
@@ -252,6 +254,14 @@ export function createFakeLmsService(w: LmsWorld) {
       };
       w.grades.push(created);
       return { data: { ...created }, error: null };
+    },
+    async submissionIsMine(_c: unknown, submissionId: string) {
+      const s = w.submissions.find((x) => x.id === submissionId);
+      return { data: !!s && ownsEnrollment(s.enrollment_id), error: null };
+    },
+    async getGradeForSubmission(_c: unknown, submissionId: string) {
+      const g = w.grades.find((x) => x.submission_id === submissionId);
+      return { data: g && gradeVisible(g) ? { ...g } : null, error: null };
     },
     async releaseGrades(_c: unknown, ids: string[]) {
       const out: LmsGrade[] = [];

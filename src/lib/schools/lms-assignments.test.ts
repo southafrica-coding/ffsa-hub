@@ -4,6 +4,9 @@ import {
   buildStudentItems,
   buildSubmissionPath,
   countStatuses,
+  downloadFileName,
+  FILE_ACCEPT_ATTR,
+  fileNameMatchesMime,
   currentAttempt,
   formatDue,
   fromJohannesburgInput,
@@ -329,6 +332,85 @@ describe("mime fallback (phones send HEIC / Office with an empty type)", () => {
       value: { file_name: "IMG_1.heic", mime: "image/heic", size_bytes: 10, ext: "heic" },
     });
     expect(validateUploadRequest({ file_name: "a.exe", mime: "", size_bytes: 10 }, 0).ok).toBe(false);
+  });
+});
+
+describe("file name must match its type", () => {
+  it("refuses a name whose extension disagrees with the declared type (file_type_mismatch)", () => {
+    const r = validateUploadRequest({ file_name: "payload.exe", mime: "application/pdf", size_bytes: 10 }, 0);
+    expect(r).toMatchObject({ ok: false, code: "file_type_mismatch" });
+    expect(!r.ok && r.error).toMatch(/\.pdf/);
+    expect(validateUploadRequest({ file_name: "photo.png", mime: "image/jpeg", size_bytes: 10 }, 0)).toMatchObject({
+      ok: false,
+      code: "file_type_mismatch",
+    });
+    // No extension at all does not match either.
+    expect(validateUploadRequest({ file_name: "notes", mime: "text/plain", size_bytes: 10 }, 0)).toMatchObject({
+      ok: false,
+      code: "file_type_mismatch",
+    });
+  });
+
+  it("accepts any extension of the same type, in any case", () => {
+    expect(validateUploadRequest({ file_name: "Essay.PDF", mime: "application/pdf", size_bytes: 10 }, 0).ok).toBe(true);
+    expect(validateUploadRequest({ file_name: "photo.jpeg", mime: "image/jpeg", size_bytes: 10 }, 0)).toMatchObject({
+      ok: true,
+      value: { mime: "image/jpeg", ext: "jpg" },
+    });
+    expect(fileNameMatchesMime("a.jpg", "image/jpeg")).toBe(true);
+    expect(fileNameMatchesMime("a.exe", "application/pdf")).toBe(false);
+    expect(fileNameMatchesMime("a.exe", "application/x-msdownload")).toBe(false);
+  });
+
+  it("an unknown type is still the plain allowlist error, not a mismatch", () => {
+    const r = validateUploadRequest({ file_name: "a.exe", mime: "application/x-msdownload", size_bytes: 10 }, 0);
+    expect(r.ok).toBe(false);
+    expect("code" in r).toBe(false);
+  });
+});
+
+describe("download names", () => {
+  it("always end in the stored type's extension, never the uploaded one", () => {
+    expect(downloadFileName("payload.exe", "application/pdf")).toBe("payload.pdf");
+    expect(downloadFileName("Essay v1.2 final.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")).toBe(
+      "Essay v1.2 final.docx"
+    );
+    expect(downloadFileName("photo.jpeg", "image/jpeg")).toBe("photo.jpg");
+    expect(downloadFileName("trick.pdf.exe", "application/pdf")).toBe("trick.pdf.pdf");
+  });
+
+  it("cleans the base name", () => {
+    expect(downloadFileName("../../etc/passwd", "text/plain")).toBe("passwd.txt");
+    expect(downloadFileName("C:\\Users\\me\\notes.txt", "text/plain")).toBe("notes.txt");
+    expect(downloadFileName('a"b\r\n<c>|d?.pdf', "application/pdf")).toBe("a b c d.pdf");
+    expect(downloadFileName("", "application/pdf")).toBe("submission.pdf");
+    expect(downloadFileName("...", "application/pdf")).toBe("submission.pdf");
+    expect(downloadFileName(`${"x".repeat(300)}.pdf`, "application/pdf")).toBe(`${"x".repeat(100)}.pdf`);
+  });
+});
+
+describe("Android HEIF counts as HEIC", () => {
+  it("maps image/heif and .heif to image/heic before the allowlist", () => {
+    expect(resolveFileMime("IMG_20261110.heif", "image/heif")).toBe("image/heic");
+    expect(resolveFileMime("IMG_20261110.heic", "image/heif")).toBe("image/heic");
+    expect(resolveFileMime("IMG_20261110.HEIF", "")).toBe("image/heic");
+    expect(resolveFileMime("IMG_20261110.heif", " IMAGE/HEIF ")).toBe("image/heic");
+  });
+
+  it("an Android HEIF photo passes upload validation and downloads as .heic", () => {
+    expect(validateUploadRequest({ file_name: "IMG_20261110.heif", mime: "image/heif", size_bytes: 10 }, 0)).toEqual({
+      ok: true,
+      value: { file_name: "IMG_20261110.heif", mime: "image/heic", size_bytes: 10, ext: "heic" },
+    });
+    expect(downloadFileName("IMG_20261110.heif", "image/heic")).toBe("IMG_20261110.heic");
+  });
+
+  it("the file picker offers HEIF", () => {
+    const accept = FILE_ACCEPT_ATTR.split(",");
+    expect(accept).toContain("image/heif");
+    expect(accept).toContain(".heif");
+    expect(accept).toContain(".heic");
+    expect(accept).toContain(".jpeg");
   });
 });
 

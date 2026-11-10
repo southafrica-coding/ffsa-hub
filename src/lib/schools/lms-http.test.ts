@@ -2,8 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { jsonRequest, lmsTestState, resetLmsWorld } from "@/lib/testing/lms-route-mocks";
 import { seedTwoSchools } from "@/lib/testing/fake-lms-assignments";
 
-// Preview-write guard (ported from #501) on every LMS slice-2 write route,
-// plus the DB-error → HTTP mapping the routes share.
+// Preview-write guard (ported from #501) on every LMS write route, slice 1
+// (courses, modules, lessons, reorders) and slice 2 (assignments), plus the
+// DB-error → HTTP mapping the routes share.
 
 vi.mock("@/lib/supabase/server", async () => (await import("@/lib/testing/lms-route-mocks")).serverClientMock());
 vi.mock("@/lib/schools/program-staff-access", async () =>
@@ -22,6 +23,16 @@ import * as assignments from "@/app/api/schools/programs/[programId]/lms/assignm
 import * as assignment from "@/app/api/schools/programs/[programId]/lms/assignments/[assignmentId]/route";
 import * as release from "@/app/api/schools/programs/[programId]/lms/assignments/[assignmentId]/release/route";
 import * as grade from "@/app/api/schools/programs/[programId]/lms/submissions/[submissionId]/grade/route";
+// Slice 1 (course content).
+import * as courses from "@/app/api/schools/programs/[programId]/lms/courses/route";
+import * as coursesReorder from "@/app/api/schools/programs/[programId]/lms/courses/reorder/route";
+import * as course from "@/app/api/schools/programs/[programId]/lms/courses/[courseId]/route";
+import * as modules from "@/app/api/schools/programs/[programId]/lms/courses/[courseId]/modules/route";
+import * as modulesReorder from "@/app/api/schools/programs/[programId]/lms/courses/[courseId]/modules/reorder/route";
+import * as mod from "@/app/api/schools/programs/[programId]/lms/modules/[moduleId]/route";
+import * as lessons from "@/app/api/schools/programs/[programId]/lms/modules/[moduleId]/lessons/route";
+import * as lessonsReorder from "@/app/api/schools/programs/[programId]/lms/modules/[moduleId]/lessons/reorder/route";
+import * as lesson from "@/app/api/schools/programs/[programId]/lms/lessons/[lessonId]/route";
 
 type Handler = (req: Request, ctx: { params: Promise<Record<string, string>> }) => Promise<Response>;
 
@@ -31,6 +42,9 @@ const ids = {
   programId: "5ca7ccc0-ffec-4f9e-92ab-ad6bf99dfa48",
   fileId: "f1000000-0000-0000-0000-000000000001",
   submissionId: "5b000000-0000-0000-0000-000000000001",
+  courseId: "c1000000-0000-0000-0000-000000000001",
+  moduleId: "d1000000-0000-0000-0000-000000000001",
+  lessonId: "e1000000-0000-0000-0000-000000000001",
 };
 
 const WRITES: Array<[string, Handler, string]> = [
@@ -44,6 +58,19 @@ const WRITES: Array<[string, Handler, string]> = [
   ["assignment DELETE", assignment.DELETE as unknown as Handler, "DELETE"],
   ["release POST", release.POST as unknown as Handler, "POST"],
   ["grade PUT", grade.PUT as unknown as Handler, "PUT"],
+  // Slice 1: course / module / lesson content and every reorder.
+  ["course POST", courses.POST as unknown as Handler, "POST"],
+  ["courses reorder POST", coursesReorder.POST as unknown as Handler, "POST"],
+  ["course PATCH", course.PATCH as unknown as Handler, "PATCH"],
+  ["course DELETE", course.DELETE as unknown as Handler, "DELETE"],
+  ["module POST", modules.POST as unknown as Handler, "POST"],
+  ["modules reorder POST", modulesReorder.POST as unknown as Handler, "POST"],
+  ["module PATCH", mod.PATCH as unknown as Handler, "PATCH"],
+  ["module DELETE", mod.DELETE as unknown as Handler, "DELETE"],
+  ["lesson POST", lessons.POST as unknown as Handler, "POST"],
+  ["lessons reorder POST", lessonsReorder.POST as unknown as Handler, "POST"],
+  ["lesson PATCH", lesson.PATCH as unknown as Handler, "PATCH"],
+  ["lesson DELETE", lesson.DELETE as unknown as Handler, "DELETE"],
 ];
 
 const ctx = () => ({ params: Promise.resolve({ ...ids }) });
@@ -89,6 +116,11 @@ describe("previewWritesDisabled", () => {
     lmsTestState.world.userId = "11111111-1111-1111-1111-111111111111";
     const res = await assignments.GET(jsonRequest("GET"), { params: Promise.resolve({ programId: ids.programId }) });
     expect(res.status).toBe(200);
+    // Slice-1 reads are not guarded either: signed out they reach the normal 401.
+    lmsTestState.world.userId = null;
+    for (const read of [courses.GET, course.GET] as unknown as Handler[]) {
+      expect((await read(jsonRequest("GET"), ctx())).status).toBe(401);
+    }
   });
 });
 
