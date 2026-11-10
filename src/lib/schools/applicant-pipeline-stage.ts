@@ -42,6 +42,26 @@ export const PIPELINE_STAGE_ORDER = [
 
 export type PipelineStageKey = (typeof PIPELINE_STAGE_ORDER)[number];
 
+/** Values application_responses.status is allowed to store. Interview complete is not one of them. */
+export const STORED_APPLICATION_STATUSES = [
+  "submitted",
+  "waiting_for_references",
+  "references_received",
+  "interview_scheduled",
+  "accepted",
+  "waitlisted",
+  "rejected",
+  "cancelled",
+] as const;
+
+export type StoredApplicationStatus = (typeof STORED_APPLICATION_STATUSES)[number];
+
+const STORED_STATUS_SET = new Set<string>(STORED_APPLICATION_STATUSES);
+
+export function isStoredApplicationStatus(value: string): value is StoredApplicationStatus {
+  return STORED_STATUS_SET.has(value);
+}
+
 export const PIPELINE_STAGE_LABEL: Record<PipelineStageKey, string> = {
   submitted: "Submitted",
   references_received: "References received",
@@ -167,4 +187,66 @@ export function statusAfterReferencesComplete(input: {
   if (!EARLY_STATUSES.has(input.storedStatus)) return null;
   if (!requiredReferencesComplete(input.requiredSlotIds, input.requests)) return null;
   return "references_received";
+}
+
+export type DecisionChoice = {
+  value: PipelineStageKey;
+  label: string;
+  /** False for a derived stage. The dropdown shows it and does not write it. */
+  settable: boolean;
+  /** Null when the stage must not be stored. */
+  writes: StoredApplicationStatus | null;
+};
+
+/**
+ * Options for the applicant Decision dropdown and the bulk status
+ * control. Same stages as the pipeline tabs, minus All and Unassigned.
+ * Waiting for refs is not a choice. Interview complete is shown and
+ * cannot be saved.
+ */
+export function decisionChoices(): DecisionChoice[] {
+  return PIPELINE_STAGE_ORDER.map((key) => {
+    if (key === "interview_complete" || !isStoredApplicationStatus(key)) {
+      return {
+        value: key,
+        label: `${PIPELINE_STAGE_LABEL[key]} — record an interview outcome to reach it`,
+        settable: false,
+        writes: null,
+      };
+    }
+    return {
+      value: key,
+      label: PIPELINE_STAGE_LABEL[key],
+      settable: true,
+      writes: key,
+    };
+  });
+}
+
+/** Value the dropdown displays. A stored waiting_for_references reads as Submitted. */
+export function decisionSelectValue(storedStatus: string): string {
+  if (storedStatus === "waiting_for_references") return "submitted";
+  return storedStatus;
+}
+
+export function statusWrittenByDecision(choice: string): StoredApplicationStatus | null {
+  return decisionChoices().find((item) => item.value === choice)?.writes ?? null;
+}
+
+/**
+ * Status to persist from the dropdown.
+ * Leaving the control on Submitted while the row is still
+ * waiting_for_references keeps that enum value. Picking another
+ * stage writes that stage. Interview complete writes nothing.
+ */
+export function statusToPersist(
+  selected: string,
+  storedStatus: string
+): StoredApplicationStatus | null {
+  const written = statusWrittenByDecision(selected);
+  if (!written) return null;
+  if (storedStatus === "waiting_for_references" && written === "submitted") {
+    return "waiting_for_references";
+  }
+  return written;
 }

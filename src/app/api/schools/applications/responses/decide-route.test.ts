@@ -6,7 +6,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const h = vi.hoisted(() => ({
   canManage: true,
   updates: 0,
+  emails: 0,
   notesError: null as string | null,
+  previousStatus: "submitted",
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -18,9 +20,24 @@ vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from: () => ({
       select: () => ({
-        in: () => Promise.resolve({ data: [{ id: "app1", program_id: "p1" }], error: null }),
+        in: () =>
+          Promise.resolve({
+            data: [{ id: "app1", program_id: "p1", status: h.previousStatus }],
+            error: null,
+          }),
         eq: () => ({
-          single: async () => ({ data: { status: "submitted" }, error: null }),
+          single: async () => ({
+            data: {
+              id: "app1",
+              status: h.previousStatus,
+              program_id: "p1",
+              applicant_email: "ada@example.com",
+              applicant_info: { first_name: "Ada" },
+              users: { first_name: "Ada", email: "ada@example.com" },
+              programs: { name: "SBI" },
+            },
+            error: null,
+          }),
         }),
       }),
     }),
@@ -58,8 +75,14 @@ vi.mock("@/lib/auth/membership-roles", () => ({
   ensureStudentRole: async () => {},
   deactivateMembershipProfile: async () => {},
 }));
-vi.mock("@/lib/email/send-transactional", () => ({ sendTransactional: async () => {} }));
-vi.mock("@/lib/email/render-program-email", () => ({ resolveProgramEmail: async () => null }));
+vi.mock("@/lib/email/send-transactional", () => ({
+  sendTransactional: async () => {
+    h.emails += 1;
+  },
+}));
+vi.mock("@/lib/email/render-program-email", () => ({
+  resolveProgramEmail: async () => ({ skip: false, subject: "Hi", html: "<p>Hi</p>" }),
+}));
 vi.mock("@/lib/email/send-reference-invite", () => ({ sendReferenceInvite: async () => {} }));
 vi.mock("@/lib/email/send-reference-reminder", () => ({ sendReferenceReminder: async () => {} }));
 vi.mock("@/lib/email/reference-email", () => ({ referenceSendConfirmed: () => false }));
@@ -73,7 +96,9 @@ const route = await import("./route");
 beforeEach(() => {
   h.canManage = true;
   h.updates = 0;
+  h.emails = 0;
   h.notesError = null;
+  h.previousStatus = "submitted";
 });
 
 function put(body: unknown) {
@@ -99,6 +124,47 @@ describe("application status changes", () => {
     expect(await res.json()).toEqual({
       error: "new row violates row-level security policy",
     });
+  });
+
+  it("returns 400 for a status the database enum does not store", async () => {
+    const res = await put({ id: "app1", status: "interview_complete" });
+    expect(res.status).toBe(400);
+    expect(h.updates).toBe(0);
+    const bulk = await put({ ids: ["app1"], status: "not-a-status" });
+    expect(bulk.status).toBe(400);
+    expect(h.updates).toBe(0);
+  });
+
+  it("refuses to move an accepted applicant back to submitted unless confirm is set", async () => {
+    h.previousStatus = "accepted";
+    const blocked = await put({ id: "app1", status: "submitted" });
+    expect(blocked.status).toBe(409);
+    expect((await blocked.json()).code).toBe("accepted_regress");
+    expect(h.updates).toBe(0);
+
+    const allowed = await put({ id: "app1", status: "submitted", confirm_regress: true });
+    expect(allowed.status).toBe(200);
+    expect(h.updates).toBe(1);
+  });
+
+  it("rejects a bulk update above 100 ids", async () => {
+    const ids = Array.from({ length: 101 }, (_, index) => `app-${index}`);
+    const res = await put({ ids, status: "interview_scheduled" });
+    expect(res.status).toBe(400);
+    expect(h.updates).toBe(0);
+  });
+
+  it("emails only when the status actually changed", async () => {
+    const changed = await put({ id: "app1", status: "interview_scheduled" });
+    expect(changed.status).toBe(200);
+    expect(h.emails).toBe(1);
+
+    h.previousStatus = "interview_scheduled";
+    h.emails = 0;
+    const same = await put({ id: "app1", status: "interview_scheduled" });
+    expect(same.status).toBe(200);
+    expect(h.updates).toBe(2);
+    expect(h.emails).toBe(0);
   });
 
   it("returns a failed notes write on a bulk update", async () => {
