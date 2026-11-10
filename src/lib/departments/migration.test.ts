@@ -54,9 +54,8 @@ describe("departments migrations 317–320", () => {
       "staff_ministry_aliases",
       "services",
       "service_owners",
-      "ministry_rocks",
-      "department_budgets",
-      "staff_ministry_finance_projects",
+      "rocks",
+      "department_budget_links",
     ]) {
       expect(all).toMatch(new RegExp(`ALTER TABLE public\\.${table} ENABLE ROW LEVEL SECURITY`));
     }
@@ -65,7 +64,7 @@ describe("departments migrations 317–320", () => {
     expect(all).toMatch(/VIEW public\.ministry_service_access\s*WITH \(security_invoker = true\)/);
   });
 
-  it("seeds service routes and the contacts / evangelism rules", () => {
+  it("seeds own and manage, and leaves evangelism use without a grant row", () => {
     expect(services).toContain("'/bookings/equipment'");
     expect(services).toContain("'/bookings/spaces'");
     expect(services).toContain("'/bookings/vehicles'");
@@ -74,19 +73,33 @@ describe("departments migrations 317–320", () => {
     expect(services).toContain("'/evangelism'");
     expect(services).toContain("'/prayer-room'");
     expect(services).toContain("'/brand-kit'");
-    expect(services).toMatch(/'contacts'[\s\S]*'point_leaders'/);
-    expect(services).toMatch(/'evangelism'[\s\S]*'everyone'/);
-    expect(services).toMatch(/'evangelism',\s*'media',\s*'moderator'/);
-    expect(services).toMatch(/'evangelism',\s*'hulk',\s*'moderator'/);
-    expect(services).toMatch(/role IN \('owner', 'access', 'moderator'\)/);
+    expect(services).toMatch(/'gear_hire',\s*'prayer_and_worship',\s*'own'/);
+    expect(services).toMatch(/'gear_hire',\s*'media',\s*'manage'/);
+    expect(services).toMatch(/'communications',\s*'media',\s*'own'/);
+    expect(services).toMatch(/'communications',\s*'hulk',\s*'use'/);
+    expect(services).toMatch(/'communications',\s*'leadership_team',\s*'use'/);
+    expect(services).toMatch(/'contacts',\s*NULL,\s*'use',\s*'leader',\s*true/);
+    expect(services).toMatch(/'evangelism',\s*'media',\s*'moderate',\s*NULL/);
+    expect(services).toMatch(/'evangelism',\s*'hulk',\s*'moderate',\s*NULL/);
+    expect(services).toMatch(/'evangelism',\s*'hulk',\s*'own'/);
+    expect(services).not.toMatch(/\('evangelism',\s*NULL/);
+    expect(services).toMatch(/p_service_key = 'evangelism'/);
+    expect(services).toMatch(/capability IN \('manage', 'use', 'moderate', 'own'\)/);
   });
 
   it("keeps rocks off the OKR tables and budgets in cents", () => {
-    expect(rocks).toMatch(/CREATE TABLE IF NOT EXISTS public\.ministry_rocks/);
+    expect(rocks).toMatch(/CREATE TABLE IF NOT EXISTS public\.rocks \(/);
+    expect(rocks).toMatch(/quarter\s+text NOT NULL CHECK \(quarter ~ '\^\[0-9\]\{4\}-Q\[1-4\]\$'\)/);
+    expect(rocks).toMatch(/status IN \('on_track', 'off_track', 'done'\)/);
+    expect(rocks).toMatch(/due_on\s+date/);
     expect(rocks).not.toMatch(/CREATE TABLE[^;]*okr_/);
     expect(rocks).toMatch(/JOIN public\.okr_objectives/);
     expect(rocks).toMatch(/c\.is_current/);
-    expect(budgets).toMatch(/amount_cents\s+bigint/);
+    expect(budgets).toMatch(/CREATE TABLE IF NOT EXISTS public\.department_budget_links/);
+    expect(budgets).toMatch(/budget_cents\s+bigint/);
+    expect(budgets).toMatch(/spend_cents\s+bigint/);
+    expect(budgets).toMatch(/DEFAULT 'ZAR'/);
+    expect(budgets).toMatch(/EXTRACT\(YEAR FROM CURRENT_DATE\)/);
     expect(budgets).toMatch(/lower\(btrim\(fp\.name\)\) = lower\(btrim\(sm\.name\)\)/);
     expect(budgets).toMatch(/dept_holds_unscoped_permission\('finance\.view'\)/);
     expect(budgets).toMatch(/slug = 'finances_legal'/);
