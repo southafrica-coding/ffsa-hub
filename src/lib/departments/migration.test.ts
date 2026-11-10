@@ -87,6 +87,8 @@ describe("departments migrations 318–321", () => {
     expect(services).toMatch(/'brand_kit',\s*'media',\s*'manage'/);
     expect(services).toMatch(/so\.open_to_all\s+AND so\.capability = 'use'/);
     expect(services).toMatch(/CHECK \(NOT open_to_all OR capability = 'use'\)/);
+    expect(services).toMatch(/service_owners_open_to_all_use_ck/);
+    expect(services).toMatch(/pg_constraint/);
     expect(services).not.toContain("user_can_moderate_service");
     expect(services).toMatch(/public\.dept_caller_is_active\(\)/);
     expect(services).not.toMatch(/'hulk',\s*'moderate'/);
@@ -138,7 +140,9 @@ describe("departments migrations 318–321", () => {
     expect(rollback).not.toContain("user_can_moderate_service");
     expect(rollback).not.toMatch(/2026-10-19/);
     expect(rollback).toMatch(/name IN \(\s*'318_department_homes'/);
-    expect(rollback).toMatch(/OR version IN \('318', '319', '320', '321'\)/);
+    expect(rollback).toMatch(/version IN \('318', '319', '320', '321'\)/);
+    expect(rollback).toMatch(/name IS NULL/);
+    expect(rollback).toMatch(/confdeltype IN \('c', 'r', 'a'\)/);
     expect(rollback).toMatch(/c\.confrelid = 'public\.staff_ministry_members'::regclass/);
     expect(rollback).toMatch(/supabase_migrations\.schema_migrations/);
     expect(rollback).toMatch(/DROP FUNCTION IF EXISTS public\.dept_is_ministry_member\(uuid, boolean\)/);

@@ -29,91 +29,85 @@
 BEGIN;
 
 -- Refuse to delete the be_free ministry 318 inserted while anything other
--- than that tracked membership still points at it through a cascading or
--- restricting foreign key. The same check covers foreign keys that point
--- at staff_ministry_members: a subcategory on Philip's tracked be_free
--- membership (staff_ministry_member_subcategories.membership_id, ON
--- DELETE CASCADE) refuses the rollback. SET NULL links (the palette,
--- parent_id) are not data loss and are not checked. Tables that do not
--- exist on a throwaway database are skipped because the catalog only
--- lists what is there. Own tables (rocks, department_budget_links,
--- service_owners, aliases) are included: a row on be_free would be
--- destroyed with it.
+-- than that tracked membership still points at it through a cascading,
+-- restricting, or NO ACTION foreign key. SET NULL links (the palette,
+-- parent_id) are not data loss and are not checked. The membership loop
+-- is separate: it runs over every membership 318 inserted, including when
+-- be_free itself was already there and was not inserted. A subcategory on
+-- one of those memberships (staff_ministry_member_subcategories, ON DELETE
+-- CASCADE) refuses the rollback. Tables that do not exist on a throwaway
+-- database are skipped because the catalog only lists what is there.
 DO $guard$
 DECLARE
   v_be uuid;
+  v_inserted boolean := false;
   v_n int;
   r record;
 BEGIN
   IF to_regclass('public.migration_318_changes') IS NULL THEN
     RETURN;
   END IF;
-  IF to_regclass('public.staff_ministries') IS NULL THEN
-    RETURN;
+
+  IF to_regclass('public.staff_ministries') IS NOT NULL THEN
+    SELECT id INTO v_be FROM public.staff_ministries WHERE slug = 'be_free';
+    v_inserted := v_be IS NOT NULL AND EXISTS (
+      SELECT 1
+        FROM public.migration_318_changes
+       WHERE kind = 'insert'
+         AND table_name = 'staff_ministries'
+         AND row_id = v_be
+    );
   END IF;
 
-  SELECT id INTO v_be FROM public.staff_ministries WHERE slug = 'be_free';
-  IF v_be IS NULL THEN
-    RETURN;
-  END IF;
-  IF NOT EXISTS (
-    SELECT 1
-      FROM public.migration_318_changes
-     WHERE kind = 'insert'
-       AND table_name = 'staff_ministries'
-       AND row_id = v_be
-  ) THEN
-    RETURN;
-  END IF;
+  IF v_inserted THEN
+    FOR r IN
+      SELECT c.conrelid::regclass AS rel,
+             a.attname AS col
+        FROM pg_constraint c
+        JOIN pg_attribute a
+          ON a.attrelid = c.conrelid
+         AND a.attnum = c.conkey[1]
+       WHERE c.confrelid = 'public.staff_ministries'::regclass
+         AND c.contype = 'f'
+         AND c.confdeltype IN ('c', 'r', 'a')
+         AND cardinality(c.conkey) = 1
+    LOOP
+      IF r.rel = 'public.staff_ministry_members'::regclass
+         AND r.col = 'staff_ministry_id' THEN
+        EXECUTE
+          'SELECT count(*) FROM public.staff_ministry_members mm
+            WHERE mm.staff_ministry_id = $1
+              AND NOT EXISTS (
+                SELECT 1 FROM public.migration_318_changes ch
+                 WHERE ch.kind = ''insert''
+                   AND ch.table_name = ''staff_ministry_members''
+                   AND ch.row_id = mm.id
+              )'
+          INTO v_n USING v_be;
+      ELSIF r.rel = 'public.staff_ministry_aliases'::regclass THEN
+        EXECUTE format(
+          'SELECT count(*) FROM %s x
+            WHERE x.%I = $1
+              AND NOT EXISTS (
+                SELECT 1 FROM public.migration_318_changes ch
+                 WHERE ch.kind = ''insert''
+                   AND ch.table_name = ''staff_ministry_aliases''
+                   AND ch.row_id = x.id
+              )',
+          r.rel, r.col
+        ) INTO v_n USING v_be;
+      ELSE
+        EXECUTE format('SELECT count(*) FROM %s WHERE %I = $1', r.rel, r.col)
+          INTO v_n USING v_be;
+      END IF;
 
-  FOR r IN
-    SELECT c.conrelid::regclass AS rel,
-           a.attname AS col,
-           c.confdeltype
-      FROM pg_constraint c
-      JOIN pg_attribute a
-        ON a.attrelid = c.conrelid
-       AND a.attnum = c.conkey[1]
-     WHERE c.confrelid = 'public.staff_ministries'::regclass
-       AND c.contype = 'f'
-       AND c.confdeltype IN ('c', 'r')
-       AND cardinality(c.conkey) = 1
-  LOOP
-    IF r.rel = 'public.staff_ministry_members'::regclass
-       AND r.col = 'staff_ministry_id' THEN
-      EXECUTE
-        'SELECT count(*) FROM public.staff_ministry_members mm
-          WHERE mm.staff_ministry_id = $1
-            AND NOT EXISTS (
-              SELECT 1 FROM public.migration_318_changes ch
-               WHERE ch.kind = ''insert''
-                 AND ch.table_name = ''staff_ministry_members''
-                 AND ch.row_id = mm.id
-            )'
-        INTO v_n USING v_be;
-    ELSIF r.rel = 'public.staff_ministry_aliases'::regclass THEN
-      EXECUTE format(
-        'SELECT count(*) FROM %s x
-          WHERE x.%I = $1
-            AND NOT EXISTS (
-              SELECT 1 FROM public.migration_318_changes ch
-               WHERE ch.kind = ''insert''
-                 AND ch.table_name = ''staff_ministry_aliases''
-                 AND ch.row_id = x.id
-            )',
-        r.rel, r.col
-      ) INTO v_n USING v_be;
-    ELSE
-      EXECUTE format('SELECT count(*) FROM %s WHERE %I = $1', r.rel, r.col)
-        INTO v_n USING v_be;
-    END IF;
-
-    IF v_n > 0 THEN
-      RAISE EXCEPTION
-        'rollback refused: be_free (%) still has % row(s) in % (%)',
-        v_be, v_n, r.rel, r.col;
-    END IF;
-  END LOOP;
+      IF v_n > 0 THEN
+        RAISE EXCEPTION
+          'rollback refused: be_free (%) still has % row(s) in % (%)',
+          v_be, v_n, r.rel, r.col;
+      END IF;
+    END LOOP;
+  END IF;
 
   IF to_regclass('public.staff_ministry_members') IS NULL THEN
     RETURN;
@@ -128,7 +122,7 @@ BEGIN
        AND a.attnum = c.conkey[1]
      WHERE c.confrelid = 'public.staff_ministry_members'::regclass
        AND c.contype = 'f'
-       AND c.confdeltype IN ('c', 'r')
+       AND c.confdeltype IN ('c', 'r', 'a')
        AND cardinality(c.conkey) = 1
   LOOP
     EXECUTE format(
@@ -140,15 +134,14 @@ BEGIN
               ON ch.kind = ''insert''
              AND ch.table_name = ''staff_ministry_members''
              AND ch.row_id = mm.id
-           WHERE mm.staff_ministry_id = $1
         )',
       r.rel, r.col
-    ) INTO v_n USING v_be;
+    ) INTO v_n;
 
     IF v_n > 0 THEN
       RAISE EXCEPTION
-        'rollback refused: be_free (%) still has % row(s) in % (%)',
-        v_be, v_n, r.rel, r.col;
+        'rollback refused: a membership 318 inserted still has % row(s) in % (%)',
+        v_n, r.rel, r.col;
     END IF;
   END LOOP;
 END
@@ -272,7 +265,8 @@ DROP TABLE IF EXISTS public.migration_318_changes;
 
 -- Prod stores the apply timestamp in version and the file stem in name
 -- (311 is version 20261110094706, name 311_evangelism_open_publish_and_moderate).
--- The short version list covers a row recorded as 318–321. A throwaway
+-- A short version is removed only when its name is null or one of these
+-- stems, so version 318 with some other name is left alone. A throwaway
 -- database has no supabase_migrations schema; leave it alone.
 DO $mig$
 BEGIN
@@ -286,7 +280,18 @@ BEGIN
      '320_ministry_rocks',
      '321_department_budgets'
    )
-      OR version IN ('318', '319', '320', '321');
+      OR (
+        version IN ('318', '319', '320', '321')
+        AND (
+          name IS NULL
+          OR name IN (
+            '318_department_homes',
+            '319_department_services',
+            '320_ministry_rocks',
+            '321_department_budgets'
+          )
+        )
+      );
 END
 $mig$;
 
