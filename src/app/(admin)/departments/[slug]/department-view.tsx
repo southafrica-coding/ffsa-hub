@@ -2,12 +2,12 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { formatDayRange } from "@/lib/format/sa-time";
 import { formatZarFromCents } from "@/lib/departments/money";
-import { audienceLabel, clusterLabel, currentQuarter, resolveDepartment, serviceRoleLabel } from "@/lib/departments/data";
-import { SERVICES, STAFF_LANGUAGE } from "@/lib/departments/mocks";
+import { currentQuarter } from "@/lib/departments/quarter";
+
+import { audienceLabel, clusterLabel, serviceRoleLabel, STAFF_LANGUAGE } from "@/lib/departments/data";
 import { statusLabel, statusTone } from "@/lib/okrs/progress";
-import type { DepartmentHome, RockStatus } from "@/lib/departments/ui-contract";
+import type { DepartmentHome, HubService, RockStatus } from "@/lib/departments/ui-contract";
 import type { DepartmentTab } from "@/lib/departments/data";
-import type { DepartmentTool } from "@/lib/departments/mocks";
 import { StatusPill } from "@/components/ffsa";
 import { DataTable, EmptyNote, LocalTabs, PageHeading, SectionHeading, StackLink } from "../local-ui";
 
@@ -21,16 +21,17 @@ export function DepartmentView({
   model,
   tab,
   tabs,
-  tools,
+  services,
+  parentName,
 }: {
   model: DepartmentHome;
   tab: DepartmentTab;
   tabs: { key: string; label: string; href: string }[];
-  tools: DepartmentTool[];
+  services: HubService[];
+  parentName: string | null;
 }) {
   const { department, access } = model;
   const leaders = (model.people ?? []).filter((person) => person.capacity === "leader");
-  const parent = department.parentSlug ? resolveDepartment(department.parentSlug) : null;
   const lead = leaders.length > 0 ? leaders.map((person) => person.name).join(", ") : "No lead is set";
 
   return (
@@ -46,10 +47,14 @@ export function DepartmentView({
               <Fact label="People" value={String(department.memberCount)} />
             )}
             <Fact label="Lead" value={lead} />
-            {parent && (
+            {department.parentSlug && (
               <Fact
                 label="Sits under"
-                value={<Link href={`/departments/${parent.slug}`}>{parent.name}</Link>}
+                value={
+                  <Link href={`/departments/${department.parentSlug}`}>
+                    {parentName ?? department.parentSlug}
+                  </Link>
+                }
               />
             )}
             {(model.subMinistries ?? []).length > 0 && (
@@ -65,8 +70,9 @@ export function DepartmentView({
       {tab === "okrs" && access.canSeeDepartmentDetail && <OkrsTab model={model} />}
       {tab === "rocks" && access.canSeeDepartmentDetail && <RocksTab model={model} />}
       {tab === "budget" && access.canSeeBudget && <BudgetTab model={model} />}
-      {tab === "services" && access.canSeeDepartmentDetail && <ServicesTab model={model} />}
-      {tab === "tools" && access.canSeeDepartmentDetail && <ToolsTab tools={tools} />}
+      {tab === "services" && access.canSeeDepartmentDetail && (
+        <ServicesTab model={model} services={services} />
+      )}
     </div>
   );
 }
@@ -247,9 +253,9 @@ function BudgetTab({ model }: { model: DepartmentHome }) {
   );
 }
 
-function ServicesTab({ model }: { model: DepartmentHome }) {
+function ServicesTab({ model, services: catalogue }: { model: DepartmentHome; services: HubService[] }) {
   const services = (model.servicesRun ?? []).flatMap((run) => {
-    const service = SERVICES.find((item) => item.id === run.serviceId);
+    const service = catalogue.find((item) => item.id === run.serviceId);
     return service ? [{ ...service, role: run.role }] : [];
   });
   return (
@@ -266,19 +272,6 @@ function ServicesTab({ model }: { model: DepartmentHome }) {
             meta={`${serviceRoleLabel(service.role)} · ${audienceLabel(service.audience)}`}
           />
         ))
-      )}
-    </>
-  );
-}
-
-function ToolsTab({ tools }: { tools: DepartmentTool[] }) {
-  return (
-    <>
-      <SectionHeading title="Tools" />
-      {tools.length === 0 ? (
-        <EmptyNote title="No tools for your access" />
-      ) : (
-        tools.map((item) => <StackLink key={item.href} title={item.label} href={item.href} />)
       )}
     </>
   );

@@ -1,14 +1,19 @@
 import type { Metadata } from "next";
-import { audienceLabel, getDepartmentViewer, listServicesForViewer, managingLabel } from "@/lib/departments/data";
-import { STAFF_LANGUAGE } from "@/lib/departments/mocks";
+import { audienceLabel, departmentNames, managingLabel, STAFF_LANGUAGE } from "@/lib/departments/data";
+import { loadDepartmentApi } from "@/lib/departments/load";
 import { requireSignedIn } from "@/lib/departments/session";
+import type { DepartmentSummary, HubService } from "@/lib/departments/ui-contract";
 import { EmptyNote, PageHeading, ServiceCard } from "../departments/local-ui";
 
 export const metadata: Metadata = { title: "Services" };
 
 export default async function ServicesPage() {
   await requireSignedIn();
-  const services = listServicesForViewer(getDepartmentViewer());
+  const [services, departments] = await Promise.all([
+    loadDepartmentApi<HubService[]>("/api/services"),
+    loadDepartmentApi<DepartmentSummary[]>("/api/departments"),
+  ]);
+  const names = departmentNames(departments);
 
   return (
     <div>
@@ -28,7 +33,7 @@ export default async function ServicesPage() {
               href={service.href}
               name={service.name}
               summary={service.summary}
-              managing={managingLabel(service)}
+              managing={managingLabel(service, names)}
               audience={audienceLabel(service.audience)}
             />
           ))}

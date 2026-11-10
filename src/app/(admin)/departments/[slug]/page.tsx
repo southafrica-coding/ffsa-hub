@@ -1,29 +1,18 @@
 import type { Metadata } from "next";
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 import {
-  foldTarget,
-  getDepartmentPage,
-  getDepartmentViewer,
+  departmentNames,
   isDepartmentTab,
-  resolveDepartment,
   tabHref,
   tabLabel,
-  viewerCanOpenModule,
   visibleTabs,
 } from "@/lib/departments/data";
-import { ministryTools } from "@/lib/departments/mocks";
+import { loadDepartmentApi } from "@/lib/departments/load";
 import { requireSignedIn } from "@/lib/departments/session";
+import type { DepartmentHome, DepartmentSummary, HubService } from "@/lib/departments/ui-contract";
 import { DepartmentView } from "./department-view";
 
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ slug: string }>;
-}): Promise<Metadata> {
-  const { slug } = await params;
-  const department = resolveDepartment(slug);
-  return { title: department?.name ?? "Department" };
-}
+export const metadata: Metadata = { title: "Department" };
 
 export default async function DepartmentPage({
   params,
@@ -35,22 +24,28 @@ export default async function DepartmentPage({
   await requireSignedIn();
   const { slug } = await params;
   const { tab: requested } = await searchParams;
-  const folded = foldTarget(slug);
-  if (folded) {
+  const [model, services, departments] = await Promise.all([
+    loadDepartmentApi<DepartmentHome>(`/api/departments/${encodeURIComponent(slug)}`),
+    loadDepartmentApi<HubService[]>("/api/services"),
+    loadDepartmentApi<DepartmentSummary[]>("/api/departments"),
+  ]);
+  if (model.department.slug !== slug) {
     const query = requested ? `?tab=${encodeURIComponent(requested)}` : "";
-    redirect(`/departments/${folded}${query}`);
+    redirect(`/departments/${model.department.slug}${query}`);
   }
-  const viewer = getDepartmentViewer();
-  const model = getDepartmentPage(slug, viewer);
-  if (!model) notFound();
 
   const keys = visibleTabs(model);
-  const tab =
-    isDepartmentTab(requested) && keys.includes(requested) ? requested : (keys[0] ?? "overview");
+  const tab = isDepartmentTab(requested) && keys.includes(requested) ? requested : (keys[0] ?? "overview");
   const tabs = keys.map((key) => ({ key, label: tabLabel(key), href: tabHref(model.department.slug, key) }));
-  const tools = model.access.canSeeDepartmentDetail
-    ? ministryTools(model.department.slug).filter((item) => viewerCanOpenModule(item.moduleId, viewer))
-    : [];
+  const names = departmentNames(departments);
 
-  return <DepartmentView model={model} tab={tab} tabs={tabs} tools={tools} />;
+  return (
+    <DepartmentView
+      model={model}
+      tab={tab}
+      tabs={tabs}
+      services={services}
+      parentName={model.department.parentSlug ? (names.get(model.department.parentSlug) ?? null) : null}
+    />
+  );
 }
