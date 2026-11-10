@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import Image from "next/image";
 import Link from "next/link";
 import { FFSA_TAGLINE } from "@/lib/brand/ffsa";
-import { loginDestination } from "@/lib/safe-redirect";
+import { loginDestination } from "@/lib/login-destination";
 import { loginErrorFromParam } from "./login-error";
 
 // The tagline sets as a stacked poster headline on the black panel. Derived from

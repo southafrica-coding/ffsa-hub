@@ -1,4 +1,4 @@
-import { safeInternalPath } from "@/lib/safe-redirect";
+import { safeInternalPath } from "@/lib/login-destination";
 
 /** Login URL with a same-origin return path. Anything else is plain /login. */
 export function loginPath(currentPath: string): string {

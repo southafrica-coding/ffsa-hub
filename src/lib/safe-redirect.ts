@@ -1,46 +1,51 @@
 /**
- * An internal path we will navigate to.
- * Self-contained: Hub Backend copies this file into a main hotfix.
- * Query and hash are kept. Control characters, whitespace, backslashes,
- * schemes, and protocol-relative URLs are not.
+ * Internal path safe to use after the auth code exchange.
+ * Protocol-relative URLs, schemes, backslashes, control characters, and
+ * encoded forms of those (including double encoding) are rejected.
  */
-const SENTINEL = "https://hub.invalid";
 const CONTROL_OR_WHITESPACE = /[\u0000-\u001F\u007F\s]/;
+const SCHEME = /^[a-z][a-z0-9+.-]*:/i;
+const ENCODED_SLASH_OR_BACKSLASH = /%2f%2f|%5c/i;
+const MAX_DECODE_ITERATIONS = 5;
+const BASE = "https://hub.invalid";
+
+function blocked(value: string): boolean {
+  return (
+    CONTROL_OR_WHITESPACE.test(value) ||
+    !value.startsWith("/") ||
+    value.startsWith("//") ||
+    value.includes("\\") ||
+    SCHEME.test(value) ||
+    ENCODED_SLASH_OR_BACKSLASH.test(value)
+  );
+}
 
 export function safeRedirect(value: unknown): string | null {
   if (typeof value !== "string") return null;
-  let decoded: string;
-  try {
-    decoded = decodeURIComponent(value);
-  } catch {
-    return null;
+  if (blocked(value)) return null;
+
+  let v = value;
+  for (let i = 0; i < MAX_DECODE_ITERATIONS; i++) {
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(v);
+    } catch {
+      return null;
+    }
+    if (decoded === v) {
+      if (blocked(v)) return null;
+      const u = new URL(v, BASE);
+      if (u.origin !== BASE) return null;
+      const redirect = u.pathname + u.search + u.hash;
+      // Path normalization can turn "/.//evil.com" into "//evil.com".
+      // new URL(next, origin) would then leave the site, so reject that too.
+      if (blocked(redirect)) return null;
+      if (new URL(redirect, BASE).origin !== BASE) return null;
+      return redirect;
+    }
+    v = decoded;
+    if (ENCODED_SLASH_OR_BACKSLASH.test(v)) return null;
   }
-  if (!isCandidate(value) || !isCandidate(decoded)) return null;
-  let url: URL;
-  try {
-    url = new URL(decoded, SENTINEL);
-  } catch {
-    return null;
-  }
-  if (url.origin !== SENTINEL) return null;
-  if (url.pathname.startsWith("//")) return null;
-  return url.pathname + url.search + url.hash;
-}
 
-export const safeInternalPath = safeRedirect;
-
-function isCandidate(path: string): boolean {
-  if (!path.startsWith("/")) return false;
-  if (path.startsWith("//")) return false;
-  if (path.includes("\\")) return false;
-  if (CONTROL_OR_WHITESPACE.test(path)) return false;
-  if (path.includes("://")) return false;
-  if (/^[a-zA-Z][a-zA-Z+\-.]*:/.test(path)) return false;
-  return true;
-}
-
-/** Where login should go. A missing value stays missing. An unsafe one is /home. */
-export function loginDestination(value: string | null | undefined): string | null {
-  if (value == null) return null;
-  return safeRedirect(value) ?? "/home";
+  return null;
 }

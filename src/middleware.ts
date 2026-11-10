@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { safeRedirect } from "@/lib/safe-redirect";
+import { safeRedirect } from "@/lib/login-destination";
 import {
   createBearerClient,
   getBearerToken,
