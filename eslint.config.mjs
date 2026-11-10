@@ -12,17 +12,17 @@ const compat = new FlatCompat({
 const restrictedImports = ["error", {
   patterns: [
     {
-      group: ["@/lib/*/internal", "@/lib/*/internal/**"],
+      group: ["@/lib/*/internal", "@/lib/*/internal/**", "**/internal", "**/internal/**"],
       allowTypeImports: true,
       message: "Import department and service internals only from API routes, internal modules, or the viewer and access files that own them.",
     },
     {
-      group: ["@/lib/supabase/admin", "@/lib/supabase/admin/**"],
+      group: ["@/lib/supabase/admin", "@/lib/supabase/admin/**", "**/supabase/admin", "**/supabase/admin/**"],
       allowTypeImports: true,
       message: "createAdminClient is the service-role client. Import it only from an allowlisted server module.",
     },
     {
-      group: ["@/lib/departments/internal/open", "@/lib/departments/internal/open/**"],
+      group: ["@/lib/departments/internal/open", "@/lib/departments/internal/open/**", "**/internal/open", "**/internal/open/**"],
       allowTypeImports: true,
       message: "openDepartment returns the service-role client. Call it only from an API route.",
     },
