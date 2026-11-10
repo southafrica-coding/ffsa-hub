@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { authorizeLms, badRequest, notFound, readJson, serverError } from "@/lib/schools/lms-route-auth";
+import { previewWritesDisabled } from "@/lib/schools/lms-http";
 import { validateLessonPatch } from "@/lib/schools/lms-content";
 import { deleteLesson, programIdForLesson, updateLesson } from "@/services/lms-content";
 
@@ -9,6 +10,8 @@ import { deleteLesson, programIdForLesson, updateLesson } from "@/services/lms-c
 type Ctx = { params: Promise<{ programId: string; lessonId: string }> };
 
 export async function PATCH(request: Request, context: Ctx) {
+  const blocked = previewWritesDisabled();
+  if (blocked) return blocked;
   const { programId, lessonId } = await context.params;
   const auth = await authorizeLms(programId, "edit");
   if ("response" in auth) return auth.response;
@@ -22,6 +25,8 @@ export async function PATCH(request: Request, context: Ctx) {
 }
 
 export async function DELETE(_request: Request, context: Ctx) {
+  const blocked = previewWritesDisabled();
+  if (blocked) return blocked;
   const { programId, lessonId } = await context.params;
   const auth = await authorizeLms(programId, "edit");
   if ("response" in auth) return auth.response;

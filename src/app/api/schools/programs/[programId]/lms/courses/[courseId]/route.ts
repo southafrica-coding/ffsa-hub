@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { authorizeLms, badRequest, notFound, readJson, serverError } from "@/lib/schools/lms-route-auth";
+import { previewWritesDisabled } from "@/lib/schools/lms-http";
 import { validateCoursePatch } from "@/lib/schools/lms-content";
 import { isLmsSchemaMissing, lmsRestrictMessage, lmsRestrictMessageFor } from "@/lib/schools/lms-assignments-auth";
 import { countSubmittedAttemptsForCourse } from "@/services/lms-assignments";
@@ -25,6 +26,8 @@ export async function GET(_request: Request, context: Ctx) {
 }
 
 export async function PATCH(request: Request, context: Ctx) {
+  const blocked = previewWritesDisabled();
+  if (blocked) return blocked;
   const { programId, courseId } = await context.params;
   const auth = await authorizeLms(programId, "edit");
   if ("response" in auth) return auth.response;
@@ -38,6 +41,8 @@ export async function PATCH(request: Request, context: Ctx) {
 }
 
 export async function DELETE(_request: Request, context: Ctx) {
+  const blocked = previewWritesDisabled();
+  if (blocked) return blocked;
   const { programId, courseId } = await context.params;
   const auth = await authorizeLms(programId, "edit");
   if ("response" in auth) return auth.response;
