@@ -117,6 +117,16 @@ describe("middleware", () => {
     expect(loc.searchParams.get("redirect")).toBe("/finance");
   });
 
+  it("keeps the query string on the login redirect and drops an unsafe path", async () => {
+    const kept = location(await middleware(req("/departments/x?tab=budget")))!;
+    expect(kept.pathname).toBe("/login");
+    expect(kept.searchParams.get("redirect")).toBe("/departments/x?tab=budget");
+
+    const dropped = location(await middleware(req("/%2F%2Fevil.com")))!;
+    expect(dropped.pathname).toBe("/login");
+    expect(dropped.searchParams.get("redirect")).toBeNull();
+  });
+
   it("a token the Auth server rejects is treated as signed out", async () => {
     current = makeClient({ token: jwtFor("u1"), validUserId: null });
     expect(location(await middleware(req("/finance")))?.pathname).toBe("/login");

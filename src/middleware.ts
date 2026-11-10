@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { safeRedirect } from "@/lib/safe-redirect";
 import {
   createBearerClient,
   getBearerToken,
@@ -202,7 +203,9 @@ export async function middleware(request: NextRequest) {
     // never redirect-loop back to /login when there's no session.
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    url.searchParams.set("redirect", pathname);
+    const target = safeRedirect(`${pathname}${request.nextUrl.search}`);
+    if (target) url.searchParams.set("redirect", target);
+    else url.searchParams.delete("redirect");
     return NextResponse.redirect(url);
   }
 

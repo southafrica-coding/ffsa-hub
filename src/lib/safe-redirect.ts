@@ -26,6 +26,11 @@ function isInternalPath(path: string): boolean {
   return true;
 }
 
+/** Same check, named for the middleware and the auth callback. */
+export function safeRedirect(value: string | null | undefined): string | null {
+  return safeInternalPath(value);
+}
+
 /** Where login should go. A missing value stays missing. An unsafe one is /home. */
 export function loginDestination(value: string | null | undefined): string | null {
   if (value == null) return null;
