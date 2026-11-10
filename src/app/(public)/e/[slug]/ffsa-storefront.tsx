@@ -2,7 +2,7 @@
 
 import { PayLaterCountry } from "./pay-later-country";
 import { useMemo, useState } from "react";
-import { PhoneInputNative } from "@/components/ui/phone-input-native";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { EventDescription } from "@/components/events/event-description";
 import type { CSSProperties } from "react";
 import type { FormField } from "@/lib/forms/schema";
@@ -962,7 +962,7 @@ export function FfsaStorefront({
                     Phone
                     {bf.phone.required && <span className="ffe-req"> *</span>}
                   </label>
-                  <PhoneInputNative
+                  <PhoneInput
                     value={phone}
                     onChange={setPhone}
                     selectClassName="ffe-input"

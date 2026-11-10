@@ -20,13 +20,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
-  Drawer,
   Initials,
   NeedsYou,
   SectionBar,
   StatusPill,
   type Tone,
 } from "@/components/ffsa";
+import { Drawer } from "@/components/ffsa/client";
 import { cn } from "@/lib/utils/cn";
 import PrayerRoomChrome, { type TabDef, type TabKey } from "./chrome";
 import EvaluationForm from "./evaluation-form";

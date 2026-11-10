@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PhoneInputNative } from "@/components/ui/phone-input-native";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { normalizePhoneE164 } from "@/lib/phone";
 import { Label } from "@/components/ui/label";
 import {
@@ -344,7 +344,7 @@ export default function NewContactPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="phone">Phone</Label>
-                <PhoneInputNative
+                <PhoneInput
                   id="phone"
                   value={form.phone}
                   onChange={(v) => updateField("phone", v)}

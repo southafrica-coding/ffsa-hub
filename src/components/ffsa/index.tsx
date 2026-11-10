@@ -1,7 +1,6 @@
-"use client";
-
 /**
- * FFSA Hub — design-system primitives
+ * FFSA Hub — design-system primitives.
+ * Server-safe. Interactive pieces that need state live in ./client.
  * NEW FILE: src/components/ffsa/index.tsx
  *
  * Build these once. Every screen composes them.
@@ -12,8 +11,6 @@
  *   · nothing is rounded, nothing is elevated
  */
 
-import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
 import Link from "next/link";
 import { cn } from "@/lib/utils/cn";
 
@@ -104,90 +101,7 @@ export function NeedsYouAction({ href, children }: { href: string; children: Rea
   );
 }
 
-/* ── Right-hand drawer ────────────────────────────── */
-/**
- * Frame 9a's panel: 470px, slides over the screen rather than replacing it, so
- * the wall stays visible behind and you can click straight through to the next
- * block. Full width below sm, where 470px is the whole screen anyway.
- *
- * Deliberately not the shadcn Dialog: that one centres, traps the page and
- * re-mounts its content, none of which the design's "stays open while you move
- * between sets" behaviour wants.
- */
-export function Drawer({
-  open,
-  onClose,
-  label,
-  onPrev,
-  onNext,
-  children,
-}: {
-  open: boolean;
-  onClose: () => void;
-  label: string;
-  onPrev?: () => void;
-  onNext?: () => void;
-  children: React.ReactNode;
-}) {
-  // Portalled to <body>. The admin shell's content column carries
-  // `animate-fade-up`, and a transform on an ancestor makes it the containing
-  // block for position:fixed — which sized the drawer to the whole scrolled
-  // page and pushed its footer below the fold.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-      if (e.key === "ArrowUp" && onPrev) onPrev();
-      if (e.key === "ArrowDown" && onNext) onNext();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose, onPrev, onNext]);
-
-  if (!open || !mounted) return null;
-
-  return createPortal(
-    <>
-      {/* The scrim dims the screen without hiding it — 9a keeps the week readable. */}
-      <div
-        className="fixed inset-0 z-40 bg-[rgba(10,10,10,0.22)]"
-        onClick={onClose}
-        aria-hidden
-      />
-      <aside
-        role="dialog"
-        aria-label={label}
-        className="fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-ink bg-white sm:w-[470px]"
-      >
-        <div className="flex shrink-0 items-center justify-between bg-ink px-6 py-3.5">
-          <span className="font-mono text-[9.5px] font-bold uppercase tracking-[0.2em] text-yellow">
-            {label}
-          </span>
-          <div className="flex items-center gap-4 font-mono text-[10px] font-bold tracking-[0.12em] text-[#8E8A7C]">
-            {onPrev && (
-              <button type="button" onClick={onPrev} className="hover:text-white">
-                ↑ PREV
-              </button>
-            )}
-            {onNext && (
-              <button type="button" onClick={onNext} className="hover:text-white">
-                NEXT ↓
-              </button>
-            )}
-            <button type="button" onClick={onClose} aria-label="Close" className="flex h-11 w-11 items-center justify-center text-[16px] text-white">
-              ✕
-            </button>
-          </div>
-        </div>
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">{children}</div>
-      </aside>
-    </>,
-    document.body
-  );
-}
+export { Drawer } from "./client";
 
 /* ── Module tab strip ─────────────────────────────── */
 /** Frames 10a / 12a: squared mono tabs sitting on the black page rule. */
@@ -346,6 +260,31 @@ export function Initials({ name, size = 32 }: { name: string; size?: number }) {
 }
 
 /* ── Date block (event rows) ──────────────────────── */
+export {
+  PageHeading,
+  SectionHeading,
+  EmptyNote,
+  LocalTabs,
+  StackLink,
+  DataTable,
+  ServiceCard,
+} from "./department-ui";
+export { MoneyCell } from "./money-cell";
+export {
+  Breadcrumbs,
+  Toolbar,
+  PropertyList,
+  KpiTile,
+  Skeleton,
+  SideSheet,
+  EmptyState,
+  ListPage,
+  DetailPage,
+  DashboardPage,
+  MoneyTablePage,
+  ServicePage,
+} from "./templates";
+
 export function DateBlock({ day, mon, invert }: { day: string; mon: string; invert?: boolean }) {
   return (
     <div className={cn("w-12 shrink-0 border py-1.5 text-center",

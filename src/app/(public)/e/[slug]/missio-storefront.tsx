@@ -2,7 +2,7 @@
 
 import { PayLaterCountry } from "./pay-later-country";
 import { useMemo, useState } from "react";
-import { PhoneInputNative } from "@/components/ui/phone-input-native";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { EventDescription } from "@/components/events/event-description";
 import type { FormField } from "@/lib/forms/schema";
 import { validateCheckoutAnswers } from "@/lib/ticketing/checkout-questions";
@@ -711,7 +711,7 @@ export function MissioStorefront({
               <label className="wo-label" htmlFor="wo-ph">
                 [ PHONE{bf.phone.required ? " *" : " — OPTIONAL"} ]
               </label>
-              <PhoneInputNative
+              <PhoneInput
                 id="wo-ph"
                 value={phone}
                 onChange={setPhone}

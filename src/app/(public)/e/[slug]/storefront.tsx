@@ -4,7 +4,7 @@ import { PayLaterCountry } from "./pay-later-country";
 import { useMemo, useState } from "react";
 import { EventDescription } from "@/components/events/event-description";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PhoneInputNative } from "@/components/ui/phone-input-native";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Button } from "@/components/ui/button";
 import type { FormField } from "@/lib/forms/schema";
 import { validateCheckoutAnswers } from "@/lib/ticketing/checkout-questions";
@@ -648,7 +648,7 @@ export function Storefront({
             </div>
             <div>
               <label>Phone (optional)</label>
-              <PhoneInputNative
+              <PhoneInput
                 value={phone}
                 onChange={setPhone}
                 wrapperClassName="flex gap-2 mt-1"

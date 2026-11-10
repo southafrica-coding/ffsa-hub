@@ -33,6 +33,9 @@ export function DateField({
   id,
   className,
   disabled,
+  onBlur,
+  "aria-invalid": ariaInvalid,
+  "aria-describedby": ariaDescribedBy,
 }: {
   value: string;
   onChange: (isoOrEmpty: string) => void;
@@ -40,6 +43,9 @@ export function DateField({
   id?: string;
   className?: string;
   disabled?: boolean;
+  onBlur?: () => void;
+  "aria-invalid"?: boolean;
+  "aria-describedby"?: string;
 }) {
   const [open, setOpen] = React.useState(false);
   const wrapRef = React.useRef<HTMLDivElement>(null);
@@ -88,7 +94,10 @@ export function DateField({
           value={value}
           onChange={onChange}
           onValidityChange={onValidityChange}
+          onBlur={onBlur}
           disabled={disabled}
+          aria-invalid={ariaInvalid}
+          aria-describedby={ariaDescribedBy}
           className="flex-1"
         />
         <button
