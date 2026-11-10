@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { isOpened, openDepartment, serverError } from "@/lib/departments/http";
+import { serverError } from "@/lib/departments/http";
+import { isOpened, openDepartment } from "@/lib/departments/internal/open";
 import { loadOkrs } from "@/lib/departments/internal/page";
 
 export const dynamic = "force-dynamic";
