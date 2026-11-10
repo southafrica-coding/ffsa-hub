@@ -30,9 +30,15 @@ describe("mobile staff-decisions contract", () => {
     expect(sortSchools([a, b]).map((s) => s.id)).toEqual(["b", "a"]);
   });
 
-  it("maps ministries to department options, tolerating null", () => {
+  it("maps ministries to department options, tolerating null, and omits leadership_team", () => {
     expect(shapeDepartmentOptions(null)).toEqual([]);
     expect(shapeDepartmentOptions([{ slug: "media", name: "Media" }])).toEqual([{ value: "media", label: "Media" }]);
+    expect(
+      shapeDepartmentOptions([
+        { slug: "leadership_team", name: "Leadership Team" },
+        { slug: "media", name: "Media" },
+      ])
+    ).toEqual([{ value: "media", label: "Media" }]);
   });
 
   it("accepts only uuids as a program id", () => {

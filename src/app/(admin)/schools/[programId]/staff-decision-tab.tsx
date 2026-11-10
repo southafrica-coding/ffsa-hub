@@ -15,6 +15,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { StaffDecisionRow } from "@/lib/schools/staff-decisions";
+import {
+  departmentChoice,
+  labelForDepartment,
+} from "@/lib/users/department-options";
 
 // Leadership Track "accepted as staff?" (migration 247). Leadership Team only
 // — the page decides whether this renders at all; the API re-checks.
@@ -57,13 +61,13 @@ export function StaffDecisionTab({
     setStep("decide");
     setAccepted(row.decision ? row.decision.accepted : null);
     setNote(row.decision?.note ?? "");
-    setDepartment(row.department ?? "");
+    setDepartment(departmentChoice(row.department, departmentOptions));
   }
 
   function openMakeStaff(row: StaffDecisionRow) {
     setActive(row);
     setStep("make-staff");
-    setDepartment(row.department ?? "");
+    setDepartment(departmentChoice(row.department, departmentOptions));
   }
 
   function close() {
@@ -276,6 +280,13 @@ export function StaffDecisionTab({
               </DialogHeader>
               <div className="space-y-1.5">
                 <Label htmlFor="staff-decision-department">Department</Label>
+                {active.department &&
+                  !departmentOptions.some((o) => o.value === active.department) && (
+                    <p className="text-[13px] text-[color:var(--text-secondary)]">
+                      Current department:{" "}
+                      {labelForDepartment(active.department, departmentOptions)}
+                    </p>
+                  )}
                 <select
                   id="staff-decision-department"
                   className="flex h-9 w-full border border-input bg-transparent px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"

@@ -25,6 +25,7 @@ import type { RosterFee } from "./roster-tab";
 import { canUseStaffDecisions } from "@/lib/auth/check-okr-access";
 import { getLeadershipTrackProgram, loadStaffDecisionRows } from "@/lib/schools/staff-decisions";
 import { listActiveMinistries } from "@/services/ministries";
+import { staffDecisionDepartmentOptions } from "@/lib/users/department-options";
 import { StaffDecisionTab } from "./staff-decision-tab";
 import { getApplicationExpiry } from "@/lib/auth/application-expiry";
 
@@ -179,8 +180,8 @@ export default async function ProgramDetailPage({
     staffDecisionPanel = (
       <StaffDecisionTab
         rows={rows}
-        departmentOptions={((ministries ?? []) as Array<{ slug: string; name: string }>).map(
-          (m) => ({ value: m.slug, label: m.name })
+        departmentOptions={staffDecisionDepartmentOptions(
+          (ministries ?? []) as Array<{ slug: string; name: string }>
         )}
       />
     );

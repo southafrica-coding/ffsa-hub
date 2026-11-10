@@ -10,7 +10,7 @@ import { announce } from "@/lib/a11y";
 import { apiFetch } from "@/lib/api-client";
 
 import { actionErrorMessage, makeStaff, recordDecision, type DepartmentOption, type StaffDecisionRow } from "../api";
-import { decisionProblem, departmentLabel, offerMakeStaffAfterSave } from "../logic";
+import { decisionProblem, departmentLabel, initialDepartmentSelection, offerMakeStaffAfterSave } from "../logic";
 import { strings } from "../strings";
 
 const sh = strings.sheet;
@@ -44,7 +44,9 @@ export function DecisionSheet({
   const [step, setStep] = useState<SheetStep>(initialStep);
   const [accepted, setAccepted] = useState<boolean | null>(row.decision ? row.decision.accepted : null);
   const [note, setNote] = useState(row.decision?.note ?? "");
-  const [department, setDepartment] = useState<string>(row.department ?? LATER);
+  const [department, setDepartment] = useState<string>(
+    initialDepartmentSelection(row.department, departmentOptions, LATER),
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -101,6 +103,11 @@ export function DecisionSheet({
       <Sheet visible title={sh.makeStaffTitle(row.name)} onClose={onClose}>
         <View style={{ gap: 12, paddingBottom: 8 }} testID="make-staff-step">
           <Text tone="secondary">{sh.makeStaffIntro}</Text>
+          {row.department && !departmentOptions.some((option) => option.value === row.department) ? (
+            <Text tone="secondary">
+              {sh.currentDepartment(departmentLabel(departmentOptions, row.department) ?? row.department)}
+            </Text>
+          ) : null}
           <Chips
             label={sh.departmentLabel}
             options={[{ value: LATER, label: sh.departmentLater }, ...departmentOptions]}

@@ -97,6 +97,7 @@ export const strings = {
     makeStaffIntro: "This switches their Hub role from Student to Staff. You can also do it later from this list.",
     departmentLabel: "Department",
     departmentLater: "Choose later",
+    currentDepartment: (label: string) => `Current department: ${label}`,
     makeStaffConfirm: "Make staff",
     notNow: "Not now",
     madeStaff: (name: string) => `${name} is now staff.`,

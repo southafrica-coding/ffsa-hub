@@ -14,10 +14,15 @@ import {
 import {
   programIdsForTargets,
   userCanDeleteApplication,
+  userCanManageApplications,
   userCanManageEveryProgram,
   userCanManageProgram,
 } from "@/lib/auth/check-schools-access";
-import { userCanReadApplication, APPLICATIONS_EXPIRED_MESSAGE } from "@/lib/auth/application-expiry";
+import {
+  userCanReadApplication,
+  APPLICATIONS_EXPIRED_MESSAGE,
+  getApplicationExpiry,
+} from "@/lib/auth/application-expiry";
 import { normaliseGender } from "@/lib/schools/demographics";
 import { ensureStudentRole, deactivateMembershipProfile } from "@/lib/auth/membership-roles";
 import { sendTransactional } from "@/lib/email/send-transactional";
@@ -827,6 +832,7 @@ export async function PATCH(request: Request) {
     if (!id || !ids) {
       return NextResponse.json({ error: "id is required" }, { status: 400 });
     }
+    // Every id in the batch has to pass userCanManageProgram. ids is check-only.
     const denied = await denyUnlessApplicationPrograms(supabase, user.id, ids);
     if (denied) return denied;
     // RLS-backed: the 6-month expiry lock (migration 223) applies here too.
@@ -964,6 +970,19 @@ export async function PATCH(request: Request) {
   return NextResponse.json({ error: "Invalid action" }, { status: 400 });
 }
 
+async function expiredWithoutAccess(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  programId: string
+): Promise<boolean> {
+  try {
+    const expiry = await getApplicationExpiry(supabase, programId);
+    if (expiry.lookupFailed) return false;
+    return expiry.expired && !expiry.canAccess;
+  } catch {
+    return false;
+  }
+}
+
 // ── DELETE: permanently remove an application ──
 // Guarded: accepted applications own an enrollment / billing / user account,
 // so they can never be hard-deleted here — they must be archived instead.
@@ -983,15 +1002,12 @@ export async function DELETE(request: Request) {
   if (!id || !ids) {
     return NextResponse.json({ error: "id is required" }, { status: 400 });
   }
-  // userCanManageProgram for every target, then userCanDeleteApplication on
-  // top. A program_leaders row or schools.manage_enrollments can manage the
-  // school and still be refused here.
-  const denied = await denyUnlessApplicationPrograms(supabase, user.id, ids, "delete");
+  // userCanManageProgram for every target. userCanDeleteApplication stays on
+  // top of that, in the block below, so an expired school still gets its
+  // own message. A program_leaders row or schools.manage_enrollments can
+  // manage the school and still be refused the delete.
+  const denied = await denyUnlessApplicationPrograms(supabase, user.id, ids);
   if (denied) return denied;
-
-  if (!(await userCanReadApplication(supabase, id))) {
-    return NextResponse.json({ error: APPLICATIONS_EXPIRED_MESSAGE }, { status: 403 });
-  }
 
   const adminSupabase = createAdminClient();
 
@@ -1000,6 +1016,32 @@ export async function DELETE(request: Request) {
     .select("id, status, program_id, applicant_email, user_id")
     .eq("id", id)
     .single();
+
+  // Both gates are required. userCanDeleteApplication is migration 223's
+  // DELETE policy (a program_leaders row is not enough). The user-client
+  // read is RLS, and it is what keeps a school-scoped grant inside that
+  // school — the service role below would otherwise ignore it. A missing
+  // row has no program, so the policy check stays global.
+  const allowed = existing?.program_id
+    ? await userCanDeleteApplication(supabase, user.id, existing.program_id)
+    : await userCanManageApplications(supabase, user.id);
+  if (!allowed) {
+    if (existing?.program_id && (await expiredWithoutAccess(supabase, existing.program_id))) {
+      return NextResponse.json({ error: APPLICATIONS_EXPIRED_MESSAGE }, { status: 403 });
+    }
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // Fail closed: a throw, an error, or no row is not permission to delete.
+  let canRead = false;
+  try {
+    canRead = (await userCanReadApplication(supabase, id)) === true;
+  } catch {
+    canRead = false;
+  }
+  if (!canRead) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   if (fetchError || !existing) {
     return NextResponse.json({ error: "Application not found" }, { status: 404 });
@@ -1060,19 +1102,11 @@ function applicationTargetIds(body: { id?: unknown; ids?: unknown }): string[] |
 async function denyUnlessApplicationPrograms(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
-  ids: string[],
-  mode: "manage" | "delete" = "manage"
+  ids: string[]
 ) {
   const programs = await programIdsForTargets(createAdminClient(), "application_responses", ids);
   if (!programs || !(await userCanManageEveryProgram(supabase, userId, programs))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-  if (mode === "delete") {
-    for (const programId of new Set(programs)) {
-      if (!(await userCanDeleteApplication(supabase, userId, programId))) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
-    }
   }
   return null;
 }

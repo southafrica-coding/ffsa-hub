@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { userCanManageProgram } from "@/lib/auth/check-schools-access";
-import { passesApplicationExpiry, APPLICATIONS_EXPIRED_MESSAGE } from "@/lib/auth/application-expiry";
+import { applicationExpiryDenial } from "@/lib/auth/application-expiry";
 
 // GET /api/schools/programs/[programId]/applicant-emails?applicationId=...
 //
@@ -34,8 +34,9 @@ export async function GET(
   if (!(await userCanManageProgram(supabase, user.id, programId))) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
-  if (!(await passesApplicationExpiry(supabase, programId))) {
-    return NextResponse.json({ error: APPLICATIONS_EXPIRED_MESSAGE }, { status: 403 });
+  const expiryDenial = await applicationExpiryDenial(supabase, programId);
+  if (expiryDenial) {
+    return NextResponse.json({ error: expiryDenial }, { status: 403 });
   }
 
   // email_messages isn't in the generated DB types; the ledger treats it

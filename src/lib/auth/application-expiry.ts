@@ -11,6 +11,8 @@ export type ApplicationExpiry = {
   expired: boolean;
   /** Whether the viewer may still see an expired school's applications. */
   canAccess: boolean;
+  /** An expiry RPC failed. Callers that bypass RLS must deny. */
+  lookupFailed: boolean;
 };
 
 /**
@@ -28,12 +30,26 @@ export async function getApplicationExpiry(
 ): Promise<ApplicationExpiry> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generated types predate migration 223
   const db = supabase as any;
-  const [endRes, expiredRes, accessRes] = await Promise.all([
-    db.rpc("program_end_date", { pid: programId }),
-    db.rpc("program_applications_expired", { pid: programId }),
-    db.rpc("can_access_expired_applications"),
-  ]);
+  let endRes: { data?: string | null; error?: unknown };
+  let expiredRes: { data?: boolean | null; error?: unknown };
+  let accessRes: { data?: boolean | null; error?: unknown };
+  try {
+    [endRes, expiredRes, accessRes] = await Promise.all([
+      db.rpc("program_end_date", { pid: programId }),
+      db.rpc("program_applications_expired", { pid: programId }),
+      db.rpc("can_access_expired_applications"),
+    ]);
+  } catch {
+    return {
+      endDate: null,
+      expiresOn: null,
+      expired: true,
+      canAccess: false,
+      lookupFailed: true,
+    };
+  }
 
+  const lookupFailed = Boolean(expiredRes.error || accessRes.error);
   const endDate: string | null = endRes.data ?? null;
   let expiresOn: string | null = null;
   if (endDate) {
@@ -42,12 +58,39 @@ export async function getApplicationExpiry(
     expiresOn = d.toISOString().slice(0, 10);
   }
 
+  // An RPC error is treated as expired with no access, and the date is
+  // dropped so the page cannot show an end date it did not confirm.
   return {
-    endDate,
-    expiresOn,
-    expired: expiredRes.data === true,
-    canAccess: accessRes.data === true,
+    endDate: lookupFailed ? null : endDate,
+    expiresOn: lookupFailed ? null : expiresOn,
+    expired: lookupFailed || expiredRes.data === true,
+    canAccess: lookupFailed ? false : accessRes.data === true,
+    lookupFailed,
   };
+}
+
+export const APPLICATIONS_EXPIRED_MESSAGE =
+  "Applications for this school have been archived. Contact the Training team for access.";
+
+export const APPLICATIONS_STATUS_UNKNOWN_MESSAGE =
+  "Couldn't check this school's status. Please try again.";
+
+/**
+ * Why a service-role caller must stop, or null when it may continue.
+ * A lookup failure is not reported as a real expiry.
+ */
+export async function applicationExpiryDenial(
+  supabase: SupabaseClient,
+  programId: string
+): Promise<string | null> {
+  try {
+    const expiry = await getApplicationExpiry(supabase, programId);
+    if (expiry.lookupFailed) return APPLICATIONS_STATUS_UNKNOWN_MESSAGE;
+    if (expiry.expired && !expiry.canAccess) return APPLICATIONS_EXPIRED_MESSAGE;
+    return null;
+  } catch {
+    return APPLICATIONS_STATUS_UNKNOWN_MESSAGE;
+  }
 }
 
 /** True when the viewer may read this school's applications as far as expiry is concerned. */
@@ -55,12 +98,8 @@ export async function passesApplicationExpiry(
   supabase: SupabaseClient,
   programId: string
 ): Promise<boolean> {
-  const { expired, canAccess } = await getApplicationExpiry(supabase, programId);
-  return !expired || canAccess;
+  return (await applicationExpiryDenial(supabase, programId)) === null;
 }
-
-export const APPLICATIONS_EXPIRED_MESSAGE =
-  "Applications for this school have been archived. Contact the Training team for access.";
 
 /**
  * Can the viewer read this application at all? Asks the USER client, so RLS
@@ -71,10 +110,15 @@ export async function userCanReadApplication(
   supabase: SupabaseClient,
   applicationId: string
 ): Promise<boolean> {
-  const { data } = await supabase
-    .from("application_responses")
-    .select("id")
-    .eq("id", applicationId)
-    .maybeSingle();
-  return !!data;
+  try {
+    const { data, error } = await supabase
+      .from("application_responses")
+      .select("id")
+      .eq("id", applicationId)
+      .maybeSingle();
+    if (error || !data) return false;
+    return true;
+  } catch {
+    return false;
+  }
 }

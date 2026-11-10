@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { todayInSA } from "@/lib/users/profile-fields";
+import { rejectIfDeactivated } from "@/lib/users/self-edit-guard";
+import { usersUpdateDeniedResponse } from "@/lib/users/users-update-error";
 
 // POST /api/profile/insurance-confirm — the caller confirms their
 // open-ended medical scheme membership is still active.
@@ -25,6 +27,9 @@ export async function POST() {
   if (!user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
+
+  const blocked = await rejectIfDeactivated(db, user.id);
+  if (blocked) return blocked;
 
   const { data: row, error: readError } = await db
     .from("users")
@@ -53,6 +58,8 @@ export async function POST() {
     .update({ health_insurance_confirmed_at: todayInSA() })
     .eq("id", user.id);
   if (error) {
+    const denied = usersUpdateDeniedResponse(error);
+    if (denied) return denied;
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

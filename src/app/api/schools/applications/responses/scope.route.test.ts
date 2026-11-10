@@ -20,7 +20,11 @@ vi.mock("@/lib/supabase/admin", () => ({
         eq() { return q; },
         insert() { return Promise.resolve({ error: null }); },
         delete() { return q; },
-        single() { return Promise.resolve(payload()); },
+        single() {
+          const body = payload();
+          const row = Array.isArray(body.data) ? body.data[0] ?? null : body.data;
+          return Promise.resolve({ data: row, error: body.error });
+        },
         then(resolve: (v: unknown) => unknown) { return Promise.resolve(payload()).then(resolve); },
       };
       function payload() {

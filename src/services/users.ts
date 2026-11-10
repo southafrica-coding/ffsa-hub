@@ -69,6 +69,8 @@ export async function getUserById(supabase: Client, id: string) {
     .single();
 }
 
+// avatar_url, display_name and is_active are outside migration 315's GRANT.
+// Callers must pass the service-role client (the avatar route does).
 export async function updateUser(
   supabase: Client,
   id: string,
@@ -89,6 +91,10 @@ export async function updateUserProfile(
   return supabase.from("users").update(data).eq("id", id).select().single();
 }
 
+// Not wired (see src/lib/users/auth-signins.ts). last_sign_in_at is outside
+// migration 315's GRANT, so this must not be called with the user client —
+// authenticated UPDATE of that column is 42501. Keep it on the service role
+// if it is ever connected.
 export async function updateLastSignIn(supabase: Client, userId: string) {
   return supabase
     .from("users")
@@ -112,16 +118,30 @@ export async function completeOnboarding(supabase: Client, userId: string) {
     .single();
 }
 
-/** Approve a user and activate their account (super_admin only). */
-export async function approveUser(
-  supabase: Client,
+/**
+ * Approve a user on the service-role client: status active, and job_title
+ * when the caller sent one.
+ *
+ * One UPDATE so a failure cannot commit the approval and then error on the
+ * title (or the other way around). Do not pass the user client. The route
+ * must already have confirmed an unscoped admin via is_admin().
+ */
+export async function activateApprovedUser(
+  admin: Client,
   userId: string,
-  approvedBy: string,
-  jobTitle?: string
+  jobTitle?: string | null
 ) {
   const update: Record<string, unknown> = { status: "active" };
   if (jobTitle !== undefined) update.job_title = jobTitle;
-  return supabase.from("users").update(update).eq("id", userId).select().single();
+  // Only a pending_approval row changes. Zero rows means it was already
+  // approved or holds another status — the caller returns 409.
+  return admin
+    .from("users")
+    .update(update)
+    .eq("id", userId)
+    .eq("status", "pending_approval")
+    .select()
+    .maybeSingle();
 }
 
 /**

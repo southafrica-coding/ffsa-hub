@@ -140,12 +140,16 @@ export async function userCanManageProgram(
   return !!data && data.length > 0;
 }
 
-// DELETE on application_responses (migration 313). Same shape as #540 so a
-// later merge keeps one copy: unscoped admin, or schools.manage /
-// schools.approve_applications unscoped or program-scoped to this program.
-// A program_leaders row does not qualify. schools.manage_enrollments does not.
-// Team and event scopes do not. When the school's applications are expired,
-// only can_access_expired_applications passes.
+// DELETE on application_responses (migration 313):
+//   application_gate(program_id,
+//     is_admin()
+//       OR has_permission_for('schools.manage', program_id)
+//       OR has_permission_for('schools.approve_applications', program_id))
+// is_admin() is an unscoped admin or super_admin (has_any_role). It does
+// not read users.is_active. has_permission_for requires
+// users.is_active IS NOT FALSE, then a direct grant or a role bundle whose
+// scope_type is null, or program-scoped to this program. Team and event
+// scopes do not count.
 const DELETE_PERMISSION_KEYS = ["schools.manage", "schools.approve_applications"] as const;
 
 function scopeCoversProgram(
@@ -165,10 +169,6 @@ function permissionKey(
   return row?.key ?? null;
 }
 
-function isManageKey(key: string | null): boolean {
-  return key != null && (SCHOOLS_MANAGE_KEYS as readonly string[]).includes(key);
-}
-
 function isDeletePermission(key: string | null): boolean {
   return key === "schools.manage" || key === "schools.approve_applications";
 }
@@ -178,18 +178,42 @@ async function hasUnscopedAdminRole(
   supabase: SupabaseClient,
   userId: string
 ): Promise<boolean> {
-  const { data, error } = await supabase
-    .from("user_roles")
-    .select("scope_type, roles!inner(name)")
-    .eq("user_id", userId)
-    .in("roles.name", ["super_admin", "admin"]);
-  if (error) return false;
+  let data;
+  try {
+    const result = await supabase
+      .from("user_roles")
+      .select("scope_type, roles!inner(name)")
+      .eq("user_id", userId)
+      .in("roles.name", ["super_admin", "admin"]);
+    if (result.error) return false;
+    data = result.data;
+  } catch {
+    return false;
+  }
 
   for (const row of data ?? []) {
     const name = embeddedName(row.roles);
     if ((name === "super_admin" || name === "admin") && row.scope_type === null) return true;
   }
   return false;
+}
+
+/** users.is_active IS NOT FALSE. A missing row or a lookup error is not active. */
+async function userAccountIsActive(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from("users")
+      .select("is_active")
+      .eq("id", userId)
+      .maybeSingle();
+    if (error || !data) return false;
+    return data.is_active !== false;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -201,39 +225,57 @@ async function hasDeletePermissionForProgram(
   userId: string,
   programId: string
 ): Promise<boolean> {
-  if (!(await accountIsActive(supabase, userId))) return false;
+  if (!(await userAccountIsActive(supabase, userId))) return false;
 
-  const direct = await supabase
-    .from("user_permissions")
-    .select("scope_type, scope_id, permissions!inner(key)")
-    .eq("user_id", userId)
-    .in("permissions.key", [...DELETE_PERMISSION_KEYS]);
-  if (direct.error) return false;
+  let direct;
+  try {
+    const result = await supabase
+      .from("user_permissions")
+      .select("scope_type, scope_id, permissions!inner(key)")
+      .eq("user_id", userId)
+      .in("permissions.key", [...DELETE_PERMISSION_KEYS]);
+    if (result.error) return false;
+    direct = result.data;
+  } catch {
+    return false;
+  }
 
-  for (const row of direct.data ?? []) {
+  for (const row of direct ?? []) {
     if (!isDeletePermission(permissionKey(row.permissions))) continue;
     if (scopeCoversProgram(row.scope_type, row.scope_id, programId)) return true;
   }
 
-  const roles = await supabase
-    .from("user_roles")
-    .select("role_id, scope_type, scope_id")
-    .eq("user_id", userId);
-  if (roles.error) return false;
-  const roleIds = (roles.data ?? [])
+  let roles;
+  try {
+    const result = await supabase
+      .from("user_roles")
+      .select("role_id, scope_type, scope_id")
+      .eq("user_id", userId);
+    if (result.error) return false;
+    roles = result.data;
+  } catch {
+    return false;
+  }
+  const roleIds = (roles ?? [])
     .filter((row) => scopeCoversProgram(row.scope_type, row.scope_id, programId))
     .map((row) => row.role_id)
     .filter((id): id is string => typeof id === "string" && id.length > 0);
   if (roleIds.length === 0) return false;
 
-  const bundle = await supabase
-    .from("role_permissions")
-    .select("permissions!inner(key)")
-    .in("role_id", roleIds)
-    .in("permissions.key", [...DELETE_PERMISSION_KEYS]);
-  if (bundle.error) return false;
+  let bundle;
+  try {
+    const result = await supabase
+      .from("role_permissions")
+      .select("permissions!inner(key)")
+      .in("role_id", roleIds)
+      .in("permissions.key", [...DELETE_PERMISSION_KEYS]);
+    if (result.error) return false;
+    bundle = result.data;
+  } catch {
+    return false;
+  }
 
-  for (const row of bundle.data ?? []) {
+  for (const row of bundle ?? []) {
     if (isDeletePermission(permissionKey(row.permissions))) return true;
   }
   return false;
@@ -241,9 +283,10 @@ async function hasDeletePermissionForProgram(
 
 /**
  * May this user permanently delete an application in this program?
- * Sits on top of userCanManageProgram. #540 owns the expiry lookupFailed
- * detail; until that lands, a thrown expiry read denies and an expired
- * school without can_access_expired_applications denies.
+ * Mirrors migration 313, including application_gate. A program_leaders
+ * row does not qualify. schools.manage_enrollments does not qualify.
+ * When the school's applications are expired, only
+ * can_access_expired_applications() passes.
  */
 export async function userCanDeleteApplication(
   supabase: SupabaseClient,
@@ -256,10 +299,16 @@ export async function userCanDeleteApplication(
   } catch {
     return false;
   }
-  if (expiry.expired && !expiry.canAccess) return false;
+  // An RPC error is not "the school is still open".
+  if (expiry.lookupFailed) return false;
+  if (expiry.expired) return expiry.canAccess;
 
   if (await hasUnscopedAdminRole(supabase, userId)) return true;
   return hasDeletePermissionForProgram(supabase, userId, programId);
+}
+
+function isManageKey(key: string | null): boolean {
+  return key != null && (SCHOOLS_MANAGE_KEYS as readonly string[]).includes(key);
 }
 
 /** True only when every program passes userCanManageProgram. */

@@ -23,12 +23,16 @@ const KEY_LEVELS: Record<string, CountLevel> = {
   "schools.manage": "manage",
 };
 
-// Roles that see every program at manage level.
-const GLOBAL_ROLES = ["super_admin", "admin", "program_leader"];
+// Roles that see every program at manage level, whatever scope the row
+// carries. program_leader is not one of them (migration 312): an unscoped
+// assignment is global, a program scope counts for that program only, and
+// a team or event scope grants nothing.
+const GLOBAL_ROLES = ["super_admin", "admin"];
+const SCOPED_COUNT_ROLES = [...GLOBAL_ROLES, "program_leader"];
 
 export type SchoolsCountScopes = {
-  // Non-null when the user sees ALL programs (admin/leader role, or a global
-  // unscoped grant). Carries the level that global access confers.
+  // Non-null when the user sees ALL programs (unscoped admin/super_admin,
+  // unscoped program_leader, or an unscoped grant).
   globalLevel: CountLevel | null;
   // Per-program levels from program-scoped grants (in addition to any global).
   programLevels: Record<string, CountLevel>;
@@ -45,10 +49,9 @@ export async function getSchoolsCountScopes(
   const [rolesResult, permsResult] = await Promise.all([
     supabase
       .from("user_roles")
-      .select("roles!inner(name)")
+      .select("scope_type, scope_id, roles!inner(name)")
       .eq("user_id", userId)
-      .in("roles.name", GLOBAL_ROLES)
-      .limit(1),
+      .in("roles.name", SCOPED_COUNT_ROLES),
     supabase
       .from("user_permissions")
       .select("scope_id, scope_type, permissions!inner(key)")
@@ -56,9 +59,28 @@ export async function getSchoolsCountScopes(
       .in("permissions.key", Object.keys(KEY_LEVELS)),
   ]);
 
-  let globalLevel: CountLevel | null =
-    rolesResult.data && rolesResult.data.length > 0 ? "manage" : null;
+  let globalLevel: CountLevel | null = null;
   const programLevels: Record<string, CountLevel> = {};
+
+  for (const row of (rolesResult.data ?? []) as Array<{
+    scope_type: string | null;
+    scope_id: string | null;
+    roles: { name: string } | { name: string }[] | null;
+  }>) {
+    const roles = row.roles;
+    const name = Array.isArray(roles) ? roles[0]?.name : roles?.name;
+    if (name && GLOBAL_ROLES.includes(name)) {
+      globalLevel = "manage";
+      continue;
+    }
+    if (name !== "program_leader") continue;
+    // scope_type IS NULL, or scope_type = 'program' AND scope_id = that program.
+    if (row.scope_type === null) {
+      globalLevel = "manage";
+    } else if (row.scope_type === "program" && row.scope_id) {
+      programLevels[row.scope_id] = higher(programLevels[row.scope_id], "manage");
+    }
+  }
 
   for (const row of (permsResult.data ?? []) as Array<{
     scope_id: string | null;

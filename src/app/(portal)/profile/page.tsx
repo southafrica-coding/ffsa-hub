@@ -26,6 +26,7 @@ import { excludedProfileFields, applyListOptions } from "@/lib/users/profile-fie
 import { INSURANCE_PROVIDERS } from "@/lib/profile/options";
 import { getAllListOptions, activeSets } from "@/services/list-options";
 import { listActiveMinistries } from "@/services/ministries";
+import { selfServiceDepartmentOptions } from "@/lib/users/self-department";
 import { Chip } from "@/components/ffsa";
 import { StaffCvCard, type CvEntry } from "@/components/profile/staff-cv-card";
 import type { CvEntryCategory } from "@/lib/users/cv-entry-types";
@@ -145,17 +146,17 @@ export default async function ProfilePage({
   // Admin-editable dropdown vocabularies (gender/insurance/relationship) plus
   // Department, which is sourced live from the Ministry tab (staff_ministries)
   // and overrides any list_options department rows.
+  const row = user as Record<string, unknown>;
+
   const { data: lists } = await getAllListOptions(supabase);
   const sets = activeSets(lists);
   const { data: mins } = await listActiveMinistries(supabase);
   if (mins?.length) {
-    sets.department = mins.map((m: { slug: string; name: string }) => ({
-      value: m.slug,
-      label: m.name,
-    }));
+    sets.department = selfServiceDepartmentOptions(
+      mins as { slug: string; name: string }[],
+      row.department
+    );
   }
-
-  const row = user as Record<string, unknown>;
   const roles = user.user_roles ?? [];
 
   // Same derivation the admin Users badge uses, so "what's missing" matches

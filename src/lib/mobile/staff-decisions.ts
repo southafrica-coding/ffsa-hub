@@ -17,6 +17,7 @@
 
 import { z } from "zod";
 import type { StaffDecisionRow } from "@/lib/schools/staff-decisions";
+import { mobileDepartmentOptions } from "@/lib/users/department-options";
 
 export const NO_STORE = { "Cache-Control": "no-store" };
 
@@ -59,5 +60,7 @@ export function sortSchools(schools: StaffDecisionSchool[]): StaffDecisionSchool
 export function shapeDepartmentOptions(
   ministries: Array<{ slug: string; name: string }> | null | undefined
 ): Array<{ value: string; label: string }> {
-  return (ministries ?? []).map((m) => ({ value: m.slug, label: m.name }));
+  // Same filtered list as the web staff-decision dropdown. Leadership Team
+  // stays off the phone picker, including a self-set.
+  return mobileDepartmentOptions(ministries);
 }
