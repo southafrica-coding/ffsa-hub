@@ -3,7 +3,13 @@
 import { useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
-import { shareQrFilename, shareQrPngDataUrl } from "./share-qr-png";
+import {
+  isAbsoluteHttpUrl,
+  shareQrFilename,
+  shareQrPngDataUrl,
+} from "./share-qr-png";
+
+export { doorShareQrUrl, isAbsoluteHttpUrl, ticketShareQrUrl } from "./share-qr-png";
 
 const DISPLAY_SIZE = 180;
 
@@ -32,8 +38,10 @@ export function ShareLinkQr({
   const [copied, setCopied] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const scannable = isAbsoluteHttpUrl(url);
 
   async function download() {
+    if (!scannable) return;
     setDownloading(true);
     try {
       const dataUrl = await shareQrPngDataUrl(url);
@@ -71,41 +79,51 @@ export function ShareLinkQr({
 
   return (
     <div className="flex w-fit max-w-full min-w-0 flex-col items-start gap-3">
-      <div
-        data-qr-plate
-        style={{
-          backgroundColor: "#FFFFFF",
-          padding: 12,
-          lineHeight: 0,
-          filter: "none",
-          colorScheme: "light",
-          width: DISPLAY_SIZE + 24,
-          maxWidth: "100%",
-          boxSizing: "border-box",
-        }}
-      >
-        <QRCodeSVG
-          value={url}
-          size={DISPLAY_SIZE}
-          level="M"
-          marginSize={4}
-          bgColor="#FFFFFF"
-          fgColor="#000000"
-          title={label}
-          aria-label={label}
-          style={{ display: "block", width: "100%", height: "auto" }}
-        />
-      </div>
+      {scannable ? (
+        <div
+          data-qr-plate
+          style={{
+            backgroundColor: "#FFFFFF",
+            padding: 12,
+            lineHeight: 0,
+            filter: "none",
+            colorScheme: "light",
+            width: DISPLAY_SIZE + 24,
+            maxWidth: "100%",
+            boxSizing: "border-box",
+          }}
+        >
+          <QRCodeSVG
+            value={url}
+            size={DISPLAY_SIZE}
+            level="M"
+            marginSize={4}
+            bgColor="#FFFFFF"
+            fgColor="#000000"
+            title={label}
+            aria-label={label}
+            style={{ display: "block", width: "100%", height: "auto" }}
+          />
+        </div>
+      ) : (
+        <div
+          data-qr-placeholder
+          className="flex items-center border border-border bg-white px-3 py-3 text-xs text-muted-foreground"
+          style={{ width: DISPLAY_SIZE + 24, minHeight: 96, boxSizing: "border-box" }}
+        >
+          QR code appears once the full link is ready.
+        </div>
+      )}
       <div className="flex max-w-full flex-wrap gap-2">
         <button
           type="button"
           onClick={download}
-          disabled={downloading}
+          disabled={!scannable || downloading}
           className="border border-ink bg-white px-3 py-1.5 text-xs text-ink hover:bg-[color:var(--surface-2)] disabled:opacity-50"
         >
           {downloading ? "Preparing…" : "Download PNG"}
         </button>
-        {showCopy && (
+        {showCopy && scannable && (
           <button
             type="button"
             onClick={copy}
@@ -114,7 +132,7 @@ export function ShareLinkQr({
             {copied ? "Copied" : "Copy link"}
           </button>
         )}
-        {fullscreenCaption && (
+        {fullscreenCaption && scannable && (
           <button
             type="button"
             onClick={() => setFullscreen(true)}
@@ -125,7 +143,7 @@ export function ShareLinkQr({
         )}
       </div>
 
-      {fullscreen && fullscreenCaption && (
+      {fullscreen && scannable && fullscreenCaption && (
         <div
           className="fixed inset-0 z-50 flex cursor-pointer flex-col items-center justify-center"
           style={{ backgroundColor: "#FFFFFF", colorScheme: "light", filter: "none" }}

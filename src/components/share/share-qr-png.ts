@@ -2,6 +2,51 @@ import QRCode from "qrcode";
 
 const PNG_WIDTH = 768;
 
+/** Absolute http(s) only. Relative paths and other schemes are not scannable. */
+export function isAbsoluteHttpUrl(url: string): boolean {
+  const trimmed = url.trim();
+  if (!trimmed) return false;
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Ticket QR only for a saved, non-empty slug while ticketing is on.
+ * An empty origin stays a relative path, so it returns null.
+ */
+export function ticketShareQrUrl(input: {
+  origin: string;
+  draftSlug: string;
+  savedSlug: string | null;
+  ticketingOn: boolean;
+}): string | null {
+  if (!input.ticketingOn) return null;
+  const saved = input.savedSlug?.trim() ?? "";
+  const draft = input.draftSlug.trim();
+  if (!saved || draft !== saved) return null;
+  const url = `${input.origin}/e/${saved}`;
+  return isAbsoluteHttpUrl(url) ? url : null;
+}
+
+/**
+ * Door QR only for a live token. Inactive, revoked, missing, or
+ * not-yet-absolute links return null.
+ */
+export function doorShareQrUrl(input: {
+  origin: string;
+  token: string | null;
+  active: boolean;
+  revoked?: boolean;
+}): string | null {
+  if (!input.token || !input.active || input.revoked) return null;
+  const url = `${input.origin}/scan/${input.token}`;
+  return isAbsoluteHttpUrl(url) ? url : null;
+}
+
 const PNG_OPTIONS = {
   width: PNG_WIDTH,
   margin: 4,
@@ -15,6 +60,9 @@ const PNG_OPTIONS = {
  * where canvas has no 2D context (tests).
  */
 export async function shareQrPngDataUrl(url: string): Promise<string> {
+  if (!isAbsoluteHttpUrl(url)) {
+    throw new Error("A QR code needs an absolute http(s) link.");
+  }
   if (typeof document !== "undefined") {
     try {
       const canvas = document.createElement("canvas");

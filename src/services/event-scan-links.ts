@@ -25,13 +25,45 @@ function newScanToken(): string {
  * weeks past the end date covers the multi-day event, the postponement and
  * the organiser who scans stragglers the next morning, then closes itself
  * without anyone having to remember.
+ *
+ * The close is the end of a calendar day in Africa/Johannesburg (SAST,
+ * UTC+2, no daylight saving), not 23:59:59Z. A past event must not mint a
+ * link that is already expired: the deadline is the later of event-end +
+ * 14 days and today + 14 days, both in that calendar.
  */
 const GRACE_DAYS = 14;
+const JOHANNESBURG = "Africa/Johannesburg";
+/** SAST is UTC+2 all year. 23:59:59 there is 21:59:59Z. */
+const JOHANNESBURG_OFFSET = "+02:00";
 
-function expiryFor(event: { start_date: string; end_date: string | null }): string {
-  const base = new Date(`${event.end_date ?? event.start_date}T23:59:59Z`);
-  base.setUTCDate(base.getUTCDate() + GRACE_DAYS);
-  return base.toISOString();
+function addCalendarDays(isoDate: string, days: number): string {
+  const [y, m, d] = isoDate.slice(0, 10).split("-").map(Number);
+  const utc = new Date(Date.UTC(y, m - 1, d));
+  utc.setUTCDate(utc.getUTCDate() + days);
+  const yyyy = utc.getUTCFullYear();
+  const mm = String(utc.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(utc.getUTCDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function johannesburgDay(instant: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: JOHANNESBURG,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(instant);
+}
+
+export function expiryFor(
+  event: { start_date: string; end_date: string | null },
+  now: Date = new Date()
+): string {
+  const eventDay = (event.end_date ?? event.start_date).slice(0, 10);
+  const fromEvent = addCalendarDays(eventDay, GRACE_DAYS);
+  const fromNow = addCalendarDays(johannesburgDay(now), GRACE_DAYS);
+  const day = fromEvent > fromNow ? fromEvent : fromNow;
+  return new Date(`${day}T23:59:59${JOHANNESBURG_OFFSET}`).toISOString();
 }
 
 /**
@@ -89,7 +121,14 @@ export async function rotateScanLink(
   return getOrCreateScanLink(admin, eventId, userId);
 }
 
-/** Switch the door off without rotating — the link is kept for next time. */
+/**
+ * Switch the door off without rotating — the link is kept for next time.
+ *
+ * Turning it back on does not refresh expires_at. A link that has already
+ * passed its expiry stays dead until someone replaces it, which mints a
+ * new row. Extending the old token here would revive a URL that had
+ * already stopped working.
+ */
 export async function setScanLinkActive(
   admin: Client,
   eventId: string,

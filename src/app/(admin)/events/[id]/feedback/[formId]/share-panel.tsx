@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusPill } from "@/components/ffsa";
-import { ShareLinkQr } from "@/components/share/share-link-qr";
+import { ShareLinkQr, isAbsoluteHttpUrl } from "@/components/share/share-link-qr";
 
 export type RosterPerson = { name: string; email: string; role: string };
 export type SendRow = {
@@ -194,7 +194,7 @@ export function SharePanel({
               </a>
             </div>
             <ShareLinkQr
-              url={url}
+              url={isAbsoluteHttpUrl(url) ? url : ""}
               filename={slug}
               label="QR code for the feedback form"
               showCopy={false}

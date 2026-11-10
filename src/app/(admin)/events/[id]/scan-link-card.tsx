@@ -1,11 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Copy, Check, RefreshCw, Link2 } from "lucide-react";
-import { ShareLinkQr } from "@/components/share/share-link-qr";
+import { ShareLinkQr, doorShareQrUrl } from "@/components/share/share-link-qr";
+
+function formatDoorExpiry(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-ZA", {
+    timeZone: "Africa/Johannesburg",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
 
 /**
  * The shareable door link for a welcome team with no Hub accounts.
@@ -22,10 +31,21 @@ export function ScanLinkCard({ eventId }: { eventId: string }) {
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [confirmingRotate, setConfirmingRotate] = useState(false);
+  const [origin, setOrigin] = useState("");
 
-  const url = token
-    ? `${typeof window === "undefined" ? "" : window.location.origin}/scan/${token}`
-    : "";
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
+
+  const url = token && origin ? `${origin}/scan/${token}` : "";
+  const expired = Boolean(expiresAt && Date.parse(expiresAt) <= Date.now());
+  const qrUrl =
+    doorShareQrUrl({
+      origin,
+      token,
+      active: isActive,
+      revoked: expired,
+    }) ?? "";
 
   type LinkPayload = {
     token: string;
@@ -144,7 +164,7 @@ export function ScanLinkCard({ eventId }: { eventId: string }) {
                   variant="outline"
                   className="gap-1.5"
                   onClick={copy}
-                  disabled={!token || !isActive}
+                  disabled={!token || !isActive || expired}
                 >
                   {copied ? (
                     <Check className="h-3.5 w-3.5" />
@@ -154,9 +174,9 @@ export function ScanLinkCard({ eventId }: { eventId: string }) {
                   {copied ? "Copied" : "Copy"}
                 </Button>
               </div>
-              {url ? (
+              {qrUrl ? (
                 <ShareLinkQr
-                  url={url}
+                  url={qrUrl}
                   filename={token ?? "door"}
                   label="QR code for the welcome team door link"
                   showCopy={false}
@@ -164,17 +184,19 @@ export function ScanLinkCard({ eventId }: { eventId: string }) {
               ) : null}
             </div>
 
-            {!isActive && (
+            {expired ? (
+              <p className="text-xs text-destructive">
+                Expired. Replace the link to get a new one.
+              </p>
+            ) : !isActive ? (
               <p className="text-xs text-destructive">
                 This link is switched off — it won&apos;t open for anyone.
               </p>
-            )}
-            {isActive && expiresAt && (
+            ) : expiresAt ? (
               <p className="text-xs text-muted-foreground">
-                Stops working automatically on{" "}
-                {new Date(expiresAt).toLocaleDateString()}.
+                Stops working automatically on {formatDoorExpiry(expiresAt)}.
               </p>
-            )}
+            ) : null}
 
             <div className="flex flex-wrap items-center gap-2">
               <Button

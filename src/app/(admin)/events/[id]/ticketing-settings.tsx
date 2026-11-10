@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Check, Copy, ExternalLink } from "lucide-react";
 import { EVENT_CURRENCIES, providersForCurrency } from "@/lib/currencies";
-import { ShareLinkQr } from "@/components/share/share-link-qr";
+import { ShareLinkQr, ticketShareQrUrl } from "@/components/share/share-link-qr";
 
 export function TicketingSettings({
   eventId,
@@ -46,6 +46,18 @@ export function TicketingSettings({
   // The link is actually reachable once ticketing is on and the slug is saved.
   const liveUrl =
     publicSlug && ticketingEnabled ? `${origin}/e/${publicSlug}` : "";
+  // QR only for the saved slug, and only while ticketing is on. A typed-but-unsaved
+  // slug, a blank slug, or ticketing switched off would print a code for a link
+  // that does not open.
+  const ticketingOn = enabled && ticketingEnabled;
+  const qrReady = Boolean(publicSlug) && trimmedSlug === publicSlug && ticketingOn;
+  const qrUrl =
+    ticketShareQrUrl({
+      origin,
+      draftSlug: slug,
+      savedSlug: publicSlug,
+      ticketingOn,
+    }) ?? "";
 
   async function copyLink() {
     const toCopy = fullUrl || `/e/${trimmedSlug}`;
@@ -198,12 +210,18 @@ export function TicketingSettings({
                   <ExternalLink className="h-3.5 w-3.5" /> Open
                 </a>
               </div>
-              <ShareLinkQr
-                url={fullUrl || `/e/${trimmedSlug}`}
-                filename={trimmedSlug}
-                label="QR code for the public ticket link"
-                showCopy={false}
-              />
+              {qrReady ? (
+                <ShareLinkQr
+                  url={qrUrl}
+                  filename={publicSlug || trimmedSlug}
+                  label="QR code for the public ticket link"
+                  showCopy={false}
+                />
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Save the link to get a QR code.
+                </p>
+              )}
             </div>
             {(!enabled || dirty) && (
               <p className="text-[11px] text-amber">

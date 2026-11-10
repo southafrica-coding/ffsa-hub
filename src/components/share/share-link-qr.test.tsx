@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import sharp from "sharp";
 import jsQR from "jsqr";
 import { afterEach, describe, expect, it } from "vitest";
-import { ShareLinkQr } from "./share-link-qr";
+import { ShareLinkQr, doorShareQrUrl, ticketShareQrUrl } from "./share-link-qr";
 
 const SHARE_URL = "https://www.ffsahub.com/e/send-night-2026";
 
@@ -147,5 +147,103 @@ describe("ShareLinkQr", () => {
     const labels = [...host.querySelectorAll("button")].map((button) => button.textContent);
     expect(labels.some((label) => label?.includes("Copy link"))).toBe(false);
     expect(labels.some((label) => label?.includes("Download PNG"))).toBe(true);
+  });
+
+  it("does not encode a relative path and keeps download off until the URL is absolute", () => {
+    const { host, root } = renderQr({ url: "/e/send-night-2026" });
+    roots.push(root);
+    hosts.push(host);
+
+    expect(host.querySelector("svg")).toBeNull();
+    expect(host.querySelector("[data-qr-plate]")).toBeNull();
+    expect(host.querySelector("[data-qr-placeholder]")?.textContent).toMatch(/full link/i);
+
+    const download = [...host.querySelectorAll("button")].find((button) =>
+      button.textContent?.includes("Download PNG")
+    ) as HTMLButtonElement | undefined;
+    expect(download).toBeTruthy();
+    expect(download?.disabled).toBe(true);
+
+    const clicks: string[] = [];
+    const originalCreate = document.createElement.bind(document);
+    document.createElement = ((tag: string, options?: ElementCreationOptions) => {
+      const el = originalCreate(tag, options);
+      if (tag.toLowerCase() === "a") {
+        (el as HTMLAnchorElement).click = () => {
+          clicks.push("clicked");
+        };
+      }
+      return el;
+    }) as typeof document.createElement;
+    download?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    document.createElement = originalCreate;
+    expect(clicks).toEqual([]);
+  });
+
+  it("withholds a ticket QR while the public slug is unsaved, empty, or ticketing is off", () => {
+    const origin = "https://www.ffsahub.com";
+    expect(
+      ticketShareQrUrl({
+        origin,
+        draftSlug: "send-night-draft",
+        savedSlug: "send-night-2026",
+        ticketingOn: true,
+      })
+    ).toBeNull();
+    expect(
+      ticketShareQrUrl({
+        origin,
+        draftSlug: "  ",
+        savedSlug: null,
+        ticketingOn: true,
+      })
+    ).toBeNull();
+    expect(
+      ticketShareQrUrl({
+        origin,
+        draftSlug: "",
+        savedSlug: "",
+        ticketingOn: true,
+      })
+    ).toBeNull();
+    expect(
+      ticketShareQrUrl({
+        origin,
+        draftSlug: "send-night-2026",
+        savedSlug: "send-night-2026",
+        ticketingOn: false,
+      })
+    ).toBeNull();
+    expect(
+      ticketShareQrUrl({
+        origin: "",
+        draftSlug: "send-night-2026",
+        savedSlug: "send-night-2026",
+        ticketingOn: true,
+      })
+    ).toBeNull();
+    expect(
+      ticketShareQrUrl({
+        origin,
+        draftSlug: " send-night-2026 ",
+        savedSlug: "send-night-2026",
+        ticketingOn: true,
+      })
+    ).toBe(`${origin}/e/send-night-2026`);
+  });
+
+  it("withholds a door QR when the link is inactive, revoked, or missing", () => {
+    const ready = {
+      origin: "https://www.ffsahub.com",
+      token: "door-token",
+      active: true,
+      revoked: false,
+    };
+    expect(doorShareQrUrl({ ...ready, active: false })).toBeNull();
+    expect(doorShareQrUrl({ ...ready, revoked: true })).toBeNull();
+    expect(doorShareQrUrl({ ...ready, token: null })).toBeNull();
+    expect(doorShareQrUrl({ ...ready, token: "" })).toBeNull();
+    expect(doorShareQrUrl({ ...ready, origin: "" })).toBeNull();
+    expect(doorShareQrUrl(ready)).toBe("https://www.ffsahub.com/scan/door-token");
   });
 });

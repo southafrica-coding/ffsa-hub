@@ -231,6 +231,9 @@ export function FormBuilder({
   }
 
   const publicUrl = origin ? `${origin}/f/${form.slug}` : `/f/${form.slug}`;
+  // The QR must wait for the absolute origin. The path above is only for the
+  // masthead until that effect runs.
+  const scannableUrl = origin ? `${origin}/f/${form.slug}` : "";
 
   return (
     <>
@@ -341,7 +344,7 @@ export function FormBuilder({
       </Card>
 
       {/* QR code */}
-      <QrPanel url={publicUrl} formName={name} />
+      <QrPanel url={scannableUrl} formName={name} />
 
       {/* Steps */}
       {(() => {
