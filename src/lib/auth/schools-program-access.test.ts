@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { canOpenSchools, programsVisibleOnSchoolsHome } from "@/lib/schools/program-staff-access";
+import {
+  canOpenSchools,
+  programsVisibleOnSchoolsHome,
+  userHasSchoolsGrant,
+} from "@/lib/schools/program-staff-access";
 import {
   createFakeSupabase,
   permissionWorldResolver,
@@ -70,6 +74,39 @@ describe("getAccessibleSchoolsProgramIds", () => {
     expect(await getAccessibleSchoolsProgramIds(client(unscoped), "u")).toEqual([]);
     expect(await canOpenSchools(client(scoped), "u")).toMatchObject({ open: false, hasModuleAccess: false });
     expect(await canOpenSchools(client(unscoped), "u")).toMatchObject({ open: false, hasModuleAccess: false });
+  });
+
+  it("keeps main's program page for a contact grant scoped to one program", async () => {
+    const db = client({
+      roles: [],
+      direct: [
+        { module: "schools", key: "schools.assignable_as_contact", scopeType: "program", scopeId: A },
+      ],
+    });
+    // Main's hasModuleAccess ignored scope, so the page opened for every program.
+    // The grant itself still covers only program A, which is what staff-scoping uses.
+    expect(await canOpenSchools(db, "u", { programId: A })).toMatchObject({
+      open: true,
+      hasModuleAccess: true,
+    });
+    expect(await canOpenSchools(db, "u", { programId: B })).toMatchObject({
+      open: true,
+      hasModuleAccess: true,
+    });
+    expect(await userHasSchoolsGrant(db, "u", A)).toBe(true);
+    expect(await userHasSchoolsGrant(db, "u", B)).toBe(false);
+    expect(await canOpenSchools(db, "u")).toMatchObject({ open: false, hasModuleAccess: false });
+  });
+
+  it("lets an unscoped contact grant cover every program page without opening Training home", async () => {
+    const db = client({
+      roles: [],
+      direct: [{ module: "schools", key: "schools.assignable_as_contact" }],
+    });
+    expect(await userHasSchoolsGrant(db, "u", A)).toBe(true);
+    expect(await userHasSchoolsGrant(db, "u", B)).toBe(true);
+    expect(await canOpenSchools(db, "u", { programId: B })).toMatchObject({ open: true });
+    expect(await canOpenSchools(db, "u")).toMatchObject({ open: false, hasModuleAccess: false });
   });
 
   it("returns nothing for a deactivated scoped leader", async () => {

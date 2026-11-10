@@ -1,7 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { canManageFinance } from "@/lib/api-auth";
+import { ASSIGNABLE_CONTACT_PERMISSION_KEY } from "@/lib/auth/assignable-contacts";
 import { userCanManageProgram } from "@/lib/auth/check-schools-access";
-import type { GrantScope } from "@/lib/auth/grant-scope";
+import { permissionOf, type GrantScope } from "@/lib/auth/grant-scope";
 import {
   getAccessibleSchoolsProgramIds,
   type SchoolsProgramAccess,
@@ -58,9 +59,85 @@ export function programsVisibleOnSchoolsHome<T extends { id: string }>(
   return programs.filter((program) => allowed.has(program.id));
 }
 
+type AssignableGrant = { scope_type: string | null; scope_id: string | null };
+
 /**
- * Direct or role-bundle schools grant that covers this program (an unscoped
- * grant counts everywhere). schools.assignable_as_contact does not.
+ * Main's grantApplies: a missing scope counts for every program. A program
+ * scope counts only for that program. Team and event scopes do not.
+ */
+function assignableCovers(grant: AssignableGrant, programId: string): boolean {
+  if (!grant.scope_type || !grant.scope_id) return true;
+  return grant.scope_type === "program" && grant.scope_id === programId;
+}
+
+/**
+ * schools.assignable_as_contact, the way main counted it. No is_active check:
+ * main's module access and userHasSchoolsGrant did not read that flag.
+ * A lookup error on a leg contributes nothing from that leg.
+ */
+async function assignableContactGrants(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<AssignableGrant[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db = supabase as any;
+  const direct = await db
+    .from("user_permissions")
+    .select("scope_type, scope_id, permissions!inner(key)")
+    .eq("user_id", userId)
+    .eq("permissions.key", ASSIGNABLE_CONTACT_PERMISSION_KEY);
+  const grants: AssignableGrant[] = [];
+  if (!direct.error) {
+    for (const row of (direct.data ?? []) as Array<{
+      scope_type?: string | null;
+      scope_id?: string | null;
+      permissions?: { key?: string } | { key?: string }[] | null;
+    }>) {
+      if (permissionOf(row)?.key !== ASSIGNABLE_CONTACT_PERMISSION_KEY) continue;
+      grants.push({ scope_type: row.scope_type ?? null, scope_id: row.scope_id ?? null });
+    }
+  }
+
+  const roles = await db
+    .from("user_roles")
+    .select("role_id, scope_type, scope_id")
+    .eq("user_id", userId);
+  if (roles.error || !Array.isArray(roles.data) || roles.data.length === 0) return grants;
+
+  const roleRows = roles.data as Array<{
+    role_id?: string;
+    scope_type?: string | null;
+    scope_id?: string | null;
+  }>;
+  const roleIds = [
+    ...new Set(roleRows.map((row) => row.role_id).filter((id): id is string => typeof id === "string")),
+  ];
+  if (roleIds.length === 0) return grants;
+
+  const bundled = await db
+    .from("role_permissions")
+    .select("role_id, permissions!inner(key)")
+    .in("role_id", roleIds)
+    .eq("permissions.key", ASSIGNABLE_CONTACT_PERMISSION_KEY);
+  if (bundled.error) return grants;
+
+  const carrying = new Set(
+    ((bundled.data ?? []) as Array<{ role_id?: string; permissions?: { key?: string } | { key?: string }[] | null }>)
+      .filter((row) => permissionOf(row)?.key === ASSIGNABLE_CONTACT_PERMISSION_KEY)
+      .map((row) => row.role_id)
+  );
+  for (const row of roleRows) {
+    if (!carrying.has(row.role_id)) continue;
+    grants.push({ scope_type: row.scope_type ?? null, scope_id: row.scope_id ?? null });
+  }
+  return grants;
+}
+
+/**
+ * Direct or role-bundle schools grant that covers this program.
+ * Other schools keys use the active-account and program-scope rules.
+ * schools.assignable_as_contact uses main's rule: an unscoped grant counts
+ * for every program, a program-scoped grant counts only for that program.
  * Used so an existing permission holder who is also listed as staff is not
  * narrowed to assigned applicants.
  */
@@ -69,9 +146,12 @@ export async function userHasSchoolsGrant(
   userId: string,
   programId: string
 ): Promise<boolean> {
-  const access = await getAccessibleSchoolsProgramIds(supabase, userId);
-  if (access === "all") return true;
-  return access.includes(programId);
+  const [access, assignable] = await Promise.all([
+    getAccessibleSchoolsProgramIds(supabase, userId),
+    assignableContactGrants(supabase, userId),
+  ]);
+  if (access === "all" || access.includes(programId)) return true;
+  return assignable.some((grant) => assignableCovers(grant, programId));
 }
 
 export async function userIsProgramStaff(
@@ -96,27 +176,35 @@ export async function canOpenSchools(
   scope?: GrantScope
 ): Promise<{
   open: boolean;
-  /** Unscoped Training access: the home lists every program and Create Program shows. */
+  /**
+   * Unscoped Training access on the home. On a program page (a programId was
+   * passed) this is also true when the user holds schools.assignable_as_contact
+   * at any scope, which is what opened every program page on main.
+   */
   hasModuleAccess: boolean;
   staffProgramIds: string[];
   /** Program ids from program-scoped schools grants. Empty when hasModuleAccess. */
   grantProgramIds: string[];
   schools: SchoolsProgramAccess;
 }> {
-  const [schools, staffProgramIds] = await Promise.all([
+  const [schools, staffProgramIds, assignable] = await Promise.all([
     getAccessibleSchoolsProgramIds(supabase, userId),
     listStaffProgramIds(supabase, userId),
+    assignableContactGrants(supabase, userId),
   ]);
   const seesAll = schools === "all";
   const grantProgramIds = seesAll ? [] : schools;
+  // Main's hasModuleAccess ignored scope, so any assignable_as_contact grant
+  // opened every program page. It does not open Training home.
+  const assignableOpensProgramPage = !!scope?.programId && assignable.length > 0;
   const covers = (programId: string) =>
     seesAll || grantProgramIds.includes(programId) || staffProgramIds.includes(programId);
   const open = scope?.programId
-    ? covers(scope.programId)
+    ? covers(scope.programId) || assignableOpensProgramPage
     : seesAll || grantProgramIds.length > 0 || staffProgramIds.length > 0;
   return {
     open,
-    hasModuleAccess: seesAll,
+    hasModuleAccess: seesAll || assignableOpensProgramPage,
     staffProgramIds,
     grantProgramIds,
     schools,
