@@ -20,7 +20,12 @@ export const MAX_FILE_BYTES = 20 * 1024 * 1024;
 export const SIGNED_URL_TTL_SECONDS = 300;
 export const LMS_SUBMISSIONS_BUCKET = "lms-submissions";
 
-/** Matches lms_submission_files.mime CHECK and the bucket allowlist in 310. */
+/**
+ * Matches lms_submission_files.mime CHECK and the bucket allowlist in 310.
+ * Note: .doc and .ppt (old Office formats) can carry macros. They are still
+ * allowed; downloads are attachments named for their stored type, and
+ * Office opens downloaded files in Protected View.
+ */
 export const ALLOWED_FILE_TYPES: Readonly<Record<string, string>> = {
   "application/pdf": "pdf",
   "image/png": "png",
@@ -48,17 +53,52 @@ export function mimeFromFileName(name: string): string | null {
   return MIME_BY_EXT[name.slice(dot + 1).toLowerCase()] ?? null;
 }
 
+/**
+ * Types stored as another allowed type. Android labels HEIC photos
+ * image/heif; the bucket and the 310 CHECK only know image/heic.
+ */
+const MIME_ALIASES: Readonly<Record<string, string>> = {
+  "image/heif": "image/heic",
+};
+
 /** The browser's type when it gave one we accept; else derived from the extension. */
 export function resolveFileMime(name: string, browserType: string | null | undefined): string | null {
-  const t = (browserType ?? "").toLowerCase();
+  const raw = (browserType ?? "").trim().toLowerCase();
+  const t = MIME_ALIASES[raw] ?? raw;
   if (t && ALLOWED_FILE_TYPES[t]) return t;
   if (!t || t === "application/octet-stream") return mimeFromFileName(name);
   return null;
 }
 
+/** True when the name's extension is one of the extensions for this allowed type. */
+export function fileNameMatchesMime(name: string, mime: string): boolean {
+  return !!ALLOWED_FILE_TYPES[mime] && mimeFromFileName(name) === mime;
+}
+
+/**
+ * The name a download is saved as: the uploaded name without its
+ * extension, cleaned, plus the extension of the type we stored. The raw
+ * stored name's extension is never used, so a file registered as a PDF
+ * always downloads as .pdf.
+ */
+export function downloadFileName(storedName: string, mime: string): string {
+  const ext = ALLOWED_FILE_TYPES[mime] ?? "bin";
+  const leaf = storedName.split(/[\\/]/).pop() ?? "";
+  const dot = leaf.lastIndexOf(".");
+  const base = (dot > 0 ? leaf.slice(0, dot) : leaf)
+    // Control characters, quotes and characters Windows forbids in names.
+    .replace(/[\u0000-\u001f\u007f<>:"/\\|?*;]+/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/^[\s.]+|[\s.]+$/g, "")
+    .slice(0, 100)
+    .trim();
+  return `${base || "submission"}.${ext}`;
+}
+
 export const FILE_ACCEPT_ATTR = [
   ...Object.keys(ALLOWED_FILE_TYPES),
-  ...Object.values(ALLOWED_FILE_TYPES).map((ext) => `.${ext}`),
+  ...Object.keys(MIME_ALIASES),
+  ...Object.keys(MIME_BY_EXT).map((ext) => `.${ext}`),
 ].join(",");
 
 export type LmsAssignment = {
@@ -457,7 +497,12 @@ export function releasedOnly<T extends { grade: LmsGrade | null }>(attempt: T): 
 
 export type UploadRequest = { file_name: string; mime: string; size_bytes: number; ext: string };
 
-export function validateUploadRequest(raw: unknown, existingFiles: number): Result<UploadRequest> {
+export const FILE_TYPE_MISMATCH = "file_type_mismatch";
+
+export function validateUploadRequest(
+  raw: unknown,
+  existingFiles: number
+): Result<UploadRequest> | { ok: false; error: string; code: typeof FILE_TYPE_MISMATCH } {
   const body = (raw ?? {}) as Record<string, unknown>;
   const name = typeof body.file_name === "string" ? body.file_name.trim() : "";
   if (!name) return { ok: false, error: "file_name is required" };
@@ -467,6 +512,14 @@ export function validateUploadRequest(raw: unknown, existingFiles: number): Resu
   const ext = ALLOWED_FILE_TYPES[mime];
   if (!ext) {
     return { ok: false, error: "That file type is not allowed. Use PDF, an image, Word, PowerPoint or plain text." };
+  }
+  // The name must agree with the type (payload.exe declared as a PDF is refused).
+  if (!fileNameMatchesMime(name, mime)) {
+    return {
+      ok: false,
+      code: FILE_TYPE_MISMATCH,
+      error: `This file's name doesn't match its type. Rename it to end in .${ext} and try again.`,
+    };
   }
   const size = typeof body.size_bytes === "number" ? body.size_bytes : Number.NaN;
   if (!Number.isInteger(size) || size <= 0) return { ok: false, error: "size_bytes is required" };

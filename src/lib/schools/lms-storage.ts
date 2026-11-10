@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { LMS_SUBMISSIONS_BUCKET, SIGNED_URL_TTL_SECONDS } from "@/lib/schools/lms-assignments";
+import { LMS_SUBMISSIONS_BUCKET, SIGNED_URL_TTL_SECONDS, downloadFileName } from "@/lib/schools/lms-assignments";
 
 // Storage for the private lms-submissions bucket (migration 310).
 //
@@ -12,9 +12,19 @@ function bucket() {
   return createAdminClient().storage.from(LMS_SUBMISSIONS_BUCKET);
 }
 
-/** Short-lived (≤5 min) download URL for one object. */
-export async function signDownload(path: string, fileName: string): Promise<{ url: string | null; error: string | null }> {
-  const { data, error } = await bucket().createSignedUrl(path, SIGNED_URL_TTL_SECONDS, { download: fileName });
+/**
+ * Short-lived (≤5 min) download URL for one file row. It downloads as
+ * <cleaned name>.<extension of the stored type>, never with the extension
+ * the student typed.
+ */
+export async function signDownload(file: {
+  storage_path: string;
+  file_name: string;
+  mime: string;
+}): Promise<{ url: string | null; error: string | null }> {
+  const { data, error } = await bucket().createSignedUrl(file.storage_path, SIGNED_URL_TTL_SECONDS, {
+    download: downloadFileName(file.file_name, file.mime),
+  });
   return { url: data?.signedUrl ?? null, error: error?.message ?? null };
 }
 

@@ -8,7 +8,8 @@ import { insertAttempt, insertFileRow, listAttempts } from "@/services/lms-assig
 // POST …/assignments/[assignmentId]/files   { file_name, mime, size_bytes }
 // Registers a file on the open draft (creating the draft if needed) and
 // returns a signed upload URL. Size (≤20 MB), type (allowlist) and count
-// (≤10) are checked here, in the DB, and by the bucket. The path is
+// (≤10) are checked here, in the DB, and by the bucket; the name's
+// extension must match the type (400 file_type_mismatch). The path is
 // {program}/{assignment}/{submission}/{random uuid}.{ext} — no user ids.
 
 type Ctx = { params: Promise<{ enrollmentId: string; assignmentId: string }> };
@@ -31,7 +32,10 @@ export async function POST(request: Request, context: Ctx) {
   let draft = openDraft(attempts.data ?? []);
 
   const upload = validateUploadRequest(await readJson(request), draft?.files.length ?? 0);
-  if (!upload.ok) return badRequest(upload.error);
+  if (!upload.ok) {
+    // file_type_mismatch: the name's extension disagrees with the type.
+    return "code" in upload ? json({ error: upload.code, message: upload.error }, 400) : badRequest(upload.error);
+  }
 
   let draftId = draft?.id;
   if (!draftId) {

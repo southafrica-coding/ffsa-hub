@@ -20,7 +20,7 @@ export async function GET(_request: Request, context: Ctx) {
   const { data: assignment } = await getAssignment(auth.supabase, submission.assignment_id);
   if (!assignment || assignment.program_id !== programId) return notFound("File");
 
-  const signed = await signDownload(file.storage_path, file.file_name);
+  const signed = await signDownload(file);
   if (!signed.url) return json({ error: signed.error ?? "Could not sign download" }, 502);
   return json({ url: signed.url, expires_in: 300 });
 }

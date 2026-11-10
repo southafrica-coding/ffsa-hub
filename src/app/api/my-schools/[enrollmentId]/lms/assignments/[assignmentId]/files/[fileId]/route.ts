@@ -28,7 +28,7 @@ export async function GET(_request: Request, context: Ctx) {
   const { enrollmentId, assignmentId, fileId } = await context.params;
   const own = await ownFile(enrollmentId, assignmentId, fileId);
   if ("response" in own) return own.response;
-  const signed = await signDownload(own.file.storage_path, own.file.file_name);
+  const signed = await signDownload(own.file);
   if (!signed.url) return json({ error: signed.error ?? "Could not sign download" }, 502);
   return json({ url: signed.url, expires_in: 300 });
 }
