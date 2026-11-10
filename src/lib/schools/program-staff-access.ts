@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { canManageFinance } from "@/lib/api-auth";
 import { userCanManageProgram } from "@/lib/auth/check-schools-access";
+import type { GrantScope } from "@/lib/auth/grant-scope";
 import { hasModuleAccess } from "@/lib/require-permission";
 
 // How a person stands on one school once program_staff exists (migration 304).
@@ -135,10 +136,11 @@ export async function userIsProgramStaff(
 
 export async function canOpenSchools(
   supabase: SupabaseClient,
-  userId: string
+  userId: string,
+  scope?: GrantScope
 ): Promise<{ open: boolean; hasModuleAccess: boolean; staffProgramIds: string[] }> {
   const [moduleAccess, staffProgramIds] = await Promise.all([
-    hasModuleAccess(supabase, userId, "schools"),
+    hasModuleAccess(supabase, userId, "schools", scope),
     listStaffProgramIds(supabase, userId),
   ]);
   return {

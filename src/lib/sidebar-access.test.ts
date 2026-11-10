@@ -34,7 +34,7 @@ describe("getSidebarAccess", () => {
     const access = await getSidebarAccess(f.client);
     expect(access.userRoles).toEqual(["super_admin"]);
     expect(access.permittedModules.size).toBe(0);
-    expect(f.queries.map((q) => q.table)).toEqual(["user_roles"]);
+    expect(f.queries.map((q) => q.table).sort()).toEqual(["user_roles", "users"]);
   });
 
   it("unions direct grants and role-bundle grants, with the bookings/users aliases", async () => {
@@ -92,6 +92,39 @@ describe("getSidebarAccess", () => {
     const access = await getSidebarAccess(f.client);
     expect(access.menuLoadFailed).toBe(false);
     expect(sorted(access.permittedModules)).toEqual(["events"]);
+  });
+
+  it("keeps an active unscoped grant on the menu and drops a scoped-only one", async () => {
+    const unscoped = await getSidebarAccess(
+      client({
+        roles: [{ id: "pl", name: "program_leader" }],
+        direct: [{ module: "events", key: "events.view" }],
+        bundles: { pl: [{ module: "schools", key: "schools.manage" }] },
+      }).client
+    );
+    expect(unscoped.userRoles).toEqual(["program_leader"]);
+    expect(sorted(unscoped.permittedModules)).toEqual(["events", "schools", "users"]);
+
+    const scoped = await getSidebarAccess(
+      client({
+        roles: [{ id: "pl", name: "program_leader", scopeType: "program", scopeId: "prog-a" }],
+        direct: [{ module: "events", key: "events.view", scopeType: "program", scopeId: "prog-a" }],
+        bundles: { pl: [{ module: "schools", key: "schools.manage" }] },
+      }).client
+    );
+    expect(scoped.userRoles).toEqual([]);
+    expect(scoped.permittedModules.size).toBe(0);
+  });
+
+  it("gives a deactivated account an empty menu", async () => {
+    const access = await getSidebarAccess(
+      client({
+        active: false,
+        roles: [{ id: "r1", name: "super_admin" }],
+        direct: [{ module: "events", key: "events.view" }],
+      }).client
+    );
+    expect(access).toEqual({ userRoles: [], permittedModules: new Set(), menuLoadFailed: false });
   });
 
   it("a program staff seat lights up Training without a schools permission", async () => {

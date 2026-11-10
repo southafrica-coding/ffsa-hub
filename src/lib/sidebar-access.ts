@@ -1,3 +1,4 @@
+import { grantCounts } from "@/lib/auth/grant-scope";
 import { getPermissionRowsForRoles } from "@/services/permissions";
 
 export interface SidebarAccess {
@@ -79,13 +80,36 @@ export async function getSidebarAccess(
   // 2) Load roles + permitted modules. If this fails for an authenticated user,
   //    flag it so the sidebar shows a refresh prompt, not a phantom empty menu.
   try {
-    // role_id rides along so the role-bundle lookup below can start straight
-    // away instead of re-reading user_roles.
-    const roleRows = await readOrThrow<
-      Array<{ role_id?: string; roles: { name: string } | { name: string }[] | null }>
-    >(() => supabase.from("user_roles").select("role_id, roles(name)").eq("user_id", userId));
+    // The account flag and the role rows are independent. A deactivated
+    // account (is_active = false) counts for nothing. NULL stays active.
+    // Global nav only keeps unscoped assignments: a program-scoped leader
+    // still opens that program, but does not get the org-wide menu entry.
+    const [userRow, roleRows] = await Promise.all([
+      readOrThrow<{ is_active: boolean | null } | null>(() =>
+        supabase.from("users").select("is_active").eq("id", userId).maybeSingle()
+      ),
+      readOrThrow<
+        Array<{
+          role_id?: string;
+          scope_type?: string | null;
+          scope_id?: string | null;
+          roles: { name: string } | { name: string }[] | null;
+        }>
+      >(() =>
+        supabase
+          .from("user_roles")
+          .select("role_id, scope_type, scope_id, roles(name)")
+          .eq("user_id", userId)
+      ),
+    ]);
 
-    result.userRoles = (roleRows ?? [])
+    if (!userRow || userRow.is_active === false) return result;
+
+    const unscopedRoles = (roleRows ?? []).filter((row) =>
+      grantCounts(row.scope_type, row.scope_id, undefined)
+    );
+
+    result.userRoles = unscopedRoles
       .map((r) => {
         const role = Array.isArray(r.roles) ? r.roles[0] : r.roles;
         return role?.name ?? null;
@@ -101,12 +125,14 @@ export async function getSidebarAccess(
     if (!isSuperAdmin) {
       // Direct grants and role-bundle grants are independent reads — fetch
       // them together.
-      const roleIds = (roleRows ?? [])
+      const roleIds = unscopedRoles
         .map((r) => r.role_id)
         .filter((id): id is string => typeof id === "string");
       const [permRows, roleDerived, staffSeat] = await Promise.all([
         readOrThrow<
           Array<{
+            scope_type?: string | null;
+            scope_id?: string | null;
             permissions:
               | { module: string; key: string }
               | { module: string; key: string }[]
@@ -115,7 +141,7 @@ export async function getSidebarAccess(
         >(() =>
           supabase
             .from("user_permissions")
-            .select("permissions(module, key)")
+            .select("scope_type, scope_id, permissions(module, key)")
             .eq("user_id", userId)
         ),
         // Best-effort, as before: a failed bundle read contributes nothing
@@ -136,7 +162,8 @@ export async function getSidebarAccess(
 
       for (const row of permRows ?? []) {
         const perm = Array.isArray(row.permissions) ? row.permissions[0] : row.permissions;
-        if (perm?.module) result.permittedModules.add(perm.module);
+        if (!perm?.module || !grantCounts(row.scope_type, row.scope_id, undefined, perm.key)) continue;
+        result.permittedModules.add(perm.module);
         // Users with schools.manage can delegate the assignable-contact
         // permission, so they need access to the Users page.
         if (perm?.key === "schools.manage") result.permittedModules.add("users");

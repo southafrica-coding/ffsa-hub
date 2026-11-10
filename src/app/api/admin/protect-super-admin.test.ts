@@ -151,8 +151,12 @@ beforeEach(() => {
     pat: ["staff"], // an ordinary staff member
   };
   state.users = {
-    boss: { email: "boss@ffsa.test", job_title: "Director" },
-    pat: { email: "pat@ffsa.test", job_title: null },
+    boss: { email: "boss@ffsa.test", job_title: "Director", is_active: true },
+    pat: { email: "pat@ffsa.test", job_title: null, is_active: true },
+    // Callers are looked up for users.is_active. NULL/absent would be active
+    // too; a missing row is not.
+    ga: { is_active: true },
+    sa: { is_active: true },
   };
   state.writes = [];
 });

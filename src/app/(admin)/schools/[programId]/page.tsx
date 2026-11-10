@@ -185,7 +185,7 @@ export default async function ProgramDetailPage({
     );
   }
 
-  const schoolsAccess = await canOpenSchools(supabase, session.user.id);
+  const schoolsAccess = await canOpenSchools(supabase, session.user.id, { programId });
   if (!schoolsAccess.open) {
     if (!ltProgram) redirect("/dashboard");
     return (

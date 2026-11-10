@@ -1,5 +1,14 @@
 import { redirect } from "next/navigation";
 import { SUPER_ADMIN_ONLY_MODULES } from "@/config/modules";
+import {
+  accountIsActive,
+  grantCounts,
+  namesOf,
+  permissionOf,
+  type GrantScope,
+} from "@/lib/auth/grant-scope";
+
+export type { GrantScope } from "@/lib/auth/grant-scope";
 
 /**
  * The role names that get the blanket bypass for a given module.
@@ -15,73 +24,135 @@ function bypassRoles(modules: string[]): string[] {
   return carvedOut ? ["super_admin"] : ["super_admin", "admin"];
 }
 
+type RoleAssignment = {
+  role_id: string;
+  scope_type?: string | null;
+  scope_id?: string | null;
+  names: string[];
+};
+
+type GrantRow = {
+  role_id?: string;
+  scope_type?: string | null;
+  scope_id?: string | null;
+  permissions?: { module?: string; key?: string } | { module?: string; key?: string }[] | null;
+};
+
 /**
- * The one access rule behind all three exports: true if the user holds a
- * bypass role (see bypassRoles), a direct user_permission for any of the
+ * The one access rule behind all three exports: true if an active user holds
+ * a bypass role (see bypassRoles), a direct user_permission for any of the
  * modules, or one through an assigned role's bundle
  * (user_roles -> role_permissions -> permissions).
  *
- * The user's roles and their direct grant are independent reads, so they go
- * out together; the bundle lookup only runs if neither settles it. That is two
- * round trips at most — the checks used to run one after another (up to four).
- * Any failed read counts as "no", exactly as before: an error never grants.
+ * Unscoped grants count everywhere. A program-scoped grant counts only when
+ * `scope.programId` matches. finance.* keys still need an unscoped grant
+ * (migration 316). The account read, the roles and the direct grant go out
+ * together; the bundle lookup only runs if neither settles it.
+ * Any failed read is false.
  */
 async function canAccessAnyModule(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
   userId: string,
-  modules: string[]
+  modules: string[],
+  scope?: GrantScope
 ): Promise<boolean> {
   const directQuery = supabase
     .from("user_permissions")
-    .select("permissions!inner(module)")
+    .select("scope_type, scope_id, permissions!inner(module, key)")
     .eq("user_id", userId);
 
-  const [{ data: roleRows }, { data: permCheck }] = await Promise.all([
-    supabase.from("user_roles").select("role_id, roles(name)").eq("user_id", userId),
-    (modules.length === 1
+  const [active, rolesResult, permsResult] = await Promise.all([
+    accountIsActive(supabase, userId),
+    supabase
+      .from("user_roles")
+      .select("role_id, scope_type, scope_id, roles(name)")
+      .eq("user_id", userId),
+    modules.length === 1
       ? directQuery.eq("permissions.module", modules[0])
-      : directQuery.in("permissions.module", modules)
-    ).limit(1),
+      : directQuery.in("permissions.module", modules),
   ]);
+  if (!active || rolesResult.error || permsResult.error) return false;
 
-  const roles = (roleRows ?? []) as Array<{
-    role_id: string;
-    roles: { name: string } | { name: string }[] | null;
-  }>;
-  const roleNames = roles.flatMap((r) =>
-    Array.isArray(r.roles) ? r.roles.map((x) => x.name) : r.roles ? [r.roles.name] : []
-  );
+  const assignments = ((rolesResult.data ?? []) as Array<{
+    role_id?: string;
+    scope_type?: string | null;
+    scope_id?: string | null;
+    roles?: { name?: string } | { name?: string }[] | null;
+  }>)
+    .filter((row): row is typeof row & { role_id: string } => typeof row.role_id === "string")
+    .map(
+      (row): RoleAssignment => ({
+        role_id: row.role_id,
+        scope_type: row.scope_type,
+        scope_id: row.scope_id,
+        names: namesOf(row.roles),
+      })
+    );
 
-  // Blanket role bypass (see bypassRoles)
   const bypass = bypassRoles(modules);
-  if (roleNames.some((name) => bypass.includes(name))) return true;
+  if (
+    assignments.some(
+      (row) =>
+        row.names.some((name) => bypass.includes(name)) &&
+        grantCounts(row.scope_type, row.scope_id, scope)
+    )
+  ) {
+    return true;
+  }
 
-  // Direct permission grant
-  if (permCheck && permCheck.length > 0) return true;
+  const direct = (permsResult.data ?? []) as GrantRow[];
+  if (
+    direct.some((row) => {
+      const perm = permissionOf(row);
+      return (
+        typeof perm?.module === "string" &&
+        modules.includes(perm.module) &&
+        grantCounts(row.scope_type, row.scope_id, scope, perm.key)
+      );
+    })
+  ) {
+    return true;
+  }
 
-  // Access granted through an assigned role's bundle
-  const roleIds = roles.map((r) => r.role_id);
+  const roleIds = [
+    ...new Set(
+      assignments
+        .filter((row) => grantCounts(row.scope_type, row.scope_id, scope))
+        .map((row) => row.role_id)
+    ),
+  ];
   if (roleIds.length === 0) return false;
 
   const bundleQuery = supabase
     .from("role_permissions")
-    .select("permissions!inner(module)")
+    .select("role_id, permissions!inner(module, key)")
     .in("role_id", roleIds);
-  const { data: rolePermCheck } = await (modules.length === 1
+  const bundled = await (modules.length === 1
     ? bundleQuery.eq("permissions.module", modules[0])
-    : bundleQuery.in("permissions.module", modules)
-  ).limit(1);
+    : bundleQuery.in("permissions.module", modules));
+  if (bundled.error) return false;
 
-  return !!(rolePermCheck && rolePermCheck.length > 0);
+  return ((bundled.data ?? []) as GrantRow[]).some((row) => {
+    const perm = permissionOf(row);
+    if (typeof perm?.module !== "string" || !modules.includes(perm.module)) return false;
+    return assignments.some(
+      (assignment) =>
+        assignment.role_id === row.role_id &&
+        grantCounts(assignment.scope_type, assignment.scope_id, scope, perm.key)
+    );
+  });
 }
 
 /**
  * Call at the top of any admin server page to enforce access.
  *
- * super_admin always passes; `admin` passes for every module except the
- * SUPER_ADMIN_ONLY_MODULES carve-outs. Everyone else must have at least one
- * user_permission row (direct or via a role bundle) for the given module.
+ * An active super_admin passes; an active `admin` passes for every module
+ * except the SUPER_ADMIN_ONLY_MODULES carve-outs. Everyone else must have at
+ * least one matching user_permission (direct or via a role bundle). Pass
+ * `{ programId }` on a program page so a grant scoped to that program counts.
+ * Callers that omit it only see unscoped grants. A deactivated account
+ * (is_active = false) never passes.
  *
  * Usage:
  *   await requireModuleAccess(supabase, userId, "finance");
@@ -90,26 +161,26 @@ export async function requireModuleAccess(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
   userId: string,
-  module: string
+  module: string,
+  scope?: GrantScope
 ) {
-  if (await canAccessAnyModule(supabase, userId, [module])) return;
+  if (await canAccessAnyModule(supabase, userId, [module], scope)) return;
   redirect("/dashboard");
 }
 
 /**
  * Non-redirecting boolean version of requireModuleAccess. Use to conditionally
  * render UI (e.g. hide a hub card the user can't open) rather than to guard a
- * page. Same rule as requireModuleAccess: super_admin always true, `admin`
- * true outside the SUPER_ADMIN_ONLY_MODULES carve-outs, else a direct or
- * role-bundle permission for the module.
+ * page. Same rule as requireModuleAccess, including the optional program scope.
  */
 export async function hasModuleAccess(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
   userId: string,
-  module: string
+  module: string,
+  scope?: GrantScope
 ): Promise<boolean> {
-  return canAccessAnyModule(supabase, userId, [module]);
+  return canAccessAnyModule(supabase, userId, [module], scope);
 }
 
 /**
@@ -121,8 +192,9 @@ export async function requireAnyModuleAccess(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
   userId: string,
-  modules: string[]
+  modules: string[],
+  scope?: GrantScope
 ) {
-  if (await canAccessAnyModule(supabase, userId, modules)) return;
+  if (await canAccessAnyModule(supabase, userId, modules, scope)) return;
   redirect("/dashboard");
 }

@@ -1,6 +1,16 @@
 // Small auth helpers for API route handlers. Keeps the auth-check
 // boilerplate consistent across the CRM / Events route handlers.
 
+import {
+  accountIsActive,
+  grantCounts,
+  namesOf,
+  permissionOf,
+  type PermissionCheck,
+} from "@/lib/auth/grant-scope";
+
+export type { GrantScope, PermissionCheck } from "@/lib/auth/grant-scope";
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
 
@@ -11,37 +21,118 @@ export async function getAuthedUser(supabase: Client) {
   return user;
 }
 
-/** True if the user holds at least one of the given role names. */
+/**
+ * True if an active user holds at least one of the given role names.
+ * Unscoped assignments count for every caller. A program-scoped assignment
+ * counts only when `scope.programId` is that program. Team and event
+ * assignments never match. A lookup error is false.
+ */
 export async function hasAnyRole(
   supabase: Client,
   userId: string,
-  roleNames: string[]
+  roleNames: string[],
+  scope?: PermissionCheck
 ): Promise<boolean> {
-  const { data } = await supabase
-    .from("user_roles")
-    .select("roles!inner(name)")
-    .eq("user_id", userId)
-    .in("roles.name", roleNames)
-    .limit(1);
-  return !!data && data.length > 0;
+  if (roleNames.length === 0) return false;
+  const [active, roles] = await Promise.all([
+    accountIsActive(supabase, userId),
+    supabase
+      .from("user_roles")
+      .select("scope_type, scope_id, roles!inner(name)")
+      .eq("user_id", userId)
+      .in("roles.name", roleNames),
+  ]);
+  if (!active || roles.error) return false;
+  const rows = (Array.isArray(roles.data) ? roles.data : []) as Array<{
+    scope_type?: string | null;
+    scope_id?: string | null;
+    roles?: { name?: string } | { name?: string }[] | null;
+  }>;
+  return rows.some(
+    (row) =>
+      namesOf(row.roles).some((name) => roleNames.includes(name)) &&
+      grantCounts(row.scope_type, row.scope_id, scope)
+  );
 }
 
 export const EVENTS_MANAGE_ROLES = ["super_admin", "admin", "events_admin"];
 export const COMMS_MANAGE_ROLES = ["super_admin", "admin", "comms_admin"];
 
-/** True if the user holds at least one of the given granular permission keys. */
+/**
+ * True if an active user holds at least one of the given permission keys
+ * on user_permissions. Same scope rule as hasAnyRole. finance.* keys count
+ * only when that grant is unscoped, even if programId matches (migration 316).
+ * Pass `{ viaRoleBundle: true }` to also accept the key from a role bundle
+ * whose assignment matches the scope. A lookup error is false.
+ */
 export async function hasAnyPermission(
   supabase: Client,
   userId: string,
-  permissionKeys: string[]
+  permissionKeys: string[],
+  scope?: PermissionCheck
 ): Promise<boolean> {
-  const { data } = await supabase
-    .from("user_permissions")
-    .select("permissions!inner(key)")
-    .eq("user_id", userId)
-    .in("permissions.key", permissionKeys)
-    .limit(1);
-  return !!data && data.length > 0;
+  if (permissionKeys.length === 0) return false;
+  const [active, perms, roles] = await Promise.all([
+    accountIsActive(supabase, userId),
+    supabase
+      .from("user_permissions")
+      .select("scope_type, scope_id, permissions!inner(key)")
+      .eq("user_id", userId)
+      .in("permissions.key", permissionKeys),
+    scope?.viaRoleBundle
+      ? supabase.from("user_roles").select("role_id, scope_type, scope_id").eq("user_id", userId)
+      : Promise.resolve(null),
+  ]);
+  if (!active || perms.error || (scope?.viaRoleBundle && roles?.error)) return false;
+
+  const direct = (Array.isArray(perms.data) ? perms.data : []) as Array<{
+    scope_type?: string | null;
+    scope_id?: string | null;
+    permissions?: { key?: string } | { key?: string }[] | null;
+  }>;
+  const directHit = direct.some((row) => {
+    const key = permissionOf(row)?.key;
+    return (
+      typeof key === "string" &&
+      permissionKeys.includes(key) &&
+      grantCounts(row.scope_type, row.scope_id, scope, key)
+    );
+  });
+  if (directHit || !scope?.viaRoleBundle) return directHit;
+
+  const assignments = (Array.isArray(roles?.data) ? roles.data : []) as Array<{
+    role_id?: string;
+    scope_type?: string | null;
+    scope_id?: string | null;
+  }>;
+  const roleIds = [
+    ...new Set(
+      assignments
+        .filter((row) => typeof row.role_id === "string" && grantCounts(row.scope_type, row.scope_id, scope))
+        .map((row) => row.role_id as string)
+    ),
+  ];
+  if (roleIds.length === 0) return false;
+
+  const bundled = await supabase
+    .from("role_permissions")
+    .select("role_id, permissions!inner(key)")
+    .in("role_id", roleIds)
+    .in("permissions.key", permissionKeys);
+  if (bundled.error) return false;
+  const rows = (Array.isArray(bundled.data) ? bundled.data : []) as Array<{
+    role_id?: string;
+    permissions?: { key?: string } | { key?: string }[] | null;
+  }>;
+  return rows.some((row) => {
+    const key = permissionOf(row)?.key;
+    if (typeof key !== "string" || !permissionKeys.includes(key)) return false;
+    return assignments.some(
+      (assignment) =>
+        assignment.role_id === row.role_id &&
+        grantCounts(assignment.scope_type, assignment.scope_id, scope, key)
+    );
+  });
 }
 
 // Roles or granular permissions that allow writing contact data.

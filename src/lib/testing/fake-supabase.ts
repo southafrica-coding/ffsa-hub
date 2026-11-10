@@ -114,11 +114,18 @@ export function createFakeSupabase(options: {
 // Answers the user_roles / user_permissions / role_permissions query shapes
 // the access helpers use, from a plain description of one user's access.
 
-export type Perm = { module: string; key: string };
+export type Perm = {
+  module: string;
+  key: string;
+  scopeType?: string | null;
+  scopeId?: string | null;
+};
 export type PermissionWorld = {
-  roles: Array<{ id: string; name: string }>;
+  roles: Array<{ id: string; name: string; scopeType?: string | null; scopeId?: string | null }>;
   direct: Perm[];
   bundles?: Record<string, Perm[]>; // role id → bundle
+  /** users.is_active. Omitted means active. false is an inactive account. */
+  active?: boolean;
 };
 
 function matchesEmbeddedFilters(q: FakeQuery, prefix: string, row: Record<string, unknown>) {
@@ -134,24 +141,39 @@ function matchesEmbeddedFilters(q: FakeQuery, prefix: string, row: Record<string
 
 export function permissionWorldResolver(world: PermissionWorld) {
   return (q: FakeQuery): FakeResult | null => {
+    if (q.table === "users" && (q.columns ?? "").includes("is_active")) {
+      return {
+        data: [{ id: filterValue(q, "eq", "id") ?? null, is_active: world.active !== false }],
+      };
+    }
     if (q.table === "user_roles") {
       const rows = world.roles
         .filter((r) => matchesEmbeddedFilters(q, "roles", r))
-        .map((r) => ({ role_id: r.id, roles: { name: r.name } }));
+        .map((r) => ({
+          role_id: r.id,
+          scope_type: r.scopeType ?? null,
+          scope_id: r.scopeId ?? null,
+          roles: { name: r.name },
+        }));
       return { data: rows };
     }
     if (q.table === "user_permissions") {
       const rows = world.direct
         .filter((p) => matchesEmbeddedFilters(q, "permissions", p))
-        .map((p) => ({ scope_id: null, scope_type: null, permissions: p }));
+        .map((p) => ({
+          scope_id: p.scopeId ?? null,
+          scope_type: p.scopeType ?? null,
+          permissions: p,
+        }));
       return { data: rows };
     }
     if (q.table === "role_permissions") {
-      const roleIds = (filterValue(q, "in", "role_id") as string[] | undefined) ?? [];
+      const listed = filterValue(q, "in", "role_id") as string[] | undefined;
+      const one = filterValue(q, "eq", "role_id");
+      const roleIds = listed ?? (one != null ? [String(one)] : []);
       const rows = roleIds
-        .flatMap((id) => world.bundles?.[id] ?? [])
-        .filter((p) => matchesEmbeddedFilters(q, "permissions", p))
-        .map((p) => ({ permissions: p }));
+        .flatMap((id) => (world.bundles?.[id] ?? []).map((p) => ({ role_id: id, permissions: p })))
+        .filter((row) => matchesEmbeddedFilters(q, "permissions", row.permissions));
       return { data: rows };
     }
     return null;
