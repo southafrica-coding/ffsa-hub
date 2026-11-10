@@ -15,7 +15,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Drawer } from "@/components/ffsa";
+import { Drawer } from "@/components/ffsa/client";
 import { cn } from "@/lib/utils/cn";
 import MemberPicker from "./member-picker";
 import {

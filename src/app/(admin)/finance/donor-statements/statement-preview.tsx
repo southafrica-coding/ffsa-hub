@@ -5,7 +5,8 @@ import { toast } from "sonner";
 import { Download, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Drawer, StatusPill } from "@/components/ffsa";
+import { StatusPill } from "@/components/ffsa";
+import { Drawer } from "@/components/ffsa/client";
 import { fmtUsd, type Donor } from "@/lib/finance/donor-statements";
 
 // One donor's statement exactly as it would go out: the email (From,

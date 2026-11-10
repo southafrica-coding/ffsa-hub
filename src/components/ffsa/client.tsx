@@ -4,9 +4,8 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
 /**
- * Client-only design primitives. The server barrel at @/components/ffsa
- * re-exports Drawer so existing imports keep working, and this file is the
- * direct entry when a page should not pull the whole set.
+ * Client-only design primitives. Import Drawer from here.
+ * The server barrel at @/components/ffsa must not re-export this module.
  */
 export function Drawer({
   open,

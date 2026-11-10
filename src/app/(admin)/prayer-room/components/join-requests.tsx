@@ -14,7 +14,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Drawer, Initials } from "@/components/ffsa";
+import { Initials } from "@/components/ffsa";
+import { Drawer } from "@/components/ffsa/client";
 import { fullName, formatDateLabel, formatTime, type Person } from "./helpers";
 
 type SeatRequest = {
