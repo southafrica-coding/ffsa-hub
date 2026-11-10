@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAuditLog } from "@/services/audit";
-import { badRequest, isOpened, notFound, openDepartment, readJson, serverError } from "@/lib/departments/http";
+import { badRequest, notFound, readJson, serverError } from "@/lib/departments/http";
+import { isOpened, openDepartment } from "@/lib/departments/internal/open";
 import { isActiveMinistryMember, updateRock } from "@/lib/departments/internal/repository";
 import { isUuid, parseRockPatch } from "@/lib/departments/validate";
 
