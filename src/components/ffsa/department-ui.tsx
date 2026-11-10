@@ -122,22 +122,33 @@ export function DataTable({
   );
 }
 
-export function ServiceCard({
-  href,
-  name,
-  summary,
-  owner,
-}: {
-  href: string;
+/** Matches HubService.audience in src/lib/departments/ui-contract.ts (PR #561). */
+export type ServiceAudience = "all_signed_in" | "point_leaders" | "owners_only";
+
+export type ServiceCardService = {
+  id: string;
   name: string;
   summary: string;
-  owner: string;
-}) {
+  href: string;
+  moduleId: string;
+  owners: { slug: string; role: "owner" | "manager" | "access" | "moderator" }[];
+  audience: ServiceAudience;
+};
+
+const AUDIENCE_LABEL: Record<ServiceAudience, string> = {
+  all_signed_in: "Everyone signed in",
+  point_leaders: "Point leaders",
+  owners_only: "Owners only",
+};
+
+export function ServiceCard({ service }: { service: ServiceCardService }) {
+  const owner = service.owners.find((link) => link.role === "owner") ?? service.owners[0];
   return (
-    <Link href={href} className="block rounded-lg border border-border bg-bg p-4 hover:border-rule-strong">
-      <h2 className="text-card-title text-ink">{name}</h2>
-      <p className="mt-1 text-body text-[color:var(--text-secondary)]">{summary}</p>
-      <p className="mt-3 text-ui text-ink">{owner}</p>
+    <Link href={service.href} className="block rounded-lg border border-border bg-bg p-4 hover:border-rule-strong">
+      <h2 className="text-card-title text-ink">{service.name}</h2>
+      <p className="mt-1 text-body text-[color:var(--text-secondary)]">{service.summary}</p>
+      <p className="mt-3 text-ui text-ink">{owner ? owner.slug : "No owner yet"}</p>
+      <p className="mt-1 text-ui text-[color:var(--text-secondary)]">{AUDIENCE_LABEL[service.audience]}</p>
     </Link>
   );
 }

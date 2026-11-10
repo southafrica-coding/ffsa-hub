@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { COUNTRIES, splitPhone } from "@/lib/profile/options";
+import { matchDial } from "./phone-country";
 
 const controlClass =
   "h-9 rounded-md border border-rule-strong bg-bg px-3 text-body text-ink placeholder:text-[color:var(--text-tertiary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link";
@@ -20,9 +21,12 @@ export function PhoneInput({
   required,
   defaultDial = "+27",
   separator = " ",
+  storage = "display",
   wrapperClassName = "flex gap-2",
   selectClassName,
   inputClassName,
+  "aria-invalid": ariaInvalid,
+  "aria-describedby": ariaDescribedBy,
 }: {
   id?: string;
   value: string;
@@ -33,9 +37,13 @@ export function PhoneInput({
   defaultDial?: string;
   /** Between the dial code and the national number. Default is a space. */
   separator?: string;
+  /** `e164` stores a leading + and digits only, which is what the form builder keeps. */
+  storage?: "display" | "e164";
   wrapperClassName?: string;
   selectClassName?: string;
   inputClassName?: string;
+  "aria-invalid"?: boolean;
+  "aria-describedby"?: string;
 }) {
   const parsed = useMemo(
     () => (value ? splitPhone(value) : { dial: defaultDial, number: "" }),
@@ -56,23 +64,29 @@ export function PhoneInput({
   );
 
   function emit(nextDial: string, nextNumber: string) {
-    const trimmed = nextNumber.trim();
-    onChange(trimmed ? `${nextDial}${separator}${trimmed}` : "");
+    const digits = nextNumber.replace(/\D/g, "");
+    if (!digits) {
+      onChange("");
+      return;
+    }
+    if (storage === "e164") {
+      onChange(`${nextDial}${digits}`);
+      return;
+    }
+    onChange(`${nextDial}${separator}${digits}`);
   }
 
   function onNumber(raw: string) {
     const compact = raw.replace(/\s/g, "");
     const international = compact.startsWith("+")
-      ? compact.slice(1)
+      ? compact.slice(1).replace(/\D/g, "")
       : compact.startsWith("00")
-        ? compact.slice(2)
+        ? compact.slice(2).replace(/\D/g, "")
         : null;
     if (international) {
-      const match = [...COUNTRIES]
-        .sort((a, b) => b.dial.length - a.dial.length)
-        .find((country) => international.startsWith(country.dial.slice(1)));
+      const match = matchDial(international, COUNTRIES);
       if (match) {
-        const rest = international.slice(match.dial.length - 1);
+        const rest = international.slice(match.dial.replace(/\D/g, "").length);
         if (rest.length > 0) {
           setIso(match.iso);
           setNumber(rest);
@@ -80,13 +94,15 @@ export function PhoneInput({
           return;
         }
       }
+      setNumber(raw);
+      return;
     }
     setNumber(raw);
     emit(dial, raw);
   }
 
   return (
-    <div className={wrapperClassName}>
+    <div className={wrapperClassName} style={{ display: "flex", gap: 8, minWidth: 0 }}>
       <select
         aria-label="Country code"
         value={iso}
@@ -97,7 +113,8 @@ export function PhoneInput({
           emit(nextDial, number);
         }}
         onBlur={onBlur}
-        className={selectClassName ?? `${controlClass} w-[7.5rem] shrink-0 px-2`}
+        className={selectClassName ?? `${controlClass} px-2`}
+        style={{ flex: "0 0 116px", width: 116, maxWidth: 116 }}
       >
         {COUNTRIES.map((country) => (
           <option key={country.iso} value={country.iso}>
@@ -114,7 +131,10 @@ export function PhoneInput({
         required={required}
         onChange={(event) => onNumber(event.target.value)}
         onBlur={onBlur}
-        className={inputClassName ?? `${controlClass} min-w-0 flex-1`}
+        aria-invalid={ariaInvalid || undefined}
+        aria-describedby={ariaDescribedBy}
+        className={inputClassName ?? controlClass}
+        style={{ flex: "1 1 auto", minWidth: 0 }}
       />
     </div>
   );
