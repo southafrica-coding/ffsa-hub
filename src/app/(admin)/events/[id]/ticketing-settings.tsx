@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Check, Copy, ExternalLink } from "lucide-react";
 import { EVENT_CURRENCIES, providersForCurrency } from "@/lib/currencies";
-import { ShareLinkQr, ticketShareQrUrl } from "@/components/share/share-link-qr";
+import { ShareLinkQr } from "@/components/share/share-link-qr";
+import { ticketShareQrUrl } from "@/components/share/share-qr-png";
 
 export function TicketingSettings({
   eventId,
@@ -219,7 +220,9 @@ export function TicketingSettings({
                 />
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  Save the link to get a QR code.
+                  {ticketingOn
+                    ? "Save the link to get a QR code."
+                    : "Turn on ticketing and save the link to get a QR code."}
                 </p>
               )}
             </div>

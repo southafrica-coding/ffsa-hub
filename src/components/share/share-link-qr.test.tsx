@@ -4,7 +4,8 @@ import { createRoot, type Root } from "react-dom/client";
 import sharp from "sharp";
 import jsQR from "jsqr";
 import { afterEach, describe, expect, it } from "vitest";
-import { ShareLinkQr, doorShareQrUrl, ticketShareQrUrl } from "./share-link-qr";
+import { ShareLinkQr } from "./share-link-qr";
+import { doorShareQrUrl, ticketShareQrUrl } from "./share-qr-png";
 
 const SHARE_URL = "https://www.ffsahub.com/e/send-night-2026";
 

@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusPill } from "@/components/ffsa";
-import { ShareLinkQr, isAbsoluteHttpUrl } from "@/components/share/share-link-qr";
+import { ShareLinkQr } from "@/components/share/share-link-qr";
+import { isAbsoluteHttpUrl } from "@/components/share/share-qr-png";
 
 export type RosterPerson = { name: string; email: string; role: string };
 export type SendRow = {

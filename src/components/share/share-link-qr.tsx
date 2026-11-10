@@ -9,8 +9,6 @@ import {
   shareQrPngDataUrl,
 } from "./share-qr-png";
 
-export { doorShareQrUrl, isAbsoluteHttpUrl, ticketShareQrUrl } from "./share-qr-png";
-
 const DISPLAY_SIZE = 180;
 
 /**

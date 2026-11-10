@@ -1,7 +1,8 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ShareLinkQr, isAbsoluteHttpUrl } from "@/components/share/share-link-qr";
+import { ShareLinkQr } from "@/components/share/share-link-qr";
+import { isAbsoluteHttpUrl } from "@/components/share/share-qr-png";
 
 export function QrPanel({ url, formName }: { url: string; formName: string }) {
   const scannable = isAbsoluteHttpUrl(url) ? url : "";

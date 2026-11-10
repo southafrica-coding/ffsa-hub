@@ -5,7 +5,8 @@ import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Copy, Check, RefreshCw, Link2 } from "lucide-react";
-import { ShareLinkQr, doorShareQrUrl } from "@/components/share/share-link-qr";
+import { ShareLinkQr } from "@/components/share/share-link-qr";
+import { doorShareQrUrl } from "@/components/share/share-qr-png";
 
 function formatDoorExpiry(iso: string): string {
   return new Date(iso).toLocaleDateString("en-ZA", {
@@ -38,7 +39,8 @@ export function ScanLinkCard({ eventId }: { eventId: string }) {
   }, []);
 
   const url = token && origin ? `${origin}/scan/${token}` : "";
-  const expired = Boolean(expiresAt && Date.parse(expiresAt) <= Date.now());
+  // Same bound as resolveScanLink: the link is dead only after expires_at.
+  const expired = Boolean(expiresAt && new Date(expiresAt) < new Date());
   const qrUrl =
     doorShareQrUrl({
       origin,
@@ -186,7 +188,7 @@ export function ScanLinkCard({ eventId }: { eventId: string }) {
 
             {expired ? (
               <p className="text-xs text-destructive">
-                Expired. Replace the link to get a new one.
+                Expired. Press Replace link to get a new link.
               </p>
             ) : !isActive ? (
               <p className="text-xs text-destructive">
