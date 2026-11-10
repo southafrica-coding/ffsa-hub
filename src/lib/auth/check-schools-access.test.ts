@@ -47,3 +47,31 @@ describe("userCanManageProgram is_active", () => {
     expect(await userCanManageProgram(client({ leader: true, error: true }), "u", PROGRAM)).toBe(false);
   });
 });
+
+describe("program_leader scope", () => {
+  const A = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+  const B = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+
+  function leader(active: boolean | null = true) {
+    return createFakeSupabase({
+      resolve: (q) => {
+        if (q.table === "users") return { data: { is_active: active } };
+        if (q.table === "user_roles") {
+          return {
+            data: [{ scope_type: "program", scope_id: A, roles: { name: "program_leader" } }],
+          };
+        }
+        return { data: [] };
+      },
+    }).client;
+  }
+
+  it("counts a program-scoped program_leader only for that program", async () => {
+    const db = leader();
+    expect(await userCanManageApplications(db, "u")).toBe(false);
+    expect(await userCanManageApplications(db, "u", A)).toBe(true);
+    expect(await userCanManageApplications(db, "u", B)).toBe(false);
+    expect(await userCanManageProgram(db, "u", A)).toBe(true);
+    expect(await userCanManageProgram(db, "u", B)).toBe(false);
+  });
+});

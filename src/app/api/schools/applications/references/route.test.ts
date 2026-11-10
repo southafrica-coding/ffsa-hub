@@ -30,16 +30,22 @@ const A = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const B = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 
 function use(opts: {
-  scope: "unscoped" | "program-a" | "error";
+  scope: "unscoped" | "program-a" | "leader-a" | "error";
 }) {
   state.user = createFakeSupabase({
     user: { id: "u" },
     resolve: (q: FakeQuery) => {
       if (q.table === "users") return { data: { is_active: true } };
       if (q.table === "application_responses") return { data: { id: "app" } };
-      if (q.table === "user_roles") return { data: [] };
+      if (q.table === "user_roles") {
+        if (opts.scope !== "leader-a") return { data: [] };
+        return {
+          data: [{ scope_type: "program", scope_id: A, roles: { name: "program_leader" } }],
+        };
+      }
       if (q.table === "program_leaders") return { data: [] };
       if (q.table === "user_permissions") {
+        if (opts.scope === "leader-a") return { data: [] };
         const grant = {
           scope_type: opts.scope === "program-a" ? "program" : null,
           scope_id: opts.scope === "program-a" ? A : null,
@@ -113,6 +119,14 @@ describe("PATCH /api/schools/applications/references", () => {
     use({ scope: "program-a" });
     const res = await PATCH(patch("ref-b"));
     expect(res.status).toBe(403);
+    expect(editReferenceContact).not.toHaveBeenCalled();
+  });
+
+  it("lets a program_leader scoped to A edit that program and refuses program B", async () => {
+    use({ scope: "leader-a" });
+    expect((await PATCH(patch("ref-a"))).status).toBe(200);
+    editReferenceContact.mockClear();
+    expect((await PATCH(patch("ref-b"))).status).toBe(403);
     expect(editReferenceContact).not.toHaveBeenCalled();
   });
 

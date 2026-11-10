@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { userCanManageApplications } from "@/lib/auth/check-schools-access";
+import { getAccessibleSchoolsProgramIds } from "@/lib/auth/schools-program-access";
 
 // Admin view: how many active applications + active enrollments each staff
 // member currently holds. Used to spot lopsided workloads.
@@ -15,8 +16,13 @@ export async function GET() {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const hasAccess = await userCanManageApplications(supabase, authUser.id);
-  if (!hasAccess) {
+  const [globalAccess, schools] = await Promise.all([
+    userCanManageApplications(supabase, authUser.id),
+    getAccessibleSchoolsProgramIds(supabase, authUser.id),
+  ]);
+  const seesAll = globalAccess || schools === "all";
+  const ownPrograms = schools === "all" ? [] : schools;
+  if (!seesAll && ownPrograms.length === 0) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
@@ -36,25 +42,34 @@ export async function GET() {
 
   const [appsResult, enrollmentsResult] = await Promise.all([
     sb.from("application_responses")
-      .select("assigned_staff_id, status")
+      .select("assigned_staff_id, status, program_id")
       .not("assigned_staff_id", "is", null)
       .in("status", ["submitted", "references_received", "interview_scheduled", "waitlisted"]),
     sb.from("enrollments")
-      .select("assigned_staff_id, status")
+      .select("assigned_staff_id, status, program_id")
       .not("assigned_staff_id", "is", null)
       .is("removed_at", null)
       .in("status", ["active", "waiting_for_arrival", "arrived", "on_hold"]),
   ]);
+  if (
+    (appsResult as { error?: unknown }).error ||
+    (enrollmentsResult as { error?: unknown }).error
+  ) {
+    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  }
+  const allowed = seesAll ? null : new Set(ownPrograms);
 
   type Counts = { applications: number; enrollments: number };
   const counts = new Map<string, Counts>();
 
-  for (const row of (appsResult.data as Array<{ assigned_staff_id: string }> | null) ?? []) {
+  for (const row of (appsResult.data as Array<{ assigned_staff_id: string; program_id?: string | null }> | null) ?? []) {
+    if (allowed && !allowed.has(row.program_id ?? "")) continue;
     const c = counts.get(row.assigned_staff_id) ?? { applications: 0, enrollments: 0 };
     c.applications += 1;
     counts.set(row.assigned_staff_id, c);
   }
-  for (const row of (enrollmentsResult.data as Array<{ assigned_staff_id: string }> | null) ?? []) {
+  for (const row of (enrollmentsResult.data as Array<{ assigned_staff_id: string; program_id?: string | null }> | null) ?? []) {
+    if (allowed && !allowed.has(row.program_id ?? "")) continue;
     const c = counts.get(row.assigned_staff_id) ?? { applications: 0, enrollments: 0 };
     c.enrollments += 1;
     counts.set(row.assigned_staff_id, c);

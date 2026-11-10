@@ -11,7 +11,11 @@ import {
   removeEnrollmentForApplicant,
   ensureEnrollmentForApplicant,
 } from "@/services/schools";
-import { userCanManageApplications, userCanManageProgram } from "@/lib/auth/check-schools-access";
+import {
+  programIdsForTargets,
+  userCanManageEveryProgram,
+  userCanManageProgram,
+} from "@/lib/auth/check-schools-access";
 import { userCanReadApplication, APPLICATIONS_EXPIRED_MESSAGE } from "@/lib/auth/application-expiry";
 import { normaliseGender } from "@/lib/schools/demographics";
 import { ensureStudentRole, deactivateMembershipProfile } from "@/lib/auth/membership-roles";
@@ -818,12 +822,12 @@ export async function PATCH(request: Request) {
 
   // ── Archive / restore an application (reversible "remove") ──
   if (action === "archive" || action === "restore") {
-    if (!id) {
+    const ids = applicationTargetIds(body);
+    if (!id || !ids) {
       return NextResponse.json({ error: "id is required" }, { status: 400 });
     }
-    if (!(await userCanManageApplications(supabase, user.id))) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = await denyUnlessApplicationPrograms(supabase, user.id, ids);
+    if (denied) return denied;
     // RLS-backed: the 6-month expiry lock (migration 223) applies here too.
     if (!(await userCanReadApplication(supabase, id))) {
       return NextResponse.json({ error: APPLICATIONS_EXPIRED_MESSAGE }, { status: 403 });
@@ -972,15 +976,14 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  if (!(await userCanManageApplications(supabase, user.id))) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
   const body = await request.json().catch(() => ({}));
   const { id } = body;
-  if (!id) {
+  const ids = applicationTargetIds(body);
+  if (!id || !ids) {
     return NextResponse.json({ error: "id is required" }, { status: 400 });
   }
+  const denied = await denyUnlessApplicationPrograms(supabase, user.id, ids);
+  if (denied) return denied;
 
   if (!(await userCanReadApplication(supabase, id))) {
     return NextResponse.json({ error: APPLICATIONS_EXPIRED_MESSAGE }, { status: 403 });
@@ -1031,4 +1034,28 @@ export async function DELETE(request: Request) {
   });
 
   return NextResponse.json({ success: true });
+}
+
+function applicationTargetIds(body: { id?: unknown; ids?: unknown }): string[] | null {
+  const ids: string[] = [];
+  if (typeof body.id === "string" && body.id.length > 0) ids.push(body.id);
+  if (Array.isArray(body.ids)) {
+    for (const id of body.ids) {
+      if (typeof id !== "string" || id.length === 0) return null;
+      if (!ids.includes(id)) ids.push(id);
+    }
+  }
+  return ids.length > 0 ? ids : null;
+}
+
+async function denyUnlessApplicationPrograms(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  ids: string[]
+) {
+  const programs = await programIdsForTargets(createAdminClient(), "application_responses", ids);
+  if (!programs || !(await userCanManageEveryProgram(supabase, userId, programs))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  return null;
 }

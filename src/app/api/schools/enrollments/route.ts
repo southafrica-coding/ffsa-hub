@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { userCanManageApplications } from "@/lib/auth/check-schools-access";
+import {
+  programIdsForTargets,
+  userCanManageEveryProgram,
+} from "@/lib/auth/check-schools-access";
 import { deactivateMembershipProfile } from "@/lib/auth/membership-roles";
 import {
   createEnrollment,
@@ -56,8 +59,9 @@ export async function PUT(request: Request) {
 
   const body = await request.json();
   const { id, status } = body;
+  const ids = targetIds(body);
 
-  if (!id || !status) {
+  if (!id || !status || !ids) {
     return NextResponse.json(
       { error: "id and status are required" },
       { status: 400 }
@@ -67,8 +71,10 @@ export async function PUT(request: Request) {
   // Dismissing switches the student's Hub login off, so it needs the same
   // schools-admin / program-leader rights as removing from the roster.
   // Waiting/Arrived stay open to anyone who can work the Arrival tab.
-  if (status === "dismissed" && !(await userCanManageApplications(supabase, user.id))) {
-    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  // Every enrollment in the batch has to be in a program this person manages.
+  if (status === "dismissed") {
+    const denied = await denyUnlessEnrollmentPrograms(supabase, user.id, ids);
+    if (denied) return denied;
   }
 
   const { data, error } = await updateEnrollmentStatus(supabase, id, status);
@@ -105,14 +111,11 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  if (!(await userCanManageApplications(supabase, user.id))) {
-    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
-  }
-
   const body = await request.json();
-  const { id, removed } = body as { id?: string; removed?: boolean };
+  const { id, removed } = body as { id?: string; removed?: boolean; ids?: unknown };
+  const ids = targetIds(body);
 
-  if (!id || typeof removed !== "boolean") {
+  if (!id || typeof removed !== "boolean" || !ids) {
     return NextResponse.json(
       { error: "id and removed (boolean) are required" },
       { status: 400 }
@@ -120,6 +123,9 @@ export async function PATCH(request: Request) {
   }
 
   const admin = createAdminClient();
+  const denied = await denyUnlessEnrollmentPrograms(supabase, user.id, ids);
+  if (denied) return denied;
+
   const { data, error } = await setEnrollmentRemoved(
     admin,
     id,
@@ -153,18 +159,17 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  if (!(await userCanManageApplications(supabase, user.id))) {
-    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
-  }
-
   const body = await request.json().catch(() => ({}));
   const { id } = body as { id?: string };
+  const ids = targetIds(body);
 
-  if (!id) {
+  if (!id || !ids) {
     return NextResponse.json({ error: "id is required" }, { status: 400 });
   }
 
   const admin = createAdminClient();
+  const denied = await denyUnlessEnrollmentPrograms(supabase, user.id, ids);
+  if (denied) return denied;
 
   const { data: existing, error: fetchError } = await admin
     .from("enrollments")
@@ -197,4 +202,28 @@ export async function DELETE(request: Request) {
   });
 
   return NextResponse.json({ success: true });
+}
+
+function targetIds(body: { id?: unknown; ids?: unknown }): string[] | null {
+  const ids: string[] = [];
+  if (typeof body.id === "string" && body.id.length > 0) ids.push(body.id);
+  if (Array.isArray(body.ids)) {
+    for (const id of body.ids) {
+      if (typeof id !== "string" || id.length === 0) return null;
+      if (!ids.includes(id)) ids.push(id);
+    }
+  }
+  return ids.length > 0 ? ids : null;
+}
+
+async function denyUnlessEnrollmentPrograms(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  ids: string[]
+) {
+  const programs = await programIdsForTargets(createAdminClient(), "enrollments", ids);
+  if (!programs || !(await userCanManageEveryProgram(supabase, userId, programs))) {
+    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  }
+  return null;
 }
