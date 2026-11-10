@@ -1,6 +1,7 @@
 -- Undo migrations 318–321 in one transaction.
--- Never run this on the live project. It drops the new tables and
--- restores only the rows 318 recorded in migration_318_changes.
+-- Run on prod only with Jack's explicit OK, and only after the export
+-- below. It drops the new tables and restores only the rows 318 recorded
+-- in migration_318_changes.
 -- user_roles are left alone, including any ministry_leader grant.
 -- org_edit_log and membership-history rows stay as the audit trail.
 --
@@ -10,8 +11,107 @@
 -- On prod Philip van Staden stays in Prayer & Worship, which is main, so
 -- his main-ministry count stays above zero and the No Ministry add side
 -- does not run.
+--
+-- Export before this runs. From psql, against the database you are
+-- rolling back:
+--
+--   \copy (SELECT * FROM public.rocks) TO 'rocks.csv' CSV HEADER
+--   \copy (SELECT * FROM public.department_budget_links) TO 'department_budget_links.csv' CSV HEADER
+--   \copy (SELECT * FROM public.services) TO 'services.csv' CSV HEADER
+--   \copy (SELECT * FROM public.service_owners) TO 'service_owners.csv' CSV HEADER
+--
+-- The same rows, as a query:
+--   SELECT * FROM public.rocks;
+--   SELECT * FROM public.department_budget_links;
+--   SELECT * FROM public.services;
+--   SELECT * FROM public.service_owners;
 
 BEGIN;
+
+-- Refuse to delete the be_free ministry 318 inserted while anything other
+-- than that tracked membership still points at it through a cascading or
+-- restricting foreign key. SET NULL links (the palette, parent_id) are
+-- not data loss and are not checked. Tables that do not exist on a
+-- throwaway database are skipped because the catalog only lists what is
+-- there. Own tables (rocks, department_budget_links, service_owners,
+-- aliases) are included: a row on be_free would be destroyed with it.
+DO $guard$
+DECLARE
+  v_be uuid;
+  v_n int;
+  r record;
+BEGIN
+  IF to_regclass('public.migration_318_changes') IS NULL THEN
+    RETURN;
+  END IF;
+  IF to_regclass('public.staff_ministries') IS NULL THEN
+    RETURN;
+  END IF;
+
+  SELECT id INTO v_be FROM public.staff_ministries WHERE slug = 'be_free';
+  IF v_be IS NULL THEN
+    RETURN;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1
+      FROM public.migration_318_changes
+     WHERE kind = 'insert'
+       AND table_name = 'staff_ministries'
+       AND row_id = v_be
+  ) THEN
+    RETURN;
+  END IF;
+
+  FOR r IN
+    SELECT c.conrelid::regclass AS rel,
+           a.attname AS col,
+           c.confdeltype
+      FROM pg_constraint c
+      JOIN pg_attribute a
+        ON a.attrelid = c.conrelid
+       AND a.attnum = c.conkey[1]
+     WHERE c.confrelid = 'public.staff_ministries'::regclass
+       AND c.contype = 'f'
+       AND c.confdeltype IN ('c', 'r')
+       AND cardinality(c.conkey) = 1
+  LOOP
+    IF r.rel = 'public.staff_ministry_members'::regclass
+       AND r.col = 'staff_ministry_id' THEN
+      EXECUTE
+        'SELECT count(*) FROM public.staff_ministry_members mm
+          WHERE mm.staff_ministry_id = $1
+            AND NOT EXISTS (
+              SELECT 1 FROM public.migration_318_changes ch
+               WHERE ch.kind = ''insert''
+                 AND ch.table_name = ''staff_ministry_members''
+                 AND ch.row_id = mm.id
+            )'
+        INTO v_n USING v_be;
+    ELSIF r.rel = 'public.staff_ministry_aliases'::regclass THEN
+      EXECUTE format(
+        'SELECT count(*) FROM %s x
+          WHERE x.%I = $1
+            AND NOT EXISTS (
+              SELECT 1 FROM public.migration_318_changes ch
+               WHERE ch.kind = ''insert''
+                 AND ch.table_name = ''staff_ministry_aliases''
+                 AND ch.row_id = x.id
+            )',
+        r.rel, r.col
+      ) INTO v_n USING v_be;
+    ELSE
+      EXECUTE format('SELECT count(*) FROM %s WHERE %I = $1', r.rel, r.col)
+        INTO v_n USING v_be;
+    END IF;
+
+    IF v_n > 0 THEN
+      RAISE EXCEPTION
+        'rollback refused: be_free (%) still has % row(s) in % (%)',
+        v_be, v_n, r.rel, r.col;
+    END IF;
+  END LOOP;
+END
+$guard$;
 
 -- undo 321: budgets. Drop the table before the functions its policies call.
 DROP TABLE IF EXISTS public.department_budget_links;
@@ -30,9 +130,9 @@ DROP VIEW IF EXISTS public.ministry_service_access;
 DROP TABLE IF EXISTS public.service_owners;
 DROP TABLE IF EXISTS public.services;
 DROP FUNCTION IF EXISTS public.user_can_use_service(text);
-DROP FUNCTION IF EXISTS public.user_can_moderate_service(text);
 
 -- can_moderate_evangelism was last defined in 311. Restored word for word.
+-- 311 set no comment.
 CREATE OR REPLACE FUNCTION public.can_moderate_evangelism()
 RETURNS boolean
 LANGUAGE sql
@@ -42,19 +142,27 @@ AS $$
   SELECT public.is_admin() OR public.has_permission('evangelism.moderate');
 $$;
 
+COMMENT ON FUNCTION public.can_moderate_evangelism() IS NULL;
+
 REVOKE ALL ON FUNCTION public.can_moderate_evangelism() FROM PUBLIC, anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.can_moderate_evangelism() TO authenticated, service_role;
 
 -- undo 318 data. Updates first, then inserts. A be_free row or a Philip
 -- membership that already existed is not in migration_318_changes, so it
--- is not deleted. The palette timestamp is the value on prod before 318.
+-- is not deleted. The palette timestamp is the value recorded before 318
+-- changed the row. The link is cleared only while it still points at the
+-- be_free ministry 318 set.
 UPDATE public.ministries m
-   SET staff_ministry_id = NULL,
-       updated_at = '2026-10-19 08:33:36.68362+00'
+   SET staff_ministry_id = NULLIF(c.prior->>'staff_ministry_id', '')::uuid,
+       updated_at = (c.prior->>'updated_at')::timestamptz
   FROM public.migration_318_changes c
  WHERE c.kind = 'update'
    AND c.table_name = 'ministries'
    AND c.row_id = m.id
+   AND c.prior ? 'updated_at'
+   AND m.staff_ministry_id IS NOT DISTINCT FROM (
+     SELECT id FROM public.staff_ministries WHERE slug = 'be_free'
+   )
    AND NOT EXISTS (
      SELECT 1
        FROM public.migration_318_changes i
@@ -72,14 +180,16 @@ UPDATE public.staff_ministries s
    AND c.prior ? 'cluster';
 
 UPDATE public.staff_ministries s
-   SET parent_id = NULL
+   SET parent_id = NULLIF(c.prior->>'parent_id', '')::uuid
   FROM public.migration_318_changes c
  WHERE c.kind = 'update'
    AND c.table_name = 'staff_ministries'
    AND c.row_id = s.id
    AND c.prior ? 'parent_id'
    AND s.slug = 'donors_dev'
-   AND s.parent_id = (SELECT id FROM public.staff_ministries WHERE slug = 'finances_legal');
+   AND s.parent_id IS NOT DISTINCT FROM (
+     SELECT id FROM public.staff_ministries WHERE slug = 'finances_legal'
+   );
 
 DELETE FROM public.staff_ministry_members mm
  USING public.migration_318_changes c
@@ -118,5 +228,22 @@ DROP FUNCTION IF EXISTS public.dept_is_ministry_member(uuid, boolean);
 DROP FUNCTION IF EXISTS public.dept_can_write_org_structure();
 DROP FUNCTION IF EXISTS public.dept_caller_is_active();
 DROP TABLE IF EXISTS public.migration_318_changes;
+
+-- The apply tool records the filename stem. A throwaway database has no
+-- supabase_migrations schema; leave it alone.
+DO $mig$
+BEGIN
+  IF to_regclass('supabase_migrations.schema_migrations') IS NULL THEN
+    RETURN;
+  END IF;
+  DELETE FROM supabase_migrations.schema_migrations
+   WHERE version IN (
+     '318_department_homes',
+     '319_department_services',
+     '320_ministry_rocks',
+     '321_department_budgets'
+   );
+END
+$mig$;
 
 COMMIT;

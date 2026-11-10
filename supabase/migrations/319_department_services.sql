@@ -49,10 +49,7 @@
 --
 -- A caller's folded ministry (318) counts as its home for a grant.
 -- Read: any active signed-in user. Write: admin or org.manage.
--- Wrapped in one transaction.
 -- ============================================================
-
-BEGIN;
 
 CREATE TABLE IF NOT EXISTS public.services (
   service_key  text PRIMARY KEY,
@@ -127,7 +124,7 @@ AS $$
            FROM public.service_owners so
           WHERE so.service_key = p_service_key
             AND so.open_to_all
-            AND so.capability IN ('use', 'manage')
+            AND so.capability = 'use'
        )
        OR (
          EXISTS (
@@ -176,57 +173,11 @@ AS $$
      );
 $$;
 
-CREATE OR REPLACE FUNCTION public.user_can_moderate_service(p_service_key text)
-RETURNS boolean
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-  SELECT public.dept_caller_is_active()
-     AND EXISTS (
-       SELECT 1 FROM public.service_owners so
-        WHERE so.service_key = p_service_key
-     )
-     AND (
-       public.is_admin()
-       OR EXISTS (
-         SELECT 1
-           FROM public.staff_ministry_members mm
-           JOIN public.staff_ministries sm
-             ON sm.id = mm.staff_ministry_id
-            AND sm.is_active
-           LEFT JOIN public.staff_ministry_aliases al
-             ON al.staff_ministry_id = sm.id
-           JOIN public.service_owners so
-             ON so.service_key = p_service_key
-            AND so.capability = 'moderate'
-            AND NOT so.any_point_leader
-            AND (
-              so.staff_ministry_id = sm.id
-              OR so.staff_ministry_id = al.resolves_to_id
-            )
-            AND (
-              -- Null: any active member of that ministry, not leaders only.
-              so.member_role IS NULL
-              OR so.member_role = mm.member_role
-              OR (so.member_role = 'member' AND mm.member_role = 'leader')
-            )
-          WHERE mm.user_id = auth.uid()
-            AND mm.status = 'active'
-       )
-     );
-$$;
-
 REVOKE ALL ON FUNCTION public.user_can_use_service(text) FROM PUBLIC, anon;
-REVOKE ALL ON FUNCTION public.user_can_moderate_service(text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.user_can_use_service(text) TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.user_can_moderate_service(text) TO authenticated, service_role;
 
 COMMENT ON FUNCTION public.user_can_use_service(text) IS
-  'Active account may use the service: an open_to_all use/manage row, an admin when any grant exists, a manage or use grant on their ministry (manage implies use; own does not), or the contacts any_point_leader row when they are an active point leader.';
-COMMENT ON FUNCTION public.user_can_moderate_service(text) IS
-  'Active admin, or a member who meets a moderate grant. own and manage do not moderate.';
+  'Active account may use the service. An open_to_all row grants use only, never manage. Otherwise: an admin when any grant exists, a manage or use grant on their ministry (manage implies use; own does not), or the contacts any_point_leader row when they are an active point leader.';
 
 -- ────────────────────────────────────────────────────────────
 -- RLS
@@ -323,14 +274,17 @@ SET search_path = ''
 AS $$
   SELECT public.is_admin()
       OR public.has_permission('evangelism.moderate')
-      OR EXISTS (
-        SELECT 1
-          FROM public.staff_ministry_members mm
-          JOIN public.staff_ministries sm ON sm.id = mm.staff_ministry_id
-         WHERE mm.user_id = auth.uid()
-           AND mm.status = 'active'
-           AND sm.is_active
-           AND sm.slug IN ('media', 'hulk')
+      OR (
+        public.dept_caller_is_active()
+        AND EXISTS (
+          SELECT 1
+            FROM public.staff_ministry_members mm
+            JOIN public.staff_ministries sm ON sm.id = mm.staff_ministry_id
+           WHERE mm.user_id = auth.uid()
+             AND mm.status = 'active'
+             AND sm.is_active
+             AND sm.slug IN ('media', 'hulk')
+        )
       );
 $$;
 
@@ -420,5 +374,3 @@ BEGIN
     RAISE NOTICE '319 services: skipped grants for missing staff ministries: %', missing;
   END IF;
 END $$;
-
-COMMIT;

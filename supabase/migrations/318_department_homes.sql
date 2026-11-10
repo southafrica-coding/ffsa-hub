@@ -41,12 +41,9 @@
 -- Idempotent: inserts are ON CONFLICT DO NOTHING or WHERE NOT EXISTS.
 -- parent_id is set only while it is still null. migration_318_changes
 -- records each insert and each column change so the rollback undoes
--- only what this file did.
---
--- Wrapped in one transaction.
+-- only what this file did. A later run skips a change already recorded
+-- there, so a row someone deleted is not recreated.
 -- ============================================================
-
-BEGIN;
 
 -- ────────────────────────────────────────────────────────────
 -- 1. Active-account and membership helpers
@@ -319,9 +316,17 @@ COMMENT ON TABLE public.migration_318_changes IS
 -- re-run. Purpose stays whatever it already is.
 
 WITH targets AS (
-  SELECT id, cluster
-    FROM public.staff_ministries
-   WHERE slug = 'hulk' AND cluster IS NULL
+  SELECT s.id, s.cluster
+    FROM public.staff_ministries s
+   WHERE s.slug = 'hulk'
+     AND s.cluster IS NULL
+     AND NOT EXISTS (
+       SELECT 1 FROM public.migration_318_changes c
+        WHERE c.kind = 'update'
+          AND c.table_name = 'staff_ministries'
+          AND c.row_id = s.id
+          AND c.prior ? 'cluster'
+     )
 ), upd AS (
   UPDATE public.staff_ministries s
      SET cluster = 'outward'
@@ -336,9 +341,17 @@ SELECT 'update', 'staff_ministries', t.id, jsonb_build_object('cluster', t.clust
 ON CONFLICT (table_name, row_id, kind) DO NOTHING;
 
 WITH targets AS (
-  SELECT id, cluster
-    FROM public.staff_ministries
-   WHERE slug = 'missio_ministry' AND cluster IS NULL
+  SELECT s.id, s.cluster
+    FROM public.staff_ministries s
+   WHERE s.slug = 'missio_ministry'
+     AND s.cluster IS NULL
+     AND NOT EXISTS (
+       SELECT 1 FROM public.migration_318_changes c
+        WHERE c.kind = 'update'
+          AND c.table_name = 'staff_ministries'
+          AND c.row_id = s.id
+          AND c.prior ? 'cluster'
+     )
 ), upd AS (
   UPDATE public.staff_ministries s
      SET cluster = 'alongside'
@@ -363,6 +376,13 @@ WITH targets AS (
    WHERE d.slug = 'donors_dev'
      AND d.parent_id IS NULL
      AND f.id <> d.id
+     AND NOT EXISTS (
+       SELECT 1 FROM public.migration_318_changes c
+        WHERE c.kind = 'update'
+          AND c.table_name = 'staff_ministries'
+          AND c.row_id = d.id
+          AND c.prior ? 'parent_id'
+     )
 ), upd AS (
   UPDATE public.staff_ministries d
      SET parent_id = f.id
@@ -385,11 +405,17 @@ WITH ins AS (
     JOIN public.staff_ministries f ON f.slug = 'finances_legal'
    WHERE d.slug = 'donors_dev'
      AND d.id <> f.id
+     AND NOT EXISTS (
+       SELECT 1 FROM public.migration_318_changes c
+        WHERE c.kind = 'insert'
+          AND c.table_name = 'staff_ministry_aliases'
+          AND c.prior->>'from_slug' = 'donors_dev'
+     )
   ON CONFLICT (staff_ministry_id) DO NOTHING
   RETURNING id
 )
 INSERT INTO public.migration_318_changes (kind, table_name, row_id, prior)
-SELECT 'insert', 'staff_ministry_aliases', id, NULL FROM ins
+SELECT 'insert', 'staff_ministry_aliases', id, jsonb_build_object('from_slug', 'donors_dev') FROM ins
 ON CONFLICT (table_name, row_id, kind) DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
@@ -400,12 +426,19 @@ ON CONFLICT (table_name, row_id, kind) DO NOTHING;
 -- left exactly as it is.
 WITH ins AS (
   INSERT INTO public.staff_ministries (name, slug, ministry_type, is_active, sort_order)
-  VALUES ('Be Free', 'be_free', 'part_time', true, 210)
+  SELECT 'Be Free', 'be_free', 'part_time', true, 210
+   WHERE NOT EXISTS (SELECT 1 FROM public.staff_ministries WHERE slug = 'be_free')
+     AND NOT EXISTS (
+       SELECT 1 FROM public.migration_318_changes c
+        WHERE c.kind = 'insert'
+          AND c.table_name = 'staff_ministries'
+          AND c.prior->>'slug' = 'be_free'
+     )
   ON CONFLICT (slug) DO NOTHING
   RETURNING id
 )
 INSERT INTO public.migration_318_changes (kind, table_name, row_id, prior)
-SELECT 'insert', 'staff_ministries', id, NULL FROM ins
+SELECT 'insert', 'staff_ministries', id, jsonb_build_object('slug', 'be_free') FROM ins
 ON CONFLICT (table_name, row_id, kind) DO NOTHING;
 
 -- Palette row exists on prod (created in the app, not by a migration).
@@ -413,12 +446,18 @@ ON CONFLICT (table_name, row_id, kind) DO NOTHING;
 -- column default. An existing row keeps its name and color.
 WITH ins AS (
   INSERT INTO public.ministries (name, slug)
-  VALUES ('Be Free', 'be-free')
-  ON CONFLICT (slug) DO NOTHING
+  SELECT 'Be Free', 'be-free'
+   WHERE NOT EXISTS (SELECT 1 FROM public.ministries WHERE slug = 'be-free')
+     AND NOT EXISTS (
+       SELECT 1 FROM public.migration_318_changes c
+        WHERE c.kind = 'insert'
+          AND c.table_name = 'ministries'
+          AND c.prior->>'slug' = 'be-free'
+     )
   RETURNING id
 )
 INSERT INTO public.migration_318_changes (kind, table_name, row_id, prior)
-SELECT 'insert', 'ministries', id, NULL FROM ins
+SELECT 'insert', 'ministries', id, jsonb_build_object('slug', 'be-free') FROM ins
 ON CONFLICT (table_name, row_id, kind) DO NOTHING;
 
 WITH targets AS (
@@ -427,6 +466,13 @@ WITH targets AS (
     JOIN public.staff_ministries sm ON sm.slug = 'be_free'
    WHERE m.slug = 'be-free'
      AND m.staff_ministry_id IS NULL
+     AND NOT EXISTS (
+       SELECT 1 FROM public.migration_318_changes c
+        WHERE c.kind = 'update'
+          AND c.table_name = 'ministries'
+          AND c.row_id = m.id
+          AND c.prior ? 'staff_ministry_id'
+     )
 ), upd AS (
   UPDATE public.ministries m
      SET staff_ministry_id = sm.id,
@@ -474,10 +520,18 @@ WITH ins AS (
         WHERE mm.staff_ministry_id = sm.id
           AND mm.user_id = 'ac7d1c5e-4300-422f-9fad-d50c29a15ca6'::uuid
      )
+     AND NOT EXISTS (
+       SELECT 1 FROM public.migration_318_changes c
+        WHERE c.kind = 'insert'
+          AND c.table_name = 'staff_ministry_members'
+          AND c.prior->>'user_id' = 'ac7d1c5e-4300-422f-9fad-d50c29a15ca6'
+     )
   RETURNING id
 ), tracked AS (
   INSERT INTO public.migration_318_changes (kind, table_name, row_id, prior)
-  SELECT 'insert', 'staff_ministry_members', id, NULL FROM ins
+  SELECT 'insert', 'staff_ministry_members', id,
+         jsonb_build_object('user_id', 'ac7d1c5e-4300-422f-9fad-d50c29a15ca6')
+    FROM ins
   ON CONFLICT (table_name, row_id, kind) DO NOTHING
   RETURNING row_id
 )
@@ -494,5 +548,3 @@ SELECT 'ac7d1c5e-4300-422f-9fad-d50c29a15ca6'::uuid, r.id
         AND ur.scope_type IS NULL
         AND ur.scope_id IS NULL
    );
-
-COMMIT;

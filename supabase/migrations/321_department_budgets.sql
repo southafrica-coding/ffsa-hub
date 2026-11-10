@@ -23,22 +23,20 @@
 -- spend_cents 0. Zero means "linked, no figure set", not a budget
 -- someone approved. "Exact" is lower(btrim(name)) on both sides, and
 -- the ministry name must be unique. HULC matches the project named
--- HULC and does not match HULC Merch. The same name in FFSA NPC and
--- FF USA Inc is two rows, not a guess between two different names.
--- Prayer & Worship does not match Worship & Prayer. No finance_projects
--- row is updated.
+-- HULC and does not match HULC Merch. Only finance_orgs.key = 'npc'
+-- is joined, and only where both the staff ministry and the project
+-- are active. FF USA Inc is not seeded. Prayer & Worship does not
+-- match Worship & Prayer. No finance_projects row is updated.
 --
--- The join is staff_ministries.name to finance_projects.name. It does
--- not look at okr_teams or the booking palette. Hope Again and Brave
--- Love are finance projects (and OKR teams; Brave Love is also a booking
--- ministry). No migration inserts a staff ministry with either name, so
--- this file does not link them. It would link one only if that exact
--- staff-ministry name were already in the table.
--- Matches from the names migrations do insert:
---   HULC, Media, Project 54, Woven — NPC and USA, where both exist.
---   Woven is inactive and still matches, because the names are equal.
--- Not matched, on purpose:
---   Hope Again; Brave Love;
+-- That predicate is the whole seed. On prod, Hope Again and Brave Love
+-- are active staff ministries with matching active NPC projects and
+-- unique names, so both are linked. Woven is not: its staff ministry
+-- is inactive. A database without those staff-ministry rows simply
+-- has nothing to match.
+-- Matches from the active names migrations insert:
+--   HULC, Media, Project 54 — NPC only.
+-- Not seeded, on purpose:
+--   Woven (inactive ministry);
 --   HULC Merch; Worship & Prayer; the Missio JHB/Potch/base rows;
 --   1040 Crossfit; EFL / EFLTanz / EFL 2026 / Educating for Life;
 --   Rooted and the Redwood academy names;
@@ -52,10 +50,7 @@
 -- not count. Write: the ministry's leader, or an admin. Finance reads
 -- and does not edit. A plain member and any inactive account get nothing.
 -- Leadership Team membership alone does not read a budget.
--- Wrapped in one transaction.
 -- ============================================================
-
-BEGIN;
 
 CREATE TABLE IF NOT EXISTS public.department_budget_links (
   id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -204,7 +199,9 @@ SELECT sm.id, fp.id, 0, 0, 'ZAR', 'Exact name match. No figure set.'
   JOIN public.finance_projects fp
     ON lower(btrim(fp.name)) = lower(btrim(sm.name))
   JOIN public.finance_orgs o ON o.id = fp.org_id AND o.key = 'npc'
- WHERE NOT EXISTS (
+ WHERE sm.is_active
+   AND fp.is_active
+   AND NOT EXISTS (
    SELECT 1
      FROM public.staff_ministries other
     WHERE lower(btrim(other.name)) = lower(btrim(sm.name))
@@ -216,5 +213,3 @@ SELECT sm.id, fp.id, 0, 0, 'ZAR', 'Exact name match. No figure set.'
       WHERE existing.staff_ministry_id = sm.id
         AND existing.finance_project_id = fp.id
    );
-
-COMMIT;

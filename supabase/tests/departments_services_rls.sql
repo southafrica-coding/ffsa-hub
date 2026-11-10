@@ -196,7 +196,7 @@ CREATE TABLE public.okr_cycles (
 CREATE TABLE public.okr_objectives (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   cycle_id uuid NOT NULL REFERENCES public.okr_cycles (id),
-  staff_ministry_id uuid REFERENCES public.staff_ministries (id),
+  staff_ministry_id uuid REFERENCES public.staff_ministries (id) ON DELETE CASCADE,
   owner_user_id uuid REFERENCES public.users (id),
   scope text NOT NULL DEFAULT 'ministry',
   title text NOT NULL,
@@ -492,6 +492,7 @@ CREATE TABLE public.pre_apply AS
 SELECT
   (SELECT parent_id FROM public.staff_ministries WHERE slug = 'donors_dev') AS donors_parent,
   (SELECT staff_ministry_id FROM public.ministries WHERE slug = 'be-free') AS be_free_link,
+  (SELECT updated_at FROM public.ministries WHERE slug = 'be-free') AS be_free_updated,
   (SELECT color FROM public.ministries WHERE slug = 'be-free') AS be_free_color;
 
 -- ── Apply, then again, before Philip exists ────────────────
@@ -667,7 +668,7 @@ BEGIN
   SELECT count(*) INTO n
     FROM public.department_budget_links l
     JOIN public.staff_ministries sm ON sm.id = l.staff_ministry_id AND sm.slug = 'woven';
-  PERFORM public._t('inactive Woven links the SA project only', n = 1, 'n=' || n);
+  PERFORM public._t('inactive Woven is not linked', n = 0, 'n=' || n);
   SELECT count(*) INTO n
     FROM public.department_budget_links l
     JOIN public.staff_ministries sm ON sm.id = l.staff_ministry_id AND sm.slug = 'media';
@@ -683,7 +684,16 @@ BEGIN
   SELECT count(*) INTO n FROM public.department_budget_links
    WHERE finance_project_id IS NOT NULL AND budget_cents = 0 AND spend_cents = 0
      AND year = EXTRACT(YEAR FROM CURRENT_DATE)::integer;
-  PERFORM public._t('seeded budget links are zero ZAR in the insert year', n = 4, 'n=' || n);
+  PERFORM public._t('seeded budget links are zero ZAR in the insert year', n = 3, 'n=' || n);
+  SELECT count(*) INTO n FROM public.service_owners
+   WHERE open_to_all AND capability <> 'use';
+  PERFORM public._t('open_to_all never grants manage', n = 0, 'n=' || n);
+  SELECT count(*) INTO n FROM public.service_owners so
+    JOIN public.staff_ministries sm ON sm.id = so.staff_ministry_id
+   WHERE so.service_key = 'brand_kit'
+     AND so.capability IN ('own', 'manage')
+     AND sm.slug = 'media';
+  PERFORM public._t('brand kit own and manage stay with Media', n = 2, 'n=' || n);
 
   SELECT count(*) INTO n FROM pg_class
    WHERE relname IN (
@@ -854,6 +864,15 @@ BEGIN
   SELECT public.can_moderate_evangelism() INTO ok;
   PERFORM public._t('media member can moderate evangelism', ok, ok::text);
   EXECUTE 'RESET ROLE';
+  UPDATE public.users SET is_active = false
+   WHERE id = 'b1111111-1111-4111-8111-111111111111';
+  PERFORM set_config('request.jwt.claim.sub', 'b1111111-1111-4111-8111-111111111111', true);
+  EXECUTE 'SET LOCAL ROLE authenticated';
+  SELECT public.can_moderate_evangelism() INTO ok;
+  PERFORM public._t('inactive media member cannot moderate evangelism', NOT ok, ok::text);
+  EXECUTE 'RESET ROLE';
+  UPDATE public.users SET is_active = true
+   WHERE id = 'b1111111-1111-4111-8111-111111111111';
 
   PERFORM set_config('request.jwt.claim.sub', 'b2222222-2222-4222-8222-222222222222', true);
   EXECUTE 'SET LOCAL ROLE authenticated';
@@ -1083,7 +1102,7 @@ BEGIN
   PERFORM set_config('request.jwt.claim.sub', 'd3333333-3333-4333-8333-333333333333', true);
   EXECUTE 'SET LOCAL ROLE authenticated';
   SELECT count(*) INTO n FROM public.department_budget_links;
-  PERFORM public._t('unscoped finance.view reads every budget', n = 5, 'n=' || n);
+  PERFORM public._t('unscoped finance.view reads every budget', n = 4, 'n=' || n);
   UPDATE public.department_budget_links SET budget_cents = 1 WHERE staff_ministry_id = ops;
   EXECUTE 'RESET ROLE';
   SELECT budget_cents INTO amount FROM public.department_budget_links WHERE notes = 'rls fixture';
@@ -1098,7 +1117,7 @@ BEGIN
   PERFORM set_config('request.jwt.claim.sub', 'd5555555-5555-4555-8555-555555555555', true);
   EXECUTE 'SET LOCAL ROLE authenticated';
   SELECT count(*) INTO n FROM public.department_budget_links;
-  PERFORM public._t('unscoped finance.edit reads every budget', n = 5, 'n=' || n);
+  PERFORM public._t('unscoped finance.edit reads every budget', n = 4, 'n=' || n);
   UPDATE public.department_budget_links SET budget_cents = 2 WHERE staff_ministry_id = ops;
   EXECUTE 'RESET ROLE';
   SELECT budget_cents INTO amount FROM public.department_budget_links WHERE notes = 'rls fixture';
@@ -1107,9 +1126,9 @@ BEGIN
   PERFORM set_config('request.jwt.claim.sub', 'd2222222-2222-4222-8222-222222222222', true);
   EXECUTE 'SET LOCAL ROLE authenticated';
   SELECT count(*) INTO n FROM public.department_budget_links;
-  PERFORM public._t('finances member reads every budget', n = 5, 'n=' || n);
+  PERFORM public._t('finances member reads every budget', n = 4, 'n=' || n);
   SELECT count(*) INTO n FROM public.department_budget_links WHERE finance_project_id IS NOT NULL;
-  PERFORM public._t('finances member reads project links', n = 4, 'n=' || n);
+  PERFORM public._t('finances member reads project links', n = 3, 'n=' || n);
   UPDATE public.department_budget_links SET budget_cents = 3 WHERE staff_ministry_id = media;
   EXECUTE 'RESET ROLE';
   SELECT count(*) INTO n FROM public.department_budget_links
@@ -1177,6 +1196,34 @@ INSERT INTO public.staff_ministry_members (staff_ministry_id, user_id, member_ro
 SELECT id, 'ac7d1c5e-4300-422f-9fad-d50c29a15ca6', 'member', 'active'
   FROM public.staff_ministries WHERE slug = 'prayer_and_worship';
 
+-- An OKR on be_free is a dependent 318 did not create. The rollback must
+-- refuse and leave the schema in place. Then drop that row and roll back.
+INSERT INTO public.okr_objectives (cycle_id, staff_ministry_id, scope, title, is_archived)
+SELECT c.id, sm.id, 'ministry', 'do not cascade be_free', false
+  FROM public.okr_cycles c, public.staff_ministries sm
+ WHERE c.is_current AND sm.slug = 'be_free';
+
+\set ON_ERROR_STOP off
+\ir ../rollbacks/318_321_departments_rollback.sql
+\set ON_ERROR_STOP on
+
+DO $do$
+BEGIN
+  IF to_regclass('public.rocks') IS NULL
+     OR to_regclass('public.department_budget_links') IS NULL
+     OR NOT EXISTS (SELECT 1 FROM public.staff_ministries WHERE slug = 'be_free') THEN
+    RAISE EXCEPTION 'be_free dependent did not stop the rollback';
+  END IF;
+  PERFORM public._t(
+    'be_free okr stops the rollback',
+    EXISTS (SELECT 1 FROM public.staff_ministries WHERE slug = 'be_free'),
+    'be_free'
+  );
+END
+$do$;
+
+DELETE FROM public.okr_objectives WHERE title = 'do not cascade be_free';
+
 \ir ../rollbacks/318_321_departments_rollback.sql
 
 DO $do$
@@ -1185,8 +1232,10 @@ DECLARE
   donors_parent uuid;
   link uuid;
   stamp timestamptz;
+  prior timestamptz;
   body text;
 BEGIN
+  SELECT be_free_updated INTO prior FROM public.pre_apply;
   SELECT parent_id INTO donors_parent FROM public.staff_ministries WHERE slug = 'donors_dev';
   PERFORM public._t(
     'rollback clears the donors parent 318 set',
@@ -1197,8 +1246,8 @@ BEGIN
     FROM public.ministries WHERE slug = 'be-free';
   PERFORM public._t('rollback clears the be-free link', link IS NULL, coalesce(link::text, 'null'));
   PERFORM public._t(
-    'rollback restores the be-free timestamp',
-    stamp = '2026-10-19 08:33:36.68362+00',
+    'rollback restores the recorded be-free timestamp',
+    stamp = prior,
     coalesce(stamp::text, 'null')
   );
   SELECT count(*) INTO n FROM public.staff_ministries WHERE slug = 'be_free';
@@ -1220,6 +1269,11 @@ BEGIN
     body LIKE '%public.is_admin() OR public.has_permission(''evangelism.moderate'')%'
       AND body NOT LIKE '%staff_ministries%',
     'def'
+  );
+  PERFORM public._t(
+    'rollback clears the can_moderate comment 311 never set',
+    obj_description('public.can_moderate_evangelism()'::regprocedure) IS NULL,
+    coalesce(obj_description('public.can_moderate_evangelism()'::regprocedure), 'null')
   );
   PERFORM public._t('rocks table is gone', to_regclass('public.rocks') IS NULL, 'reg');
   PERFORM public._t('budget links table is gone', to_regclass('public.department_budget_links') IS NULL, 'reg');
@@ -1244,6 +1298,21 @@ BEGIN
   PERFORM public._t('re-apply after rollback links be-free', n = 1 AND linked, 'n=' || n);
   SELECT count(*) INTO n FROM public.service_owners WHERE open_to_all AND capability = 'use';
   PERFORM public._t('re-apply restores six open_to_all use rows', n = 6, 'n=' || n);
+
+  -- A row 318 inserted, then deliberately deleted, is not recreated.
+  UPDATE public.ministries SET staff_ministry_id = NULL WHERE slug = 'be-free';
+  DELETE FROM public.staff_ministries WHERE slug = 'be_free';
+END
+$do$;
+
+\ir ../migrations/318_department_homes.sql
+
+DO $do$
+DECLARE
+  n int;
+BEGIN
+  SELECT count(*) INTO n FROM public.staff_ministries WHERE slug = 'be_free';
+  PERFORM public._t('re-run does not recreate a deleted be_free', n = 0, 'n=' || n);
   SELECT count(*) INTO n FROM public.t_checks WHERE NOT ok;
   IF n > 0 THEN
     RAISE EXCEPTION 'departments services checks failed (%): %', n,
