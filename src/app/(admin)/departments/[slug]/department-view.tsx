@@ -5,7 +5,7 @@ import { formatZarFromCents } from "@/lib/departments/money";
 import { audienceLabel, clusterLabel, currentQuarter, resolveDepartment, serviceRoleLabel } from "@/lib/departments/data";
 import { SERVICES, STAFF_LANGUAGE } from "@/lib/departments/mocks";
 import { statusLabel, statusTone } from "@/lib/okrs/progress";
-import type { DepartmentHome, RockStatus } from "@/types/departments";
+import type { DepartmentHome, RockStatus } from "@/lib/departments/ui-contract";
 import type { DepartmentTab } from "@/lib/departments/data";
 import type { DepartmentTool } from "@/lib/departments/mocks";
 import { StatusPill } from "@/components/ffsa";
@@ -42,7 +42,9 @@ export function DepartmentView({
           <p className="max-w-prose px-5 py-4 text-sm md:px-8">{department.purpose ?? "—"}</p>
           <dl className="grid gap-3 px-5 pb-6 md:px-8">
             <Fact label="Cluster" value={clusterLabel(department.cluster)} />
-            <Fact label="People" value={String(department.memberCount)} />
+            {department.memberCount != null && (
+              <Fact label="People" value={String(department.memberCount)} />
+            )}
             <Fact label="Lead" value={lead} />
             {parent && (
               <Fact
@@ -78,21 +80,27 @@ function Fact({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
+function peopleCount(count: number | null): string | null {
+  if (count == null) return null;
+  return count === 1 ? "1 person is" : `${count} people are`;
+}
+
 function PeopleTab({ model }: { model: DepartmentHome }) {
   const people = model.people ?? [];
   const listed = people.length;
-  const rest = model.department.memberCount - listed;
+  const count = model.department.memberCount;
+  const rest = count == null ? null : count - listed;
   const showEmail = model.access.canSeePeopleEmails;
+  const onRoster = peopleCount(count);
   return (
     <>
       <SectionHeading
         title="People"
-        meta={`${model.department.memberCount} on this ministry`}
+        meta={count == null ? undefined : `${count} on this ministry`}
       />
       {listed === 0 ? (
         <EmptyNote title="No names are listed here yet">
-          {model.department.memberCount === 1 ? "1 person is" : `${model.department.memberCount} people are`} on
-          this ministry
+          {onRoster ? `${onRoster} on this ministry` : "The roster is not listed here"}
           {(model.people ?? []).every((person) => person.capacity !== "leader") ? ", and no lead is set" : ""}. The live roster is on{" "}
           <Link href="/ministry">Ministries</Link>.
         </EmptyNote>
@@ -108,7 +116,7 @@ function PeopleTab({ model }: { model: DepartmentHome }) {
             )}
           />
           <p className="px-5 py-4 text-sm text-muted-foreground md:px-8">
-            {rest > 0
+            {rest != null && rest > 0
               ? `${rest} more ${rest === 1 ? "person is" : "people are"} on the roster. `
               : null}
             Open the live roster on <Link href="/ministry">Ministries</Link>.

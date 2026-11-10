@@ -3,6 +3,11 @@ import {
   SYSTEM_MODULES,
   getAccessibleModules,
 } from "@/config/modules";
+import {
+  canOpenDepartment,
+  getDepartmentAccess,
+  type AccessViewer,
+} from "@/app/(admin)/departments/_lib/viewer";
 import type {
   DepartmentHome,
   DepartmentSummary,
@@ -12,8 +17,7 @@ import type {
   ServiceRunRole,
   SubMinistry,
   ViewerMembership,
-} from "@/types/departments";
-import { canOpenDepartment, getDepartmentAccess, type AccessViewer } from "./access";
+} from "@/lib/departments/ui-contract";
 import { DEPARTMENT_HOME_SLUGS, FOLDED_INTO, NON_HOME_SLUGS } from "./allow-list";
 import {
   BUDGETS,
@@ -75,7 +79,7 @@ export function toViewerMemberships(viewer: AccessViewer): ViewerMembership[] {
     .filter((membership) => membership.active)
     .map((membership) => ({
       departmentSlug: membership.slug,
-      capacity: membership.isLeader || membership.isPointLeader ? "leader" : "member",
+      capacity: membership.isLeader ? "leader" : "member",
       isPointLeader: membership.isPointLeader,
     }));
 }
@@ -169,7 +173,7 @@ function toSummary(home: MinistryRecord, viewer: AccessViewer): DepartmentSummar
     cluster: home.cluster,
     parentSlug: home.parentSlug,
     purpose: home.purpose,
-    memberCount: home.memberCount,
+    memberCount: access.canSeeDepartmentDetail ? home.memberCount : null,
     active: home.active,
     budgetOnly: access.canSeeBudget && !access.canSeeDepartmentDetail,
     access,
