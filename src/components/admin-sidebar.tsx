@@ -19,6 +19,7 @@ interface AdminSidebarProps {
   defaultGroupsClosed?: boolean;
   /** One row per department the viewer leads or serves on. Hidden when empty. */
   departments?: { id: string; label: string; href: string }[];
+  equipmentStaff?: boolean;
 }
 
 function SignOutForm({ className, children }: { className?: string; children: React.ReactNode }) {
@@ -199,7 +200,7 @@ function SidebarBody({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className={cn("flex items-center", collapsed ? "flex-col gap-1 px-1 pt-2" : "gap-1 pr-2")}>
-        <Link href="/dashboard" aria-label="FFSA Hub" onClick={onNavigate} className="shrink-0">
+        <Link href="/home" aria-label="FFSA Hub" onClick={onNavigate} className="shrink-0">
           <Logo surface="black" kind="mark" height={24} />
         </Link>
         {!collapsed ? <span className="text-ui font-medium text-bg">FFSA Hub</span> : null}
@@ -294,6 +295,7 @@ export function AdminSidebar({
   defaultCollapsed = false,
   defaultGroupsClosed = false,
   departments,
+  equipmentStaff = false,
 }: AdminSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -302,9 +304,10 @@ export function AdminSidebar({
       buildShellNav(
         userRoles,
         permittedModules,
-        (departments ?? []).map((department) => ({ ...department, icon: Building2 }))
+        (departments ?? []).map((department) => ({ ...department, icon: Building2 })),
+        { equipmentStaff }
       ),
-    [userRoles, permittedModules, departments]
+    [userRoles, permittedModules, departments, equipmentStaff]
   );
   const items = useMemo(() => flattenShellNav(nav), [nav]);
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
@@ -378,7 +381,9 @@ export function AdminSidebar({
       </aside>
 
       <div className="fixed inset-x-0 top-0 z-50 flex h-14 items-center justify-between bg-brand-black px-2 md:hidden">
-        <Logo surface="black" kind="wordmark" height={24} />
+        <Link href="/home" aria-label="FFSA Hub" className="shrink-0">
+          <Logo surface="black" kind="wordmark" height={24} />
+        </Link>
         <button type="button" onClick={() => setMobileOpen(true)} aria-label="Open menu" className="flex h-11 w-11 items-center justify-center text-bg">
           <Menu className="h-5 w-5" aria-hidden />
         </button>

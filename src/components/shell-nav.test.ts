@@ -32,6 +32,8 @@ describe("buildShellNav", () => {
     expect(labels).toContain("Home");
     expect(labels).not.toContain("Users");
     expect(labels).not.toContain("Contacts");
-    expect(labels).toContain("Hire gear");
+    expect(nav.services.find((item) => item.id === "hire-gear")?.href).toBe("/hire");
+    const staffGear = buildShellNav(["staff"], new Set(["prayer-room"]), [], { equipmentStaff: true });
+    expect(staffGear.services.find((item) => item.id === "hire-gear")?.href).toBe("/bookings/equipment");
   });
 });

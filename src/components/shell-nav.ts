@@ -46,7 +46,8 @@ function fromModule(mod: ModuleDefinition, label = mod.label): ShellLink {
 export function buildShellNav(
   userRoles: string[],
   permittedModules?: Set<string>,
-  departments: ShellLink[] = []
+  departments: ShellLink[] = [],
+  options?: { equipmentStaff?: boolean }
 ): ShellNav {
   const admin = getAccessibleModules(ADMIN_MODULES, userRoles, permittedModules);
   const system = getAccessibleModules(SYSTEM_MODULES, userRoles, permittedModules);
@@ -57,7 +58,12 @@ export function buildShellNav(
   ];
   const prayer = byId.get("prayer-room");
   if (prayer) services.push(fromModule(prayer, "Prayer room"));
-  services.push({ id: "hire-gear", label: "Hire gear", href: "/bookings/equipment", icon: Package });
+  services.push({
+    id: "hire-gear",
+    label: "Hire gear",
+    href: options?.equipmentStaff ? "/bookings/equipment" : "/hire",
+    icon: Package,
+  });
   if (byId.has("bookings")) {
     services.push(
       { id: "book-space", label: "Book a space", href: "/bookings/spaces", icon: Building2 },

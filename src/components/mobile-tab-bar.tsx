@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, LayoutDashboard, LayoutGrid, User } from "lucide-react";
+import { Building2, GraduationCap, Heart, LayoutDashboard, LayoutGrid, User, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
 const TABS = [
@@ -12,9 +12,24 @@ const TABS = [
   { id: "me", label: "Me", href: "/profile", icon: User },
 ] as const;
 
-export function MobileTabBar({ showDepartments = false }: { showDepartments?: boolean }) {
+const PORTAL_TABS = [
+  { id: "school", label: "School", href: "/my-schools", icon: GraduationCap },
+  { id: "finance", label: "Finance", href: "/my-finance", icon: Wallet },
+  { id: "prayer", label: "Prayer", href: "/prayer-room", icon: Heart },
+  { id: "me", label: "Me", href: "/profile", icon: User },
+] as const;
+
+export function MobileTabBar({
+  showDepartments = false,
+  variant = "staff",
+}: {
+  showDepartments?: boolean;
+  variant?: "staff" | "portal";
+}) {
   const pathname = usePathname();
-  const tabs = TABS.filter((tab) => tab.id !== "departments" || showDepartments);
+  const tabs = variant === "portal"
+    ? PORTAL_TABS
+    : TABS.filter((tab) => tab.id !== "departments" || showDepartments);
 
   return (
     <nav

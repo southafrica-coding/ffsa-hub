@@ -13,14 +13,20 @@ export async function HubShell({
   permittedModules,
   menuLoadFailed,
   initials,
-  departments,
+  departments = [],
+  equipmentStaff = false,
+  variant = "staff",
 }: {
   children: React.ReactNode;
   userRoles: string[];
   permittedModules?: Set<string>;
   menuLoadFailed?: boolean;
   initials?: string;
+  /** Empty until the department API is wired. A non-empty list shows the tab and group. */
   departments?: { id: string; label: string; href: string }[];
+  /** True when has_equipment_access() is true. Hire gear then opens the staff register. */
+  equipmentStaff?: boolean;
+  variant?: "staff" | "portal";
 }) {
   const collapsed = (await cookies()).get("ffsa-sidebar")?.value === "1";
   return (
@@ -31,6 +37,7 @@ export async function HubShell({
         menuLoadFailed={menuLoadFailed}
         initials={initials}
         departments={departments}
+        equipmentStaff={equipmentStaff}
         defaultCollapsed={collapsed}
       />
       <main data-shell-main className="min-w-0 flex-1 overflow-y-auto bg-bg pb-20 pt-14 md:pb-0 md:pt-0">
@@ -42,7 +49,7 @@ export async function HubShell({
           <ProfileCompletionGate>{children}</ProfileCompletionGate>
         </div>
       </main>
-      <MobileTabBar showDepartments={(departments?.length ?? 0) > 0} />
+      <MobileTabBar showDepartments={(departments?.length ?? 0) > 0} variant={variant} />
       <AssistantMount userRoles={userRoles} />
     </div>
   );
