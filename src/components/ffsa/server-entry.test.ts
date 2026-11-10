@@ -25,16 +25,15 @@ function resolveImport(specifier: string): string | null {
 describe("ffsa server entry", () => {
   const source = fileText(entry);
 
-  it("is not a client module and does not pull the client entry", () => {
+  it("is not itself a client module", () => {
     expect(source).not.toMatch(/^\s*["']use client["']/m);
-    expect(source).not.toMatch(/from ["']\.\/client["']/);
-    expect(source).not.toMatch(/\bDrawer\b/);
   });
 
-  it("only imports server modules", () => {
+  it("re-exports Drawer and otherwise stays on server modules", () => {
+    expect(source).toContain('export { Drawer } from "./client"');
     const specifiers = [...source.matchAll(/from ["'](\.[^"']+)["']/g)].map((match) => match[1]);
-    expect(specifiers.length).toBeGreaterThan(0);
-    for (const specifier of specifiers) {
+    expect(specifiers).toContain("./client");
+    for (const specifier of specifiers.filter((item) => item !== "./client")) {
       const file = resolveImport(specifier);
       expect(file, specifier).toBeTruthy();
       expect(fileText(file!), specifier).not.toMatch(/^\s*["']use client["']/m);

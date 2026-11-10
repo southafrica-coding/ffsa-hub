@@ -122,7 +122,9 @@ export function DataTable({
   );
 }
 
-/** Matches HubService.audience in src/lib/departments/ui-contract.ts (PR #561). */
+/** Matches HubService.audience in src/lib/departments/ui-contract.ts.
+ *  TODO: import HubService from that module once #561 lands on feat/departments-services.
+ */
 export type ServiceAudience = "all_signed_in" | "point_leaders" | "owners_only";
 
 export type ServiceCardService = {
