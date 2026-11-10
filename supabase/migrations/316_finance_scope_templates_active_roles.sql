@@ -4,8 +4,13 @@
 -- for active accounts
 -- ============================================================
 -- Builds on 313 (#542): this file redefines public.has_permission with
--- 313's active-account check, so it must run after 313. It does not
--- depend on 314 (#543) or 315 (#544) and can run before or after either.
+-- 313's active-account check, so it must run after 313, and it refuses to
+-- run (section 0) if 313 is missing. It does not depend on 314 (#543) or
+-- 315 (#544) and can run before or after either. 314 redefines none of
+-- the functions or policies changed here.
+-- NEVER re-run 313 after 316: 313's CREATE OR REPLACE of has_permission
+-- would drop the finance rule (C). 313 carries a guard that refuses to
+-- run once 316 is in place.
 --
 -- Jack's decisions (10 Nov 2026):
 --
@@ -53,6 +58,25 @@
 -- move to search_path = ''. Idempotent: CREATE OR REPLACE, DROP POLICY IF
 -- EXISTS + CREATE POLICY, DROP TRIGGER IF EXISTS + CREATE TRIGGER.
 -- ============================================================
+
+-- ────────────────────────────────────────────────────────────
+-- 0. Preflight: 313 must already be applied. 316 rewrites has_permission
+--    on top of 313's active-account version and relies on 313's
+--    has_permission_for (D uses has_permission_for(key, NULL) as
+--    "unscoped grant, active account"). Without 313 it would ship a
+--    half-done state, so refuse.
+-- ────────────────────────────────────────────────────────────
+DO $preflight$
+DECLARE
+  v_for text := (SELECT p.prosrc FROM pg_catalog.pg_proc p
+                  WHERE p.oid = pg_catalog.to_regprocedure('public.has_permission_for(text, uuid)'));
+BEGIN
+  IF v_for IS NULL OR pg_catalog.strpos(v_for, 'is_active IS NOT FALSE') = 0 THEN
+    RAISE EXCEPTION '316 requires migration 313 (has_permission_for must have the is_active check). Apply 313 first.'
+      USING ERRCODE = 'P0001';
+  END IF;
+END
+$preflight$;
 
 -- ────────────────────────────────────────────────────────────
 -- C. has_permission: scoped finance.* grants stay in their scope.

@@ -33,7 +33,10 @@
 -- Run:  psql -v ON_ERROR_STOP=1 -f f_program_leaders.sql
 -- verify mode (default) always ends in RAISE EXCEPTION 'VERIFY_RESULTS
 -- {...}' so everything rolls back and the JSON shows before/after.
--- commit mode checks the expected row counts and aborts if they differ.
+-- commit mode checks the expected row counts (6 deleted, 0 inserted, and
+-- 6 more deleted if SWITCH 1 is on) and aborts if any differ. A non-zero
+-- insert means an own-program scoped grant was missing: stop and review
+-- rather than grant it silently.
 -- ============================================================
 
 SELECT set_config('f316.remove_sa_exp_2027', 'false', false);  -- SWITCH 1: false = KEEP SA Experience 2027 grants (default) | true = remove them
@@ -138,8 +141,9 @@ BEGIN
     RAISE EXCEPTION 'VERIFY_RESULTS %', res;
   END IF;
   -- commit mode: refuse anything unexpected.
-  IF n_del_unscoped <> 6 OR (v_remove_sa AND n_del_sa <> 6) THEN
-    RAISE EXCEPTION 'F aborted: expected 6 unscoped (and 6 SA Exp 2027 if switched on) rows, got % / %. Nothing changed. %', n_del_unscoped, n_del_sa, res;
+  IF n_del_unscoped <> 6 OR n_ins <> 0 OR (v_remove_sa AND n_del_sa <> 6) THEN
+    RAISE EXCEPTION 'F aborted: expected 6 unscoped deleted, 0 inserted (and 6 SA Exp 2027 deleted if switched on); got % / % / %. Nothing changed. %',
+      n_del_unscoped, n_ins, n_del_sa, res;
   END IF;
   RAISE NOTICE 'F_COMMITTED %', res;
 END

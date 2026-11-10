@@ -31,8 +31,26 @@
 -- schools.manage holder. Those need app-side confirmation first.
 --
 -- Same signatures, owners and grants as live. Idempotent: CREATE OR
--- REPLACE, DROP POLICY IF EXISTS + CREATE POLICY.
+-- REPLACE, DROP POLICY IF EXISTS + CREATE POLICY. Re-runnable on its own,
+-- but refuses to run once 316 is applied (section 0).
 -- ============================================================
+
+-- ────────────────────────────────────────────────────────────
+-- 0. Guard: never re-run after 316. 316 (#549) extends has_permission
+--    with the finance scope rule; replacing it with the body below would
+--    silently undo that. If 316 is present, 313 is already applied.
+-- ────────────────────────────────────────────────────────────
+DO $guard$
+BEGIN
+  IF pg_catalog.strpos(
+       coalesce((SELECT p.prosrc FROM pg_catalog.pg_proc p
+                  WHERE p.oid = pg_catalog.to_regprocedure('public.has_permission(text)')), ''),
+       'NOT LIKE ''finance.%''') > 0 THEN
+    RAISE EXCEPTION '313 must not run after 316: it would remove 316''s finance scope rule from has_permission. 313 is already applied; skip it.'
+      USING ERRCODE = 'P0001';
+  END IF;
+END
+$guard$;
 
 -- ────────────────────────────────────────────────────────────
 -- 1. Active accounts only. Scope semantics unchanged.

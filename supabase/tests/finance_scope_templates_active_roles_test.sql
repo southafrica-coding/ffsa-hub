@@ -1,6 +1,7 @@
 -- Disposable check for migration 316. Not a migration. Throwaway DB only,
 -- one transaction, rolled back.
 --   psql -v ON_ERROR_STOP=1 -d <throwaway> -f finance_scope_templates_active_roles_test.sql
+-- Exits non-zero (psql exit 3) if any check fails.
 -- People (programs A, B):
 --   feA    finance.edit scoped to A only (prod shape of 666e334c minus view)
 --   feAv   finance.edit scoped to A + finance.view unscoped (prod shape of the 3)
@@ -227,5 +228,8 @@ BEGIN
     ELSE nf := nf + 1; RAISE WARNING 'FAIL %: got %, want %', r.label, r.got, r.want; END IF;
   END LOOP;
   RAISE WARNING '316 test: % passed, % failed', np, nf;
+  IF nf > 0 THEN
+    RAISE EXCEPTION '316 test: % checks failed', nf;
+  END IF;
 END $$;
 ROLLBACK;
