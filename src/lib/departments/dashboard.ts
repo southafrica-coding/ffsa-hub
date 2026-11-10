@@ -1,10 +1,10 @@
-import type { AccessViewer } from "./access";
+import type { AccessViewer } from "@/app/(admin)/departments/_lib/viewer";
 import type {
   DepartmentSummary,
   HomeDashboard,
   HubService,
   Rock,
-} from "@/types/departments";
+} from "@/lib/departments/ui-contract";
 import { filterServices, listDepartmentHomes, resolveDepartment } from "./data";
 import { ROCKS, SERVICES } from "./mocks";
 
@@ -100,7 +100,7 @@ export function selectHomeDashboard(
       .filter((membership) => membership.active)
       .map((membership) => ({
         departmentSlug: membership.slug,
-        capacity: membership.isLeader || membership.isPointLeader ? "leader" : "member",
+        capacity: membership.isLeader ? "leader" : "member",
         isPointLeader: membership.isPointLeader,
       })),
   };

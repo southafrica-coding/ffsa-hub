@@ -5,7 +5,7 @@ import { clusterLabel, getDepartmentViewer, managingLabel } from "@/lib/departme
 import { STAFF_LANGUAGE } from "@/lib/departments/mocks";
 import { requireSignedIn } from "@/lib/departments/session";
 import { formatDayRange } from "@/lib/format/sa-time";
-import type { RockStatus } from "@/types/departments";
+import type { RockStatus } from "@/lib/departments/ui-contract";
 import { EmptyNote, PageHeading, SectionHeading, StackLink } from "../departments/local-ui";
 
 export const metadata: Metadata = { title: "Home" };

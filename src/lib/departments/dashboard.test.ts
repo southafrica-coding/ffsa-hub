@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AccessViewer } from "./access";
+import type { AccessViewer } from "@/app/(admin)/departments/_lib/viewer";
 import {
   addIsoDays,
   saTodayIso,
