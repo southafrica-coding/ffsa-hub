@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { canCreateProgram } from "@/lib/auth/schools-program-access";
 import {
   canOpenSchools,
   programsVisibleOnSchoolsHome,
@@ -200,7 +201,7 @@ export default async function SchoolsPage({
           statusFilter === "archived" ? "archived " : ""
         }${shownCount === 1 ? "school" : "schools"}`}
         title="Training"
-        actions={access.hasModuleAccess ? <CreateProgramForm /> : undefined}
+        actions={canCreateProgram(access.schools) ? <CreateProgramForm /> : undefined}
       />
 
       {/* The page's ONE yellow band. Never add a second. */}

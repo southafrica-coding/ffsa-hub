@@ -2,7 +2,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { canManageFinance } from "@/lib/api-auth";
 import { userCanManageProgram } from "@/lib/auth/check-schools-access";
 import type { GrantScope } from "@/lib/auth/grant-scope";
-import { hasModuleAccess } from "@/lib/require-permission";
+import {
+  getAccessibleSchoolsProgramIds,
+  type SchoolsProgramAccess,
+} from "@/lib/auth/schools-program-access";
 
 // How a person stands on one school once program_staff exists (migration 304).
 //
@@ -42,80 +45,33 @@ export function applicationsForViewer<T extends { assigned_staff_id: string | nu
 }
 
 /**
- * Schools home list. Module access keeps the list the query already returned
- * (RLS). A person who can open Training only because they are program staff
- * sees the schools they staff.
+ * Schools home list. Unscoped module access keeps the list the query already
+ * returned. Anyone else sees the schools they staff plus the programs on a
+ * program-scoped schools grant, and nothing else.
  */
 export function programsVisibleOnSchoolsHome<T extends { id: string }>(
   programs: T[],
-  opts: { hasModuleAccess: boolean; staffProgramIds: string[] }
+  opts: { hasModuleAccess: boolean; staffProgramIds: string[]; grantProgramIds?: string[] }
 ): T[] {
   if (opts.hasModuleAccess) return programs;
-  const allowed = new Set(opts.staffProgramIds);
+  const allowed = new Set([...(opts.staffProgramIds ?? []), ...(opts.grantProgramIds ?? [])]);
   return programs.filter((program) => allowed.has(program.id));
 }
 
-type GrantRow = {
-  scope_type: string | null;
-  scope_id: string | null;
-  permissions: { key: string } | { key: string }[] | null;
-};
-
-function grantKey(row: GrantRow): string | null {
-  const perm = Array.isArray(row.permissions) ? row.permissions[0] : row.permissions;
-  return perm?.key ?? null;
-}
-
-function grantApplies(row: GrantRow, programId: string): boolean {
-  if (!row.scope_type || !row.scope_id) return true;
-  return row.scope_type === "program" && row.scope_id === programId;
-}
-
 /**
- * Direct or role-bundle schools.* grant that covers this program (global
- * scope counts). Used so an existing permission holder who is also listed
- * as staff is not narrowed.
+ * Direct or role-bundle schools grant that covers this program (an unscoped
+ * grant counts everywhere). schools.assignable_as_contact does not.
+ * Used so an existing permission holder who is also listed as staff is not
+ * narrowed to assigned applicants.
  */
 export async function userHasSchoolsGrant(
   supabase: SupabaseClient,
   userId: string,
   programId: string
 ): Promise<boolean> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const db = supabase as any;
-
-  const { data: direct, error: directError } = await db
-    .from("user_permissions")
-    .select("scope_type, scope_id, permissions!inner(key)")
-    .eq("user_id", userId);
-  if (directError) return false;
-
-  for (const row of (direct ?? []) as GrantRow[]) {
-    const key = grantKey(row);
-    if (key?.startsWith("schools.") && grantApplies(row, programId)) return true;
-  }
-
-  const { data: roles, error: rolesError } = await db
-    .from("user_roles")
-    .select("role_id, scope_type, scope_id")
-    .eq("user_id", userId);
-  if (rolesError || !roles || roles.length === 0) return false;
-
-  const roleIds = (roles as Array<{ role_id: string; scope_type: string | null; scope_id: string | null }>)
-    .filter((role) => !role.scope_type || (role.scope_type === "program" && role.scope_id === programId))
-    .map((role) => role.role_id);
-  if (roleIds.length === 0) return false;
-
-  const { data: bundle, error: bundleError } = await db
-    .from("role_permissions")
-    .select("permissions!inner(key)")
-    .in("role_id", roleIds);
-  if (bundleError) return false;
-
-  return (bundle ?? []).some((row: { permissions: { key: string } | { key: string }[] }) => {
-    const perm = Array.isArray(row.permissions) ? row.permissions[0] : row.permissions;
-    return !!perm?.key?.startsWith("schools.");
-  });
+  const access = await getAccessibleSchoolsProgramIds(supabase, userId);
+  if (access === "all") return true;
+  return access.includes(programId);
 }
 
 export async function userIsProgramStaff(
@@ -138,15 +94,32 @@ export async function canOpenSchools(
   supabase: SupabaseClient,
   userId: string,
   scope?: GrantScope
-): Promise<{ open: boolean; hasModuleAccess: boolean; staffProgramIds: string[] }> {
-  const [moduleAccess, staffProgramIds] = await Promise.all([
-    hasModuleAccess(supabase, userId, "schools", scope),
+): Promise<{
+  open: boolean;
+  /** Unscoped Training access: the home lists every program and Create Program shows. */
+  hasModuleAccess: boolean;
+  staffProgramIds: string[];
+  /** Program ids from program-scoped schools grants. Empty when hasModuleAccess. */
+  grantProgramIds: string[];
+  schools: SchoolsProgramAccess;
+}> {
+  const [schools, staffProgramIds] = await Promise.all([
+    getAccessibleSchoolsProgramIds(supabase, userId),
     listStaffProgramIds(supabase, userId),
   ]);
+  const seesAll = schools === "all";
+  const grantProgramIds = seesAll ? [] : schools;
+  const covers = (programId: string) =>
+    seesAll || grantProgramIds.includes(programId) || staffProgramIds.includes(programId);
+  const open = scope?.programId
+    ? covers(scope.programId)
+    : seesAll || grantProgramIds.length > 0 || staffProgramIds.length > 0;
   return {
-    open: moduleAccess || staffProgramIds.length > 0,
-    hasModuleAccess: moduleAccess,
+    open,
+    hasModuleAccess: seesAll,
     staffProgramIds,
+    grantProgramIds,
+    schools,
   };
 }
 

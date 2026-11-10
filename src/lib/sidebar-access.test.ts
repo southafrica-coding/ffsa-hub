@@ -94,7 +94,7 @@ describe("getSidebarAccess", () => {
     expect(sorted(access.permittedModules)).toEqual(["events"]);
   });
 
-  it("keeps an active unscoped grant on the menu and drops a scoped-only one", async () => {
+  it("keeps an unscoped grant, lights Training for a program-scoped leader, and ignores a contact-only grant", async () => {
     const unscoped = await getSidebarAccess(
       client({
         roles: [{ id: "pl", name: "program_leader" }],
@@ -113,7 +113,15 @@ describe("getSidebarAccess", () => {
       }).client
     );
     expect(scoped.userRoles).toEqual([]);
-    expect(scoped.permittedModules.size).toBe(0);
+    expect(sorted(scoped.permittedModules)).toEqual(["schools"]);
+
+    const contactOnly = await getSidebarAccess(
+      client({
+        roles: [{ id: "s", name: "staff" }],
+        direct: [{ module: "schools", key: "schools.assignable_as_contact", scopeType: "program", scopeId: "prog-a" }],
+      }).client
+    );
+    expect(contactOnly.permittedModules.has("schools")).toBe(false);
   });
 
   it("gives a deactivated account an empty menu", async () => {
@@ -138,12 +146,12 @@ describe("getSidebarAccess", () => {
     expect(sorted((await getSidebarAccess(f.client)).permittedModules)).toEqual(["schools"]);
   });
 
-  it("takes three round trips: auth, roles, then both grant reads together", async () => {
+  it("takes at most four round trips, including the Training scope lookup", async () => {
     const f = client(
       { roles: [{ id: "r1", name: "staff" }], direct: [], bundles: { r1: [{ module: "events", key: "events.view" }] } },
       { latencyMs: 20 }
     );
     const { roundTrips } = await measure(20, () => getSidebarAccess(f.client));
-    expect(roundTrips).toBeLessThanOrEqual(3);
+    expect(roundTrips).toBeLessThanOrEqual(4);
   });
 });

@@ -183,20 +183,26 @@ describe("active unscoped callers keep what they already see", () => {
 
   it("canOpenSchools still opens Training for an active unscoped schools grant", async () => {
     const access = await canOpenSchools(client(UNSCOPED_SCHOOLS), "u");
-    expect(access).toEqual({ open: true, hasModuleAccess: true, staffProgramIds: [] });
-  });
-
-  it("canOpenSchools keeps a program-scoped leader on that program and off the global list", async () => {
-    const db = client(SCOPED_SCHOOLS);
-    expect(await canOpenSchools(db, "u")).toEqual({
-      open: false,
-      hasModuleAccess: false,
-      staffProgramIds: [],
-    });
-    expect(await canOpenSchools(db, "u", { programId: A })).toEqual({
+    expect(access).toEqual({
       open: true,
       hasModuleAccess: true,
       staffProgramIds: [],
+      grantProgramIds: [],
+      schools: "all",
     });
+  });
+
+  it("opens Training home for a program-scoped leader without full module access", async () => {
+    const db = client(SCOPED_SCHOOLS);
+    const home = await canOpenSchools(db, "u");
+    expect(home).toEqual({
+      open: true,
+      hasModuleAccess: false,
+      staffProgramIds: [],
+      grantProgramIds: [A],
+      schools: [A],
+    });
+    expect(await canOpenSchools(db, "u", { programId: A })).toMatchObject({ open: true });
+    expect(await canOpenSchools(db, "u", { programId: B })).toMatchObject({ open: false });
   });
 });

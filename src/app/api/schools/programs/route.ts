@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import {
+  canCreateProgram,
+  getAccessibleSchoolsProgramIds,
+} from "@/lib/auth/schools-program-access";
+import {
   createProgram,
   updateProgram,
   deleteProgram,
@@ -15,6 +19,12 @@ export async function POST(request: Request) {
 
   if (!user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  // Creating a school is org-wide. A program-scoped grant does not reach it.
+  const schools = await getAccessibleSchoolsProgramIds(supabase, user.id);
+  if (!canCreateProgram(schools)) {
+    return NextResponse.json({ error: "You don't have permission to create a program" }, { status: 403 });
   }
 
   const body = await request.json();

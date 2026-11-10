@@ -1,4 +1,5 @@
 import { grantCounts } from "@/lib/auth/grant-scope";
+import { getAccessibleSchoolsProgramIds } from "@/lib/auth/schools-program-access";
 import { getPermissionRowsForRoles } from "@/services/permissions";
 
 export interface SidebarAccess {
@@ -82,8 +83,8 @@ export async function getSidebarAccess(
   try {
     // The account flag and the role rows are independent. A deactivated
     // account (is_active = false) counts for nothing. NULL stays active.
-    // Global nav only keeps unscoped assignments: a program-scoped leader
-    // still opens that program, but does not get the org-wide menu entry.
+    // Global nav keeps unscoped assignments. A program-scoped schools grant
+    // still lights Training; other modules stay unscoped.
     const [userRow, roleRows] = await Promise.all([
       readOrThrow<{ is_active: boolean | null } | null>(() =>
         supabase.from("users").select("is_active").eq("id", userId).maybeSingle()
@@ -128,7 +129,7 @@ export async function getSidebarAccess(
       const roleIds = unscopedRoles
         .map((r) => r.role_id)
         .filter((id): id is string => typeof id === "string");
-      const [permRows, roleDerived, staffSeat] = await Promise.all([
+      const [permRows, roleDerived, staffSeat, schoolsAccess] = await Promise.all([
         readOrThrow<
           Array<{
             scope_type?: string | null;
@@ -158,12 +159,16 @@ export async function getSidebarAccess(
             res.error ? [] : res.data ?? []
           )
           .catch(() => [] as { id: string }[]),
+        // Program-scoped schools grants light Training without opening every module.
+        getAccessibleSchoolsProgramIds(supabase, userId),
       ]);
 
       for (const row of permRows ?? []) {
         const perm = Array.isArray(row.permissions) ? row.permissions[0] : row.permissions;
         if (!perm?.module || !grantCounts(row.scope_type, row.scope_id, undefined, perm.key)) continue;
-        result.permittedModules.add(perm.module);
+        // Training itself is decided by getAccessibleSchoolsProgramIds, so a
+        // lone schools.assignable_as_contact grant cannot light the entry.
+        if (perm.module !== "schools") result.permittedModules.add(perm.module);
         // Users with schools.manage can delegate the assignable-contact
         // permission, so they need access to the Users page.
         if (perm?.key === "schools.manage") result.permittedModules.add("users");
@@ -174,11 +179,12 @@ export async function getSidebarAccess(
 
       // Also count modules reachable through assigned roles' bundles.
       for (const perm of roleDerived) {
-        result.permittedModules.add(perm.module);
+        if (perm.module !== "schools") result.permittedModules.add(perm.module);
         if (perm.key === "schools.manage") result.permittedModules.add("users");
         if (perm.module === "vehicles" || perm.module === "equipment") result.permittedModules.add("bookings");
       }
 
+      if (schoolsAccess === "all" || schoolsAccess.length > 0) result.permittedModules.add("schools");
       if (staffSeat.length > 0) result.permittedModules.add("schools");
     }
   } catch {
