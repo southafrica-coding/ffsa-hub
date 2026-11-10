@@ -1,7 +1,5 @@
 import { safeRedirect } from "@/lib/safe-redirect";
 
-export { safeRedirect };
-
 /** Alias kept for the department login return path. */
 export const safeInternalPath = safeRedirect;
 

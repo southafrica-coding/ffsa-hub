@@ -1,8 +1,17 @@
 import "server-only";
+import { cache } from "react";
 import { notFound, redirect } from "next/navigation";
-import type { DepartmentHome, DepartmentHomeResult, ViewerResult } from "@/lib/departments";
+import {
+  loadDepartmentsIndexForViewer,
+  type DepartmentHome,
+  type DepartmentHomeResult,
+  type ViewerResult,
+} from "@/lib/departments";
 import { loginPath } from "@/lib/departments/login-path";
 import { getViewer } from "@/lib/departments/session";
+
+/** One index read per request, shared by the departments layout and the index page. */
+export const loadCachedDepartmentsIndex = cache(loadDepartmentsIndexForViewer);
 
 export class DepartmentLoadError extends Error {
   constructor(message = "Department data failed") {

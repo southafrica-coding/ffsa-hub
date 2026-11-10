@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { loadDepartmentsIndexForViewer } from "@/lib/departments";
 import { clusterLabel, STAFF_LANGUAGE } from "@/lib/departments/data";
-import { sessionClient, settleViewerResult } from "@/lib/departments/load";
+import { loadCachedDepartmentsIndex, sessionClient, settleViewerResult } from "@/lib/departments/load";
 import { requireSignedIn } from "@/lib/departments/session";
 import { PageHeading, StackLink } from "./local-ui";
 
@@ -12,7 +11,7 @@ export const dynamic = "force-dynamic";
 export default async function DepartmentsIndexPage() {
   const path = "/departments";
   await requireSignedIn(path);
-  const departments = settleViewerResult(await loadDepartmentsIndexForViewer(await sessionClient()), path);
+  const departments = settleViewerResult(await loadCachedDepartmentsIndex(await sessionClient()), path);
   if (departments.length === 0) notFound();
 
   return (

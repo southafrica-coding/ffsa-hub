@@ -34,7 +34,11 @@ export function DepartmentView({
 
   return (
     <div>
-      <PageHeading context={`${STAFF_LANGUAGE} · ${clusterLabel(department.cluster)}`} title={department.name} />
+      <PageHeading
+        context={`${STAFF_LANGUAGE} · ${clusterLabel(department.cluster)}`}
+        title={department.name}
+        note={department.parentName ? `Sits under ${department.parentName}` : null}
+      />
       <LocalTabs label={department.name} tabs={tabs} active={tab} />
       {tab === "overview" && access.canSeeDepartmentDetail && (
         <>
@@ -45,18 +49,6 @@ export function DepartmentView({
               <Fact label="People" value={String(department.memberCount)} />
             )}
             <Fact label="Lead" value={lead} />
-            {department.parentName ? (
-              <Fact
-                label="Sits under"
-                value={
-                  department.parentSlug ? (
-                    <Link href={`/departments/${department.parentSlug}`}>{department.parentName}</Link>
-                  ) : (
-                    department.parentName
-                  )
-                }
-              />
-            ) : null}
             {(model.subMinistries ?? []).length > 0 && (
               <Fact
                 label="Includes"

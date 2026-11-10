@@ -100,8 +100,31 @@ describe("department pages with loader fixtures", () => {
     ]);
     expect(markup).toContain("Accounts for the base");
     expect(markup).toContain("Test Leader A");
-    expect(markup).toContain("Training");
+    expect(markup).toContain("Sits under Training");
+    expect(markup.match(/Sits under Training/g)).toHaveLength(1);
     expect(markup).not.toContain("Budget");
+  });
+
+  it("shows the parent in the header for a finance-only viewer", async () => {
+    const home = foldedFinanceHome();
+    home.access = {
+      canSeeDepartmentDetail: false,
+      canSeeBudget: true,
+      canEditBudget: false,
+      canEditRocks: false,
+      canSeePeopleEmails: false,
+    };
+    home.department.access = home.access;
+    home.department.budgetOnly = true;
+    loadDepartmentHomeForViewer.mockResolvedValue({ kind: "ok", data: home });
+    const markup = renderToStaticMarkup(
+      await DepartmentPage({
+        params: Promise.resolve({ slug: "finances_legal" }),
+        searchParams: Promise.resolve({ tab: "budget" }),
+      })
+    );
+    expect(markup).toContain("Sits under Training");
+    expect(markup).not.toContain("Accounts for the base");
   });
 
   it("shows nothing for a null parent name", async () => {
