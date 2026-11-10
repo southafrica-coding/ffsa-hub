@@ -125,6 +125,10 @@ describe("middleware", () => {
     const dropped = location(await middleware(req("/%2F%2Fevil.com")))!;
     expect(dropped.pathname).toBe("/login");
     expect(dropped.searchParams.get("redirect")).toBeNull();
+
+    const stripped = location(await middleware(req("/%09/evil.com")))!;
+    expect(stripped.pathname).toBe("/login");
+    expect(stripped.searchParams.get("redirect")).toBeNull();
   });
 
   it("a token the Auth server rejects is treated as signed out", async () => {
