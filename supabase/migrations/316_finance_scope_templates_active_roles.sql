@@ -33,13 +33,19 @@
 --   that no caller (policy, function or app RPC) can drift from the rule.
 --
 -- D (yes) — application_templates INSERT / UPDATE / DELETE and
---   application_template_questions INSERT / DELETE need an UNSCOPED
---   schools.manage grant (or admin). The library is shared by every
---   program and has no program column. Reading the library is unchanged
---   (has_schools_access(), any scope), so scoped managers can still
---   import a template into their own program.
+--   application_template_questions INSERT / DELETE need admin, or an
+--   UNSCOPED schools.manage grant, or an UNSCOPED grant of the new
+--   schools.templates.manage key (Jack, round 2). One function,
+--   can_manage_application_templates(), holds the rule for the policies
+--   and the app. The library is shared by every program and has no
+--   program column. Reading the library is unchanged (has_schools_access(),
+--   any scope), so scoped managers can still import a template into their
+--   own program.
 --   has_permission_for(key, NULL) means "unscoped grant only" (313): the
 --   program branch compares scope_id = NULL, which is never true.
+--   schools.templates.manage is org-wide only: a trigger refuses scoped
+--   grants of it, and has_permission ignores scoped copies (as for
+--   finance.*), so a scoped copy can never count anywhere.
 --
 -- E (yes) — is_admin(), has_any_role() and has_role() count only active
 --   accounts (users.is_active IS NOT FALSE), as 313 did for has_permission
@@ -96,13 +102,14 @@ AS $$
   )
   AND (
     EXISTS (
-      -- direct grant: any scope, except finance.* where only unscoped counts (316)
+      -- direct grant: any scope, except finance.* and schools.templates.manage,
+      -- where only unscoped counts (316)
       SELECT 1
       FROM public.user_permissions up
       JOIN public.permissions p ON p.id = up.permission_id
       WHERE up.user_id = auth.uid()
         AND p.key = required_permission
-        AND (up.scope_type IS NULL OR p.key NOT LIKE 'finance.%')
+        AND (up.scope_type IS NULL OR (p.key NOT LIKE 'finance.%' AND p.key <> 'schools.templates.manage'))
     )
     OR EXISTS (
       -- via an assigned role's bundle: same rule on the role's scope
@@ -112,7 +119,7 @@ AS $$
       JOIN public.permissions p ON p.id = rp.permission_id
       WHERE ur.user_id = auth.uid()
         AND p.key = required_permission
-        AND (ur.scope_type IS NULL OR p.key NOT LIKE 'finance.%')
+        AND (ur.scope_type IS NULL OR (p.key NOT LIKE 'finance.%' AND p.key <> 'schools.templates.manage'))
     )
   );
 $$;
@@ -122,7 +129,7 @@ $$;
 GRANT EXECUTE ON FUNCTION public.has_permission(text) TO PUBLIC, anon, authenticated, service_role;
 
 COMMENT ON FUNCTION public.has_permission(text) IS
-  'Active account holds the key directly or through a role bundle. Any scope counts, except finance.* keys, where only unscoped grants count (316): program-scoped finance does not reach org-wide finance, Xero or outreach. Use has_permission_for for a program check.';
+  'Active account holds the key directly or through a role bundle. Any scope counts, except finance.* keys and schools.templates.manage, where only unscoped grants count (316): program-scoped finance does not reach org-wide finance, Xero or outreach. Use has_permission_for for a program check.';
 
 -- ────────────────────────────────────────────────────────────
 -- E. Roles count only for active accounts.
@@ -194,35 +201,101 @@ GRANT EXECUTE ON FUNCTION public.has_role(text, text, uuid) TO PUBLIC, anon, aut
 GRANT EXECUTE ON FUNCTION public.is_admin() TO PUBLIC, anon, authenticated, service_role;
 
 -- ────────────────────────────────────────────────────────────
--- D. Template library writes: admin or UNSCOPED schools.manage.
---    has_permission_for(key, NULL) = unscoped grant only, active only.
---    Wrapped in (SELECT ...) so it runs once per statement.
+-- D. Template library writes.
+--    Allowed: admin, OR an active caller with UNSCOPED schools.manage,
+--    OR an active caller with UNSCOPED schools.templates.manage (Jack,
+--    10 Nov 2026: a dedicated, org-wide-only key).
+--    has_permission_for(key, NULL) = unscoped grant only (direct or via
+--    an unscoped role), active accounts only (313). A program-scoped grant
+--    of either key never counts here.
 -- ────────────────────────────────────────────────────────────
+INSERT INTO public.permissions (module, key, display_name, sort_order) VALUES
+  ('schools', 'schools.templates.manage', 'Manage Application Templates (org-wide only)', 6)
+ON CONFLICT (key) DO NOTHING;
+
+-- The key is org-wide only: refuse to store it with a scope at all.
+CREATE OR REPLACE FUNCTION public.user_permissions_unscoped_only_keys()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  IF NEW.scope_type IS NOT NULL AND EXISTS (
+       SELECT 1 FROM public.permissions p
+        WHERE p.id = NEW.permission_id AND p.key = 'schools.templates.manage') THEN
+    RAISE EXCEPTION 'schools.templates.manage can only be granted org-wide (no scope)'
+      USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.user_permissions_unscoped_only_keys() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS user_permissions_unscoped_only_keys ON public.user_permissions;
+CREATE TRIGGER user_permissions_unscoped_only_keys
+  BEFORE INSERT OR UPDATE OF permission_id, scope_type, scope_id ON public.user_permissions
+  FOR EACH ROW
+  EXECUTE FUNCTION public.user_permissions_unscoped_only_keys();
+
+-- The one rule. Policies below and the app (RPC) use the same function.
+CREATE OR REPLACE FUNCTION public.can_manage_application_templates()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+  SELECT public.is_admin()
+      OR public.has_permission_for('schools.manage', NULL::uuid)
+      OR public.has_permission_for('schools.templates.manage', NULL::uuid);
+$$;
+
+GRANT EXECUTE ON FUNCTION public.can_manage_application_templates() TO PUBLIC, anon, authenticated, service_role;
+
+COMMENT ON FUNCTION public.can_manage_application_templates() IS
+  'Template library writes (316): is_admin(), or an active account with an UNSCOPED schools.manage or schools.templates.manage grant (direct or via an unscoped role). Program-scoped grants never count.';
+
 DROP POLICY IF EXISTS "Schools access can insert templates" ON public.application_templates;
 CREATE POLICY "Schools access can insert templates"
   ON public.application_templates FOR INSERT
-  WITH CHECK ((SELECT public.is_admin() OR public.has_permission_for('schools.manage', NULL::uuid)));
+  WITH CHECK ((SELECT public.can_manage_application_templates()));
 
 DROP POLICY IF EXISTS "Schools access can update templates" ON public.application_templates;
 CREATE POLICY "Schools access can update templates"
   ON public.application_templates FOR UPDATE
-  USING ((SELECT public.is_admin() OR public.has_permission_for('schools.manage', NULL::uuid)))
-  WITH CHECK ((SELECT public.is_admin() OR public.has_permission_for('schools.manage', NULL::uuid)));
+  USING ((SELECT public.can_manage_application_templates()))
+  WITH CHECK ((SELECT public.can_manage_application_templates()));
 
 DROP POLICY IF EXISTS "Schools access can delete templates" ON public.application_templates;
 CREATE POLICY "Schools access can delete templates"
   ON public.application_templates FOR DELETE
-  USING ((SELECT public.is_admin() OR public.has_permission_for('schools.manage', NULL::uuid)));
+  USING ((SELECT public.can_manage_application_templates()));
 
 DROP POLICY IF EXISTS "Schools access can insert template questions" ON public.application_template_questions;
 CREATE POLICY "Schools access can insert template questions"
   ON public.application_template_questions FOR INSERT
-  WITH CHECK ((SELECT public.is_admin() OR public.has_permission_for('schools.manage', NULL::uuid)));
+  WITH CHECK ((SELECT public.can_manage_application_templates()));
 
 DROP POLICY IF EXISTS "Schools access can delete template questions" ON public.application_template_questions;
 CREATE POLICY "Schools access can delete template questions"
   ON public.application_template_questions FOR DELETE
-  USING ((SELECT public.is_admin() OR public.has_permission_for('schools.manage', NULL::uuid)));
+  USING ((SELECT public.can_manage_application_templates()));
+
+-- Template managers must also see the library to update or delete in it
+-- (UPDATE / DELETE only reach visible rows). A holder of only
+-- schools.templates.manage is not covered by has_schools_access(), so add
+-- a permissive read policy on the same rule. Existing read policies stay.
+DROP POLICY IF EXISTS "Template managers can read templates" ON public.application_templates;
+CREATE POLICY "Template managers can read templates"
+  ON public.application_templates FOR SELECT
+  USING ((SELECT public.can_manage_application_templates()));
+
+DROP POLICY IF EXISTS "Template managers can read template questions" ON public.application_template_questions;
+CREATE POLICY "Template managers can read template questions"
+  ON public.application_template_questions FOR SELECT
+  USING ((SELECT public.can_manage_application_templates()));
 
 -- SELECT policies ("Schools access can read templates" / "... template
 -- questions", has_schools_access()) are deliberately unchanged.

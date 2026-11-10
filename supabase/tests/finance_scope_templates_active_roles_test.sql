@@ -15,6 +15,12 @@
 --   adm    admin                             offadm deactivated admin
 --   offst  deactivated staff                 st   active staff
 --   offfa  deactivated finance_admin         nobody
+--   fx3    finance.approve/edit/export/view scoped to A + finance.view
+--          unscoped (exact prod shape of 08c957a0, 666e334c, c380c569)
+--   tmG    schools.templates.manage unscoped   offtm  same, deactivated
+--   tmA    schools.templates.manage scoped to A (legacy row, trigger bypassed)
+--   tmR    role 'tpl_bundle' (carries schools.templates.manage) scoped to A
+--   tmRG   the same role unscoped
 \set ON_ERROR_STOP 1
 SET client_min_messages = warning;
 BEGIN;
@@ -28,7 +34,7 @@ DECLARE
   pa uuid := gen_random_uuid(); pb uuid := gen_random_uuid();
   ids jsonb := '{}'::jsonb; who text; org uuid; tpl uuid; tq uuid; fp uuid; og uuid;
 BEGIN
-  FOREACH who IN ARRAY ARRAY['feA','feAv','feG','frA','frG','fadm','offfe','mA','plA','mG','ffx','adm','offadm','offst','st','offfa','nobody'] LOOP
+  FOREACH who IN ARRAY ARRAY['feA','feAv','feG','frA','frG','fadm','offfe','mA','plA','mG','ffx','adm','offadm','offst','st','offfa','nobody','fx3','tmG','offtm','tmA','tmR','tmRG'] LOOP
     ids := ids || jsonb_build_object(who, gen_random_uuid());
     INSERT INTO auth.users (id, email) VALUES ((ids->>who)::uuid, lower(who) || '@t316.test');
     INSERT INTO public.users (id, email, first_name, last_name, is_active)
@@ -39,29 +45,45 @@ BEGIN
     (pb, 't316 B', 'T316B' || left(pb::text, 4), (ids->>'adm')::uuid);
   INSERT INTO public.roles (name, display_name) VALUES
     ('program_leader','Program Leader'), ('admin','Admin'), ('finance_admin','Finance Admin'),
-    ('staff','Staff'), ('fin_bundle','T316 finance bundle'), ('ffx_like','T316 schools bundle')
+    ('staff','Staff'), ('fin_bundle','T316 finance bundle'), ('ffx_like','T316 schools bundle'),
+    ('tpl_bundle','T316 templates bundle')
   ON CONFLICT (name) DO NOTHING;
   INSERT INTO public.permissions (module, key, display_name) VALUES
     ('finance','finance.edit','Edit finance'), ('finance','finance.view','View finance'),
-    ('schools','schools.manage','Manage schools'), ('events','events.create','Create events')
+    ('schools','schools.manage','Manage schools'), ('events','events.create','Create events'),
+    ('finance','finance.approve','Approve finance'), ('finance','finance.export','Export finance'),
+    ('schools','schools.templates.manage','Manage templates')
   ON CONFLICT (key) DO NOTHING;
   INSERT INTO public.role_permissions (role_id, permission_id)
   SELECT r.id, p.id FROM public.roles r, public.permissions p
-   WHERE (r.name, p.key) IN (('program_leader','schools.manage'), ('fin_bundle','finance.edit'), ('ffx_like','schools.manage'))
+   WHERE (r.name, p.key) IN (('program_leader','schools.manage'), ('fin_bundle','finance.edit'), ('ffx_like','schools.manage'), ('tpl_bundle','schools.templates.manage'))
   ON CONFLICT DO NOTHING;
   INSERT INTO public.user_roles (user_id, role_id, scope_type, scope_id)
   SELECT (ids->>x.who)::uuid, r.id, x.st, x.sid FROM (VALUES
     ('frA','fin_bundle','program',pa), ('frG','fin_bundle',NULL,NULL::uuid), ('fadm','finance_admin',NULL,NULL),
     ('plA','program_leader','program',pa), ('ffx','ffx_like',NULL,NULL), ('adm','admin',NULL,NULL),
-    ('offadm','admin',NULL,NULL), ('offst','staff',NULL,NULL), ('st','staff',NULL,NULL), ('offfa','finance_admin',NULL,NULL)
+    ('offadm','admin',NULL,NULL), ('offst','staff',NULL,NULL), ('st','staff',NULL,NULL), ('offfa','finance_admin',NULL,NULL),
+    ('tmR','tpl_bundle','program',pa), ('tmRG','tpl_bundle',NULL,NULL)
   ) x(who, role, st, sid) JOIN public.roles r ON r.name = x.role;
   INSERT INTO public.user_permissions (user_id, permission_id, scope_type, scope_id)
   SELECT (ids->>x.who)::uuid, p.id, x.st, x.sid FROM (VALUES
     ('feA','finance.edit','program',pa), ('feAv','finance.edit','program',pa), ('feAv','finance.view',NULL,NULL::uuid),
     ('feG','finance.edit',NULL,NULL), ('offfe','finance.edit',NULL,NULL),
     ('mA','schools.manage','program',pa), ('mA','events.create','event',gen_random_uuid()),
-    ('mG','schools.manage',NULL,NULL)
+    ('mG','schools.manage',NULL,NULL),
+    ('fx3','finance.approve','program',pa), ('fx3','finance.edit','program',pa), ('fx3','finance.export','program',pa),
+    ('fx3','finance.view','program',pa), ('fx3','finance.view',NULL,NULL),
+    ('tmG','schools.templates.manage',NULL,NULL), ('offtm','schools.templates.manage',NULL,NULL)
   ) x(who, key, st, sid) JOIN public.permissions p ON p.key = x.key;
+  -- a scoped copy of the org-wide-only key, as if left over from before 316's trigger
+  IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'user_permissions_unscoped_only_keys') THEN
+    ALTER TABLE public.user_permissions DISABLE TRIGGER user_permissions_unscoped_only_keys;
+  END IF;
+  INSERT INTO public.user_permissions (user_id, permission_id, scope_type, scope_id)
+  SELECT (ids->>'tmA')::uuid, p.id, 'program', pa FROM public.permissions p WHERE p.key = 'schools.templates.manage';
+  IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'user_permissions_unscoped_only_keys') THEN
+    ALTER TABLE public.user_permissions ENABLE TRIGGER user_permissions_unscoped_only_keys;
+  END IF;
 
   SELECT id INTO org FROM public.finance_orgs WHERE key = 'npc';
   IF org IS NULL THEN
@@ -134,6 +156,17 @@ FROM (VALUES ('feA','false'),('feAv','false'),('frA','false'),('feG','true'),('f
 SELECT pg_temp.expect('C has_permission_for(finance.edit, A) feA', pg_temp.fn('feA', format($q$public.has_permission_for('finance.edit', %L::uuid)$q$, pg_temp.s('pa'))), 'true');
 SELECT pg_temp.expect('C has_permission_for(finance.edit, B) feA', pg_temp.fn('feA', format($q$public.has_permission_for('finance.edit', %L::uuid)$q$, pg_temp.s('pb'))), 'false');
 SELECT pg_temp.expect('C has_permission_for(finance.edit, A) frA (role)', pg_temp.fn('frA', format($q$public.has_permission_for('finance.edit', %L::uuid)$q$, pg_temp.s('pa'))), 'true');
+-- prod shape of the 3 (Jack round 2): keep org-wide view, lose org-wide approve/edit/export
+SELECT pg_temp.expect('C fx3 has_permission('||k||')', pg_temp.fn('fx3', format($q$public.has_permission(%L)$q$, k)), e)
+FROM (VALUES ('finance.view','true'),('finance.approve','false'),('finance.edit','false'),('finance.export','false')) v(k,e);
+SELECT pg_temp.expect('C fx3 has_permission_for('||k||', A)', pg_temp.fn('fx3', format($q$public.has_permission_for(%L, %L::uuid)$q$, k, pg_temp.s('pa'))), 'true')
+FROM (VALUES ('finance.view'),('finance.approve'),('finance.edit'),('finance.export')) v(k);
+SELECT pg_temp.expect('C fx3 has_permission_for('||k||', B)', pg_temp.fn('fx3', format($q$public.has_permission_for(%L, %L::uuid)$q$, k, pg_temp.s('pb'))), e)
+FROM (VALUES ('finance.view','true'),('finance.approve','false'),('finance.edit','false'),('finance.export','false')) v(k,e);
+SELECT pg_temp.expect('C fx3 finance_projects SELECT', pg_temp.fn('fx3', format($q$(SELECT count(*) FROM public.finance_projects WHERE id = %L)$q$, pg_temp.s('fp'))), '1');
+SELECT pg_temp.expect('C fx3 finance_projects INSERT', pg_temp.try('fx3', format($q$INSERT INTO public.finance_projects (org_id, name) VALUES (%L, 'x316 fx3')$q$, pg_temp.s('org'))), 'err 42501');
+SELECT pg_temp.expect('C fx3 outreach viewer', pg_temp.fn('fx3', 'public.is_outreach_staff_viewer()'), 'true');
+SELECT pg_temp.expect('C fx3 outreach editor', pg_temp.fn('fx3', 'public.is_outreach_staff_editor()'), 'false');
 -- other modules keep any-scope semantics (313 option b)
 SELECT pg_temp.expect('C has_permission(schools.manage) mA (scoped, unchanged)', pg_temp.fn('mA', $q$public.has_permission('schools.manage')$q$), 'true');
 SELECT pg_temp.expect('C has_permission(schools.manage) plA (role scoped, unchanged)', pg_temp.fn('plA', $q$public.has_permission('schools.manage')$q$), 'true');
@@ -163,22 +196,32 @@ FROM (VALUES ('feA','rows=0'),('feAv','rows=0'),('feG','rows=1'),('fadm','rows=1
 SELECT pg_temp.expect('C outreach_groups INSERT '||w, pg_temp.try(w, $q$INSERT INTO public.outreach_groups (name) VALUES ('t316 new')$q$), e)
 FROM (VALUES ('feA','err 42501'),('feAv','err 42501'),('feG','rows=1')) v(w,e);
 
--- ── D. template library writes: admin or unscoped schools.manage ──
+-- ── D. template library writes: admin, unscoped schools.manage or unscoped schools.templates.manage ──
+SELECT pg_temp.expect('D can_manage_application_templates '||w, pg_temp.fn(w, 'public.can_manage_application_templates()'), e)
+FROM (VALUES ('adm','true'),('mG','true'),('ffx','true'),('tmG','true'),('tmRG','true'),
+             ('tmA','false'),('tmR','false'),('mA','false'),('plA','false'),('offtm','false'),('offadm','false'),('nobody','false'),('anon','false')) v(w,e);
+SELECT pg_temp.expect('D has_permission(schools.templates.manage) '||w, pg_temp.fn(w, $q$public.has_permission('schools.templates.manage')$q$), e)
+FROM (VALUES ('tmG','true'),('tmRG','true'),('tmA','false'),('tmR','false'),('offtm','false')) v(w,e);
+SELECT pg_temp.expect('D scoped schools.templates.manage grant refused', pg_temp.try('service', format($q$INSERT INTO public.user_permissions (user_id, permission_id, scope_type, scope_id) SELECT %L, id, 'program', %L FROM public.permissions WHERE key = 'schools.templates.manage'$q$, current_setting('t316.ids')::jsonb->>'nobody', pg_temp.s('pa'))), 'err 23514');
+SELECT pg_temp.expect('D scoping an existing schools.templates.manage grant refused', pg_temp.try('service', format($q$UPDATE public.user_permissions SET scope_type = 'program', scope_id = %L WHERE user_id = %L$q$, pg_temp.s('pa'), current_setting('t316.ids')::jsonb->>'tmG')), 'err 23514');
+SELECT pg_temp.expect('D unscoped schools.templates.manage grant allowed', pg_temp.try('service', format($q$INSERT INTO public.user_permissions (user_id, permission_id) SELECT %L, id FROM public.permissions WHERE key = 'schools.templates.manage'$q$, current_setting('t316.ids')::jsonb->>'nobody')), 'rows=1');
 SELECT pg_temp.expect('D templates SELECT '||w, pg_temp.fn(w, format($q$(SELECT count(*) FROM public.application_templates WHERE id = %L)$q$, pg_temp.s('tpl'))), e)
-FROM (VALUES ('mA','1'),('plA','1'),('mG','1'),('adm','1'),('nobody','0')) v(w,e);
+FROM (VALUES ('mA','1'),('plA','1'),('mG','1'),('adm','1'),('nobody','0'),('tmG','1'),('tmRG','1'),('tmA','0'),('tmR','0'),('offtm','0')) v(w,e);
 SELECT pg_temp.expect('D template questions SELECT '||w, pg_temp.fn(w, format($q$(SELECT count(*) FROM public.application_template_questions WHERE id = %L)$q$, pg_temp.s('tq'))), e)
-FROM (VALUES ('mA','1'),('plA','1'),('mG','1')) v(w,e);
+FROM (VALUES ('mA','1'),('plA','1'),('mG','1'),('tmG','1'),('tmA','0')) v(w,e);
 SELECT pg_temp.expect('D templates INSERT '||w, pg_temp.try(w, $q$INSERT INTO public.application_templates (name) VALUES ('t316 new')$q$), e)
-FROM (VALUES ('mA','err 42501'),('plA','err 42501'),('mG','rows=1'),('ffx','rows=1'),('adm','rows=1'),('offadm','err 42501'),('nobody','err 42501'),('anon','err 42501')) v(w,e);
+FROM (VALUES ('mA','err 42501'),('plA','err 42501'),('mG','rows=1'),('ffx','rows=1'),('adm','rows=1'),('offadm','err 42501'),('nobody','err 42501'),('anon','err 42501'),
+             ('tmG','rows=1'),('tmRG','rows=1'),('tmA','err 42501'),('tmR','err 42501'),('offtm','err 42501')) v(w,e);
 SELECT pg_temp.expect('D templates UPDATE '||w, pg_temp.try(w, format($q$UPDATE public.application_templates SET name = 't316 renamed' WHERE id = %L$q$, pg_temp.s('tpl'))), e)
-FROM (VALUES ('mA','rows=0'),('plA','rows=0'),('mG','rows=1'),('ffx','rows=1'),('adm','rows=1'),('offadm','rows=0')) v(w,e);
+FROM (VALUES ('mA','rows=0'),('plA','rows=0'),('mG','rows=1'),('ffx','rows=1'),('adm','rows=1'),('offadm','rows=0'),
+             ('tmG','rows=1'),('tmA','rows=0'),('tmR','rows=0'),('offtm','rows=0')) v(w,e);
 SELECT pg_temp.expect('D templates DELETE '||w, pg_temp.try(w, format($q$DELETE FROM public.application_templates WHERE id = %L$q$, pg_temp.s('tpl'))), e)
-FROM (VALUES ('mA','rows=0'),('plA','rows=0'),('mG','rows=1'),('adm','rows=1'),('offadm','rows=0')) v(w,e);
+FROM (VALUES ('mA','rows=0'),('plA','rows=0'),('mG','rows=1'),('adm','rows=1'),('offadm','rows=0'),('tmG','rows=1'),('tmA','rows=0')) v(w,e);
 SELECT pg_temp.expect('D templates unfiltered DELETE mA', pg_temp.try('mA', $q$DELETE FROM public.application_templates$q$), 'rows=0');
 SELECT pg_temp.expect('D template questions INSERT '||w, pg_temp.try(w, format($q$INSERT INTO public.application_template_questions (template_id, label) VALUES (%L, 'q2')$q$, pg_temp.s('tpl'))), e)
-FROM (VALUES ('mA','err 42501'),('plA','err 42501'),('mG','rows=1'),('adm','rows=1'),('offadm','err 42501')) v(w,e);
+FROM (VALUES ('mA','err 42501'),('plA','err 42501'),('mG','rows=1'),('adm','rows=1'),('offadm','err 42501'),('tmG','rows=1'),('tmA','err 42501'),('tmR','err 42501')) v(w,e);
 SELECT pg_temp.expect('D template questions DELETE '||w, pg_temp.try(w, format($q$DELETE FROM public.application_template_questions WHERE id = %L$q$, pg_temp.s('tq'))), e)
-FROM (VALUES ('mA','rows=0'),('plA','rows=0'),('mG','rows=1'),('adm','rows=1')) v(w,e);
+FROM (VALUES ('mA','rows=0'),('plA','rows=0'),('mG','rows=1'),('adm','rows=1'),('tmG','rows=1'),('tmA','rows=0')) v(w,e);
 
 -- ── E. roles count only for active accounts ──
 SELECT pg_temp.expect('E is_admin '||w, pg_temp.fn(w, 'public.is_admin()'), e)
@@ -210,13 +253,19 @@ SELECT pg_temp.expect('dept INSERT clean', pg_temp.ins_dept('training'), 'traini
 
 -- ── catalog: search_path, definer, ACL ──
 SELECT pg_temp.expect('catalog '||f||' search_path', (SELECT array_to_string(proconfig, ',') FROM pg_proc WHERE oid = to_regprocedure(f)), 'search_path=""')
-FROM (VALUES ('public.has_permission(text)'),('public.has_any_role(text[])'),('public.has_role(text,text,uuid)'),('public.is_admin()'),('public.users_normalise_department_on_insert()')) v(f);
+FROM (VALUES ('public.has_permission(text)'),('public.has_any_role(text[])'),('public.has_role(text,text,uuid)'),('public.is_admin()'),('public.users_normalise_department_on_insert()'),
+             ('public.can_manage_application_templates()'),('public.user_permissions_unscoped_only_keys()')) v(f);
 SELECT pg_temp.expect('catalog '||f||' definer', (SELECT prosecdef::text FROM pg_proc WHERE oid = to_regprocedure(f)), 'true')
-FROM (VALUES ('public.has_permission(text)'),('public.has_any_role(text[])'),('public.has_role(text,text,uuid)'),('public.is_admin()')) v(f);
+FROM (VALUES ('public.has_permission(text)'),('public.has_any_role(text[])'),('public.has_role(text,text,uuid)'),('public.is_admin()'),('public.can_manage_application_templates()')) v(f);
 SELECT pg_temp.expect('catalog '||f||' EXECUTE anon+authenticated', (has_function_privilege('anon', f, 'EXECUTE') AND has_function_privilege('authenticated', f, 'EXECUTE'))::text, 'true')
 FROM (VALUES ('public.has_permission(text)'),('public.has_any_role(text[])'),('public.has_role(text,text,uuid)'),('public.is_admin()')) v(f);
 SELECT pg_temp.expect('catalog dept trigger fn not executable by authenticated', CASE WHEN to_regprocedure('public.users_normalise_department_on_insert()') IS NULL THEN 'missing' ELSE has_function_privilege('authenticated', 'public.users_normalise_department_on_insert()', 'EXECUTE')::text END, 'false');
-SELECT pg_temp.expect('catalog template write policies', (SELECT count(*)::text FROM pg_policies WHERE tablename IN ('application_templates','application_template_questions') AND cmd <> 'SELECT' AND coalesce(qual, with_check) LIKE '%has_permission_for(''schools.manage''::text, NULL::uuid)%'), '5');
+SELECT pg_temp.expect('catalog template write policies', (SELECT count(*)::text FROM pg_policies WHERE tablename IN ('application_templates','application_template_questions') AND cmd <> 'SELECT' AND coalesce(qual, with_check) LIKE '%can_manage_application_templates()%'), '5');
+SELECT pg_temp.expect('catalog template write rule text', (SELECT regexp_replace(prosrc, '\s+', ' ', 'g') FROM pg_proc WHERE oid = to_regprocedure('public.can_manage_application_templates()')),
+  ' SELECT public.is_admin() OR public.has_permission_for(''schools.manage'', NULL::uuid) OR public.has_permission_for(''schools.templates.manage'', NULL::uuid); ');
+SELECT pg_temp.expect('catalog permission schools.templates.manage seeded', (SELECT module || '|' || display_name || '|' || sort_order FROM public.permissions WHERE key = 'schools.templates.manage' AND created_at < now()), 'schools|Manage Application Templates (org-wide only)|6');
+SELECT pg_temp.expect('catalog unscoped-only trigger enabled', (SELECT tgenabled::text FROM pg_trigger WHERE tgname = 'user_permissions_unscoped_only_keys'), 'O');
+SELECT pg_temp.expect('catalog template-manager read policies', (SELECT count(*)::text FROM pg_policies WHERE tablename IN ('application_templates','application_template_questions') AND cmd = 'SELECT' AND qual LIKE '%can_manage_application_templates()%'), '2');
 SELECT pg_temp.expect('catalog template read policies unchanged', (SELECT count(*)::text FROM pg_policies WHERE tablename IN ('application_templates','application_template_questions') AND cmd = 'SELECT' AND qual = 'has_schools_access()'), '2');
 
 -- ── report ──
