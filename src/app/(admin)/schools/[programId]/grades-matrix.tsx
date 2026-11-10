@@ -158,9 +158,14 @@ export function GradesMatrix({
     return (
       <div className="border border-ink">
         <SectionBar title={`${programCode} · grades`} />
-        <p className="mono-label px-6 py-12 text-center">
-          Add courses on the Courses tab before grading
-        </p>
+        <div className="space-y-3 px-6 py-12 text-center">
+          <p className="mono-label">
+            Add billing courses on the Courses tab before grading
+          </p>
+          <p className="mono-label">
+            Classroom courses don&apos;t create grade columns
+          </p>
+        </div>
       </div>
     );
   }
