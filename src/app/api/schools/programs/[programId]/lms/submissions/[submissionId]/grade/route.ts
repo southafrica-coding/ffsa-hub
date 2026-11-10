@@ -9,7 +9,13 @@ import {
   readJson,
 } from "@/lib/schools/lms-assignments-auth";
 import { validateGradeInput } from "@/lib/schools/lms-assignments";
-import { getAssignment, getSubmission, upsertGrade } from "@/services/lms-assignments";
+import {
+  getAssignment,
+  getGradeForSubmission,
+  getSubmission,
+  submissionIsMine,
+  upsertGrade,
+} from "@/services/lms-assignments";
 
 // PUT …/lms/submissions/[submissionId]/grade
 //     { points, feedback?, release?, expected_updated_at? }
@@ -20,11 +26,44 @@ import { getAssignment, getSubmission, upsertGrade } from "@/services/lms-assign
 // Optimistic concurrency: send expected_updated_at = the grade's updated_at
 // you edited (null if you saw no grade). If someone else has graded or
 // re-graded since, nothing is written and the answer is 409 grade_changed.
+//
+// Nobody grades their own attempt (310 F3). RLS hides the grade row from
+// that UPDATE, which looks like "0 rows", so a 0-row result is re-checked:
+// 403 not_allowed for your own work (or any other refusal), and 409
+// grade_changed only when the grade still exists and its updated_at moved.
 
 type Ctx = { params: Promise<{ programId: string; submissionId: string }> };
+type Client = Parameters<typeof getSubmission>[0];
 
 const gradeChanged = () =>
   conflict("grade_changed", "Someone else changed this grade while you were editing. Reload to see it.");
+const ownWork = () => json({ error: "not_allowed", message: "You can't grade your own work." }, 403);
+const notAllowed = () => json({ error: "not_allowed", message: "You're not allowed to grade this attempt." }, 403);
+
+const sameInstant = (a: string | null, b: string | null) =>
+  a === null || b === null ? a === b : Date.parse(a) === Date.parse(b);
+
+/** A refusal: your own work, or not allowed for another reason. */
+async function refusal(supabase: Client, submissionId: string) {
+  const mine = await submissionIsMine(supabase, submissionId);
+  if (mine.error) return dbError(mine.error);
+  return mine.data ? ownWork() : notAllowed();
+}
+
+/**
+ * The UPDATE matched no row. 409 only if the grade is still there and its
+ * updated_at is no longer the one we wrote against; otherwise RLS refused.
+ */
+async function explainNoWrite(supabase: Client, submissionId: string, basedOn: string | null) {
+  const mine = await submissionIsMine(supabase, submissionId);
+  if (mine.error) return dbError(mine.error);
+  if (mine.data) return ownWork();
+  const now = await getGradeForSubmission(supabase, submissionId);
+  if (now.error) return dbError(now.error);
+  // Same PostgREST serialisation both times, so compare exactly (keeps µs).
+  if (now.data && now.data.updated_at !== basedOn) return gradeChanged();
+  return notAllowed();
+}
 
 export async function PUT(request: Request, context: Ctx) {
   const blocked = previewWritesDisabled();
@@ -51,15 +90,23 @@ export async function PUT(request: Request, context: Ctx) {
     if (expected !== null && typeof expected !== "string") {
       return badRequest("expected_updated_at must be a timestamp or null");
     }
-    const sameMoment =
-      expected === null ? existing === null : !!existing && Date.parse(expected) === Date.parse(existing.updated_at);
-    if (!sameMoment) return gradeChanged();
+    if (!sameInstant(expected, existing?.updated_at ?? null)) {
+      // The grade differs from what the caller edited, unless this is
+      // their own attempt, which they may not grade at all.
+      const mine = await submissionIsMine(auth.supabase, submissionId);
+      if (mine.error) return dbError(mine.error);
+      return mine.data ? ownWork() : gradeChanged();
+    }
     basedOn = existing ? existing.updated_at : null;
   }
 
   const result = await upsertGrade(auth.supabase, submissionId, input.value, existing, basedOn);
-  if (result.stale) return gradeChanged();
-  if (result.error) return dbError(result.error);
+  if (result.stale) return explainNoWrite(auth.supabase, submissionId, basedOn);
+  if (result.error) {
+    // A first grade on your own attempt fails the INSERT policy (42501).
+    if (result.error.code === "42501") return refusal(auth.supabase, submissionId);
+    return dbError(result.error);
+  }
   if (!result.data) return notFound("Grade");
   return json({ grade: { ...result.data, points: Number(result.data.points) } });
 }

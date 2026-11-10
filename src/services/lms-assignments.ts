@@ -278,6 +278,20 @@ export async function upsertGrade(
     .single();
 }
 
+/** Is this attempt the signed-in user's own work? (310's lms_submission_is_mine.) */
+export async function submissionIsMine(supabase: Client, submissionId: string): Promise<DbResult<boolean>> {
+  const { data, error } = await supabase.rpc("lms_submission_is_mine", { target_submission_id: submissionId });
+  if (error) return { data: null, error };
+  return { data: data === true, error: null };
+}
+
+/** The grade on one attempt as the caller sees it now (RLS), or null. */
+export async function getGradeForSubmission(supabase: Client, submissionId: string): Promise<DbResult<LmsGrade>> {
+  const { data, error } = await supabase.from("lms_grades").select("*").eq("submission_id", submissionId).maybeSingle();
+  if (error) return { data: null, error };
+  return { data: data ? { ...(data as LmsGrade), points: Number((data as LmsGrade).points) } : null, error: null };
+}
+
 /** Release held grades by id. Already-released grades are left alone. */
 export async function releaseGrades(supabase: Client, gradeIds: string[]): Promise<DbResult<LmsGrade[]>> {
   if (gradeIds.length === 0) return { data: [], error: null };
