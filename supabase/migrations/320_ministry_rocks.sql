@@ -19,10 +19,7 @@
 -- every rock, plus current-cycle OKR objectives on a staff ministry.
 -- The view's own predicate is leadership-or-admin, and security_invoker
 -- still applies rocks and okr_objectives RLS.
--- Wrapped in one transaction.
 -- ============================================================
-
-BEGIN;
 
 CREATE TABLE IF NOT EXISTS public.rocks (
   id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -176,5 +173,3 @@ COMMENT ON VIEW public.leadership_ministry_rollup IS
 
 REVOKE ALL ON public.leadership_ministry_rollup FROM PUBLIC, anon;
 GRANT SELECT ON public.leadership_ministry_rollup TO authenticated, service_role;
-
-COMMIT;

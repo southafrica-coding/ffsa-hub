@@ -33,10 +33,12 @@ describe("departments migrations 318–321", () => {
   it("leaves HULC and Missio as updates, not new rows", () => {
     expect(homes).not.toMatch(/INSERT INTO public\.staff_ministries[\s\S]*'hulk'/);
     expect(homes).not.toMatch(/INSERT INTO public\.staff_ministries[\s\S]*'missio_ministry'/);
-    expect(homes).toMatch(/slug = 'hulk' AND cluster IS NULL/);
-    expect(homes).toMatch(/slug = 'missio_ministry' AND cluster IS NULL/);
+    expect(homes).toMatch(/s\.slug = 'hulk'/);
+    expect(homes).toMatch(/s\.slug = 'missio_ministry'/);
+    expect(homes).toMatch(/s\.cluster IS NULL/);
     expect(homes).not.toMatch(/SET is_active = true/);
     expect(homes).toMatch(/ON CONFLICT \(slug\) DO NOTHING/);
+    expect(homes).toMatch(/prior->>'slug' = 'be_free'/);
   });
 
   it("folds donors_dev through parent_id and an alias", () => {
@@ -81,6 +83,11 @@ describe("departments migrations 318–321", () => {
     expect(services).toMatch(/'spaces',\s*NULL,\s*'use'/);
     expect(services).toMatch(/'vehicles',\s*NULL,\s*'use'/);
     expect(services).toMatch(/'brand_kit',\s*NULL,\s*'use'/);
+    expect(services).toMatch(/'brand_kit',\s*'media',\s*'own'/);
+    expect(services).toMatch(/'brand_kit',\s*'media',\s*'manage'/);
+    expect(services).toMatch(/so\.open_to_all\s+AND so\.capability = 'use'/);
+    expect(services).not.toContain("user_can_moderate_service");
+    expect(services).toMatch(/public\.dept_caller_is_active\(\)/);
     expect(services).not.toMatch(/'hulk',\s*'moderate'/);
     expect(services).not.toMatch(/'media',\s*'moderate'/);
     expect(services).toMatch(/mm\.is_point_leader/);
@@ -101,6 +108,10 @@ describe("departments migrations 318–321", () => {
     expect(budgets).toMatch(/spend_cents\s+bigint/);
     expect(budgets).toMatch(/CHECK \(currency = 'ZAR'\)/);
     expect(budgets).toMatch(/o\.key = 'npc'/);
+    expect(budgets).toMatch(/sm\.is_active/);
+    expect(budgets).toMatch(/fp\.is_active/);
+    expect(budgets).toMatch(/Hope Again and Brave Love/);
+    expect(budgets).toMatch(/Woven is not/);
     expect(budgets).not.toMatch(/record_currency/);
     expect(budgets).not.toMatch(/UNIQUE \(staff_ministry_id\)/);
     expect(budgets).toMatch(/EXTRACT\(YEAR FROM CURRENT_DATE\)/);
@@ -113,9 +124,20 @@ describe("departments migrations 318–321", () => {
     expect(homes).toMatch(/u\.is_active IS NOT FALSE/);
     expect(homes).toMatch(/sm\.is_active/);
     expect(homes).not.toMatch(/has_role\('leadership_team'\)/);
-    expect(homes).toMatch(/^BEGIN;/m);
-    expect(rollback).toMatch(/can_moderate_evangelism/);
-    expect(rollback).toMatch(/2026-10-19 08:33:36\.68362\+00/);
+    expect(homes).not.toMatch(/^BEGIN;/m);
+    expect(services).not.toMatch(/^BEGIN;/m);
+    expect(rocks).not.toMatch(/^BEGIN;/m);
+    expect(budgets).not.toMatch(/^BEGIN;/m);
+    expect(rollback).toMatch(/Jack's explicit OK/);
+    expect(rollback).not.toMatch(/Never run this on the live project/);
+    expect(rollback).toMatch(/\\copy \(SELECT \* FROM public\.rocks\)/);
+    expect(rollback).toMatch(/rollback refused: be_free/);
+    expect(rollback).toMatch(/prior->>'updated_at'/);
+    expect(rollback).toMatch(/COMMENT ON FUNCTION public\.can_moderate_evangelism\(\) IS NULL/);
+    expect(rollback).not.toContain("user_can_moderate_service");
+    expect(rollback).not.toMatch(/2026-10-19/);
+    expect(rollback).toMatch(/318_department_homes/);
+    expect(rollback).toMatch(/supabase_migrations\.schema_migrations/);
     expect(rollback).toMatch(/DROP FUNCTION IF EXISTS public\.dept_is_ministry_member\(uuid, boolean\)/);
   });
 });
