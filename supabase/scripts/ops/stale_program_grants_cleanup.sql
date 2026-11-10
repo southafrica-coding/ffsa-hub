@@ -9,7 +9,7 @@
 --   68f5d637 (super_admin)  10 rows on deleted program a311977f
 --   62d623b0                 9 rows on deleted program a311977f
 -- 68f5d637 also has 4 grants scoped to a deleted EVENT (2a80fbbe); with
--- those the total is 14. They are only removed when SWITCH 2 is on.
+-- those the total is 14. They are removed by default (SWITCH 2 on, per Jack).
 -- Nothing else is touched: grants on live programs or events, unscoped
 -- grants, team scopes, roles.
 --
@@ -26,12 +26,12 @@
 -- ============================================================
 
 SELECT set_config('stale316.mode', 'verify', false);               -- SWITCH 1: verify (roll back, default) | commit
-SELECT set_config('stale316.include_dead_events', 'false', false); -- SWITCH 2: false = programs only (default) | true = also deleted-event grants
+SELECT set_config('stale316.include_dead_events', 'true', false);  -- SWITCH 2: true = also deleted-event grants (default) | false = programs only
 
 DO $s$
 DECLARE
   v_commit boolean := coalesce(current_setting('stale316.mode', true), 'verify') = 'commit';
-  v_events boolean := coalesce(nullif(current_setting('stale316.include_dead_events', true), ''), 'false')::boolean;
+  v_events boolean := coalesce(nullif(current_setting('stale316.include_dead_events', true), ''), 'true')::boolean;
   c_people constant jsonb := jsonb_build_object(
     '48d733cb-7db2-4a15-86a3-51e04a64c816', jsonb_build_object('program', 45, 'event', 0),
     '68f5d637-afde-409e-abed-eaee20df19a7', jsonb_build_object('program', 10, 'event', 4),
