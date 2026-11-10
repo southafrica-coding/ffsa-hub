@@ -46,14 +46,14 @@ export default async function DesignSystemPage({
           columns={["Line", "Amount"]}
           rows={[
             { cells: ["Travel", null], cents: 1_245_000 },
-            { cells: ["Refund", null], cents: -12_50 },
+            { cells: ["Refund", null], cents: -1_200 },
           ]}
-          totalCents={1_243_750}
+          totalCents={1_243_800}
         />
         <DataTable
           caption="People"
           columns={["Name", "Role"]}
-          rows={[["Amina", "Prayer lead"]]}
+          rows={[["Test Leader A", "Prayer lead"]]}
         />
         <p className="px-5 py-4 text-ui">
           Sample amount <MoneyCell cents={1_245_000} />
