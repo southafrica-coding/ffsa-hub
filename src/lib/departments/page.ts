@@ -1,7 +1,7 @@
 // Assembles department payloads. Finance-only viewers get the header and
 // the budget; people, OKRs, rocks, services and sub-ministries are not read.
 
-import { loadMinistryAccess, type DepartmentAccessFlags } from "./access";
+import { foldedDetailIds, loadMinistryAccess, type DepartmentAccessFlags } from "./access";
 import { FOLDED_DEPARTMENTS, isBlockedHomeSlug } from "./homes";
 import { personName } from "./names";
 import { addIsoDays, currentQuarter, saTodayIso } from "./quarter";
@@ -34,6 +34,7 @@ import type {
   ViewerMembership,
 } from "./ui-contract";
 import { okrStatus } from "./ui-contract";
+import { isEvangelismModeratorSlug } from "@/lib/services/evangelism-moderators";
 import { listServiceOwnerRows } from "@/lib/services/repository";
 import type { ServiceOwnerRow } from "@/lib/services/seed";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -118,19 +119,27 @@ export async function listVisibleDepartments(
   const homes = rows.data
     .filter((row) => isListedHome(row, foldedSources))
     .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
-  const decisions = await Promise.all(homes.map((home) => loadMinistryAccess(reader, home.id)));
-  if (decisions.some((decision) => !decision.ok)) {
+  const [decisions, fold] = await Promise.all([
+    Promise.all(homes.map((home) => loadMinistryAccess(reader, home.id, { fold: false }))),
+    foldedDetailIds(reader, rows.data),
+  ]);
+  if (!fold.ok || decisions.some((decision) => !decision.ok)) {
     return { data: null, error: { message: "access lookup failed" }, accessError: true };
   }
   const visible = homes.flatMap((home, index) => {
     const decision = decisions[index];
-    if (!decision.ok || decision.denied) return [];
-    return [{ home, access: decision.access }];
+    if (!decision.ok) return [];
+    const access = {
+      ...decision.access,
+      canSeeDepartmentDetail: decision.access.canSeeDepartmentDetail || fold.ids.has(home.id),
+    };
+    if (!access.canSeeDepartmentDetail && !access.canSeeBudget) return [];
+    return [{ home, access }];
   });
   const detailIds = visible.filter((row) => row.access.canSeeDepartmentDetail).map((row) => row.home.id);
   const counts = detailIds.length === 0
     ? { data: new Map<string, number>(), error: null }
-    : await countActiveMembers(createAdminClient());
+    : await countActiveMembers(createAdminClient(), detailIds);
   if (counts.error) return { data: null, error: counts.error };
   const summaries: DepartmentSummary[] = [];
   for (const row of visible) {
@@ -215,6 +224,39 @@ export async function loadOkrs(admin: Client, department: DepartmentRecord): Pro
   };
 }
 
+export async function rocksForDepartments(
+  admin: Client,
+  departments: readonly DepartmentRecord[],
+  quarter: string
+): Promise<{ data: Map<string, Rock[]> | null; error: { message: string } | null }> {
+  const grouped = new Map<string, Rock[]>();
+  for (const department of departments) grouped.set(department.id, []);
+  if (departments.length === 0) return { data: grouped, error: null };
+  const rocks = await listRocksForQuarter(admin, quarter);
+  if (rocks.error) return { data: null, error: rocks.error };
+  const ids = new Set(departments.map((department) => department.id));
+  const slugOf = new Map(departments.map((department) => [department.id, department.slug]));
+  const mine = rocks.data.filter((rock) => ids.has(rock.staff_ministry_id));
+  const named = await loadPeopleById(
+    admin,
+    mine.flatMap((rock) => (rock.owner_user_id ? [rock.owner_user_id] : []))
+  );
+  if (named.error) return { data: null, error: named.error };
+  for (const rock of mine) {
+    grouped.get(rock.staff_ministry_id)?.push({
+      id: rock.id,
+      departmentSlug: slugOf.get(rock.staff_ministry_id) ?? "",
+      title: rock.title,
+      owner: rock.owner_user_id ? personName(named.data.get(rock.owner_user_id)) : "",
+      status: rock.status,
+      dueOn: rock.due_on,
+      quarter: rock.quarter,
+    });
+  }
+  for (const list of grouped.values()) list.sort((a, b) => a.title.localeCompare(b.title));
+  return { data: grouped, error: null };
+}
+
 export async function loadQuarterRocks(admin: Client, department: DepartmentRecord, quarter: string): Promise<{ data: Rock[] | null; error: { message: string } | null }> {
   const rocks = await listRocks(admin, department.id, quarter);
   if (rocks.error) return { data: null, error: rocks.error };
@@ -250,7 +292,7 @@ async function servicesRun(admin: Client, department: DepartmentRecord) {
     seen.add(key);
     runs.push({ serviceId: grant.service_key, role });
   }
-  if (department.slug === "media" || department.slug === "hulk") {
+  if (isEvangelismModeratorSlug(department.slug)) {
     const key = "evangelism:moderator";
     if (!seen.has(key)) runs.push({ serviceId: "evangelism", role: "moderator" });
   }

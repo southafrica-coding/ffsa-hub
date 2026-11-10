@@ -3,6 +3,7 @@
 // user_id and the resolver honours eq / in / is.
 
 import type { FakeQuery, FakeResult } from "@/lib/testing/fake-supabase";
+import { EVANGELISM_MODERATOR_SLUGS } from "@/lib/services/evangelism-moderators";
 import { seedGrants, SERVICE_CATALOG } from "@/lib/services/seed";
 import { currentQuarter } from "@/lib/departments/quarter";
 
@@ -433,7 +434,10 @@ function rpcResult(world: DepartmentWorld, query: FakeQuery): FakeResult | null 
     if (caller === "none" || !caller.active) return { data: false };
     if (world.errors?.staff_ministry_members) return { error: { message: "members down" } };
     const homes = world.ministries.filter(
-      (row) => (row.slug === "media" || row.slug === "hulk") && row.is_active !== false
+      (row) =>
+        typeof row.slug === "string" &&
+        (EVANGELISM_MODERATOR_SLUGS as readonly string[]).includes(row.slug) &&
+        row.is_active !== false
     );
     const allowed = world.memberships.some(
       (row) =>
