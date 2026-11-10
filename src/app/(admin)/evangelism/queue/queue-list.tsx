@@ -14,18 +14,12 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { deleteStory, patchStory, storyListSignature } from "@/lib/evangelism/story-client";
-import { canActOnOthersStory, decideTakedown, takedownSubject, type TakedownAccess } from "@/lib/evangelism/takedown";
+import { decideTakedown, takedownSubject, type TakedownAccess } from "@/lib/evangelism/takedown";
 import type { PresentedTestimony } from "@/services/evangelism";
 import { StoryCard } from "../story-card";
+import { WITHHELD_QUEUE_LIMIT, showWithheldQueue } from "./withheld-queue-rules";
 
 const control = "min-h-11 w-full sm:w-auto";
-
-/** Moderators only. Authors do not get this section of the queue. */
-export function showWithheldQueue(access: TakedownAccess): boolean {
-  return canActOnOthersStory(access);
-}
-
-export const WITHHELD_QUEUE_LIMIT = 100;
 
 /** Set when the withheld query returned a full page, so more may exist. */
 export function withheldCapNote(count: number, limit = WITHHELD_QUEUE_LIMIT): string | null {

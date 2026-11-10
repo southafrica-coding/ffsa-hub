@@ -5,7 +5,8 @@ import { getEvangelismAccess } from "@/lib/auth/check-evangelism-access";
 import { present } from "@/lib/evangelism/http";
 import { Masthead, MastheadAction, SectionBar } from "@/components/ffsa";
 import { isEvangelismNotReady, listTestimonies } from "@/services/evangelism";
-import { QueueList, WITHHELD_QUEUE_LIMIT, WithheldQueue, showWithheldQueue } from "./queue-list";
+import { QueueList, WithheldQueue } from "./queue-list";
+import { WITHHELD_QUEUE_LIMIT, showWithheldQueue } from "./withheld-queue-rules";
 
 export default async function EvangelismQueuePage() {
   const supabase = await createClient();

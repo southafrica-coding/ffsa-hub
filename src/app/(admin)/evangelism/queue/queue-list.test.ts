@@ -2,7 +2,8 @@ import { createElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { PresentedTestimony } from "@/services/evangelism";
-import { WithheldQueue, afterWithheldSuccess, showWithheldQueue, withheldCapNote, withoutStory } from "./queue-list";
+import { WithheldQueue, afterWithheldSuccess, withheldCapNote, withoutStory } from "./queue-list";
+import { WITHHELD_QUEUE_LIMIT, showWithheldQueue } from "./withheld-queue-rules";
 
 vi.mock("sonner", () => ({ toast: { error: () => {}, success: () => {} } }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: () => {} }) }));
@@ -51,9 +52,10 @@ describe("withoutStory", () => {
 
 describe("withheldCapNote", () => {
   it("appears only once the list reaches the fetch limit", () => {
-    expect(withheldCapNote(99)).toBeNull();
-    expect(withheldCapNote(100)).toBe("Showing the first 100 withheld stories.");
-    expect(withheldCapNote(101)).toBe("Showing the first 100 withheld stories.");
+    expect(WITHHELD_QUEUE_LIMIT).toBe(100);
+    expect(withheldCapNote(WITHHELD_QUEUE_LIMIT - 1)).toBeNull();
+    expect(withheldCapNote(WITHHELD_QUEUE_LIMIT)).toBe(`Showing the first ${WITHHELD_QUEUE_LIMIT} withheld stories.`);
+    expect(withheldCapNote(WITHHELD_QUEUE_LIMIT + 1)).toBe(`Showing the first ${WITHHELD_QUEUE_LIMIT} withheld stories.`);
   });
 });
 
