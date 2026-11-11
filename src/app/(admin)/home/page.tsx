@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { loadHomeForViewer } from "@/lib/departments";
+import { notFound } from "next/navigation";
+import { loadHomeForViewer, loadServicesForViewer } from "@/lib/departments";
 import { clusterLabel, departmentNames, managingLabel, STAFF_LANGUAGE } from "@/lib/departments/data";
-import { sessionClient, settleViewerResult } from "@/lib/departments/load";
+import { loadCachedDepartmentsIndex, sessionClient, settleViewerResult } from "@/lib/departments/load";
 import { requireSignedIn } from "@/lib/departments/session";
 import { formatDayRange } from "@/lib/format/sa-time";
-import type { RockStatus } from "@/lib/departments/ui-contract";
+import type { HomeDashboard, RockStatus } from "@/lib/departments/ui-contract";
 import { EmptyNote, PageHeading, SectionHeading, StackLink } from "../departments/local-ui";
 
 export const metadata: Metadata = { title: "Home" };
@@ -19,7 +20,39 @@ const ROCK_LABEL: Record<RockStatus, string> = {
 export default async function HomePage() {
   const path = "/home";
   await requireSignedIn(path);
-  const home = settleViewerResult(await loadHomeForViewer(await sessionClient()), path);
+  const supabase = await sessionClient();
+  const [homeResult, indexResult] = await Promise.all([
+    loadHomeForViewer(supabase),
+    loadCachedDepartmentsIndex(supabase),
+  ]);
+  const showAllDepartments = indexResult.kind === "ok" && indexResult.data.length > 0;
+  if (homeResult.kind === "ok") {
+    return <HomeBody home={homeResult.data} departmentsNote={false} showAllDepartments={showAllDepartments} />;
+  }
+  if (homeResult.kind === "unauthenticated") {
+    settleViewerResult(homeResult, path);
+  }
+  if (homeResult.kind === "not_found") notFound();
+
+  const services = settleViewerResult(await loadServicesForViewer(supabase), path);
+  return (
+    <HomeBody
+      home={{ departments: [], services, rocksDue: [], okrCheckInsDue: [], viewerMemberships: [] }}
+      departmentsNote
+      showAllDepartments={showAllDepartments}
+    />
+  );
+}
+
+function HomeBody({
+  home,
+  departmentsNote,
+  showAllDepartments,
+}: {
+  home: HomeDashboard;
+  departmentsNote: boolean;
+  showAllDepartments: boolean;
+}) {
   const names = departmentNames(home.departments);
 
   return (
@@ -27,7 +60,9 @@ export default async function HomePage() {
       <PageHeading context={STAFF_LANGUAGE} title="Home" />
 
       <SectionHeading title="My departments" />
-      {home.departments.length === 0 ? (
+      {departmentsNote ? (
+        <p className="px-5 py-4 text-sm text-muted-foreground md:px-8">Couldn&apos;t load departments.</p>
+      ) : home.departments.length === 0 ? (
         <EmptyNote title="No department home yet">
           A home appears when you lead or serve on a staff ministry. Part-time ministries, Rooted
           Christian Academy and No Ministry do not get one.
@@ -46,6 +81,11 @@ export default async function HomePage() {
           />
         ))
       )}
+      {showAllDepartments ? (
+        <p className="px-5 py-3 text-sm md:px-8">
+          <Link href="/departments">All departments</Link>
+        </p>
+      ) : null}
 
       <SectionHeading title="Services you use" />
       {home.services.length === 0 ? (
