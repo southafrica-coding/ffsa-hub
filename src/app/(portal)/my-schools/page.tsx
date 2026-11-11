@@ -3,6 +3,7 @@ import { getEnrollmentsByUser, getResponsesByUser } from "@/services/schools";
 import Link from "next/link";
 import {
   Masthead,
+  MastheadAction,
   NeedsYou,
   NeedsYouAction,
   SectionBar,
@@ -105,15 +106,26 @@ export default async function MySchoolsPage() {
   }
 
   const userId = user.id;
-  const { data: enrollments } = await getEnrollmentsByUser(supabase, userId);
-  const { data: myResponses } = await getResponsesByUser(supabase, userId);
-
-  const { data: openPrograms } = await supabase
-    .from("programs")
-    .select("id, name, code, credit_hours")
-    .eq("application_open", true)
-    .eq("status", "active")
-    .order("name", { ascending: true });
+  // Same gate as /my-attendance: a users row for this auth user. One read.
+  // A missing row, an error, or a rejected read hides the link. No role check.
+  const profileRead = Promise.resolve()
+    .then(() => supabase.from("users").select("id").eq("id", userId).maybeSingle())
+    .then(
+      (result) => !result.error && result.data != null,
+      () => false
+    );
+  const [canViewAttendance, { data: enrollments }, { data: myResponses }, { data: openPrograms }] =
+    await Promise.all([
+      profileRead,
+      getEnrollmentsByUser(supabase, userId),
+      getResponsesByUser(supabase, userId),
+      supabase
+        .from("programs")
+        .select("id, name, code, credit_hours")
+        .eq("application_open", true)
+        .eq("status", "active")
+        .order("name", { ascending: true }),
+    ]);
 
   const responses = (myResponses ?? []) as ResponseRow[];
   const enrolled = (enrollments ?? []) as EnrollmentRow[];
@@ -132,6 +144,11 @@ export default async function MySchoolsPage() {
       <Masthead
         context={`Training & education · ${enrolled.length} ${enrolled.length === 1 ? "enrolment" : "enrolments"}`}
         title="My training"
+        actions={
+          canViewAttendance ? (
+            <MastheadAction href="/my-attendance">View my attendance</MastheadAction>
+          ) : undefined
+        }
       />
 
       {/* The page's ONE yellow band: something is open that you have not
