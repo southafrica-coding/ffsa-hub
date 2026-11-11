@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { safeRedirect } from "@/lib/safe-redirect";
+import { loginDestination, loginReturnPath } from "@/lib/login-destination";
 import {
   createBearerClient,
   getBearerToken,
@@ -14,7 +14,7 @@ export async function middleware(request: NextRequest) {
   // Sign-out clears its own cookies on the redirect to /login. Do not
   // refresh the session here: getSession() would write the cookies back
   // onto the response, and /login would bounce a still-signed-in user
-  // to /dashboard.
+  // to /home.
   if (pathname === "/auth/sign-out" && request.method === "POST") {
     return NextResponse.next({ request });
   }
@@ -203,7 +203,9 @@ export async function middleware(request: NextRequest) {
     // never redirect-loop back to /login when there's no session.
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    const target = safeRedirect(`${pathname}${request.nextUrl.search}`);
+    // `/` is not a return path. Remembering it only sends a signed-in
+    // person back through this page. Unsafe values are dropped the same way.
+    const target = loginReturnPath(`${pathname}${request.nextUrl.search}`);
     if (target) url.searchParams.set("redirect", target);
     else url.searchParams.delete("redirect");
     return NextResponse.redirect(url);
@@ -212,17 +214,34 @@ export async function middleware(request: NextRequest) {
   if (user && !isDeactivated && pathname === "/login") {
     // A failed sign-out often leaves the session cookie in place. Let that
     // one URL through so the login page can show the error instead of
-    // bouncing straight back to the dashboard.
+    // bouncing straight back to home.
     if (request.nextUrl.searchParams.get("error") === "signout") {
       return supabaseResponse;
     }
-    // Redirect authenticated (active) users away from login
-    const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
-    return NextResponse.redirect(url);
+    // A safe internal return path is honoured. `/`, empty, unsafe, and
+    // /login (including redirect=/login?redirect=…) are not one, so they
+    // land on /home rather than looping.
+    const destination =
+      loginDestination(request.nextUrl.searchParams.get("redirect")) ?? "/home";
+    return redirectToPath(request, destination);
+  }
+
+  // `/` is not a page. Send a signed-in person to /home once. /home itself
+  // is an ordinary protected route, so the next request is not redirected.
+  if (user && !isDeactivated && pathname === "/") {
+    return redirectToPath(request, "/home");
   }
 
   return supabaseResponse;
+}
+
+function redirectToPath(request: NextRequest, destination: string) {
+  const url = request.nextUrl.clone();
+  const parsed = new URL(destination, url.origin);
+  url.pathname = parsed.pathname;
+  url.search = parsed.search;
+  url.hash = parsed.hash;
+  return NextResponse.redirect(url);
 }
 
 // ────────────────────────────────────────────────────────────
