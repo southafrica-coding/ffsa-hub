@@ -68,6 +68,8 @@ export type DepartmentWorld = {
   permissions?: Row[];
   rolePermissions?: Row[];
   rpcModerate?: boolean | "error";
+  /** Override has_equipment_access(). Default follows admin and equipment.* grants. */
+  equipmentStaff?: boolean | "error";
   /** Signed-in user for RPC checks. Route tests set this from the session. */
   callerId?: string | null;
   errors?: Partial<Record<string, boolean>>;
@@ -417,6 +419,18 @@ function rpcResult(world: DepartmentWorld, query: FakeQuery): FakeResult | null 
   if (!query.table.startsWith("rpc:")) return null;
   const name = query.table.slice(4);
   const args = (query.rpc?.args ?? {}) as Record<string, unknown>;
+  if (name === "has_equipment_access") {
+    if (world.equipmentStaff === "error") return { error: { message: "rpc down" } };
+    if (world.equipmentStaff === true) return { data: true };
+    if (world.equipmentStaff === false) return { data: false };
+    const caller = callerState(world);
+    if (caller === "error" || caller === "none" || !caller.active) return { data: false };
+    if (unscopedAdmin(world, caller.id)) return { data: true };
+    const keys = ["equipment.view", "equipment.request", "equipment.operate", "equipment.manage"];
+    return {
+      data: (world.permissions ?? []).some((row) => row.user_id === caller.id && keys.includes(String(row.key))),
+    };
+  }
   if (name === "can_moderate_evangelism") {
     if (world.rpcModerate === "error") return { error: { message: "rpc down" } };
     if (world.rpcModerate === true) return { data: true };
