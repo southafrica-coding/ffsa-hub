@@ -26,6 +26,33 @@ describe("login destination", () => {
   it("sends the login page to /home for /%09/evil.com", () => {
     expect(loginDestination("/%09/evil.com")).toBe("/home");
     expect(loginDestination(null)).toBeNull();
+    expect(loginDestination(undefined)).toBeNull();
     expect(loginDestination("/departments/x?tab=okrs")).toBe("/departments/x?tab=okrs");
+  });
+
+  it("treats /, empty, and unsafe values as no return path", () => {
+    expect(loginDestination("/")).toBe("/home");
+    expect(loginDestination("/?next=/finance")).toBe("/home");
+    expect(loginDestination("")).toBe("/home");
+    expect(loginDestination("//evil.com")).toBe("/home");
+    expect(loginDestination("/\\evil")).toBe("/home");
+    expect(loginDestination("https://evil.com")).toBe("/home");
+    expect(loginDestination("https://evil")).toBe("/home");
+  });
+
+  it("treats /login, including a nested redirect, as no return path", () => {
+    expect(loginDestination("/login")).toBe("/home");
+    expect(loginDestination("/login/")).toBe("/home");
+    expect(loginDestination("/login?redirect=/")).toBe("/home");
+    expect(loginDestination("/login?redirect=/login")).toBe("/home");
+    expect(loginDestination("/login?redirect=/login?redirect=/finance")).toBe("/home");
+    expect(loginDestination("/login?redirect=/finance/projects")).toBe("/home");
+  });
+
+  it("keeps a safe internal path and its query string", () => {
+    expect(loginDestination("/finance/projects")).toBe("/finance/projects");
+    expect(loginDestination("/finance/projects?tab=open")).toBe("/finance/projects?tab=open");
+    expect(loginDestination("/profile?tab=x#a")).toBe("/profile?tab=x#a");
+    expect(loginDestination("/home")).toBe("/home");
   });
 });

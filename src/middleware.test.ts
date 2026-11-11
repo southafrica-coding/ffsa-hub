@@ -166,9 +166,53 @@ describe("middleware", () => {
     ]);
   });
 
-  it("signed-in users leave /login for the dashboard", async () => {
+  it("signed-in users leave /login for /home when there is no return path", async () => {
     current = makeClient({ token: jwtFor("u1"), validUserId: "u1" });
-    expect(location(await middleware(req("/login")))?.pathname).toBe("/dashboard");
+    expect(location(await middleware(req("/login")))?.pathname).toBe("/home");
+
+    const root = location(await middleware(req("/login?redirect=" + encodeURIComponent("/"))))!;
+    expect(root.pathname).toBe("/home");
+    expect(root.search).toBe("");
+
+    const empty = location(await middleware(req("/login?redirect=")))!;
+    expect(empty.pathname).toBe("/home");
+
+    for (const unsafe of ["//evil.com", "/\\evil", "https://evil.com"]) {
+      const loc = location(
+        await middleware(req("/login?redirect=" + encodeURIComponent(unsafe)))
+      )!;
+      expect(loc.origin).toBe("https://hub.test");
+      expect(loc.pathname).toBe("/home");
+      expect(loc.searchParams.get("redirect")).toBeNull();
+    }
+
+    for (const loop of ["/login", "/login?redirect=/", "/login?redirect=/finance/projects"]) {
+      const loc = location(
+        await middleware(req("/login?redirect=" + encodeURIComponent(loop)))
+      )!;
+      expect(loc.pathname).toBe("/home");
+      expect(loc.searchParams.get("redirect")).toBeNull();
+    }
+  });
+
+  it("signed-in users on /login follow a safe internal redirect, query included", async () => {
+    current = makeClient({ token: jwtFor("u1"), validUserId: "u1" });
+    const loc = location(
+      await middleware(
+        req("/login?redirect=" + encodeURIComponent("/finance/projects?tab=open"))
+      )
+    )!;
+    expect(loc.origin).toBe("https://hub.test");
+    expect(loc.pathname).toBe("/finance/projects");
+    expect(loc.searchParams.get("tab")).toBe("open");
+    expect(loc.searchParams.get("redirect")).toBeNull();
+  });
+
+  it("an anonymous visit to / reaches login with no redirect param", async () => {
+    const loc = location(await middleware(req("/")))!;
+    expect(loc.pathname).toBe("/login");
+    expect(loc.searchParams.get("redirect")).toBeNull();
+    expect(loc.search).toBe("");
   });
 
   it("a signed-out visit to /login stays on /login", async () => {
