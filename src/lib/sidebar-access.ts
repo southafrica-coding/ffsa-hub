@@ -1,18 +1,9 @@
 import { cache } from "react";
+import type { StaffSignals } from "@/components/shell-nav";
 import { grantCounts } from "@/lib/auth/grant-scope";
 import { getAccessibleSchoolsProgramIds } from "@/lib/auth/schools-program-access";
 
 const MEMBERSHIP_ROLES = new Set(["student", "community_member", "self_service"]);
-
-/** Why a person is staff. Portal-role bundles are not one of these. */
-export type StaffSignals = {
-  /** A direct user_permissions row with no scope. Role bundles do not count. */
-  directUnscopedGrant: boolean;
-  /** A module bundle that belongs to a role outside the membership set. */
-  staffRoleBundle: boolean;
-  /** Program-scoped schools access, or a program_staff seat. */
-  schoolsStaff: boolean;
-};
 
 export interface SidebarAccess {
   /** Unscoped role names. Module visibility still uses this list. */

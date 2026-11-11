@@ -37,9 +37,13 @@ export type ShellVariant = "staff" | "portal";
  */
 const MEMBERSHIP_ONLY_ROLES = new Set(["student", "community_member", "self_service"]);
 
+/** Why a person is staff. Portal-role bundles are not one of these. */
 export type StaffSignals = {
+  /** A direct user_permissions row with no scope. Role bundles do not count. */
   directUnscopedGrant: boolean;
+  /** A module bundle that belongs to a role outside the membership set. */
   staffRoleBundle: boolean;
+  /** Program-scoped schools access, or a program_staff seat. */
   schoolsStaff: boolean;
 };
 
