@@ -226,6 +226,12 @@ export async function middleware(request: NextRequest) {
     return redirectToPath(request, destination);
   }
 
+  // `/` is not a page. Send a signed-in person to /home once. /home itself
+  // is an ordinary protected route, so the next request is not redirected.
+  if (user && !isDeactivated && pathname === "/") {
+    return redirectToPath(request, "/home");
+  }
+
   return supabaseResponse;
 }
 
