@@ -10,8 +10,30 @@ import {
 import { loginPath } from "@/lib/departments/login-path";
 import { getViewer } from "@/lib/departments/session";
 
-/** One index read per request, shared by the departments layout and the index page. */
+/** One index read per request, shared by the shell layouts and the departments pages. */
 export const loadCachedDepartmentsIndex = cache(loadDepartmentsIndexForViewer);
+
+export type ShellDepartment = { id: string; label: string; href: string };
+
+/** HubShell's prop. An empty list hides the department group and the phone tab. */
+export function toShellDepartments(rows: readonly { slug: string; name: string }[]): ShellDepartment[] {
+  return rows.map((row) => ({
+    id: row.slug,
+    label: row.name,
+    href: `/departments/${row.slug}`,
+  }));
+}
+
+/** Failed, forbidden, or signed-out reads become an empty shell list. They do not throw. */
+export async function departmentsForShell(client: Parameters<typeof loadCachedDepartmentsIndex>[0]): Promise<ShellDepartment[]> {
+  try {
+    const result = await loadCachedDepartmentsIndex(client);
+    if (result.kind !== "ok") return [];
+    return toShellDepartments(result.data);
+  } catch {
+    return [];
+  }
+}
 
 export class DepartmentLoadError extends Error {
   constructor(message = "Department data failed") {
