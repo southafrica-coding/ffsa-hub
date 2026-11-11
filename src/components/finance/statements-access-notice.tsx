@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 const NOTICE = "statements-access";
 
@@ -20,8 +20,18 @@ export function StatementsAccessNotice() {
 
 function StatementsAccessNoticeBody() {
   const params = useSearchParams();
+  const pathname = usePathname();
+  const router = useRouter();
   const [dismissed, setDismissed] = useState(false);
   if (dismissed || params.get("notice") !== NOTICE) return null;
+
+  function dismiss() {
+    setDismissed(true);
+    const next = new URLSearchParams(params.toString());
+    next.delete("notice");
+    const query = next.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname);
+  }
 
   return (
     <div
@@ -33,7 +43,7 @@ function StatementsAccessNoticeBody() {
       </p>
       <button
         type="button"
-        onClick={() => setDismissed(true)}
+        onClick={dismiss}
         className="mono-label shrink-0 text-ink"
       >
         Dismiss
