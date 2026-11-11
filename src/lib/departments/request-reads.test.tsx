@@ -116,6 +116,7 @@ const summary = {
   memberCount: 1,
   active: true,
   budgetOnly: false,
+  viewerMembership: "member" as const,
   access: {
     canSeeDepartmentDetail: true,
     canSeeBudget: false,
