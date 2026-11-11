@@ -30,7 +30,7 @@ function StatementsAccessNoticeBody() {
     const next = new URLSearchParams(params.toString());
     next.delete("notice");
     const query = next.toString();
-    router.replace(query ? `${pathname}?${query}` : pathname);
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   }
 
   return (

@@ -70,7 +70,7 @@ describe("StatementsAccessNotice", () => {
     expect(view.querySelector("button")?.textContent).toBe("Dismiss");
     dismiss(view);
     expect(view.textContent).toBe("");
-    expect(replace).toHaveBeenCalledWith("/finance");
+    expect(replace).toHaveBeenCalledWith("/finance", { scroll: false });
   });
 
   it("drops notice from the url and keeps the other params", () => {
@@ -78,6 +78,6 @@ describe("StatementsAccessNotice", () => {
     const view = render(<StatementsAccessNotice />);
     dismiss(view);
     expect(replace).toHaveBeenCalledTimes(1);
-    expect(replace).toHaveBeenCalledWith("/finance?tab=open&org=usa");
+    expect(replace).toHaveBeenCalledWith("/finance?tab=open&org=usa", { scroll: false });
   });
 });
