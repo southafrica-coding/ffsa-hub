@@ -42,7 +42,7 @@ describe("GET /api/profile/notification-preferences", () => {
     expect(body.mutedModules).toEqual(["prayer_room"]);
     expect(body.modules).toContainEqual({
       key: "prayer_room",
-      label: "Prayer Room",
+      label: "Prayer room",
       description: expect.any(String),
     });
     const q = state.fake.queries.find((x) => x.table === "notification_preferences")!;

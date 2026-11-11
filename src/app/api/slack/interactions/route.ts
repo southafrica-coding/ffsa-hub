@@ -88,7 +88,7 @@ async function liveSuggestion(admin: Client, alertKey: string) {
 async function apply(admin: Client, userId: string, alertKey: string, location: string, responseUrl?: string) {
   const s = await liveSuggestion(admin, alertKey);
   if (!s) {
-    await tell(responseUrl, "This booking has changed or was already handled — check Prayer Room → Manage.");
+    await tell(responseUrl, "This booking has changed or was already handled — check Prayer room → Manage.");
     return;
   }
   const result = await applyBookingSuggestion(admin, admin, userId, {
