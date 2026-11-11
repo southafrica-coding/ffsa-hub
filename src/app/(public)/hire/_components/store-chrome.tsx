@@ -124,7 +124,7 @@ export function StoreTabBar() {
             {t.label}
           </Link>
         ) : (
-          <span key={t.label} aria-disabled="true" className={cn(cell, "flex-col text-[color:var(--hire-dim)]")}>
+          <span key={t.label} className={cn(cell, "flex-col text-[color:var(--hire-dim)]")}>
             <span>{t.label}</span>
             <span className="text-[10px] uppercase tracking-[0.12em]">Coming soon</span>
           </span>

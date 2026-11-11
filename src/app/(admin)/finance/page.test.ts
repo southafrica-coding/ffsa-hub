@@ -1,6 +1,23 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { HIRE, HIRE_CSS } from "@/lib/equipment/hire-theme";
+
+function channel(hex: string, index: number): number {
+  return parseInt(hex.slice(1 + index * 2, 3 + index * 2), 16) / 255;
+}
+
+function linear(value: number): number {
+  return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+}
+
+function contrastRatio(foreground: string, background: string): number {
+  const luminance = (hex: string) =>
+    0.2126 * linear(channel(hex, 0)) + 0.7152 * linear(channel(hex, 1)) + 0.0722 * linear(channel(hex, 2));
+  const lighter = Math.max(luminance(foreground), luminance(background));
+  const darker = Math.min(luminance(foreground), luminance(background));
+  return (lighter + 0.05) / (darker + 0.05);
+}
 
 const ROOT = path.resolve(__dirname, "../../../..");
 const APP = path.join(ROOT, "src/app");
@@ -94,5 +111,18 @@ describe("finance and hire internal hrefs", () => {
     expect(hrefs.length).toBeGreaterThan(0);
     const missing = hrefs.filter((href) => !pageExists(href, routes));
     expect(missing).toEqual([]);
+  });
+
+  it("keeps Coming soon as plain text with AA contrast", () => {
+    const finance = readFileSync(path.join(ROOT, SOURCES[0]), "utf8");
+    const hire = readFileSync(path.join(ROOT, SOURCES[1]), "utf8");
+    expect(finance).not.toContain("opacity-55");
+    expect(finance).not.toContain("aria-disabled");
+    expect(finance).toContain('aria-hidden="true"');
+    expect(hire).not.toContain("aria-disabled");
+    expect(HIRE_CSS).toContain(`--hire-dim: ${HIRE.dim}`);
+    // Quiet pill #55524A on white, once the row is no longer at 55% opacity.
+    expect(contrastRatio("#55524A", "#FFFFFF")).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(HIRE.dim, HIRE.bg)).toBeGreaterThanOrEqual(4.5);
   });
 });

@@ -138,8 +138,8 @@ export default async function FinancePage() {
                   {body}
                 </Link>
               ) : (
-                <div key={mod.title} className="border-b border-rule px-4 py-4 opacity-55 last:border-b-0">
-                  <span aria-disabled="true" className="block">
+                <div key={mod.title} className="border-b border-rule px-4 py-4 last:border-b-0">
+                  <span className="block">
                     {body}
                   </span>
                 </div>
@@ -160,7 +160,7 @@ export default async function FinancePage() {
               {modules.map((mod) => {
                 const Icon = mod.icon;
                 return (
-                  <TableRow key={mod.title} className={mod.ready ? undefined : "opacity-55"}>
+                  <TableRow key={mod.title}>
                     <TableCell className="align-top">
                       <div className="flex items-center gap-2.5">
                         <Icon className="h-4 w-4 shrink-0 text-[color:var(--text-tertiary)]" />
@@ -169,7 +169,7 @@ export default async function FinancePage() {
                             {mod.title}
                           </Link>
                         ) : (
-                          <span aria-disabled="true" className="font-display text-[19px] font-black uppercase leading-none">
+                          <span className="font-display text-[19px] font-black uppercase leading-none">
                             {mod.title}
                           </span>
                         )}
@@ -192,7 +192,7 @@ export default async function FinancePage() {
                           Open
                         </Link>
                       ) : (
-                        <span aria-disabled="true" className="mono-label">
+                        <span aria-hidden="true" className="mono-label">
                           —
                         </span>
                       )}

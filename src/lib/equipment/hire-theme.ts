@@ -14,7 +14,7 @@ const P = {
   ink: "#F6F0E2", // primary text
   body: "#CFC6B4",
   muted: "#8C8273",
-  dim: "#5E564A",
+  dim: "#867C6D",
   accent: "#FFB801",
   onAccent: "#100E0B", // text on the yellow — always dark
   ok: "#9CC48A",
