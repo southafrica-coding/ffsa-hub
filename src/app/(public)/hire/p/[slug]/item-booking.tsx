@@ -43,7 +43,7 @@ export function ItemBooking({
         aria-label="One fewer"
         disabled={qty <= 1}
         onClick={() => setQty((n) => Math.max(1, n - 1))}
-        className="flex h-full w-11 items-center justify-center text-[color:var(--hire-body)] disabled:text-[color:var(--hire-dim)]"
+        className="flex h-full w-11 items-center justify-center text-[color:var(--hire-body)] disabled:text-[color:var(--hire-dim-edge)]"
       >
         <Minus className="h-4 w-4" />
       </button>
@@ -55,7 +55,7 @@ export function ItemBooking({
         aria-label="One more"
         disabled={qty >= free}
         onClick={() => setQty((n) => Math.min(free, n + 1))}
-        className="flex h-full w-11 items-center justify-center text-[color:var(--hire-body)] disabled:text-[color:var(--hire-dim)]"
+        className="flex h-full w-11 items-center justify-center text-[color:var(--hire-body)] disabled:text-[color:var(--hire-dim-edge)]"
       >
         <Plus className="h-4 w-4" />
       </button>
@@ -71,7 +71,7 @@ export function ItemBooking({
         "flex h-[46px] flex-1 items-center justify-center rounded-[6px] px-4 text-[15px] font-bold md:h-[46px]",
         free > 0
           ? "bg-[color:var(--hire-accent)] text-[color:var(--hire-on-accent)] opacity-60"
-          : "bg-[color:var(--hire-surface2)] text-[color:var(--hire-dim)]"
+          : "bg-[color:var(--hire-surface2)] text-[color:var(--hire-dim-edge)]"
       )}
     >
       {free > 0 ? `${variant === "bar" ? "Add" : "Add to cart"} · ${rands(total)}` : "Booked on these dates"}

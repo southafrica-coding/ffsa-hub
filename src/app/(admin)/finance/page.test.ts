@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { TONE } from "@/components/ffsa";
 import { HIRE, HIRE_CSS } from "@/lib/equipment/hire-theme";
 
 function channel(hex: string, index: number): number {
@@ -11,13 +12,23 @@ function linear(value: number): number {
   return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
 }
 
+function luminance(hex: string): number {
+  return 0.2126 * linear(channel(hex, 0)) + 0.7152 * linear(channel(hex, 1)) + 0.0722 * linear(channel(hex, 2));
+}
+
 function contrastRatio(foreground: string, background: string): number {
-  const luminance = (hex: string) =>
-    0.2126 * linear(channel(hex, 0)) + 0.7152 * linear(channel(hex, 1)) + 0.0722 * linear(channel(hex, 2));
   const lighter = Math.max(luminance(foreground), luminance(background));
   const darker = Math.min(luminance(foreground), luminance(background));
   return (lighter + 0.05) / (darker + 0.05);
 }
+
+function toneHex(tone: string): string {
+  const match = tone.match(/#([0-9A-Fa-f]{6})/);
+  if (!match) throw new Error(`No hex colour in tone class: ${tone}`);
+  return `#${match[1]}`;
+}
+
+const HIRE_SURFACES = ["bg", "surface", "surface2", "hover"] as const;
 
 const ROOT = path.resolve(__dirname, "../../../..");
 const APP = path.join(ROOT, "src/app");
@@ -121,8 +132,12 @@ describe("finance and hire internal hrefs", () => {
     expect(finance).toContain('aria-hidden="true"');
     expect(hire).not.toContain("aria-disabled");
     expect(HIRE_CSS).toContain(`--hire-dim: ${HIRE.dim}`);
-    // Quiet pill #55524A on white, once the row is no longer at 55% opacity.
-    expect(contrastRatio("#55524A", "#FFFFFF")).toBeGreaterThanOrEqual(4.5);
-    expect(contrastRatio(HIRE.dim, HIRE.bg)).toBeGreaterThanOrEqual(4.5);
+    expect(HIRE_CSS).toContain(`--hire-dim-edge: ${HIRE.dimEdge}`);
+    expect(contrastRatio(toneHex(TONE.quiet), "#FFFFFF")).toBeGreaterThanOrEqual(4.5);
+    for (const name of HIRE_SURFACES) {
+      expect(contrastRatio(HIRE.dim, HIRE[name]), `dim text on ${name}`).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(HIRE.dimEdge, HIRE[name]), `dim edge on ${name}`).toBeGreaterThanOrEqual(3);
+    }
+    expect(luminance(HIRE.dim)).toBeLessThan(luminance(HIRE.muted));
   });
 });
