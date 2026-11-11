@@ -39,6 +39,7 @@ vi.mock("@/lib/sidebar-access", () => ({
   }),
 }));
 
+import { departmentsForShell } from "@/lib/departments/load";
 import HomePage from "./page";
 import ServicesPage from "../services/page";
 
@@ -110,6 +111,26 @@ describe("home and services survive a failed department read", () => {
     const markup = renderToStaticMarkup(await HomePage());
     expect(markup).toContain('href="/departments"');
     expect(markup).toContain("All departments");
+  });
+
+  it("keeps All departments when a membership read fails and My departments is empty", async () => {
+    loadHomeForViewer.mockResolvedValue({
+      kind: "ok",
+      data: { departments: [], services: [], rocksDue: [], okrCheckInsDue: [], viewerMemberships: [] },
+    });
+    const index = {
+      kind: "ok" as const,
+      data: [
+        { slug: "media", name: "Media", viewerMembership: "none" as const },
+        { slug: "training", name: "Training", viewerMembership: "none" as const },
+      ],
+    };
+    loadDepartmentsIndexForViewer.mockResolvedValue(index);
+    await expect(departmentsForShell({ kind: "session" })).resolves.toEqual([]);
+    const markup = renderToStaticMarkup(await HomePage());
+    expect(markup).toContain('href="/departments"');
+    expect(markup).toContain("All departments");
+    expect(markup).not.toContain('href="/departments/media"');
   });
 
   it("hides the departments link when the index is empty", async () => {
