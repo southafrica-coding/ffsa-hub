@@ -46,9 +46,15 @@ beforeEach(() => {
   state.allowed = true;
 });
 
+function expectResponse<T>(res: T): asserts res is NonNullable<T> {
+  expect(res).toBeDefined();
+  if (!res) throw new Error("expected a response");
+}
+
 describe("/api/scan/[token] rate limit", () => {
   it("keys on token + client IP, 120 per 60 seconds", async () => {
     const res = await get("198.51.100.7");
+    expectResponse(res);
     expect(res.status).toBe(200);
     expect(state.hits).toEqual([{ key: "scan:tok123:198.51.100.7", limit: 120, windowSeconds: 60 }]);
   });
@@ -56,6 +62,7 @@ describe("/api/scan/[token] rate limit", () => {
   it("429 with Retry-After when the limiter says no", async () => {
     state.allowed = false;
     const res = await get("198.51.100.7");
+    expectResponse(res);
     expect(res.status).toBe(429);
     expect(res.headers.get("retry-after")).toBe("20");
   });
