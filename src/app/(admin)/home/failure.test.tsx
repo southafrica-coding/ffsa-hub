@@ -43,6 +43,32 @@ import { departmentsForShell } from "@/lib/departments/load";
 import HomePage from "./page";
 import ServicesPage from "../services/page";
 
+function department(slug: string, name: string, viewerMembership: "member" | "leader" | "none") {
+  return {
+    slug,
+    name,
+    viewerMembership,
+    cluster: "inward" as const,
+    budgetOnly: false,
+    parentSlug: null,
+    parentName: null,
+    purpose: null,
+    memberCount: 1,
+    active: true,
+    access: {
+      canSeeDepartmentDetail: true,
+      canSeeBudget: false,
+      canEditBudget: false,
+      canEditRocks: false,
+      canSeePeopleEmails: false,
+    },
+  };
+}
+
+function homeWith(rows: ReturnType<typeof department>[]) {
+  return { kind: "ok" as const, data: { departments: rows, services: [], rocksDue: [], okrCheckInsDue: [], viewerMemberships: [] } };
+}
+
 const service = {
   id: "prayer_room",
   name: "Prayer room",
@@ -99,38 +125,60 @@ describe("home and services survive a failed department read", () => {
     await expect(HomePage()).rejects.toThrow("services down");
   });
 
-  it("links to /departments when the index has departments", async () => {
-    loadHomeForViewer.mockResolvedValue({
-      kind: "ok",
-      data: { departments: [], services: [], rocksDue: [], okrCheckInsDue: [], viewerMemberships: [] },
-    });
-    loadDepartmentsIndexForViewer.mockResolvedValue({
-      kind: "ok",
-      data: [{ slug: "media", name: "Media" }],
-    });
+  it("lists a member under My departments", async () => {
+    const row = department("media", "Media", "member");
+    loadHomeForViewer.mockResolvedValue(homeWith([row]));
+    loadDepartmentsIndexForViewer.mockResolvedValue({ kind: "ok", data: [row] });
     const markup = renderToStaticMarkup(await HomePage());
+    expect(markup).toContain("My departments");
+    expect(markup).toContain("Media");
+    expect(markup).toContain('href="/departments/media"');
+    expect(markup).toContain("All departments");
+  });
+
+  it("lists a leader under My departments", async () => {
+    const row = department("worship", "Worship", "leader");
+    loadHomeForViewer.mockResolvedValue(homeWith([row]));
+    loadDepartmentsIndexForViewer.mockResolvedValue({ kind: "ok", data: [row] });
+    const markup = renderToStaticMarkup(await HomePage());
+    expect(markup).toContain("My departments");
+    expect(markup).toContain("Worship");
+    expect(markup).toContain('href="/departments/worship"');
+  });
+
+  it("does not list a department whose membership is none", async () => {
+    const row = department("finance", "Finances", "none");
+    loadHomeForViewer.mockResolvedValue(homeWith([row]));
+    loadDepartmentsIndexForViewer.mockResolvedValue({ kind: "ok", data: [row] });
+    const markup = renderToStaticMarkup(await HomePage());
+    expect(markup).not.toContain("My departments");
+    expect(markup).not.toContain("Finances");
+    expect(markup).not.toContain('href="/departments/finance"');
     expect(markup).toContain('href="/departments"');
     expect(markup).toContain("All departments");
   });
 
-  it("keeps All departments when a membership read fails and My departments is empty", async () => {
-    loadHomeForViewer.mockResolvedValue({
-      kind: "ok",
-      data: { departments: [], services: [], rocksDue: [], okrCheckInsDue: [], viewerMemberships: [] },
-    });
-    const index = {
-      kind: "ok" as const,
-      data: [
-        { slug: "media", name: "Media", viewerMembership: "none" as const },
-        { slug: "training", name: "Training", viewerMembership: "none" as const },
-      ],
-    };
-    loadDepartmentsIndexForViewer.mockResolvedValue(index);
+  it("renders nothing for My departments when the index is empty too", async () => {
+    loadHomeForViewer.mockResolvedValue(homeWith([]));
+    loadDepartmentsIndexForViewer.mockResolvedValue({ kind: "ok", data: [] });
+    const markup = renderToStaticMarkup(await HomePage());
+    expect(markup).not.toContain("My departments");
+    expect(markup).not.toContain("All departments");
+    expect(markup).not.toContain("No department home yet");
+  });
+
+  it("keeps All departments when a membership read fails and lists no departments", async () => {
+    const rows = [department("media", "Media", "none"), department("training", "Training", "none")];
+    loadHomeForViewer.mockResolvedValue(homeWith(rows));
+    loadDepartmentsIndexForViewer.mockResolvedValue({ kind: "ok", data: rows });
     await expect(departmentsForShell({ kind: "session" })).resolves.toEqual([]);
     const markup = renderToStaticMarkup(await HomePage());
+    expect(markup).not.toContain("My departments");
+    expect(markup).not.toContain("Media");
+    expect(markup).not.toContain("Training");
+    expect(markup).not.toContain('href="/departments/media"');
     expect(markup).toContain('href="/departments"');
     expect(markup).toContain("All departments");
-    expect(markup).not.toContain('href="/departments/media"');
   });
 
   it("hides the departments link when the index is empty", async () => {
