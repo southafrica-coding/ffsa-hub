@@ -1,7 +1,9 @@
 // Skeleton for one admin route. It used to live at (admin)/loading.tsx, which
 // wrapped every admin page — including departments — in Suspense. notFound()
-// inside that boundary was streamed as HTTP 200. Departments has no loading
-// file so its empty-list 404 is sent before the response starts.
+// inside that boundary was streamed as HTTP 200. A segment that calls
+// notFound() has no loading file on it or above it, so the 404 is sent before
+// the response starts. Departments, and the contact, event, OKR, and prayer
+// room routes that call notFound(), are in that set.
 
 export default function AdminLoading() {
   return (
