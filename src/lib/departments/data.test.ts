@@ -25,6 +25,7 @@ function home(access: DepartmentAccess, servicesRun: DepartmentHome["servicesRun
       memberCount: access.canSeeDepartmentDetail ? 2 : null,
       active: true,
       budgetOnly: access.canSeeBudget && !access.canSeeDepartmentDetail,
+      viewerMembership: "none",
       access,
     },
     access,

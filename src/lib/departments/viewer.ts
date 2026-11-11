@@ -12,7 +12,7 @@ import { loadMinistryAccess } from "./access";
 import { notAuthenticated, notAuthorized, notFound, serverError } from "./http";
 import { resolveHome } from "./internal/open";
 import { buildDepartmentHome, listVisibleDepartments, rocksDueFor, viewerMemberships } from "./internal/page";
-import { listActiveMemberships, listDepartmentRows, listMinistriesById } from "./internal/repository";
+import { listDepartmentRows, listMinistriesById } from "./internal/repository";
 import { usableServiceKeys } from "@/lib/services/access";
 import { toHubService } from "@/lib/services/present";
 import { listServiceOwnerRows, listServices } from "@/lib/services/internal/repository";
@@ -64,7 +64,7 @@ export function viewerResponse<T>(result: ViewerResult<T> | DepartmentHomeResult
 export async function loadDepartmentsIndexForViewer(userClient: UserClient): Promise<ViewerResult<DepartmentSummary[]>> {
   const viewer = await requireViewer(userClient);
   if ("kind" in viewer) return viewer;
-  const list = await listVisibleDepartments(userClient);
+  const list = await listVisibleDepartments(userClient, viewer.userId);
   if (list.accessError) return { kind: "forbidden" };
   if (list.error || !list.data) return { kind: "error", error: list.error };
   return { kind: "ok", data: list.data };
@@ -135,14 +135,15 @@ export async function loadHomeForViewer(userClient: UserClient): Promise<ViewerR
   const viewer = await requireViewer(userClient);
   if ("kind" in viewer) return viewer;
 
-  const [departments, services, grants, memberships] = await Promise.all([
-    listVisibleDepartments(userClient),
+  const [departments, services, grants] = await Promise.all([
+    listVisibleDepartments(userClient, viewer.userId),
     listServices(userClient),
     listServiceOwnerRows(userClient),
-    listActiveMemberships(userClient, viewer.userId),
   ]);
-  if (departments.accessError || memberships.error || services.error || grants.error) return { kind: "forbidden" };
-  if (departments.error || !departments.data) return { kind: "error", error: departments.error };
+  if (departments.accessError || services.error || grants.error) return { kind: "forbidden" };
+  if (departments.error || !departments.data || !departments.memberships) {
+    return { kind: "error", error: departments.error };
+  }
   const usable = await usableServiceKeys(
     userClient,
     services.data.map((service) => service.service_key)
@@ -183,7 +184,7 @@ export async function loadHomeForViewer(userClient: UserClient): Promise<ViewerR
         ),
       rocksDue: due.data,
       okrCheckInsDue: [],
-      viewerMemberships: viewerMemberships(memberships.data, rows.data),
+      viewerMemberships: viewerMemberships(departments.memberships, rows.data),
     },
   };
 }

@@ -53,6 +53,7 @@ function foldedFinanceHome(): DepartmentHome {
       memberCount: 2,
       active: true,
       budgetOnly: false,
+      viewerMembership: "none",
       access: detail,
     },
     access: detail,
