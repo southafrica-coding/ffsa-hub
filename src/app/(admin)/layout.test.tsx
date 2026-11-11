@@ -10,8 +10,14 @@ vi.mock("next/navigation", () => ({
 const departmentsForShell = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/departments/load", () => ({
-  sessionClient: async () => ({ kind: "session" }),
   departmentsForShell: () => departmentsForShell(),
+}));
+vi.mock("@/lib/viewer-cache", () => ({
+  getRequestViewer: async () => ({
+    supabase: { kind: "session" },
+    user: { id: "user-1", email: "ada@example.com" },
+    active: true,
+  }),
 }));
 vi.mock("@/lib/sidebar-access", () => ({
   getSidebarAccess: async () => ({

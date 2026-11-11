@@ -2,11 +2,12 @@
  * Resolve the signed-in user's display initials for the shell rail avatar.
  * Best-effort: any failure returns "" and the rail shows a neutral glyph.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function getUserInitials(supabase: any): Promise<string> {
+export async function getUserInitials(
+  supabase: any, // eslint-disable-line @typescript-eslint/no-explicit-any
+  knownUser?: { id: string; email?: string | null }
+): Promise<string> {
   try {
-    const { data } = await supabase.auth.getUser();
-    const user = data?.user;
+    const user = knownUser ?? (await supabase.auth.getUser()).data?.user;
     if (!user) return "";
 
     const { data: row } = await supabase

@@ -47,7 +47,8 @@ async function readOrThrow<T>(
  */
 export async function getSidebarAccess(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: any
+  supabase: any,
+  known?: { userId: string; active: boolean }
 ): Promise<SidebarAccess> {
   const result: SidebarAccess = {
     userRoles: [],
@@ -58,25 +59,27 @@ export async function getSidebarAccess(
   // 1) Who is this? Prefer getUser() (revalidated); fall back to the cookie
   //    session only if getUser errors, so an auth-server blip doesn't read as
   //    logged out. A clean null user means genuinely signed out → empty menu.
-  let userId: string | null = null;
-  try {
-    const { data, error } = await supabase.auth.getUser();
-    if (data?.user) {
-      userId = data.user.id;
-    } else if (error) {
-      const { data: sessionData } = await supabase.auth.getSession();
-      userId = sessionData?.session?.user?.id ?? null;
-    }
-  } catch {
+  let userId: string | null = known?.userId ?? null;
+  if (!known) {
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      userId = sessionData?.session?.user?.id ?? null;
+      const { data, error } = await supabase.auth.getUser();
+      if (data?.user) {
+        userId = data.user.id;
+      } else if (error) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        userId = sessionData?.session?.user?.id ?? null;
+      }
     } catch {
-      userId = null;
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        userId = sessionData?.session?.user?.id ?? null;
+      } catch {
+        userId = null;
+      }
     }
   }
 
-  if (!userId) return result; // signed out — a minimal menu is correct
+  if (!userId || known?.active === false) return result; // signed out — a minimal menu is correct
 
   // 2) Load roles + permitted modules. If this fails for an authenticated user,
   //    flag it so the sidebar shows a refresh prompt, not a phantom empty menu.
@@ -86,9 +89,11 @@ export async function getSidebarAccess(
     // Global nav keeps unscoped assignments. A program-scoped schools grant
     // still lights Training; other modules stay unscoped.
     const [userRow, roleRows] = await Promise.all([
-      readOrThrow<{ is_active: boolean | null } | null>(() =>
-        supabase.from("users").select("is_active").eq("id", userId).maybeSingle()
-      ),
+      known?.active === true
+        ? Promise.resolve({ is_active: true })
+        : readOrThrow<{ is_active: boolean | null } | null>(() =>
+            supabase.from("users").select("is_active").eq("id", userId).maybeSingle()
+          ),
       readOrThrow<
         Array<{
           role_id?: string;
@@ -160,7 +165,7 @@ export async function getSidebarAccess(
           )
           .catch(() => [] as { id: string }[]),
         // Program-scoped schools grants light Training without opening every module.
-        getAccessibleSchoolsProgramIds(supabase, userId),
+        getAccessibleSchoolsProgramIds(supabase, userId, known?.active === true ? { active: true } : undefined),
       ]);
 
       for (const row of permRows ?? []) {

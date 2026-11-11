@@ -66,4 +66,25 @@ describe("home and services survive a failed department read", () => {
     loadDepartmentsIndexForViewer.mockResolvedValue({ kind: "ok", data: [] });
     await expect(ServicesPage()).rejects.toThrow("NOT_FOUND");
   });
+
+  it("renders /home when the home result is forbidden and drops the department part", async () => {
+    loadHomeForViewer.mockResolvedValue({ kind: "forbidden" });
+    loadServicesForViewer.mockResolvedValue({ kind: "ok", data: [service] });
+    const markup = renderToStaticMarkup(await HomePage());
+    expect(markup).toContain("Couldn&#x27;t load departments.");
+    expect(markup).toContain("Prayer room");
+    expect(markup).not.toContain('href="/departments/');
+  });
+
+  it("throws on /home when the services fallback errors", async () => {
+    loadHomeForViewer.mockResolvedValue({ kind: "forbidden" });
+    loadServicesForViewer.mockResolvedValue({ kind: "error", error: new Error("services down") });
+    await expect(HomePage()).rejects.toThrow("services down");
+  });
+
+  it("throws on /services when the services result errors", async () => {
+    loadServicesForViewer.mockResolvedValue({ kind: "error", error: new Error("services down") });
+    loadDepartmentsIndexForViewer.mockResolvedValue({ kind: "ok", data: [] });
+    await expect(ServicesPage()).rejects.toThrow("services down");
+  });
 });
