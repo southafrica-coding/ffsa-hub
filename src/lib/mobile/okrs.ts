@@ -3,7 +3,7 @@
 // contract (pure, tested)
 // ============================================================
 // The phone app's OKR wall and one group's OKRs. The website renders these
-// pages on the server (src/app/(admin)/okrs/page.tsx and [ownerId]/page.tsx),
+// pages on the server (src/app/(admin)/okrs/(index)/page.tsx and [ownerId]/page.tsx),
 // so there was no JSON for the app to read. These helpers shape the same
 // rows those pages fetch, through the same roll-ups (summariseByOwner,
 // totals, writesOkrs, krProgress, metricCaption), so the phone never carries
@@ -150,7 +150,7 @@ export function pickCycle(cycles: OkrCycle[], slug: string | null | undefined): 
 // ── The wall ───────────────────────────────────────────────────────────────
 
 /**
- * The wall for one cycle, mirroring src/app/(admin)/okrs/page.tsx line for
+ * The wall for one cycle, mirroring src/app/(admin)/okrs/(index)/page.tsx line for
  * line: which ministries appear, Main / Part-time sections, and the
  * "not started" list only for people who can act on it, only on the
  * current cycle.

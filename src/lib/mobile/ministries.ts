@@ -2,7 +2,7 @@
 // /api/mobile/ministries/** — access rule + response contract
 // ============================================================
 // The phone app's read-only mirror of the website's Ministry tab
-// (src/app/(admin)/ministry/page.tsx and [id]/page.tsx). Those pages read
+// (src/app/(admin)/ministry/(index)/page.tsx and [id]/page.tsx). Those pages read
 // rosters with the service-role client after their own access checks; the
 // phone must never hold that key, so these endpoints run the SAME checks on
 // the server and only then read with the admin client.
