@@ -88,7 +88,7 @@ export default async function UserProfilePage({
   const canManagePermissions =
     isAdmin || manageScopes.hasGlobal || manageScopes.programIds.length > 0;
 
-  if (!canManagePermissions) redirect("/dashboard");
+  if (!canManagePermissions) redirect("/home");
 
   // A schools manager who isn't an admin may only open the profiles of people
   // attached to a school they manage — their applicants and students. Checked

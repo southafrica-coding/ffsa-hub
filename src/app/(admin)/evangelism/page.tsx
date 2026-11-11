@@ -16,7 +16,7 @@ export default async function EvangelismPage() {
   await requireModuleAccess(supabase, user.id, "evangelism");
 
   const access = await getEvangelismAccess(supabase, user.id);
-  if (!access.view) redirect("/dashboard");
+  if (!access.view) redirect("/home");
   const caller = { supabase, userId: user.id, access };
 
   const [published, mine, ministries] = await Promise.all([

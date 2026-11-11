@@ -73,7 +73,7 @@ export default async function SchoolsPage({
     canOpenSchools(supabase, user.id),
     getPrograms(supabase, { status: statusFilter }),
   ]);
-  if (!access.open) redirect("/dashboard");
+  if (!access.open) redirect("/home");
   const { data: programs, error, count } = programsResult;
 
   if (error) {

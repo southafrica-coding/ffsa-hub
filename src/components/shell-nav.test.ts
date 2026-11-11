@@ -25,6 +25,16 @@ describe("buildShellNav", () => {
     expect(nav.departments).toEqual([]);
   });
 
+  it("shows Ministries to Leadership Team, hides it from a member, and leaves ministry leaders on the permission", () => {
+    const hrefs = (roles: string[], permitted?: Set<string>) =>
+      buildShellNav(roles, permitted).work.map((item) => item.href);
+
+    expect(hrefs(["leadership_team"])).toContain("/ministry");
+    expect(hrefs(["self_service"])).not.toContain("/ministry");
+    expect(hrefs(["ministry_leader"], new Set(["ministry"]))).toContain("/ministry");
+    expect(hrefs(["ministry_leader"])).not.toContain("/ministry");
+  });
+
   it("hides work tools the viewer cannot open", () => {
     const nav = buildShellNav(["staff"], new Set(["prayer-room"]));
     const labels = flattenShellNav(nav).map((item) => item.label);

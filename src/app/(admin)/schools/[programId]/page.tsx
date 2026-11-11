@@ -190,7 +190,7 @@ export default async function ProgramDetailPage({
 
   const schoolsAccess = await canOpenSchools(supabase, session.user.id, { programId });
   if (!schoolsAccess.open) {
-    if (!ltProgram) redirect("/dashboard");
+    if (!ltProgram) redirect("/home");
     return (
       <div className="ffsa-screen">
         <Masthead context="Leadership Track · Staff decision" title={ltProgram.name} />
