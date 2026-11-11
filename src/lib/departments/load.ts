@@ -18,6 +18,15 @@ export type ShellDepartment = { id: string; label: string; href: string };
 
 const SHELL_MEMBERSHIPS = new Set<ViewerDepartmentMembership>(["member", "leader"]);
 
+/** Member or leader. Admin and Leadership Team visibility is none. */
+export function isMyDepartment(viewerMembership: ViewerDepartmentMembership): boolean {
+  return SHELL_MEMBERSHIPS.has(viewerMembership);
+}
+
+export function myDepartments<T extends { viewerMembership: ViewerDepartmentMembership }>(rows: readonly T[]): T[] {
+  return rows.filter((row) => isMyDepartment(row.viewerMembership));
+}
+
 /**
  * HubShell's prop. Only a member or a leader appears. Admin and Leadership
  * Team visibility stay on the index, not in this group. An empty list hides
@@ -26,11 +35,11 @@ const SHELL_MEMBERSHIPS = new Set<ViewerDepartmentMembership>(["member", "leader
 export function toShellDepartments(
   rows: readonly { slug: string; name: string; viewerMembership: ViewerDepartmentMembership }[]
 ): ShellDepartment[] {
-  return rows.flatMap((row) =>
-    SHELL_MEMBERSHIPS.has(row.viewerMembership)
-      ? [{ id: row.slug, label: row.name, href: `/departments/${row.slug}` }]
-      : []
-  );
+  return myDepartments(rows).map((row) => ({
+    id: row.slug,
+    label: row.name,
+    href: `/departments/${row.slug}`,
+  }));
 }
 
 /** Failed, forbidden, or signed-out reads become an empty shell list. They do not throw. */
