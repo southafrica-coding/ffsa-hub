@@ -164,6 +164,7 @@ describe("departments migrations 318–321", () => {
     expect(doors).not.toMatch(/^BEGIN;/m);
     expect(doors).not.toMatch(/^COMMIT;/m);
     expect(doorsRollback).toMatch(/'brand_kit', NULL, 'use'/);
+    expect(doorsRollback).toMatch(/so\.admin_href = '\/hire'/);
     expect(doorsRollback).not.toMatch(/^BEGIN;/m);
   });
 });

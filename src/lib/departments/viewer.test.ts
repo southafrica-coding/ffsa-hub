@@ -190,6 +190,21 @@ describe("viewer wrappers", () => {
     }
   });
 
+  it("keeps the public gear door when the equipment check fails", async () => {
+    h.world = makeDepartmentWorld();
+    h.world.equipmentStaff = "error";
+    const services = await loadServicesForViewer(client(OUTSIDER));
+    expect(services.kind).toBe("ok");
+    if (services.kind === "ok") {
+      expect(services.data.find((row) => row.id === "gear_hire")?.href).toBe("/hire");
+    }
+    const home = await loadHomeForViewer(client(OUTSIDER));
+    expect(home.kind).toBe("ok");
+    if (home.kind === "ok") {
+      expect(home.data.services.find((row) => row.id === "gear_hire")?.href).toBe("/hire");
+    }
+  });
+
   it("returns every home-dashboard outcome", async () => {
     expect((await loadHomeForViewer(client(null))).kind).toBe("unauthenticated");
     expect((await loadHomeForViewer(client(INACTIVE_ADMIN))).kind).toBe("forbidden");
