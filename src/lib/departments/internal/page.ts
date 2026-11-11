@@ -3,6 +3,8 @@ import "server-only";
 // Assembles department payloads. Finance-only viewers get the header and
 // the budget; people, OKRs, rocks, services and sub-ministries are not read.
 
+import { cache } from "react";
+
 import { foldedDetailIds, loadMinistryAccess, type DepartmentAccessFlags } from "../access";
 import { FOLDED_DEPARTMENTS, isBlockedHomeSlug } from "../homes";
 import { personName } from "../names";
@@ -134,6 +136,23 @@ async function summaryFor(
   };
 }
 
+function logMembershipReadFailure(userId: string, code: string | undefined) {
+  console.error("[departments] viewer membership read failed", {
+    userId,
+    code: code ?? null,
+  });
+}
+
+/** One membership read per request for this client and user. A failed read is an empty roster. */
+const viewerMembershipRows = cache(async (reader: Client, userId: string): Promise<ActiveMembership[]> => {
+  const memberships = await listActiveMemberships(reader, userId);
+  if (memberships.error) {
+    logMembershipReadFailure(userId, memberships.error.code);
+    return [];
+  }
+  return memberships.data;
+});
+
 function isListedHome(row: DepartmentRecord, foldedSources: Set<string>): boolean {
   if (!row.is_active || row.ministry_type === "part_time" || isBlockedHomeSlug(row.slug)) return false;
   if (foldedSources.has(row.id)) return false;
@@ -150,14 +169,11 @@ export async function listVisibleDepartments(
   error: { message: string } | null;
   accessError?: boolean;
 }> {
-  const [rows, aliases, memberships] = await Promise.all([
+  const [rows, aliases, membershipRows] = await Promise.all([
     listDepartmentRows(reader),
     listAliases(reader),
-    listActiveMemberships(reader, userId),
+    viewerMembershipRows(reader, userId),
   ]);
-  if (memberships.error) {
-    return { data: null, memberships: null, error: memberships.error, accessError: true };
-  }
   if (rows.error || aliases.error) {
     return { data: null, memberships: null, error: rows.error ?? aliases.error, accessError: true };
   }
@@ -190,9 +206,9 @@ export async function listVisibleDepartments(
   if (counts.error) return { data: null, memberships: null, error: counts.error };
   const summaries: DepartmentSummary[] = [];
   for (const row of visible) {
-    summaries.push(await summaryFor(row.home, row.access, counts.data, parents, memberships.data));
+    summaries.push(await summaryFor(row.home, row.access, counts.data, parents, membershipRows));
   }
-  return { data: summaries, memberships: memberships.data, error: null };
+  return { data: summaries, memberships: membershipRows, error: null };
 }
 
 async function loadBudget(admin: Client, department: DepartmentRecord) {
@@ -378,16 +394,16 @@ export async function buildDepartmentHome(
   const [counts, all, mine] = await Promise.all([
     detail ? countActiveMembers(admin) : Promise.resolve({ data: new Map<string, number>(), error: null }),
     listDepartmentRows(admin),
-    listActiveMemberships(userClient, userId),
+    // Budget-only homes did not read memberships. Keep that path off this query.
+    detail ? viewerMembershipRows(userClient, userId) : Promise.resolve([] as ActiveMembership[]),
   ]);
   if (counts.error) return { data: null, error: counts.error };
   if (all.error) return { data: null, error: all.error };
-  if (mine.error) return { data: null, error: mine.error };
   const parentMap = new Map(all.data.map((row) => [row.id, { slug: row.slug, name: row.name }]));
-  const summary = await summaryFor(department, access, counts.data, parentMap, mine.data);
+  const summary = await summaryFor(department, access, counts.data, parentMap, mine);
   const budget = seeBudget ? await loadBudget(admin, department) : { data: null, error: null };
   if (budget.error) return { data: null, error: budget.error };
-  const viewer = viewerMemberships(mine.data, all.data);
+  const viewer = detail ? viewerMemberships(mine, all.data) : [];
 
   if (!detail) {
     return {

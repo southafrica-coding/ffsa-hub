@@ -30,6 +30,9 @@ const h = vi.hoisted(() => ({
   userId: null as string | null,
   world: null as DepartmentWorld | null,
   adminErrors: {} as Record<string, boolean>,
+  /** User-client table read only. Access RPCs keep using the world. */
+  membershipReadError: false,
+  memberTableReads: 0,
 }));
 
 vi.mock("@/lib/supabase/admin", () => ({
@@ -52,6 +55,10 @@ function client(userId: string | null) {
     user: userId ? { id: userId } : null,
     resolve: (query: FakeQuery) => {
       world.callerId = userId;
+      if (query.table === "staff_ministry_members") h.memberTableReads += 1;
+      if (h.membershipReadError && query.table === "staff_ministry_members") {
+        return { error: { message: "members down" } };
+      }
       return resolveDepartmentWorld(world, query);
     },
   }).client;
@@ -60,6 +67,8 @@ function client(userId: string | null) {
 beforeEach(() => {
   h.userId = MEMBER;
   h.adminErrors = {};
+  h.membershipReadError = false;
+  h.memberTableReads = 0;
   h.world = makeDepartmentWorld();
 });
 
@@ -389,29 +398,26 @@ describe("viewerMembership", () => {
     }
   });
 
-  it("reports none for an inactive membership", async () => {
+  it("reports none for a pending membership", async () => {
     h.world!.memberships.push({
-      id: "m-admin-inactive",
+      id: "m-admin-pending",
       user_id: ADMIN,
       staff_ministry_id: MEDIA,
       member_role: "leader",
       is_point_leader: true,
-      status: "inactive",
+      status: "pending",
     });
-    const inactive = await loadDepartmentsIndexForViewer(client(ADMIN));
-    expect(inactive.kind).toBe("ok");
-    if (inactive.kind === "ok") {
-      const media = summaryOf(inactive.data, "media");
+    const pending = await loadDepartmentsIndexForViewer(client(ADMIN));
+    expect(pending.kind).toBe("ok");
+    if (pending.kind === "ok") {
+      const media = summaryOf(pending.data, "media");
       expect(media.viewerMembership).toBe("none");
       expect(media.access.canSeeDepartmentDetail).toBe(true);
     }
 
-    const row = h.world!.memberships.find((membership) => membership.id === "m-admin-inactive");
-    expect(row).toBeTruthy();
-    if (row) row.status = "pending";
-    const pending = await loadDepartmentHomeForViewer(client(ADMIN), "media");
-    expect(pending.kind).toBe("ok");
-    if (pending.kind === "ok") expect(pending.data.department.viewerMembership).toBe("none");
+    const home = await loadDepartmentHomeForViewer(client(ADMIN), "media");
+    expect(home.kind).toBe("ok");
+    if (home.kind === "ok") expect(home.data.department.viewerMembership).toBe("none");
 
     h.world = makeDepartmentWorld();
     h.world.memberships.push({
@@ -427,10 +433,61 @@ describe("viewerMembership", () => {
     expect((await loadDepartmentHomeForViewer(client(INACTIVE_ADMIN), "media")).kind).toBe("forbidden");
   });
 
-  it("fails closed when the membership lookup fails", async () => {
-    h.world!.errors = { staff_ministry_members: true };
-    expect((await loadDepartmentsIndexForViewer(client(ADMIN))).kind).toBe("forbidden");
-    expect((await loadHomeForViewer(client(ADMIN))).kind).toBe("forbidden");
-    expect((await loadDepartmentHomeForViewer(client(ADMIN), "media")).kind).toBe("error");
+  it("degrades viewerMembership when the membership read fails", async () => {
+    h.membershipReadError = true;
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const listed = await loadDepartmentsIndexForViewer(client(ADMIN));
+    expect(listed.kind).toBe("ok");
+    if (listed.kind === "ok") {
+      expect(listed.data.length).toBeGreaterThan(0);
+      expect(listed.data.every((row) => row.viewerMembership === "none")).toBe(true);
+      expect(summaryOf(listed.data, "media").access.canSeeDepartmentDetail).toBe(true);
+    }
+
+    const dashboard = await loadHomeForViewer(client(ADMIN));
+    expect(dashboard.kind).toBe("ok");
+    if (dashboard.kind === "ok") {
+      expect(dashboard.data.departments.every((row) => row.viewerMembership === "none")).toBe(true);
+      expect(dashboard.data.viewerMemberships).toEqual([]);
+    }
+
+    const home = await loadDepartmentHomeForViewer(client(ADMIN), "media");
+    expect(home.kind).toBe("ok");
+    if (home.kind === "ok") {
+      expect(home.data.department.viewerMembership).toBe("none");
+      expect(home.data.viewerMemberships).toEqual([]);
+      expect(home.data.access.canSeeDepartmentDetail).toBe(true);
+      expect(home.data.access.canEditRocks).toBe(true);
+    }
+
+    expect(logged).toHaveBeenCalledWith(
+      "[departments] viewer membership read failed",
+      expect.objectContaining({ userId: ADMIN })
+    );
+    const payload = logged.mock.calls.find((call) => call[0] === "[departments] viewer membership read failed")?.[1];
+    expect(JSON.stringify(payload)).not.toMatch(/@|email|name/i);
+    logged.mockRestore();
+  });
+
+  it("does not read memberships for a budget-only home", async () => {
+    h.membershipReadError = true;
+    h.memberTableReads = 0;
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    const home = await loadDepartmentHomeForViewer(client(FINANCE_USER), "media");
+    expect(home.kind).toBe("ok");
+    if (home.kind === "ok") {
+      expect(home.data.department.budgetOnly).toBe(true);
+      expect(home.data.department.viewerMembership).toBe("none");
+      expect(home.data.viewerMemberships).toEqual([]);
+      expect(home.data.budget).not.toBeNull();
+      expect(home.data.access.canSeeBudget).toBe(true);
+    }
+    expect(h.memberTableReads).toBe(0);
+    expect(logged).not.toHaveBeenCalledWith(
+      "[departments] viewer membership read failed",
+      expect.anything()
+    );
+    logged.mockRestore();
   });
 });
