@@ -90,7 +90,7 @@ export function PrayerWeekCard() {
               color: "var(--text-primary)",
             }}
           >
-            Prayer Room · This Week
+            Prayer room · This Week
           </span>
         </div>
         <Link
@@ -111,7 +111,7 @@ export function PrayerWeekCard() {
         <div className="flex flex-col items-center justify-center gap-1.5 text-center" style={{ padding: "2rem 1.5rem" }}>
           <p style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>No prayer sets scheduled this week</p>
           <Link href="/prayer-room" style={{ fontSize: 12, color: "hsl(265 60% 72%)" }}>
-            Open the Prayer Room →
+            Open the Prayer room →
           </Link>
         </div>
       ) : (

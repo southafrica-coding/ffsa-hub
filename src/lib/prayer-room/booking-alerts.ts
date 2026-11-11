@@ -132,7 +132,7 @@ function resolvedMessage(title: string, line: string) {
     text: `${line} — ${title}`,
     blocks: [
       { type: "section", text: { type: "mrkdwn", text: `*🏛️ Auditorium booking — ${title}*\n${line}` } },
-      { type: "context", elements: [{ type: "mrkdwn", text: `<${MANAGE_URL}|Open Prayer Room → Manage>` }] },
+      { type: "context", elements: [{ type: "mrkdwn", text: `<${MANAGE_URL}|Open Prayer room → Manage>` }] },
     ],
   };
 }

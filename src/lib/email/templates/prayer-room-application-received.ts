@@ -11,7 +11,7 @@ export function prayerRoomApplicationReceivedEmailHtml({
   return renderEmailShell({
     title: "Application received",
     preheader: "We've received your prayer room application.",
-    eyebrow: "Prayer Room",
+    eyebrow: "Prayer room",
     heading: "We've got your application",
     bodyHtml: `
       ${bodyParagraph(`Hi ${escapeHtml(applicantFirstName)}, thanks for applying to serve in the prayer room.`)}

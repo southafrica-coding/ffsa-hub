@@ -20,7 +20,7 @@ export function prayerRoomEvaluatorAssignedEmailHtml({
     bodyHtml: `
       ${bodyParagraph(`Hi ${escapeHtml(evaluatorFirstName)}, you've been asked to meet with and evaluate ${emphasis(escapeHtml(applicantName))} for the prayer room team.`)}
       ${skillsLine ? bodyParagraph(`They'd like to serve in: ${escapeHtml(skillsLine)}.`) : ""}
-      ${bodyParagraph("Open the Prayer Room to record your notes and decision once you've met.")}
+      ${bodyParagraph("Open the Prayer room to record your notes and decision once you've met.")}
     `,
     cta: { label: "Open Evaluation", url: `${siteUrl}/prayer-room` },
     siteUrl,

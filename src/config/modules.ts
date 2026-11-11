@@ -120,7 +120,7 @@ export const ADMIN_MODULES: ModuleDefinition[] = [
   },
   {
     id: "prayer-room",
-    label: "Prayer Room",
+    label: "Prayer room",
     href: "/prayer-room",
     icon: Heart,
     description: "Weekly devo schedule, rosters, directory, and team applications",
