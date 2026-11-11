@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { loadHomeForViewer } from "@/lib/departments";
-import { clusterLabel, departmentNames, managingLabel, STAFF_LANGUAGE } from "@/lib/departments/data";
+import { clusterLabel, departmentNames, managingLabel } from "@/lib/departments/data";
+import { homeContext } from "./home-context";
 import { sessionClient, settleViewerResult } from "@/lib/departments/load";
 import { requireSignedIn } from "@/lib/departments/session";
+import { getSidebarAccess } from "@/lib/sidebar-access";
 import { formatDayRange } from "@/lib/format/sa-time";
 import type { RockStatus } from "@/lib/departments/ui-contract";
 import { EmptyNote, PageHeading, SectionHeading, StackLink } from "../departments/local-ui";
@@ -19,12 +21,16 @@ const ROCK_LABEL: Record<RockStatus, string> = {
 export default async function HomePage() {
   const path = "/home";
   await requireSignedIn(path);
-  const home = settleViewerResult(await loadHomeForViewer(await sessionClient()), path);
+  const supabase = await sessionClient();
+  const [{ userRoles, menuLoadFailed }, home] = await Promise.all([
+    getSidebarAccess(supabase),
+    loadHomeForViewer(supabase).then((result) => settleViewerResult(result, path)),
+  ]);
   const names = departmentNames(home.departments);
 
   return (
     <div>
-      <PageHeading context={STAFF_LANGUAGE} title="Home" />
+      <PageHeading context={homeContext(userRoles, menuLoadFailed)} title="Home" />
 
       <SectionHeading title="My departments" />
       {home.departments.length === 0 ? (
