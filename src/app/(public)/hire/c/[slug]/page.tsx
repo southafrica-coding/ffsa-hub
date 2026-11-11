@@ -2,14 +2,17 @@
 // Free first, then partly free, then booked with "free from <date>".
 // /hire/c/all is every listed product, and takes ?q= from the header search.
 
+import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils/cn";
 import { dayCount, rangeLabel, readRange, sastToday } from "@/lib/equipment/dates";
 import { periodForDates, periodLabel } from "@/lib/equipment/pricing";
-import { categoryIds, loadStore, withDates, type StoreCategory } from "@/lib/equipment/storefront";
+import { categoryIds, categoryTree, loadStore, withDates, type StoreCategory } from "@/lib/equipment/storefront";
+import { listCategories, type EquipmentCategory } from "@/services/equipment";
 import { DateBar, ItemCard } from "../../_components/store-ui";
+import CategorySkeleton from "./skeleton";
 
 type Params = { from?: string; to?: string; only?: string; type?: string; q?: string };
 
@@ -21,6 +24,22 @@ export default async function CategoryPage({
   searchParams: Promise<Params>;
 }) {
   const [{ slug }, sp] = await Promise.all([params, searchParams]);
+  const supabase = await createClient();
+  const { data: categoryRows } = await listCategories(supabase, { visibleOnly: true });
+  const known = categoryTree((categoryRows ?? []) as EquipmentCategory[]);
+  const all = slug === "all";
+  const cat = all ? undefined : known.find((c) => c.slug === slug);
+  const parentOfChild = all || cat ? undefined : known.find((c) => c.children.some((x) => x.slug === slug));
+  if (!all && !cat && !parentOfChild) notFound();
+
+  return (
+    <Suspense fallback={<CategorySkeleton />}>
+      <CategoryCatalogue slug={slug} sp={sp} />
+    </Suspense>
+  );
+}
+
+async function CategoryCatalogue({ slug, sp }: { slug: string; sp: Params }) {
   const today = sastToday();
   const range = readRange(sp, today);
   const supabase = await createClient();
@@ -28,10 +47,9 @@ export default async function CategoryPage({
 
   const all = slug === "all";
   const cat: StoreCategory | undefined = all ? undefined : categories.find((c) => c.slug === slug);
-  // A child slug (e.g. /hire/c/microphones) shows its parent with that type picked.
   const parentOfChild = all || cat ? undefined : categories.find((c) => c.children.some((x) => x.slug === slug));
-  if (!all && !cat && !parentOfChild) notFound();
   const category = cat ?? parentOfChild;
+  if (!category && !all) return null;
   const typeSlug = parentOfChild ? slug : sp.type;
   const type = category?.children.find((c) => c.slug === typeSlug);
 

@@ -41,6 +41,7 @@ vi.mock("@/lib/sidebar-access", () => ({
 
 import { departmentsForShell } from "@/lib/departments/load";
 import HomePage from "./page";
+import ServicesLayout from "../services/layout";
 import ServicesPage from "../services/page";
 
 function department(slug: string, name: string, viewerMembership: "member" | "leader" | "none") {
@@ -107,7 +108,7 @@ describe("home and services survive a failed department read", () => {
   it("still 404s /services when the service read itself is forbidden", async () => {
     loadServicesForViewer.mockResolvedValue({ kind: "forbidden" });
     loadDepartmentsIndexForViewer.mockResolvedValue({ kind: "ok", data: [] });
-    await expect(ServicesPage()).rejects.toThrow("NOT_FOUND");
+    await expect(ServicesLayout({ children: null })).rejects.toThrow("NOT_FOUND");
   });
 
   it("renders /home when the home result is forbidden and drops the department part", async () => {

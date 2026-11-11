@@ -1,11 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { shellVariantForRoles, type StaffSignals } from "@/components/shell-nav";
 import { loadHomeForViewer, loadServicesForViewer } from "@/lib/departments";
 import { clusterLabel, departmentNames, managingLabel } from "@/lib/departments/data";
-import { loadCachedDepartmentsIndex, myDepartments, settleViewerResult } from "@/lib/departments/load";
-import { requireSignedIn } from "@/lib/departments/session";
+import { DepartmentLoadError, loadCachedDepartmentsIndex, myDepartments } from "@/lib/departments/load";
 import { getSidebarAccess } from "@/lib/sidebar-access";
 import { getRequestViewer } from "@/lib/viewer-cache";
 import { formatDayRange } from "@/lib/format/sa-time";
@@ -22,8 +20,6 @@ const ROCK_LABEL: Record<RockStatus, string> = {
 };
 
 export default async function HomePage() {
-  const path = "/home";
-  await requireSignedIn(path);
   const viewer = await getRequestViewer();
   const known = viewer.user ? { userId: viewer.user.id, active: viewer.active } : undefined;
   const [access, homeResult, indexResult] = await Promise.all([
@@ -42,12 +38,18 @@ export default async function HomePage() {
   if (homeResult.kind === "ok") {
     return <HomeBody home={homeResult.data} departmentsNote={false} showAllDepartments={showAllDepartments} {...chrome} />;
   }
-  if (homeResult.kind === "unauthenticated") {
-    settleViewerResult(homeResult, path);
-  }
-  if (homeResult.kind === "not_found") notFound();
+  // Inactive and missing viewers are a real 404 from the layout, which runs
+  // outside this page's loading boundary.
+  if (homeResult.kind === "unauthenticated" || homeResult.kind === "not_found") return null;
 
-  const services = settleViewerResult(await loadServicesForViewer(viewer.supabase), path);
+  const servicesResult = await loadServicesForViewer(viewer.supabase);
+  if (servicesResult.kind === "error") {
+    throw new DepartmentLoadError(
+      servicesResult.error instanceof Error ? servicesResult.error.message : "Department data failed"
+    );
+  }
+  if (servicesResult.kind !== "ok") return null;
+  const services = servicesResult.data;
   return (
     <HomeBody
       home={{ departments: [], services, rocksDue: [], okrCheckInsDue: [], viewerMemberships: [] }}

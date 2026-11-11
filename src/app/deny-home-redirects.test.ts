@@ -29,7 +29,7 @@ const DENIALS: Array<[file: string, line: string]> = [
   ["src/app/(admin)/teams/page.tsx", 'if (isHiddenFromNav("teams")) redirect("/home");'],
   ["src/app/(admin)/roles/page.tsx", 'redirect("/home");'],
   [
-    "src/app/(admin)/ministry/page.tsx",
+    "src/app/(admin)/ministry/(index)/page.tsx",
     'if (!seesEverything && ledIds.length === 0) redirect("/home");',
   ],
   ["src/app/(admin)/ministry/[id]/page.tsx", 'if (!canView) redirect("/home");'],

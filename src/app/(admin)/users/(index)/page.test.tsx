@@ -88,15 +88,15 @@ vi.mock("next/headers", () => ({
   headers: async () => ({ get: () => null }),
 }));
 
-vi.mock("./users-table", () => ({
+vi.mock("../users-table", () => ({
   UsersTable: () => null,
 }));
 
-vi.mock("./invite-user-form", () => ({
+vi.mock("../invite-user-form", () => ({
   InviteUserForm: () => null,
 }));
 
-vi.mock("./public-signup-link-card", () => ({
+vi.mock("../public-signup-link-card", () => ({
   PublicSignupLinkCard: () => null,
 }));
 

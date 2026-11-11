@@ -1,21 +1,24 @@
 import type { Metadata } from "next";
 import { loadServicesForViewer } from "@/lib/departments";
 import { audienceLabel, departmentNames, managingLabel, STAFF_LANGUAGE } from "@/lib/departments/data";
-import { loadCachedDepartmentsIndex, sessionClient, settleViewerResult } from "@/lib/departments/load";
-import { requireSignedIn } from "@/lib/departments/session";
+import { DepartmentLoadError, loadCachedDepartmentsIndex, sessionClient } from "@/lib/departments/load";
 import { EmptyNote, PageHeading, ServiceCard } from "../departments/local-ui";
 
 export const metadata: Metadata = { title: "Services" };
 
 export default async function ServicesPage() {
-  const path = "/services";
-  await requireSignedIn(path);
   const supabase = await sessionClient();
   const [servicesResult, departmentsResult] = await Promise.all([
     loadServicesForViewer(supabase),
     loadCachedDepartmentsIndex(supabase),
   ]);
-  const services = settleViewerResult(servicesResult, path);
+  if (servicesResult.kind === "error") {
+    throw new DepartmentLoadError(
+      servicesResult.error instanceof Error ? servicesResult.error.message : "Department data failed"
+    );
+  }
+  // Forbidden and missing catalogues 404 in the layout, outside the loading boundary.
+  const services = servicesResult.kind === "ok" ? servicesResult.data : [];
   const departments = departmentsResult.kind === "ok" ? departmentsResult.data : [];
   const names = departmentNames(departments);
 

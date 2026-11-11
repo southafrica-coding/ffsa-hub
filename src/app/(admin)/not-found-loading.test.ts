@@ -40,13 +40,28 @@ function stripComments(source: string): string {
 function callsNotFound(source: string): boolean {
   const code = stripComments(source);
   const imported = /import\s*\{[^}]*\bnotFound\b[^}]*\}\s*from\s*["']next\/navigation["']/.test(code);
-  return imported && /\bnotFound\s*\(/.test(code);
+  // requireSignedIn 404s an inactive account. settleViewerResult 404s
+  // forbidden and not_found. Both are notFound callers even though the
+  // throw lives in the helper.
+  return (
+    (imported && /\bnotFound\s*\(/.test(code)) ||
+    /\brequireSignedIn\s*\(/.test(code) ||
+    /\bsettleViewerResult\s*\(/.test(code)
+  );
 }
 
-/** loading.tsx in this segment or any parent, route groups included. */
+/**
+ * loading.tsx in this segment or any parent, route groups included.
+ * A layout is outside its own segment's loading boundary, so a same-segment
+ * loading.tsx does not wrap notFound() called from that layout.
+ */
 function loadingAncestors(file: string): string[] {
   const hits: string[] = [];
   let dir = path.dirname(file);
+  if (path.basename(file) === "layout.tsx") {
+    if (dir === APP) return hits;
+    dir = path.dirname(dir);
+  }
   while (dir.startsWith(APP)) {
     const loading = path.join(dir, "loading.tsx");
     if (existsSync(loading)) hits.push(relative(loading));

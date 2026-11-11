@@ -2,6 +2,7 @@
 // what's included, specs, and a month calendar of how many are free each
 // day (equipment_free_by_day). A phone gets a week strip and a bottom bar.
 
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -44,6 +45,7 @@ import { periodForDates } from "@/lib/equipment/pricing";
 import { DEFAULT_SETTINGS, loadStore, withDates } from "@/lib/equipment/storefront";
 import { DateBar, ItemCard, Photo } from "../../_components/store-ui";
 import { ItemBooking } from "./item-booking";
+import ItemSkeleton from "./skeleton";
 
 type Search = { from?: string; to?: string; month?: string; photo?: string };
 
@@ -78,6 +80,27 @@ export default async function ItemPage({
   // RLS already hides unlisted products from the public; staff may preview.
   if (!product.is_listed && !staff) notFound();
 
+  return (
+    <Suspense fallback={<ItemSkeleton />}>
+      <ItemBody product={product} sp={sp} today={today} range={range} staff={staff} />
+    </Suspense>
+  );
+}
+
+async function ItemBody({
+  product,
+  sp,
+  today,
+  range,
+  staff,
+}: {
+  product: EquipmentProductWithRefs;
+  sp: Search;
+  today: string;
+  range: { from: string; to: string };
+  staff: boolean;
+}) {
+  const supabase = await createClient();
   const month = sp.month && /^\d{4}-\d{2}$/.test(sp.month) ? sp.month : monthOf(range.from);
   const grid = monthGrid(month);
   const stripStart = addDays(range.from, -1);

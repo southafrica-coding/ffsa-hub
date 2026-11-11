@@ -13,6 +13,7 @@ import { getContactDossier } from "@/services/contact-dossier";
 import { getContactEmailHistory } from "@/services/contact-email-history";
 import { getListOptions, type ListOption } from "@/services/list-options";
 import { getAuthedUser, hasAnyRole, hasAnyPermission } from "@/lib/api-auth";
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -30,6 +31,7 @@ import { EmailHistoryCard } from "./email-history-card";
 import { ContactDossier } from "./contact-dossier";
 import { EditContactDialog } from "./edit-contact-dialog";
 import { Masthead, StatusPill, type Tone } from "@/components/ffsa";
+import ContactDetailSkeleton from "./skeleton";
 
 export default async function ContactDetailPage({
   params,
@@ -41,6 +43,22 @@ export default async function ContactDetailPage({
 
   const { data: contact, error } = await getContactById(supabase, id);
   if (error || !contact) notFound();
+
+  return (
+    <Suspense fallback={<ContactDetailSkeleton />}>
+      <ContactDetailBody id={id} contact={contact} />
+    </Suspense>
+  );
+}
+
+async function ContactDetailBody({
+  id,
+  contact,
+}: {
+  id: string;
+  contact: NonNullable<Awaited<ReturnType<typeof getContactById>>["data"]>;
+}) {
+  const supabase = await createClient();
 
   // contact_emails / contact_phones are RLS-gated on the granular
   // has_permission('contacts.read') grant, whereas the contacts table (and the
