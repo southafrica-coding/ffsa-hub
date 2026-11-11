@@ -1,6 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
 import { getEnrollmentsByUser, getResponsesByUser } from "@/services/schools";
-import { getCurrentUser } from "@/services/users";
 import Link from "next/link";
 import {
   Masthead,
@@ -107,12 +106,17 @@ export default async function MySchoolsPage() {
   }
 
   const userId = user.id;
-  // Same gate as /my-attendance: a signed-in profile may open it. A session
-  // with no profile row is sent to login, so the link stays off for them.
-  // That page does not check a role.
-  const [{ data: profile }, { data: enrollments }, { data: myResponses }, { data: openPrograms }] =
+  // Same gate as /my-attendance: a users row for this auth user. One read.
+  // A missing row, an error, or a rejected read hides the link. No role check.
+  const profileRead = Promise.resolve()
+    .then(() => supabase.from("users").select("id").eq("id", userId).maybeSingle())
+    .then(
+      (result) => !result.error && result.data != null,
+      () => false
+    );
+  const [canViewAttendance, { data: enrollments }, { data: myResponses }, { data: openPrograms }] =
     await Promise.all([
-      getCurrentUser(supabase),
+      profileRead,
       getEnrollmentsByUser(supabase, userId),
       getResponsesByUser(supabase, userId),
       supabase
@@ -122,7 +126,6 @@ export default async function MySchoolsPage() {
         .eq("status", "active")
         .order("name", { ascending: true }),
     ]);
-  const canViewAttendance = Boolean(profile);
 
   const responses = (myResponses ?? []) as ResponseRow[];
   const enrolled = (enrollments ?? []) as EnrollmentRow[];

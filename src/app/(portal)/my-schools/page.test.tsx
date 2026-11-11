@@ -2,40 +2,42 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * /my-attendance's own guard is getCurrentUser: any signed-in profile may
- * open it, and a session with no profile row is sent to /login. There is
- * no role check on that page, so the link follows the profile, not a role.
+ * /my-attendance sends anyone without a users row to login. The link uses
+ * that same fact: one read of the signed-in person's users row. No role check.
  */
 const state = vi.hoisted(() => ({
   authUser: null as { id: string } | null,
-  profile: null as { id: string } | null,
+  usersRow: null as { id: string } | null,
+  usersError: null as { message: string } | null,
+  usersReject: false,
 }));
+
+function query(result: { data: unknown; error: { message: string } | null }, rejectRead: boolean) {
+  const builder: Record<string, unknown> = {};
+  const self = () => builder;
+  for (const method of ["select", "eq", "in", "order", "limit"]) builder[method] = self;
+  const finish = () => (rejectRead ? Promise.reject(new Error("users read failed")) : Promise.resolve(result));
+  builder.maybeSingle = finish;
+  builder.then = (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) =>
+    finish().then(resolve, reject);
+  return builder;
+}
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     auth: {
       getUser: async () => ({ data: { user: state.authUser } }),
     },
-    from: () => {
-      const builder: Record<string, unknown> = {};
-      const self = () => builder;
-      for (const method of ["select", "eq", "in", "order", "limit"]) builder[method] = self;
-      builder.then = (
-        resolve: (value: unknown) => unknown,
-        reject: (reason: unknown) => unknown
-      ) => Promise.resolve({ data: [], error: null }).then(resolve, reject);
-      return builder;
-    },
+    from: (table: string) =>
+      table === "users"
+        ? query({ data: state.usersRow, error: state.usersError }, state.usersReject)
+        : query({ data: [], error: null }, false),
   }),
 }));
 
 vi.mock("@/services/schools", () => ({
   getEnrollmentsByUser: async () => ({ data: [] }),
   getResponsesByUser: async () => ({ data: [] }),
-}));
-
-vi.mock("@/services/users", () => ({
-  getCurrentUser: async () => ({ data: state.profile, error: null }),
 }));
 
 import MySchoolsPage from "./page";
@@ -47,14 +49,16 @@ async function markup() {
 describe("My training attendance link", () => {
   beforeEach(() => {
     state.authUser = null;
-    state.profile = null;
+    state.usersRow = null;
+    state.usersError = null;
+    state.usersReject = false;
   });
 
   it.each(["member", "leader", "admin", "finance", "portal"])(
     "shows View my attendance to a signed-in %s profile",
     async () => {
       state.authUser = { id: "user-1" };
-      state.profile = { id: "user-1" };
+      state.usersRow = { id: "user-1" };
       const html = await markup();
       expect(html).toContain('href="/my-attendance"');
       expect(html).toContain("View my attendance");
@@ -70,8 +74,27 @@ describe("My training attendance link", () => {
 
   it("hides the attendance link when the session has no profile", async () => {
     state.authUser = { id: "user-1" };
-    state.profile = null;
+    state.usersRow = null;
     const html = await markup();
+    expect(html).not.toContain("/my-attendance");
+    expect(html).not.toContain("View my attendance");
+  });
+
+  it("hides the attendance link when the profile read errors", async () => {
+    state.authUser = { id: "user-1" };
+    state.usersRow = null;
+    state.usersError = { message: "permission denied" };
+    const html = await markup();
+    expect(html).toContain("My training");
+    expect(html).not.toContain("/my-attendance");
+    expect(html).not.toContain("View my attendance");
+  });
+
+  it("hides the attendance link when the profile read rejects", async () => {
+    state.authUser = { id: "user-1" };
+    state.usersReject = true;
+    const html = await markup();
+    expect(html).toContain("My training");
     expect(html).not.toContain("/my-attendance");
     expect(html).not.toContain("View my attendance");
   });
