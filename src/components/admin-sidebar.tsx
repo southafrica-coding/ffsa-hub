@@ -22,6 +22,8 @@ interface AdminSidebarProps {
   equipmentStaff?: boolean;
   /** Portal replaces the staff groups with School, Finance, Prayer and Me. */
   variant?: "staff" | "portal";
+  /** Tests open the account menu without a click. */
+  defaultMenuOpen?: boolean;
 }
 
 function SignOutForm({ className, children }: { className?: string; children: React.ReactNode }) {
@@ -186,6 +188,7 @@ function SidebarBody({
   onRefresh,
   initials,
   onSearch,
+  defaultMenuOpen = false,
 }: {
   nav: ShellNav;
   pathname: string;
@@ -197,8 +200,9 @@ function SidebarBody({
   onRefresh?: () => void;
   initials: string;
   onSearch: () => void;
+  defaultMenuOpen?: boolean;
 }) {
-  const [meOpen, setMeOpen] = useState(false);
+  const [meOpen, setMeOpen] = useState(defaultMenuOpen);
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className={cn("flex items-center", collapsed ? "flex-col gap-1 px-1 pt-2" : "gap-1 pr-2")}>
@@ -307,6 +311,7 @@ export function AdminSidebar({
   departments,
   equipmentStaff = false,
   variant = "staff",
+  defaultMenuOpen = false,
 }: AdminSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -365,6 +370,7 @@ export function AdminSidebar({
     onRefresh: () => router.refresh(),
     initials: initials || "·",
     onSearch: () => setSearchOpen(true),
+    defaultMenuOpen,
   };
 
   return (

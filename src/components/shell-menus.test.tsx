@@ -45,8 +45,13 @@ describe("shell menus", () => {
     expect(html).toContain(">Dashboard<");
     expect(html).toContain('href="/finance"');
     expect(html).toContain(">Finance<");
-    expect(html).not.toContain('href="/my-finance"');
-    expect(html).not.toContain("My finance");
+  });
+
+  it("shows My finance in the open staff account menu", () => {
+    const html = markup(<AdminSidebar userRoles={["staff"]} defaultMenuOpen />);
+    expect(html).toContain('href="/my-finance"');
+    expect(html).toContain("My finance");
+    expect(html).toContain('href="/finance"');
   });
 
   it("keeps the phone labels on the same hrefs", () => {

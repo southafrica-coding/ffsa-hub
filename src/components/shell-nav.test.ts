@@ -12,9 +12,11 @@ describe("shellVariantForRoles", () => {
     expect(shellVariantForRoles(["ministry_leader"])).toBe("staff");
   });
 
-  it("gives a student with a direct module grant the staff shell", () => {
-    expect(shellVariantForRoles(["student"], { permittedModules: new Set(["schools"]) })).toBe("staff");
-    expect(shellVariantForRoles(["self_service"], { permittedModules: ["bookings"] })).toBe("staff");
+  it("gives a direct unscoped grant or a staff-role bundle the staff shell, and ignores a portal bundle", () => {
+    expect(shellVariantForRoles(["self_service"], { staffSignals: { directUnscopedGrant: true, staffRoleBundle: false, schoolsStaff: false } })).toBe("staff");
+    expect(shellVariantForRoles(["self_service"], { staffSignals: { directUnscopedGrant: false, staffRoleBundle: false, schoolsStaff: false } })).toBe("portal");
+    expect(shellVariantForRoles(["student"], { staffSignals: { directUnscopedGrant: false, staffRoleBundle: true, schoolsStaff: false } })).toBe("staff");
+    expect(shellVariantForRoles(["student"], { staffSignals: { directUnscopedGrant: false, staffRoleBundle: false, schoolsStaff: true } })).toBe("staff");
   });
 
   it("gives a student with a scoped role the staff shell", () => {
@@ -26,8 +28,8 @@ describe("shellVariantForRoles", () => {
   });
 
   it("keeps a student, and a person with no roles, on the portal", () => {
-    expect(shellVariantForRoles(["student"], { permittedModules: new Set(), departments: [] })).toBe("portal");
-    expect(shellVariantForRoles([], { permittedModules: new Set(), departments: [] })).toBe("portal");
+    expect(shellVariantForRoles(["student"], { departments: [] })).toBe("portal");
+    expect(shellVariantForRoles([], { departments: [] })).toBe("portal");
   });
 });
 

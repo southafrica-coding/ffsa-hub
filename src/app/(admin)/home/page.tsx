@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { shellVariantForRoles } from "@/components/shell-nav";
+import { shellVariantForRoles, type StaffSignals } from "@/components/shell-nav";
 import { loadHomeForViewer, loadServicesForViewer } from "@/lib/departments";
 import { clusterLabel, departmentNames, managingLabel } from "@/lib/departments/data";
 import { loadCachedDepartmentsIndex, settleViewerResult } from "@/lib/departments/load";
@@ -35,9 +35,9 @@ export default async function HomePage() {
   const chrome = {
     userRoles: access.userRoles,
     menuLoadFailed: access.menuLoadFailed,
-    permittedModules: access.permittedModules,
     departments: indexResult.kind === "ok" ? indexResult.data : [],
     roleNames: access.roleNames,
+    staffSignals: access.staffSignals,
   };
   if (homeResult.kind === "ok") {
     return <HomeBody home={homeResult.data} departmentsNote={false} showAllDepartments={showAllDepartments} {...chrome} />;
@@ -64,28 +64,27 @@ function HomeBody({
   showAllDepartments,
   userRoles,
   menuLoadFailed,
-  permittedModules,
   departments,
   roleNames,
+  staffSignals,
 }: {
   home: HomeDashboard;
   departmentsNote: boolean;
   showAllDepartments: boolean;
   userRoles: string[];
   menuLoadFailed: boolean;
-  permittedModules?: Set<string>;
   departments?: readonly unknown[];
   roleNames?: string[];
+  staffSignals?: StaffSignals;
 }) {
   const names = departmentNames(home.departments);
   const roles = roleNames ?? userRoles;
-  const portal =
-    !menuLoadFailed &&
-    shellVariantForRoles(roles, { permittedModules, departments }) === "portal";
+  const variantOptions = { departments, staffSignals };
+  const portal = !menuLoadFailed && shellVariantForRoles(roles, variantOptions) === "portal";
 
   return (
     <div>
-      <PageHeading context={homeContext(roles, menuLoadFailed, { permittedModules, departments })} title="Home" />
+      <PageHeading context={homeContext(roles, menuLoadFailed, variantOptions)} title="Home" />
 
       {portal ? null : (
         <>

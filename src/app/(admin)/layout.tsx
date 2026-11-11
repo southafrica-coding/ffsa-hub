@@ -13,7 +13,7 @@ export default async function AdminLayout({
   const viewer = await getRequestViewer();
   const supabase = viewer.supabase;
   const known = viewer.user ? { userId: viewer.user.id, active: viewer.active } : undefined;
-  const [{ userRoles, roleNames, permittedModules, menuLoadFailed }, initials, equipmentStaff, departments] =
+  const [{ userRoles, roleNames, permittedModules, staffSignals, menuLoadFailed }, initials, equipmentStaff, departments] =
     await Promise.all([
       getSidebarAccess(supabase, known),
       getUserInitials(supabase, viewer.user ?? undefined),
@@ -25,6 +25,7 @@ export default async function AdminLayout({
     <HubShell
       userRoles={userRoles}
       roleNames={roleNames}
+      staffSignals={staffSignals}
       permittedModules={permittedModules}
       menuLoadFailed={menuLoadFailed}
       initials={initials}

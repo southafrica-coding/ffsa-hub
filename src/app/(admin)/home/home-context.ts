@@ -1,4 +1,4 @@
-import { shellVariantForRoles } from "@/components/shell-nav";
+import { shellVariantForRoles, type StaffSignals } from "@/components/shell-nav";
 import { STAFF_LANGUAGE } from "@/lib/departments/data";
 
 /** Context line for a portal-only person. Staff keep STAFF_LANGUAGE. */
@@ -8,8 +8,8 @@ export function homeContext(
   userRoles: readonly string[],
   menuLoadFailed = false,
   options?: {
-    permittedModules?: ReadonlySet<string> | readonly string[] | null;
     departments?: readonly unknown[] | null;
+    staffSignals?: StaffSignals | null;
   }
 ): string {
   if (menuLoadFailed) return STAFF_LANGUAGE;

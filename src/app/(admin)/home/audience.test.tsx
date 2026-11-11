@@ -73,27 +73,33 @@ async function renderHome(
   roles: string[],
   routeVariant: "staff" | "portal",
   extras?: {
-    permittedModules?: string[];
+    staffSignals?: { directUnscopedGrant: boolean; staffRoleBundle: boolean; schoolsStaff: boolean };
     roleNames?: string[];
     departments?: { id: string; label: string; href: string }[];
     menuLoadFailed?: boolean;
   }
 ) {
-  const permittedModules = new Set(extras?.permittedModules ?? []);
   const roleNames = extras?.roleNames ?? roles;
   const departments = extras?.departments ?? [];
   const menuLoadFailed = extras?.menuLoadFailed ?? false;
+  const staffSignals = extras?.staffSignals ?? {
+    directUnscopedGrant: false,
+    staffRoleBundle: false,
+    schoolsStaff: false,
+  };
   getSidebarAccess.mockResolvedValue({
     userRoles: roles,
     roleNames,
-    permittedModules,
+    permittedModules: new Set<string>(["bookings", "vehicles"]),
+    staffSignals,
     menuLoadFailed,
   });
   return renderToStaticMarkup(
     await HubShell({
       userRoles: roles,
       roleNames,
-      permittedModules,
+      permittedModules: new Set<string>(["bookings", "vehicles"]),
+      staffSignals,
       departments,
       menuLoadFailed,
       variant: routeVariant,
@@ -130,8 +136,10 @@ describe("/home follows the viewer, not the route", () => {
     expect(html).toContain("Services you use");
   });
 
-  it("gives a student with a module grant the staff shell", async () => {
-    const html = await renderHome(["student"], "portal", { permittedModules: ["schools"] });
+  it("gives a student with a direct grant the staff shell", async () => {
+    const html = await renderHome(["student"], "portal", {
+      staffSignals: { directUnscopedGrant: true, staffRoleBundle: false, schoolsStaff: false },
+    });
     const tabs = tabBar(html);
     expect(html).toContain(STAFF_LANGUAGE);
     expect(tabs).toContain('href="/home"');

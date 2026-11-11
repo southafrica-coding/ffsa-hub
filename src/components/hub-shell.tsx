@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { AdminSidebar } from "@/components/admin-sidebar";
 import { MobileTabBar } from "@/components/mobile-tab-bar";
-import { shellVariantForRoles } from "@/components/shell-nav";
+import { shellVariantForRoles, type StaffSignals } from "@/components/shell-nav";
 import { ProfileCompletionGate } from "@/components/profile-completion-gate";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { BackButton } from "@/components/back-button";
@@ -16,6 +16,7 @@ export async function HubShell({
   initials,
   departments = [],
   roleNames,
+  staffSignals,
   equipmentStaff = false,
   variant = "staff",
 }: {
@@ -28,6 +29,8 @@ export async function HubShell({
   departments?: { id: string; label: string; href: string }[];
   /** Every role name, including scoped ones. Falls back to the unscoped list. */
   roleNames?: string[];
+  /** Staff-only access. Portal-role bundles are not included. */
+  staffSignals?: StaffSignals;
   /** True when has_equipment_access() is true. Hire gear then opens the staff register. */
   equipmentStaff?: boolean;
   /**
@@ -39,7 +42,7 @@ export async function HubShell({
   const collapsed = (await cookies()).get("ffsa-sidebar")?.value === "1";
   const resolvedVariant = menuLoadFailed
     ? variant
-    : shellVariantForRoles(roleNames ?? userRoles, { permittedModules, departments });
+    : shellVariantForRoles(roleNames ?? userRoles, { departments, staffSignals });
   return (
     <div className="flex h-screen overflow-hidden bg-bg text-ink">
       <AdminSidebar

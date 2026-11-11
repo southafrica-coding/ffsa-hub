@@ -25,7 +25,13 @@ describe("getSidebarAccess", () => {
   it("returns an empty menu for a signed-out visitor", async () => {
     const f = createFakeSupabase({ user: null });
     const access = await getSidebarAccess(f.client);
-    expect(access).toEqual({ userRoles: [], roleNames: [], permittedModules: new Set(), menuLoadFailed: false });
+    expect(access).toEqual({
+      userRoles: [],
+      roleNames: [],
+      permittedModules: new Set(),
+      staffSignals: { directUnscopedGrant: false, staffRoleBundle: false, schoolsStaff: false },
+      menuLoadFailed: false,
+    });
     expect(f.queries).toHaveLength(0);
   });
 
@@ -133,7 +139,13 @@ describe("getSidebarAccess", () => {
         direct: [{ module: "events", key: "events.view" }],
       }).client
     );
-    expect(access).toEqual({ userRoles: [], roleNames: [], permittedModules: new Set(), menuLoadFailed: false });
+    expect(access).toEqual({
+      userRoles: [],
+      roleNames: [],
+      permittedModules: new Set(),
+      staffSignals: { directUnscopedGrant: false, staffRoleBundle: false, schoolsStaff: false },
+      menuLoadFailed: false,
+    });
   });
 
   it("a program staff seat lights up Training without a schools permission", async () => {

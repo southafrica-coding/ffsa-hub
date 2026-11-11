@@ -30,27 +30,34 @@ export type ShellLink = {
 export type ShellVariant = "staff" | "portal";
 
 /**
- * Membership roles. A viewer is staff when they hold any other role (scoped
- * or not), a module grant, or a department. Everyone else gets the portal.
+ * Membership roles. Their own permission bundles do not make someone staff.
+ * A viewer is staff only for a staff signal: another role (scoped or not),
+ * a direct unscoped grant, a staff-role bundle, schools or program-staff
+ * access, or a department.
  */
 const MEMBERSHIP_ONLY_ROLES = new Set(["student", "community_member", "self_service"]);
 
-function hasEntries(value: ReadonlySet<string> | readonly string[] | null | undefined): boolean {
-  if (value == null) return false;
-  if ("size" in value) return value.size > 0;
-  return value.length > 0;
-}
+export type StaffSignals = {
+  directUnscopedGrant: boolean;
+  staffRoleBundle: boolean;
+  schoolsStaff: boolean;
+};
 
 export function shellVariantForRoles(
   userRoles: readonly string[],
   options?: {
-    permittedModules?: ReadonlySet<string> | readonly string[] | null;
     departments?: readonly unknown[] | null;
+    staffSignals?: StaffSignals | null;
   }
 ): ShellVariant {
   const staffRole = userRoles.some((role) => !MEMBERSHIP_ONLY_ROLES.has(role));
+  const signals = options?.staffSignals;
   const staff =
-    staffRole || hasEntries(options?.permittedModules) || (options?.departments?.length ?? 0) > 0;
+    staffRole ||
+    (options?.departments?.length ?? 0) > 0 ||
+    !!signals?.directUnscopedGrant ||
+    !!signals?.staffRoleBundle ||
+    !!signals?.schoolsStaff;
   return staff ? "staff" : "portal";
 }
 
