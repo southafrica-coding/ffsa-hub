@@ -54,6 +54,23 @@ export function mayUseService(
   return grants.some((grant) => memberMatchesGrant(grant, memberships, "use"));
 }
 
+const GEAR_PUBLIC_HREF = "/hire";
+
+/**
+ * Catalogue door. services.admin_href is the staff door. Gear hire's
+ * open_to_all row carries the public storefront. People who pass
+ * has_equipment_access() keep the staff register.
+ */
+export function catalogueHref(
+  service: { service_key: string; admin_href: string },
+  grants: readonly Pick<ServiceOwnerRow, "open_to_all" | "capability" | "admin_href">[],
+  equipmentStaff: boolean
+): string {
+  if (service.service_key !== "gear_hire" || equipmentStaff) return service.admin_href;
+  const open = grants.find((grant) => grant.open_to_all === true && grant.capability === "use");
+  return open?.admin_href || GEAR_PUBLIC_HREF;
+}
+
 export function audienceFromGrants(
   grants: readonly Pick<ServiceOwnerRow, "open_to_all" | "any_point_leader">[]
 ): "all_signed_in" | "point_leaders" | "owners_only" {

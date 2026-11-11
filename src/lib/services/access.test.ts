@@ -48,7 +48,15 @@ function client(world: DepartmentWorld, userId = MEMBER) {
 describe("service owner seed", () => {
   it("gives owners own and manage, and opens gear_hire to everyone", () => {
     const open = SERVICE_OWNER_SEED.filter((row) => row.open_to_all).map((row) => row.service_key).sort();
-    expect(open).toEqual(["brand_kit", "evangelism", "gear_hire", "prayer_room", "spaces", "vehicles"]);
+    expect(open).toEqual(["evangelism", "gear_hire", "prayer_room", "spaces", "vehicles"]);
+    const gearOpen = SERVICE_OWNER_SEED.find((row) => row.service_key === "gear_hire" && row.open_to_all);
+    expect(gearOpen?.admin_href).toBe("/hire");
+    expect(
+      SERVICE_OWNER_SEED.filter((row) => row.service_key === "gear_hire" && !row.open_to_all).every(
+        (row) => row.admin_href === "/bookings/equipment"
+      )
+    ).toBe(true);
+    expect(SERVICE_OWNER_SEED.some((row) => row.service_key === "brand_kit" && row.open_to_all)).toBe(false);
     expect(SERVICE_OWNER_SEED.some((row) => row.service_key === "evangelism" && row.capability === "moderate")).toBe(false);
     expect(SERVICE_OWNER_SEED.find((row) => row.any_point_leader)).toMatchObject({
       service_key: "contacts",
@@ -177,6 +185,14 @@ describe("toHubService", () => {
       ministries
     );
     expect(gear.audience).toBe("all_signed_in");
+    expect(gear.href).toBe("/hire");
+    const register = toHubService(
+      { service_key: "gear_hire", label: "Gear hire", admin_href: "/bookings/equipment" },
+      grants("gear_hire"),
+      ministries,
+      true
+    );
+    expect(register.href).toBe("/bookings/equipment");
     expect(gear.owners.map((owner) => owner.role).sort()).toEqual(["manager", "manager", "manager", "owner", "owner", "owner"]);
     expect(gear.owners.some((owner) => owner.slug == null)).toBe(false);
 

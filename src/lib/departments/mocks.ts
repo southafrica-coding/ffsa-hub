@@ -351,7 +351,7 @@ export const SERVICES: HubService[] = [
     id: "gear_hire",
     name: "Gear hire",
     summary: "Hire equipment from the catalogue.",
-    href: "/bookings/equipment",
+    href: "/hire",
     moduleId: "bookings",
     owners: [
       link("prayer_and_worship", "owner"),
@@ -367,7 +367,7 @@ export const SERVICES: HubService[] = [
     href: "/brand-kit",
     moduleId: "brand-kit",
     owners: [link("media", "owner")],
-    audience: "all_signed_in",
+    audience: "owners_only",
   },
   {
     id: "communications",

@@ -177,7 +177,17 @@ describe("viewer wrappers", () => {
     h.world = makeDepartmentWorld();
     const services = await loadServicesForViewer(client(OUTSIDER));
     expect(services.kind).toBe("ok");
-    if (services.kind === "ok") expect(services.data.some((row) => row.id === "gear_hire")).toBe(true);
+    if (services.kind === "ok") {
+      const gear = services.data.find((row) => row.id === "gear_hire");
+      expect(gear?.href).toBe("/hire");
+      expect(services.data.some((row) => row.id === "brand_kit")).toBe(false);
+    }
+    h.world = makeDepartmentWorld();
+    h.world.equipmentStaff = true;
+    const staff = await loadServicesForViewer(client(OUTSIDER));
+    if (staff.kind === "ok") {
+      expect(staff.data.find((row) => row.id === "gear_hire")?.href).toBe("/bookings/equipment");
+    }
   });
 
   it("returns every home-dashboard outcome", async () => {

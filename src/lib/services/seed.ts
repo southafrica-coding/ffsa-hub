@@ -49,9 +49,14 @@ function row(
   };
 }
 
-/** staff_ministry_id null, capability use, open_to_all true. */
-function openToAll(serviceKey: string): ServiceSeedRow {
-  return row(serviceKey, null, "use", null, { open_to_all: true });
+/** staff_ministry_id null, capability use, open_to_all true.
+ * adminHref overrides the service's staff door. Gear hire's open row
+ * is the public storefront; the register stays on the service row.
+ */
+function openToAll(serviceKey: string, adminHref?: string): ServiceSeedRow {
+  const seeded = row(serviceKey, null, "use", null, { open_to_all: true });
+  if (adminHref) seeded.admin_href = adminHref;
+  return seeded;
 }
 
 function owned(serviceKey: string, ministrySlug: string): ServiceSeedRow[] {
@@ -62,7 +67,7 @@ export const SERVICE_OWNER_SEED: readonly ServiceSeedRow[] = [
   ...owned("gear_hire", "prayer_and_worship"),
   ...owned("gear_hire", "operations"),
   ...owned("gear_hire", "media"),
-  openToAll("gear_hire"),
+  openToAll("gear_hire", "/hire"),
   ...owned("communications", "media"),
   row("communications", "hulk", "use", "member"),
   row("communications", "leadership_team", "use", "member"),
@@ -80,7 +85,6 @@ export const SERVICE_OWNER_SEED: readonly ServiceSeedRow[] = [
   ...owned("vehicles", "operations"),
   openToAll("vehicles"),
   ...owned("brand_kit", "media"),
-  openToAll("brand_kit"),
 ];
 
 export type ServiceOwnerRow = ServiceOwner;

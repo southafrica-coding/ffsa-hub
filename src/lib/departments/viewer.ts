@@ -31,6 +31,12 @@ export type ViewerResult<T> = { kind: "ok"; data: T } | ViewerFailure;
 
 export type DepartmentHomeResult = ViewerResult<DepartmentHome> | { kind: "redirect"; slug: string };
 
+async function callerHasEquipmentAccess(userClient: UserClient): Promise<boolean> {
+  const { data, error } = await userClient.rpc("has_equipment_access");
+  if (error) return false;
+  return data === true;
+}
+
 async function requireViewer(userClient: UserClient): Promise<{ userId: string } | ViewerFailure> {
   const user = await getAuthedUser(userClient);
   if (!user) return { kind: "unauthenticated" };
@@ -102,10 +108,13 @@ export async function loadServicesForViewer(userClient: UserClient): Promise<Vie
   );
   if (!usable.ok) return { kind: "forbidden" };
   const visible = services.data.filter((service) => usable.keys.has(service.service_key));
-  const ministries = await listMinistriesById(
-    userClient,
-    grants.data.flatMap((grant) => (grant.staff_ministry_id ? [grant.staff_ministry_id] : []))
-  );
+  const [ministries, equipmentStaff] = await Promise.all([
+    listMinistriesById(
+      userClient,
+      grants.data.flatMap((grant) => (grant.staff_ministry_id ? [grant.staff_ministry_id] : []))
+    ),
+    callerHasEquipmentAccess(userClient),
+  ]);
   if (ministries.error) return { kind: "error", error: ministries.error };
   return {
     kind: "ok",
@@ -115,7 +124,8 @@ export async function loadServicesForViewer(userClient: UserClient): Promise<Vie
         toHubService(
           service,
           grants.data.filter((grant) => grant.service_key === service.service_key),
-          ministries.data
+          ministries.data,
+          equipmentStaff
         )
       ),
   };
@@ -148,10 +158,13 @@ export async function loadHomeForViewer(userClient: UserClient): Promise<ViewerR
   if (due.error || !due.data) return { kind: "error", error: due.error };
 
   const visible = services.data.filter((service) => usable.keys.has(service.service_key));
-  const ministries = await listMinistriesById(
-    userClient,
-    grants.data.flatMap((grant) => (grant.staff_ministry_id ? [grant.staff_ministry_id] : []))
-  );
+  const [ministries, equipmentStaff] = await Promise.all([
+    listMinistriesById(
+      userClient,
+      grants.data.flatMap((grant) => (grant.staff_ministry_id ? [grant.staff_ministry_id] : []))
+    ),
+    callerHasEquipmentAccess(userClient),
+  ]);
   if (ministries.error) return { kind: "error", error: ministries.error };
 
   return {
@@ -164,7 +177,8 @@ export async function loadHomeForViewer(userClient: UserClient): Promise<ViewerR
           toHubService(
             service,
             grants.data.filter((grant) => grant.service_key === service.service_key),
-            ministries.data
+            ministries.data,
+            equipmentStaff
           )
         ),
       rocksDue: due.data,
