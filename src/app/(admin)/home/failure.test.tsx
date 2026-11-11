@@ -23,6 +23,21 @@ vi.mock("@/lib/departments/session", () => ({
   requireSignedIn: async () => ({ id: "user" }),
   getViewer: async () => ({ supabase: { kind: "session" }, user: { id: "user" }, active: true }),
 }));
+vi.mock("@/lib/viewer-cache", () => ({
+  getRequestViewer: async () => ({
+    supabase: { kind: "session" },
+    user: { id: "user" },
+    active: true,
+  }),
+}));
+vi.mock("@/lib/sidebar-access", () => ({
+  getSidebarAccess: async () => ({
+    userRoles: ["staff"],
+    roleNames: ["staff"],
+    permittedModules: new Set<string>(),
+    menuLoadFailed: false,
+  }),
+}));
 
 import HomePage from "./page";
 import ServicesPage from "../services/page";

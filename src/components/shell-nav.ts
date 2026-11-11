@@ -1,11 +1,15 @@
 import {
   Building2,
   Car,
+  GraduationCap,
+  Heart,
   Inbox,
   KeyRound,
   LayoutDashboard,
   LayoutGrid,
   Package,
+  User,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -23,6 +27,55 @@ export type ShellLink = {
   icon: LucideIcon;
 };
 
+export type ShellVariant = "staff" | "portal";
+
+/**
+ * Membership roles. Their own permission bundles do not make someone staff.
+ * A viewer is staff only for a staff signal: another role (scoped or not),
+ * a direct unscoped grant, a staff-role bundle, schools or program-staff
+ * access, or a department.
+ */
+const MEMBERSHIP_ONLY_ROLES = new Set(["student", "community_member", "self_service"]);
+
+/** Why a person is staff. Portal-role bundles are not one of these. */
+export type StaffSignals = {
+  /** A direct user_permissions row with no scope. Role bundles do not count. */
+  directUnscopedGrant: boolean;
+  /** A module bundle that belongs to a role outside the membership set. */
+  staffRoleBundle: boolean;
+  /** Program-scoped schools access, or a program_staff seat. */
+  schoolsStaff: boolean;
+};
+
+export function shellVariantForRoles(
+  userRoles: readonly string[],
+  options?: {
+    departments?: readonly unknown[] | null;
+    staffSignals?: StaffSignals | null;
+  }
+): ShellVariant {
+  const staffRole = userRoles.some((role) => !MEMBERSHIP_ONLY_ROLES.has(role));
+  const signals = options?.staffSignals;
+  const staff =
+    staffRole ||
+    (options?.departments?.length ?? 0) > 0 ||
+    !!signals?.directUnscopedGrant ||
+    !!signals?.staffRoleBundle ||
+    !!signals?.schoolsStaff;
+  return staff ? "staff" : "portal";
+}
+
+/**
+ * Portal phone tabs and the portal desktop sidebar. One label per href:
+ * Finance is personal fees, not the staff office.
+ */
+export const PORTAL_SHELL_LINKS: ShellLink[] = [
+  { id: "school", label: "School", href: "/my-schools", icon: GraduationCap },
+  { id: "finance", label: "Finance", href: "/my-finance", icon: Wallet },
+  { id: "prayer", label: "Prayer", href: "/prayer-room", icon: Heart },
+  { id: "portal-me", label: "Me", href: "/profile", icon: User },
+];
+
 export type ShellNav = {
   home: ShellLink | null;
   inbox: ShellLink | null;
@@ -31,6 +84,8 @@ export type ShellNav = {
   departments: ShellLink[];
   work: ShellLink[];
   system: ShellLink[];
+  /** Portal primary items. Empty on the staff shell. */
+  portalLinks: ShellLink[];
   me: ShellLink[];
 };
 
@@ -47,8 +102,9 @@ export function buildShellNav(
   userRoles: string[],
   permittedModules?: Set<string>,
   departments: ShellLink[] = [],
-  options?: { equipmentStaff?: boolean }
+  options?: { equipmentStaff?: boolean; variant?: ShellVariant }
 ): ShellNav {
+  if (options?.variant === "portal") return portalShell();
   const admin = getAccessibleModules(ADMIN_MODULES, userRoles, permittedModules);
   const system = getAccessibleModules(SYSTEM_MODULES, userRoles, permittedModules);
   const byId = new Map(admin.map((mod) => [mod.id, mod]));
@@ -78,6 +134,9 @@ export function buildShellNav(
   if (evangelism) services.push(fromModule(evangelism, "Evangelism"));
 
   const workOrder = [
+    // The widget board, kept so staff can still open it. It is not the front door,
+    // and it is not in the nav because a denied module used to land here.
+    "dashboard",
     "contacts",
     "communications",
     "brand-kit",
@@ -108,10 +167,14 @@ export function buildShellNav(
 
   const me = getVisiblePortalTabs().map((tab) => ({
     id: tab.id,
-    label: tab.label,
+    label: tab.href === "/my-finance" ? "My finance" : tab.label,
     href: tab.href,
     icon: tab.icon,
   }));
+  // Staff Finance is the office at /finance, only when that module is open.
+  // Personal fees stay in the avatar as My finance.
+  const finance = byId.get("finance");
+  if (finance) me.push(fromModule(finance, "Finance"));
   me.push({
     id: "security",
     label: "Security",
@@ -126,18 +189,51 @@ export function buildShellNav(
     departments,
     work,
     system: system.map((mod) => fromModule(mod)),
+    portalLinks: [],
     me,
   };
 }
 
+/** Personal tabs only. Staff groups stay empty so the office never appears here. */
+function portalShell(): ShellNav {
+  const extras = getVisiblePortalTabs()
+    .filter((tab) => !PORTAL_SHELL_LINKS.some((link) => link.href === tab.href))
+    .map((tab) => ({
+      id: tab.id,
+      label: tab.label,
+      href: tab.href,
+      icon: tab.icon,
+    }));
+  extras.push({
+    id: "security",
+    label: "Security",
+    href: "/account/security",
+    icon: KeyRound,
+  });
+  return {
+    home: null,
+    inbox: null,
+    services: [],
+    departments: [],
+    work: [],
+    system: [],
+    portalLinks: PORTAL_SHELL_LINKS,
+    me: [...PORTAL_SHELL_LINKS, ...extras],
+  };
+}
+
 export function flattenShellNav(nav: ShellNav): ShellLink[] {
-  return [
+  const links = [
     ...(nav.home ? [nav.home] : []),
     ...(nav.inbox ? [nav.inbox] : []),
     ...nav.services,
     ...nav.departments,
     ...nav.work,
     ...nav.system,
+    ...nav.portalLinks,
     ...nav.me,
   ];
+  return links.filter(
+    (link, index) => links.findIndex((item) => item.href === link.href && item.label === link.label) === index
+  );
 }
