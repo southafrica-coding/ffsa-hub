@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import { loadDepartmentsIndexForViewer, loadServicesForViewer } from "@/lib/departments";
+import { loadServicesForViewer } from "@/lib/departments";
 import { audienceLabel, departmentNames, managingLabel, STAFF_LANGUAGE } from "@/lib/departments/data";
-import { sessionClient, settleViewerResult } from "@/lib/departments/load";
+import { loadCachedDepartmentsIndex, sessionClient, settleViewerResult } from "@/lib/departments/load";
 import { requireSignedIn } from "@/lib/departments/session";
 import { EmptyNote, PageHeading, ServiceCard } from "../departments/local-ui";
 
@@ -13,15 +13,18 @@ export default async function ServicesPage() {
   const supabase = await sessionClient();
   const [servicesResult, departmentsResult] = await Promise.all([
     loadServicesForViewer(supabase),
-    loadDepartmentsIndexForViewer(supabase),
+    loadCachedDepartmentsIndex(supabase),
   ]);
   const services = settleViewerResult(servicesResult, path);
-  const departments = settleViewerResult(departmentsResult, path);
+  const departments = departmentsResult.kind === "ok" ? departmentsResult.data : [];
   const names = departmentNames(departments);
 
   return (
     <div>
       <PageHeading context={STAFF_LANGUAGE} title="Services" />
+      {departmentsResult.kind !== "ok" ? (
+        <p className="px-5 pt-4 text-sm text-muted-foreground md:px-8">Couldn&apos;t load departments.</p>
+      ) : null}
       <p className="max-w-prose px-5 py-4 text-sm text-muted-foreground md:px-8">
         Base-wide services. Each one is run by a staff ministry. You only see the ones your access can open.
       </p>

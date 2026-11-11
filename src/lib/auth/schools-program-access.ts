@@ -45,10 +45,11 @@ export function canCreateProgram(access: SchoolsProgramAccess): boolean {
 export async function getAccessibleSchoolsProgramIds(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
-  userId: string
+  userId: string,
+  options?: { active?: boolean }
 ): Promise<SchoolsProgramAccess> {
   const [active, rolesResult, directResult] = await Promise.all([
-    accountIsActive(supabase, userId),
+    options?.active === true ? true : accountIsActive(supabase, userId),
     supabase
       .from("user_roles")
       .select("role_id, scope_type, scope_id, roles(name)")
